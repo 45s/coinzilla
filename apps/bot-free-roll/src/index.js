@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import { connectTrading, connectMarket } from "./binance.js"
 import { showAccount, watchOrderUpdates } from "./account.js"
 import { prepareShutdown } from "./prepare-shutdown.js"
+import { runBot } from "./run-bot.js"
 
 const config = JSON.parse(
   await readFile(new URL("../trading.json", import.meta.url), "utf8"),
@@ -45,26 +46,31 @@ try {
 
   await watchOrderUpdates(tradingConnection)
 
-  if (!config.order.enabled) {
-    console.log("[trade] Order placement disabled in trading.json")
-    // return
-  }
-
-  const order = await tradingConnection.orderPlace({
-    symbol: config.symbol,
-    side: config.order.side,
-    type: "LIMIT",
-    timeInForce: "GTC",
-    price: config.order.price,
-    quantity: config.order.quantity,
-    newOrderRespType: "RESULT",
+  const { bot } = await runBot({
+    deposit: 1000,
+    ticker: "DOGE",
+    pair: "FDUSD",
   })
 
-  console.log("[trade] Order placed:", order.data)
+  if (config.order.enabled) {
+    const order = await tradingConnection.orderPlace({
+      symbol: config.symbol,
+      side: config.order.side,
+      type: "LIMIT",
+      timeInForce: "GTC",
+      price: config.order.price,
+      quantity: config.order.quantity,
+      newOrderRespType: "RESULT",
+    })
+    console.log("[trade] Order placed:", order.data)
+  } else {
+    console.log("[trade] Order placement disabled in trading.json")
+  }
 
   const { startShutdown } = await prepareShutdown({
     tradingConnection,
     marketConnection,
+    bot,
   })
 
   for (const n of ["SIGINT", "SIGTERM"]) {

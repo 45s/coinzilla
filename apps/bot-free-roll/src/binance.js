@@ -7,7 +7,7 @@ import {
 const { BINANCE_API_KEY, BINANCE_API_SECRET_KEY } = process.env
 
 if (!BINANCE_API_KEY || !BINANCE_API_SECRET_KEY) {
-  throw new Error("Missing Binance Testnet credentials")
+  throw new Error("Missing Binance credentials")
 }
 
 const client = new Spot({
