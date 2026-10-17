@@ -1,0 +1,16 @@
+export const EM = {
+  oneBrokerMustBeProvided: () => 'At least one broker must be provided',
+  brokerNotSupported: (brokerName) => `Broker "${brokerName}" not supported yet`,
+  notImplemented: (details) => `${details} not implemented`,
+  invalidConfig: () => 'Invalid configuration',
+  invalidOperationName: (operationName) => `Invalid operation name '${operationName}'`,
+  methodShouldBeImplemented: (methodName) => `"${methodName}" method must be implemented`,
+  invalidParameter: (parameterName) => `Invalid "${parameterName}" parameter`,
+  required: (fieldName) => (fieldName ? `Field "${fieldName}" is required` : 'Field is required'),
+  emptyString: () => 'Empty string not allowed',
+  emptyArray: () => 'Empty string not allowed',
+  notNumber: () => 'Must be a number',
+  notString: () => 'Must be a string',
+  undefined: () => 'Value is undefined',
+  arr: () => 'It should be an array',
+}

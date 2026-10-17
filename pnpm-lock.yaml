@@ -171,6 +171,26 @@ importers:
       '@binance/spot':
         specifier: ^34.0.1
         version: 34.0.1(debug@4.4.3)
+      '@coinzilla/brokers':
+        specifier: workspace:*
+        version: link:../../packages/brokers
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+
+  packages/brokers:
+    dependencies:
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../utils
+
+  packages/entities:
+    dependencies:
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../utils
+
+  packages/utils: {}
 
 packages:
 
