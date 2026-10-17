@@ -1,0 +1,17 @@
+{
+  "name": "@coinzilla/entities",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:watch": "node --test --watch"
+  },
+  "dependencies": {
+    "@coinzilla/utils": "workspace:*"
+  }
+}
