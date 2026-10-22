@@ -1,6 +1,10 @@
-import { defaultLogger as logger } from '../../../../_utils/index.js'
-import { generateSignQuery, generateSignature, send } from '../../shared/index.js'
-import { adaptOrder } from '../adapters/index.js'
+import { defaultLogger as logger } from "@coinzilla/utils"
+import {
+  generateSignQuery,
+  generateSignature,
+  send,
+} from "../../shared/index.js"
+import { adaptOrder } from "../adapters/index.js"
 
 /**
  * @param order {
@@ -16,17 +20,17 @@ export async function createOrder({ order }) {
     side,
     price,
     quantity,
-    timeInForce: 'GTC',
+    timeInForce: "GTC",
   })
     .map(([k, v]) => `${k}=${v}`)
-    .join('&')
+    .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const path = `order?${fullQuery}&signature=${generateSignature(fullQuery)}`
   const createOrderResponse = await send({
     path,
-    method: 'POST',
+    method: "POST",
   })
-  if ('msg' in createOrderResponse) {
+  if ("msg" in createOrderResponse) {
     logger.error({
       where: `binance/broker/methods/${createOrder.name}`,
       msg: createOrderResponse.msg,

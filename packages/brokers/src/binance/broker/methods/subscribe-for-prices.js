@@ -1,19 +1,24 @@
-import { defaultLogger, handleErr } from '../../../../_utils/index.js'
-import { createWebSocket } from '../../../../_libs/index.js'
+import { defaultLogger, handleErr } from "@coinzilla/utils"
+// import { createWebSocket } from '../../../../_libs/index.js'
 
-const url = 'wss://stream.binance.com:9443/ws'
-const where = 'brokers/binance/.../subscribeForPrices'
+const url = "wss://stream.binance.com:9443/ws"
+const where = "brokers/binance/.../subscribeForPrices"
 
-export const subscribeForPrices = ({ symbols, onMessage, logger = defaultLogger }) => {
+export const subscribeForPrices = ({
+  symbols,
+  onMessage,
+  logger = defaultLogger,
+}) => {
   try {
-    const { socket } = createWebSocket({ url })
+    // const { socket } = createWebSocket({ url })
+    const socket = new WebSocket(url)
     const events = [
       [
-        'open',
+        "open",
         function onOpenEvent() {
           socket.send(
             JSON.stringify({
-              method: 'SUBSCRIBE',
+              method: "SUBSCRIBE",
               params: symbols.map((s) => `${s.toLowerCase()}@aggTrade`),
               id: 1,
             }),
@@ -22,13 +27,13 @@ export const subscribeForPrices = ({ symbols, onMessage, logger = defaultLogger 
         },
       ],
       [
-        'message',
+        "message",
         function onMsgEvent(m) {
           const { s, p } = JSON.parse(m.data)
           onMessage?.({ symbol: s, price: p })
         },
       ],
-      ['error', (e) => logger.error(e)],
+      ["error", (e) => logger.error(e)],
     ]
 
     for (const [eventName, cb] of events) {

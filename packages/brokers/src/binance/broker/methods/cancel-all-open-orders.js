@@ -1,5 +1,9 @@
-import { defaultLogger as logger, Validator, VR } from '../../../../_utils/index.js'
-import { generateSignQuery, generateSignature, send } from '../../shared/index.js'
+import { defaultLogger as logger, Validator, VR } from "@coinzilla/utils"
+import {
+  generateSignQuery,
+  generateSignature,
+  send,
+} from "../../shared/index.js"
 
 /**
  * {@link https://developers.binance.com/docs/binance-spot-api-docs/rest-api#cancel-all-open-orders-on-a-symbol-trade}
@@ -12,14 +16,14 @@ export async function cancelAllOpenOrders(input = {}) {
   })
   const query = Object.entries({ symbol: ticket })
     .map(([k, v]) => `${k}=${v}`)
-    .join('&')
+    .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const sendParams = {
-    method: 'DELETE',
+    method: "DELETE",
     path: `openOrders?${fullQuery}&signature=${generateSignature(fullQuery)}`,
   }
   const r = await send(sendParams)
-  if ('msg' in r) {
+  if ("msg" in r) {
     logger.error(r)
     throw r
   }

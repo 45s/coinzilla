@@ -12,7 +12,6 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@binance/spot": "^34.0.1",
     "@coinzilla/brokers": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   }

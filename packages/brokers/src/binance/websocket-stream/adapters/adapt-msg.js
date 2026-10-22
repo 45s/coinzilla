@@ -1,15 +1,15 @@
-import { defaultLogger as logger } from '../../../../_utils/index.js'
-import { adaptUser } from './user.js'
-import { adaptAggTrades } from './adapt-trades.js'
-import { ExecutedOrder } from '../../../../orders/index.js'
+import { defaultLogger as logger } from "@coinzilla/utils"
+import { ExecutedOrder } from "@coinzilla/entities"
+import { adaptUser } from "./user.js"
+import { adaptAggTrades } from "./adapt-trades.js"
 
 export const wsEventsMap = {
-  executionReport: 'executionReport',
-  outboundAccountPosition: 'outboundAccountPosition',
-  aggTrade: 'aggTrade',
-  account: 'account',
-  balanceUpdate: 'balanceUpdate',
-  listStatus: 'listStatus',
+  executionReport: "executionReport",
+  outboundAccountPosition: "outboundAccountPosition",
+  aggTrade: "aggTrade",
+  account: "account",
+  balanceUpdate: "balanceUpdate",
+  listStatus: "listStatus",
 }
 
 const adaptExecutedOrder = (m) => {

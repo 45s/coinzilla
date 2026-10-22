@@ -1,10 +1,15 @@
-import { defaultLogger as logger } from '../../../_utils/index.js'
-import { getBinanceConfig } from '../config.js'
+import { defaultLogger as logger } from "@coinzilla/utils"
+import { getBinanceConfig } from "../config.js"
 
 const { baseURL, apiKey } = getBinanceConfig()
-const where = 'brokers/binance/shared/send.js'
+const where = "brokers/binance/shared/send.js"
 
-export async function send({ path, url = `${baseURL}/v3`, method = 'GET', headers }) {
+export async function send({
+  path,
+  url = `${baseURL}/v3`,
+  method = "GET",
+  headers,
+}) {
   logger.debug({
     where,
     method,
@@ -13,10 +18,12 @@ export async function send({ path, url = `${baseURL}/v3`, method = 'GET', header
   const r = await fetch(`${url}/${path}`, {
     method,
     headers: {
-      'Content-Type': 'application/json',
-      'X-MBX-APIKEY': apiKey,
+      "Content-Type": "application/json",
+      "X-MBX-APIKEY": apiKey,
       ...headers,
     },
   })
-  return r.headers.get('content-type')?.includes('application/json') ? r.json() : r.text()
+  return r.headers.get("content-type")?.includes("application/json")
+    ? r.json()
+    : r.text()
 }

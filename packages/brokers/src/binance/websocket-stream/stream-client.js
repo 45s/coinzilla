@@ -1,13 +1,18 @@
-import crypto from 'node:crypto'
-import { defaultLogger } from '../../../_utils/index.js'
-import { send } from '../shared/index.js'
-import { WS } from './WS.js'
-import { validateRequiredParameters, isEmptyValue, removeEmptyValue, buildQueryString } from './helpers.js'
-import { adaptMsg } from './adapters/index.js'
+import crypto from "node:crypto"
+import { defaultLogger } from "@coinzilla/utils"
+import { send } from "../shared/index.js"
+import { WS } from "./WS.js"
+import {
+  validateRequiredParameters,
+  isEmptyValue,
+  removeEmptyValue,
+  buildQueryString,
+} from "./helpers.js"
+import { adaptMsg } from "./adapters/index.js"
 
 const PrivateKeyAlgo = {
-  RSA: 'RSA',
-  ED25519: 'Ed25519',
+  RSA: "RSA",
+  ED25519: "Ed25519",
 }
 
 // // unsubscribe the stream above
@@ -43,7 +48,7 @@ export class BinanceStreamClient extends WS {
         },
       },
       reconnectDelay,
-      wsURL: wsURL || 'wss://stream.binance.com:9443',
+      wsURL: wsURL || "wss://stream.binance.com:9443",
     })
 
     this.apiKey = apiKey
@@ -53,11 +58,11 @@ export class BinanceStreamClient extends WS {
     this.timeout = timeout || 0
     this.proxy = proxy || false
     this.httpsAgent = httpsAgent
-    this.privateKey = privateKey || ''
-    this.privateKeyPassphrase = privateKeyPassphrase || ''
+    this.privateKey = privateKey || ""
+    this.privateKeyPassphrase = privateKeyPassphrase || ""
     this.privateKeyAlgo = privateKeyAlgo || PrivateKeyAlgo.RSA
     this.combinedStreams = combinedStreams || false
-    this.listenKey = ''
+    this.listenKey = ""
   }
 
   #sendRequest = send
@@ -65,7 +70,7 @@ export class BinanceStreamClient extends WS {
   #publicRequest(method, path, params = {}) {
     params = removeEmptyValue(params)
     params = buildQueryString(params)
-    if (params !== '') {
+    if (params !== "") {
       path = `${path}?${params}`
     }
     // return createRequest({
@@ -86,15 +91,18 @@ export class BinanceStreamClient extends WS {
     let signature
 
     if (!this.privateKey) {
-      signature = crypto.createHmac('sha256', this.apiSecret).update(queryString).digest('hex')
+      signature = crypto
+        .createHmac("sha256", this.apiSecret)
+        .update(queryString)
+        .digest("hex")
     } else {
       if (this.privateKeyAlgo === PrivateKeyAlgo.RSA) {
         signature = crypto
-          .sign('RSA-SHA256', Buffer.from(queryString), {
+          .sign("RSA-SHA256", Buffer.from(queryString), {
             key: this.privateKey,
             passphrase: this.privateKeyPassphrase,
           })
-          .toString('base64')
+          .toString("base64")
       } else if (this.privateKeyAlgo === PrivateKeyAlgo.ED25519) {
         signature = crypto
           .sign(null, Buffer.from(queryString), {
@@ -102,7 +110,7 @@ export class BinanceStreamClient extends WS {
             padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
             saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
           })
-          .toString('base64')
+          .toString("base64")
       } else {
         // eslint-disable-next-line quotes
         throw new Error("privateKeyAlgo must be either 'RSA' or 'ED25519'")
@@ -121,20 +129,20 @@ export class BinanceStreamClient extends WS {
     // })
   }
 
-  async #manageListenKey({ action = 'create' } = {}) {
-    if (action === 'create') {
+  async #manageListenKey({ action = "create" } = {}) {
+    if (action === "create") {
       const every30mins = 1_000 * 60 * 30
       setInterval(() => {
-        this.#manageListenKey({ action: 'update' })
+        this.#manageListenKey({ action: "update" })
       }, every30mins)
     }
     const actionsMap = {
-      create: 'POST',
-      update: 'PUT',
-      delete: 'DELETE',
+      create: "POST",
+      update: "PUT",
+      delete: "DELETE",
     }
     return this.#sendRequest({
-      path: 'userDataStream',
+      path: "userDataStream",
       method: actionsMap[action],
     }).then((r) => {
       this.listenKey = r.listenKey
@@ -148,7 +156,7 @@ export class BinanceStreamClient extends WS {
         stream = [stream]
       }
       const payload = JSON.stringify({
-        method: 'SUBSCRIBE',
+        method: "SUBSCRIBE",
         params: stream,
         id: Date.now(),
       })
@@ -157,26 +165,28 @@ export class BinanceStreamClient extends WS {
       return
     }
     if (Array.isArray(stream)) {
-      stream = stream.join('/')
+      stream = stream.join("/")
     }
-    const url = this.combinedStreams ? `${this.wsURL}/stream?streams=${stream}` : `${this.wsURL}/ws/${stream}`
+    const url = this.combinedStreams
+      ? `${this.wsURL}/stream?streams=${stream}`
+      : `${this.wsURL}/ws/${stream}`
     return this.initConnect(url)
   }
 
   #unsubscribe(stream) {
     if (!this.isConnected()) {
-      this.logger.warn('Not connected')
+      this.logger.warn("Not connected")
       return
     }
     if (!Array.isArray(stream)) {
       stream = [stream]
     }
     const payload = {
-      method: 'UNSUBSCRIBE',
+      method: "UNSUBSCRIBE",
       params: stream,
       id: Date.now(),
     }
-    this.logger.info('UNSUBSCRIBE', payload)
+    this.logger.info("UNSUBSCRIBE", payload)
     this.send(JSON.stringify(payload))
   }
 
@@ -220,7 +230,7 @@ export class BinanceStreamClient extends WS {
    * @param {string} [symbol]
    */
   miniTicker({ symbol = null }) {
-    let stream = '!miniTicker@arr'
+    let stream = "!miniTicker@arr"
     if (!isEmptyValue(symbol)) {
       stream = `${symbol.toLowerCase()}@miniTicker`
     }
@@ -242,7 +252,7 @@ export class BinanceStreamClient extends WS {
    *
    */
   ticker({ symbol = null }) {
-    let stream = '!ticker@arr'
+    let stream = "!ticker@arr"
     if (!isEmptyValue(symbol)) {
       stream = `${symbol.toLowerCase()}@ticker`
     }
@@ -343,10 +353,14 @@ export class BinanceStreamClient extends WS {
    * @param {string} listenKey
    */
   async userData() {
-    const listenKey = this.listenKey || (await this.#manageListenKey({ action: 'create' }).then((r) => r.listenKey))
+    const listenKey =
+      this.listenKey ||
+      (await this.#manageListenKey({ action: "create" }).then(
+        (r) => r.listenKey,
+      ))
     this.logger.debug(`binance listen key: ${listenKey}`)
     validateRequiredParameters({ listenKey })
     this.#subscribe(listenKey)
-    this.logger.success('WebSocket user data stream connected!')
+    this.logger.success("WebSocket user data stream connected!")
   }
 }

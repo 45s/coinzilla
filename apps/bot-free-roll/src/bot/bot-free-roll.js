@@ -1,5 +1,5 @@
 import { Bot } from "./bot.js"
-import { logErr } from "./log-err.js"
+import { logErr } from "../log-err.js"
 
 export class FreeRollBot extends Bot {
   #isRunning = false

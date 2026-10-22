@@ -1,5 +1,7 @@
-import { Console } from 'console'
-import { createWebSocket, WebSocket } from '../../../_libs/index.js'
+import { Console } from "console"
+// import { createWebSocket, WebSocket } from '../../../_libs/index.js'
+
+function createWebSocket() {}
 
 export class WS {
   constructor({ logger, wsURL, callbacks = {}, reconnectDelay } = {}) {
@@ -14,8 +16,8 @@ export class WS {
     this.wsConnection = {}
 
     this.callbacks = {
-      open: () => this.logger.debug('Connected with Websocket server'),
-      close: () => this.logger.debug('Disconnected with Websocket server'),
+      open: () => this.logger.debug("Connected with Websocket server"),
+      close: () => this.logger.debug("Disconnected with Websocket server"),
       message: (msg) => {
         const data = JSON.parse(msg)
         this.logger.info(data)
@@ -25,17 +27,20 @@ export class WS {
   }
 
   isConnected() {
-    return !(!this.wsConnection.ws || this.wsConnection.ws.readyState !== WebSocket.OPEN)
+    return !(
+      !this.wsConnection.ws ||
+      this.wsConnection.ws.readyState !== WebSocket.OPEN
+    )
   }
 
   disconnect() {
     if (this.isConnected()) {
       this.wsConnection.closeInitiated = true
       this.wsConnection.ws.close()
-      this.logger.info('Disconnected with Binance Websocket Server')
+      this.logger.info("Disconnected with Binance Websocket Server")
       return
     }
-    this.logger.warn('No connection to close.')
+    this.logger.warn("No connection to close.")
   }
 
   initConnect(url) {
@@ -57,7 +62,7 @@ export class WS {
 
     const onPing = () => {
       // As ping pong is very important for maintaining the connection, log them as INFO level
-      this.logger.system('Received PING from server')
+      this.logger.system("Received PING from server")
       this.callbacks.ping && this.callbacks.ping()
       ws.pong()
       // eslint-disable-next-line quotes
@@ -65,12 +70,12 @@ export class WS {
     }
 
     const onPong = () => {
-      this.logger.system('Received PONG from server')
+      this.logger.system("Received PONG from server")
       this.callbacks?.pong()
     }
 
     const onError = (err) => {
-      this.logger.error('Received error from server')
+      this.logger.error("Received error from server")
       this.callbacks?.error()
       this.logger.error(err)
     }
@@ -78,9 +83,11 @@ export class WS {
     const onClose = (closeEventCode, reason) => {
       if (!this.wsConnection.closeInitiated) {
         this.callbacks.close && this.callbacks.close()
-        this.logger.warn(`Connection close due to ${closeEventCode}: ${reason}.`)
+        this.logger.warn(
+          `Connection close due to ${closeEventCode}: ${reason}.`,
+        )
         setTimeout(() => {
-          this.logger.debug('Reconnect to the server.')
+          this.logger.debug("Reconnect to the server.")
           this.initConnect(url)
         }, this.reconnectDelay)
       } else {
@@ -88,26 +95,26 @@ export class WS {
       }
     }
 
-    ws.on('open', onOpen)
-    ws.on('message', onMessage)
-    ws.on('ping', onPing)
-    ws.on('pong', onPong)
-    ws.on('error', onError)
-    ws.on('close', onClose)
+    ws.on("open", onOpen)
+    ws.on("message", onMessage)
+    ws.on("ping", onPing)
+    ws.on("pong", onPong)
+    ws.on("error", onError)
+    ws.on("close", onClose)
   }
 
   pingServer() {
     if (this.isConnected()) {
-      this.logger.info('Send PING to the Websocket Server')
+      this.logger.info("Send PING to the Websocket Server")
       this.wsConnection.ws.ping()
       return
     }
-    this.logger.warn('Ping only can be sent when connection is ready.')
+    this.logger.warn("Ping only can be sent when connection is ready.")
   }
 
   send(payload) {
     if (this.isConnected()) {
-      this.logger.warn('Send only can be sent when connection is ready.')
+      this.logger.warn("Send only can be sent when connection is ready.")
     }
     this.wsConnection.ws.send(payload)
   }

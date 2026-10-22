@@ -12,7 +12,8 @@
     "test:watch": "node --test --watch"
   },
   "dependencies": {
-    "@coinzilla/utils": "workspace:*",
-    "@coinzilla/entities": "workspace:*"
+    "@binance/spot": "^34.0.3",
+    "@coinzilla/entities": "workspace:*",
+    "@coinzilla/utils": "workspace:*"
   }
 }
