@@ -1,31 +1,32 @@
-import {
-  Spot,
-  SPOT_WS_API_TESTNET_URL,
-  SPOT_WS_STREAMS_TESTNET_URL,
-} from "@binance/spot"
+import { Spot } from "@binance/spot"
 
 import { CoreBroker } from "../../broker.core.js"
 
 export class BinanceSdkBroker extends CoreBroker {
-  constructor(input = {}) {
+  constructor(input) {
     super(input)
+    const {
+      apiKey,
+      apiSecret,
+      websocketApiUrl,
+      websocketStreamsUrl,
+      reconnectDelay,
+    } = input
 
-    const { BINANCE_API_KEY, BINANCE_API_SECRET_KEY } = process.env
-
-    if (!BINANCE_API_KEY || !BINANCE_API_SECRET_KEY) {
+    if (!apiKey || !apiSecret) {
       throw new Error("Missing Binance API credentials")
     }
 
     this.client = new Spot({
       configurationWebsocketAPI: {
-        apiKey: BINANCE_API_KEY,
-        apiSecret: BINANCE_API_SECRET_KEY,
-        wsURL: SPOT_WS_API_TESTNET_URL,
-        reconnectDelay: 5000,
+        apiKey,
+        apiSecret,
+        wsURL: websocketApiUrl,
+        reconnectDelay,
       },
       configurationWebsocketStreams: {
-        wsURL: SPOT_WS_STREAMS_TESTNET_URL,
-        reconnectDelay: 5000,
+        wsURL: websocketStreamsUrl,
+        reconnectDelay,
       },
     })
 
@@ -56,7 +57,7 @@ export class BinanceSdkBroker extends CoreBroker {
       omitZeroBalances: true,
     })
 
-    return response.data().balances
+    return response.data.balances
   }
 
   async getOpenOrders({ symbol } = {}) {
@@ -64,7 +65,7 @@ export class BinanceSdkBroker extends CoreBroker {
       symbol ? { symbol } : {},
     )
 
-    return response.data()
+    return response.data
   }
 
   async getOrder({ symbol, orderId }) {
@@ -73,7 +74,7 @@ export class BinanceSdkBroker extends CoreBroker {
       orderId,
     })
 
-    return response.data()
+    return response.data
   }
 
   async createOrder(order) {
@@ -83,7 +84,7 @@ export class BinanceSdkBroker extends CoreBroker {
       timeInForce: order.timeInForce ?? "GTC",
     })
 
-    return response.data()
+    return response.data
   }
 
   async cancelOrder({ symbol, orderId }) {
@@ -92,7 +93,7 @@ export class BinanceSdkBroker extends CoreBroker {
       orderId,
     })
 
-    return response.data()
+    return response.data
   }
 
   async cancelAllOpenOrders({ symbol }) {
@@ -100,13 +101,15 @@ export class BinanceSdkBroker extends CoreBroker {
       symbol,
     })
 
-    return response.data()
+    this.logger.debug(response)
+
+    return response.data
   }
 
   async getPrices({ symbol }) {
     const response = await this.tradingConnection.tickerPrice({ symbol })
 
-    return response.data()
+    return response.data
   }
 
   async subscribeForPrices({ symbol, onPrice }) {

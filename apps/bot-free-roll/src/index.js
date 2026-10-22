@@ -30,6 +30,8 @@ try {
     pair: "FDUSD",
   })
 
+  await broker.cancelAllOpenOrders({ symbol: "DOGEFDUSD" })
+
   // if (config.order.enabled) {
   //   const order = await broker.tradingConnection.orderPlace({
   //     symbol: config.symbol,
