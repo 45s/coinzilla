@@ -11,11 +11,11 @@ export class CoreBroker {
     this.prices = new Map()
     this.priceSubscriptions = new Map()
   }
-
-  getAssets = foo("getAssets")
-  cancelOrder = foo("cancelOrder")
-  getOpenOrders = foo("getOpenOrders")
-  getPrice = foo("getPrice")
-  createOrder = foo("createOrder")
-  subscribeForPrices = foo("subscribeForPrices")
 }
+
+CoreBroker.prototype.getAssets = foo("getAssets")
+CoreBroker.prototype.cancelOrder = foo("cancelOrder")
+CoreBroker.prototype.getOpenOrders = foo("getOpenOrders")
+CoreBroker.prototype.getPrice = foo("getPrice")
+CoreBroker.prototype.createOrder = foo("createOrder")
+CoreBroker.prototype.subscribeForPrices = foo("subscribeForPrices")

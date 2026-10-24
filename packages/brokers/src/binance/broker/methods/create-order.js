@@ -3,8 +3,8 @@ import {
   generateSignQuery,
   generateSignature,
   send,
+  adaptOrder,
 } from "../../shared/index.js"
-import { adaptOrder } from "../adapters/index.js"
 
 /**
  * @param order {

@@ -7,7 +7,7 @@ import {
 import { isProdMode } from "@coinzilla/utils"
 
 export class BinanceSdkConfig {
-  constructor(input = {}) {
+  constructor(input) {
     const {
       apiKey,
       apiSecret,

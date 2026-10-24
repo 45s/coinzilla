@@ -3,8 +3,8 @@ import {
   generateSignQuery,
   send,
   generateSignature,
+  adaptOrder,
 } from "../../shared/index.js"
-import { adaptOrder } from "../adapters/index.js"
 
 /**
  * @see {@link https://binance-docs.github.io/apidocs/spot/en/#query-order-user_data}
