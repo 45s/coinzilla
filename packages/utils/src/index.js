@@ -1,18 +1,19 @@
-export { EM } from './error-messages.js'
-export { Logger, defaultLogger } from './logger.js'
-export { EVENTS, eventEmitter } from './events.js'
-export { addTextToFile } from './add-text-to-file.js'
-export { VR, Validator } from './validator.js'
-export { generateUUID } from './generate-uuid.js'
-export { checkIfFeatureEnable } from './check-if-feature-enable.js'
-export { handleErr } from './handle-err.js'
-export { capitalize } from './capitalize.js'
-export { wait } from './wait.js'
-export { formatTimeRelatively } from './format-time-relatively.js'
-export { calculateTimeDiff } from './calculate-time-diff.js'
-export { NH } from './number-helper.js'
+export { EM } from "./error-messages.js"
+export { Logger, defaultLogger } from "./logger.js"
+export { EVENTS, eventEmitter } from "./events.js"
+export { addTextToFile } from "./add-text-to-file.js"
+export { VR, Validator } from "./validator.js"
+export { generateUUID } from "./generate-uuid.js"
+export { checkIfFeatureEnable } from "./check-if-feature-enable.js"
+export { handleErr } from "./handle-err.js"
+export { capitalize } from "./capitalize.js"
+export { wait } from "./wait.js"
+export { formatTimeRelatively } from "./format-time-relatively.js"
+export { calculateTimeDiff } from "./calculate-time-diff.js"
+export { NH } from "./number-helper.js"
+export { toResult } from "./to-result.js"
 
 const { NODE_ENV } = process.env
-export const isDevMode = NODE_ENV === 'development'
-export const isProdMode = NODE_ENV === 'production'
-export const isTestingMode = NODE_ENV === 'testing'
+export const isDevMode = NODE_ENV === "development"
+export const isProdMode = NODE_ENV === "production"
+export const isTestingMode = NODE_ENV === "testing"

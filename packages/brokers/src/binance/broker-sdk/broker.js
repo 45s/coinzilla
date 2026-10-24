@@ -1,5 +1,4 @@
 import { Spot } from "@binance/spot"
-
 import { CoreBroker } from "../../broker.core.js"
 
 export class BinanceSdkBroker extends CoreBroker {
