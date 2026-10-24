@@ -1,5 +1,5 @@
+import { handleErr } from "@coinzilla/utils"
 import { Bot } from "./bot.js"
-import { logErr } from "../log-err.js"
 
 export class FreeRollBot extends Bot {
   #isRunning = false
@@ -27,7 +27,7 @@ export class FreeRollBot extends Bot {
       const r = await this.broker.placeOrder({ order })
       console.log({ r })
     } catch (error) {
-      logErr({ where: "FreeRollBot.placeOrder", error })
+      handleErr({ where: "FreeRollBot.placeOrder", error })
     }
   }
 

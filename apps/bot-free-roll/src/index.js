@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import { defaultLogger as logger } from "@coinzilla/utils"
 import { showAccount, watchOrderUpdates } from "./account.js"
 import { runBot } from "./bot/index.js"
 import { prepareBroker } from "./prepare-broker.js"
@@ -14,11 +15,11 @@ try {
   })
 
   tradesStream.on("message", (trade) => {
-    console.log(`[price] ${trade.s}: ${trade.p}`)
+    logger.info(`[price] ${trade.s}: ${trade.p}`)
   })
 
   tradesStream.on("error", (error) => {
-    console.error("[market] Error:", error)
+    logger.error("[market] Error:", error)
   })
 
   await showAccount(broker.tradingConnection, config)
@@ -48,13 +49,13 @@ try {
   // }
 
   async function startShutdown() {
-    console.log("\n[bot] Shutting down...")
+    logger.info("\n[bot] Shutting down...")
     await Promise.allSettled([broker.disconnect(), bot?.stop()])
   }
   for (const n of ["SIGINT", "SIGTERM"]) {
     process.once(n, startShutdown)
   }
 } catch (error) {
-  console.error("[bot] Failed:", error)
+  logger.error("[bot] Failed:", error)
   process.exitCode = 1
 }

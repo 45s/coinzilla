@@ -4,8 +4,7 @@ export class Bot {
   }
 
   #validateConfig({ config }) {}
-
-  initialize() {}
-
-  run() {}
 }
+
+Bot.prototype.initialize = function () {}
+Bot.prototype.run = function () {}
