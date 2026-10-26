@@ -177,12 +177,8 @@ export class BinanceSdkBroker extends CoreBroker {
       const stream = this.marketConnection.aggTrade({
         symbol: symbol.toLowerCase(),
       })
-      stream.on("message", (trade) => {
-        onPrice({
-          symbol: trade.s,
-          price: trade.p,
-          timestamp: trade.T,
-        })
+      stream.on("message", (m) => {
+        onPrice(adaptMsg(m))
       })
       stream.on("error", (error) => {
         this.logger.error?.("Binance price stream error", error)
