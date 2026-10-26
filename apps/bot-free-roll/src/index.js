@@ -1,52 +1,44 @@
-import { readFile } from "node:fs/promises"
 import { defaultLogger as logger } from "@coinzilla/utils"
-import { showAccount, watchOrderUpdates } from "./account.js"
+import tradingConfig from "../trading-config.json" with { type: "json" }
 import { runBot } from "./bot/index.js"
 import { prepareBroker } from "./prepare-broker.js"
 
-const config = JSON.parse(
-  await readFile(new URL("../trading.json", import.meta.url), "utf8"),
-)
-
 try {
   const { broker } = await prepareBroker()
-  const tradesStream = broker.marketConnection.aggTrade({
-    symbol: config.symbol.toLowerCase(),
+  // const tradesStream = broker.marketConnection.aggTrade({
+  //   symbol: config.symbol.toLowerCase(),
+  // })
+
+  // tradesStream.on("message", (trade) => {
+  //   logger.info(`[price] ${trade.s}: ${trade.p}`)
+  // })
+
+  // tradesStream.on("error", (error) => {
+  //   logger.error("[market] Error:", error)
+  // })
+
+  const { stream } =
+    await broker.tradingConnection.userDataStreamSubscribeSignature()
+
+  stream.on("message", (message) => {
+    const event = message.event ?? message
+    if (event.e === "executionReport") {
+      console.log("[order update]", {
+        symbol: event.s,
+        orderId: event.i,
+        side: event.S,
+        status: event.X,
+        executionType: event.x,
+        price: event.p,
+        lastFilledQuantity: event.l,
+        totalFilledQuantity: event.z,
+      })
+    }
   })
 
-  tradesStream.on("message", (trade) => {
-    logger.info(`[price] ${trade.s}: ${trade.p}`)
-  })
+  logger.info("[trade] Listening for order updates")
 
-  tradesStream.on("error", (error) => {
-    logger.error("[market] Error:", error)
-  })
-
-  await showAccount(broker.tradingConnection, config)
-  await watchOrderUpdates(broker.tradingConnection)
-
-  const { bot } = await runBot({
-    deposit: 1000,
-    ticker: "DOGE",
-    pair: "FDUSD",
-  })
-
-  await broker.cancelAllOpenOrders({ symbol: "DOGEFDUSD" })
-
-  // if (config.order.enabled) {
-  //   const order = await broker.tradingConnection.orderPlace({
-  //     symbol: config.symbol,
-  //     side: config.order.side,
-  //     type: "LIMIT",
-  //     timeInForce: "GTC",
-  //     price: config.order.price,
-  //     quantity: config.order.quantity,
-  //     newOrderRespType: "RESULT",
-  //   })
-  //   console.log("[trade] Order placed:", order.data)
-  // } else {
-  //   console.log("[trade] Order placement disabled in trading.json")
-  // }
+  const { bot } = await runBot({ tradingConfig, broker })
 
   async function startShutdown() {
     logger.info("\n[bot] Shutting down...")

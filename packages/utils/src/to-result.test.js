@@ -34,7 +34,7 @@ test("preserves falsy data values", () => {
   }
 })
 
-test("sets ok to false when error is provided", () => {
+test("wraps a single error in an errors array", () => {
   const error = {
     code: "NOT_FOUND",
     message: "Not found",
@@ -42,18 +42,36 @@ test("sets ok to false when error is provided", () => {
 
   assert.deepEqual(toResult({ error }), {
     ok: false,
-    error,
+    errors: [error],
   })
 })
 
-test("omits error when undefined", () => {
+test("preserves multiple errors", () => {
+  const errors = [
+    { code: "INVALID_PRICE", message: "Invalid price" },
+    { code: "INVALID_QUANTITY", message: "Invalid quantity" },
+  ]
+
+  assert.deepEqual(toResult({ errors }), {
+    ok: false,
+    errors,
+  })
+})
+
+test("omits errors when error is undefined", () => {
   assert.deepEqual(toResult({ error: undefined }), {
     ok: true,
   })
 })
 
-test("omits error when null", () => {
+test("omits errors when error is null", () => {
   assert.deepEqual(toResult({ error: null }), {
+    ok: true,
+  })
+})
+
+test("omits errors when the errors array is empty", () => {
+  assert.deepEqual(toResult({ errors: [] }), {
     ok: true,
   })
 })
@@ -82,7 +100,7 @@ test("calculates ok instead of trusting input ok", () => {
 
   assert.deepEqual(toResult({ ok: true, error: "Oops" }), {
     ok: false,
-    error: "Oops",
+    errors: ["Oops"],
   })
 })
 
@@ -100,7 +118,7 @@ test("does not mutate the input", () => {
   assert.deepEqual(input, original)
 })
 
-test("defaults undefined data to null", () => {
+test("preserves undefined data", () => {
   assert.deepEqual(toResult({ data: undefined }), {
     ok: true,
     data: undefined,

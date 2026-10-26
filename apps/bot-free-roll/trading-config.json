@@ -1,0 +1,12 @@
+{
+  "DOGEFDUSD": {
+    "enabled": true,
+    "priceStep": 0.001,
+    "orderQuantity": 100
+  },
+  "SOLFDUSD": {
+    "enabled": false,
+    "priceStep": 0.002,
+    "orderQuantity": 1
+  }
+}
