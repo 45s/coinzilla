@@ -1,1 +1,1 @@
-export { runBot } from "./run-bot.js"
+export { FreeRollBot } from "./bot-free-roll.js"

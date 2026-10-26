@@ -2,6 +2,7 @@ import { Spot } from "@binance/spot"
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptOrder, adaptSpotAsset } from "../shared/index.js"
+import { adaptMsg } from "../websocket-stream/index.js"
 
 export class BinanceSdkBroker extends CoreBroker {
   constructor(input) {
@@ -64,7 +65,7 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.getAssets()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
@@ -81,7 +82,7 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.getOpenOrders()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
@@ -99,7 +100,7 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.getOrder()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
@@ -119,7 +120,7 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.createOrder()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
@@ -137,7 +138,7 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.cancelOrder()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
@@ -154,42 +155,65 @@ export class BinanceSdkBroker extends CoreBroker {
         where: "BinanceSdkBroker.cancelAllOpenOrders()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
   async getPrices({ symbol }) {
     try {
       const response = await this.tradingConnection.tickerPrice({ symbol })
-      return toResult({
-        data: response.data,
-      })
+      return toResult({ data: response.data })
     } catch (error) {
       handleErr({
         where: "BinanceSdkBroker.getPrices()",
         error,
       })
-      return toResult({ error })
+      return toResult({ errors: [error] })
     }
   }
 
   async subscribeForPrices({ symbol, onPrice }) {
-    const stream = this.marketConnection.aggTrade({
-      symbol: symbol.toLowerCase(),
-    })
-
-    stream.on("message", (trade) => {
-      onPrice({
-        symbol: trade.s,
-        price: trade.p,
-        timestamp: trade.T,
+    try {
+      const stream = this.marketConnection.aggTrade({
+        symbol: symbol.toLowerCase(),
       })
-    })
+      stream.on("message", (trade) => {
+        onPrice({
+          symbol: trade.s,
+          price: trade.p,
+          timestamp: trade.T,
+        })
+      })
+      stream.on("error", (error) => {
+        this.logger.error?.("Binance price stream error", error)
+      })
+      return toResult({ data: stream })
+    } catch (error) {
+      handleErr({
+        where: "BinanceSdkBroker.subscribeForPrices()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
 
-    stream.on("error", (error) => {
-      this.logger.error?.("Binance price stream error", error)
-    })
-
-    return stream
+  async subscribeForUserData({ onEvent }) {
+    try {
+      const { stream } =
+        await this.tradingConnection.userDataStreamSubscribeSignature()
+      stream.on("message", (event) => {
+        onEvent({ event: adaptMsg(event) })
+      })
+      stream.on("error", (error) => {
+        this.logger.error?.("Binance user data stream error", error)
+      })
+      return toResult({ data: stream })
+    } catch (error) {
+      handleErr({
+        where: "BinanceSdkBroker.subscribeForUserData()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   }
 }
