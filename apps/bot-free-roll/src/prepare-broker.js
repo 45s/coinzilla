@@ -1,5 +1,5 @@
 import { BinanceSdkBroker, BinanceSdkConfig } from "@coinzilla/brokers"
-import { handleErr } from "@coinzilla/utils"
+import { handleErr, toResult } from "@coinzilla/utils"
 
 const { BINANCE_API_KEY, BINANCE_API_SECRET_KEY } = process.env
 
@@ -12,9 +12,9 @@ export async function prepareBroker() {
       }),
     )
     await broker.connect()
-    return {
-      broker,
-    }
+    return toResult({
+      data: broker,
+    })
   } catch (error) {
     handleErr({ error })
   }

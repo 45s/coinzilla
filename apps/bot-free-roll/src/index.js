@@ -1,18 +1,15 @@
-import { fileURLToPath } from "node:url"
-import path from "node:path"
-
 import { EventBus } from "@coinzilla/event-bus"
-import { Journal } from "@coinzilla/journal"
 import { defaultLogger as logger } from "@coinzilla/utils"
 
 import { prepareBroker } from "./prepare-broker.js"
-
-const directory = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../../logs_bot-free-roll",
-)
+import { prepareJournal } from "./prepare-journal.js"
 
 const eventBus = new EventBus({ logger })
+const { data: journal } = prepareJournal({
+  eventBus,
+  logger,
+  folderPath: "../../../logs_bot-free-roll",
+})
 
 eventBus.publish({
   name: "order.filled",
@@ -26,13 +23,7 @@ eventBus.publish({
   },
 })
 
-const journal = new Journal({
-  eventBus,
-  directory,
-  logger,
-})
-
-let broker
+const { data: broker } = await prepareBroker()
 let bot
 let shuttingDown = false
 
@@ -262,7 +253,7 @@ try {
   const journalResult = await journal.start()
 
   if (!journalResult.ok) {
-    throw new Error("Failed to start Coinzilla journal", {
+    throw new Error("Failed to start journal", {
       cause: journalResult.errors,
     })
   }
@@ -312,9 +303,6 @@ try {
       pid: process.pid,
     },
   })
-
-  const { broker: preparedBroker } = await prepareBroker()
-  broker = preparedBroker
 
   await broker.subscribeForUserData({
     onEvent: (event) => {
