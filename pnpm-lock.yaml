@@ -171,6 +171,9 @@ importers:
       '@coinzilla/brokers':
         specifier: workspace:*
         version: link:../../packages/brokers
+      '@coinzilla/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -188,6 +191,12 @@ importers:
         version: link:../utils
 
   packages/entities:
+    dependencies:
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../utils
+
+  packages/event-bus:
     dependencies:
       '@coinzilla/utils':
         specifier: workspace:*

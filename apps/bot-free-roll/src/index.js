@@ -31,3 +31,29 @@ try {
   logger.error("[bot] Failed:", error)
   process.exitCode = 1
 }
+
+// import { EventBus } from "@coinzilla/event-bus"
+
+// const eventBus = new EventBus()
+
+// eventBus.subscribe({
+//   name: "order.filled",
+//   handler: async ({ data }) => {
+//     console.log("Order filled:", data.orderId)
+//   },
+// })
+
+// eventBus.publish({
+//   name: "order.filled",
+//   source: "binance",
+//   data: {
+//     symbol: "DOGEFDUSD",
+//     orderId: "123456",
+//     side: "BUY",
+//     price: "0.05",
+//     quantity: "100",
+//   },
+// })
+
+// await eventBus.flush()
+// await eventBus.close()

@@ -13,6 +13,7 @@
   "type": "module",
   "dependencies": {
     "@coinzilla/brokers": "workspace:*",
+    "@coinzilla/event-bus": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   }
 }
