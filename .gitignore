@@ -1,3 +1,6 @@
 .env
 .env.development
 node_modules
+
+# Bot session logs
+/logs_bot-free-roll/

@@ -1,0 +1,19 @@
+{
+  "name": "@coinzilla/journal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@coinzilla/event-bus": "workspace:*",
+    "@coinzilla/utils": "workspace:*"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
