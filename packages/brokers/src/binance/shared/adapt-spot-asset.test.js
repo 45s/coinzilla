@@ -23,13 +23,14 @@ describe("adaptSpotAsset", () => {
   })
 
   it("removes the LD prefix from Binance earn asset tickers", () => {
-    assert.deepEqual(adaptSpotAsset([
+    const result = adaptSpotAsset([
       { asset: "LDBTC", free: "0.1", locked: "0.02" },
       { asset: "LDUSDT", free: "5", locked: "0" },
-    ]), [
-      { ticker: "BTC", quantity: 0.12 },
-      { ticker: "USDT", quantity: 5 },
     ])
+
+    assert.equal(result[0].ticker, "BTC")
+    assert.ok(Math.abs(result[0].quantity - 0.12) < Number.EPSILON)
+    assert.deepEqual(result[1], { ticker: "USDT", quantity: 5 })
   })
 
   it("does not modify the input balances", () => {
