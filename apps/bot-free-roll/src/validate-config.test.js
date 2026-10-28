@@ -10,10 +10,6 @@ function createValidConfig() {
         enabled: true,
         settings: {
           minProfit: 0.01,
-          commission: {
-            maker: 0,
-            taker: 0.001,
-          },
         },
         pairs: {
           DOGEFDUSD: {
@@ -23,6 +19,8 @@ function createValidConfig() {
             quantityPrecision: 0,
             orderQuantity: 100,
             keepQuantity: 1,
+            makerPercent: 0,
+            takerPercent: 0.075,
           },
           SOLFDUSD: {
             enabled: false,
@@ -31,6 +29,8 @@ function createValidConfig() {
             quantityPrecision: 0,
             orderQuantity: 1,
             keepQuantity: 0.01,
+            makerPercent: 0,
+            takerPercent: 0.075,
           },
         },
       },
@@ -95,24 +95,24 @@ test("invalid minProfit is rejected", () => {
   )
 })
 
-test("invalid commission rates are rejected", () => {
+test("invalid per-pair commission percentages are rejected", () => {
   const tradingConfig = createValidConfig()
-  const commission = tradingConfig.strategies["free-roll"].settings.commission
+  const pair = tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD
 
-  commission.maker = -0.1
-  commission.taker = 1.1
+  pair.makerPercent = -0.1
+  pair.takerPercent = 100.1
 
   const result = validateTradingConfig({ tradingConfig })
 
   assert.equal(result.ok, false)
   assert.ok(
     result.errors.includes(
-      "settings.commission.maker must be a number between 0 and 1",
+      "pairs.DOGEFDUSD.makerPercent must be a number between 0 and 100",
     ),
   )
   assert.ok(
     result.errors.includes(
-      "settings.commission.taker must be a number between 0 and 1",
+      "pairs.DOGEFDUSD.takerPercent must be a number between 0 and 100",
     ),
   )
 })
