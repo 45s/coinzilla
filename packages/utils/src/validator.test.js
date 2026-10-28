@@ -81,3 +81,7 @@ describe('Validator', () => {
     assert.equal(Validator.isRequiredNotEmptyString(123), false)
   })
 })
+
+it("ignores entries with an empty rules list", () => {
+  assert.equal(Validator.validate({ items: [["anything", []], [undefined, []]] }), undefined)
+})
