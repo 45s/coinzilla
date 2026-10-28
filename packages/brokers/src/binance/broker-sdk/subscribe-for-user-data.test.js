@@ -55,3 +55,15 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.equal(result.errors[0].message, "user stream unavailable")
   })
 })
+
+it("forwards unrecognized user-data messages unchanged", async () => {
+  const broker = createBroker()
+  const stream = new EventEmitter()
+  broker.tradingConnection = { userDataStreamSubscribeSignature: async () => ({ stream }) }
+  const received = []
+  const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
+  assert.equal(result.ok, true)
+  const message = { e: "futureEvent", payload: { id: 7 } }
+  stream.emit("message", message)
+  assert.deepEqual(received, [{ event: message }])
+})
