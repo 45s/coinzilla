@@ -4,7 +4,7 @@ import { send } from "../../shared/send.js"
 export async function getPrices({ tickets } = {}) {
   Validator.validate({
     isSoft: false,
-    items: [[tickets, [VR.required, VR.arr]]],
+    items: [[tickets, [VR.notEmptyArr], "tickets"]],
   })
   const path = `ticker/price?symbols=${JSON.stringify(tickets)}`
   try {
