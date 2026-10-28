@@ -30,3 +30,10 @@ describe(`_utils/${NH.name}`, () => {
     })
   })
 })
+
+  describe("configurable precision", () => {
+    it("rounds to the requested number of decimal places", () => {
+      assert.strictEqual(NH.round(1.23456, 3), 1.235)
+      assert.strictEqual(NH.round(1.23456, 0), 1)
+    })
+  })
