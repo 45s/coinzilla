@@ -1,136 +1,593 @@
 import { handleErr, defaultLogger as logger } from "@coinzilla/utils"
-import { validateConfig } from "./helpers/index.js"
+import {
+  createKeyedQueue,
+  disconnectSubscriptions,
+  validateConfig,
+  calculateBuyThreshold,
+  calculateSellPlan,
+  estimateBuyAccounting,
+  estimateSellAccounting,
+  getOrderId,
+  roundPriceDown,
+  unwrapResult,
+} from "./helpers/index.js"
+
+const TERMINAL_FAILURES = new Set([
+  "CANCELED",
+  "REJECTED",
+  "EXPIRED",
+  "EXPIRED_IN_MATCH",
+])
 
 export class FreeRollBot {
   logger = logger
+
   #isRunning = false
   #subscriptions = new Map()
-  #lastBuyPrice = new Map()
-  #pendingOrders = new Map()
+  #userDataSubscription = null
+  #states = new Map()
+  #queue
 
   constructor(config) {
-    const r = validateConfig({ config })
-    if (!r.ok) {
-      this.logger.error(r.errors)
-      throw new AggregateError(r.errors, "Invalid FreeRollBot config")
+    const validation = validateConfig({ config })
+
+    if (!validation.ok) {
+      throw new AggregateError(validation.errors, "Invalid FreeRollBot config")
     }
-    const { broker, pairs } = config
+
+    const { broker, pairs, settings = {} } = config
+
+    if (!broker || !pairs || typeof pairs !== "object") {
+      throw new Error("FreeRollBot requires broker and pairs")
+    }
+
     this.broker = broker
-    this.pairs = pairs
+
+    this.#queue = createKeyedQueue({
+      onError: ({ key, error }) => {
+        handleErr({ where: `FreeRollBot(${key})`, error })
+        this.#debug(`[${key}] Queued task failed`, error)
+      },
+    })
+
+    this.settings = {
+      minProfit: settings.minProfit ?? 0.01,
+      makerFee: settings.commission?.maker ?? 0,
+      takerFee: settings.commission?.taker ?? 0.001,
+    }
+
+    this.feeRate = Math.max(this.settings.makerFee, this.settings.takerFee)
+
+    if (
+      !Number.isFinite(this.settings.minProfit) ||
+      this.settings.minProfit <= 0 ||
+      !Number.isFinite(this.feeRate) ||
+      this.feeRate < 0 ||
+      this.feeRate >= 1
+    ) {
+      throw new Error("Invalid minProfit or commission settings")
+    }
+
+    for (const [symbol, pair] of Object.entries(pairs)) {
+      if (pair.enabled === false) {
+        this.#debug(`[${symbol}] Disabled; skipping`)
+        continue
+      }
+
+      if (
+        !Number.isFinite(pair.priceStep) ||
+        pair.priceStep <= 0 ||
+        !Number.isFinite(pair.orderQuantity) ||
+        pair.orderQuantity <= 0 ||
+        !Number.isFinite(pair.keepQuantity) ||
+        pair.keepQuantity < 0 ||
+        pair.keepQuantity >= pair.orderQuantity
+      ) {
+        throw new Error(`${symbol}: invalid pair settings`)
+      }
+
+      this.#states.set(symbol, {
+        settings: pair,
+        referencePrice: null,
+        lastBuyPrice: null,
+        buyOrder: null,
+        sellOrder: null,
+        activeQuantity: 0,
+        cycleCost: 0,
+        saleProceeds: 0,
+        freeQuantity: 0,
+        cancelingOrderIds: new Set(),
+        paused: false,
+      })
+
+      this.#debug(`[${symbol}] Pair initialized`, pair)
+    }
+
+    this.#debug("Configuration initialized", {
+      minProfit: this.settings.minProfit,
+      feeRate: this.feeRate,
+      enabledPairs: [...this.#states.keys()],
+    })
+  }
+
+  #debug(message, details) {
+    if (typeof this.logger.debug !== "function") return
+
+    this.logger.debug(details === undefined ? message : { message, details })
   }
 
   async run() {
-    if (this.#isRunning) return
+    if (this.#isRunning) {
+      this.#debug("run() ignored; bot already running")
+      return
+    }
+
     this.#isRunning = true
+    this.#debug("Starting bot")
+
     try {
-      for (const [symbol, settings] of Object.entries(this.pairs)) {
-        this.#validateSettings(symbol, settings)
-        const subscription = await this.broker.subscribeForPrices({
-          symbol,
-          onPrice: (tick) => {
-            if (this.#isRunning) {
-              void this.#handlePrice(symbol, tick)
-            }
+      if (this.#states.size === 0) {
+        throw new Error("No enabled pairs configured")
+      }
+
+      const userData = unwrapResult(
+        await this.broker.subscribeForUserData({
+          onEvent: (payload) => {
+            const event = payload?.event ?? payload
+            const order = event?.executedOrder
+            const symbol = order?.symbol ?? event?.symbol
+
+            this.#debug("User-data event received", {
+              eventType: event?.eventType,
+              executionType: event?.executionType,
+              symbol,
+              orderId: getOrderId(order),
+              status: order?.status,
+            })
+
+            if (!symbol || !this.#states.has(symbol)) return
+
+            void this.#enqueue(symbol, () =>
+              this.#handleOrderEvent(symbol, event),
+            )
           },
-        })
+        }),
+        "subscribeForUserData",
+      )
+
+      this.#userDataSubscription = userData
+
+      for (const [symbol] of this.#states) {
+        const subscription = unwrapResult(
+          await this.broker.subscribeForPrices({
+            symbol,
+            onPrice: (tick) => {
+              if (!this.#isRunning) return
+
+              void this.#enqueue(symbol, () => this.#handlePrice(symbol, tick))
+            },
+          }),
+          `subscribeForPrices(${symbol})`,
+        )
 
         this.#subscriptions.set(symbol, subscription)
-        console.log(`[FreeRollBot] Subscribed: ${symbol}`)
+        this.#debug(`[${symbol}] Price subscription active`)
       }
+
+      this.#debug("Bot started successfully")
     } catch (error) {
       this.#isRunning = false
+      await this.#disconnectSubscriptions()
       handleErr({ where: "FreeRollBot.run()", error })
       throw error
     }
   }
 
   async stop() {
+    this.#debug("Stopping bot")
     this.#isRunning = false
-    for (const subscription of this.#subscriptions.values()) {
-      subscription?.disconnect?.()
-    }
-    this.#subscriptions.clear()
-    this.logger.info("[FreeRollBot] Stopped")
+    await this.#disconnectSubscriptions()
+
+    this.#debug("Bot stopped; existing exchange orders were left untouched")
+  }
+
+  getStats() {
+    return Object.fromEntries(
+      [...this.#states].map(([symbol, state]) => [
+        symbol,
+        {
+          paused: state.paused,
+          referencePrice: state.referencePrice,
+          lastBuyPrice: state.lastBuyPrice,
+          activeQuantity: state.activeQuantity,
+          cycleCost: state.cycleCost,
+          saleProceeds: state.saleProceeds,
+          freeQuantity: state.freeQuantity,
+          buyOrderId: getOrderId(state.buyOrder),
+          sellOrderId: getOrderId(state.sellOrder),
+        },
+      ]),
+    )
+  }
+
+  #enqueue(symbol, task) {
+    return this.#queue.enqueue({ key: symbol, task })
   }
 
   async #handlePrice(symbol, tick) {
-    if (this.#pendingOrders.has(symbol)) return
+    const state = this.#states.get(symbol)
+    const price = Number(tick?.price)
 
-    const settings = this.pairs[symbol]
-    const price = Number(tick.price)
+    this.#debug(`[${symbol}] Price received`, {
+      price,
+      referencePrice: state.referencePrice,
+      lastBuyPrice: state.lastBuyPrice,
+      buyOrderId: getOrderId(state.buyOrder),
+      paused: state.paused,
+    })
 
+    if (!this.#isRunning || state.paused || state.buyOrder) return
     if (!Number.isFinite(price) || price <= 0) return
 
-    const lastBuyPrice = this.#lastBuyPrice.get(symbol)
-
-    // First price establishes the initial reference.
-    if (lastBuyPrice === undefined) {
-      this.#lastBuyPrice.set(symbol, price)
-      console.log(`[${symbol}] Initial reference price: ${price}`)
+    if (state.referencePrice === null) {
+      state.referencePrice = price
+      this.#debug(`[${symbol}] Initial reference established`, { price })
       return
     }
 
-    // Buy when price falls by the configured percentage from the last buy.
-    if (price > lastBuyPrice * (1 - settings.priceStep)) return
+    const threshold = calculateBuyThreshold({
+      referencePrice: state.referencePrice,
+      lastBuyPrice: state.lastBuyPrice,
+      priceStep: state.settings.priceStep,
+    })
 
-    await this.#placeBuyOrder(symbol, price, settings)
+    this.#debug(`[${symbol}] Buy threshold evaluated`, {
+      price,
+      threshold,
+      priceStep: state.settings.priceStep,
+      shouldBuy: price <= threshold,
+    })
+
+    if (threshold <= 0 || price > threshold) return
+
+    await this.#placeBuy(symbol, threshold)
   }
 
-  async #placeBuyOrder(symbol, price, settings) {
-    this.#pendingOrders.set(symbol, true)
+  async #placeBuy(symbol, rawPrice) {
+    const state = this.#states.get(symbol)
+    if (state.paused || state.buyOrder) return
+
+    const price = roundPriceDown(rawPrice, state.settings.priceTickSize ?? 0)
+
+    const quantity = state.settings.orderQuantity
+
+    this.#debug(`[${symbol}] Submitting BUY`, { price, quantity })
 
     try {
-      const result = await this.broker.createOrder({
-        symbol,
-        side: "BUY",
-        type: "LIMIT",
-        timeInForce: "GTC",
-        quantity: String(settings.orderQuantity),
-        price: String(price),
-      })
+      const order = unwrapResult(
+        await this.broker.createOrder({
+          symbol,
+          side: "BUY",
+          type: "LIMIT",
+          timeInForce: "GTC",
+          quantity: String(quantity),
+          price: String(price),
+        }),
+        `create BUY ${symbol}`,
+      )
 
-      if (result?.error || !result?.data) {
-        throw result?.error ?? new Error(`Failed to place ${symbol} buy order`)
-      }
+      const id = getOrderId(order)
+      if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
-      const order = result.data
+      state.buyOrder = { id, quantity, price }
 
-      // Prevent duplicate buys until this order is reconciled.
-      this.#pendingOrders.set(symbol, order.orderId ?? order)
-
-      console.log(`[${symbol}] Limit buy submitted`, {
+      this.#debug(`[${symbol}] BUY submitted`, {
+        orderId: id,
         price,
-        quantity: settings.orderQuantity,
-        orderId: order.orderId,
+        quantity,
+        response: order,
       })
     } catch (error) {
-      this.#pendingOrders.delete(symbol)
-      handleErr({ where: "FreeRollBot.placeBuyOrder", error })
+      this.#pause(symbol, "BUY submission failed", error)
     }
   }
 
-  async observePrice() {
-    // Price subscriptions are started by run().
-  }
+  async #handleOrderEvent(symbol, event) {
+    if (event?.eventType !== "executionReport") return
 
-  async observeOrders() {
-    // Fill tracking will be added in the next step.
-  }
+    const state = this.#states.get(symbol)
+    const order = event.executedOrder
+    const id = getOrderId(order)
+    const status = String(order?.status ?? "").toUpperCase()
 
-  #validateSettings(symbol, settings) {
-    if (
-      !Number.isFinite(settings?.priceStep) ||
-      settings.priceStep <= 0 ||
-      settings.priceStep >= 1
-    ) {
-      throw new Error(`${symbol}: priceStep must be between 0 and 1`)
+    if (!state || !id) return
+
+    if (state.cancelingOrderIds.has(id)) {
+      this.#debug(`[${symbol}] Event received while canceling order`, {
+        id,
+        status,
+      })
+
+      if (TERMINAL_FAILURES.has(status)) {
+        state.cancelingOrderIds.delete(id)
+      }
+
+      return
     }
 
-    if (
-      !Number.isFinite(settings?.orderQuantity) ||
-      settings.orderQuantity <= 0
-    ) {
-      throw new Error(`${symbol}: orderQuantity must be positive`)
+    this.#debug(`[${symbol}] Processing order event`, {
+      id,
+      status,
+      executionType: event.executionType,
+    })
+
+    if (state.buyOrder?.id === id) {
+      if (status === "FILLED") {
+        await this.#handleBuyFilled(symbol)
+      } else if (TERMINAL_FAILURES.has(status)) {
+        this.#pause(
+          symbol,
+          `BUY ${id} ended as ${status}; reconcile fills before continuing`,
+        )
+      }
+
+      return
     }
+
+    if (state.sellOrder?.id === id) {
+      if (status === "FILLED") {
+        await this.#handleSellFilled(symbol)
+      } else if (TERMINAL_FAILURES.has(status)) {
+        this.#pause(
+          symbol,
+          `SELL ${id} ended as ${status}; reconcile fills before continuing`,
+        )
+      }
+    }
+  }
+
+  async #handleBuyFilled(symbol) {
+    const state = this.#states.get(symbol)
+    const order = state.buyOrder
+    if (!order || state.paused) return
+
+    state.buyOrder = null
+
+    const accounting = estimateBuyAccounting({
+      quantity: order.quantity,
+      price: order.price,
+      feeRate: this.feeRate,
+    })
+
+    state.lastBuyPrice = order.price
+    state.activeQuantity += accounting.netQuantity
+    state.cycleCost += accounting.estimatedCost
+
+    this.#debug(`[${symbol}] BUY accounted`, {
+      order,
+      accounting,
+      activeQuantity: state.activeQuantity,
+      cycleCost: state.cycleCost,
+    })
+
+    if (!(await this.#replaceSell(symbol))) return
+    await this.#placeNextBuy(symbol)
+  }
+
+  async #replaceSell(symbol) {
+    const state = this.#states.get(symbol)
+
+    if (state.sellOrder && !(await this.#cancelSell(symbol))) {
+      return false
+    }
+
+    return this.#placeSell(symbol)
+  }
+
+  async #cancelSell(symbol) {
+    const state = this.#states.get(symbol)
+    const order = state.sellOrder
+    if (!order) return true
+
+    state.cancelingOrderIds.add(order.id)
+    this.#debug(`[${symbol}] Canceling old SELL`, order)
+
+    try {
+      const canceled = unwrapResult(
+        await this.broker.cancelOrder({
+          symbol,
+          orderId: order.id,
+        }),
+        `cancel SELL ${symbol} ${order.id}`,
+      )
+
+      // Existing adapter reports remaining quantity in .quantity.
+      const remaining = Number(canceled?.quantity)
+
+      if (!Number.isFinite(remaining) || remaining < 0) {
+        throw new Error("Cannot determine remaining quantity after cancel")
+      }
+
+      const filledQuantity = Math.max(0, order.quantity - remaining)
+
+      if (filledQuantity > 0) {
+        this.#recordSellFill(state, order, filledQuantity)
+      }
+
+      state.sellOrder = null
+      state.cancelingOrderIds.delete(order.id)
+
+      this.#debug(`[${symbol}] SELL cancellation reconciled`, {
+        orderId: order.id,
+        remaining,
+        filledQuantity,
+      })
+
+      return true
+    } catch (error) {
+      this.#pause(symbol, `Could not reconcile SELL ${order.id}`, error)
+      return false
+    }
+  }
+
+  async #placeSell(symbol) {
+    const state = this.#states.get(symbol)
+    if (state.paused) return false
+
+    const plan = calculateSellPlan({
+      activeQuantity: state.activeQuantity,
+      keepQuantity: state.settings.keepQuantity,
+      cycleCost: state.cycleCost,
+      saleProceeds: state.saleProceeds,
+      minProfit: this.settings.minProfit,
+      feeRate: this.feeRate,
+      priceTickSize: state.settings.priceTickSize ?? 0,
+    })
+
+    this.#debug(`[${symbol}] SELL plan calculated`, {
+      plan,
+      activeQuantity: state.activeQuantity,
+      cycleCost: state.cycleCost,
+      saleProceeds: state.saleProceeds,
+      keepQuantity: state.settings.keepQuantity,
+    })
+
+    if (plan.quantity <= 0 || plan.price === null) return true
+
+    try {
+      const order = unwrapResult(
+        await this.broker.createOrder({
+          symbol,
+          side: "SELL",
+          type: "LIMIT",
+          timeInForce: "GTC",
+          quantity: String(plan.quantity),
+          price: String(plan.price),
+        }),
+        `create SELL ${symbol}`,
+      )
+
+      const id = getOrderId(order)
+      if (!id) throw new Error(`${symbol}: SELL response missing order ID`)
+
+      state.sellOrder = {
+        id,
+        quantity: plan.quantity,
+        price: plan.price,
+      }
+
+      this.#debug(`[${symbol}] Recovery SELL submitted`, {
+        ...state.sellOrder,
+        plan,
+        response: order,
+      })
+
+      return true
+    } catch (error) {
+      this.#pause(symbol, "Recovery SELL submission failed", error)
+      return false
+    }
+  }
+
+  async #placeNextBuy(symbol) {
+    const state = this.#states.get(symbol)
+    if (state.paused || state.buyOrder) return
+
+    const threshold = calculateBuyThreshold({
+      referencePrice: state.referencePrice,
+      lastBuyPrice: state.lastBuyPrice,
+      priceStep: state.settings.priceStep,
+    })
+
+    this.#debug(`[${symbol}] Scheduling next BUY`, { threshold })
+
+    if (threshold <= 0) {
+      this.#pause(symbol, "Next BUY price is not positive")
+      return
+    }
+
+    await this.#placeBuy(symbol, threshold)
+  }
+
+  async #handleSellFilled(symbol) {
+    const state = this.#states.get(symbol)
+    const order = state.sellOrder
+    if (!order || state.paused) return
+
+    state.sellOrder = null
+    this.#recordSellFill(state, order, order.quantity)
+
+    const required = state.cycleCost + this.settings.minProfit
+
+    this.#debug(`[${symbol}] SELL filled; checking recovery`, {
+      saleProceeds: state.saleProceeds,
+      requiredNetProceeds: required,
+      activeQuantity: state.activeQuantity,
+    })
+
+    if (state.saleProceeds + 1e-8 < required) {
+      this.#pause(symbol, "Completed sale did not meet estimated profit target")
+      return
+    }
+
+    state.freeQuantity += Math.max(0, state.activeQuantity)
+    state.activeQuantity = 0
+    state.cycleCost = 0
+    state.saleProceeds = 0
+
+    this.#debug(`[${symbol}] Recovery cycle completed`, {
+      freeQuantity: state.freeQuantity,
+    })
+  }
+
+  #recordSellFill(state, order, quantity) {
+    const accounting = estimateSellAccounting({
+      quantity,
+      price: order.price,
+      feeRate: this.feeRate,
+    })
+
+    state.activeQuantity = Math.max(
+      0,
+      state.activeQuantity - accounting.estimatedBaseDeduction,
+    )
+
+    state.saleProceeds += accounting.estimatedProceeds
+
+    this.#debug("SELL fill accounted", {
+      quantity,
+      price: order.price,
+      accounting,
+      activeQuantity: state.activeQuantity,
+      saleProceeds: state.saleProceeds,
+    })
+  }
+
+  #pause(symbol, message, error) {
+    const state = this.#states.get(symbol)
+    if (state) state.paused = true
+
+    this.logger.error?.({
+      message: `[${symbol}] PAUSED: ${message}`,
+      error: error?.message ?? error,
+    })
+
+    this.#debug(`[${symbol}] State paused`, {
+      message,
+      error: error?.message,
+    })
+  }
+
+  async #disconnectSubscriptions() {
+    const subscriptions = [
+      ...this.#subscriptions.values(),
+      this.#userDataSubscription,
+    ]
+
+    this.#subscriptions.clear()
+    this.#userDataSubscription = null
+
+    await disconnectSubscriptions({ subscriptions })
+    this.#debug("Subscriptions disconnected")
   }
 }

@@ -1,12 +1,34 @@
 {
-  "DOGEFDUSD": {
-    "enabled": true,
-    "priceStep": 0.001,
-    "orderQuantity": 100
-  },
-  "SOLFDUSD": {
-    "enabled": false,
-    "priceStep": 0.002,
-    "orderQuantity": 1
+  "strategies": {
+    "free-roll": {
+      "enabled": true,
+      "settings": {
+        "minProfit": 0.01,
+        "commission": {
+          "maker": 0,
+          "taker": 0.01
+        }
+      },
+      "pairs": {
+        "DOGEFDUSD": {
+          "enabled": false,
+          "priceStep": 0.001,
+          "orderQuantity": 100,
+          "keepQuantity": 1
+        },
+        "SOLFDUSD": {
+          "enabled": false,
+          "priceStep": 0.002,
+          "orderQuantity": 1,
+          "keepQuantity": 0.01
+        },
+        "ZROFDUSD": {
+          "enabled": true,
+          "priceStep": 0.01,
+          "orderQuantity": 5,
+          "keepQuantity": 0.01
+        }
+      }
+    }
   }
 }
