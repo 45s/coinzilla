@@ -158,7 +158,7 @@ export function calculateSellPlan({
   return {
     quantity,
     price: roundPriceUp(minimumPrice, priceTickSize),
-    requiredNetProceeds,
+    requiredNetProceeds: Number(requiredNetProceeds.toFixed(8)),
   }
 }
 

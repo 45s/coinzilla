@@ -91,3 +91,21 @@ test("calculateSellPlan rounds quantity down before calculating profitable price
   assert.equal(plan.quantity, 391)
   assert.equal(plan.price, 0.08233)
 })
+
+
+test("calculateSellPlan returns readable money precision without floating-point noise", () => {
+  const plan = calculateSellPlan({
+    activeQuantity: 1584,
+    keepQuantity: 1,
+    cycleCost: 128.00336,
+    saleProceeds: 0,
+    minProfit: 0.01,
+    feeRate: 0.01,
+    priceTickSize: 0.00001,
+    quantityStepSize: 1,
+  })
+
+  assert.equal(plan.quantity, 1567)
+  assert.equal(plan.requiredNetProceeds, 128.01336)
+  assert.equal(plan.price, 0.08252)
+})
