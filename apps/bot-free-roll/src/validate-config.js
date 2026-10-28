@@ -49,39 +49,12 @@ export function validateTradingConfig({ tradingConfig } = {}) {
     Array.isArray(settings)
   ) {
     errors.push('strategies["free-roll"].settings must be an object')
-  } else {
-    if (
-      typeof settings.minProfit !== "number" ||
-      !Number.isFinite(settings.minProfit) ||
-      settings.minProfit < 0
-    ) {
-      errors.push("settings.minProfit must be a non-negative number")
-    }
-
-    const commission = settings.commission
-
-    if (
-      commission === null ||
-      typeof commission !== "object" ||
-      Array.isArray(commission)
-    ) {
-      errors.push("settings.commission must be an object")
-    } else {
-      for (const type of ["maker", "taker"]) {
-        const rate = commission[type]
-
-        if (
-          typeof rate !== "number" ||
-          !Number.isFinite(rate) ||
-          rate < 0 ||
-          rate > 1
-        ) {
-          errors.push(
-            `settings.commission.${type} must be a number between 0 and 1`,
-          )
-        }
-      }
-    }
+  } else if (
+    typeof settings.minProfit !== "number" ||
+    !Number.isFinite(settings.minProfit) ||
+    settings.minProfit < 0
+  ) {
+    errors.push("settings.minProfit must be a non-negative number")
   }
 
   const pairs = strategy.pairs
@@ -145,6 +118,21 @@ export function validateTradingConfig({ tradingConfig } = {}) {
         errors.push(
           `pairs.${symbol}.keepQuantity must be a non-negative number`,
         )
+      }
+
+      for (const type of ["makerPercent", "takerPercent"]) {
+        const rate = pair[type]
+
+        if (
+          typeof rate !== "number" ||
+          !Number.isFinite(rate) ||
+          rate < 0 ||
+          rate > 100
+        ) {
+          errors.push(
+            `pairs.${symbol}.${type} must be a number between 0 and 100`,
+          )
+        }
       }
     }
   }
