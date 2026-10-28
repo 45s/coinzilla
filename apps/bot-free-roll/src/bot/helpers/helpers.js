@@ -79,6 +79,24 @@ export function roundPriceUp(price, tickSize = 0) {
   return Number((ticks * tickSize).toFixed(precision))
 }
 
+export function roundQuantityDown(quantity, stepSize = 0) {
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error("Quantity must be non-negative")
+  }
+
+  if (!Number.isFinite(stepSize) || stepSize < 0) {
+    throw new Error("stepSize must be non-negative")
+  }
+
+  if (stepSize === 0) {
+    return Math.floor(quantity * 1e8) / 1e8
+  }
+
+  const precision = getTickPrecision(stepSize)
+  const steps = Math.floor((quantity + stepSize * 1e-10) / stepSize)
+  return Number((steps * stepSize).toFixed(precision))
+}
+
 export function calculateSellPlan({
   activeQuantity,
   keepQuantity,
@@ -87,6 +105,7 @@ export function calculateSellPlan({
   minProfit,
   feeRate,
   priceTickSize = 0,
+  quantityStepSize = 0,
 }) {
   const values = {
     activeQuantity,
@@ -96,6 +115,7 @@ export function calculateSellPlan({
     minProfit,
     feeRate,
     priceTickSize,
+    quantityStepSize,
   }
 
   for (const [name, value] of Object.entries(values)) {
@@ -112,12 +132,16 @@ export function calculateSellPlan({
     minProfit <= 0 ||
     feeRate < 0 ||
     feeRate >= 1 ||
-    priceTickSize < 0
+    priceTickSize < 0 ||
+    quantityStepSize < 0
   ) {
     throw new Error("Invalid sell plan inputs")
   }
 
-  const quantity = Math.max(0, (activeQuantity - keepQuantity) / (1 + feeRate))
+  const quantity = roundQuantityDown(
+    Math.max(0, (activeQuantity - keepQuantity) / (1 + feeRate)),
+    quantityStepSize,
+  )
 
   if (quantity <= 0) {
     return {
