@@ -1,35 +1,60 @@
-import assert from 'node:assert'
-import { describe, it } from 'node:test'
-import { errMsgs, Coin } from './coin.js'
+import assert from "node:assert/strict"
+import { describe, it } from "node:test"
+import { errMsgs, Coin } from "./coin.js"
 
 describe(`${Coin.name}`, () => {
-  const ticker = 'btc'
+  const ticker = "btc"
   const quantity = 3
 
-  it('should return a coin entity', () => {
-    const c = new Coin({ ticker, quantity })
-    assert(c.ticker, 'BTC')
-    assert(c.quantity, quantity)
+  const createCoin = (overrides = {}) =>
+    new Coin({ ticker, quantity, ...overrides })
+
+  it("normalizes the ticker and exposes the complete value", () => {
+    const coin = createCoin({ ticker: "  btc  " })
+
+    assert.equal(coin.ticker, "BTC")
+    assert.equal(coin.quantity, quantity)
+    assert.deepEqual(coin.value, { ticker: "BTC", quantity })
   })
 
-  it('should throw an error with invalid ticker', () => {
-    assert.throws(() => new Coin(), {
-      message: errMsgs.ticker,
-    })
+  it("accepts zero quantity", () => {
+    const coin = createCoin({ quantity: 0 })
+
+    assert.equal(coin.quantity, 0)
+    assert.deepEqual(coin.value, { ticker: "BTC", quantity: 0 })
   })
 
-  it('should throw an error with invalid amount', () => {
-    assert.throws(() => new Coin({ ticker }), {
-      message: errMsgs.quantity,
-    })
-  })
-
-  it("should throw an error with non-finite amount", () => {
-    for (const quantity of [NaN, Infinity, -Infinity]) {
-      assert.throws(() => new Coin({ ticker, quantity }), {
-        message: errMsgs.quantity,
-      })
+  it("rejects missing, non-string, and blank tickers", () => {
+    for (const invalidTicker of [undefined, null, "", "   ", 123]) {
+      assert.throws(
+        () => createCoin({ ticker: invalidTicker }),
+        { message: errMsgs.ticker },
+      )
     }
   })
 
+  it("rejects missing, non-numeric, non-finite, and negative quantities", () => {
+    for (const invalidQuantity of [
+      undefined,
+      null,
+      "3",
+      NaN,
+      Infinity,
+      -Infinity,
+      -1,
+    ]) {
+      assert.throws(
+        () => createCoin({ quantity: invalidQuantity }),
+        { message: errMsgs.quantity },
+      )
+    }
+  })
+
+  it("requires constructor input to be an object", () => {
+    for (const input of [undefined]) {
+      assert.throws(() => new Coin(input), {
+        message: errMsgs.ticker,
+      })
+    }
+  })
 })
