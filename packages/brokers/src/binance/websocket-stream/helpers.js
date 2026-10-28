@@ -40,11 +40,10 @@ export function validateRequiredParameters(paramObject) {
 }
 
 /**
- * NOTE: The array conversion logic is different from usual query string.
- * E.g. symbols=["BTCUSDT","BNBBTC"] instead of symbols[]=BTCUSDT&symbols[]=BNBBTC
+ * NOTE: Arrays use JSON encoding, e.g. symbols=["BTCUSDT","BNBBTC"].
  */
 const stringifyKeyValuePair = ([key, value]) => {
-  const valueString = Array.isArray(value) ? `["${value.join('","')}"]` : value
+  const valueString = Array.isArray(value) ? JSON.stringify(value) : value
   return `${key}=${encodeURIComponent(valueString)}`
 }
 
