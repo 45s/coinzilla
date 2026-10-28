@@ -71,6 +71,13 @@ describe(`${Order.name}`, () => {
     )
   })
 
+  it("should reject negative quantity", () => {
+    assert.throws(
+      () => new Order({ symbol, type, side, quantity: -1, price, id }),
+      { message: errMsgs.quantity },
+    )
+  })
+
   it("should throw an error with invalid price", () => {
     assert.throws(
       () =>
@@ -81,6 +88,13 @@ describe(`${Order.name}`, () => {
           quantity,
           price: "43",
         }),
+      { message: errMsgs.price },
+    )
+  })
+
+  it("should reject negative price", () => {
+    assert.throws(
+      () => new Order({ symbol, type, side, quantity, price: -1, id }),
       { message: errMsgs.price },
     )
   })
