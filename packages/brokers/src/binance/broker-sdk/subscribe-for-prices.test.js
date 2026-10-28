@@ -60,3 +60,18 @@ describe("BinanceSdkBroker.subscribeForPrices", () => {
     assert.equal(result.errors[0].message, "stream unavailable")
   })
 })
+
+it("keeps the subscription result valid when a consumer callback throws", async () => {
+  const broker = createBroker()
+  const stream = new EventEmitter()
+  broker.marketConnection = { aggTrade: () => stream }
+  const result = await broker.subscribeForPrices({
+    symbol: "BTCUSDT",
+    onPrice: () => { throw new Error("consumer callback failed") },
+  })
+  assert.equal(result.ok, true)
+  assert.doesNotThrow(() => stream.emit("message", {
+    e: "aggTrade", E: 1, T: 1, s: "BTCUSDT", p: "1", q: "1",
+    m: false, M: false, a: 1, f: 1, l: 1,
+  }))
+})
