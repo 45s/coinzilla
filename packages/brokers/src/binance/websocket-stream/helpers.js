@@ -13,12 +13,11 @@ export function removeEmptyValue(obj) {
 
 export function isEmptyValue(input) {
   /**
-   * Scope of empty value: falsy value (except for false and 0),
-   * string with white space characters only, empty object, empty array
+   * Scope of empty value: falsy value (except for false and 0), string with white space characters only, empty object, empty array
    */
   return (
     (!input && input !== false && input !== 0) ||
-    ((typeof input === 'string' || input instanceof String) && /^\s+$/.test(input)) ||
+    ((typeof input === 'string' || input instanceof String) && /^\\s+$/.test(input)) ||
     (input instanceof Object && !Object.keys(input).length) ||
     (Array.isArray(input) && !input.length)
   )
@@ -37,6 +36,18 @@ export function validateRequiredParameters(paramObject) {
   if (emptyParams.length) {
     throw new MissingParameterError(emptyParams)
   }
+}
+
+export function getFirstTicket(tickets) {
+  if (!Array.isArray(tickets) || tickets.length === 0) {
+    throw new MissingParameterError(['tickets'])
+  }
+
+  if (typeof tickets[0] !== 'string' || tickets[0].trim() === '') {
+    throw new MissingParameterError(['tickets[0]'])
+  }
+
+  return tickets[0]
 }
 
 /**
