@@ -56,13 +56,21 @@ export class BinanceSdkBroker extends CoreBroker {
       const priceFilter = symbolInfo?.filters?.find(
         (filter) => filter.filterType === "PRICE_FILTER",
       )
+      const lotSizeFilter = symbolInfo?.filters?.find(
+        (filter) => filter.filterType === "LOT_SIZE",
+      )
       const tickSize = Number(priceFilter?.tickSize)
+      const stepSize = Number(lotSizeFilter?.stepSize)
 
       if (!Number.isFinite(tickSize) || tickSize <= 0) {
         throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
       }
 
-      return toResult({ data: { symbol, tickSize } })
+      if (!Number.isFinite(stepSize) || stepSize <= 0) {
+        throw new Error(`Binance LOT_SIZE stepSize missing for ${symbol}`)
+      }
+
+      return toResult({ data: { symbol, tickSize, stepSize } })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
       return toResult({ errors: [error] })
