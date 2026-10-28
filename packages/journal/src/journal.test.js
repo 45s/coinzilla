@@ -184,3 +184,46 @@ test("logs journal startup and shutdown", async () => {
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+
+test("rejects invalid records without writing them", async () => {
+  const context = await createTestJournal()
+
+  try {
+    for (const event of [undefined, null, "event", 123, []]) {
+      const result = await context.journal.record({ event })
+      assert.equal(result.ok, false)
+    }
+
+    const circular = {}
+    circular.self = circular
+    const result = await context.journal.record({ event: circular })
+    assert.equal(result.ok, false)
+
+    const flushResult = await context.journal.flush()
+    assert.equal(flushResult.ok, true)
+    assert.equal(await readFile(context.filePath, "utf8"), "")
+  } finally {
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+test("does not allow a journal to start more than once or restart after close", async () => {
+  const context = await createTestJournal()
+
+  try {
+    const secondStart = await context.journal.start()
+    assert.equal(secondStart.ok, false)
+
+    const closeResult = await context.journal.close()
+    assert.equal(closeResult.ok, true)
+
+    const restart = await context.journal.start()
+    assert.equal(restart.ok, false)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
