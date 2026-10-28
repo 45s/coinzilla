@@ -19,7 +19,7 @@ const colors = {
     cyan: '\x1b[36m',
     white: '\x1b[37m',
     gray: '\x1b[90m',
-    crimson: '\x1b[38m', // Scarlet
+    crimson: '\x1b[38m',
   },
   bg: {
     black: '\x1b[40m',
@@ -45,7 +45,9 @@ const levelColorsMap = {
 }
 
 const formatContent = (data) =>
-  ['string', 'number', 'boolean'].some((t) => typeof input === t) ? data : JSON.stringify(data, null, 2)
+  ['string', 'number', 'boolean'].some((type) => typeof data === type)
+    ? data
+    : JSON.stringify(data, null, 2)
 
 /**
  *
@@ -57,10 +59,6 @@ const formatContent = (data) =>
  * @returns
  */
 function createLog(input, { level = 'info' } = {}) {
-  /**
-   * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date#formats_of_tostring_method_return_values}
-   */
-
   const timestamp = [colors.fg.gray, new Date().toLocaleTimeString()]
   console.log(...timestamp, ...levelColorsMap[level], formatContent(input), colors.reset)
 }

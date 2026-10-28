@@ -1,9 +1,13 @@
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { wait as helper } from './wait.js'
+import { wait } from './wait.js'
 
-describe(`_utils/${helper.name}`, () => {
-  it('should return a promise', () => {
-    assert(helper(50) instanceof Promise)
+describe('wait', () => {
+  it('returns a promise', () => {
+    assert.equal(wait(0) instanceof Promise, true)
+  })
+
+  it('resolves after the requested delay', async () => {
+    await assert.doesNotReject(wait(0))
   })
 })

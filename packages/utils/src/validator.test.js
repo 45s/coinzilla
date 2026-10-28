@@ -1,42 +1,61 @@
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Validator, VR } from './validator.js'
 import { EM } from './error-messages.js'
 
-/**
- * @link https://dev.to/hi_iam_chris/node-test-runner-assertion-cheat-sheet-98o
- */
-describe(`utils/${Validator.name}`, () => {
-  it('should has static "validation" method', () => {
-    assert(typeof Validator.validate === 'function')
+describe('Validator', () => {
+  it('throws when items are missing or not an array', () => {
+    assert.throws(() => Validator.validate(), { message: EM.invalidParameter('items') })
+    assert.throws(() => Validator.validate({ items: {} }), { message: EM.invalidParameter('items') })
   })
 
-  it('should throw an error when "items" not provided', () => {
-    assert.throws(Validator.validate, { message: EM.invalidParameter('items') })
-  })
-
-  it('should return "undefined" if validation pass', () => {
+  it('returns undefined when all rules pass', () => {
     const items = [
-      [1, [VR.required, VR.num]],
-      ['not-empty-string', [VR.required, VR.str]],
+      [42, [VR.required, VR.num, VR.notUndefined], 'price'],
+      ['BTC', [VR.required, VR.str, VR.notEmptyString], 'symbol'],
+      [[1], [VR.arr, VR.notEmptyArr], 'values'],
     ]
-    const errors = Validator.validate({ items })
-    assert.strictEqual(errors, undefined)
+
+    assert.equal(Validator.validate({ items }), undefined)
   })
 
-  it('should return an object with errors, if validation failed', () => {
-    const strWithSpaces = '       '
+  it('collects all applicable validation errors and field names', () => {
     const items = [
-      [0, [VR.required, VR.str]],
-      [strWithSpaces, [VR.notEmptyString, VR.num]],
-      ['1', [VR.num]],
-      [undefined, [VR.notUndefined]],
+      [0, [VR.required, VR.str], 'quantity'],
+      ['   ', [VR.notEmptyString, VR.num], 'symbol'],
+      [undefined, [VR.notUndefined], 'timestamp'],
+      ['not-an-array', [VR.arr], 'items'],
+      [[], [VR.notEmptyArr], 'orders'],
     ]
+
     assert.deepEqual(Validator.validate({ items }), [
-      { value: 0, msgs: [EM.required(), EM.notString()] },
-      { value: strWithSpaces, msgs: [EM.emptyString(), EM.notNumber()] },
-      { value: '1', msgs: [EM.notNumber()] },
-      { value: undefined, msgs: [EM.undefined()] },
+      { value: 0, msgs: [EM.required(), EM.notString()], fieldName: 'quantity' },
+      { value: '   ', msgs: [EM.emptyString(), EM.notNumber()], fieldName: 'symbol' },
+      { value: undefined, msgs: [EM.undefined()], fieldName: 'timestamp' },
+      { value: 'not-an-array', msgs: [EM.arr()], fieldName: 'items' },
+      { value: [], msgs: [EM.emptyArray()], fieldName: 'orders' },
     ])
+  })
+
+  it('omits fieldName when none is supplied', () => {
+    assert.deepEqual(Validator.validate({ items: [['x', [VR.num]]] }), [
+      { value: 'x', msgs: [EM.notNumber()] },
+    ])
+  })
+
+  it('throws the collected errors when soft mode is disabled', () => {
+    assert.throws(
+      () => Validator.validate({ isSoft: false, items: [['x', [VR.num]]] }),
+      (error) => Array.isArray(error) && error[0].msgs[0] === EM.notNumber(),
+    )
+  })
+
+  it('returns booleans from required-value helpers', () => {
+    assert.equal(Validator.isRequiredNumberValid(5), true)
+    assert.equal(Validator.isRequiredNumberValid(0), false)
+    assert.equal(Validator.isRequiredNumberValid('5'), false)
+    assert.equal(Validator.isRequiredNotEmptyString('  BTC  '), true)
+    assert.equal(Validator.isRequiredNotEmptyString('   '), false)
+    assert.equal(Validator.isRequiredNotEmptyString(123), false)
   })
 })
