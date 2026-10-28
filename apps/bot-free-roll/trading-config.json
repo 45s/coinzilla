@@ -12,21 +12,21 @@
       "pairs": {
         "DOGEUSDT": {
           "enabled": true,
-          "priceStep": 0.0005,
           "orderQuantity": 400,
-          "keepQuantity": 1
+          "keepQuantity": 1,
+          "priceStepPercent": 0.05
         },
         "SOLFDUSD": {
           "enabled": false,
-          "priceStep": 0.0005,
           "orderQuantity": 1,
-          "keepQuantity": 0.01
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.05
         },
         "ZROUSDT": {
           "enabled": false,
-          "priceStep": 0.01,
           "orderQuantity": 5,
-          "keepQuantity": 0.01
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.05
         }
       }
     }
