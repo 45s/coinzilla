@@ -58,6 +58,14 @@ describe('Validator', () => {
     }
   })
 
+  it('handles invalid values safely with the non-empty-array rule', () => {
+    for (const value of [undefined, null, 'not-an-array', 42]) {
+      assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyArr]]] }), [
+        { value, msgs: [EM.emptyArray()] },
+      ])
+    }
+  })
+
   it('rejects non-finite values in required-number validation', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.equal(Validator.isRequiredNumberValid(value), false)

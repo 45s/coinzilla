@@ -40,7 +40,7 @@ export class Validator {
         if (r === VR.arr && !Array.isArray(value)) {
           msgs.push(EM.arr())
         }
-        if (r === VR.notEmptyArr && value.length === 0) {
+        if (r === VR.notEmptyArr && (!Array.isArray(value) || value.length === 0)) {
           msgs.push(EM.emptyArray())
         }
       }
