@@ -101,30 +101,38 @@ Strategies are keyed by strategy name. Pairs are keyed by trading symbol.
     "free-roll": {
       "enabled": true,
       "settings": {
-        "minProfit": 0.01,
-        "commission": {
-          "maker": 0,
-          "taker": 0.001
-        }
+        "minProfit": 0.01
       },
       "pairs": {
-        "DOGEFDUSD": {
+        "DOGEUSDT": {
           "enabled": true,
+          "makerPercent": 0.075,
+          "takerPercent": 0.075,
           "priceStepPercent": 0.05,
-          "orderQuantity": 100,
-          "keepQuantity": 1
-        },
-        "ZROFDUSD": {
-          "enabled": true,
-          "priceStepPercent": 0.05,
-          "orderQuantity": 5,
-          "keepQuantity": 0.01
+          "orderQuantity": 400,
+          "keepQuantity": 1,
+          "pricePrecision": 5,
+          "quantityPrecision": 0
         },
         "SOLFDUSD": {
           "enabled": false,
+          "makerPercent": 0,
+          "takerPercent": 0.075,
           "priceStepPercent": 0.05,
           "orderQuantity": 1,
-          "keepQuantity": 0.01
+          "keepQuantity": 0.01,
+          "pricePrecision": 2,
+          "quantityPrecision": 3
+        },
+        "ZROUSDT": {
+          "enabled": false,
+          "makerPercent": 0.075,
+          "takerPercent": 0.075,
+          "priceStepPercent": 0.05,
+          "orderQuantity": 5,
+          "keepQuantity": 0.01,
+          "pricePrecision": 3,
+          "quantityPrecision": 1
         }
       }
     }
@@ -146,8 +154,8 @@ The commission values above are examples, not universal defaults. Configure them
 | `free-roll`                 | Configuration for this strategy                                                       |
 | `enabled`                   | Enables or disables a strategy or individual pair                                     |
 | `settings.minProfit`        | Minimum required net profit per completed recovery sale, in the pair's quote currency |
-| `settings.commission.maker` | Expected maker commission rate                                                        |
-| `settings.commission.taker` | Expected taker commission rate                                                        |
+| `makerPercent`             | Expected maker commission percentage for this pair; 0.075 means 0.075%               |
+| `takerPercent`             | Expected taker commission percentage for this pair; 0.075 means 0.075%               |
 | `pairs`                     | Object containing per-pair settings                                                   |
 | `priceStepPercent`                 | Percentage decrease from the reference or last buy price that triggers the next buy; 0.05 means 0.05% |
 | `orderQuantity`             | Base-asset quantity for each buy order                                                |
@@ -163,13 +171,17 @@ Recovery SELL quantities are rounded **down** to the resolved quantity step befo
 
 ### Commission rate format
 
-Commission rates are decimal fractions.
+Commission rates are configured **per trading pair** as human-readable percentages.
 
 - `0` means 0%.
-- `0.001` means 0.1%.
-- `0.002` means 0.2%.
+- `0.075` means 0.075%.
+- `0.1` means 0.1%.
 
-Configured commission rates are estimates used when calculating safe order prices. Actual execution commissions must be recorded and used in the accounting ledger.
+The bot converts percentages to decimal rates by dividing by 100. For example, `0.075` becomes `0.00075` for calculations.
+
+The bot conservatively uses the higher of a pair's `makerPercent` and `takerPercent` for buy and sell estimates. This avoids assuming that a limit order will always receive maker fees. Configure both values for the actual account and pair; do not assume zero fees unless the account's current fee schedule confirms them.
+
+Configured rates are estimates used to calculate safe order prices. Actual execution commissions should be recorded and used in the accounting ledger.
 
 A limit order is not automatically a maker order. Depending on how it executes, it may be charged a maker or taker fee.
 
