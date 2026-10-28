@@ -3,6 +3,12 @@ import assert from "node:assert/strict"
 import { BinanceSdkBroker } from "./broker.js"
 import { BinanceSdkConfig } from "./binance-sdk-config.js"
 
+if (process.env.NODE_ENV === "production") {
+  throw new Error(
+    "Refusing to run Binance SDK integration tests with NODE_ENV=production",
+  )
+}
+
 const symbol = "DOGEFDUSD"
 const price = 0.05
 const quantity = 1_000
@@ -30,9 +36,7 @@ describe("BinanceSdkBroker integration (TESTNET)", () => {
   })
 
   it("fetches open orders", async () => {
-    const { ok, data: orders } = await broker.getOpenOrders({
-      symbol,
-    })
+    const { ok, data: orders } = await broker.getOpenOrders({ symbol })
     assert.ok(ok)
     assert.ok(Array.isArray(orders))
   })
@@ -48,10 +52,10 @@ describe("BinanceSdkBroker integration (TESTNET)", () => {
   it("fetches ticker price", async () => {
     const { ok, data } = await broker.getPrices({ symbol })
     assert.ok(ok)
-    assert.ok(data.symbol === symbol)
+    assert.equal(data.symbol, symbol)
   })
 
-  it("creates, checks, and cancels a test order", async (t) => {
+  it("creates, checks, and cancels a test order", async () => {
     let order
 
     try {
@@ -66,20 +70,17 @@ describe("BinanceSdkBroker integration (TESTNET)", () => {
       assert.ok(order.id)
       assert.equal(order.symbol, symbol)
 
-      const r = await broker.getOrder({
-        symbol,
-        orderId: order.id,
-      })
-      assert.ok(r.ok)
-      assert.equal(r.data.id, order.id)
+      const result = await broker.getOrder({ symbol, orderId: order.id })
+      assert.ok(result.ok)
+      assert.equal(result.data.id, order.id)
     } finally {
       if (order?.id) {
-        const r = await broker.cancelOrder({
+        const result = await broker.cancelOrder({
           symbol,
           orderId: order.id,
         })
-        assert.ok(r.ok)
-        assert.equal(order.id, r.data.id)
+        assert.ok(result.ok)
+        assert.equal(order.id, result.data.id)
       }
     }
   })
