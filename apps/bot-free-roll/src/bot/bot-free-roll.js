@@ -436,8 +436,22 @@ export class FreeRollBot {
         filledQuantity,
       })
 
+      this.#publish("order.cancelled", {
+        orderId: order.id,
+        symbol,
+        side: "SELL",
+        remainingQuantity: remaining,
+        filledQuantity,
+      })
+
       return true
     } catch (error) {
+      this.#publish("order.cancel_failed", {
+        orderId: order.id,
+        symbol,
+        side: "SELL",
+        error: error?.message ?? String(error),
+      })
       this.#pause(symbol, `Could not reconcile SELL ${order.id}`, error)
       return false
     }
