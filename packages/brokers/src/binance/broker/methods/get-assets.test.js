@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
-import { getAssets } from "./get-assets.js"
+process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
+process.env.BINANCE_API_KEY = "unit-test-key"
+process.env.BINANCE_SPOT_API_URL = "https://example.test"
+const { getAssets } = await import("./get-assets.js")
 
 const originalFetch = globalThis.fetch
 const originalConsoleError = console.error
