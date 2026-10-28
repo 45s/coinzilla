@@ -38,12 +38,12 @@ export class Order {
     }
     this.#side = side
 
-    if (!Validator.isRequiredNumberValid(quantity)) {
+    if (!Validator.isRequiredNumberValid(quantity) || quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#quantity = quantity
 
-    if (!Validator.isRequiredNumberValid(price)) {
+    if (!Validator.isRequiredNumberValid(price) || price < 0) {
       throw new Error(errMsgs.price)
     }
     this.#price = price
