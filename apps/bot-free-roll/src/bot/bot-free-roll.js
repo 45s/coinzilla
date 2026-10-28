@@ -95,6 +95,8 @@ export class FreeRollBot {
         quantityStepSize: null,
         lastPriceLogKey: null,
         referencePrice: null,
+        highestPrice: null,
+        lastAdjustmentPrice: null,
         lastBuyPrice: null,
         buyOrder: null,
         sellOrder: null,
@@ -357,9 +359,13 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     const price = Number(tick?.price)
 
+    if (!Number.isFinite(price) || price <= 0) return
+
     const priceDetails = {
       price,
       referencePrice: state.referencePrice,
+      highestPrice: state.highestPrice,
+      lastAdjustmentPrice: state.lastAdjustmentPrice,
       lastBuyPrice: state.lastBuyPrice,
       buyOrderId: getOrderId(state.buyOrder),
       buyOrder: state.buyOrder
@@ -385,27 +391,51 @@ export class FreeRollBot {
       state.lastPriceLogKey = priceLogKey
     }
 
-    if (!this.#isRunning || state.paused || state.buyOrder) return
-    if (!Number.isFinite(price) || price <= 0) return
+    if (!this.#isRunning || state.paused) return
+
+    if (state.buyOrder) {
+      state.highestPrice = Math.max(state.highestPrice ?? price, price)
+
+      const step = state.settings.priceStepPercent / 100
+      const adjustmentThreshold = (state.lastAdjustmentPrice ?? state.highestPrice) * (1 + step)
+
+      this.#debug(`[${symbol}] Trailing BUY evaluated`, {
+        price,
+        highestPrice: state.highestPrice,
+        lastAdjustmentPrice: state.lastAdjustmentPrice,
+        adjustmentThreshold,
+        buyOrderPrice: state.buyOrder.price,
+        shouldAdjust: price >= adjustmentThreshold,
+      })
+
+      if (price >= adjustmentThreshold) {
+        await this.#replaceTrailingBuy({ symbol, price })
+      }
+
+      return
+    }
 
     if (state.referencePrice === null) {
       state.referencePrice = price
-
-      const threshold = calculateBuyThreshold({
-        referencePrice: price,
-        lastBuyPrice: null,
-        priceStepPercent: state.settings.priceStepPercent,
-      })
-
+      state.highestPrice = price
       this.#debug(`[${symbol}] Initial reference established`, {
         price,
-        triggerThreshold: threshold,
-        buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
+        priceStepPercent: state.settings.priceStepPercent,
       })
-
-      await this.#placeBuy(symbol, threshold)
+      await this.#placeBuy(
+        symbol,
+        calculateBuyThreshold({
+          referencePrice: price,
+          lastBuyPrice: null,
+          priceStepPercent: state.settings.priceStepPercent,
+        }),
+      )
       return
     }
+
+    // Keep the reference moving upward while waiting for a new BUY.
+    state.highestPrice = Math.max(state.highestPrice ?? state.referencePrice, price)
+    state.referencePrice = state.highestPrice
 
     const threshold = calculateBuyThreshold({
       referencePrice: state.referencePrice,
@@ -415,15 +445,88 @@ export class FreeRollBot {
 
     this.#debug(`[${symbol}] Buy threshold evaluated`, {
       price,
+      referencePrice: state.referencePrice,
       triggerThreshold: threshold,
-      buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
       priceStepPercent: state.settings.priceStepPercent,
       shouldBuy: price <= threshold,
     })
 
-    if (threshold <= 0 || price > threshold) return
+    if (threshold > 0 && price <= threshold) {
+      await this.#placeBuy(symbol, threshold)
+    }
+  }
 
-    await this.#placeBuy(symbol, threshold)
+  async #replaceTrailingBuy({ symbol, price }) {
+    const state = this.#states.get(symbol)
+    const order = state.buyOrder
+
+    if (!order || state.paused) return
+
+    state.cancelingOrderIds.add(order.id)
+    this.#debug(`[${symbol}] Canceling BUY before trailing replacement`, {
+      orderId: order.id,
+      oldPrice: order.price,
+      marketPrice: price,
+    })
+
+    try {
+      const canceled = unwrapResult(
+        await this.broker.cancelOrder({ symbol, orderId: order.id }),
+        `cancel BUY ${symbol} ${order.id}`,
+      )
+
+      const remaining = Number(canceled?.quantity)
+      const status = String(canceled?.status ?? "").toUpperCase()
+
+      if (
+        status === "FILLED" ||
+        !Number.isFinite(remaining) ||
+        remaining < 0 ||
+        remaining < order.quantity - 1e-8
+      ) {
+        state.cancelingOrderIds.delete(order.id)
+        this.#pause(
+          symbol,
+          `BUY ${order.id} may have filled during trailing cancellation; reconcile before replacing`,
+        )
+        return
+      }
+
+      state.buyOrder = null
+      state.cancelingOrderIds.delete(order.id)
+
+      this.#publish("order.cancelled", {
+        orderId: order.id,
+        symbol,
+        side: "BUY",
+        remainingQuantity: remaining,
+        filledQuantity: 0,
+        reason: "trailing_replacement",
+      })
+
+      const replacementPrice =
+        price * (1 - state.settings.priceStepPercent / 100)
+
+      this.#debug(`[${symbol}] Replacing trailing BUY`, {
+        previousOrderId: order.id,
+        marketPrice: price,
+        replacementPrice,
+        priceStepPercent: state.settings.priceStepPercent,
+      })
+
+      state.referencePrice = price
+      state.highestPrice = price
+      await this.#placeBuy(symbol, replacementPrice)
+    } catch (error) {
+      state.cancelingOrderIds.delete(order.id)
+      this.#publish("order.cancel_failed", {
+        orderId: order.id,
+        symbol,
+        side: "BUY",
+        error: error?.message ?? String(error),
+      })
+      this.#pause(symbol, `Could not safely replace BUY ${order.id}`, error)
+    }
   }
 
   async #placeBuy(symbol, rawPrice) {
@@ -461,6 +564,7 @@ export class FreeRollBot {
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
       state.buyOrder = { id, quantity, price }
+      state.lastAdjustmentPrice = price / (1 - state.settings.priceStepPercent / 100)
 
       this.#publish("order.created", {
         orderId: id,
