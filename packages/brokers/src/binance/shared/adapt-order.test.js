@@ -1,6 +1,6 @@
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { adaptOrder as adapt, adaptOrder } from './adapt-order.js'
+import { adaptOrder } from './adapt-order.js'
 
 const mockedBinanceOrder = {
   symbol: 'BTCUSDT',
@@ -25,14 +25,35 @@ const mockedBinanceOrder = {
   selfTradePreventionMode: 'NONE',
 }
 
-describe(`brokers/binance/helpers/${adapt.name}`, () => {
-  it('should adapt an order', () => {
-    const r = adaptOrder(mockedBinanceOrder)
-    assert.strictEqual(r.id, mockedBinanceOrder.orderId.toString())
-    assert.strictEqual(r.type, mockedBinanceOrder.type)
-    assert.strictEqual(r.side, mockedBinanceOrder.side)
-    assert.strictEqual(r.price, +mockedBinanceOrder.price)
-    assert.strictEqual(r.quantity, +mockedBinanceOrder.origQty)
-    assert.strictEqual(r.symbol, mockedBinanceOrder.symbol)
+describe('adaptOrder', () => {
+  it('adapts an unfilled Binance order', () => {
+    const result = adaptOrder(mockedBinanceOrder)
+    assert.equal(result.id, String(mockedBinanceOrder.orderId))
+    assert.equal(result.type, mockedBinanceOrder.type)
+    assert.equal(result.side, mockedBinanceOrder.side)
+    assert.equal(result.price, Number(mockedBinanceOrder.price))
+    assert.equal(result.quantity, 1)
+    assert.equal(result.symbol, mockedBinanceOrder.symbol)
+  })
+
+  it('subtracts executed quantity from original quantity for a partial fill', () => {
+    const result = adaptOrder({
+      ...mockedBinanceOrder,
+      origQty: '1.00000000',
+      executedQty: '0.37500000',
+    })
+
+    assert.equal(result.quantity, 0.625)
+  })
+
+  it('rejects an order whose remaining quantity is zero', () => {
+    assert.throws(
+      () => adaptOrder({
+        ...mockedBinanceOrder,
+        origQty: '1.00000000',
+        executedQty: '1.00000000',
+      }),
+      /quantity =\+origQty - \+executedQty === 0/,
+    )
   })
 })
