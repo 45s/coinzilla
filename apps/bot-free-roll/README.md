@@ -177,13 +177,13 @@ The current priority is to implement the smallest correct version of the strateg
 
 Each pair maintains its own last qualifying buy price.
 
-`priceStepPercent` is an absolute price amount, not a percentage.
+`priceStepPercent` is a percentage, not an absolute price amount. The strategy calculates the next buy limit as `basePrice * (1 - priceStepPercent / 100)`, using the last qualifying buy price when available, otherwise the initial reference price.
 
 For example:
 
-- Last qualifying buy price: `0.100`
-- Configured `priceStepPercent`: `0.001`
-- Next buy trigger price: `0.099`
+- Base price: `0.100`
+- Configured `priceStepPercent`: `0.05` (0.05%)
+- Next buy limit before tick-size rounding: `0.09995`
 
 When the trigger condition is reached, the strategy must initiate the next buy according to the pair's configured `orderQuantity`.
 
@@ -623,7 +623,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.001`**
+Current version: **`v0.002`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
