@@ -105,11 +105,12 @@ export function validateTradingConfig({ tradingConfig } = {}) {
       }
 
       if (
-        typeof pair.priceStep !== "number" ||
-        !Number.isFinite(pair.priceStep) ||
-        pair.priceStep <= 0
+        typeof pair.priceStepPercent !== "number" ||
+        !Number.isFinite(pair.priceStepPercent) ||
+        pair.priceStepPercent <= 0 ||
+        pair.priceStepPercent >= 100
       ) {
-        errors.push(`pairs.${symbol}.priceStep must be greater than 0`)
+        errors.push(`pairs.${symbol}.priceStepPercent must be greater than 0 and less than 100`)
       }
 
       if (

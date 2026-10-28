@@ -18,13 +18,13 @@ function createValidConfig() {
         pairs: {
           DOGEFDUSD: {
             enabled: true,
-            priceStep: 0.001,
+            priceStepPercent: 0.05,
             orderQuantity: 100,
             keepQuantity: 1,
           },
           SOLFDUSD: {
             enabled: false,
-            priceStep: 0.002,
+            priceStepPercent: 0.05,
             orderQuantity: 1,
             keepQuantity: 0.01,
           },
@@ -117,7 +117,7 @@ test("invalid pair settings identify the affected pair", () => {
   const tradingConfig = createValidConfig()
   const pair = tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD
 
-  pair.priceStep = 0
+  pair.priceStepPercent = 0
   pair.orderQuantity = -100
   pair.keepQuantity = -1
 
@@ -125,7 +125,7 @@ test("invalid pair settings identify the affected pair", () => {
 
   assert.equal(result.ok, false)
   assert.ok(
-    result.errors.includes("pairs.DOGEFDUSD.priceStep must be greater than 0"),
+    result.errors.includes("pairs.DOGEFDUSD.priceStepPercent must be greater than 0 and less than 100"),
   )
   assert.ok(
     result.errors.includes(
@@ -143,18 +143,32 @@ test("multiple invalid pairs are reported independently", () => {
   const tradingConfig = createValidConfig()
   const pairs = tradingConfig.strategies["free-roll"].pairs
 
-  pairs.DOGEFDUSD.priceStep = 0
+  pairs.DOGEFDUSD.priceStepPercent = 0
   pairs.SOLFDUSD.orderQuantity = 0
 
   const result = validateTradingConfig({ tradingConfig })
 
   assert.equal(result.ok, false)
   assert.ok(
-    result.errors.includes("pairs.DOGEFDUSD.priceStep must be greater than 0"),
+    result.errors.includes("pairs.DOGEFDUSD.priceStepPercent must be greater than 0 and less than 100"),
   )
   assert.ok(
     result.errors.includes(
       "pairs.SOLFDUSD.orderQuantity must be greater than 0",
+    ),
+  )
+})
+
+test("priceStepPercent must be less than 100", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD.priceStepPercent = 100
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(
+    result.errors.includes(
+      "pairs.DOGEFDUSD.priceStepPercent must be greater than 0 and less than 100",
     ),
   )
 })
