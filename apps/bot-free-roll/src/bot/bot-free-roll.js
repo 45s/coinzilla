@@ -905,6 +905,7 @@ export class FreeRollBot {
     state.activeQuantity = 0
     state.cycleCost = 0
     state.saleProceeds = 0
+    state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
       freeQuantity: state.freeQuantity,
