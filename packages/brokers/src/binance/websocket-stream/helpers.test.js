@@ -26,7 +26,7 @@ describe("getFirstTicket", () => {
   })
 
   it("rejects missing, non-array, and empty ticket lists", () => {
-    for (const tickets of [undefined, null, "BTCUSDT", [], {}]) {
+    for (const tickets of [undefined, null, "BTCUSDT", [], {}, [42], ["   "]]) {
       assert.throws(() => getFirstTicket(tickets), {
         name: "MissingParameterError",
       })
