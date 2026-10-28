@@ -258,4 +258,61 @@ test("close waits for pending handlers and rejects new work", async () => {
     }).ok,
     false,
   )
+
+
+test("rejects invalid event sources and data payloads", async () => {
+  const { bus } = createTestBus()
+
+  for (const source of [undefined, null, "", "   ", 123]) {
+    const result = bus.publish({ name: "test.event", source })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /Event source/)
+  }
+
+  for (const data of [null, [], "text", 123, true]) {
+    const result = bus.publish({ name: "test.event", source: "test", data })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /Event data/)
+  }
+
+  await bus.close()
+})
+
+test("rejects invalid subscription names and handlers", async () => {
+  const { bus } = createTestBus()
+
+  for (const name of [undefined, null, "", "   ", 123]) {
+    const result = bus.subscribe({ name, handler: () => {} })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /Event name/)
+  }
+
+  for (const handler of [undefined, null, "handler", {}]) {
+    const result = bus.subscribe({ name: "test.event", handler })
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /Event handler/)
+  }
+
+  assert.equal(bus.subscribeAll({ handler: null }).ok, false)
+  await bus.close()
+})
+
+test("published event envelopes are frozen and contain generated metadata", async () => {
+  const { bus } = createTestBus()
+
+  const result = bus.publish({
+    name: "test.event",
+    source: "unit-test",
+    data: { count: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(Object.isFrozen(result.event), true)
+  assert.match(result.event.id, /^[0-9a-f-]{36}$/i)
+  assert.equal(typeof result.event.timestamp, "string")
+  assert.equal(result.event.name, "test.event")
+  assert.equal(result.event.source, "unit-test")
+  assert.deepEqual(result.event.data, { count: 1 })
+
+  await bus.close()
 })
