@@ -23,4 +23,13 @@ describe(`${Coin.name}`, () => {
       message: errMsgs.quantity,
     })
   })
+
+  it("should throw an error with non-finite amount", () => {
+    for (const quantity of [NaN, Infinity, -Infinity]) {
+      assert.throws(() => new Coin({ ticker, quantity }), {
+        message: errMsgs.quantity,
+      })
+    }
+  })
+
 })
