@@ -124,3 +124,8 @@ test("preserves undefined data", () => {
     data: undefined,
   })
 })
+
+test("normalizes a scalar errors value into an array", () => {
+  const error = new Error("invalid state")
+  assert.deepEqual(toResult({ errors: error }), { ok: false, errors: [error] })
+})
