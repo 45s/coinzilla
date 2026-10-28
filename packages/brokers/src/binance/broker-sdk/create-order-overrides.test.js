@@ -8,9 +8,9 @@ describe("BinanceSdkBroker.createOrder overrides", () => {
     let args
     broker.tradingConnection = { orderPlace: async (input) => {
       args = input
-      return { data: { symbol: "BTCUSDT", orderId: 10, type: "MARKET", side: "SELL", price: "0", origQty: "1", executedQty: "0" } }
+      return { data: { symbol: "BTCUSDT", orderId: 10, type: "MARKET", side: "SELL", price: "100", origQty: "1", executedQty: "0" } }
     } }
-    const input = { symbol: "BTCUSDT", quantity: 1, price: 0, side: "SELL", type: "MARKET", timeInForce: "IOC" }
+    const input = { symbol: "BTCUSDT", quantity: 1, price: 100, side: "SELL", type: "MARKET", timeInForce: "IOC" }
     const result = await broker.createOrder(input)
     assert.deepEqual(args, input)
     assert.equal(result.ok, true)
