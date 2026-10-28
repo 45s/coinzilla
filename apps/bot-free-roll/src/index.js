@@ -31,18 +31,6 @@ const bot = new FreeRollBot({
 })
 await bot.run()
 
-eventBus.publish({
-  name: "order.filled",
-  source: "binance",
-  data: {
-    symbol: "DOGEFDUSD",
-    orderId: "123456",
-    side: "BUY",
-    price: "0.05",
-    quantity: "100",
-  },
-})
-
 let shuttingDown = false
 
 async function shutdown() {
@@ -289,19 +277,6 @@ try {
     },
   })
 
-  // Test event: the journal is already subscribed.
-  eventBus.publish({
-    name: "order.filled",
-    source: "binance",
-    data: {
-      symbol: "DOGEFDUSD",
-      orderId: "123456",
-      side: "BUY",
-      price: "0.05",
-      quantity: "100",
-    },
-  })
-
   const flushResult = await journal.flush()
 
   if (!flushResult.ok) {
@@ -319,12 +294,6 @@ try {
     source: "free-roll-bot",
     data: {
       pid: process.pid,
-    },
-  })
-
-  await broker.subscribeForUserData({
-    onEvent: (event) => {
-      logger.info?.("User data event received", { event })
     },
   })
 } catch (error) {
