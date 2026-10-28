@@ -37,4 +37,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run package tests with coverage
-        run: pnpm run test:coverage
+        shell: bash
+        run: |
+          set +e
+          pnpm run test:coverage 2>&1 | tee coverage-output.txt
+          test_status=${PIPESTATUS[0]}
+
+          {
+            echo '## Test coverage'
+            echo
+            cat coverage-output.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$test_status"
