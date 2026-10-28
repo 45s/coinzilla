@@ -23,7 +23,7 @@ pnpm test
 
 Unit tests should be deterministic and must not require local environment files, API credentials, or live exchange access. Broker tests that call Binance are kept in separate integration-test files and are excluded from the default test command.
 
-To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`, add Binance **TESTNET** credentials, then run:
+To run the broker integration tests locally, copy `packages/brokers/.env.example` to `packages/brokers/.env.development`. The Binance SDK integration tests are skipped automatically unless actual Binance TESTNET credentials are configured; no credentials are needed for the default unit tests.
 
 ```sh
 pnpm --filter @coinzilla/brokers test:integration
@@ -35,7 +35,7 @@ To run only the Binance SDK integration tests:
 pnpm --filter @coinzilla/brokers test:sdk
 ```
 
-Integration tests need network access and valid testnet credentials. They are intentionally not part of the default CI unit-test run. Never use production credentials for these tests or commit real credentials.
+Integration tests need network access. Tests that place orders use TESTNET only and are intentionally not part of the default CI unit-test run. Never use production credentials for these tests or commit real credentials.
 
 To run the utility package tests directly:
 
