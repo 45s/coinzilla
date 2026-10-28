@@ -1,61 +1,54 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-
 import { validateConfig } from "./validate-config.js"
 
 const configWithPairs = {
   broker: {},
-  tradingConfig: {
-    strategies: {
-      "free-roll": {
-        pairs: { DOGEFDUSD: { priceStepPercent: 0.1, orderQuantity: 100 } },
-      },
-    },
-  },
+  tradingConfig: { strategies: { "free-roll": { pairs: { DOGEFDUSD: { priceStepPercent: 0.1, orderQuantity: 100 } } } } },
 }
 
 test("returns success for valid config", () => {
-  assert.deepEqual(validateConfig({ config: configWithPairs }), { ok: true })
+  assert.deepEqual(validateConfig(configWithPairs), { ok: true })
 })
 
 test("returns an error when broker is missing", () => {
   const { broker, ...config } = configWithPairs
-  const result = validateConfig({ config })
+  const result = validateConfig(config)
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker"])
 })
 
 test("returns an error when pairs are missing", () => {
-  const result = validateConfig({ config: { broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: {} } } } } })
+  const result = validateConfig({ broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: {} } } } })
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires at least one trading pair"])
 })
 
 test("returns errors when broker and pairs are missing", () => {
-  const result = validateConfig({ config: {} })
-  assert.equal(result.ok, false)
-  assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker", "Bot requires at least one trading pair"])
-})
-
-test("returns errors when config is undefined", () => {
   const result = validateConfig({})
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker", "Bot requires at least one trading pair"])
 })
 
+test("returns errors when config is undefined", () => {
+  const result = validateConfig()
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker", "Bot requires at least one trading pair"])
+})
+
 test("returns errors when config is null", () => {
-  const result = validateConfig({ config: null })
+  const result = validateConfig(null)
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker", "Bot requires at least one trading pair"])
 })
 
 test("rejects an empty pairs object", () => {
-  const result = validateConfig({ config: { broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: {} } } } } })
+  const result = validateConfig({ broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: {} } } } })
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires at least one trading pair"])
 })
 
 test("does not reject an empty broker object", () => {
-  const result = validateConfig({ config: { broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: { DOGEFDUSD: {} } } } } } })
+  const result = validateConfig({ broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: { DOGEFDUSD: {} } } } } })
   assert.equal(result.ok, true)
 })
