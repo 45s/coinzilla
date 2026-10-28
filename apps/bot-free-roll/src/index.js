@@ -308,10 +308,6 @@ try {
     })
   }
 
-  logger.info?.("Journal started", {
-    filePath: journalResult.filePath,
-  })
-
   eventBus.publish({
     name: "bot.started",
     source: "free-roll-bot",
