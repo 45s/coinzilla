@@ -259,6 +259,8 @@ test("close waits for pending handlers and rejects new work", async () => {
     false,
   )
 
+  await bus.close()
+})
 
 test("rejects invalid event sources and data payloads", async () => {
   const { bus } = createTestBus()
