@@ -52,3 +52,9 @@ describe("BinanceStreamClient stream names", () => {
     assert.deepEqual(urls, ["wss://example.test/ws/ethusdt@ticker"])
   })
 })
+
+it("rejects an empty ticket list before connecting", () => {
+  const { client, urls } = createClient()
+  assert.throws(() => client.trade({ tickets: [] }))
+  assert.deepEqual(urls, [])
+})
