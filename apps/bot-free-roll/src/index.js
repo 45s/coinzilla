@@ -27,9 +27,9 @@ const { data: broker } = await prepareBroker()
 
 const bot = new FreeRollBot({
   broker,
+  eventBus,
   tradingConfig,
 })
-await bot.run()
 
 let shuttingDown = false
 
@@ -294,6 +294,17 @@ try {
     source: "free-roll-bot",
     data: {
       pid: process.pid,
+    },
+  })
+
+  await bot.run()
+
+  eventBus.publish({
+    name: "bot.ready",
+    source: "free-roll-bot",
+    data: {
+      pid: process.pid,
+      pairs: Object.keys(tradingConfig.strategies["free-roll"].pairs),
     },
   })
 } catch (error) {
