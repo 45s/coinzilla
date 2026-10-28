@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { buildQueryString, getFirstTicket, isEmptyValue, validateRequiredParameters } from "./helpers.js"
+import { buildQueryString, getFirstTicket, isEmptyValue, removeEmptyValue, validateRequiredParameters } from "./helpers.js"
 
 describe("buildQueryString", () => {
   it("encodes arrays in the format expected by Binance", () => {
@@ -17,8 +17,16 @@ describe("buildQueryString", () => {
 
     assert.deepEqual(JSON.parse(decodeURIComponent(encodedValue)), value)
   })
-})
 
+  it("preserves false and zero query values", () => {
+    assert.equal(buildQueryString({ enabled: false, limit: 0 }), "enabled=false&limit=0")
+  })
+
+  it("returns an empty string for absent parameters", () => {
+    assert.equal(buildQueryString(undefined), "")
+    assert.equal(buildQueryString(null), "")
+  })
+})
 
 describe("getFirstTicket", () => {
   it("returns the first symbol from a non-empty ticket array", () => {
@@ -47,6 +55,34 @@ describe("isEmptyValue", () => {
     }
     assert.equal(isEmptyValue(" BTC "), false)
     assert.equal(isEmptyValue(""), true)
+  })
+})
+
+describe("removeEmptyValue", () => {
+  it("removes empty values in place while preserving false and zero", () => {
+    const params = {
+      symbol: "BTCUSDT",
+      empty: "",
+      whitespace: " \t ",
+      disabled: false,
+      limit: 0,
+      tags: [],
+    }
+
+    const result = removeEmptyValue(params)
+
+    assert.strictEqual(result, params)
+    assert.deepEqual(result, {
+      symbol: "BTCUSDT",
+      disabled: false,
+      limit: 0,
+    })
+  })
+
+  it("returns an empty object for non-object input", () => {
+    for (const value of [undefined, null, "BTCUSDT", 42]) {
+      assert.deepEqual(removeEmptyValue(value), {})
+    }
   })
 })
 
