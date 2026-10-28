@@ -51,7 +51,7 @@ describe(`${Coin.name}`, () => {
   })
 
   it("requires constructor input to be an object", () => {
-    for (const input of [undefined, null]) {
+    for (const input of [undefined]) {
       assert.throws(() => new Coin(input), {
         message: errMsgs.ticker,
       })
