@@ -54,18 +54,15 @@ export class WS {
       this.callbacks?.open(this)
     }
 
-    // handle data message. Pass the data to the call back method from user
-    // It could be useful to store the original messages from server for debug
+    // handle data message. Pass the original message to the callback.
     const onMessage = (data) => {
       this.callbacks?.message(data.toString())
     }
 
     const onPing = () => {
-      // As ping pong is very important for maintaining the connection, log them as INFO level
       this.logger.system("Received PING from server")
       this.callbacks.ping && this.callbacks.ping()
       ws.pong()
-      // eslint-disable-next-line quotes
       this.logger.system("Responded PONG to server's PING message")
     }
 
@@ -113,9 +110,11 @@ export class WS {
   }
 
   send(payload) {
-    if (this.isConnected()) {
-      this.logger.warn("Send only can be sent when connection is ready.")
+    if (!this.isConnected()) {
+      this.logger.warn("Cannot send: WebSocket connection is not ready.")
+      return false
     }
     this.wsConnection.ws.send(payload)
+    return true
   }
 }
