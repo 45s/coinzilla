@@ -61,7 +61,8 @@ export class Validator {
     }
   }
 
-  static isRequiredNumberValid = (n) => typeof n === 'number' && Boolean(n)
+  static isRequiredNumberValid = (n) =>
+    typeof n === 'number' && Number.isFinite(n) && Boolean(n)
 
   static isRequiredNotEmptyString = (s) => typeof s === 'string' && Boolean(s.trim())
 }
