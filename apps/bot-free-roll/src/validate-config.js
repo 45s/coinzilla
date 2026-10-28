@@ -113,6 +113,14 @@ export function validateTradingConfig({ tradingConfig } = {}) {
       }
 
       if (
+        !Number.isInteger(pair.quantityPrecision) ||
+        pair.quantityPrecision < 0 ||
+        pair.quantityPrecision > 8
+      ) {
+        errors.push(`pairs.${symbol}.quantityPrecision must be an integer between 0 and 8`)
+      }
+
+      if (
         typeof pair.priceStepPercent !== "number" ||
         !Number.isFinite(pair.priceStepPercent) ||
         pair.priceStepPercent <= 0 ||
