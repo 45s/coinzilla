@@ -50,10 +50,12 @@ describe('Validator', () => {
     )
   })
 
-  it('checks required number and non-empty string helpers', () => {
-    assert.equal(Validator.isRequiredNumberValid(5), 5)
+  it('returns booleans from required-value helpers', () => {
+    assert.equal(Validator.isRequiredNumberValid(5), true)
+    assert.equal(Validator.isRequiredNumberValid(0), false)
     assert.equal(Validator.isRequiredNumberValid('5'), false)
-    assert.equal(Validator.isRequiredNotEmptyString('  BTC  '), 'BTC')
+    assert.equal(Validator.isRequiredNotEmptyString('  BTC  '), true)
     assert.equal(Validator.isRequiredNotEmptyString('   '), false)
+    assert.equal(Validator.isRequiredNotEmptyString(123), false)
   })
 })
