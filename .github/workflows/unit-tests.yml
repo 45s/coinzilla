@@ -2,7 +2,12 @@ name: Unit Tests
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: unit-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,10 +16,16 @@ jobs:
   test:
     name: Run package tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -22,14 +33,9 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 12.11.2
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run package tests (non-blocking)
         continue-on-error: true
-        run: pnpm --recursive --if-present --filter './packages/**' test
+        run: pnpm test
