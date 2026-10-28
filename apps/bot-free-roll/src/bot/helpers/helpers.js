@@ -18,6 +18,17 @@ export function unwrapResult(result, operation) {
   return result.data
 }
 
+export function getFeeRate({ makerPercent, takerPercent }) {
+  for (const [name, percent] of Object.entries({ makerPercent, takerPercent })) {
+    if (!Number.isFinite(percent) || percent < 0 || percent >= 100) {
+      throw new Error(`${name} must be a number from 0 (inclusive) to 100 (exclusive)`)
+    }
+  }
+
+  // Use the higher configured rate for both sides to keep estimates conservative.
+  return Math.max(makerPercent, takerPercent) / 100
+}
+
 export function calculateBuyThreshold({
   referencePrice,
   lastBuyPrice,

@@ -4,6 +4,7 @@ import {
   disconnectSubscriptions,
   validateConfig,
   calculateBuyThreshold,
+  getFeeRate,
   calculateSellPlan,
   estimateBuyAccounting,
   estimateSellAccounting,
@@ -57,20 +58,10 @@ export class FreeRollBot {
 
     this.settings = {
       minProfit: settings.minProfit ?? 0.01,
-      makerFee: settings.commission?.maker ?? 0,
-      takerFee: settings.commission?.taker ?? 0.001,
     }
 
-    this.feeRate = Math.max(this.settings.makerFee, this.settings.takerFee)
-
-    if (
-      !Number.isFinite(this.settings.minProfit) ||
-      this.settings.minProfit <= 0 ||
-      !Number.isFinite(this.feeRate) ||
-      this.feeRate < 0 ||
-      this.feeRate >= 1
-    ) {
-      throw new Error("Invalid minProfit or commission settings")
+    if (!Number.isFinite(this.settings.minProfit) || this.settings.minProfit <= 0) {
+      throw new Error("Invalid minProfit setting")
     }
 
     for (const [symbol, pair] of Object.entries(pairs)) {
@@ -92,8 +83,14 @@ export class FreeRollBot {
         throw new Error(`${symbol}: invalid pair settings`)
       }
 
+      const feeRate = getFeeRate({
+        makerPercent: pair.makerPercent,
+        takerPercent: pair.takerPercent,
+      })
+
       this.#states.set(symbol, {
         settings: pair,
+        feeRate,
         priceTickSize: null,
         quantityStepSize: null,
         lastPriceLogKey: null,
@@ -118,7 +115,9 @@ export class FreeRollBot {
 
     this.#debug("Configuration initialized", {
       minProfit: this.settings.minProfit,
-      feeRate: this.feeRate,
+      feeRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.feeRate]),
+      ),
       enabledPairs: [...this.#states.keys()],
     })
   }
@@ -256,7 +255,9 @@ export class FreeRollBot {
     return {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
-      configuredFeeRate: this.feeRate,
+      configuredFeeRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.feeRate]),
+      ),
       minProfit: this.settings.minProfit,
       confirmedBalances: Object.fromEntries(this.#confirmedBalances),
       pairs: this.getStats(),
@@ -572,7 +573,7 @@ export class FreeRollBot {
     const accounting = estimateBuyAccounting({
       quantity: order.quantity,
       price: order.price,
-      feeRate: this.feeRate,
+      feeRate: state.feeRate,
     })
 
     state.lastBuyPrice = order.price
@@ -675,7 +676,7 @@ export class FreeRollBot {
       cycleCost: state.cycleCost,
       saleProceeds: state.saleProceeds,
       minProfit: this.settings.minProfit,
-      feeRate: this.feeRate,
+      feeRate: state.feeRate,
       priceTickSize: state.priceTickSize ?? 0,
       quantityStepSize: state.quantityStepSize ?? 0,
     })
@@ -803,7 +804,7 @@ export class FreeRollBot {
     const accounting = estimateSellAccounting({
       quantity,
       price: order.price,
-      feeRate: this.feeRate,
+      feeRate: state.feeRate,
     })
 
     state.activeQuantity = Math.max(
