@@ -48,3 +48,15 @@ describe("BinanceSdkBroker order error results", () => {
     assert.equal(result.errors[0].message, "unknown order")
   })
 })
+
+it("returns an empty successful list when no open orders exist", async () => {
+  const broker = createBroker()
+  let params
+  broker.tradingConnection = {
+    openOrdersStatus: async (input) => { params = input; return { data: [] } },
+  }
+  const result = await broker.getOpenOrders()
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, [])
+  assert.deepEqual(params, {})
+})
