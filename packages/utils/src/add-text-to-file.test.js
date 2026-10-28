@@ -39,3 +39,8 @@ describe('addTextToFile', () => {
     )
   })
 })
+
+it("appends UTF-8 text without changing Unicode characters", async () => {
+  await addTextToFile({ fileName, text: "Київ 🚀\n" })
+  assert.equal(await readFile(fileName, "utf8"), "Київ 🚀\n")
+})
