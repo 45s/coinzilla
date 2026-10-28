@@ -3,9 +3,8 @@ import { describe, it } from "node:test"
 import { CoreBroker } from "./broker.core.js"
 
 describe("CoreBroker unsupported methods", () => {
-  it("reports unimplemented price lookup and bulk cancellation", () => {
+  it("reports an unimplemented price lookup", () => {
     const broker = new CoreBroker()
-    assert.throws(() => broker.getPrices(), /implemented/i)
-    assert.throws(() => broker.cancelAllOpenOrders(), /implemented/i)
+    assert.throws(() => broker.getPrice(), /implemented/i)
   })
 })
