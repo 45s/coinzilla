@@ -4,11 +4,11 @@ export function validateSettings({ symbol, settings }) {
   const errors = []
 
   if (
-    !Number.isFinite(settings?.priceStep) ||
-    settings.priceStep <= 0 ||
-    settings.priceStep >= 1
+    !Number.isFinite(settings?.priceStepPercent) ||
+    settings.priceStepPercent <= 0 ||
+    settings.priceStepPercent >= 100
   ) {
-    errors.push(new Error(`${symbol}: priceStep must be between 0 and 1`))
+    errors.push(new Error(`${symbol}: priceStepPercent must be greater than 0 and less than 100`))
   }
 
   if (
