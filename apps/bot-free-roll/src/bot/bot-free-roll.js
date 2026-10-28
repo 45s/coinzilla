@@ -28,6 +28,8 @@ export class FreeRollBot {
   #userDataSubscription = null
   #states = new Map()
   #queue
+  #startedAt = null
+  #confirmedBalances = new Map()
 
   constructor(input) {
     const validation = validateConfig(input)
@@ -102,6 +104,9 @@ export class FreeRollBot {
         cycleCost: 0,
         saleProceeds: 0,
         freeQuantity: 0,
+        buyFills: 0,
+        sellFills: 0,
+        profitableCycles: 0,
         cancelingOrderIds: new Set(),
         paused: false,
       })
@@ -146,6 +151,7 @@ export class FreeRollBot {
     }
 
     this.#isRunning = true
+    this.#startedAt = Date.now()
     this.#debug("Starting bot")
 
     try {
@@ -159,6 +165,10 @@ export class FreeRollBot {
         await this.broker.subscribeForUserData({
           onEvent: (payload) => {
             const event = payload?.event ?? payload
+            if (event?.eventType === "outboundAccountPosition") {
+              this.#handleBalanceUpdate(event)
+              return
+            }
             const order = event?.executedOrder
             const symbol = order?.symbol ?? event?.symbol
 
@@ -228,11 +238,55 @@ export class FreeRollBot {
           cycleCost: state.cycleCost,
           saleProceeds: state.saleProceeds,
           freeQuantity: state.freeQuantity,
+          buyFills: state.buyFills,
+          sellFills: state.sellFills,
+          profitableCycles: state.profitableCycles,
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
         },
       ]),
     )
+  }
+
+  getSummary() {
+    return {
+      runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
+      running: this.#isRunning,
+      configuredFeeRate: this.feeRate,
+      minProfit: this.settings.minProfit,
+      confirmedBalances: Object.fromEntries(this.#confirmedBalances),
+      pairs: this.getStats(),
+    }
+  }
+
+  #handleBalanceUpdate(event) {
+    const balances = event?.balances ?? event?.balance ?? []
+
+    if (!Array.isArray(balances)) return
+
+    for (const balance of balances) {
+      if (!balance?.asset) continue
+
+      const free = Number(balance.free)
+      const locked = Number(balance.locked)
+
+      if (!Number.isFinite(free) || !Number.isFinite(locked)) continue
+
+      this.#confirmedBalances.set(balance.asset, { free, locked })
+    }
+
+    this.#publish("trading.summary", {
+      reason: "exchange_balance_update",
+      summary: this.getSummary(),
+    })
+  }
+
+  #publishTradingSummary({ symbol, reason }) {
+    this.#publish("trading.summary", {
+      reason,
+      symbol,
+      summary: this.getSummary(),
+    })
   }
 
   #enqueue(symbol, task) {
@@ -498,6 +552,7 @@ export class FreeRollBot {
     })
 
     state.lastBuyPrice = order.price
+    state.buyFills += 1
     state.activeQuantity += accounting.netQuantity
     state.cycleCost += accounting.estimatedCost
 
@@ -508,8 +563,12 @@ export class FreeRollBot {
       cycleCost: state.cycleCost,
     })
 
-    if (!(await this.#replaceSell(symbol))) return
+    if (!(await this.#replaceSell(symbol))) {
+      this.#publishTradingSummary({ symbol, reason: "buy_filled" })
+      return
+    }
     await this.#placeNextBuy(symbol)
+    this.#publishTradingSummary({ symbol, reason: "buy_filled" })
   }
 
   async #replaceSell(symbol) {
@@ -685,6 +744,7 @@ export class FreeRollBot {
     if (!order || state.paused) return
 
     state.sellOrder = null
+    state.sellFills += 1
     this.#recordSellFill(state, order, order.quantity)
 
     const required = state.cycleCost + this.settings.minProfit
@@ -697,9 +757,11 @@ export class FreeRollBot {
 
     if (state.saleProceeds + 1e-8 < required) {
       this.#pause(symbol, "Completed sale did not meet estimated profit target")
+      this.#publishTradingSummary({ symbol, reason: "sell_filled_below_target" })
       return
     }
 
+    state.profitableCycles += 1
     state.freeQuantity += Math.max(0, state.activeQuantity)
     state.activeQuantity = 0
     state.cycleCost = 0
@@ -708,6 +770,8 @@ export class FreeRollBot {
     this.#debug(`[${symbol}] Recovery cycle completed`, {
       freeQuantity: state.freeQuantity,
     })
+
+    this.#publishTradingSummary({ symbol, reason: "profitable_cycle_completed" })
   }
 
   #recordSellFill(state, order, quantity) {
