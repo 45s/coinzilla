@@ -9,8 +9,9 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "test:watch": "node --test --watch --env-file=.env.development",
-    "test:sdk": "node --test --watch --env-file=.env.development ./src/binance/broker-sdk/**/*.test.js"
+    "test:watch": "node --test --watch",
+    "test:integration": "node --env-file-if-exists=.env.development --test \"src/**/*.integration.js\"",
+    "test:sdk": "node --env-file-if-exists=.env.development --test ./src/binance/broker-sdk/broker.integration.js"
   },
   "dependencies": {
     "@binance/spot": "^34.0.3",
