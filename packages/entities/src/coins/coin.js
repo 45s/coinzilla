@@ -28,7 +28,7 @@ export class Coin {
     if (!Validator.isRequiredNotEmptyString(ticker)) {
       throw new Error(errMsgs.ticker)
     }
-    if (typeof quantity !== "number" || quantity < 0) {
+    if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#ticker = capitalize(ticker.trim())
