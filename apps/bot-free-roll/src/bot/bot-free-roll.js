@@ -96,6 +96,7 @@ export class FreeRollBot {
         settings: pair,
         priceTickSize: null,
         quantityStepSize: null,
+        lastPriceLogKey: null,
         referencePrice: null,
         lastBuyPrice: null,
         buyOrder: null,
@@ -355,13 +356,19 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     const price = Number(tick?.price)
 
-    this.#debug(`[${symbol}] Price received`, {
+    const priceDetails = {
       price,
       referencePrice: state.referencePrice,
       lastBuyPrice: state.lastBuyPrice,
       buyOrderId: getOrderId(state.buyOrder),
       paused: state.paused,
-    })
+    }
+    const priceLogKey = JSON.stringify(priceDetails)
+
+    if (state.lastPriceLogKey !== priceLogKey) {
+      this.#debug(`[${symbol}] Price received`, priceDetails)
+      state.lastPriceLogKey = priceLogKey
+    }
 
     if (!this.#isRunning || state.paused || state.buyOrder) return
     if (!Number.isFinite(price) || price <= 0) return
