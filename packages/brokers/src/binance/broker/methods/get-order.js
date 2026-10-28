@@ -21,7 +21,7 @@ export async function getOrder({ orderId, symbol }) {
 
   const r = await send({ path })
   if ("msg" in r) {
-    logger(r)
+    logger.error(r)
     throw r
   }
   return adaptOrder(r)
