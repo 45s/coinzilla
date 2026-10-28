@@ -232,7 +232,19 @@ export class FreeRollBot {
 
     if (state.referencePrice === null) {
       state.referencePrice = price
-      this.#debug(`[${symbol}] Initial reference established`, { price })
+
+      const threshold = calculateBuyThreshold({
+        referencePrice: price,
+        lastBuyPrice: null,
+        priceStep: state.settings.priceStep,
+      })
+
+      this.#debug(`[${symbol}] Initial reference established`, {
+        price,
+        buyLimitPrice: threshold,
+      })
+
+      await this.#placeBuy(symbol, threshold)
       return
     }
 
