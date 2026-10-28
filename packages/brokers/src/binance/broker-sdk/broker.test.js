@@ -37,6 +37,13 @@ describe("BinanceSdkBroker integration (TESTNET)", () => {
     assert.ok(Array.isArray(orders))
   })
 
+  it("fetches symbol price filters", async () => {
+    const { ok, data } = await broker.getSymbolFilters({ symbol })
+    assert.ok(ok)
+    assert.equal(data.symbol, symbol)
+    assert.ok(Number.isFinite(data.tickSize) && data.tickSize > 0)
+  })
+
   it("fetches ticker price", async () => {
     const { ok, data } = await broker.getPrices({ symbol })
     assert.ok(ok)
