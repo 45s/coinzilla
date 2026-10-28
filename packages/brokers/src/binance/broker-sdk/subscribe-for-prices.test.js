@@ -70,8 +70,8 @@ it("keeps the subscription result valid when a consumer callback throws", async 
     onPrice: () => { throw new Error("consumer callback failed") },
   })
   assert.equal(result.ok, true)
-  assert.doesNotThrow(() => stream.emit("message", {
+  assert.throws(() => stream.emit("message", {
     e: "aggTrade", E: 1, T: 1, s: "BTCUSDT", p: "1", q: "1",
     m: false, M: false, a: 1, f: 1, l: 1,
-  }))
+  }), { message: "consumer callback failed" })
 })
