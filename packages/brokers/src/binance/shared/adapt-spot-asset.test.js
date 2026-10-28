@@ -42,3 +42,7 @@ describe("adaptSpotAsset", () => {
     assert.deepEqual(balances, original)
   })
 })
+
+it("returns an empty list for an empty balance response", () => {
+  assert.deepEqual(adaptSpotAsset([]), [])
+})
