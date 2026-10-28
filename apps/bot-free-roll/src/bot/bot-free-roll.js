@@ -97,6 +97,7 @@ export class FreeRollBot {
         referencePrice: null,
         highestPrice: null,
         lastAdjustmentPrice: null,
+        trailingBuy: true,
         lastBuyPrice: null,
         buyOrder: null,
         sellOrder: null,
@@ -394,6 +395,9 @@ export class FreeRollBot {
     if (!this.#isRunning || state.paused) return
 
     if (state.buyOrder) {
+      // Only the initial BUY trails. Once it fills, subsequent BUYs stay fixed.
+      if (!state.trailingBuy) return
+
       state.highestPrice = Math.max(state.highestPrice ?? price, price)
 
       const step = state.settings.priceStepPercent / 100
@@ -673,6 +677,7 @@ export class FreeRollBot {
     if (!order || state.paused) return
 
     state.buyOrder = null
+    state.trailingBuy = false
 
     const accounting = estimateBuyAccounting({
       quantity: order.quantity,
