@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "pnpm --recursive --if-present test"
+    "test": "pnpm --recursive --if-present test",
+    "test:coverage": "pnpm --filter './packages/*' --recursive exec node --test --experimental-test-coverage"
   },
   "keywords": [],
   "author": "",
