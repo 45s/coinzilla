@@ -30,7 +30,7 @@ export class FreeRollBot {
 
   constructor(input) {
     const validation = validateConfig(input)
-    const { broker, tradingConfig } = input
+    const { broker, eventBus, tradingConfig } = input
 
     if (!validation.ok) {
       throw new AggregateError(validation.errors, "Invalid FreeRollBot config")
@@ -43,6 +43,7 @@ export class FreeRollBot {
     }
 
     this.broker = broker
+    this.eventBus = eventBus
 
     this.#queue = createKeyedQueue({
       onError: ({ key, error }) => {
@@ -115,6 +116,23 @@ export class FreeRollBot {
     if (typeof this.logger.debug !== "function") return
 
     this.logger.debug(details === undefined ? message : { message, details })
+  }
+
+  #publish(name, data = {}) {
+    if (!this.eventBus || typeof this.eventBus.publish !== "function") return
+
+    const result = this.eventBus.publish({
+      name,
+      source: "free-roll-bot",
+      data,
+    })
+
+    if (!result?.ok) {
+      this.logger.error?.("Failed to publish journal event", {
+        name,
+        errors: result?.errors,
+      })
+    }
   }
 
   async run() {
@@ -294,6 +312,15 @@ export class FreeRollBot {
 
       state.buyOrder = { id, quantity, price }
 
+      this.#publish("order.created", {
+        orderId: id,
+        symbol,
+        side: "BUY",
+        type: "LIMIT",
+        price,
+        quantity,
+      })
+
       this.#debug(`[${symbol}] BUY submitted`, {
         orderId: id,
         price,
@@ -301,6 +328,11 @@ export class FreeRollBot {
         response: order,
       })
     } catch (error) {
+      this.#publish("order.create_failed", {
+        symbol,
+        side: "BUY",
+        error: error?.message ?? String(error),
+      })
       this.#pause(symbol, "BUY submission failed", error)
     }
   }
@@ -314,6 +346,28 @@ export class FreeRollBot {
     const status = String(order?.status ?? "").toUpperCase()
 
     if (!state || !id) return
+
+    if (status === "FILLED") {
+      this.#publish("order.filled", {
+        orderId: id,
+        symbol,
+        side: order?.side,
+        price: order?.price,
+        quantity: order?.quantity,
+        event,
+      })
+    }
+
+    this.#publish("order.execution_report", {
+      orderId: id,
+      symbol,
+      side: order?.side,
+      status,
+      executionType: event.executionType,
+      price: order?.price,
+      quantity: order?.quantity,
+      event,
+    })
 
     if (state.cancelingOrderIds.has(id)) {
       this.#debug(`[${symbol}] Event received while canceling order`, {
@@ -503,6 +557,15 @@ export class FreeRollBot {
         price: plan.price,
       }
 
+      this.#publish("order.created", {
+        orderId: id,
+        symbol,
+        side: "SELL",
+        type: "LIMIT",
+        price: plan.price,
+        quantity: plan.quantity,
+      })
+
       this.#debug(`[${symbol}] Recovery SELL submitted`, {
         ...state.sellOrder,
         plan,
@@ -511,6 +574,11 @@ export class FreeRollBot {
 
       return true
     } catch (error) {
+      this.#publish("order.create_failed", {
+        symbol,
+        side: "SELL",
+        error: error?.message ?? String(error),
+      })
       this.#pause(symbol, "Recovery SELL submission failed", error)
       return false
     }
