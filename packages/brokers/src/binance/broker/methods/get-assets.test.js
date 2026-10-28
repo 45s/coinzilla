@@ -38,3 +38,11 @@ describe("getAssets", () => {
     await assert.rejects(() => getAssets(), { message: "Too many requests." })
   })
 })
+
+it("returns an empty list when the account has no balances", async () => {
+  globalThis.fetch = async () => ({
+    headers: { get: () => "application/json" },
+    json: async () => ({ balances: [] }),
+  })
+  assert.deepEqual(await getAssets(), [])
+})
