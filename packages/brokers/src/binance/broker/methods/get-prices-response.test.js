@@ -20,7 +20,7 @@ describe("Binance getPrices response", () => {
       assert.deepEqual(await getPrices({ tickets: ["BTCUSDT"] }), [
         { symbol: "BTCUSDT", price: 65000.12 },
       ])
-      assert.match(requestedUrl, /ticker\/price\?symbols=%5B%22BTCUSDT%22%5D$/)
+      assert.ok(requestedUrl.endsWith('ticker/price?symbols=["BTCUSDT"]'))
     } finally {
       globalThis.fetch = originalFetch
     }
