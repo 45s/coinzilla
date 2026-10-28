@@ -4,6 +4,7 @@ import { send } from "../shared/index.js"
 import { WS } from "./WS.js"
 import {
   validateRequiredParameters,
+  getFirstTicket,
   isEmptyValue,
   removeEmptyValue,
   buildQueryString,
@@ -197,8 +198,7 @@ export class BinanceStreamClient extends WS {
    * @param {string} symbol
    */
   trade({ tickets }) {
-    const [symbol] = tickets
-    validateRequiredParameters({ symbol })
+    const symbol = getFirstTicket(tickets)
     this.#subscribe(`${symbol.toLowerCase()}@trade`)
   }
 
@@ -211,7 +211,7 @@ export class BinanceStreamClient extends WS {
    *     1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
    */
   kline({ tickets, interval }) {
-    const [symbol] = tickets
+    const symbol = getFirstTicket(tickets)
     validateRequiredParameters({ symbol, interval })
     this.#subscribe(`${symbol.toLowerCase()}@kline_${interval}`)
   }
@@ -280,6 +280,7 @@ export class BinanceStreamClient extends WS {
    *
    */
   rollingWindowTicker({ windowSize, symbol = null }) {
+    validateRequiredParameters({ windowSize })
     let stream = `!ticker_${windowSize.toLowerCase()}@arr`
     if (!isEmptyValue(symbol)) {
       stream = `${symbol.toLowerCase()}@ticker_${windowSize.toLowerCase()}`
