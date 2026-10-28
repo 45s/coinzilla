@@ -21,19 +21,21 @@ export function unwrapResult(result, operation) {
 export function calculateBuyThreshold({
   referencePrice,
   lastBuyPrice,
-  priceStep,
+  priceStepPercent,
 }) {
   const basePrice = lastBuyPrice ?? referencePrice
 
   if (
     !Number.isFinite(basePrice) ||
-    !Number.isFinite(priceStep) ||
-    priceStep <= 0
+    basePrice <= 0 ||
+    !Number.isFinite(priceStepPercent) ||
+    priceStepPercent <= 0 ||
+    priceStepPercent >= 100
   ) {
     throw new Error("Invalid buy threshold inputs")
   }
 
-  return basePrice - priceStep
+  return basePrice * (1 - priceStepPercent / 100)
 }
 
 export function roundPriceDown(price, tickSize = 0) {

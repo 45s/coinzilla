@@ -77,8 +77,9 @@ export class FreeRollBot {
       }
 
       if (
-        !Number.isFinite(pair.priceStep) ||
-        pair.priceStep <= 0 ||
+        !Number.isFinite(pair.priceStepPercent) ||
+        pair.priceStepPercent <= 0 ||
+        pair.priceStepPercent >= 100 ||
         !Number.isFinite(pair.orderQuantity) ||
         pair.orderQuantity <= 0 ||
         !Number.isFinite(pair.keepQuantity) ||
@@ -254,7 +255,7 @@ export class FreeRollBot {
       const threshold = calculateBuyThreshold({
         referencePrice: price,
         lastBuyPrice: null,
-        priceStep: state.settings.priceStep,
+        priceStepPercent: state.settings.priceStepPercent,
       })
 
       this.#debug(`[${symbol}] Initial reference established`, {
@@ -269,13 +270,13 @@ export class FreeRollBot {
     const threshold = calculateBuyThreshold({
       referencePrice: state.referencePrice,
       lastBuyPrice: state.lastBuyPrice,
-      priceStep: state.settings.priceStep,
+      priceStepPercent: state.settings.priceStepPercent,
     })
 
     this.#debug(`[${symbol}] Buy threshold evaluated`, {
       price,
       threshold,
-      priceStep: state.settings.priceStep,
+      priceStepPercent: state.settings.priceStepPercent,
       shouldBuy: price <= threshold,
     })
 
@@ -591,7 +592,7 @@ export class FreeRollBot {
     const threshold = calculateBuyThreshold({
       referencePrice: state.referencePrice,
       lastBuyPrice: state.lastBuyPrice,
-      priceStep: state.settings.priceStep,
+      priceStepPercent: state.settings.priceStepPercent,
     })
 
     this.#debug(`[${symbol}] Scheduling next BUY`, { threshold })
