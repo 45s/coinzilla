@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { buildQueryString, getFirstTicket } from "./helpers.js"
+import { buildQueryString, getFirstTicket, isEmptyValue, validateRequiredParameters } from "./helpers.js"
 
 describe("buildQueryString", () => {
   it("encodes arrays in the format expected by Binance", () => {
@@ -37,5 +37,27 @@ describe("getFirstTicket", () => {
     assert.throws(() => getFirstTicket([""]), {
       name: "MissingParameterError",
     })
+  })
+})
+
+describe("isEmptyValue", () => {
+  it("treats whitespace-only strings as empty", () => {
+    for (const value of [" ", "\t", "\n", " \t\n "]) {
+      assert.equal(isEmptyValue(value), true)
+    }
+    assert.equal(isEmptyValue(" BTC "), false)
+    assert.equal(isEmptyValue(""), true)
+  })
+})
+
+describe("validateRequiredParameters", () => {
+  it("rejects whitespace-only required values", () => {
+    assert.throws(() => validateRequiredParameters({ symbol: " \t " }), {
+      name: "MissingParameterError",
+    })
+  })
+
+  it("preserves valid false and zero values", () => {
+    assert.doesNotThrow(() => validateRequiredParameters({ enabled: false, limit: 0 }))
   })
 })
