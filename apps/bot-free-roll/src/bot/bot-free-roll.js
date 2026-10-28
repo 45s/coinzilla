@@ -92,6 +92,7 @@ export class FreeRollBot {
       this.#states.set(symbol, {
         settings: pair,
         priceTickSize: null,
+        quantityStepSize: null,
         referencePrice: null,
         lastBuyPrice: null,
         buyOrder: null,
@@ -240,6 +241,7 @@ export class FreeRollBot {
   async #loadPriceTickSizes() {
     for (const [symbol, state] of this.#states) {
       const fallbackTickSize = 10 ** -state.settings.pricePrecision
+      const fallbackQuantityStepSize = 10 ** -state.settings.quantityPrecision
 
       try {
         if (typeof this.broker.getSymbolFilters !== "function") {
@@ -251,29 +253,41 @@ export class FreeRollBot {
           `getSymbolFilters(${symbol})`,
         )
         const tickSize = Number(filters?.tickSize)
+        const stepSize = Number(filters?.stepSize)
 
         if (!Number.isFinite(tickSize) || tickSize <= 0) {
           throw new Error(`Invalid tickSize returned for ${symbol}`)
         }
 
+        if (!Number.isFinite(stepSize) || stepSize <= 0) {
+          throw new Error(`Invalid stepSize returned for ${symbol}`)
+        }
+
         state.priceTickSize = tickSize
+        state.quantityStepSize = stepSize
         this.#debug(`[${symbol}] Price tick size loaded from broker`, {
           tickSize,
+          stepSize,
           source: "Binance exchangeInfo",
         })
       } catch (error) {
         state.priceTickSize = fallbackTickSize
+        state.quantityStepSize = fallbackQuantityStepSize
         this.logger.warn?.({
-          message: `[${symbol}] Could not load tickSize; using configured pricePrecision fallback`,
+          message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
           details: {
             pricePrecision: state.settings.pricePrecision,
+            quantityPrecision: state.settings.quantityPrecision,
             tickSize: fallbackTickSize,
+            stepSize: fallbackQuantityStepSize,
             error: error?.message ?? String(error),
           },
         })
-        this.#debug(`[${symbol}] Price tick size fallback selected`, {
+        this.#debug(`[${symbol}] Exchange filter fallbacks selected`, {
           tickSize: fallbackTickSize,
           pricePrecision: state.settings.pricePrecision,
+          quantityPrecision: state.settings.quantityPrecision,
+          stepSize: fallbackQuantityStepSize,
         })
       }
     }
@@ -569,6 +583,7 @@ export class FreeRollBot {
       minProfit: this.settings.minProfit,
       feeRate: this.feeRate,
       priceTickSize: state.priceTickSize ?? 0,
+      quantityStepSize: state.quantityStepSize ?? 0,
     })
 
     this.#debug(`[${symbol}] SELL plan calculated`, {
