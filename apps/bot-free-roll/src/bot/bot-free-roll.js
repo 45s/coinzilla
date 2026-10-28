@@ -107,6 +107,7 @@ export class FreeRollBot {
         buyFills: 0,
         sellFills: 0,
         profitableCycles: 0,
+        estimatedRealizedProfit: 0,
         cancelingOrderIds: new Set(),
         paused: false,
       })
@@ -241,6 +242,8 @@ export class FreeRollBot {
           buyFills: state.buyFills,
           sellFills: state.sellFills,
           profitableCycles: state.profitableCycles,
+          estimatedCyclePnl: state.saleProceeds - state.cycleCost,
+          estimatedRealizedProfit: state.estimatedRealizedProfit,
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
         },
@@ -762,6 +765,7 @@ export class FreeRollBot {
     }
 
     state.profitableCycles += 1
+    state.estimatedRealizedProfit += state.saleProceeds - state.cycleCost
     state.freeQuantity += Math.max(0, state.activeQuantity)
     state.activeQuantity = 0
     state.cycleCost = 0
