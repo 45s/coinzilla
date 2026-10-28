@@ -43,7 +43,10 @@ export function getFirstTicket(tickets) {
     throw new MissingParameterError(['tickets'])
   }
 
-  validateRequiredParameters({ symbol: tickets[0] })
+  if (typeof tickets[0] !== 'string' || tickets[0].trim() === '') {
+    throw new MissingParameterError(['tickets[0]'])
+  }
+
   return tickets[0]
 }
 
