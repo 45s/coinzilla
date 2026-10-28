@@ -19,7 +19,7 @@ describe('events', () => {
   })
 })
 
-test("does not deliver unrelated event names to a listener", () => {
+it("does not deliver unrelated event names to a listener", () => {
   const received = []
   const listener = (payload) => received.push(payload)
   eventEmitter.on(EVENTS.PRICE_UPDATE, listener)
