@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.001`
+**Document version:** `v0.002`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -110,19 +110,19 @@ Strategies are keyed by strategy name. Pairs are keyed by trading symbol.
       "pairs": {
         "DOGEFDUSD": {
           "enabled": true,
-          "priceStep": 0.001,
+          "priceStepPercent": 0.05,
           "orderQuantity": 100,
           "keepQuantity": 1
         },
         "ZROFDUSD": {
           "enabled": true,
-          "priceStep": 0.01,
+          "priceStepPercent": 0.05,
           "orderQuantity": 5,
           "keepQuantity": 0.01
         },
         "SOLFDUSD": {
           "enabled": false,
-          "priceStep": 0.002,
+          "priceStepPercent": 0.05,
           "orderQuantity": 1,
           "keepQuantity": 0.01
         }
@@ -133,6 +133,10 @@ Strategies are keyed by strategy name. Pairs are keyed by trading symbol.
 ```
 
 The commission values above are examples, not universal defaults. Configure them for the actual broker, account, symbol, and execution conditions.
+
+### Buy-step percentage
+
+`priceStepPercent` is a percentage, not an absolute quote-currency amount. A value of `0.05` means 0.05% (five hundredths of one percent). The strategy calculates the buy limit as `basePrice * (1 - priceStepPercent / 100)`, where `basePrice` is the last buy price when available, otherwise the initial reference price. For example, a base price of `0.07929` and `priceStepPercent: 0.05` produce an unrounded limit of `0.079250355`; the broker's tick-size rules may round the submitted limit down.
 
 ### Configuration fields
 
@@ -145,7 +149,7 @@ The commission values above are examples, not universal defaults. Configure them
 | `settings.commission.maker` | Expected maker commission rate                                                        |
 | `settings.commission.taker` | Expected taker commission rate                                                        |
 | `pairs`                     | Object containing per-pair settings                                                   |
-| `priceStep`                 | Absolute price decrease from the last qualifying buy price that triggers the next buy |
+| `priceStepPercent`                 | Percentage decrease from the reference or last buy price that triggers the next buy; 0.05 means 0.05% |
 | `orderQuantity`             | Base-asset quantity for each buy order                                                |
 | `keepQuantity`              | Base-asset quantity to retain as free coins per completed recovery cycle              |
 
@@ -173,12 +177,12 @@ The current priority is to implement the smallest correct version of the strateg
 
 Each pair maintains its own last qualifying buy price.
 
-`priceStep` is an absolute price amount, not a percentage.
+`priceStepPercent` is an absolute price amount, not a percentage.
 
 For example:
 
 - Last qualifying buy price: `0.100`
-- Configured `priceStep`: `0.001`
+- Configured `priceStepPercent`: `0.001`
 - Next buy trigger price: `0.099`
 
 When the trigger condition is reached, the strategy must initiate the next buy according to the pair's configured `orderQuantity`.
@@ -224,7 +228,7 @@ It should:
 
 1. Record the actual filled quantity, quote cost, commission, and commission asset.
 2. Update the active trading position and its cost basis.
-3. Calculate the next buy price using `priceStep`.
+3. Calculate the next buy price using `priceStepPercent`.
 4. Calculate a profitable sell order for the active position, retaining the configured `keepQuantity` for the current recovery cycle.
 5. Place or maintain the next buy limit order.
 6. Place or maintain the sell limit order.
@@ -589,7 +593,7 @@ At minimum:
 
 - `minProfit` must be positive.
 - Commission rates must be non-negative and represented as decimal fractions.
-- `priceStep` must be positive.
+- `priceStepPercent` must be greater than 0 and less than 100; it is expressed in percentage points (for example, `0.05` means a 0.05% decrease).
 - `orderQuantity` must be positive.
 - `keepQuantity` must be non-negative and smaller than `orderQuantity`.
 - The intended sell quantity must comply with the broker's trading rules.
@@ -634,4 +638,5 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.002` — Replaced the absolute `priceStep` setting with `priceStepPercent`; documented percentage semantics and the buy-threshold calculation.
 - `v0.001` — Initial Free-Roll specification covering broker-independent design, keyed JSON configuration, standing buy and sell orders, replacement behavior after new buys, net-profit accounting, commissions, free-coin accounting, statistics, safety rules, and unresolved design questions.
