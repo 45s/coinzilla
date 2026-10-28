@@ -612,7 +612,7 @@ The strategy must:
 At minimum:
 
 - `minProfit` must be positive.
-- Commission rates must be non-negative and represented as decimal fractions.
+- Per-pair `makerPercent` and `takerPercent` values must be finite percentages in the range `0` (inclusive) to `100` (exclusive). The bot converts them to decimal fractions internally.
 - `priceStepPercent` must be greater than 0 and less than 100; it is expressed in percentage points (for example, `0.05` means a 0.05% decrease).
 - `orderQuantity` must be positive.
 - `keepQuantity` must be non-negative and smaller than `orderQuantity`.
