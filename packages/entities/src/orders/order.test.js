@@ -12,22 +12,18 @@ describe(`${Order.name}`, () => {
   const price = 23_456
   const id = generateUUID()
 
-  it("should return an order entity", () => {
-    const o = new Order({
-      symbol,
-      type,
-      side,
-      quantity,
-      price,
-      id,
-    })
+  const validOrder = (overrides = {}) =>
+    new Order({ symbol, type, side, quantity, price, id, ...overrides })
+
+  it("should normalize and expose all order fields", () => {
+    const o = validOrder({ symbol: "  btcusdt  " })
+
     assert.strictEqual(o.symbol, "BTCUSDT")
     assert.strictEqual(o.type, type)
     assert.strictEqual(o.side, side)
     assert.strictEqual(o.quantity, quantity)
     assert.strictEqual(o.price, price)
     assert.strictEqual(o.id, id)
-
     assert.deepStrictEqual(o.value, {
       id,
       symbol: "BTCUSDT",
@@ -38,88 +34,81 @@ describe(`${Order.name}`, () => {
     })
   })
 
-  it("should throw an error with invalid symbol", () => {
-    assert.throws(() => new Order({ symbol: "  " }), {
-      message: errMsgs.symbol,
-    })
+  it("should support every declared order type", () => {
+    for (const supportedType of ["LIMIT", "MARKET"]) {
+      assert.strictEqual(validOrder({ type: supportedType }).type, supportedType)
+    }
   })
 
-  it("should throw an error with invalid type", () => {
-    assert.throws(
-      () =>
-        new Order({
-          symbol,
-          type: "limit",
-        }),
-      { message: errMsgs.type },
-    )
+  it("should reject missing, non-string, or blank symbols", () => {
+    for (const invalidSymbol of [undefined, null, "", "   ", 123]) {
+      assert.throws(
+        () => validOrder({ symbol: invalidSymbol }),
+        { message: errMsgs.symbol },
+      )
+    }
   })
 
-  it("should throw an error with invalid side", () => {
-    assert.throws(
-      () =>
-        new Order({
-          symbol,
-          type,
-          side: "sell",
-        }),
-      { message: errMsgs.side },
-    )
+  it("should reject unsupported order types", () => {
+    for (const invalidType of [undefined, null, "", "limit", "STOP", 1]) {
+      assert.throws(
+        () => validOrder({ type: invalidType }),
+        { message: errMsgs.type },
+      )
+    }
   })
 
-  it("should throw an error with invalid quantity", () => {
-    assert.throws(
-      () =>
-        new Order({
-          symbol,
-          type,
-          side,
-          quantity: "23",
-        }),
-      { message: errMsgs.quantity },
-    )
+  it("should reject unsupported order sides", () => {
+    for (const invalidSide of [undefined, null, "", "buy", "SELL ", 1]) {
+      assert.throws(
+        () => validOrder({ side: invalidSide }),
+        { message: errMsgs.side },
+      )
+    }
   })
 
-  it("should reject negative quantity", () => {
-    assert.throws(
-      () => new Order({ symbol, type, side, quantity: -1, price, id }),
-      { message: errMsgs.quantity },
-    )
+  it("should reject invalid quantities", () => {
+    for (const invalidQuantity of [
+      undefined,
+      null,
+      "23",
+      NaN,
+      Infinity,
+      -Infinity,
+      0,
+      -1,
+    ]) {
+      assert.throws(
+        () => validOrder({ quantity: invalidQuantity }),
+        { message: errMsgs.quantity },
+      )
+    }
   })
 
-  it("should throw an error with invalid price", () => {
-    assert.throws(
-      () =>
-        new Order({
-          symbol,
-          type,
-          side,
-          quantity,
-          price: "43",
-        }),
-      { message: errMsgs.price },
-    )
+  it("should reject invalid prices", () => {
+    for (const invalidPrice of [
+      undefined,
+      null,
+      "43",
+      NaN,
+      Infinity,
+      -Infinity,
+      0,
+      -1,
+    ]) {
+      assert.throws(
+        () => validOrder({ price: invalidPrice }),
+        { message: errMsgs.price },
+      )
+    }
   })
 
-  it("should reject negative price", () => {
-    assert.throws(
-      () => new Order({ symbol, type, side, quantity, price: -1, id }),
-      { message: errMsgs.price },
-    )
-  })
-
-  it("should throw an error with invalid id", () => {
-    assert.throws(
-      () =>
-        new Order({
-          symbol,
-          type,
-          side,
-          quantity,
-          price,
-          id: "    ",
-        }),
-      { message: errMsgs.id },
-    )
+  it("should reject missing, non-string, or blank IDs", () => {
+    for (const invalidId of [undefined, null, "", "    ", 123]) {
+      assert.throws(
+        () => validOrder({ id: invalidId }),
+        { message: errMsgs.id },
+      )
+    }
   })
 })
