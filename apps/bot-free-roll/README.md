@@ -152,11 +152,14 @@ The commission values above are examples, not universal defaults. Configure them
 | `priceStepPercent`                 | Percentage decrease from the reference or last buy price that triggers the next buy; 0.05 means 0.05% |
 | `orderQuantity`             | Base-asset quantity for each buy order                                                |
 | `pricePrecision`          | Fallback decimal precision used only when the broker cannot fetch a valid `tickSize`; 5 means a fallback tick size of 0.00001 |
+| `quantityPrecision`       | Fallback decimal precision used only when the broker cannot fetch a valid `stepSize`; 0 means whole-number quantities |
 | `keepQuantity`              | Base-asset quantity to retain as free coins per completed recovery cycle              |
 
 ### Price tick-size resolution
 
-Before subscribing to prices, the bot tries to fetch each enabled symbol's `PRICE_FILTER.tickSize` from Binance exchange information. If the request fails or the filter is unavailable, it falls back to the pair's configured `pricePrecision`, converted to a tick size of `10 ** -pricePrecision`. The fallback is a manual safety net and must be kept consistent with the symbol's actual exchange filter.
+Before subscribing to prices, the bot tries to fetch each enabled symbol's `PRICE_FILTER.tickSize` and `LOT_SIZE.stepSize` from Binance exchange information. If the request fails or either filter is unavailable, it falls back to the pair's configured `pricePrecision` and `quantityPrecision`, converted to increments of `10 ** -precision`. These fallbacks are manual safety nets and must be kept consistent with the symbol's actual exchange filters.
+
+Recovery SELL quantities are rounded **down** to the resolved quantity step before calculating the minimum profitable price. This avoids Binance precision errors without selling more than the available strategy quantity. If rounding leaves no valid quantity, the bot does not submit a SELL order.
 
 ### Commission rate format
 

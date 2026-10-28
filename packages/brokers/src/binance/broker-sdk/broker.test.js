@@ -42,6 +42,7 @@ describe("BinanceSdkBroker integration (TESTNET)", () => {
     assert.ok(ok)
     assert.equal(data.symbol, symbol)
     assert.ok(Number.isFinite(data.tickSize) && data.tickSize > 0)
+    assert.ok(Number.isFinite(data.stepSize) && data.stepSize > 0)
   })
 
   it("fetches ticker price", async () => {

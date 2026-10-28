@@ -1,7 +1,13 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { calculateBuyThreshold, roundPriceDown, roundPriceUp } from "./helpers.js"
+import {
+  calculateBuyThreshold,
+  calculateSellPlan,
+  roundPriceDown,
+  roundPriceUp,
+  roundQuantityDown,
+} from "./helpers.js"
 
 test("calculateBuyThreshold applies a percentage drop to the initial reference price", () => {
   const threshold = calculateBuyThreshold({
@@ -62,4 +68,26 @@ test("roundPriceDown returns a valid tick without floating-point noise", () => {
 test("roundPriceUp returns a valid tick without floating-point noise", () => {
   assert.equal(roundPriceUp(0.0790500001, 0.00001), 0.07906)
   assert.equal(roundPriceUp(0.101, 0.05), 0.15)
+})
+
+
+test("roundQuantityDown respects exchange quantity steps", () => {
+  assert.equal(roundQuantityDown(391.08910891089107, 1), 391)
+  assert.equal(roundQuantityDown(4.999, 0.01), 4.99)
+  assert.equal(roundQuantityDown(0.009, 0.01), 0)
+})
+
+test("calculateSellPlan rounds quantity down before calculating profitable price", () => {
+  const plan = calculateSellPlan({
+    activeQuantity: 396,
+    keepQuantity: 1,
+    cycleCost: 31.8554,
+    saleProceeds: 0,
+    minProfit: 0.01,
+    feeRate: 0.01,
+    priceTickSize: 0.00001,
+    quantityStepSize: 1,
+  })
+  assert.equal(plan.quantity, 391)
+  assert.equal(plan.price, 0.08233)
 })
