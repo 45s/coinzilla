@@ -105,6 +105,14 @@ export function validateTradingConfig({ tradingConfig } = {}) {
       }
 
       if (
+        !Number.isInteger(pair.pricePrecision) ||
+        pair.pricePrecision < 0 ||
+        pair.pricePrecision > 8
+      ) {
+        errors.push(`pairs.${symbol}.pricePrecision must be an integer between 0 and 8`)
+      }
+
+      if (
         typeof pair.priceStepPercent !== "number" ||
         !Number.isFinite(pair.priceStepPercent) ||
         pair.priceStepPercent <= 0 ||
