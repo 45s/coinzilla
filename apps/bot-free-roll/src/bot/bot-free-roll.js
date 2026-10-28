@@ -79,6 +79,7 @@ export class FreeRollBot {
       if (
         !Number.isFinite(pair.priceStepPercent) ||
         pair.priceStepPercent <= 0 ||
+        pair.priceStepPercent >= 100 ||
         !Number.isFinite(pair.orderQuantity) ||
         pair.orderQuantity <= 0 ||
         !Number.isFinite(pair.keepQuantity) ||
