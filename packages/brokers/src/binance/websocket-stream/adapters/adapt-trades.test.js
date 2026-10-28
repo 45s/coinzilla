@@ -16,3 +16,13 @@ describe("adaptAggTrades", () => {
     })
   })
 })
+it("preserves false boolean flags and zero trade identifiers", () => {
+  const result = adaptAggTrades({
+    e: "aggTrade", E: 0, T: 0, s: "BTCUSDT", p: "0", q: "0",
+    m: false, M: false, a: 0, f: 0, l: 0,
+  })
+  assert.equal(result.isBuyerMaker, false)
+  assert.equal(result.wasBestPrice, false)
+  assert.equal(result.aggId, 0)
+  assert.equal(result.eventTime, 0)
+})
