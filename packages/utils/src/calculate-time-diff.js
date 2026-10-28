@@ -5,5 +5,9 @@ const unitsMap = {
 }
 
 export const calculateTimeDiff = ({ start, end = new Date(), unit = 'hour' } = {}) => {
+  if (!Object.hasOwn(unitsMap, unit)) {
+    throw new RangeError(`Unsupported time unit: ${unit}`)
+  }
+
   return (end.getTime() - start.getTime()) / unitsMap[unit]
 }
