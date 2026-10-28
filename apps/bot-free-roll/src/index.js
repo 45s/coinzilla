@@ -8,10 +8,12 @@ import { prepareJournal } from "./prepare-journal.js"
 import { FreeRollBot } from "./bot/index.js"
 import { validateTradingConfig } from "./validate-config.js"
 
-const result = validateTradingConfig({ tradingConfig })
+const validatedTradingConfig = validateTradingConfig({ tradingConfig })
 
-if (!result.ok) {
-  throw new Error(`Invalid trading config:\n- ${result.errors.join("\n- ")}`)
+if (!validatedTradingConfig.ok) {
+  throw new Error(
+    `Invalid trading config:\n- ${validatedTradingConfig.errors.join("\n- ")}`,
+  )
 }
 
 const eventBus = new EventBus({ logger })
@@ -23,8 +25,11 @@ const { data: journal } = prepareJournal({
 
 const { data: broker } = await prepareBroker()
 
-const bot = new FreeRollBot({ tradingConfig: result.data, broker })
-await bot.connect()
+const bot = new FreeRollBot({
+  broker,
+  tradingConfig,
+})
+await bot.run()
 
 eventBus.publish({
   name: "order.filled",

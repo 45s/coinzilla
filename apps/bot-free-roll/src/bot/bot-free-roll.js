@@ -28,14 +28,15 @@ export class FreeRollBot {
   #states = new Map()
   #queue
 
-  constructor(config) {
-    const validation = validateConfig({ config })
+  constructor(input) {
+    const validation = validateConfig(input)
+    const { broker, tradingConfig } = input
 
     if (!validation.ok) {
       throw new AggregateError(validation.errors, "Invalid FreeRollBot config")
     }
 
-    const { broker, pairs, settings = {} } = config
+    const { pairs, settings = {} } = tradingConfig.strategies["free-roll"]
 
     if (!broker || !pairs || typeof pairs !== "object") {
       throw new Error("FreeRollBot requires broker and pairs")
