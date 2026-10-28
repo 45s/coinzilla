@@ -83,3 +83,16 @@ describe("Binance send", () => {
     }
   })
 })
+
+it("propagates network errors from fetch", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new Error("network unavailable") }
+  try {
+    await assert.rejects(
+      () => send({ url: "https://example.test/api", path: "order" }),
+      { message: "network unavailable" },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
