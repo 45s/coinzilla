@@ -45,15 +45,15 @@ describe("getOrder", () => {
   })
 })
 
-it("URL-encodes the symbol in the signed order lookup", async () => {
+it("preserves a zero order ID in the signed lookup query", async () => {
   let requestedUrl
   globalThis.fetch = async (url) => {
     requestedUrl = String(url)
     return {
       headers: { get: () => "application/json" },
-      json: async () => ({ code: -1121, msg: "Invalid symbol." }),
+      json: async () => ({ code: -2013, msg: "Order does not exist." }),
     }
   }
-  await assert.rejects(() => getOrder({ symbol: "BAD/SYMBOL", orderId: 99 }))
-  assert.match(requestedUrl, /symbol=BAD%2FSYMBOL/)
+  await assert.rejects(() => getOrder({ symbol: "ETHUSDT", orderId: 0 }))
+  assert.match(requestedUrl, /symbol=ETHUSDT&orderId=0&/)
 })
