@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   coverage:
-    name: Package test coverage
+    name: Workspace test coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run package tests with coverage
+      - name: Run workspace tests with coverage
         shell: bash
         run: |
           set +e
@@ -44,7 +44,7 @@ jobs:
           test_status=${PIPESTATUS[0]}
 
           {
-            echo '## Test coverage'
+            echo '## Workspace test coverage'
             echo
             cat coverage-output.txt
           } >> "$GITHUB_STEP_SUMMARY"
