@@ -19,12 +19,14 @@ function createValidConfig() {
           DOGEFDUSD: {
             enabled: true,
             priceStepPercent: 0.05,
+            pricePrecision: 5,
             orderQuantity: 100,
             keepQuantity: 1,
           },
           SOLFDUSD: {
             enabled: false,
             priceStepPercent: 0.05,
+            pricePrecision: 5,
             orderQuantity: 1,
             keepQuantity: 0.01,
           },
@@ -155,6 +157,20 @@ test("multiple invalid pairs are reported independently", () => {
   assert.ok(
     result.errors.includes(
       "pairs.SOLFDUSD.orderQuantity must be greater than 0",
+    ),
+  )
+})
+
+test("pricePrecision must be an integer between 0 and 8", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD.pricePrecision = 9
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(
+    result.errors.includes(
+      "pairs.DOGEFDUSD.pricePrecision must be an integer between 0 and 8",
     ),
   )
 })
