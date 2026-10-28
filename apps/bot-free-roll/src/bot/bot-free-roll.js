@@ -91,6 +91,7 @@ export class FreeRollBot {
 
       this.#states.set(symbol, {
         settings: pair,
+        priceTickSize: null,
         referencePrice: null,
         lastBuyPrice: null,
         buyOrder: null,
@@ -149,6 +150,8 @@ export class FreeRollBot {
       if (this.#states.size === 0) {
         throw new Error("No enabled pairs configured")
       }
+
+      await this.#loadPriceTickSizes()
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
@@ -234,6 +237,48 @@ export class FreeRollBot {
     return this.#queue.enqueue({ key: symbol, task })
   }
 
+  async #loadPriceTickSizes() {
+    for (const [symbol, state] of this.#states) {
+      const fallbackTickSize = 10 ** -state.settings.pricePrecision
+
+      try {
+        if (typeof this.broker.getSymbolFilters !== "function") {
+          throw new Error("Broker does not support getSymbolFilters()")
+        }
+
+        const filters = unwrapResult(
+          await this.broker.getSymbolFilters({ symbol }),
+          `getSymbolFilters(${symbol})`,
+        )
+        const tickSize = Number(filters?.tickSize)
+
+        if (!Number.isFinite(tickSize) || tickSize <= 0) {
+          throw new Error(`Invalid tickSize returned for ${symbol}`)
+        }
+
+        state.priceTickSize = tickSize
+        this.#debug(`[${symbol}] Price tick size loaded from broker`, {
+          tickSize,
+          source: "Binance exchangeInfo",
+        })
+      } catch (error) {
+        state.priceTickSize = fallbackTickSize
+        this.logger.warn?.({
+          message: `[${symbol}] Could not load tickSize; using configured pricePrecision fallback`,
+          details: {
+            pricePrecision: state.settings.pricePrecision,
+            tickSize: fallbackTickSize,
+            error: error?.message ?? String(error),
+          },
+        })
+        this.#debug(`[${symbol}] Price tick size fallback selected`, {
+          tickSize: fallbackTickSize,
+          pricePrecision: state.settings.pricePrecision,
+        })
+      }
+    }
+  }
+
   async #handlePrice(symbol, tick) {
     const state = this.#states.get(symbol)
     const price = Number(tick?.price)
@@ -289,7 +334,7 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (state.paused || state.buyOrder) return
 
-    const price = roundPriceDown(rawPrice, state.settings.priceTickSize ?? 0)
+    const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
 
     const quantity = state.settings.orderQuantity
 
@@ -523,7 +568,7 @@ export class FreeRollBot {
       saleProceeds: state.saleProceeds,
       minProfit: this.settings.minProfit,
       feeRate: this.feeRate,
-      priceTickSize: state.settings.priceTickSize ?? 0,
+      priceTickSize: state.priceTickSize ?? 0,
     })
 
     this.#debug(`[${symbol}] SELL plan calculated`, {
