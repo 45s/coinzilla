@@ -1,11 +1,49 @@
-import assert from 'node:assert'
-import { describe, it } from 'node:test'
-import { defaultLogger as logger } from './logger.js'
+import assert from 'node:assert/strict'
+import { afterEach, describe, it } from 'node:test'
+import { Logger } from './logger.js'
 
-describe('utils/logger', () => {
-  for (const methodName of ['info', 'system', 'debug', 'error', 'success']) {
-    it(`should has "${methodName}" method`, () => {
-      assert(typeof logger[methodName] === 'function')
-    })
-  }
+describe('Logger', () => {
+  const originalLog = console.log
+  let calls
+
+  afterEach(() => {
+    console.log = originalLog
+  })
+
+  it('logs primitive values without throwing', () => {
+    calls = []
+    console.log = (...args) => calls.push(args)
+    const logger = new Logger()
+
+    assert.doesNotThrow(() => logger.info('hello'))
+    assert.doesNotThrow(() => logger.info(42))
+    assert.doesNotThrow(() => logger.info(true))
+
+    assert.equal(calls.length, 3)
+    assert.equal(calls[0].includes('hello'), true)
+    assert.equal(calls[1].includes(42), true)
+    assert.equal(calls[2].includes(true), true)
+  })
+
+  it('serializes objects as readable JSON', () => {
+    calls = []
+    console.log = (...args) => calls.push(args)
+    const logger = new Logger()
+
+    logger.info({ message: 'hello', count: 2 })
+
+    assert.equal(calls.length, 1)
+    assert.equal(
+      calls[0].includes(JSON.stringify({ message: 'hello', count: 2 }, null, 2)),
+      true,
+    )
+  })
+
+  it('exposes all supported logging methods', () => {
+    const logger = new Logger()
+
+    for (const methodName of ['info', 'system', 'debug', 'error', 'warn', 'success']) {
+      assert.equal(typeof logger[methodName], 'function')
+    }
+  })
 })
