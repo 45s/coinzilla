@@ -50,6 +50,12 @@ describe('Validator', () => {
     )
   })
 
+  it('rejects non-finite values in required-number validation', () => {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      assert.equal(Validator.isRequiredNumberValid(value), false)
+    }
+  })
+
   it('returns booleans from required-value helpers', () => {
     assert.equal(Validator.isRequiredNumberValid(5), true)
     assert.equal(Validator.isRequiredNumberValid(0), false)
