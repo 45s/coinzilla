@@ -8,6 +8,6 @@ describe("WS reconnect defaults", () => {
   })
 
   it("preserves an explicit zero reconnect delay", () => {
-    assert.equal(new WS({ wsURL: "wss://example.test", reconnectDelay: 0, logger: {} }).reconnectDelay, 5000)
+    assert.equal(new WS({ wsURL: "wss://example.test", reconnectDelay: 0, logger: {} }).reconnectDelay, 0)
   })
 })
