@@ -10,6 +10,9 @@ const { data: journal } = prepareJournal({
   logger,
   folderPath: "../../../logs_bot-free-roll",
 })
+const { data: broker } = await prepareBroker()
+const bot = new FreeRollBot({ tradingConfig, broker })
+await bot.connect()
 
 eventBus.publish({
   name: "order.filled",
@@ -23,8 +26,6 @@ eventBus.publish({
   },
 })
 
-const { data: broker } = await prepareBroker()
-let bot
 let shuttingDown = false
 
 async function shutdown() {
@@ -309,10 +310,6 @@ try {
       logger.info?.("User data event received", { event })
     },
   })
-
-  // Temporarily disabled for journal testing.
-  // bot = new FreeRollBot({ tradingConfig, broker })
-  // await bot.connect()
 } catch (error) {
   logger.error?.("[bot] Failed", { error })
 
