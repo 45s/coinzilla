@@ -44,3 +44,16 @@ describe("getOrder", () => {
     )
   })
 })
+
+it("URL-encodes the symbol in the signed order lookup", async () => {
+  let requestedUrl
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url)
+    return {
+      headers: { get: () => "application/json" },
+      json: async () => ({ code: -1121, msg: "Invalid symbol." }),
+    }
+  }
+  await assert.rejects(() => getOrder({ symbol: "BAD/SYMBOL", orderId: 99 }))
+  assert.match(requestedUrl, /symbol=BAD%2FSYMBOL/)
+})
