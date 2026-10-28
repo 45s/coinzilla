@@ -89,3 +89,8 @@ describe("BinanceSdkConfig", () => {
     assert.equal(config.websocketStreamsUrl, "wss://example.com/streams")
   })
 })
+
+it("rejects empty credential strings", () => {
+  assert.throws(() => new BinanceSdkConfig({ apiKey: "", apiSecret: "test-secret" }), /credentials are required/)
+  assert.throws(() => new BinanceSdkConfig({ apiKey: "test-key", apiSecret: "" }), /credentials are required/)
+})
