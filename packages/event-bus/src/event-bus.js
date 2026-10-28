@@ -9,6 +9,10 @@ export class EventBus {
     this.logger = logger
     this.onError = onError
     this.emitter = new EventEmitter()
+    // Node treats an unhandled "error" event as an exception. The event bus
+    // accepts arbitrary event names, so keep publishing "error" safe even
+    // when no consumer subscribes to it.
+    this.emitter.on("error", () => {})
     this.pending = new Set()
     this.closed = false
   }
