@@ -10,8 +10,8 @@
         }
       },
       "pairs": {
-        "DOGEFDUSD": {
-          "enabled": false,
+        "DOGEUSDT": {
+          "enabled": true,
           "priceStep": 0.0005,
           "orderQuantity": 400,
           "keepQuantity": 1
@@ -23,7 +23,7 @@
           "keepQuantity": 0.01
         },
         "ZROUSDT": {
-          "enabled": true,
+          "enabled": false,
           "priceStep": 0.01,
           "orderQuantity": 5,
           "keepQuantity": 0.01

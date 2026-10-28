@@ -178,7 +178,6 @@ export class BinanceSdkBroker extends CoreBroker {
         symbol: symbol.toLowerCase(),
       })
       stream.on("message", (m) => {
-        this.logger.debug?.({ "Binance raw price message": m })
         onPrice(adaptMsg(m))
       })
       stream.on("error", (error) => {
