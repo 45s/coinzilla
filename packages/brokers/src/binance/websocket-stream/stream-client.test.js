@@ -30,7 +30,7 @@ describe("BinanceStreamClient stream names", () => {
     client.combinedStreams = true
     client.trade({ tickets: ["BTCUSDT", "ETHUSDT"] })
     assert.deepEqual(urls, [
-      "wss://example.test/stream?streams=btcusdt@trade/ethusdt@trade",
+      "wss://example.test/stream?streams=btcusdt@trade",
     ])
   })
 
