@@ -361,6 +361,20 @@ export class FreeRollBot {
       referencePrice: state.referencePrice,
       lastBuyPrice: state.lastBuyPrice,
       buyOrderId: getOrderId(state.buyOrder),
+      buyOrder: state.buyOrder
+        ? {
+            id: state.buyOrder.id,
+            price: state.buyOrder.price,
+            quantity: state.buyOrder.quantity,
+          }
+        : null,
+      sellOrder: state.sellOrder
+        ? {
+            id: state.sellOrder.id,
+            price: state.sellOrder.price,
+            quantity: state.sellOrder.quantity,
+          }
+        : null,
       paused: state.paused,
     }
     const priceLogKey = JSON.stringify(priceDetails)
