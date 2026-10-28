@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { calculateBuyThreshold } from "./helpers.js"
+import { calculateBuyThreshold, roundPriceDown, roundPriceUp } from "./helpers.js"
 
 test("calculateBuyThreshold applies a percentage drop to the initial reference price", () => {
   const threshold = calculateBuyThreshold({
@@ -51,4 +51,15 @@ test("calculateBuyThreshold rejects invalid prices and percentages", () => {
       priceStepPercent: 0.05,
     }),
   )
+})
+
+
+test("roundPriceDown returns a valid tick without floating-point noise", () => {
+  assert.equal(roundPriceDown(0.07905045499999999, 0.00001), 0.07905)
+  assert.equal(roundPriceDown(0.1234, 0.05), 0.1)
+})
+
+test("roundPriceUp returns a valid tick without floating-point noise", () => {
+  assert.equal(roundPriceUp(0.0790500001, 0.00001), 0.07906)
+  assert.equal(roundPriceUp(0.101, 0.05), 0.15)
 })

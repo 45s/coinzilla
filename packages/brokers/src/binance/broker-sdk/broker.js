@@ -1,5 +1,5 @@
 import { Spot } from "@binance/spot"
-import { handleErr, toResult } from "@coinzilla/utils"
+import { handleErr, isProdMode, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptOrder, adaptSpotAsset } from "../shared/index.js"
 import { adaptMsg } from "../websocket-stream/index.js"
@@ -34,6 +34,39 @@ export class BinanceSdkBroker extends CoreBroker {
 
     this.tradingConnection = null
     this.marketConnection = null
+  }
+
+  async getSymbolFilters({ symbol }) {
+    try {
+      const baseUrl = isProdMode
+        ? "https://api.binance.com"
+        : "https://testnet.binance.vision"
+      const response = await fetch(
+        `${baseUrl}/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`,
+      )
+
+      if (!response.ok) {
+        throw new Error(`Binance exchangeInfo returned HTTP ${response.status}`)
+      }
+
+      const exchangeInfo = await response.json()
+      const symbolInfo = exchangeInfo.symbols?.find(
+        (item) => item.symbol === symbol,
+      )
+      const priceFilter = symbolInfo?.filters?.find(
+        (filter) => filter.filterType === "PRICE_FILTER",
+      )
+      const tickSize = Number(priceFilter?.tickSize)
+
+      if (!Number.isFinite(tickSize) || tickSize <= 0) {
+        throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
+      }
+
+      return toResult({ data: { symbol, tickSize } })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
+      return toResult({ errors: [error] })
+    }
   }
 
   async connect() {

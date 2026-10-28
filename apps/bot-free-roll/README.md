@@ -151,7 +151,12 @@ The commission values above are examples, not universal defaults. Configure them
 | `pairs`                     | Object containing per-pair settings                                                   |
 | `priceStepPercent`                 | Percentage decrease from the reference or last buy price that triggers the next buy; 0.05 means 0.05% |
 | `orderQuantity`             | Base-asset quantity for each buy order                                                |
+| `pricePrecision`          | Fallback decimal precision used only when the broker cannot fetch a valid `tickSize`; 5 means a fallback tick size of 0.00001 |
 | `keepQuantity`              | Base-asset quantity to retain as free coins per completed recovery cycle              |
+
+### Price tick-size resolution
+
+Before subscribing to prices, the bot tries to fetch each enabled symbol's `PRICE_FILTER.tickSize` from Binance exchange information. If the request fails or the filter is unavailable, it falls back to the pair's configured `pricePrecision`, converted to a tick size of `10 ** -pricePrecision`. The fallback is a manual safety net and must be kept consistent with the symbol's actual exchange filter.
 
 ### Commission rate format
 

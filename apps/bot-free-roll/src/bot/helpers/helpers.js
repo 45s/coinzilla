@@ -38,6 +38,11 @@ export function calculateBuyThreshold({
   return basePrice * (1 - priceStepPercent / 100)
 }
 
+function getTickPrecision(tickSize) {
+  const [coefficient, exponent = "0"] = tickSize.toString().toLowerCase().split("e")
+  return Math.max(0, (coefficient.split(".")[1]?.length ?? 0) - Number(exponent))
+}
+
 export function roundPriceDown(price, tickSize = 0) {
   if (!Number.isFinite(price) || price <= 0) {
     throw new Error("Price must be positive")
@@ -51,7 +56,9 @@ export function roundPriceDown(price, tickSize = 0) {
     return Math.floor(price * 1e8) / 1e8
   }
 
-  return Math.floor((price + Number.EPSILON) / tickSize) * tickSize
+  const precision = getTickPrecision(tickSize)
+  const ticks = Math.floor((price + tickSize * 1e-10) / tickSize)
+  return Number((ticks * tickSize).toFixed(precision))
 }
 
 export function roundPriceUp(price, tickSize = 0) {
@@ -67,7 +74,9 @@ export function roundPriceUp(price, tickSize = 0) {
     return Math.ceil(price * 1e8) / 1e8
   }
 
-  return Math.ceil((price - Number.EPSILON) / tickSize) * tickSize
+  const precision = getTickPrecision(tickSize)
+  const ticks = Math.ceil((price - tickSize * 1e-10) / tickSize)
+  return Number((ticks * tickSize).toFixed(precision))
 }
 
 export function calculateSellPlan({
