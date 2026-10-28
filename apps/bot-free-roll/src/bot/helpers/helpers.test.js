@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 
 import {
   calculateBuyThreshold,
+  getFeeRate,
   calculateSellPlan,
   roundPriceDown,
   roundPriceUp,
@@ -108,4 +109,34 @@ test("calculateSellPlan returns readable money precision without floating-point 
   assert.equal(plan.quantity, 1567)
   assert.equal(plan.requiredNetProceeds, 128.01336)
   assert.equal(plan.price, 0.08252)
+})
+
+test("getFeeRate converts pair commission percentages to a conservative decimal rate", () => {
+  assert.equal(getFeeRate({ makerPercent: 0.075, takerPercent: 0.075 }), 0.00075)
+  assert.equal(getFeeRate({ makerPercent: 0, takerPercent: 0.075 }), 0.00075)
+  assert.equal(getFeeRate({ makerPercent: 0, takerPercent: 0 }), 0)
+  assert.equal(getFeeRate({ makerPercent: 0.075, takerPercent: 0.04 }), 0.00075)
+})
+
+test("getFeeRate rejects missing or invalid commission percentages", () => {
+  for (const value of [undefined, null, -0.01, 100, Number.NaN, Infinity]) {
+    assert.throws(() => getFeeRate({ makerPercent: value, takerPercent: 0 }))
+    assert.throws(() => getFeeRate({ makerPercent: 0, takerPercent: value }))
+  }
+})
+
+test("calculateSellPlan uses realistic 0.075% commission without the former 1% assumption", () => {
+  const plan = calculateSellPlan({
+    activeQuantity: 396,
+    keepQuantity: 1,
+    cycleCost: 31.8554,
+    saleProceeds: 0,
+    minProfit: 0.01,
+    feeRate: getFeeRate({ makerPercent: 0.075, takerPercent: 0.075 }),
+    priceTickSize: 0.00001,
+    quantityStepSize: 1,
+  })
+
+  assert.equal(plan.quantity, 394)
+  assert.equal(plan.price, 0.08099)
 })
