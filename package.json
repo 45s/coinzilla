@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "pnpm --recursive --if-present --filter './packages/**' test"
+    "test": "pnpm --recursive --if-present test"
   },
   "keywords": [],
   "author": "",
