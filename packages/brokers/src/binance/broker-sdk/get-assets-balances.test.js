@@ -19,3 +19,13 @@ describe("BinanceSdkBroker.getAssets", () => {
     assert.deepEqual(result.data, [{ ticker: "BTC", quantity: 0.25 }])
   })
 })
+
+it("returns a structured error when the SDK rejects asset retrieval", async () => {
+  const instance = broker()
+  instance.tradingConnection = {
+    accountStatus: async () => { throw new Error("account endpoint unavailable") },
+  }
+  const result = await instance.getAssets()
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].message, "account endpoint unavailable")
+})
