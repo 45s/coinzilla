@@ -20,6 +20,7 @@ function createValidConfig() {
             enabled: true,
             priceStepPercent: 0.05,
             pricePrecision: 5,
+            quantityPrecision: 0,
             orderQuantity: 100,
             keepQuantity: 1,
           },
@@ -27,6 +28,7 @@ function createValidConfig() {
             enabled: false,
             priceStepPercent: 0.05,
             pricePrecision: 5,
+            quantityPrecision: 0,
             orderQuantity: 1,
             keepQuantity: 0.01,
           },
@@ -173,6 +175,16 @@ test("pricePrecision must be an integer between 0 and 8", () => {
       "pairs.DOGEFDUSD.pricePrecision must be an integer between 0 and 8",
     ),
   )
+})
+
+test("quantityPrecision must be an integer between 0 and 8", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD.quantityPrecision = 9
+  const result = validateTradingConfig({ tradingConfig })
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes(
+    "pairs.DOGEFDUSD.quantityPrecision must be an integer between 0 and 8",
+  ))
 })
 
 test("priceStepPercent must be less than 100", () => {
