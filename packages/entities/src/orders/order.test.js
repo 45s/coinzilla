@@ -21,12 +21,21 @@ describe(`${Order.name}`, () => {
       price,
       id,
     })
-    assert(o.symbol, "BTCUSDT")
-    assert(o.type, type)
-    assert(o.side, side)
-    assert(o.quantity, quantity)
-    assert(o.price, price)
-    assert(o.id, id)
+    assert.strictEqual(o.symbol, "BTCUSDT")
+    assert.strictEqual(o.type, type)
+    assert.strictEqual(o.side, side)
+    assert.strictEqual(o.quantity, quantity)
+    assert.strictEqual(o.price, price)
+    assert.strictEqual(o.id, id)
+
+    assert.deepStrictEqual(o.value, {
+      id,
+      symbol: "BTCUSDT",
+      type,
+      side,
+      quantity,
+      price,
+    })
   })
 
   it("should throw an error with invalid symbol", () => {
