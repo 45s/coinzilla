@@ -44,3 +44,11 @@ describe("getOpenOrders", () => {
     )
   })
 })
+
+it("returns an empty list when no open orders exist", async () => {
+  globalThis.fetch = async () => ({
+    headers: { get: () => "application/json" },
+    json: async () => [],
+  })
+  assert.deepEqual(await getOpenOrders(), [])
+})
