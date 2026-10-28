@@ -9,6 +9,7 @@ import {
   estimateSellAccounting,
   getOrderId,
   roundPriceDown,
+  roundQuantityDown,
   unwrapResult,
 } from "./helpers/index.js"
 
@@ -319,7 +320,8 @@ export class FreeRollBot {
 
       this.#debug(`[${symbol}] Initial reference established`, {
         price,
-        buyLimitPrice: threshold,
+        triggerThreshold: threshold,
+        buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
       })
 
       await this.#placeBuy(symbol, threshold)
@@ -334,7 +336,8 @@ export class FreeRollBot {
 
     this.#debug(`[${symbol}] Buy threshold evaluated`, {
       price,
-      threshold,
+      triggerThreshold: threshold,
+      buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
       priceStepPercent: state.settings.priceStepPercent,
       shouldBuy: price <= threshold,
     })
@@ -350,7 +353,15 @@ export class FreeRollBot {
 
     const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
 
-    const quantity = state.settings.orderQuantity
+    const quantity = roundQuantityDown(
+      state.settings.orderQuantity,
+      state.quantityStepSize ?? 0,
+    )
+
+    if (quantity <= 0) {
+      this.#pause(symbol, "BUY quantity is below the exchange quantity step")
+      return
+    }
 
     this.#debug(`[${symbol}] Submitting BUY`, { price, quantity })
 
@@ -655,7 +666,10 @@ export class FreeRollBot {
       priceStepPercent: state.settings.priceStepPercent,
     })
 
-    this.#debug(`[${symbol}] Scheduling next BUY`, { threshold })
+    this.#debug(`[${symbol}] Scheduling next BUY`, {
+      triggerThreshold: threshold,
+      buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
+    })
 
     if (threshold <= 0) {
       this.#pause(symbol, "Next BUY price is not positive")
