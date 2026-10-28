@@ -167,7 +167,30 @@ async function shutdown() {
       debug("SKIP: broker.disconnect() — broker is not initialized")
     }
 
-    // Stage 3: publish bot.stopped while the journal is still subscribed.
+    // Stage 3: publish a final strategy/accounting snapshot while the
+    // journal is still active. Wallet figures are included only when
+    // confirmed by Binance account-position events.
+    await runStage("final trading summary", () => {
+      const summary = bot.getSummary()
+      logger.info?.("Final trading summary", summary)
+
+      const result = eventBus.publish({
+        name: "trading.summary",
+        source: "free-roll-bot",
+        data: {
+          reason: "bot_shutdown",
+          summary,
+        },
+      })
+
+      if (!result?.ok) {
+        throw new Error(`eventBus.publish failed: ${JSON.stringify(result)}`)
+      }
+
+      return summary
+    })
+
+    // Stage 4: publish bot.stopped while the journal is still subscribed.
     await runStage("eventBus.publish(bot.stopped)", () => {
       const result = eventBus.publish({
         name: "bot.stopped",
@@ -183,7 +206,7 @@ async function shutdown() {
       return result
     })
 
-    // Stage 4: flush pending event handlers and close the journal.
+    // Stage 5: flush pending event handlers and close the journal.
     await runStage("journal.close()", async () => {
       const result = await journal.close()
 
@@ -194,7 +217,7 @@ async function shutdown() {
       return result
     })
 
-    // Stage 5: close the event bus after the journal has flushed.
+    // Stage 6: close the event bus after the journal has flushed.
     await runStage("eventBus.close()", async () => {
       const result = await eventBus.close()
 
@@ -263,6 +286,13 @@ try {
       cause: journalResult.errors,
     })
   }
+
+  eventBus.subscribe({
+    name: "trading.summary",
+    handler: async ({ data }) => {
+      logger.info?.("Trading summary", data)
+    },
+  })
 
   eventBus.subscribe({
     name: "order.filled",
