@@ -1,8 +1,18 @@
 import { EventBus } from "@coinzilla/event-bus"
 import { defaultLogger as logger } from "@coinzilla/utils"
 
+import tradingConfig from "../trading-config.json" with { type: "json" }
+
 import { prepareBroker } from "./prepare-broker.js"
 import { prepareJournal } from "./prepare-journal.js"
+import { FreeRollBot } from "./bot/index.js"
+import { validateTradingConfig } from "./validate-config.js"
+
+const result = validateTradingConfig({ tradingConfig })
+
+if (!result.ok) {
+  throw new Error(`Invalid trading config:\n- ${result.errors.join("\n- ")}`)
+}
 
 const eventBus = new EventBus({ logger })
 const { data: journal } = prepareJournal({
@@ -10,8 +20,10 @@ const { data: journal } = prepareJournal({
   logger,
   folderPath: "../../../logs_bot-free-roll",
 })
+
 const { data: broker } = await prepareBroker()
-const bot = new FreeRollBot({ tradingConfig, broker })
+
+const bot = new FreeRollBot({ tradingConfig: result.data, broker })
 await bot.connect()
 
 eventBus.publish({
