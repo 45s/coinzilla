@@ -288,13 +288,6 @@ try {
   }
 
   eventBus.subscribe({
-    name: "trading.summary",
-    handler: async ({ data }) => {
-      logger.info?.("Trading summary", data)
-    },
-  })
-
-  eventBus.subscribe({
     name: "order.filled",
     handler: async ({ data }) => {
       logger.info?.("Order filled", {
