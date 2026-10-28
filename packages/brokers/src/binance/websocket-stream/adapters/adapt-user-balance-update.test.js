@@ -12,3 +12,11 @@ describe("adaptUser.balanceUpdate", () => {
     })
   })
 })
+it("preserves zero balance deltas and timestamps", () => {
+  assert.deepEqual(adaptUser.balanceUpdate({
+    e: "balanceUpdate", a: "USDT", d: "0", T: 0, E: 0,
+  }), {
+    asset: "USDT", balanceDelta: "0", clearTime: 0, eventTime: 0,
+    eventType: "balanceUpdate",
+  })
+})
