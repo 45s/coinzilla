@@ -25,3 +25,16 @@ describe("adaptUser.executionReport", () => {
     })
   })
 })
+it("preserves zero fill and commission values", () => {
+  const result = adaptUser.executionReport({
+    E: 0, s: "BTCUSDT", c: "client", C: "", S: "BUY", o: "LIMIT",
+    f: "GTC", q: "1", p: "100", x: "NEW", P: "0", F: "0", X: "NEW",
+    r: "NONE", i: 1, T: 0, l: "0", z: "0", L: "0", n: "0", N: null,
+    t: -1, w: false, m: false, O: 0, Z: "0", g: -1, Q: "1", Y: "0",
+  })
+  assert.equal(result.lastTradeQuantity, "0")
+  assert.equal(result.totalTradeQuantity, "0")
+  assert.equal(result.commission, "0")
+  assert.equal(result.commissionAsset, null)
+  assert.equal(result.isBuyerMaker, false)
+})
