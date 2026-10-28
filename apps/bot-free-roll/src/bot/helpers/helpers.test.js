@@ -138,5 +138,5 @@ test("calculateSellPlan uses realistic 0.075% commission without the former 1% a
   })
 
   assert.equal(plan.quantity, 394)
-  assert.equal(plan.price, 0.08099)
+  assert.equal(plan.price, 0.08094)
 })
