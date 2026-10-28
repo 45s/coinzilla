@@ -40,6 +40,22 @@ test("publishes a structured event", () => {
   bus.close()
 })
 
+
+test('publishes an "error" event safely when no consumer subscribes', async () => {
+  const { bus } = createTestBus()
+
+  const result = bus.publish({
+    name: "error",
+    source: "test",
+    data: { message: "simulated error event" },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.event.name, "error")
+
+  await bus.close()
+})
+
 test("returns a failure result for invalid events", () => {
   const { bus } = createTestBus()
 
