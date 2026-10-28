@@ -50,6 +50,14 @@ describe('Validator', () => {
     )
   })
 
+  it('rejects non-finite values with the number rule', () => {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      assert.deepEqual(Validator.validate({ items: [[value, [VR.num]]] }), [
+        { value, msgs: [EM.notNumber()] },
+      ])
+    }
+  })
+
   it('rejects non-finite values in required-number validation', () => {
     for (const value of [NaN, Infinity, -Infinity]) {
       assert.equal(Validator.isRequiredNumberValid(value), false)
