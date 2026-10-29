@@ -227,3 +227,12 @@ test("does not allow a journal to start more than once or restart after close", 
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+test("can close before startup and then rejects startup", async () => {
+  const journal = new Journal({ directory: "/unused" })
+  const closeResult = await journal.close()
+  assert.equal(closeResult.ok, true)
+  assert.equal(closeResult.closed, true)
+  const startResult = await journal.start()
+  assert.equal(startResult.ok, false)
+})
