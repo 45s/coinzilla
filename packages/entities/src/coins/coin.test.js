@@ -58,3 +58,12 @@ describe(`${Coin.name}`, () => {
     }
   })
 })
+
+  it("returns a fresh value snapshot on each access", () => {
+    const coin = createCoin()
+    const snapshot = coin.value
+    snapshot.ticker = "ETH"
+    snapshot.quantity = 99
+    assert.deepEqual(coin.value, { ticker: "BTC", quantity })
+    assert.notStrictEqual(coin.value, snapshot)
+  })
