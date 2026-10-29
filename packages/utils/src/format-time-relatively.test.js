@@ -15,3 +15,10 @@ describe('formatTimeRelatively', () => {
     assert.equal(formatTimeRelatively({ value: -1 }), '1 hour ago')
   })
 })
+
+it("rejects unsupported relative-time units", () => {
+  assert.throws(
+    () => formatTimeRelatively({ value: 1, unit: "fortnight" }),
+    { name: "RangeError" },
+  )
+})
