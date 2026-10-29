@@ -18,12 +18,19 @@ export function prepareJournal({
       directory,
       logger,
     })
+
     return toResult({ data: journal })
   } catch (error) {
-    handleErr({
-      logger,
-      error,
-      where: "prepareJournal()",
-    })
+    try {
+      handleErr({
+        logger,
+        error,
+        where: "prepareJournal()",
+      })
+    } catch {
+      // Logging must not hide the original setup error.
+    }
+
+    return toResult({ error })
   }
 }
