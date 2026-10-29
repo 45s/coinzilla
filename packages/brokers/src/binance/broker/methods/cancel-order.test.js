@@ -1,23 +1,20 @@
 import assert from "node:assert/strict"
-import { afterEach, describe, it } from "node:test"
+import { describe, it } from "node:test"
 process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
 process.env.BINANCE_API_KEY = "unit-test-key"
 process.env.BINANCE_SPOT_API_URL = "https://example.test"
 const { cancelOrder } = await import("./cancel-order.js")
 
-const originalFetch = globalThis.fetch
-afterEach(() => { globalThis.fetch = originalFetch })
-
 describe("cancelOrder", () => {
-  it("sends a DELETE request and returns the exchange response", async () => {
+  it("sends a DELETE request and returns the exchange response", async (t) => {
     let request
-    globalThis.fetch = async (url, options) => {
+    t.mock.method(globalThis, "fetch", async (url, options) => {
       request = { url: String(url), options }
       return {
         headers: { get: () => "application/json" },
         json: async () => ({ symbol: "BTCUSDT", status: "CANCELED" }),
       }
-    }
+    })
 
     const result = await cancelOrder({ symbol: "BTCUSDT", orderId: 123 })
 
@@ -27,11 +24,11 @@ describe("cancelOrder", () => {
     assert.deepEqual(result, { symbol: "BTCUSDT", status: "CANCELED" })
   })
 
-  it("throws the exchange error response", async () => {
-    globalThis.fetch = async () => ({
+  it("throws the exchange error response", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -2011, msg: "Unknown order sent." }),
-    })
+    }))
 
     await assert.rejects(
       () => cancelOrder({ symbol: "BTCUSDT", orderId: 123 }),
