@@ -1,12 +1,9 @@
 import assert from "node:assert/strict"
-import { afterEach, describe, it } from "node:test"
+import { describe, it } from "node:test"
 process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
 process.env.BINANCE_API_KEY = "unit-test-key"
 process.env.BINANCE_SPOT_API_URL = "https://example.test"
 const { createOrder } = await import("./create-order.js")
-
-const originalFetch = globalThis.fetch
-afterEach(() => { globalThis.fetch = originalFetch })
 
 const order = {
   symbol: "BTCUSDT",
@@ -17,9 +14,9 @@ const order = {
 }
 
 describe("createOrder", () => {
-  it("sends a signed POST request and adapts the created order", async () => {
+  it("sends a signed POST request and adapts the created order", async (t) => {
     let request
-    globalThis.fetch = async (url, options) => {
+    t.mock.method(globalThis, "fetch", async (url, options) => {
       request = { url: String(url), options }
       return {
         headers: { get: () => "application/json" },
@@ -28,10 +25,9 @@ describe("createOrder", () => {
           price: "50000", origQty: "0.25", executedQty: "0",
         }),
       }
-    }
+    })
 
     const result = await createOrder({ order })
-
     assert.equal(request.options.method, "POST")
     assert.match(request.url, /order\?symbol=BTCUSDT&type=LIMIT&side=BUY/)
     assert.match(request.url, /timeInForce=GTC/)
@@ -41,12 +37,11 @@ describe("createOrder", () => {
     assert.equal(result.price, 50000)
   })
 
-  it("throws the exchange error response", async () => {
-    globalThis.fetch = async () => ({
+  it("throws the exchange error response", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -1013, msg: "Invalid quantity." }),
-    })
-
+    }))
     await assert.rejects(
       () => createOrder({ order }),
       (error) => error.code === -1013 && error.msg === "Invalid quantity.",
@@ -54,14 +49,14 @@ describe("createOrder", () => {
   })
 })
 
-it("returns remaining quantity for a partially filled order response", async () => {
-  globalThis.fetch = async () => ({
+it("returns remaining quantity for a partially filled order response", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => ({
     headers: { get: () => "application/json" },
     json: async () => ({
       symbol: "BTCUSDT", orderId: 43, type: "LIMIT", side: "BUY",
       price: "50000", origQty: "0.25", executedQty: "0.1",
     }),
-  })
+  }))
   const result = await createOrder({ order })
   assert.equal(result.quantity, 0.15)
 })
