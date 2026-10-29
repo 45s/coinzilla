@@ -1,6 +1,1 @@
-export const capitalize = (s) =>
-  s
-    .trim()
-    .split()
-    .map((c) => c.toUpperCase())
-    .join()
+export const capitalize = (value) => value.trim().toUpperCase()
