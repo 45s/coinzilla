@@ -1,12 +1,9 @@
 import assert from "node:assert/strict"
-import { afterEach, describe, it } from "node:test"
+import { describe, it } from "node:test"
 process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
 process.env.BINANCE_API_KEY = "unit-test-key"
 process.env.BINANCE_SPOT_API_URL = "https://example.test"
 const { getOpenOrders } = await import("./get-open-orders.js")
-
-const originalFetch = globalThis.fetch
-afterEach(() => { globalThis.fetch = originalFetch })
 
 const exchangeOrder = (orderId, overrides = {}) => ({
   symbol: "BTCUSDT",
@@ -20,11 +17,11 @@ const exchangeOrder = (orderId, overrides = {}) => ({
 })
 
 describe("getOpenOrders", () => {
-  it("adapts each returned open order", async () => {
-    globalThis.fetch = async () => ({
+  it("adapts each returned open order", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => [exchangeOrder(1), exchangeOrder(2, { origQty: "2" })],
-    })
+    }))
 
     const result = await getOpenOrders()
     assert.equal(result.length, 2)
@@ -32,11 +29,11 @@ describe("getOpenOrders", () => {
     assert.deepEqual(result.map((item) => item.quantity), [1, 2])
   })
 
-  it("throws the exchange error response", async () => {
-    globalThis.fetch = async () => ({
+  it("throws the exchange error response", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -1003, msg: "Rate limit exceeded." }),
-    })
+    }))
 
     await assert.rejects(
       () => getOpenOrders(),
@@ -45,10 +42,10 @@ describe("getOpenOrders", () => {
   })
 })
 
-it("returns an empty list when no open orders exist", async () => {
-  globalThis.fetch = async () => ({
+it("returns an empty list when no open orders exist", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => ({
     headers: { get: () => "application/json" },
     json: async () => [],
-  })
+  }))
   assert.deepEqual(await getOpenOrders(), [])
 })
