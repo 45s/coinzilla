@@ -15,4 +15,12 @@ describe('capitalize', () => {
     assert.equal(capitalize('COINZILLA'), 'COINZILLA')
     assert.equal(capitalize('CoInZilla'), 'COINZILLA')
   })
+
+  it('returns an empty string for empty input', () => {
+    assert.equal(capitalize(''), '')
+  })
+
+  it('returns an empty string for whitespace-only input', () => {
+    assert.equal(capitalize(' \t\n '), '')
+  })
 })
