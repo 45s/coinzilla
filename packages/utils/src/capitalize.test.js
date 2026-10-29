@@ -16,6 +16,10 @@ describe('capitalize', () => {
     assert.equal(capitalize('CoInZilla'), 'COINZILLA')
   })
 
+  it('uppercases Unicode text without changing other characters', () => {
+    assert.equal(capitalize('  київ 🚀  '), 'КИЇВ 🚀')
+  })
+
   it('returns an empty string for empty input', () => {
     assert.equal(capitalize(''), '')
   })
