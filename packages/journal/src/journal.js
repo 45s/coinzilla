@@ -174,11 +174,20 @@ export class Journal {
       ...this.writeErrors,
     ]
 
+    if (errors.length === 0 && this.fileHandle && !this.closed) {
+      try {
+        // Wait for queued writes, then ask the OS to sync file data to storage.
+        await this.fileHandle.sync()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
     if (errors.length > 0) {
       return toResult({ errors })
     }
 
-    return toResult({ flushed: true })
+    return toResult({ flushed: true, filePath: this.filePath })
   }
 
   async close({} = {}) {
