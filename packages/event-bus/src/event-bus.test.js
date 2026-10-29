@@ -368,3 +368,13 @@ test("defaults omitted event data to an empty object", async () => {
   assert.deepEqual(result.event.data, {})
   await bus.close()
 })
+
+test("rejects subscriptions without a function handler", async () => {
+  const { bus } = createTestBus()
+  const result = bus.subscribe({ name: "test.event", handler: null })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /Event handler must be a function/)
+
+  await bus.close()
+})
