@@ -87,3 +87,13 @@ describe("WS/send", () => {
     assert.deepEqual(warnings, ["No connection to close."])
   })
 })
+
+it("forwards Buffer payloads without converting them", () => {
+  const payload = Buffer.from("trade-event")
+  let sent
+  const client = new WS({ logger: { warn() {} } })
+  client.isConnected = () => true
+  client.wsConnection.ws = { send: (value) => { sent = value } }
+  assert.equal(client.send(payload), true)
+  assert.equal(sent, payload)
+})
