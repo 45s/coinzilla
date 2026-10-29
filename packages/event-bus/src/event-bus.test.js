@@ -318,3 +318,12 @@ test("published event envelopes are frozen and contain generated metadata", asyn
 
   await bus.close()
 })
+
+test("reports unsubscribe state consistently across repeated calls", async () => {
+  const { bus } = createTestBus()
+  const result = bus.subscribe({ name: "test.event", handler: () => {} })
+  assert.equal(result.ok, true)
+  assert.equal(result.subscription.unsubscribe().unsubscribed, true)
+  assert.equal(result.subscription.unsubscribe().unsubscribed, false)
+  await bus.close()
+})
