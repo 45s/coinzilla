@@ -1,6 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { generateSignQuery, buildSignQuery } from "./generate-sign-query.js"
+import { generateSignQuery } from "./generate-sign-query.js"
+import { buildSignQuery } from "./build-sign-query.js"
 import { generateTimestamp } from "./generate-timestamp.js"
 
 describe("generateTimestamp", () => {
@@ -21,11 +22,10 @@ describe("buildSignQuery", () => {
     assert.equal(buildSignQuery(1700000000123), buildSignQuery(1700000000123))
   })
 
-  it("does not read the clock or mutate input", () => {
+  it("does not mutate the supplied timestamp", () => {
     const timestamp = 1700000000123
-    const result = buildSignQuery(timestamp)
 
-    assert.equal(result, "recvWindow=5000&timestamp=1700000000123")
+    assert.equal(buildSignQuery(timestamp), "recvWindow=5000&timestamp=1700000000123")
     assert.equal(timestamp, 1700000000123)
   })
 })
