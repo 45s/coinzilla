@@ -28,7 +28,7 @@ describe("WS/send", () => {
     }
 
     assert.equal(client.send("payload"), true)
-    assert.deepEqual(sent, ["payload"])
+    assert.deepEqual(sent, [ "payload" ])
     assert.deepEqual(warnings, [])
   })
 
@@ -84,6 +84,24 @@ describe("WS/send", () => {
 
     client.disconnect()
 
+    assert.equal(client.wsConnection.closeInitiated, true)
+    assert.deepEqual(warnings, ["No connection to close."])
+  })
+
+  it("clears a pending reconnect timer even when already disconnected", async () => {
+    const warnings = []
+    const client = new WS({ logger: { warn: (message) => warnings.push(message) } })
+    client.isConnected = () => false
+    let reconnected = false
+    client.reconnectTimer = setTimeout(() => {
+      reconnected = true
+    }, 20)
+
+    client.disconnect()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+
+    assert.equal(client.reconnectTimer, null)
+    assert.equal(reconnected, false)
     assert.deepEqual(warnings, ["No connection to close."])
   })
 })
@@ -98,7 +116,6 @@ it("overrides only the supplied default callbacks", () => {
   client.callbacks.message('{"event":"trade"}')
   assert.deepEqual(calls, ["custom-open", { event: "trade" }])
 })
-
 
 it("forwards Buffer payloads without converting them", () => {
   const payload = Buffer.from("trade-event")
