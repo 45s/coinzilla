@@ -398,3 +398,50 @@ test("keeps startup successful when the startup info logger throws", async () =>
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("returns a flush error when the event bus flush rejects", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.eventBus.flush = async () => {
+      throw new Error("simulated event bus flush rejection")
+    }
+
+    const result = await context.journal.flush()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated event bus flush rejection/)
+  } finally {
+    context.eventBus.flush = EventBus.prototype.flush
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+test("still closes the journal when unsubscribe and event bus flush throw", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.subscription.unsubscribe = () => {
+      throw new Error("simulated unsubscribe failure")
+    }
+    context.eventBus.flush = async () => {
+      throw new Error("simulated event bus flush rejection")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.ok(result.errors.some((error) => /simulated unsubscribe failure/.test(error.message)))
+    assert.ok(result.errors.some((error) => /simulated event bus flush rejection/.test(error.message)))
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+    assert.equal(context.journal.subscription, null)
+  } finally {
+    context.eventBus.flush = EventBus.prototype.flush
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
