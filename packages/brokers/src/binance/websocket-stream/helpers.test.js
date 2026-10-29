@@ -97,3 +97,7 @@ describe("validateRequiredParameters", () => {
     assert.doesNotThrow(() => validateRequiredParameters({ enabled: false, limit: 0 }))
   })
 })
+
+it("percent-encodes reserved characters in scalar values", () => {
+  assert.equal(buildQueryString({ symbol: "BTC/USDT + test" }), "symbol=BTC%2FUSDT%20%2B%20test")
+})
