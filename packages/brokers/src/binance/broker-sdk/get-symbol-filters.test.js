@@ -85,3 +85,15 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
     assert.match(result.errors[0].message, /tickSize missing/)
   })
 })
+
+it("returns an error when the LOT_SIZE step size is absent", async () => {
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ symbols: [{ symbol: "BTCUSDT", filters: [
+      { filterType: "PRICE_FILTER", tickSize: "0.01" },
+    ] }] }),
+  })
+  const result = await createBroker().getSymbolFilters({ symbol: "BTCUSDT" })
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /LOT_SIZE stepSize missing/)
+})
