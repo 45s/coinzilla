@@ -345,16 +345,20 @@ export class FreeRollBot {
       } catch (error) {
         state.priceTickSize = fallbackTickSize
         state.quantityStepSize = fallbackQuantityStepSize
-        this.logger.warn?.({
-          message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
-          details: {
-            pricePrecision: state.settings.pricePrecision,
-            quantityPrecision: state.settings.quantityPrecision,
-            tickSize: fallbackTickSize,
-            stepSize: fallbackQuantityStepSize,
-            error: error?.message ?? String(error),
-          },
-        })
+        try {
+          this.logger.warn?.({
+            message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
+            details: {
+              pricePrecision: state.settings.pricePrecision,
+              quantityPrecision: state.settings.quantityPrecision,
+              tickSize: fallbackTickSize,
+              stepSize: fallbackQuantityStepSize,
+              error: error?.message ?? String(error),
+            },
+          })
+        } catch {
+          // Diagnostics must not prevent configured fallbacks from being used.
+        }
         this.#debug(`[${symbol}] Exchange filter fallbacks selected`, {
           tickSize: fallbackTickSize,
           pricePrecision: state.settings.pricePrecision,
