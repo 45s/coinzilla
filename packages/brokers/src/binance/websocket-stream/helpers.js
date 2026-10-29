@@ -1,26 +1,13 @@
+import { isEmptyValue } from "./is-empty-value.js"
+import { removeEmptyValue } from "./remove-empty-value.js"
+
+export { isEmptyValue, removeEmptyValue }
+
 class MissingParameterError extends Error {
   constructor(paramNames) {
     super(`One or more of required parameters is missing: ${paramNames ? paramNames.slice().join(', ') : ''} `)
     this.name = 'MissingParameterError'
   }
-}
-
-export function removeEmptyValue(obj) {
-  if (!(obj instanceof Object)) return {}
-  Object.keys(obj).forEach((key) => isEmptyValue(obj[key]) && delete obj[key])
-  return obj
-}
-
-export function isEmptyValue(input) {
-  /**
-   * Scope of empty value: falsy value (except for false and 0), string with white space characters only, empty object, empty array
-   */
-  return (
-    (!input && input !== false && input !== 0) ||
-    ((typeof input === 'string' || input instanceof String) && /^\s+$/.test(input)) ||
-    (input instanceof Object && !Object.keys(input).length) ||
-    (Array.isArray(input) && !input.length)
-  )
 }
 
 export function validateRequiredParameters(paramObject) {
