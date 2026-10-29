@@ -17,7 +17,7 @@ describe("getOrder", () => {
           price: "2500.5", origQty: "3", executedQty: "1",
         }),
       }
-    }
+    })
 
     const result = await getOrder({ symbol: "ETHUSDT", orderId: 99 })
 
@@ -33,7 +33,7 @@ describe("getOrder", () => {
     t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -2013, msg: "Order does not exist." }),
-    })
+    }))
 
     await assert.rejects(
       () => getOrder({ symbol: "ETHUSDT", orderId: 99 }),
@@ -50,7 +50,7 @@ it("preserves a zero order ID in the signed lookup query", async (t) => {
       headers: { get: () => "application/json" },
       json: async () => ({ code: -2013, msg: "Order does not exist." }),
     }
-  }
+  })
   await assert.rejects(() => getOrder({ symbol: "ETHUSDT", orderId: 0 }))
   assert.match(requestedUrl, /symbol=ETHUSDT&orderId=0&/)
 })
