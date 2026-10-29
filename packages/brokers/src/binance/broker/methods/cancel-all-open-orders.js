@@ -15,7 +15,7 @@ export async function cancelAllOpenOrders(input = {}) {
     items: [[input.ticket, [VR.required, VR.notEmptyString]]],
   })
   const query = Object.entries({ symbol: ticket })
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const sendParams = {
