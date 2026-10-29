@@ -38,7 +38,7 @@ export class Order {
     }
     this.#side = side
 
-    if (!Validator.isRequiredNumberValid(quantity) || quantity < 0) {
+    if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#quantity = quantity
