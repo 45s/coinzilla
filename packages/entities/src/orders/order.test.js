@@ -112,3 +112,8 @@ describe(`${Order.name}`, () => {
     }
   })
 })
+
+  it("rejects zero quantity and zero price independently", () => {
+    assert.throws(() => validOrder({ quantity: 0 }), { message: errMsgs.quantity })
+    assert.throws(() => validOrder({ price: 0 }), { message: errMsgs.price })
+  })
