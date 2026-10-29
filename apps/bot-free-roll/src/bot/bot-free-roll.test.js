@@ -28,13 +28,13 @@ test("unexpected queued-task failures pause only the affected pair and publish d
 
   const bot = new FreeRollBot({
     broker: {
-      getSymbolFilters: async () => ({ tickSize: 0.00001, stepSize: 1 }),
-      subscribeForUserData: async () => ({ disconnect() {} }),
+      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      subscribeForUserData: async () => ({ ok: true, data: { disconnect() {} } }),
       subscribeForPrices: async ({ symbol, onPrice }) => {
         priceHandlers.set(symbol, onPrice)
-        return { disconnect() {} }
+        return { ok: true, data: { disconnect() {} } }
       },
-      createOrder: async ({ symbol }) => ({ orderId: `order-${symbol}` }),
+      createOrder: async ({ symbol }) => ({ ok: true, data: { orderId: `order-${symbol}` } }),
     },
     eventBus: {
       publish(event) {
@@ -57,7 +57,8 @@ test("unexpected queued-task failures pause only the affected pair and publish d
   })
 
   bot.logger = {
-    debug(message) {
+    debug(entry) {
+      const message = typeof entry === "string" ? entry : entry?.message
       if (
         throwOnDogPrice &&
         typeof message === "string" &&
