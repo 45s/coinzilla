@@ -272,8 +272,22 @@ async function shutdown() {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     void shutdown().catch((error) => {
-      logger.error?.("[bot] Shutdown failed", { error })
       process.exitCode = 1
+
+      try {
+        logger.error?.("[bot] Shutdown failed", { error })
+      } catch (loggingError) {
+        try {
+          process.stderr.write(
+            `[bot] Shutdown failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\\n`,
+          )
+          process.stderr.write(
+            `[bot] Shutdown logger failed: ${loggingError instanceof Error ? loggingError.stack ?? loggingError.message : String(loggingError)}\\n`,
+          )
+        } catch {
+          // No reliable output channel remains if stderr also fails.
+        }
+      }
     })
   })
 }
