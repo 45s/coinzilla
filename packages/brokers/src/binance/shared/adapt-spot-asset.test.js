@@ -46,3 +46,10 @@ describe("adaptSpotAsset", () => {
 it("returns an empty list for an empty balance response", () => {
   assert.deepEqual(adaptSpotAsset([]), [])
 })
+
+it("rejects malformed numeric balance values instead of silently dropping them", () => {
+  assert.throws(
+    () => adaptSpotAsset([{ asset: "BTC", free: "unknown", locked: "0" }]),
+    { name: "TypeError", message: 'Invalid balance quantity for asset "BTC"' },
+  )
+})
