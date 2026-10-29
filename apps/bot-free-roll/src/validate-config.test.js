@@ -247,3 +247,18 @@ test("fractional precision values are rejected", () => {
   ))
 })
 
+
+
+test("rejects an empty pairs object", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs = {}
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(
+    result.errors.includes(
+      'strategies["free-roll"].pairs must contain at least one pair',
+    ),
+  )
+})
