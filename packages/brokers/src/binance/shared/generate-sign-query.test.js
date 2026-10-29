@@ -26,3 +26,10 @@ describe("generateSignQuery", () => {
     assert.ok(Math.abs(Date.now() - timestamp) < 1000)
   })
 })
+
+it("includes exactly one receive window and one timestamp parameter", () => {
+  const query = generateSignQuery()
+  assert.equal((query.match(/recvWindow=/g) || []).length, 1)
+  assert.equal((query.match(/timestamp=/g) || []).length, 1)
+  assert.match(query, /^recvWindow=5000&timestamp=\d+$/)
+})
