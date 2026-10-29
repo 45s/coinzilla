@@ -227,3 +227,13 @@ test("does not allow a journal to start more than once or restart after close", 
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+test("rejects an empty directory before creating a session file", async () => {
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory: "   " })
+  const result = await journal.start()
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /journal directory is required/)
+  assert.equal(journal.fileHandle, null)
+  await eventBus.close()
+})
