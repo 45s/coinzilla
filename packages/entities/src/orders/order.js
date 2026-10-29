@@ -15,7 +15,7 @@ export class Order {
   get value() {
     return {
       id: this.#id,
-      clientOrderId: this.#clientOrderId,
+      ...(this.#clientOrderId === undefined ? {} : { clientOrderId: this.#clientOrderId }),
       symbol: this.#symbol,
       type: this.#type,
       side: this.#side,
