@@ -45,10 +45,25 @@ export class Journal {
     try {
       await mkdir(this.directory, { recursive: true })
 
+      if (this.closing || this.closed) {
+        return toResult({
+          error: new Error("Journal was closed during startup"),
+        })
+      }
+
       const { fileHandle, filePath } = await this.createSessionFile()
 
       this.fileHandle = fileHandle
       this.filePath = filePath
+
+      if (this.closing || this.closed) {
+        await this.fileHandle.close()
+        this.fileHandle = null
+
+        return toResult({
+          error: new Error("Journal was closed during startup"),
+        })
+      }
 
       const result = this.eventBus.subscribeAll({
         handler: async (event) => {
