@@ -227,3 +227,16 @@ test("does not allow a journal to start more than once or restart after close", 
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+test("rejects startup without a usable event bus", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-invalid-"))
+  try {
+    const journal = new Journal({ directory })
+    const result = await journal.start()
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /valid eventBus is required/)
+    assert.equal(journal.started, false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
