@@ -85,3 +85,11 @@ describe('Validator', () => {
 it("ignores entries with an empty rules list", () => {
   assert.equal(Validator.validate({ items: [["anything", []], [undefined, []]] }), undefined)
 })
+
+it("reports non-string values for the non-empty-string rule without throwing", () => {
+  for (const value of [undefined, null, 0, 123, false, {}]) {
+    assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyString], "field"]] }), [
+      { value, msgs: [EM.emptyString()], fieldName: "field" },
+    ])
+  }
+})

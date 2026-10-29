@@ -25,7 +25,7 @@ export class Validator {
         if (r === VR.required && !value) {
           msgs.push(EM.required())
         }
-        if (r === VR.notEmptyString && !value?.trim()) {
+        if (r === VR.notEmptyString && (typeof value !== 'string' || !value.trim())) {
           msgs.push(EM.emptyString())
         }
         if (r === VR.num && (typeof value !== 'number' || !Number.isFinite(value))) {
