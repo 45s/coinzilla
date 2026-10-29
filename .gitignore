@@ -1,5 +1,8 @@
+# Environment files and secrets
 .env
-.env.development
+.env.*
+!.env.example
+
 node_modules
 
 # Bot session logs
