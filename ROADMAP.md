@@ -29,7 +29,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 - [ ] Add consistent linting and formatting checks if the repository does not already enforce them.
 - [ ] Add dependency vulnerability checks to CI.
-- [ ] Use clearly fake, documented placeholders in `.env.example` files so contributors know what values to provide.
+- [x] Keep the existing mock Binance key/secret examples in `.env.example` to demonstrate expected format, with an explicit comment that the values are fake.
 
 ## 5. Release safely
 
