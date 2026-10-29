@@ -35,12 +35,22 @@ describe('calculateTimeDiff', () => {
     const end = new Date('2025-12-31T23:00:00.000Z')
     assert.equal(calculateTimeDiff({ start, end }), -1)
   })
-})
 
-  it("preserves fractional units for sub-second intervals", () => {
-    const start = new Date("2026-01-01T00:00:00.000Z")
-    const end = new Date("2026-01-01T00:00:00.250Z")
-    assert.equal(calculateTimeDiff({ start, end, unit: "second" }), 0.25)
-    assert.equal(calculateTimeDiff({ start, end, unit: "minute" }), 0.25 / 60)
-    assert.equal(calculateTimeDiff({ start, end, unit: "hour" }), 0.25 / 3600)
+  it('preserves fractional units for sub-second intervals', () => {
+    const start = new Date('2026-01-01T00:00:00.000Z')
+    const end = new Date('2026-01-01T00:00:00.250Z')
+    assert.equal(calculateTimeDiff({ start, end, unit: 'second' }), 0.25)
+    assert.equal(calculateTimeDiff({ start, end, unit: 'minute' }), 0.25 / 60)
+    assert.equal(calculateTimeDiff({ start, end, unit: 'hour' }), 0.25 / 3600)
   })
+
+  it('rejects missing or non-Date inputs with a clear type error', () => {
+    assert.throws(() => calculateTimeDiff(), { name: 'TypeError', message: 'start must be a Date' })
+    assert.throws(() => calculateTimeDiff({ start: '2026-01-01' }), { name: 'TypeError', message: 'start must be a Date' })
+  })
+
+  it('rejects invalid Date instances instead of returning NaN', () => {
+    assert.throws(() => calculateTimeDiff({ start: new Date('invalid') }), { name: 'RangeError', message: 'start must be a valid Date' })
+    assert.throws(() => calculateTimeDiff({ start: new Date(), end: new Date('invalid') }), { name: 'RangeError', message: 'end must be a valid Date' })
+  })
+})
