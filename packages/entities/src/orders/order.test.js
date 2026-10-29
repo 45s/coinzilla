@@ -114,6 +114,7 @@ describe(`${Order.name}`, () => {
 })
 
   it("rejects zero quantity and zero price independently", () => {
-    assert.throws(() => validOrder({ quantity: 0 }), { message: errMsgs.quantity })
-    assert.throws(() => validOrder({ price: 0 }), { message: errMsgs.price })
+    const input = { symbol: "BTCUSDT", type: "LIMIT", side: "BUY", quantity: 1, price: 10, id: "test-id" }
+    assert.throws(() => new Order({ ...input, quantity: 0 }), { message: errMsgs.quantity })
+    assert.throws(() => new Order({ ...input, price: 0 }), { message: errMsgs.price })
   })
