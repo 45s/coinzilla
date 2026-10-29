@@ -61,6 +61,8 @@ export function validateTradingConfig({ tradingConfig } = {}) {
 
   if (pairs === null || typeof pairs !== "object" || Array.isArray(pairs)) {
     errors.push('strategies["free-roll"].pairs must be an object')
+  } else if (Object.keys(pairs).length === 0) {
+    errors.push('strategies["free-roll"].pairs must contain at least one pair')
   } else {
     for (const [symbol, pair] of Object.entries(pairs)) {
       if (!symbol.trim()) {
