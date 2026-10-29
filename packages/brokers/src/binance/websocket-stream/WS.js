@@ -12,7 +12,7 @@ export class WS {
         stderr: process.stderr,
       })
     this.wsURL = wsURL
-    this.reconnectDelay = reconnectDelay || 5000
+    this.reconnectDelay = reconnectDelay ?? 5000
     this.wsConnection = {}
 
     this.callbacks = {
