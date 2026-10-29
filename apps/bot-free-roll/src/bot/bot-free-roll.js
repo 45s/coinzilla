@@ -645,8 +645,13 @@ export class FreeRollBot {
     }
 
     this.#debug(`[${symbol}] Processing order event`, {
-      id,
-      status,
+      order: {
+        id,
+        side: order?.side,
+        quantity: order?.quantity,
+        status,
+        price: order?.price,
+      },
       executionType: event.executionType,
     })
 
