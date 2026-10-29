@@ -79,7 +79,7 @@ describe(`${ExecutedOrder.name}`, () => {
 
   it("preserves explicitly supplied null execution metadata", () => {
     const order = new ExecutedOrder({
-      symbol, type, side, quantity, price, id,
+      symbol: "BTCUSDT", type: "LIMIT", side: "BUY", quantity: 1, price: 10, id: "test-id",
       status: null, commission: null, commissionAsset: null,
     })
     assert.equal(order.value.status, null)
