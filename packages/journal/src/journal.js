@@ -74,9 +74,13 @@ export class Journal {
       this.subscription = result.subscription
       this.started = true
 
-      this.logger.info?.("Journal started", {
-        filePath: this.filePath,
-      })
+      try {
+        this.logger.info?.("Journal started", {
+          filePath: this.filePath,
+        })
+      } catch {
+        // Logging must not turn a successful startup into a failure.
+      }
 
       return toResult({
         filePath: this.filePath,
