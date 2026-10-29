@@ -7,7 +7,7 @@
       },
       "pairs": {
         "DOGEUSDT": {
-          "enabled": true,
+          "enabled": false,
           "orderQuantity": 400,
           "keepQuantity": 1,
           "priceStepPercent": 0.05,
@@ -27,7 +27,7 @@
           "takerPercent": 0.075
         },
         "ZROUSDT": {
-          "enabled": false,
+          "enabled": true,
           "orderQuantity": 5,
           "keepQuantity": 0.01,
           "priceStepPercent": 0.05,
