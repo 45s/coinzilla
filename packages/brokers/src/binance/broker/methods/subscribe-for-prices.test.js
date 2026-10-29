@@ -4,11 +4,16 @@ import { subscribeForPrices } from "./subscribe-for-prices.js"
 
 describe("subscribeForPrices", () => {
   it("subscribes to aggregate trades and forwards parsed prices", (t) => {
+    const originalWebSocket = globalThis.WebSocket
+    t.after(() => {
+      globalThis.WebSocket = originalWebSocket
+    })
+
     const sockets = []
     const logs = []
     const received = []
 
-    t.mock.method(globalThis, "WebSocket", class FakeWebSocket {
+    globalThis.WebSocket = class FakeWebSocket {
       constructor(url) {
         this.url = url
         this.listeners = {}
@@ -21,7 +26,7 @@ describe("subscribeForPrices", () => {
       send(value) {
         this.sent.push(value)
       }
-    })
+    }
 
     const result = subscribeForPrices({
       symbols: ["BTCUSDT", "ETHUSDT"],
