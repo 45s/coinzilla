@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { EM } from "@coinzilla/utils"
-import { cancelAllOpenOrders } from "./cancel-all-open-orders.js"
+
+process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
+process.env.BINANCE_API_KEY = "unit-test-key"
+process.env.BINANCE_SPOT_API_URL = "https://example.test"
+const { cancelAllOpenOrders } = await import("./cancel-all-open-orders.js")
 
 describe("BinanceBroker/cancelAllOpenOrders", () => {
   it("should validate input", () => {
