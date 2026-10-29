@@ -2,7 +2,15 @@
  * NH stands for "number helper"
  */
 export class NH {
-  static round = (number, decimals = 2) => Number(Math.round(number + `e+${decimals}`) + `e-${decimals}`)
+  static round = (number, decimals = 2) => {
+    // The exponent-string technique below turns Infinity into NaN.
+    // Preserve JavaScript's existing non-finite numeric values instead.
+    if (typeof number === 'number' && !Number.isFinite(number)) {
+      return number
+    }
+
+    return Number(Math.round(number + `e+${decimals}`) + `e-${decimals}`)
+  }
 
   /**
    * fix numbers like "1.0000000000000009"
