@@ -1,17 +1,14 @@
 import assert from "node:assert/strict"
-import { afterEach, describe, it } from "node:test"
+import { describe, it } from "node:test"
 process.env.BINANCE_API_SECRET_KEY = "unit-test-secret"
 process.env.BINANCE_API_KEY = "unit-test-key"
 process.env.BINANCE_SPOT_API_URL = "https://example.test"
 const { getOrder } = await import("./get-order.js")
 
-const originalFetch = globalThis.fetch
-afterEach(() => { globalThis.fetch = originalFetch })
-
 describe("getOrder", () => {
-  it("requests the specified order and adapts its response", async () => {
+  it("requests the specified order and adapts its response", async (t) => {
     let requestedUrl
-    globalThis.fetch = async (url) => {
+    t.mock.method(globalThis, "fetch", async (url) => {
       requestedUrl = String(url)
       return {
         headers: { get: () => "application/json" },
@@ -20,7 +17,7 @@ describe("getOrder", () => {
           price: "2500.5", origQty: "3", executedQty: "1",
         }),
       }
-    }
+    })
 
     const result = await getOrder({ symbol: "ETHUSDT", orderId: 99 })
 
@@ -32,11 +29,11 @@ describe("getOrder", () => {
     assert.equal(result.price, 2500.5)
   })
 
-  it("throws the exchange error response", async () => {
-    globalThis.fetch = async () => ({
+  it("throws the exchange error response", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -2013, msg: "Order does not exist." }),
-    })
+    }))
 
     await assert.rejects(
       () => getOrder({ symbol: "ETHUSDT", orderId: 99 }),
@@ -45,15 +42,15 @@ describe("getOrder", () => {
   })
 })
 
-it("preserves a zero order ID in the signed lookup query", async () => {
+it("preserves a zero order ID in the signed lookup query", async (t) => {
   let requestedUrl
-  globalThis.fetch = async (url) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
     requestedUrl = String(url)
     return {
       headers: { get: () => "application/json" },
       json: async () => ({ code: -2013, msg: "Order does not exist." }),
     }
-  }
+  })
   await assert.rejects(() => getOrder({ symbol: "ETHUSDT", orderId: 0 }))
   assert.match(requestedUrl, /symbol=ETHUSDT&orderId=0&/)
 })
