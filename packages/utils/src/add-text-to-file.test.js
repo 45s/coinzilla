@@ -30,7 +30,7 @@ describe('addTextToFile', () => {
       addTextToFile({ fileName: '', text: '' }),
       (error) => {
         assert.equal(error.message, 'Error appending data to file')
-        assert.equal(error.cause.message, 'Invalid parameter: fileName')
+        assert.equal(error.cause.message, 'Invalid "fileName" parameter')
         return true
       },
     )
