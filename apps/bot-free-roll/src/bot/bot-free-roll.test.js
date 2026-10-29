@@ -257,3 +257,47 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
     await bot.stop()
   }
 })
+
+test("continues startup with precision fallbacks when warning logger throws", async () => {
+  const priceHandlers = new Map()
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => {
+        throw new Error("exchange filters unavailable")
+      },
+      subscribeForUserData: async () => ({
+        ok: true,
+        data: { disconnect() {} },
+      }),
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  bot.logger = {
+    debug() {},
+    warn() {
+      throw new Error("logger unavailable")
+    },
+    error() {},
+  }
+
+  try {
+    await assert.doesNotReject(bot.run())
+    assert.equal(bot.getSummary().running, true)
+    assert.equal(typeof priceHandlers.get("DOGEUSDT"), "function")
+  } finally {
+    await bot.stop()
+  }
+})
