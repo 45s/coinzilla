@@ -353,6 +353,49 @@ test("snapshots nested event data before asynchronous consumers run", async () =
   await bus.close()
 })
 
+test("deep-freezes Map and Set values in event data", async () => {
+  const { bus } = createTestBus()
+  const original = {
+    metadata: new Map([["order", { quantity: 1 }]]),
+    tags: new Set(["initial"]),
+  }
+
+  const result = bus.publish({
+    name: "test.immutable-collections",
+    source: "unit-test",
+    data: original,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(Object.isFrozen(result.event.data.metadata), true)
+  assert.equal(Object.isFrozen(result.event.data.metadata.get("order")), true)
+  assert.equal(Object.isFrozen(result.event.data.tags), true)
+
+  assert.throws(
+    () => result.event.data.metadata.set("new", true),
+    { name: "TypeError", message: "Cannot mutate frozen event data" },
+  )
+  assert.throws(
+    () => result.event.data.metadata.get("order").quantity = 2,
+    TypeError,
+  )
+  assert.throws(
+    () => result.event.data.tags.add("new"),
+    { name: "TypeError", message: "Cannot mutate frozen event data" },
+  )
+  assert.throws(
+    () => result.event.data.tags.delete("initial"),
+    { name: "TypeError", message: "Cannot mutate frozen event data" },
+  )
+
+  original.metadata.get("order").quantity = 99
+  original.tags.add("changed")
+  assert.equal(result.event.data.metadata.get("order").quantity, 1)
+  assert.deepEqual([...result.event.data.tags], ["initial"])
+
+  await bus.close()
+})
+
 test("returns a failure result when event data cannot be cloned", async () => {
   const { bus } = createTestBus()
   const result = bus.publish({
