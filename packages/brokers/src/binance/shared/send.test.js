@@ -77,4 +77,17 @@ describe("Binance send", () => {
       { message: "network unavailable" },
     )
   })
+  it("parses JSON when the media type uses uppercase letters", async (t) => {
+    t.mock.method(globalThis, "fetch", async () => ({
+      headers: { get: () => "Application/JSON; charset=utf-8" },
+      json: async () => ({ success: true }),
+      text: async () => "unused",
+    }))
+
+    assert.deepEqual(
+      await send({ url: "https://example.test/api", path: "status" }),
+      { success: true },
+    )
+  })
+
 })
