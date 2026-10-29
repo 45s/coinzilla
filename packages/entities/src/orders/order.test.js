@@ -40,9 +40,9 @@ describe(`${Order.name}`, () => {
   it("should leave clientOrderId undefined when omitted", () => {
     const o = validOrder()
     assert.strictEqual(o.clientOrderId, undefined)
+    assert.equal("clientOrderId" in o.value, false)
     assert.deepStrictEqual(o.value, {
       id,
-      clientOrderId: undefined,
       symbol: "BTCUSDT",
       type,
       side,
@@ -153,7 +153,6 @@ describe(`${Order.name}`, () => {
     assert.equal(order.price, price)
     assert.deepStrictEqual(order.value, {
       id,
-      clientOrderId: undefined,
       symbol: "BTCUSDT",
       type,
       side,
