@@ -322,3 +322,48 @@ test("reports a failed disk sync during close and still closes the file handle",
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+
+test("keeps close successful when the shutdown info logger throws", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.logger.info = () => {
+      throw new Error("simulated logger failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, true)
+    assert.equal(result.closed, true)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+test("returns close errors even when the error logger throws", async () => {
+  const context = await createTestJournal()
+  const fileHandle = context.journal.fileHandle
+
+  try {
+    fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+    context.journal.logger.error = () => {
+      throw new Error("simulated error logger failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated close sync failure/)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})

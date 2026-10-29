@@ -258,9 +258,13 @@ export class Journal {
       return toResult({ errors })
     }
 
-    this.logger.info?.("Journal closed", {
-      filePath: this.filePath,
-    })
+    try {
+      this.logger.info?.("Journal closed", {
+        filePath: this.filePath,
+      })
+    } catch {
+      // Logging must not turn a completed shutdown into a failure.
+    }
 
     return toResult({
       closed: true,
@@ -269,9 +273,13 @@ export class Journal {
   }
 
   reportError({ message, errors, ...context } = {}) {
-    this.logger.error?.(message, {
-      ...context,
-      errors,
-    })
+    try {
+      this.logger.error?.(message, {
+        ...context,
+        errors,
+      })
+    } catch {
+      // Logging must not interrupt journal cleanup or error reporting.
+    }
   }
 }
