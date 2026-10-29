@@ -229,6 +229,13 @@ export class Journal {
 
     if (this.fileHandle) {
       try {
+        // Sync the final queued writes before closing the session file.
+        await this.fileHandle.sync()
+      } catch (error) {
+        errors.push(error)
+      }
+
+      try {
         await this.fileHandle.close()
       } catch (error) {
         errors.push(error)
