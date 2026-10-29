@@ -6,7 +6,7 @@
   "scripts": {
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
-    "check:syntax": "find apps packages -type f \\( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \\) -print0 | xargs -0 -r -n1 node --check",
+    "check:syntax": "find apps packages -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.cjs' \) -print0 | xargs -0 -r -n1 node --check",
     "quality": "pnpm test && pnpm run check:syntax"
   },
   "keywords": [],
