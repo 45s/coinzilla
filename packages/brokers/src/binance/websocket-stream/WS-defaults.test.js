@@ -11,3 +11,7 @@ describe("WS reconnect defaults", () => {
     assert.equal(new WS({ wsURL: "wss://example.test", reconnectDelay: 0, logger: {} }).reconnectDelay, 0)
   })
 })
+
+it("falls back to the default reconnect delay when null is supplied", () => {
+  assert.equal(new WS({ wsURL: "wss://example.test", reconnectDelay: null, logger: {} }).reconnectDelay, 5000)
+})
