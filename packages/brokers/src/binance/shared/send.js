@@ -23,7 +23,7 @@ export async function send({
       ...headers,
     },
   })
-  return r.headers.get("content-type")?.includes("application/json")
+  return r.headers.get("content-type")?.toLowerCase().includes("application/json")
     ? r.json()
     : r.text()
 }
