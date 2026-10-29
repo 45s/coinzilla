@@ -15,7 +15,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 ## 2. Protect main and improve change safety
 
 - [ ] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate. Current repository settings show branch protection is not enabled.
-- [ ] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
+- [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
 
 ## 3. Test critical behavior
