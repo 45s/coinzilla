@@ -62,3 +62,11 @@ it("rejects non-numeric exchange quantities", () => {
   assert.throws(() => adaptOrder({ ...mockedBinanceOrder, origQty: "not-a-number" }))
   assert.throws(() => adaptOrder({ ...mockedBinanceOrder, executedQty: "not-a-number" }))
 })
+
+it("preserves a zero-valued Binance order ID", () => {
+  const result = adaptOrder({
+    ...mockedBinanceOrder,
+    orderId: 0,
+  })
+  assert.equal(result.id, "0")
+})
