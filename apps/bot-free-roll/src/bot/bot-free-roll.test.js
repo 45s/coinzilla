@@ -96,3 +96,91 @@ test("unexpected queued-task failures pause only the affected pair and publish d
 
   await bot.stop()
 })
+
+test("duplicate BUY FILLED events are accounted only once", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  let resolveBuyCreated
+  let resolveSellCreated
+  const buyCreated = new Promise((resolve) => { resolveBuyCreated = resolve })
+  const sellCreated = new Promise((resolve) => { resolveSellCreated = resolve })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        const response = { orderId: `${order.side}-${createdOrders.length}` }
+        return { ok: true, data: response }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created" && event.data.side === "BUY") {
+          resolveBuyCreated(event.data)
+        }
+        if (event.name === "order.created" && event.data.side === "SELL") {
+          resolveSellCreated(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+
+    const buy = await Promise.race([
+      buyCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
+    ])
+
+    const fillEvent = {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        orderId: buy.orderId,
+        status: "FILLED",
+        side: "BUY",
+        price: String(buy.price),
+        quantity: String(buy.quantity),
+      },
+    }
+
+    userDataHandler(fillEvent)
+    userDataHandler(fillEvent)
+
+    await Promise.race([
+      sellCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
+    ])
+
+    // Let the second queued event run after the first fill has been processed.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
