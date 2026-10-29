@@ -210,6 +210,32 @@ test("rejects invalid records without writing them", async () => {
   }
 })
 
+test("rejects overlapping startup attempts without leaking a session file or subscription", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-concurrent-start-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+
+  try {
+    const [first, second] = await Promise.all([journal.start(), journal.start()])
+
+    assert.equal([first, second].filter((result) => result.ok).length, 1)
+    assert.equal([first, second].filter((result) => !result.ok).length, 1)
+    assert.equal(journal.started, true)
+    assert.equal(journal.starting, false)
+    assert.ok(journal.fileHandle)
+    assert.equal(eventBus.emitter.eventNames().filter((name) => typeof name === "symbol").length, 1)
+
+    const files = await readdir(directory)
+    assert.equal(files.length, 1)
+
+    const closeResult = await journal.close()
+    assert.equal(closeResult.ok, true)
+  } finally {
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("does not allow a journal to start more than once or restart after close", async () => {
   const context = await createTestJournal()
 
