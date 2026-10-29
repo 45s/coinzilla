@@ -23,7 +23,7 @@ export async function createOrder({ order }) {
     timeInForce: "GTC",
     ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
   })
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const path = `order?${fullQuery}&signature=${generateSignature(fullQuery)}`

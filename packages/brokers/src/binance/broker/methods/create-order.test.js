@@ -37,7 +37,7 @@ describe("createOrder", () => {
     assert.equal(result.price, 50000)
   })
 
-  it("includes clientOrderId in the signed request as newClientOrderId", async (t) => {
+  it("URL-encodes special characters before signing client order IDs", async (t) => {
     let requestUrl
     t.mock.method(globalThis, "fetch", async (url) => {
       requestUrl = String(url)
@@ -50,12 +50,13 @@ describe("createOrder", () => {
       }
     })
 
-    await createOrder({ order: { ...order, clientOrderId: "FR_BTC_0001" } })
+    await createOrder({ order: { ...order, clientOrderId: "FR BTC&1" } })
 
-    assert.match(requestUrl, /newClientOrderId=FR_BTC_0001/)
+    assert.match(requestUrl, /newClientOrderId=FR%20BTC%261/)
     const signedQuery = requestUrl.match(/order\?(.+)&signature=/)?.[1]
     assert.ok(signedQuery)
-    assert.match(signedQuery, /newClientOrderId=FR_BTC_0001/)
+    assert.match(signedQuery, /newClientOrderId=FR%20BTC%261/)
+    assert.doesNotMatch(signedQuery, /newClientOrderId=FR BTC&1/)
   })
 
   it("does not add newClientOrderId when it is omitted", async (t) => {

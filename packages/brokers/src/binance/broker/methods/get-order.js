@@ -14,7 +14,7 @@ export async function getOrder({ orderId, symbol }) {
     symbol,
     orderId,
   })
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const path = `order?${fullQuery}&signature=${generateSignature(fullQuery)}`

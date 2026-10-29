@@ -24,6 +24,24 @@ describe("cancelOrder", () => {
     assert.deepEqual(result, { symbol: "BTCUSDT", status: "CANCELED" })
   })
 
+  it("URL-encodes parameter values before signing the cancellation query", async (t) => {
+    let requestUrl
+    t.mock.method(globalThis, "fetch", async (url) => {
+      requestUrl = String(url)
+      return {
+        headers: { get: () => "application/json" },
+        json: async () => ({ symbol: "BTCUSDT", status: "CANCELED" }),
+      }
+    })
+
+    await cancelOrder({ symbol: "BTCUSDT", origClientOrderId: "FR BTC&1" })
+
+    assert.match(requestUrl, /origClientOrderId=FR%20BTC%261/)
+    const signedQuery = requestUrl.match(/order\?(.+)&signature=/)?.[1]
+    assert.ok(signedQuery)
+    assert.match(signedQuery, /origClientOrderId=FR%20BTC%261/)
+  })
+
   it("throws the exchange error response", async (t) => {
     t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },

@@ -10,7 +10,7 @@ import {
  */
 export async function cancelOrder(input) {
   const query = Object.entries(input)
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&")
   const fullQuery = `${query}&${generateSignQuery()}`
   const r = await send({

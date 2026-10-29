@@ -54,3 +54,17 @@ it("preserves a zero order ID in the signed lookup query", async (t) => {
   await assert.rejects(() => getOrder({ symbol: "ETHUSDT", orderId: 0 }))
   assert.match(requestedUrl, /symbol=ETHUSDT&orderId=0&/)
 })
+
+it("URL-encodes lookup parameter values before signing the query", async (t) => {
+  let requestedUrl
+  t.mock.method(globalThis, "fetch", async (url) => {
+    requestedUrl = String(url)
+    return {
+      headers: { get: () => "application/json" },
+      json: async () => ({ code: -2013, msg: "Order does not exist." }),
+    }
+  })
+
+  await assert.rejects(() => getOrder({ symbol: "BTC USDT&x=1", orderId: 99 }))
+  assert.match(requestedUrl, /symbol=BTC%20USDT%26x%3D1&orderId=99&/)
+})
