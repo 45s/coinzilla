@@ -145,6 +145,42 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
+  async getOrderHistory({ symbol, orderId, limit = 100 } = {}) {
+    try {
+      if (!symbol) throw new Error("getOrderHistory requires symbol")
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new Error("getOrderHistory limit must be an integer between 1 and 1000")
+      }
+
+      const params = { symbol, limit }
+      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+
+      const response = await this.tradingConnection.allOrders(params)
+      return toResult({ data: response.data })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getMyTrades({ symbol, orderId, limit = 100 } = {}) {
+    try {
+      if (!symbol) throw new Error("getMyTrades requires symbol")
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new Error("getMyTrades limit must be an integer between 1 and 1000")
+      }
+
+      const params = { symbol, limit }
+      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+
+      const response = await this.tradingConnection.myTrades(params)
+      return toResult({ data: response.data })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
   async createOrder(input) {
     try {
       const response = await this.tradingConnection.orderPlace({
