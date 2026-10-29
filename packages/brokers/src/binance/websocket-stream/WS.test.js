@@ -98,3 +98,8 @@ it("overrides only the supplied default callbacks", () => {
   client.callbacks.message('{"event":"trade"}')
   assert.deepEqual(calls, ["custom-open", { event: "trade" }])
 })
+
+it("uses the default reconnect delay when no override is provided", () => {
+  const client = new WS({ logger: { debug() {} } })
+  assert.equal(client.reconnectDelay, 5000)
+})
