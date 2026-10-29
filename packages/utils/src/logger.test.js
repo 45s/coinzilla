@@ -47,3 +47,14 @@ describe('Logger', () => {
     }
   })
 })
+
+  it('serializes null and arrays as JSON', () => {
+    const calls = []
+    console.log = (...args) => calls.push(args)
+    const logger = new Logger()
+    logger.info(null)
+    logger.info([1, "two"])
+    assert.equal(calls.length, 2)
+    assert.equal(calls[0].includes("null"), true)
+    assert.equal(calls[1].includes(JSON.stringify([1, "two"], null, 2)), true)
+  })
