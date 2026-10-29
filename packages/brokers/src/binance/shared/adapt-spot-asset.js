@@ -6,6 +6,9 @@ export const adaptSpotAsset = (input) => {
   const assets = []
   for (const { asset, free, locked } of input) {
     const quantity = Number(free) + Number(locked)
+    if (!Number.isFinite(quantity)) {
+      throw new TypeError(`Invalid balance quantity for asset "${asset}"`)
+    }
     if (!quantity) {
       continue
     }
