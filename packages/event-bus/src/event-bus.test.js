@@ -318,3 +318,11 @@ test("published event envelopes are frozen and contain generated metadata", asyn
 
   await bus.close()
 })
+
+test("defaults omitted event data to an empty object", async () => {
+  const { bus } = createTestBus()
+  const result = bus.publish({ name: "bot.started", source: "test" })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.event.data, {})
+  await bus.close()
+})
