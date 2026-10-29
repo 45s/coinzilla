@@ -13,7 +13,4 @@ export { calculateTimeDiff } from "./calculate-time-diff.js"
 export { NH } from "./number-helper.js"
 export { toResult } from "./to-result.js"
 
-const { NODE_ENV } = process.env
-export const isDevMode = NODE_ENV === "development"
-export const isProdMode = NODE_ENV === "production"
-export const isTestingMode = NODE_ENV === "testing"
+export { isDevMode, isProdMode, isTestingMode } from "./environment-mode.js"

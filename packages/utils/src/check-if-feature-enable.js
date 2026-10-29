@@ -1,5 +1,5 @@
 import { handleErr } from './handle-err.js'
-import { defaultLogger } from './index.js'
+import { defaultLogger } from './logger.js'
 
 /**
  * check if environment variable set too "1" for enabling feature

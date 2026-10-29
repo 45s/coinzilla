@@ -1,4 +1,4 @@
-import { isProdMode, isTestingMode } from './index.js'
+import { isProdMode, isTestingMode } from './environment-mode.js'
 
 const colors = {
   reset: '\x1b[0m',
