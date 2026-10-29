@@ -35,7 +35,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 5. Release safely
 
-- [ ] Document release and rollback steps.
+- [x] Document release and rollback steps.
 - [ ] Verify critical workflows in a staging/test environment before production use.
 
 ## Working rules
