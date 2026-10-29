@@ -110,11 +110,8 @@ describe(`${Order.name}`, () => {
       )
     }
   })
-})
 
-
-describe("zero remaining quantity", () => {
-  it("allows zero for a fully filled order", () => {
+  it("allows zero remaining quantity for a fully filled order", () => {
     assert.equal(validOrder({ quantity: 0 }).quantity, 0)
   })
 })
