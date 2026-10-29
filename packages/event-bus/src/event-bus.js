@@ -150,7 +150,8 @@ export class EventBus {
 
   async close({} = {}) {
     if (this.closed) {
-      return this.flush().ok
+      const result = await this.flush()
+      return result.ok
         ? toResult({ closed: true })
         : toResult({ error: new Error("Failed to flush EventBus") })
     }
