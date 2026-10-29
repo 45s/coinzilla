@@ -184,3 +184,76 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
   }
 })
 
+test("publishes pair-paused diagnostics even when error logging throws", async () => {
+  const priceHandlers = new Map()
+  const events = []
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({
+        ok: true,
+        data: { tickSize: 0.00001, stepSize: 1 },
+      }),
+      subscribeForUserData: async () => ({
+        ok: true,
+        data: { disconnect() {} },
+      }),
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async () => ({
+        ok: false,
+        errors: [new Error("exchange unavailable")],
+      }),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  bot.logger = {
+    debug() {},
+    error() {
+      throw new Error("logger unavailable")
+    },
+    warn() {},
+  }
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+
+    await Promise.race([
+      new Promise((resolve) => {
+        const check = () => {
+          if (events.some((event) => event.name === "bot.pair_paused")) {
+            resolve()
+          } else {
+            setTimeout(check, 5)
+          }
+        }
+        check()
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("pause event was not published")), 1000),
+      ),
+    ])
+
+    assert.equal(bot.getStats().DOGEUSDT.paused, true)
+    assert.ok(events.some((event) => event.name === "bot.pair_paused"))
+  } finally {
+    await bot.stop()
+  }
+})

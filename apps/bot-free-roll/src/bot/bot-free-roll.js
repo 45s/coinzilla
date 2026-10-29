@@ -146,10 +146,14 @@ export class FreeRollBot {
     })
 
     if (!result?.ok) {
-      this.logger.error?.("Failed to publish journal event", {
-        name,
-        errors: result?.errors,
-      })
+      try {
+        this.logger.error?.("Failed to publish journal event", {
+          name,
+          errors: result?.errors,
+        })
+      } catch {
+        // Logging must not interrupt bot event handling.
+      }
     }
   }
 
@@ -995,10 +999,14 @@ export class FreeRollBot {
       timestamp: new Date().toISOString(),
     }
 
-    this.logger.error?.({
-      message: `[${symbol}] PAUSED: ${message}`,
-      ...diagnostic,
-    })
+    try {
+      this.logger.error?.({
+        message: `[${symbol}] PAUSED: ${message}`,
+        ...diagnostic,
+      })
+    } catch {
+      // The pause event must still be published if logging fails.
+    }
 
     this.#publish("bot.pair_paused", diagnostic)
     this.#debug(`[${symbol}] State paused`, diagnostic)
