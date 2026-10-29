@@ -53,3 +53,15 @@ describe("createOrder", () => {
     )
   })
 })
+
+it("returns remaining quantity for a partially filled order response", async () => {
+  globalThis.fetch = async () => ({
+    headers: { get: () => "application/json" },
+    json: async () => ({
+      symbol: "BTCUSDT", orderId: 43, type: "LIMIT", side: "BUY",
+      price: "50000", origQty: "0.25", executedQty: "0.1",
+    }),
+  })
+  const result = await createOrder({ order })
+  assert.equal(result.quantity, 0.15)
+})
