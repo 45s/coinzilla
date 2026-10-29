@@ -42,7 +42,6 @@ describe(`${ExecutedOrder.name}`, () => {
 
     assert.deepStrictEqual(order.value, {
       id,
-      clientOrderId: undefined,
       symbol: "BTCUSDT",
       type,
       side,
