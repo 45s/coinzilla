@@ -7,8 +7,10 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 ## 1. Make CI trustworthy
 
 - [x] Provide repository workflows for package tests and workspace test coverage.
-- [ ] Audit which tests need environment variables, network access, exchange APIs, or other external services.
-- [ ] Separate deterministic unit tests from integration tests that contact exchanges or other services.
+- [x] Audit which tests need environment variables, network access, exchange APIs, or other external services.
+- [x] Separate deterministic unit tests from integration tests that contact exchanges or other services.
+
+  Audit result: the broker package has two `.integration.js` tests that require network access. The default `pnpm test` runs package `node --test` scripts and discovers `.test.js` files, so those integration tests are not part of the deterministic unit-test run. Run them explicitly with `pnpm --filter @coinzilla/brokers test:integration`; the Binance SDK integration suite skips unless non-placeholder credentials are configured. Integration tests are not currently run in CI.
 - [ ] Verify all relevant checks consistently pass on pull requests; distinguish checks that run from checks enforced by branch protection.
 - [ ] Give unit tests explicit test configuration and mocks. Keep live API tests opt-in and use GitHub Secrets only when genuinely required.
 
