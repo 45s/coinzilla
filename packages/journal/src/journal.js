@@ -169,14 +169,20 @@ export class Journal {
   }
 
   async flush({} = {}) {
-    const busResult = await this.eventBus.flush()
+    const errors = []
+
+    try {
+      const busResult = await this.eventBus.flush()
+
+      if (!busResult.ok) {
+        errors.push(...busResult.errors)
+      }
+    } catch (error) {
+      errors.push(error)
+    }
 
     await this.writeQueue
-
-    const errors = [
-      ...(busResult.ok ? [] : busResult.errors),
-      ...this.writeErrors,
-    ]
+    errors.push(...this.writeErrors)
 
     if (errors.length === 0 && this.fileHandle && !this.closed) {
       try {
@@ -211,20 +217,29 @@ export class Journal {
       return toResult({ closed: true })
     }
 
-    if (this.subscription) {
-      this.subscription.unsubscribe()
-      this.subscription = null
-    }
-
-    const busResult = await this.eventBus.flush()
-
-    this.closing = true
-
     const errors = []
 
-    if (!busResult.ok) {
-      errors.push(...busResult.errors)
+    if (this.subscription) {
+      try {
+        this.subscription.unsubscribe()
+      } catch (error) {
+        errors.push(error)
+      } finally {
+        this.subscription = null
+      }
     }
+
+    try {
+      const busResult = await this.eventBus.flush()
+
+      if (!busResult.ok) {
+        errors.push(...busResult.errors)
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+
+    this.closing = true
 
     await this.writeQueue
 
