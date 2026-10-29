@@ -3,6 +3,10 @@
  */
 export class NH {
   static round = (number, decimals = 2) => {
+    if (!Number.isInteger(decimals) || decimals < 0 || decimals > 100) {
+      throw new RangeError('decimals must be an integer between 0 and 100')
+    }
+
     // The exponent-string technique below turns Infinity into NaN.
     // Preserve JavaScript's existing non-finite numeric values instead.
     if (typeof number === 'number' && !Number.isFinite(number)) {
