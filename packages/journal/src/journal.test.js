@@ -227,3 +227,18 @@ test("does not allow a journal to start more than once or restart after close", 
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+test("cleans up the file handle when a closed event bus rejects subscription", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-closed-bus-"))
+  const eventBus = new EventBus()
+  await eventBus.close()
+  const journal = new Journal({ eventBus, directory })
+  try {
+    const result = await journal.start()
+    assert.equal(result.ok, false)
+    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.started, false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
