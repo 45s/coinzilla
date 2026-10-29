@@ -37,6 +37,45 @@ describe("createOrder", () => {
     assert.equal(result.price, 50000)
   })
 
+  it("includes clientOrderId in the signed request as newClientOrderId", async (t) => {
+    let requestUrl
+    t.mock.method(globalThis, "fetch", async (url) => {
+      requestUrl = String(url)
+      return {
+        headers: { get: () => "application/json" },
+        json: async () => ({
+          symbol: "BTCUSDT", orderId: 44, type: "LIMIT", side: "BUY",
+          price: "50000", origQty: "0.25", executedQty: "0",
+        }),
+      }
+    })
+
+    await createOrder({ order: { ...order, clientOrderId: "FR_BTC_0001" } })
+
+    assert.match(requestUrl, /newClientOrderId=FR_BTC_0001/)
+    const signedQuery = requestUrl.match(/order\?(.+)&signature=/)?.[1]
+    assert.ok(signedQuery)
+    assert.match(signedQuery, /newClientOrderId=FR_BTC_0001/)
+  })
+
+  it("does not add newClientOrderId when it is omitted", async (t) => {
+    let requestUrl
+    t.mock.method(globalThis, "fetch", async (url) => {
+      requestUrl = String(url)
+      return {
+        headers: { get: () => "application/json" },
+        json: async () => ({
+          symbol: "BTCUSDT", orderId: 45, type: "LIMIT", side: "BUY",
+          price: "50000", origQty: "0.25", executedQty: "0",
+        }),
+      }
+    })
+
+    await createOrder({ order })
+
+    assert.doesNotMatch(requestUrl, /newClientOrderId=/)
+  })
+
   it("throws the exchange error response", async (t) => {
     t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },

@@ -8,12 +8,12 @@ import {
 
 /**
  * @param order {
- *  symbol, type, side, price, quantity
+ *  symbol, type, side, price, quantity, clientOrderId
  * }
  * @see {@link https://binance-docs.github.io/apidocs/spot/en/#spot-account-trade}
  */
 export async function createOrder({ order }) {
-  const { symbol, type, side, price, quantity } = order
+  const { symbol, type, side, price, quantity, clientOrderId } = order
   const query = Object.entries({
     symbol,
     type,
@@ -21,6 +21,7 @@ export async function createOrder({ order }) {
     price,
     quantity,
     timeInForce: "GTC",
+    ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
   })
     .map(([k, v]) => `${k}=${v}`)
     .join("&")
