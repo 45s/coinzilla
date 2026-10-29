@@ -300,3 +300,25 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+
+test("reports a failed disk sync during close and still closes the file handle", async () => {
+  const context = await createTestJournal()
+  const fileHandle = context.journal.fileHandle
+
+  try {
+    fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated close sync failure/)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
