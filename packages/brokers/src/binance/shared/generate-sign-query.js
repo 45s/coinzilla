@@ -1,5 +1,8 @@
 import { generateTimestamp } from './generate-timestamp.js'
+import { buildSignQuery } from './build-sign-query.js'
+
+export { buildSignQuery }
 
 export function generateSignQuery() {
-  return `recvWindow=5000&timestamp=${generateTimestamp()}`
+  return buildSignQuery(generateTimestamp())
 }
