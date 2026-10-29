@@ -46,15 +46,15 @@ describe('adaptOrder', () => {
     assert.equal(result.quantity, 0.625)
   })
 
-  it('rejects an order whose remaining quantity is zero', () => {
-    assert.throws(
-      () => adaptOrder({
-        ...mockedBinanceOrder,
-        origQty: '1.00000000',
-        executedQty: '1.00000000',
-      }),
-      /quantity =\+origQty - \+executedQty === 0/,
-    )
+  it('adapts a fully filled Binance order with zero remaining quantity', () => {
+    const result = adaptOrder({
+      ...mockedBinanceOrder,
+      origQty: '1.00000000',
+      executedQty: '1.00000000',
+    })
+
+    assert.equal(result.quantity, 0)
+    assert.equal(result.id, String(mockedBinanceOrder.orderId))
   })
 })
 
