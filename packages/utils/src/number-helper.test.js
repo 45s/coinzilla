@@ -20,6 +20,15 @@ describe(`_utils/${NH.name}`, () => {
       assert.strictEqual(NH.round(1.23456, 0), 1)
     })
 
+    it('rejects invalid decimal-place counts', () => {
+      for (const decimals of [-1, 1.5, 101, NaN, Infinity, '2']) {
+        assert.throws(
+          () => NH.round(1.23456, decimals),
+          { name: 'RangeError', message: 'decimals must be an integer between 0 and 100' },
+        )
+      }
+    })
+
     it('preserves positive and negative infinity instead of converting them to NaN', () => {
       assert.strictEqual(NH.round(Infinity), Infinity)
       assert.strictEqual(NH.round(-Infinity), -Infinity)
