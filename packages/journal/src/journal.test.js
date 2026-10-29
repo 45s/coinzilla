@@ -236,6 +236,52 @@ test("rejects overlapping startup attempts without leaking a session file or sub
   }
 })
 
+test("closes a session file created after close cancels startup", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+
+  let releaseCreateSessionFile
+  let signalCreateSessionFileStarted
+  const createSessionFileStarted = new Promise((resolve) => {
+    signalCreateSessionFileStarted = resolve
+  })
+  const createSessionFileGate = new Promise((resolve) => {
+    releaseCreateSessionFile = resolve
+  })
+  const originalCreateSessionFile = journal.createSessionFile.bind(journal)
+
+  journal.createSessionFile = async () => {
+    signalCreateSessionFileStarted()
+    await createSessionFileGate
+    return originalCreateSessionFile()
+  }
+
+  try {
+    const startPromise = journal.start()
+    await createSessionFileStarted
+
+    const closeResult = await journal.close()
+    assert.equal(closeResult.ok, true)
+    assert.equal(journal.closed, true)
+
+    releaseCreateSessionFile()
+
+    const startResult = await startPromise
+    assert.equal(startResult.ok, false)
+    assert.match(startResult.errors[0].message, /closed during startup/)
+    assert.equal(journal.started, false)
+    assert.equal(journal.starting, false)
+    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.subscription, null)
+    assert.equal((await readdir(directory)).length, 1)
+  } finally {
+    releaseCreateSessionFile()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("does not allow a journal to start more than once or restart after close", async () => {
   const context = await createTestJournal()
 
