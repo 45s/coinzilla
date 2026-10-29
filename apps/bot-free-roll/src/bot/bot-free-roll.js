@@ -52,6 +52,11 @@ export class FreeRollBot {
     this.#queue = createKeyedQueue({
       onError: ({ key, error }) => {
         handleErr({ where: `FreeRollBot(${key})`, error })
+        this.#pause(
+          key,
+          "Queued task failed; pair paused to prevent unsafe trading",
+          error,
+        )
         this.#debug(`[${key}] Queued task failed`, error)
       },
     })
@@ -946,15 +951,57 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (state) state.paused = true
 
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            ...(error.errors
+              ? {
+                  errors: [...error.errors].map((item) => ({
+                    name: item?.name,
+                    message: item?.message ?? String(item),
+                  })),
+                }
+              : {}),
+          }
+        : error == null
+          ? null
+          : { message: String(error) }
+
+    const stateSnapshot = state
+      ? {
+          paused: state.paused,
+          referencePrice: state.referencePrice,
+          highestPrice: state.highestPrice,
+          lastAdjustmentPrice: state.lastAdjustmentPrice,
+          lastBuyPrice: state.lastBuyPrice,
+          activeQuantity: state.activeQuantity,
+          cycleCost: state.cycleCost,
+          saleProceeds: state.saleProceeds,
+          freeQuantity: state.freeQuantity,
+          buyOrder: state.buyOrder ? { ...state.buyOrder } : null,
+          sellOrder: state.sellOrder ? { ...state.sellOrder } : null,
+          cancelingOrderIds: [...state.cancelingOrderIds],
+        }
+      : null
+
+    const diagnostic = {
+      symbol,
+      reason: message,
+      error: errorDetails,
+      state: stateSnapshot,
+      timestamp: new Date().toISOString(),
+    }
+
     this.logger.error?.({
       message: `[${symbol}] PAUSED: ${message}`,
-      error: error?.message ?? error,
+      ...diagnostic,
     })
 
-    this.#debug(`[${symbol}] State paused`, {
-      message,
-      error: error?.message,
-    })
+    this.#publish("bot.pair_paused", diagnostic)
+    this.#debug(`[${symbol}] State paused`, diagnostic)
   }
 
   async #disconnectSubscriptions() {
