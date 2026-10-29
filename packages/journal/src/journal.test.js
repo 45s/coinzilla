@@ -278,3 +278,25 @@ test("can close before startup and then rejects startup", async () => {
   assert.equal(startResult.ok, false)
 })
 
+
+
+test("reports a failed disk sync instead of claiming the journal was flushed", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.fileHandle.sync = async () => {
+      throw new Error("simulated disk sync failure")
+    }
+
+    const result = await context.journal.flush()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated disk sync failure/)
+  } finally {
+    // Restore a working sync method so cleanup can complete normally.
+    delete context.journal.fileHandle.sync
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
