@@ -51,3 +51,12 @@ describe("BinanceSdkBroker.disconnect", () => {
     assert.equal(broker.marketConnection, null)
   })
 })
+
+it("clears both connections when both disconnect operations reject", async () => {
+  const broker = createBroker()
+  broker.tradingConnection = { disconnect: async () => { throw new Error("trading close failed") } }
+  broker.marketConnection = { disconnect: async () => { throw new Error("market close failed") } }
+  await assert.doesNotReject(() => broker.disconnect())
+  assert.equal(broker.tradingConnection, null)
+  assert.equal(broker.marketConnection, null)
+})
