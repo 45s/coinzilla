@@ -237,3 +237,28 @@ test("rejects an empty directory before creating a session file", async () => {
   assert.equal(journal.fileHandle, null)
   await eventBus.close()
 })
+
+
+test("can close before startup and then rejects startup", async () => {
+  const journal = new Journal({ directory: "/unused" })
+  const closeResult = await journal.close()
+  assert.equal(closeResult.ok, true)
+  assert.equal(closeResult.closed, true)
+  const startResult = await journal.start()
+  assert.equal(startResult.ok, false)
+})
+
+
+test("rejects startup when the event bus has already closed", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-closed-bus-"))
+  const eventBus = new EventBus()
+  await eventBus.close()
+  const journal = new Journal({ eventBus, directory })
+  try {
+    const result = await journal.start()
+    assert.equal(result.ok, false)
+    assert.equal(journal.started, false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
