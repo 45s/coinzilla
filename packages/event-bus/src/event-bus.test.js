@@ -318,3 +318,12 @@ test("published event envelopes are frozen and contain generated metadata", asyn
 
   await bus.close()
 })
+
+test("repeated close calls remain successful", async () => {
+  const { bus } = createTestBus()
+  const first = await bus.close()
+  const second = await bus.close()
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.closed, true)
+})
