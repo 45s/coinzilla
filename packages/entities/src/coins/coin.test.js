@@ -57,7 +57,6 @@ describe(`${Coin.name}`, () => {
       })
     }
   })
-})
 
   it("returns a fresh value snapshot on each access", () => {
     const coin = new Coin({ ticker: "btc", quantity: 3 })
@@ -67,3 +66,10 @@ describe(`${Coin.name}`, () => {
     assert.deepEqual(coin.value, { ticker: "BTC", quantity: 3 })
     assert.notStrictEqual(coin.value, snapshot)
   })
+
+  it("normalizes mixed-case tickers after trimming", () => {
+    const coin = new Coin({ ticker: "  bTcUsDt  ", quantity: 3 })
+    assert.equal(coin.ticker, "BTCUSDT")
+    assert.equal(coin.value.ticker, "BTCUSDT")
+  })
+})
