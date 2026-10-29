@@ -40,7 +40,6 @@ test("publishes a structured event", () => {
   bus.close()
 })
 
-
 test('publishes an "error" event safely when no consumer subscribes', async () => {
   const { bus } = createTestBus()
 
@@ -315,6 +314,55 @@ test("published event envelopes are frozen and contain generated metadata", asyn
   assert.equal(result.event.name, "test.event")
   assert.equal(result.event.source, "unit-test")
   assert.deepEqual(result.event.data, { count: 1 })
+  assert.equal(Object.isFrozen(result.event.data), true)
+
+  await bus.close()
+})
+
+test("snapshots nested event data before asynchronous consumers run", async () => {
+  const { bus } = createTestBus()
+  const original = { order: { quantity: 1 } }
+  let received
+
+  bus.subscribe({
+    name: "order.created",
+    handler: (event) => {
+      received = event.data
+    },
+  })
+
+  const published = bus.publish({
+    name: "order.created",
+    source: "test",
+    data: original,
+  })
+
+  original.order.quantity = 99
+  original.order.extra = true
+
+  await bus.flush()
+
+  assert.equal(published.ok, true)
+  assert.deepEqual(received, { order: { quantity: 1 } })
+  assert.deepEqual(published.event.data, { order: { quantity: 1 } })
+  assert.equal(Object.isFrozen(published.event.data.order), true)
+  assert.throws(() => {
+    published.event.data.order.quantity = 2
+  }, TypeError)
+
+  await bus.close()
+})
+
+test("returns a failure result when event data cannot be cloned", async () => {
+  const { bus } = createTestBus()
+  const result = bus.publish({
+    name: "test.event",
+    source: "test",
+    data: { callback() {} },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /clone/i)
 
   await bus.close()
 })
@@ -327,7 +375,6 @@ test("reports unsubscribe state consistently across repeated calls", async () =>
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
   await bus.close()
 })
-
 
 test("repeated close calls remain successful", async () => {
   const { bus } = createTestBus()
@@ -359,7 +406,6 @@ test("passes the original event and source to the error reporter", async () => {
   assert.equal(reported.event.source, "test-source")
   await bus.close()
 })
-
 
 test("defaults omitted event data to an empty object", async () => {
   const { bus } = createTestBus()
