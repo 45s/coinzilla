@@ -15,7 +15,7 @@ describe("getAssets", () => {
           { asset: "USDT", free: "0", locked: "0" },
         ],
       }),
-    })
+    }))
 
     const result = await getAssets()
     assert.deepEqual(result, [{ ticker: "BTC", quantity: 0.3 }])
@@ -26,7 +26,7 @@ describe("getAssets", () => {
     t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "application/json" },
       json: async () => ({ code: -1003, msg: "Too many requests." }),
-    })
+    }))
 
     await assert.rejects(() => getAssets(), { message: "Too many requests." })
   })
@@ -36,6 +36,6 @@ it("returns an empty list when the account has no balances", async (t) => {
   t.mock.method(globalThis, "fetch", async () => ({
     headers: { get: () => "application/json" },
     json: async () => ({ balances: [] }),
-  })
+  }))
   assert.deepEqual(await getAssets(), [])
 })
