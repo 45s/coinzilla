@@ -318,3 +318,16 @@ test("published event envelopes are frozen and contain generated metadata", asyn
 
   await bus.close()
 })
+
+test("passes the original event and source to the error reporter", async () => {
+  let reported
+  const { bus } = createTestBus({ onError: async (context) => { reported = context } })
+  bus.subscribe({ name: "trade.failed", handler: () => { throw new Error("handler failed") } })
+  const published = bus.publish({ name: "trade.failed", source: "test-source", data: { id: 7 } })
+  await bus.flush()
+  assert.equal(reported.error.message, "handler failed")
+  assert.equal(reported.event.id, published.event.id)
+  assert.equal(reported.eventName, "trade.failed")
+  assert.equal(reported.event.source, "test-source")
+  await bus.close()
+})
