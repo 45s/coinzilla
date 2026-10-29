@@ -129,3 +129,12 @@ test("normalizes a scalar errors value into an array", () => {
   const error = new Error("invalid state")
   assert.deepEqual(toResult({ errors: error }), { ok: false, errors: [error] })
 })
+
+test("preserves falsey scalar errors instead of treating them as success", () => {
+  for (const error of [0, false, ""]) {
+    assert.deepEqual(toResult({ error }), {
+      ok: false,
+      errors: [error],
+    })
+  }
+})
