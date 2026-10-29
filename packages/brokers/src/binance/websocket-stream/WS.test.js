@@ -98,3 +98,19 @@ it("overrides only the supplied default callbacks", () => {
   client.callbacks.message('{"event":"trade"}')
   assert.deepEqual(calls, ["custom-open", { event: "trade" }])
 })
+
+
+it("forwards Buffer payloads without converting them", () => {
+  const payload = Buffer.from("trade-event")
+  let sent
+  const client = new WS({ logger: { warn() {} } })
+  client.isConnected = () => true
+  client.wsConnection.ws = { send: (value) => { sent = value } }
+  assert.equal(client.send(payload), true)
+  assert.equal(sent, payload)
+})
+
+it("uses the default reconnect delay when none is provided", () => {
+  const client = new WS({ logger: { warn() {} } })
+  assert.equal(client.reconnectDelay, 5000)
+})
