@@ -200,3 +200,50 @@ test("priceStepPercent must be less than 100", () => {
     ),
   )
 })
+
+test("nested arrays are rejected where config objects are required", () => {
+  for (const mutate of [
+    (config) => { config.strategies = [] },
+    (config) => { config.strategies["free-roll"] = [] },
+    (config) => { config.strategies["free-roll"].settings = [] },
+    (config) => { config.strategies["free-roll"].pairs = [] },
+  ]) {
+    const tradingConfig = createValidConfig()
+    mutate(tradingConfig)
+
+    const result = validateTradingConfig({ tradingConfig })
+
+    assert.equal(result.ok, false)
+  }
+})
+
+test("non-finite minProfit values are rejected", () => {
+  for (const minProfit of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    const tradingConfig = createValidConfig()
+    tradingConfig.strategies["free-roll"].settings.minProfit = minProfit
+
+    const result = validateTradingConfig({ tradingConfig })
+
+    assert.equal(result.ok, false)
+    assert.ok(result.errors.includes("settings.minProfit must be a non-negative number"))
+  }
+})
+
+test("fractional precision values are rejected", () => {
+  const tradingConfig = createValidConfig()
+  const pair = tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD
+
+  pair.pricePrecision = 2.5
+  pair.quantityPrecision = 0.5
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes(
+    "pairs.DOGEFDUSD.pricePrecision must be an integer between 0 and 8",
+  ))
+  assert.ok(result.errors.includes(
+    "pairs.DOGEFDUSD.quantityPrecision must be an integer between 0 and 8",
+  ))
+})
+
