@@ -26,14 +26,22 @@ const mockedBinanceOrder = {
 }
 
 describe('adaptOrder', () => {
-  it('adapts an unfilled Binance order', () => {
+  it('adapts an unfilled Binance order including its client order ID', () => {
     const result = adaptOrder(mockedBinanceOrder)
     assert.equal(result.id, String(mockedBinanceOrder.orderId))
+    assert.equal(result.clientOrderId, mockedBinanceOrder.clientOrderId)
     assert.equal(result.type, mockedBinanceOrder.type)
     assert.equal(result.side, mockedBinanceOrder.side)
     assert.equal(result.price, Number(mockedBinanceOrder.price))
     assert.equal(result.quantity, 1)
     assert.equal(result.symbol, mockedBinanceOrder.symbol)
+  })
+
+  it('leaves clientOrderId undefined when Binance omits it', () => {
+    const { clientOrderId, ...orderWithoutClientId } = mockedBinanceOrder
+    const result = adaptOrder(orderWithoutClientId)
+    assert.equal(result.clientOrderId, undefined)
+    assert.equal('clientOrderId' in result.value, false)
   })
 
   it('subtracts executed quantity from original quantity for a partial fill', () => {
@@ -56,9 +64,13 @@ describe('adaptOrder', () => {
     assert.equal(result.quantity, 0)
     assert.equal(result.id, String(mockedBinanceOrder.orderId))
   })
-})
 
-it("rejects non-numeric exchange quantities", () => {
-  assert.throws(() => adaptOrder({ ...mockedBinanceOrder, origQty: "not-a-number" }))
-  assert.throws(() => adaptOrder({ ...mockedBinanceOrder, executedQty: "not-a-number" }))
+  it('rejects non-numeric exchange quantities', () => {
+    assert.throws(() =>
+      adaptOrder({ ...mockedBinanceOrder, origQty: 'not-a-number' }),
+    )
+    assert.throws(() =>
+      adaptOrder({ ...mockedBinanceOrder, executedQty: 'not-a-number' }),
+    )
+  })
 })
