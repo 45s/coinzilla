@@ -48,3 +48,13 @@ describe("BinanceSdkBroker order error results", () => {
     assert.equal(result.errors[0].message, "unknown order")
   })
 })
+
+it("returns errors from cancelAllOpenOrders when the SDK rejects", async () => {
+  const broker = createBroker()
+  broker.tradingConnection = {
+    openOrdersCancelAll: async () => { throw new Error("bulk cancel unavailable") },
+  }
+  const result = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].message, "bulk cancel unavailable")
+})
