@@ -15,13 +15,14 @@ export class Journal {
     this.writeQueue = Promise.resolve()
 
     this.started = false
+    this.starting = false
     this.closing = false
     this.closed = false
     this.writeErrors = []
   }
 
   async start({} = {}) {
-    if (this.started || this.closing || this.closed) {
+    if (this.started || this.starting || this.closing || this.closed) {
       return toResult({
         error: new Error("Journal has already started or closed"),
       })
@@ -38,6 +39,8 @@ export class Journal {
         error: new TypeError("A journal directory is required"),
       })
     }
+
+    this.starting = true
 
     try {
       await mkdir(this.directory, { recursive: true })
@@ -97,6 +100,8 @@ export class Journal {
       })
 
       return toResult({ error })
+    } finally {
+      this.starting = false
     }
   }
 
