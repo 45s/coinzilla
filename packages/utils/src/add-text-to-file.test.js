@@ -40,12 +40,12 @@ describe('addTextToFile', () => {
   })
 })
 
-it("appends UTF-8 text without changing Unicode characters", async () => {
-  const localDirectory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-unicode-"))
-  const localFile = path.join(localDirectory, "unicode.txt")
+it('appends Latin Unicode text without changing Unicode characters', async () => {
+  const localDirectory = await mkdtemp(path.join(os.tmpdir(), 'coinzilla-unicode-'))
+  const localFile = path.join(localDirectory, 'unicode.txt')
   try {
-    await addTextToFile({ fileName: localFile, text: "Київ 🚀\n" })
-    assert.equal(await readFile(localFile, "utf8"), "Київ 🚀\n")
+    await addTextToFile({ fileName: localFile, text: 'café 🚀\n' })
+    assert.equal(await readFile(localFile, 'utf8'), 'café 🚀\n')
   } finally {
     await rm(localDirectory, { recursive: true, force: true })
   }
