@@ -16,7 +16,8 @@ describe(`${Order.name}`, () => {
     new Order({ symbol, type, side, quantity, price, id, ...overrides })
 
   it("should normalize and expose all order fields", () => {
-    const o = validOrder({ symbol: "  btcusdt  " })
+    const clientOrderId = "FR_BTC_0001"
+    const o = validOrder({ symbol: "  btcusdt  ", clientOrderId })
 
     assert.strictEqual(o.symbol, "BTCUSDT")
     assert.strictEqual(o.type, type)
@@ -24,6 +25,22 @@ describe(`${Order.name}`, () => {
     assert.strictEqual(o.quantity, quantity)
     assert.strictEqual(o.price, price)
     assert.strictEqual(o.id, id)
+    assert.strictEqual(o.clientOrderId, clientOrderId)
+    assert.deepStrictEqual(o.value, {
+      id,
+      clientOrderId,
+      symbol: "BTCUSDT",
+      type,
+      side,
+      quantity,
+      price,
+    })
+  })
+
+  it("should leave clientOrderId undefined when omitted", () => {
+    const o = validOrder()
+    assert.strictEqual(o.clientOrderId, undefined)
+    assert.equal("clientOrderId" in o.value, false)
     assert.deepStrictEqual(o.value, {
       id,
       symbol: "BTCUSDT",
@@ -32,6 +49,15 @@ describe(`${Order.name}`, () => {
       quantity,
       price,
     })
+  })
+
+  it("should reject blank or non-string clientOrderId values when provided", () => {
+    for (const clientOrderId of ["", "   ", 123, false]) {
+      assert.throws(
+        () => validOrder({ clientOrderId }),
+        { message: errMsgs.clientOrderId },
+      )
+    }
   })
 
   it("should support every declared order type", () => {

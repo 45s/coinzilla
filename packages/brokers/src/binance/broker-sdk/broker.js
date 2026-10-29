@@ -183,8 +183,10 @@ export class BinanceSdkBroker extends CoreBroker {
 
   async createOrder(input) {
     try {
+      const { clientOrderId, ...orderInput } = input
       const response = await this.tradingConnection.orderPlace({
-        ...input,
+        ...orderInput,
+        ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
         side: input.side ?? "BUY",
         type: input.type ?? "LIMIT",
         timeInForce: input.timeInForce ?? "GTC",
@@ -241,10 +243,7 @@ export class BinanceSdkBroker extends CoreBroker {
       const response = await this.tradingConnection.tickerPrice({ symbol })
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.getPrices()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.getPrices()", error })
       return toResult({ errors: [error] })
     }
   }

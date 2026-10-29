@@ -5,4 +5,5 @@ export const errMsgs = {
   quantity: 'Order.quantity should be a number',
   price: 'Order.price should be a number',
   id: 'Order.id is required not empty string',
+  clientOrderId: 'Order.clientOrderId must be a non-empty string when provided',
 }

@@ -5,6 +5,7 @@ const supportedTypes = ["LIMIT", "MARKET"]
 
 export class Order {
   #id
+  #clientOrderId
   #symbol
   #type
   #side
@@ -14,6 +15,7 @@ export class Order {
   get value() {
     return {
       id: this.#id,
+      ...(this.#clientOrderId === undefined ? {} : { clientOrderId: this.#clientOrderId }),
       symbol: this.#symbol,
       type: this.#type,
       side: this.#side,
@@ -22,7 +24,7 @@ export class Order {
     }
   }
 
-  constructor({ symbol, type, side, quantity, price, id }) {
+  constructor({ symbol, type, side, quantity, price, id, clientOrderId }) {
     if (typeof symbol !== "string" || !symbol.trim()) {
       throw new Error(errMsgs.symbol)
     }
@@ -52,10 +54,20 @@ export class Order {
       throw new Error(errMsgs.id)
     }
     this.#id = id
+
+    if (clientOrderId !== undefined && clientOrderId !== null &&
+        !Validator.isRequiredNotEmptyString(clientOrderId)) {
+      throw new Error(errMsgs.clientOrderId)
+    }
+    this.#clientOrderId = clientOrderId ?? undefined
   }
 
   get id() {
     return this.#id
+  }
+
+  get clientOrderId() {
+    return this.#clientOrderId
   }
 
   get symbol() {
