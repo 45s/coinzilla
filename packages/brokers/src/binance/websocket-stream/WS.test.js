@@ -97,3 +97,9 @@ it("forwards Buffer payloads without converting them", () => {
   assert.equal(client.send(payload), true)
   assert.equal(sent, payload)
 })
+
+
+test("uses the default reconnect delay when none is provided", () => {
+  const ws = new WS({ url: "ws://localhost" })
+  assert.equal(ws.reconnectDelay, 5000)
+})
