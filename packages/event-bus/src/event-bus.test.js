@@ -327,3 +327,44 @@ test("reports unsubscribe state consistently across repeated calls", async () =>
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
   await bus.close()
 })
+
+
+test("repeated close calls remain successful", async () => {
+  const { bus } = createTestBus()
+  const first = await bus.close()
+  const second = await bus.close()
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.closed, true)
+})
+
+test("passes the original event and source to the error reporter", async () => {
+  let reported
+  const { bus } = createTestBus({
+    onError: async (context) => { reported = context },
+  })
+  bus.subscribe({
+    name: "trade.failed",
+    handler: () => { throw new Error("handler failed") },
+  })
+  const published = bus.publish({
+    name: "trade.failed",
+    source: "test-source",
+    data: { id: 7 },
+  })
+  await bus.flush()
+  assert.equal(reported.error.message, "handler failed")
+  assert.equal(reported.event.id, published.event.id)
+  assert.equal(reported.eventName, "trade.failed")
+  assert.equal(reported.event.source, "test-source")
+  await bus.close()
+})
+
+
+test("defaults omitted event data to an empty object", async () => {
+  const { bus } = createTestBus()
+  const result = bus.publish({ name: "test.default-data", source: "unit-test" })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.event.data, {})
+  await bus.close()
+})
