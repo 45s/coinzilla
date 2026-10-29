@@ -92,7 +92,6 @@ describe(`${Order.name}`, () => {
       NaN,
       Infinity,
       -Infinity,
-      0,
       -1,
     ]) {
       assert.throws(
@@ -114,10 +113,26 @@ describe(`${Order.name}`, () => {
   it("allows zero remaining quantity for a fully filled order", () => {
     assert.equal(validOrder({ quantity: 0 }).quantity, 0)
   })
-})
 
-  it("rejects zero quantity and zero price independently", () => {
-    const input = { symbol: "BTCUSDT", type: "LIMIT", side: "BUY", quantity: 1, price: 10, id: "test-id" }
-    assert.throws(() => new Order({ ...input, quantity: 0 }), { message: errMsgs.quantity })
-    assert.throws(() => new Order({ ...input, price: 0 }), { message: errMsgs.price })
+  it("returns a value snapshot independent of the order instance", () => {
+    const order = validOrder()
+    const snapshot = order.value
+
+    snapshot.symbol = "ETHUSDT"
+    snapshot.quantity = 99
+    snapshot.price = 0
+
+    assert.equal(order.symbol, "BTCUSDT")
+    assert.equal(order.quantity, quantity)
+    assert.equal(order.price, price)
+    assert.deepStrictEqual(order.value, {
+      id,
+      symbol: "BTCUSDT",
+      type,
+      side,
+      quantity,
+      price,
+    })
+    assert.notStrictEqual(order.value, snapshot)
   })
+})
