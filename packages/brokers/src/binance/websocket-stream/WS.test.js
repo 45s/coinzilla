@@ -87,3 +87,14 @@ describe("WS/send", () => {
     assert.deepEqual(warnings, ["No connection to close."])
   })
 })
+
+it("overrides only the supplied default callbacks", () => {
+  const calls = []
+  const client = new WS({
+    logger: { debug: () => {}, info: (value) => calls.push(value) },
+    callbacks: { open: () => calls.push("custom-open") },
+  })
+  client.callbacks.open()
+  client.callbacks.message('{"event":"trade"}')
+  assert.deepEqual(calls, ["custom-open", { event: "trade" }])
+})
