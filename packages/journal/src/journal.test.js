@@ -367,3 +367,34 @@ test("returns close errors even when the error logger throws", async () => {
     await rm(context.directory, { recursive: true, force: true })
   }
 })
+
+
+test("keeps startup successful when the startup info logger throws", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-logger-"))
+  const eventBus = new EventBus()
+  const logger = {
+    info: () => {
+      throw new Error("simulated startup logger failure")
+    },
+    error: () => {
+      throw new Error("simulated error logger failure")
+    },
+  }
+  const journal = new Journal({ eventBus, directory, logger })
+
+  try {
+    const result = await journal.start()
+
+    assert.equal(result.ok, true)
+    assert.equal(journal.started, true)
+    assert.ok(journal.fileHandle)
+
+    const closeResult = await journal.close()
+    assert.equal(closeResult.ok, true)
+    assert.equal(journal.closed, true)
+    assert.equal(journal.fileHandle, null)
+  } finally {
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
