@@ -87,3 +87,8 @@ describe("WS/send", () => {
     assert.deepEqual(warnings, ["No connection to close."])
   })
 })
+
+it("uses the default reconnect delay when no override is provided", () => {
+  const client = new WS({ logger: { debug() {} } })
+  assert.equal(client.reconnectDelay, 5000)
+})
