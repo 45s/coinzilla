@@ -14,6 +14,7 @@ export class WS {
     this.wsURL = wsURL
     this.reconnectDelay = reconnectDelay ?? 5000
     this.wsConnection = {}
+    this.reconnectTimer = null
 
     this.callbacks = {
       open: () => this.logger.debug("Connected with Websocket server"),
@@ -34,12 +35,21 @@ export class WS {
   }
 
   disconnect() {
+    // Stop a reconnect already scheduled by an earlier unexpected close,
+    // even if the socket is currently disconnected.
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    this.wsConnection.closeInitiated = true
+
     if (this.isConnected()) {
-      this.wsConnection.closeInitiated = true
       this.wsConnection.ws.close()
       this.logger.info("Disconnected with Binance Websocket Server")
       return
     }
+
     this.logger.warn("No connection to close.")
   }
 
@@ -83,9 +93,15 @@ export class WS {
         this.logger.warn(
           `Connection close due to ${closeEventCode}: ${reason}.`,
         )
-        setTimeout(() => {
-          this.logger.debug("Reconnect to the server.")
-          this.initConnect(url)
+        if (this.reconnectTimer !== null) {
+          clearTimeout(this.reconnectTimer)
+        }
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null
+          if (!this.wsConnection.closeInitiated) {
+            this.logger.debug("Reconnect to the server.")
+            this.initConnect(url)
+          }
         }, this.reconnectDelay)
       } else {
         this.wsConnection.closeInitiated = false
