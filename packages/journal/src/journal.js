@@ -74,9 +74,13 @@ export class Journal {
       this.subscription = result.subscription
       this.started = true
 
-      this.logger.info?.("Journal started", {
-        filePath: this.filePath,
-      })
+      try {
+        this.logger.info?.("Journal started", {
+          filePath: this.filePath,
+        })
+      } catch {
+        // Logging must not turn a successful startup into a failure.
+      }
 
       return toResult({
         filePath: this.filePath,
@@ -165,20 +169,35 @@ export class Journal {
   }
 
   async flush({} = {}) {
-    const busResult = await this.eventBus.flush()
+    const errors = []
+
+    try {
+      const busResult = await this.eventBus.flush()
+
+      if (!busResult.ok) {
+        errors.push(...busResult.errors)
+      }
+    } catch (error) {
+      errors.push(error)
+    }
 
     await this.writeQueue
+    errors.push(...this.writeErrors)
 
-    const errors = [
-      ...(busResult.ok ? [] : busResult.errors),
-      ...this.writeErrors,
-    ]
+    if (errors.length === 0 && this.fileHandle && !this.closed) {
+      try {
+        // Wait for queued writes, then ask the OS to sync file data to storage.
+        await this.fileHandle.sync()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
 
     if (errors.length > 0) {
       return toResult({ errors })
     }
 
-    return toResult({ flushed: true })
+    return toResult({ flushed: true, filePath: this.filePath })
   }
 
   async close({} = {}) {
@@ -198,20 +217,29 @@ export class Journal {
       return toResult({ closed: true })
     }
 
-    if (this.subscription) {
-      this.subscription.unsubscribe()
-      this.subscription = null
-    }
-
-    const busResult = await this.eventBus.flush()
-
-    this.closing = true
-
     const errors = []
 
-    if (!busResult.ok) {
-      errors.push(...busResult.errors)
+    if (this.subscription) {
+      try {
+        this.subscription.unsubscribe()
+      } catch (error) {
+        errors.push(error)
+      } finally {
+        this.subscription = null
+      }
     }
+
+    try {
+      const busResult = await this.eventBus.flush()
+
+      if (!busResult.ok) {
+        errors.push(...busResult.errors)
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+
+    this.closing = true
 
     await this.writeQueue
 
@@ -219,6 +247,13 @@ export class Journal {
     this.writeErrors = []
 
     if (this.fileHandle) {
+      try {
+        // Sync the final queued writes before closing the session file.
+        await this.fileHandle.sync()
+      } catch (error) {
+        errors.push(error)
+      }
+
       try {
         await this.fileHandle.close()
       } catch (error) {
@@ -242,9 +277,13 @@ export class Journal {
       return toResult({ errors })
     }
 
-    this.logger.info?.("Journal closed", {
-      filePath: this.filePath,
-    })
+    try {
+      this.logger.info?.("Journal closed", {
+        filePath: this.filePath,
+      })
+    } catch {
+      // Logging must not turn a completed shutdown into a failure.
+    }
 
     return toResult({
       closed: true,
@@ -253,9 +292,13 @@ export class Journal {
   }
 
   reportError({ message, errors, ...context } = {}) {
-    this.logger.error?.(message, {
-      ...context,
-      errors,
-    })
+    try {
+      this.logger.error?.(message, {
+        ...context,
+        errors,
+      })
+    } catch {
+      // Logging must not interrupt journal cleanup or error reporting.
+    }
   }
 }

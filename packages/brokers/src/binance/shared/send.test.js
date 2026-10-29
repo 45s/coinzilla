@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { defaultLogger as logger } from "@coinzilla/utils"
 import { send } from "./send.js"
 
 describe("Binance send", () => {
@@ -77,6 +78,7 @@ describe("Binance send", () => {
       { message: "network unavailable" },
     )
   })
+
   it("parses JSON when the media type uses uppercase letters", async (t) => {
     t.mock.method(globalThis, "fetch", async () => ({
       headers: { get: () => "Application/JSON; charset=utf-8" },
@@ -90,4 +92,31 @@ describe("Binance send", () => {
     )
   })
 
+  it("redacts query parameters from logs but preserves them in the request", async (t) => {
+    let requestUrl
+    let logEntry
+
+    t.mock.method(logger, "debug", (entry) => {
+      logEntry = entry
+    })
+    t.mock.method(globalThis, "fetch", async (url) => {
+      requestUrl = url
+      return {
+        headers: { get: () => "application/json" },
+        json: async () => ({ success: true }),
+        text: async () => "unused",
+      }
+    })
+
+    const signedPath = "order?timestamp=123&signature=secret-signature"
+    await send({ url: "https://example.test/api", path: signedPath })
+
+    assert.equal(
+      requestUrl,
+      "https://example.test/api/order?timestamp=123&signature=secret-signature",
+    )
+    assert.equal(logEntry.url, "https://example.test/api/order")
+    assert.equal(JSON.stringify(logEntry).includes("secret-signature"), false)
+    assert.equal(JSON.stringify(logEntry).includes("timestamp=123"), false)
+  })
 })

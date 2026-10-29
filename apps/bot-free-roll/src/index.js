@@ -272,8 +272,22 @@ async function shutdown() {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     void shutdown().catch((error) => {
-      logger.error?.("[bot] Shutdown failed", { error })
       process.exitCode = 1
+
+      try {
+        logger.error?.("[bot] Shutdown failed", { error })
+      } catch (loggingError) {
+        try {
+          process.stderr.write(
+            `[bot] Shutdown failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+          )
+          process.stderr.write(
+            `[bot] Shutdown logger failed: ${loggingError instanceof Error ? loggingError.stack ?? loggingError.message : String(loggingError)}\n`,
+          )
+        } catch {
+          // No reliable output channel remains if stderr also fails.
+        }
+      }
     })
   })
 }
@@ -327,11 +341,26 @@ try {
     },
   })
 } catch (error) {
-  logger.error?.("[bot] Failed", { error })
+  // Logging must never prevent cleanup. Keep a synchronous stderr fallback
+  // because the configured logger may itself be the source of the failure.
+  try {
+    logger.error?.("[bot] Failed", { error })
+  } catch (loggingError) {
+    try {
+      process.stderr.write(
+        `[bot] Failed; logger also failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+      )
+      process.stderr.write(
+        `[bot] Logger failure: ${loggingError instanceof Error ? loggingError.stack ?? loggingError.message : String(loggingError)}\n`,
+      )
+    } catch {
+      // There is no further reliable output channel if stderr also fails.
+    }
+  } finally {
+    process.exitCode = 1
 
-  if (!shuttingDown) {
-    await shutdown()
+    if (!shuttingDown) {
+      await shutdown()
+    }
   }
-
-  process.exitCode = 1
 }

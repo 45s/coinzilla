@@ -10,12 +10,17 @@ export async function send({
   method = "GET",
   headers,
 }) {
+  const requestUrl = `${url}/${path}`
+
   logger.debug({
     where,
     method,
-    url: `${url}/${path}`,
+    // Binance signed requests include a timestamp and signature in the query.
+    // Keep those credentials out of logs while preserving the endpoint path.
+    url: requestUrl.split("?")[0],
   })
-  const r = await fetch(`${url}/${path}`, {
+
+  const r = await fetch(requestUrl, {
     method,
     headers: {
       "Content-Type": "application/json",

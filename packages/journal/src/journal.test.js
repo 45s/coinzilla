@@ -278,3 +278,170 @@ test("can close before startup and then rejects startup", async () => {
   assert.equal(startResult.ok, false)
 })
 
+
+
+test("reports a failed disk sync instead of claiming the journal was flushed", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.fileHandle.sync = async () => {
+      throw new Error("simulated disk sync failure")
+    }
+
+    const result = await context.journal.flush()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated disk sync failure/)
+  } finally {
+    // Restore a working sync method so cleanup can complete normally.
+    delete context.journal.fileHandle.sync
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("reports a failed disk sync during close and still closes the file handle", async () => {
+  const context = await createTestJournal()
+  const fileHandle = context.journal.fileHandle
+
+  try {
+    fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated close sync failure/)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("keeps close successful when the shutdown info logger throws", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.logger.info = () => {
+      throw new Error("simulated logger failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, true)
+    assert.equal(result.closed, true)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+test("returns close errors even when the error logger throws", async () => {
+  const context = await createTestJournal()
+  const fileHandle = context.journal.fileHandle
+
+  try {
+    fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+    context.journal.logger.error = () => {
+      throw new Error("simulated error logger failure")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated close sync failure/)
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("keeps startup successful when the startup info logger throws", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-logger-"))
+  const eventBus = new EventBus()
+  const logger = {
+    info: () => {
+      throw new Error("simulated startup logger failure")
+    },
+    error: () => {
+      throw new Error("simulated error logger failure")
+    },
+  }
+  const journal = new Journal({ eventBus, directory, logger })
+
+  try {
+    const result = await journal.start()
+
+    assert.equal(result.ok, true)
+    assert.equal(journal.started, true)
+    assert.ok(journal.fileHandle)
+
+    const closeResult = await journal.close()
+    assert.equal(closeResult.ok, true)
+    assert.equal(journal.closed, true)
+    assert.equal(journal.fileHandle, null)
+  } finally {
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("returns a flush error when the event bus flush rejects", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.eventBus.flush = async () => {
+      throw new Error("simulated event bus flush rejection")
+    }
+
+    const result = await context.journal.flush()
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /simulated event bus flush rejection/)
+  } finally {
+    context.eventBus.flush = EventBus.prototype.flush
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+test("still closes the journal when unsubscribe and event bus flush throw", async () => {
+  const context = await createTestJournal()
+
+  try {
+    context.journal.subscription.unsubscribe = () => {
+      throw new Error("simulated unsubscribe failure")
+    }
+    context.eventBus.flush = async () => {
+      throw new Error("simulated event bus flush rejection")
+    }
+
+    const result = await context.journal.close()
+
+    assert.equal(result.ok, false)
+    assert.ok(result.errors.some((error) => /simulated unsubscribe failure/.test(error.message)))
+    assert.ok(result.errors.some((error) => /simulated event bus flush rejection/.test(error.message)))
+    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.closed, true)
+    assert.equal(context.journal.subscription, null)
+  } finally {
+    context.eventBus.flush = EventBus.prototype.flush
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
