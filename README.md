@@ -79,4 +79,14 @@ formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 
 ## Continuous integration
 
-The main GitHub Actions workflow runs `pnpm test` and fails when a package unit test fails. The separate `packages/utils tests` workflow also checks the utility package. Repository branch protection must require the relevant checks if they should block merges.
+GitHub Actions currently runs these checks:
+
+- **Quality Gate** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm run quality` (workspace unit tests plus JavaScript syntax checks).
+- **Unit Tests** runs `pnpm test` independently.
+- **Utils Unit Tests** runs `@coinzilla/utils` tests independently.
+- **Test Coverage** runs workspace tests with Node.js coverage reporting.
+- **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pushes, pull requests, and a weekly schedule.
+
+The Unit Tests and Utils Unit Tests workflows overlap with the Quality Gate. Keep that duplication until repository branch-protection requirements have been reviewed; removing a workflow can invalidate a required status check.
+
+A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the **Quality Gate / Tests and JavaScript syntax** check. Consider requiring coverage and dependency audit as well if their runtime and failure policies are appropriate for every pull request.
