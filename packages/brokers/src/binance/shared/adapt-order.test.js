@@ -57,3 +57,8 @@ describe('adaptOrder', () => {
     )
   })
 })
+
+it("rejects non-numeric exchange quantities", () => {
+  assert.throws(() => adaptOrder({ ...mockedBinanceOrder, origQty: "not-a-number" }))
+  assert.throws(() => adaptOrder({ ...mockedBinanceOrder, executedQty: "not-a-number" }))
+})
