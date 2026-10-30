@@ -1,23 +1,53 @@
-function parseDecimal(value) {
-  const decimal = String(value).trim();
+const MAX_DECIMAL_DIGITS = 256;
+const MAX_DECIMAL_SCALE = 100;
+const MAX_DECIMAL_EXPONENT = 100;
 
-  if (!Number.isFinite(Number(decimal))) {
+function parseDecimal(value) {
+  if (!["string", "number", "bigint"].includes(typeof value)) {
+    throw new Error("Decimal value must be a string, number, or bigint");
+  }
+
+  if (typeof value === "number" && !Number.isFinite(value)) {
     throw new Error("Decimal value must be finite");
   }
 
-  const [coefficient, exponentText = "0"] = decimal
-    .toLowerCase()
-    .split("e");
-  const exponent = Number(exponentText);
-  const [whole, fraction = ""] = coefficient.split(".");
-  const digits = `${whole}${fraction}`.replace(/^\+/, "");
-  const scale = fraction.length - exponent;
+  const decimal = String(value);
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(decimal);
 
-  if (scale < 0) {
-    return { coefficient: BigInt(digits) * 10n ** BigInt(-scale), scale: 0 };
+  if (!match) {
+    throw new Error("Decimal value has an invalid format");
   }
 
-  return { coefficient: BigInt(digits), scale };
+  const [, sign, whole, fraction = "", exponentText = "0"] = match;
+
+  if (whole.length + fraction.length > MAX_DECIMAL_DIGITS || exponentText.length > 4) {
+    throw new Error("Decimal value exceeds supported precision");
+  }
+
+  const exponent = Number(exponentText);
+
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > MAX_DECIMAL_EXPONENT) {
+    throw new Error("Decimal exponent exceeds supported range");
+  }
+
+  const scale = fraction.length - exponent;
+  const digits = `${whole}${fraction}`;
+  const resultingDigits = digits.length + Math.max(0, -scale);
+
+  if (scale > MAX_DECIMAL_SCALE || resultingDigits > MAX_DECIMAL_DIGITS) {
+    throw new Error("Decimal value exceeds supported precision");
+  }
+
+  const coefficient = BigInt(`${sign === "-" ? "-" : ""}${digits}`);
+
+  if (scale < 0) {
+    return {
+      coefficient: coefficient * 10n ** BigInt(-scale),
+      scale: 0,
+    };
+  }
+
+  return { coefficient, scale };
 }
 
 function formatDecimal({ coefficient, scale }) {

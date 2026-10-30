@@ -222,3 +222,48 @@ test("decimal helpers reject invalid decimal input", () => {
   assert.throws(() => addDecimal({ left: "not-a-number", right: "1" }));
   assert.throws(() => compareDecimal({ left: "Infinity", right: "1" }));
 });
+
+test("decimal helpers accept valid signed and scientific decimal strings", () => {
+  assert.equal(addDecimal({ left: "+1.25", right: "2.5e-1" }), "1.5");
+  assert.equal(addDecimal({ left: "-0.5", right: "1" }), "0.5");
+  assert.equal(addDecimal({ left: "1e2", right: "0.01" }), "100.01");
+});
+
+test("decimal helpers reject malformed decimal syntax", () => {
+  for (const value of [
+    "",
+    " ",
+    "NaN",
+    "Infinity",
+    "-Infinity",
+    "1.2.3",
+    "1e",
+    "1e+",
+    "--1",
+    "0x10",
+    ".5",
+    "1e101",
+    "1e-101",
+    "1".repeat(257),
+    "1e00000",
+  ]) {
+    assert.throws(
+      () => addDecimal({ left: value, right: "1" }),
+      { message: /Decimal/ },
+      `Expected ${JSON.stringify(value)} to be rejected`,
+    );
+  }
+});
+
+test("decimal helpers reject unsupported input types and non-finite numbers", () => {
+  for (const value of [null, undefined, true, {}, [], Number.NaN, Infinity, -Infinity]) {
+    assert.throws(() => addDecimal({ left: value, right: "1" }));
+  }
+});
+
+test("decimal helpers enforce the supported scale and exponent limits", () => {
+  assert.equal(addDecimal({ left: "1e-100", right: "0" }), `0.${"0".repeat(99)}1`);
+  assert.equal(addDecimal({ left: "1e100", right: "0" }), `1${"0".repeat(100)}`);
+  assert.throws(() => addDecimal({ left: "1e-101", right: "0" }));
+  assert.throws(() => addDecimal({ left: "1e101", right: "0" }));
+});
