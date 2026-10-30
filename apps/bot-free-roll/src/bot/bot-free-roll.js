@@ -8,7 +8,7 @@ import {
   maxDecimal,
   compareDecimal,
   subtractDecimal,
-  getSellFeeRateExact,
+  getConfiguredSellFeeRateExact,
   getOrderType,
   calculateFillAccountingExact,
   calculateCommissionRateExact,
@@ -95,7 +95,7 @@ export class FreeRollBot {
       }
 
       const orderType = getOrderType({ makerPercent: pair.makerPercent })
-      const configuredFeeRate = getSellFeeRateExact({
+      const configuredFeeRate = getConfiguredSellFeeRateExact({
         makerPercent: pair.makerPercent,
         takerPercent: pair.takerPercent,
       })
