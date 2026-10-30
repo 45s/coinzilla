@@ -19,7 +19,7 @@ describe("adaptUser.executionReport", () => {
       orderRejectReason: "NONE", orderId: 77, orderTime: 11,
       lastTradeQuantity: "0.5", totalTradeQuantity: "1.5", priceLastTrade: "99",
       commission: "0.01", commissionAsset: "BNB", tradeId: 9, isOrderWorking: true,
-      isBuyerMaker: false, creationTime: 8, totalQuoteTradeQuantity: "148.5",
+      isMaker: false, creationTime: 8, totalQuoteTradeQuantity: "148.5",
       orderListId: -1, quoteOrderQuantity: "2.5", lastQuoteTransacted: "49.5",
       trailingTime: 7,
     })
