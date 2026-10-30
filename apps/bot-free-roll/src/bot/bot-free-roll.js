@@ -518,10 +518,11 @@ export class FreeRollBot {
         compareDecimal({ left: remaining, right: "0" }) < 0 ||
         compareDecimal({ left: remaining, right: String(order.quantity) }) < 0
       ) {
+        await this.#reconcileOrderFills({ symbol, order })
         state.cancelingOrderIds.delete(order.id)
         this.#pause(
           symbol,
-          `BUY ${order.id} may have filled during trailing cancellation; reconcile before replacing`,
+          `BUY ${order.id} may have filled during trailing cancellation; reconciled actual fills and paused before replacing`,
         )
         return
       }
