@@ -12,7 +12,7 @@ function parseDecimal(value) {
   }
 
   const decimal = String(value);
-  const match = /^([+-]?)(\\d+)(?:\\.(\\d*))?(?:e([+-]?\\d+))?$/i.exec(decimal);
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(decimal);
 
   if (!match) {
     throw new Error("Decimal value has an invalid format");
