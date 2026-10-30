@@ -7,6 +7,8 @@ import {
   calculatePercentageOf,
   applyPercentageChange,
   calculatePercentageChange,
+  calculateNotional,
+  meetsMinimumNotional,
   addDecimal,
   absoluteDecimal,
   divideDecimal,
@@ -372,4 +374,29 @@ test("percentage helpers reject non-string financial inputs and invalid division
   assert.throws(() => calculatePercentageChange({ from: "0", to: "1", scale: 4, rounding: "half-up" }), { message: "Cannot divide by zero" });
   assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 4 }), { message: /rounding/ });
   assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 99, rounding: "half-up" }));
+});
+
+
+test("notional calculation multiplies exact decimal price and quantity", () => {
+  assert.equal(calculateNotional({ price: "0.1", quantity: "99.9" }), "9.99");
+  assert.equal(calculateNotional({ price: "123456789.123456789", quantity: "0.00000001" }), "1.23456789123456789");
+  assert.equal(calculateNotional({ price: "0.00000001", quantity: "0.00000001" }), "0.0000000000000001");
+});
+
+test("minimum notional check distinguishes below, equal, and above boundaries", () => {
+  const minimum = "10";
+
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "4.999", minNotional: minimum }), false);
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "5", minNotional: minimum }), true);
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "5.001", minNotional: minimum }), true);
+  assert.equal(meetsMinimumNotional({ price: "0.1", quantity: "100", minNotional: "10.0000000000000000001" }), false);
+});
+
+test("notional helpers reject invalid financial inputs", () => {
+  assert.throws(() => calculateNotional({ price: 2, quantity: "5" }), { message: "price must be a decimal string" });
+  assert.throws(() => calculateNotional({ price: "0", quantity: "5" }), { message: "price must be greater than zero" });
+  assert.throws(() => calculateNotional({ price: "-1", quantity: "5" }), { message: "price must be greater than zero" });
+  assert.throws(() => calculateNotional({ price: "2", quantity: "-1" }), { message: "quantity must be non-negative" });
+  assert.throws(() => meetsMinimumNotional({ price: "2", quantity: "5", minNotional: -1 }), { message: "minNotional must be a decimal string" });
+  assert.throws(() => meetsMinimumNotional({ price: "2", quantity: "5", minNotional: "-1" }), { message: "minNotional must be non-negative" });
 });
