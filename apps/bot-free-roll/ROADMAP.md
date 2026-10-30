@@ -214,7 +214,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 ### Stage 0 — Roadmap and baseline (FR-001–FR-006)
 
 - [x] **FR-001 — Establish this roadmap.** Add this document, target architecture, invariants, PR sequencing, AI instructions, and release gates. Acceptance: roadmap is committed in this application and linked from its README.
-- [ ] **FR-002 — Capture current behavior and gaps.** Map each current bot behavior to the invariants above; identify existing Number-based financial paths, estimate-only accounting, and lifecycle assumptions. Acceptance: a concise gap matrix with file/function references and tests.
+- [x] **FR-002 — Capture current behavior and gaps.** Completed in [CURRENT_STATE.md](./CURRENT_STATE.md): file/function gap matrix, severity, existing test map, and recommended implementation order. Runtime test/coverage baseline remains FR-004 and was not claimed by this source audit.
 - [ ] **FR-003 — Define strategy decisions that block correctness.** Resolve initial entry semantics, price source, cost-basis allocation, free-coin allocation after partial recovery, third-asset fee valuation, and treatment of manual wallet activity. Acceptance: approved decisions recorded in README; no implementation silently chooses.
 - [ ] **FR-004 — Establish app test/coverage baseline.** Run and document current app tests and coverage; identify uncovered critical branches. Acceptance: reproducible command and baseline report, no arbitrary coverage target without evidence.
 - [ ] **FR-005 — Add roadmap PR template/checklist guidance.** Ensure future PRs state roadmap ID, invariants, tests, and check results. Acceptance: checklist is usable and does not duplicate repository-wide standards unnecessarily.
@@ -241,7 +241,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 - [ ] **FR-020 — Exact percentage and rate calculations.** Implement percentage points, fee rates, and percentage changes without Number arithmetic. Acceptance: examples and boundary tests cover tiny prices and high precision.
 - [ ] **FR-021 — Exact notional calculation.** Calculate price × quantity and min-notional checks exactly. Acceptance: values at minNotional - one unit, exactly minNotional, and + one unit.
 - [ ] **FR-022 — Trading-rule validator.** Validate tick, step, min/max quantity, notional, price bands, and supported order type from canonical TradingRules. Acceptance: structured rejection reasons, no CEX-specific logic.
-- [ ] **FR-023 — Remove financial Number boundaries from strategy.** Replace Number conversion in position, cost, proceeds, fees, and order plan paths. Acceptance: static review finds no Number arithmetic in financial decisions.
+- [ ] **FR-023 — Remove financial Number boundaries from strategy.** Prerequisite: first repair the existing PR #228 decimal-string integration regression identified in [CURRENT_STATE.md](./CURRENT_STATE.md) (string concatenation and Number conversions in bot accounting). Then replace Number conversion in position, cost, proceeds, fees, and order-plan paths. Acceptance: regression tests cover repeated accumulation and minimum-profit boundaries; static review finds no Number arithmetic in financial decisions.
 - [ ] **FR-024 — Validate market-data freshness and quality.** Define timestamp, sequence/gap, stale, invalid, and crossed/empty quote rules for whichever price source is approved. Acceptance: stale/invalid market data cannot trigger orders.
 - [ ] **FR-025 — Add property-based-style deterministic arithmetic tests.** Use native test runner loops/generators with fixed seeds or exhaustive bounded cases; do not add a dependency without justification. Acceptance: identities, monotonicity, rounding bounds, and no mutation.
 - [ ] **FR-026 — Add decimal regression corpus.** Include real observed precision/filter cases (including prior tick/step and percent-price failures) as fixtures. Acceptance: regressions remain reproducible without network access.
@@ -396,6 +396,8 @@ Paste this section into future AI development prompts or provide the full `READM
 > **Do not optimize for fewer PRs. Optimize for correctness, reviewability, and recoverability.**
 
 ## 11. Current implementation snapshot (2026-10-30)
+
+See [CURRENT_STATE.md](./CURRENT_STATE.md) for the detailed FR-002 source audit, severity-ranked gap matrix, existing test map, and recommended order of work.
 
 This is a snapshot of known repository state when the roadmap was created. Re-check the code before relying on it; it will become stale as PRs merge.
 
