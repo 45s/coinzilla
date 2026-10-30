@@ -30,6 +30,7 @@ import {
   getOrderType,
   getSellFeeRateExact,
   calculateFillAccountingExact,
+  calculateCommissionRateExact,
   calculateSellPlan,
   roundPriceDown,
   roundPriceUp,
@@ -692,4 +693,43 @@ test("third-asset and incomplete commissions fail closed", () => {
     commissionAmount: "0.01",
     commissionAsset: null,
   }), /must include its asset/);
+});
+
+
+test("calculates effective commission rate from the actual commission asset", () => {
+  assert.equal(calculateCommissionRateExact({
+    price: "0.1",
+    quoteQuantity: "10",
+    commissionAmount: "0.075",
+    commissionAsset: "DOGE",
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }), "0.00075");
+
+  assert.equal(calculateCommissionRateExact({
+    price: "0.1",
+    quoteQuantity: "10",
+    commissionAmount: "0.0075",
+    commissionAsset: "USDT",
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }), "0.00075");
+
+  assert.equal(calculateCommissionRateExact({
+    price: "0.1",
+    quoteQuantity: "10",
+    commissionAmount: "0",
+    commissionAsset: null,
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }), "0");
+
+  assert.throws(() => calculateCommissionRateExact({
+    price: "0.1",
+    quoteQuantity: "10",
+    commissionAmount: "0.001",
+    commissionAsset: "BNB",
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }), /Unsupported commission asset/);
 });
