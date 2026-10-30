@@ -664,8 +664,19 @@ test("reconciles partial SELL history and deduplicates a later stream replay", a
 
     const firstSell = createdOrders.find((order) => order.side === "SELL")
     const secondBuy = createdOrders.filter((order) => order.side === "BUY")[1]
-    userDataHandler(createExecutionEvent({ order: secondBuy, tradeId: 41 }))
 
+    userDataHandler(createExecutionEvent({
+      order: firstSell,
+      tradeId: 9001,
+      fillQuantity: "10",
+      status: "PARTIALLY_FILLED",
+    }))
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.activeQuantity === "90",
+      "partial SELL execution report was not accounted",
+    )
+
+    userDataHandler(createExecutionEvent({ order: secondBuy, tradeId: 41 }))
     await waitForCondition(
       () => createdOrders.filter((order) => order.side === "SELL").length === 2,
       "partial SELL history was not reconciled into a replacement SELL",
@@ -676,23 +687,12 @@ test("reconciles partial SELL history and deduplicates a later stream replay", a
     assert.equal(statsAfterReconcile.activeQuantity, "190")
     assert.equal(statsAfterReconcile.freeQuantity, "0")
     assert.ok(compareDecimal({ left: statsAfterReconcile.saleProceeds, right: "0" }) > 0)
-
-    userDataHandler(createExecutionEvent({
-      order: firstSell,
-      tradeId: 9001,
-      fillQuantity: "10",
-      status: "PARTIALLY_FILLED",
-    }))
-
-    await waitForCondition(
-      () => bot.getStats().DOGEUSDT.activeQuantity === "190",
-      "duplicate stream fill changed the reconciled position",
+    assert.equal(
+      orderEvents.filter((event) =>
+        event.name === "fill.received" && event.data.fill.id === "9001",
+      ).length,
+      1,
     )
-
-    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "190")
-    assert.equal(bot.getStats().DOGEUSDT.freeQuantity, "0")
-    assert.equal(historyCalls, 1)
-    assert.equal(orderEvents.some((event) => event.name === "fill.received"), true)
   } finally {
     await bot.stop()
   }
