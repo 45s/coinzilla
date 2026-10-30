@@ -303,6 +303,34 @@ export function calculatePercentageChange({ from, to, scale, rounding }) {
   return multiplyDecimal({ left: ratio, right: "100" });
 }
 
+export function calculateNotional({ price, quantity }) {
+  assertDecimalString(price, "price");
+  assertDecimalString(quantity, "quantity");
+
+  if (compareDecimal({ left: price, right: "0" }) <= 0) {
+    throw new Error("price must be greater than zero");
+  }
+
+  if (compareDecimal({ left: quantity, right: "0" }) < 0) {
+    throw new Error("quantity must be non-negative");
+  }
+
+  return multiplyDecimal({ left: price, right: quantity });
+}
+
+export function meetsMinimumNotional({ price, quantity, minNotional }) {
+  assertDecimalString(minNotional, "minNotional");
+
+  if (compareDecimal({ left: minNotional, right: "0" }) < 0) {
+    throw new Error("minNotional must be non-negative");
+  }
+
+  return compareDecimal({
+    left: calculateNotional({ price, quantity }),
+    right: minNotional,
+  }) >= 0;
+}
+
 function roundToIncrement(value, increment, direction) {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error("Value must be non-negative");
