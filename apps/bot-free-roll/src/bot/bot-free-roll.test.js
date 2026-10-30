@@ -777,6 +777,32 @@ test("preserves unexpected third-asset fees and pauses before placing a SELL", a
   }
 })
 
+test("fails startup when the selected post-only order type is unsupported", async () => {
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({
+        ok: true,
+        data: {
+          ...createMarketFilters(),
+          supportedOrderTypes: ["LIMIT", "MARKET"],
+        },
+      }),
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await assert.rejects(bot.run(), /does not support configured order type LIMIT_MAKER/)
+  assert.equal(bot.getSummary().running, false)
+})
+
 test("fails startup when exact market metadata is unavailable", async () => {
   const bot = new FreeRollBot({
     broker: {
