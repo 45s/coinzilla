@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { FreeRollBot } from "./bot-free-roll.js"
-import { multiplyDecimal, compareDecimal } from "./helpers/helpers.js"
+import { multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/helpers.js"
 
 function waitForCondition(predicate, message, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
@@ -48,8 +48,17 @@ function createMarketFilters() {
   }
 }
 
-function createExecutionEvent({ order, tradeId, commissionAmount = "0", commissionAsset = null, isMaker = true }) {
-  const quantity = String(order.quantity)
+function createExecutionEvent({
+  order,
+  tradeId,
+  commissionAmount = "0",
+  commissionAsset = null,
+  isMaker = true,
+  fillQuantity,
+  status = "FILLED",
+}) {
+  const orderQuantity = String(order.quantity)
+  const quantity = String(fillQuantity ?? orderQuantity)
   const price = String(order.price)
 
   return {
@@ -545,6 +554,145 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
 
     assert.equal(bot.getStats().DOGEUSDT.paused, true)
     assert.ok(events.some((event) => event.name === "bot.pair_paused"))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("reconciles partial SELL history and deduplicates a later stream replay", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const orderEvents = []
+  let userDataHandler
+  let cancelledOrder
+  let historyCalls = 0
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = {
+          ...order,
+          orderId: `${order.side}-${createdOrders.length + 1}`,
+        }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+      cancelOrder: async ({ orderId }) => {
+        cancelledOrder = createdOrders.find((order) => order.orderId === orderId)
+        assert.ok(cancelledOrder)
+        const executedQuantity = "10"
+        return {
+          ok: true,
+          data: {
+            orderId,
+            originalQuantity: String(cancelledOrder.quantity),
+            executedQuantity,
+            quantity: subtractDecimal({
+              left: String(cancelledOrder.quantity),
+              right: executedQuantity,
+            }),
+            status: "CANCELED",
+          },
+        }
+      },
+      getMyTrades: async ({ symbol, orderId }) => {
+        historyCalls += 1
+        assert.equal(symbol, "DOGEUSDT")
+        assert.equal(orderId, cancelledOrder.orderId)
+        return {
+          ok: true,
+          data: [{
+            id: "9001",
+            orderId,
+            symbol,
+            side: "SELL",
+            price: String(cancelledOrder.price),
+            quantity: "10",
+            quoteQuantity: multiplyDecimal({
+              left: "10",
+              right: String(cancelledOrder.price),
+            }),
+            commissionAmount: "0",
+            commissionAsset: null,
+            isMaker: true,
+            time: 9001,
+          }],
+        }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        orderEvents.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    const firstBuy = createdOrders.find((order) => order.side === "BUY")
+    userDataHandler(createExecutionEvent({ order: firstBuy, tradeId: 40 }))
+
+    await waitForCondition(
+      () => createdOrders.filter((order) => order.side === "BUY").length === 2 &&
+        createdOrders.filter((order) => order.side === "SELL").length === 1,
+      "first BUY did not create the recovery SELL and next BUY",
+    )
+
+    const firstSell = createdOrders.find((order) => order.side === "SELL")
+    const secondBuy = createdOrders.filter((order) => order.side === "BUY")[1]
+    userDataHandler(createExecutionEvent({ order: secondBuy, tradeId: 41 }))
+
+    await waitForCondition(
+      () => createdOrders.filter((order) => order.side === "SELL").length === 2,
+      "partial SELL history was not reconciled into a replacement SELL",
+    )
+
+    const statsAfterReconcile = bot.getStats().DOGEUSDT
+    assert.equal(historyCalls, 1)
+    assert.equal(statsAfterReconcile.activeQuantity, "190")
+    assert.equal(statsAfterReconcile.freeQuantity, "0")
+    assert.ok(compareDecimal({ left: statsAfterReconcile.saleProceeds, right: "0" }) > 0)
+
+    userDataHandler(createExecutionEvent({
+      order: firstSell,
+      tradeId: 9001,
+      fillQuantity: "10",
+      status: "PARTIALLY_FILLED",
+    }))
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.activeQuantity === "190",
+      "duplicate stream fill changed the reconciled position",
+    )
+
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "190")
+    assert.equal(bot.getStats().DOGEUSDT.freeQuantity, "0")
+    assert.equal(historyCalls, 1)
+    assert.equal(orderEvents.some((event) => event.name === "fill.received"), true)
   } finally {
     await bot.stop()
   }
