@@ -807,7 +807,7 @@ test("does not reserve SELL commission when actual BUY fills were commission-fre
         "free-roll": {
           settings: { minProfit: 0.01 },
           pairs: {
-            DOGEUSDT: createPair({ makerPercent: 0.075, takerPercent: 0.075 }),
+            DOGEUSDT: createPair({ makerPercent: 0, takerPercent: 0.075 }),
           },
         },
       },
@@ -822,7 +822,7 @@ test("does not reserve SELL commission when actual BUY fills were commission-fre
       "BUY was not created",
     )
     const buy = createdOrders.find((order) => order.side === "BUY")
-    assert.equal(buy.type, "LIMIT")
+    assert.equal(buy.type, "LIMIT_MAKER")
 
     userDataHandler(createExecutionEvent({
       order: buy,
@@ -836,7 +836,7 @@ test("does not reserve SELL commission when actual BUY fills were commission-fre
       new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
     ])
 
-    assert.equal(sell.type, "LIMIT")
+    assert.equal(sell.type, "LIMIT_MAKER")
     assert.equal(bot.getStats().DOGEUSDT.actualCommissionRate, "0")
     assert.equal(bot.getStats().DOGEUSDT.feeRate, "0")
   } finally {
