@@ -27,6 +27,9 @@ import {
   estimateBuyAccountingExact,
   estimateSellAccountingExact,
   calculateSellPlanExact,
+  getOrderType,
+  getSellFeeRateExact,
+  calculateFillAccountingExact,
   calculateSellPlan,
   roundPriceDown,
   roundPriceUp,
@@ -586,4 +589,105 @@ test("exact repeated position accumulation and minimum-profit boundary do not dr
   const required = addDecimal({ left: cycleCost, right: "0.01" });
   assert.equal(compareDecimal({ left: "1.01", right: required }), 0);
   assert.equal(compareDecimal({ left: "1.00999999", right: required }), -1);
+});
+
+
+test("zero maker commission selects post-only orders and zero SELL fee reserve", () => {
+  assert.equal(getOrderType({ makerPercent: 0 }), "LIMIT_MAKER");
+  assert.equal(getSellFeeRateExact({ makerPercent: 0, takerPercent: 0.075 }), "0");
+  assert.equal(getOrderType({ makerPercent: 0.075 }), "LIMIT");
+  assert.equal(getSellFeeRateExact({ makerPercent: 0.075, takerPercent: 0.1 }), "0.001");
+});
+
+test("actual BUY commissions are applied in the asset Binance charged", () => {
+  assert.deepEqual(calculateFillAccountingExact({
+    side: "BUY",
+    quantity: "100",
+    quoteQuantity: "10",
+    commissionAmount: "0.075",
+    commissionAsset: "DOGE",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  }), {
+    baseQuantity: "99.925",
+    quoteQuantity: "10",
+  });
+
+  assert.deepEqual(calculateFillAccountingExact({
+    side: "BUY",
+    quantity: "100",
+    quoteQuantity: "10",
+    commissionAmount: "0.01",
+    commissionAsset: "FDUSD",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  }), {
+    baseQuantity: "100",
+    quoteQuantity: "10.01",
+  });
+});
+
+test("actual SELL commissions are applied in the asset Binance charged", () => {
+  assert.deepEqual(calculateFillAccountingExact({
+    side: "SELL",
+    quantity: "50",
+    quoteQuantity: "5",
+    commissionAmount: "0.0375",
+    commissionAsset: "FDUSD",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  }), {
+    baseQuantity: "50",
+    quoteQuantity: "4.9625",
+  });
+
+  assert.deepEqual(calculateFillAccountingExact({
+    side: "SELL",
+    quantity: "50",
+    quoteQuantity: "5",
+    commissionAmount: "0.01",
+    commissionAsset: "DOGE",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  }), {
+    baseQuantity: "50.01",
+    quoteQuantity: "5",
+  });
+});
+
+test("zero commissions do not require an inferred commission asset", () => {
+  assert.deepEqual(calculateFillAccountingExact({
+    side: "BUY",
+    quantity: "10",
+    quoteQuantity: "2",
+    commissionAmount: "0",
+    commissionAsset: null,
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  }), {
+    baseQuantity: "10",
+    quoteQuantity: "2",
+  });
+});
+
+test("third-asset and incomplete commissions fail closed", () => {
+  const base = {
+    side: "BUY",
+    quantity: "10",
+    quoteQuantity: "2",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
+  };
+
+  assert.throws(() => calculateFillAccountingExact({
+    ...base,
+    commissionAmount: "0.01",
+    commissionAsset: "BNB",
+  }), /Unsupported commission asset/);
+
+  assert.throws(() => calculateFillAccountingExact({
+    ...base,
+    commissionAmount: "0.01",
+    commissionAsset: null,
+  }), /must include its asset/);
 });
