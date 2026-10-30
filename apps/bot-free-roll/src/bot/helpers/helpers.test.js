@@ -20,6 +20,7 @@ import {
   roundPriceDown,
   roundPriceUp,
   roundQuantityDown,
+  roundDecimalToIncrement,
 } from "./helpers.js"
 
 test("calculateBuyThreshold applies a percentage drop to the initial reference price", () => {
@@ -310,4 +311,26 @@ test("rescale decimal applies explicit rounding when reducing precision", () => 
   assert.equal(rescaleDecimal({ value: "-1.235", scale: 2, rounding: "half-up" }), "-1.24");
   assert.equal(rescaleDecimal({ value: "1.2", scale: 4 }), "1.2");
   assert.throws(() => rescaleDecimal({ value: "1.234", scale: 2 }), /rounding/);
+});
+
+
+test("exact increment rounding uses decimal strings and explicit direction", () => {
+  assert.equal(roundDecimalToIncrement({ value: "1.234", increment: "0.01", direction: "down" }), "1.23");
+  assert.equal(roundDecimalToIncrement({ value: "1.231", increment: "0.01", direction: "up" }), "1.24");
+  assert.equal(roundDecimalToIncrement({ value: "1.235", increment: "0.01", direction: "nearest" }), "1.24");
+  assert.equal(roundDecimalToIncrement({ value: "1.234", increment: "0.01", direction: "nearest" }), "1.23");
+  assert.equal(roundDecimalToIncrement({ value: "0.3", increment: "0.1", direction: "down" }), "0.3");
+});
+
+test("exact increment rounding supports large and tiny increments", () => {
+  assert.equal(roundDecimalToIncrement({ value: "12345678901234567890.123", increment: "0.05", direction: "down" }), "12345678901234567890.1");
+  assert.equal(roundDecimalToIncrement({ value: "0.00000000000000012349", increment: "0.0000000000000000001", direction: "down" }), "0.0000000000000001234");
+  assert.equal(roundDecimalToIncrement({ value: "0.00000000000000012349", increment: "0.0000000000000000001", direction: "up" }), "0.0000000000000001235");
+});
+
+test("exact increment rounding handles disabled increments and rejects unsafe inputs", () => {
+  assert.equal(roundDecimalToIncrement({ value: "1.2300", increment: "0", direction: "down" }), "1.23");
+  assert.throws(() => roundDecimalToIncrement({ value: 1.23, increment: "0.01", direction: "down" }), /decimal strings/);
+  assert.throws(() => roundDecimalToIncrement({ value: "1", increment: "-0.01", direction: "down" }), /non-negative/);
+  assert.throws(() => roundDecimalToIncrement({ value: "1", increment: "0.01", direction: "sideways" }), /direction/);
 });
