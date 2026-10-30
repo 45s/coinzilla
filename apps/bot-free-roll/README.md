@@ -651,12 +651,12 @@ This decision selects the price source only. Freshness thresholds, stream-gap ha
 
 These questions remain unresolved and must not be silently guessed during implementation.
 
-3. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-4. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, especially when the sell order partially fills or is canceled?
-5. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
-6. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
-7. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
-8. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
+1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
+2. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, especially when the sell order partially fills or is canceled?
+3. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
+4. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
+5. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
+6. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
 
 Ask only the question that blocks the current design decision. Do not overwhelm the user with every open question at once.
 
