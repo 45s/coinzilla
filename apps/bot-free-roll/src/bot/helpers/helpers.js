@@ -377,6 +377,22 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
     }
   }
 
+  if (rules.referencePrice !== undefined && compareDecimal({ left: rules.referencePrice, right: "0" }) <= 0) {
+    throw new Error("rules.referencePrice must be greater than zero");
+  }
+
+  for (const [minimum, maximum, label] of [
+    ["minQuantity", "maxQuantity", "quantity"],
+    ["minNotional", "maxNotional", "notional"],
+    ["minPrice", "maxPrice", "price"],
+    ["minPriceMultiplier", "maxPriceMultiplier", "price multiplier"],
+  ]) {
+    if (rules[minimum] !== undefined && rules[maximum] !== undefined &&
+        compareDecimal({ left: rules[minimum], right: rules[maximum] }) > 0) {
+      throw new Error(`rules.${minimum} must not exceed rules.${maximum} (${label})`);
+    }
+  }
+
   const hasPercentBand = rules.minPriceMultiplier !== undefined || rules.maxPriceMultiplier !== undefined;
   if (hasPercentBand && (rules.referencePrice === undefined ||
       (rules.minPriceMultiplier === undefined || rules.maxPriceMultiplier === undefined))) {
@@ -401,14 +417,14 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
     reject("UNSUPPORTED_ORDER_TYPE", "type", `Order type ${String(order.type)} is not supported`);
   }
 
-  if (compareDecimal({
+  if (compareDecimal({ left: order.price, right: "0" }) > 0 && compareDecimal({
     left: roundDecimalToIncrement({ value: order.price, increment: rules.priceIncrement, direction: "down" }),
     right: order.price,
   }) !== 0) {
     reject("PRICE_INCREMENT", "price", "Price is not aligned to the configured price increment");
   }
 
-  if (compareDecimal({
+  if (compareDecimal({ left: order.quantity, right: "0" }) > 0 && compareDecimal({
     left: roundDecimalToIncrement({ value: order.quantity, increment: rules.quantityIncrement, direction: "down" }),
     right: order.quantity,
   }) !== 0) {
@@ -431,9 +447,12 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
   checkMinimum(order.price, rules.minPrice, "MIN_PRICE", "price", "Price");
   checkMaximum(order.price, rules.maxPrice, "MAX_PRICE", "price", "Price");
 
-  const notional = calculateNotional({ price: order.price, quantity: order.quantity });
-  checkMinimum(notional, rules.minNotional, "MIN_NOTIONAL", "notional", "Notional");
-  checkMaximum(notional, rules.maxNotional, "MAX_NOTIONAL", "notional", "Notional");
+  if (compareDecimal({ left: order.price, right: "0" }) > 0 &&
+      compareDecimal({ left: order.quantity, right: "0" }) > 0) {
+    const notional = calculateNotional({ price: order.price, quantity: order.quantity });
+    checkMinimum(notional, rules.minNotional, "MIN_NOTIONAL", "notional", "Notional");
+    checkMaximum(notional, rules.maxNotional, "MAX_NOTIONAL", "notional", "Notional");
+  }
 
   if (hasPercentBand) {
     const lowerPrice = multiplyDecimal({ left: rules.referencePrice, right: rules.minPriceMultiplier });
