@@ -3,7 +3,6 @@ import {
   createKeyedQueue,
   disconnectSubscriptions,
   validateConfig,
-  calculateBuyThreshold,
   calculateBuyThresholdExact,
   addDecimal,
   maxDecimal,
@@ -771,7 +770,7 @@ export class FreeRollBot {
 
     state.buyOrder = null
     state.trailingBuy = false
-    state.lastBuyPrice = Number(order.price)
+    state.lastBuyPrice = String(order.price)
     state.buyFills += 1
 
     this.#debug(`[${symbol}] BUY fills reconciled`, {
@@ -959,10 +958,10 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused || state.buyOrder) return
 
-    const threshold = calculateBuyThreshold({
-      referencePrice: state.referencePrice,
+    const threshold = calculateBuyThresholdExact({
+      referencePrice: String(state.referencePrice),
       lastBuyPrice: state.lastBuyPrice,
-      priceStepPercent: state.settings.priceStepPercent,
+      priceStepPercent: String(state.settings.priceStepPercent),
     })
 
     this.#debug(`[${symbol}] Scheduling next BUY`, {
