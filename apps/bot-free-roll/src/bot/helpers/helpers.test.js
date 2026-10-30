@@ -157,5 +157,5 @@ test("tick and step rounding uses exact decimal increments", () => {
   assert.equal(roundPriceDown(1.5532230000000002, 0.001), 1.553);
   assert.equal(roundPriceUp(1.5530000000000002, 0.001), 1.554);
   assert.equal(roundQuantityDown(0.3, 0.1), 0.3);
-  assert.equal(roundQuantityDown(0.29999999999999999, 0.1), 0.2);
+  assert.equal(roundQuantityDown(0.29999999999999993, 0.1), 0.2);
 });
