@@ -524,6 +524,7 @@ export class FreeRollBot {
       if (
         status === "FILLED" ||
         compareDecimal({ left: remaining, right: "0" }) < 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) > 0 ||
         compareDecimal({ left: remaining, right: String(order.quantity) }) < 0
       ) {
         await this.#reconcileOrderFills({ symbol, order })
@@ -810,8 +811,11 @@ export class FreeRollBot {
           })
         : String(canceled?.quantity)
 
-      if (compareDecimal({ left: remaining, right: "0" }) < 0) {
-        throw new Error("Cannot determine remaining quantity after cancel")
+      if (
+        compareDecimal({ left: remaining, right: "0" }) < 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) > 0
+      ) {
+        throw new Error("Cannot determine a valid remaining quantity after cancel")
       }
 
       await this.#reconcileOrderFills({ symbol, order })
@@ -1138,6 +1142,11 @@ export class FreeRollBot {
     }
 
     for (const fill of fills) {
+      if (String(fill?.orderId) !== String(order.id) ||
+          fill?.symbol !== symbol ||
+          fill?.side !== order.side) {
+        throw new Error(`Trade history returned a fill outside order ${order.id}`)
+      }
       if (!this.#applyExecutionFill({ symbol, fill })) {
         throw new Error(`Could not account trade fill ${fill?.id ?? "unknown"}`)
       }
