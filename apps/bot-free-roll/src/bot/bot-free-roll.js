@@ -28,6 +28,7 @@ export class FreeRollBot {
   logger = logger
 
   #isRunning = false
+  #isEnabled = true
   #subscriptions = new Map()
   #userDataSubscription = null
   #states = new Map()
@@ -43,7 +44,9 @@ export class FreeRollBot {
       throw new AggregateError(validation.errors, "Invalid FreeRollBot config")
     }
 
-    const { pairs, settings = {} } = tradingConfig.strategies["free-roll"]
+    const strategy = tradingConfig.strategies["free-roll"]
+    const { pairs, settings = {} } = strategy
+    this.#isEnabled = strategy.enabled !== false
 
     if (!broker || !pairs || typeof pairs !== "object") {
       throw new Error("FreeRollBot requires broker and pairs")
@@ -73,7 +76,7 @@ export class FreeRollBot {
     }
 
     for (const [symbol, pair] of Object.entries(pairs)) {
-      if (pair.enabled === false) {
+      if (!this.#isEnabled || pair.enabled === false) {
         this.#debug(`[${symbol}] Disabled; skipping`)
         continue
       }
@@ -163,6 +166,11 @@ export class FreeRollBot {
   async run() {
     if (this.#isRunning) {
       this.#debug("run() ignored; bot already running")
+      return
+    }
+
+    if (!this.#isEnabled) {
+      this.#debug("Free-Roll strategy disabled; skipping startup")
       return
     }
 
