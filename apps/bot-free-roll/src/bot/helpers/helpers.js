@@ -1,3 +1,93 @@
+function parseDecimal(value) {
+  if (!Number.isFinite(value)) {
+    throw new Error("Decimal value must be finite");
+  }
+
+  const [coefficient, exponentText = "0"] = String(value)
+    .toLowerCase()
+    .split("e");
+  const exponent = Number(exponentText);
+  const [whole, fraction = ""] = coefficient.split(".");
+  const digits = `${whole}${fraction}`.replace(/^\+/, "");
+  const scale = fraction.length - exponent;
+
+  if (scale < 0) {
+    return { coefficient: BigInt(digits) * 10n ** BigInt(-scale), scale: 0 };
+  }
+
+  return { coefficient: BigInt(digits), scale };
+}
+
+function formatDecimal({ coefficient, scale }) {
+  const negative = coefficient < 0n;
+  const absolute = negative ? -coefficient : coefficient;
+  const digits = absolute.toString().padStart(scale + 1, "0");
+  const value =
+    scale === 0
+      ? digits
+      : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+  const normalized = value.includes(".")
+    ? value.replace(/0+$/, "").replace(/\.$/, "")
+    : value;
+
+  return Number(`${negative ? "-" : ""}${normalized}`);
+}
+
+function alignDecimals(left, right) {
+  const scale = Math.max(left.scale, right.scale);
+
+  return {
+    left: left.coefficient * 10n ** BigInt(scale - left.scale),
+    right: right.coefficient * 10n ** BigInt(scale - right.scale),
+    scale,
+  };
+}
+
+function roundToIncrement(value, increment, direction) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("Value must be non-negative");
+  }
+
+  if (!Number.isFinite(increment) || increment < 0) {
+    throw new Error("Increment must be non-negative");
+  }
+
+  if (increment === 0) {
+    const factor = 100_000_000n;
+    const scaled = parseDecimal(value);
+    const aligned = alignDecimals(scaled, { coefficient: 1n, scale: 8 });
+    const integer = direction === "up"
+      ? (aligned.left + aligned.right - 1n) / aligned.right
+      : aligned.left / aligned.right;
+    return Number(integer) / Number(factor);
+  }
+
+  const parsedValue = parseDecimal(value);
+  const parsedIncrement = parseDecimal(increment);
+  const { left, right } = alignDecimals(parsedValue, parsedIncrement);
+  const quotient = left / right;
+  const remainder = left % right;
+  const units =
+    direction === "up" && remainder !== 0n ? quotient + 1n : quotient;
+
+  return formatDecimal({
+    coefficient: units * parsedIncrement.coefficient,
+    scale: parsedIncrement.scale,
+  });
+}
+
+function calculatePercentageDrop({ price, percent }) {
+  const parsedPrice = parseDecimal(price);
+  const parsedPercent = parseDecimal(percent);
+  const denominator = 10n ** BigInt(parsedPercent.scale + 2);
+  const numerator = denominator - parsedPercent.coefficient;
+
+  return formatDecimal({
+    coefficient: parsedPrice.coefficient * numerator,
+    scale: parsedPrice.scale + parsedPercent.scale + 2,
+  });
+}
+
 export function getOrderId(order) {
   const id = order?.id ?? order?.orderId ?? order?.orderID
   return id == null ? null : String(id)
@@ -46,66 +136,43 @@ export function calculateBuyThreshold({
     throw new Error("Invalid buy threshold inputs")
   }
 
-  return basePrice * (1 - priceStepPercent / 100)
-}
-
-function getTickPrecision(tickSize) {
-  const [coefficient, exponent = "0"] = tickSize.toString().toLowerCase().split("e")
-  return Math.max(0, (coefficient.split(".")[1]?.length ?? 0) - Number(exponent))
+  return calculatePercentageDrop({ price: basePrice, percent: priceStepPercent })
 }
 
 export function roundPriceDown(price, tickSize = 0) {
   if (!Number.isFinite(price) || price <= 0) {
-    throw new Error("Price must be positive")
+    throw new Error("Price must be positive");
   }
 
   if (!Number.isFinite(tickSize) || tickSize < 0) {
-    throw new Error("tickSize must be non-negative")
+    throw new Error("tickSize must be non-negative");
   }
 
-  if (tickSize === 0) {
-    return Math.floor(price * 1e8) / 1e8
-  }
-
-  const precision = getTickPrecision(tickSize)
-  const ticks = Math.floor((price + tickSize * 1e-10) / tickSize)
-  return Number((ticks * tickSize).toFixed(precision))
+  return roundToIncrement(price, tickSize, "down");
 }
 
 export function roundPriceUp(price, tickSize = 0) {
   if (!Number.isFinite(price) || price <= 0) {
-    throw new Error("Price must be positive")
+    throw new Error("Price must be positive");
   }
 
   if (!Number.isFinite(tickSize) || tickSize < 0) {
-    throw new Error("tickSize must be non-negative")
+    throw new Error("tickSize must be non-negative");
   }
 
-  if (tickSize === 0) {
-    return Math.ceil(price * 1e8) / 1e8
-  }
-
-  const precision = getTickPrecision(tickSize)
-  const ticks = Math.ceil((price - tickSize * 1e-10) / tickSize)
-  return Number((ticks * tickSize).toFixed(precision))
+  return roundToIncrement(price, tickSize, "up");
 }
 
 export function roundQuantityDown(quantity, stepSize = 0) {
   if (!Number.isFinite(quantity) || quantity < 0) {
-    throw new Error("Quantity must be non-negative")
+    throw new Error("Quantity must be non-negative");
   }
 
   if (!Number.isFinite(stepSize) || stepSize < 0) {
-    throw new Error("stepSize must be non-negative")
+    throw new Error("stepSize must be non-negative");
   }
 
-  if (stepSize === 0) {
-    return Math.floor(quantity * 1e8) / 1e8
-  }
-
-  const precision = getTickPrecision(stepSize)
-  const steps = Math.floor((quantity + stepSize * 1e-10) / stepSize)
-  return Number((steps * stepSize).toFixed(precision))
+  return roundToIncrement(quantity, stepSize, "down");
 }
 
 export function calculateSellPlan({
