@@ -612,7 +612,7 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
-      state.buyOrder = { id, quantity, price: String(price) }
+      state.buyOrder = { id, side: "BUY", quantity, price: String(price) }
       state.lastAdjustmentPrice = Number(
         (price / (1 - state.settings.priceStepPercent / 100)).toFixed(
           state.settings.pricePrecision,
@@ -907,6 +907,7 @@ export class FreeRollBot {
 
       state.sellOrder = {
         id,
+        side: "SELL",
         quantity: plan.quantity,
         price: plan.price,
       }
