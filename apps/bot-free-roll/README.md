@@ -192,7 +192,7 @@ The configured maker rate also selects the order type for both BUY and SELL:
 - `makerPercent: 0` — submit `LIMIT_MAKER` (post-only). Binance must reject an order that would immediately take liquidity. An accepted order can only fill as maker. The expected SELL fee reserve is zero, but actual fill commission is still recorded and checked.
 - `makerPercent > 0` — submit regular `LIMIT`. It may execute as maker or taker, so the SELL fee reserve uses the higher configured maker/taker rate. Actual BUY and SELL commissions always replace estimates in accounting.
 
-`LIMIT_MAKER` does not guarantee an order will be accepted or filled, and maker execution does not universally guarantee zero commission. The configured zero maker rate must match the effective account/symbol fee schedule. If the exchange reports an unexpected non-zero fee, actual accounting uses it.
+`LIMIT_MAKER` does not guarantee an order will be accepted or filled. If Binance rejects it because it would immediately match, the pair pauses; the bot must not silently fall back to a regular LIMIT order. Maker execution also does not universally guarantee zero commission. The configured zero maker rate must match the effective account/symbol fee schedule. If the exchange reports an unexpected non-zero fee, actual accounting uses it.
 
 A regular LIMIT order may execute immediately as taker. Its actual commission is read from each fill and included in the recovery calculation.
 
