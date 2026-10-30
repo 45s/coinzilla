@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { FreeRollBot } from "./bot-free-roll.js"
-import { multiplyDecimal } from "./helpers/helpers.js"
+import { multiplyDecimal, compareDecimal } from "./helpers/helpers.js"
 
 function waitForCondition(predicate, message, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
@@ -48,7 +48,7 @@ function createMarketFilters() {
   }
 }
 
-function createExecutionEvent({ order, tradeId, commissionAmount = "0", commissionAsset = null }) {
+function createExecutionEvent({ order, tradeId, commissionAmount = "0", commissionAsset = null, isMaker = true }) {
   const quantity = String(order.quantity)
   const price = String(order.price)
 
@@ -73,7 +73,7 @@ function createExecutionEvent({ order, tradeId, commissionAmount = "0", commissi
       quoteQuantity: multiplyDecimal({ left: quantity, right: price }),
       commissionAmount,
       commissionAsset,
-      isMaker: true,
+      isMaker,
       time: tradeId,
     },
   }
@@ -372,6 +372,116 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
     assert.ok(createdOrders.every((order) => order.type === "LIMIT_MAKER"))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recovery plan", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  const buyCreated = new Promise((resolve) => {
+    createdOrders.resolveBuy = resolve
+  })
+  const sellCreated = new Promise((resolve) => {
+    createdOrders.resolveSell = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created" && event.data.side === "BUY") {
+          createdOrders.resolveBuy(event.data)
+        }
+        if (event.name === "order.created" && event.data.side === "SELL") {
+          createdOrders.resolveSell(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: {
+            DOGEUSDT: createPair({ makerPercent: 0.075, takerPercent: 0.075 }),
+          },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+
+    const buy = await Promise.race([
+      buyCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
+    ])
+    assert.equal(buy.type, "LIMIT")
+
+    userDataHandler(createExecutionEvent({
+      order: { ...buy, side: "BUY" },
+      tradeId: 20,
+      commissionAmount: "0.075",
+      commissionAsset: "DOGE",
+      isMaker: false,
+    }))
+
+    const sell = await Promise.race([
+      sellCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
+    ])
+    assert.equal(sell.type, "LIMIT")
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "99.925")
+    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10000")
+
+    const grossQuote = multiplyDecimal({
+      left: String(sell.quantity),
+      right: String(sell.price),
+    })
+    const sellCommission = multiplyDecimal({ left: grossQuote, right: "0.00075" })
+
+    userDataHandler(createExecutionEvent({
+      order: { ...sell, side: "SELL" },
+      tradeId: 21,
+      commissionAmount: sellCommission,
+      commissionAsset: "USDT",
+      isMaker: false,
+    }))
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.profitableCycles === 1,
+      "actual commission recovery did not complete",
+    )
+
+    const stats = bot.getStats().DOGEUSDT
+    assert.equal(stats.commissionTotals.DOGE, "0.075")
+    assert.equal(stats.commissionTotals.USDT, sellCommission)
+    assert.equal(stats.buyFills, 1)
+    assert.equal(stats.sellFills, 1)
+    assert.equal(stats.profitableCycles, 1)
+    assert.ok(compareDecimal({
+      left: stats.estimatedRealizedProfit,
+      right: "0.01",
+    }) >= 0)
   } finally {
     await bot.stop()
   }
