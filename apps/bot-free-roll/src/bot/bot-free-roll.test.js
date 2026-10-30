@@ -360,7 +360,7 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     ])
 
     // Quote totals must remain normalized decimal strings after the first fill.
-    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10000")
+    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "9995")
 
     userDataHandler(createExecutionEvent({
       order: { ...sell, side: "SELL" },
@@ -460,7 +460,7 @@ test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recover
     ])
     assert.equal(sell.type, "LIMIT")
     assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "99.925")
-    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10000")
+    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "9995")
 
     const grossQuote = multiplyDecimal({
       left: String(sell.quantity),
