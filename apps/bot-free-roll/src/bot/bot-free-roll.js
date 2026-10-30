@@ -759,7 +759,7 @@ export class FreeRollBot {
 
     state.buyOrder = null
     state.trailingBuy = false
-    state.lastBuyPrice = order.price
+    state.lastBuyPrice = Number(order.price)
     state.buyFills += 1
 
     this.#debug(`[${symbol}] BUY fills reconciled`, {
