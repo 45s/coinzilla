@@ -844,6 +844,80 @@ test("does not reserve SELL commission when actual BUY fills were commission-fre
   }
 })
 
+test("raises SELL fee coverage when a zero-maker pair reports an actual BUY commission", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  let resolveSellCreated
+  const sellCreated = new Promise((resolve) => {
+    resolveSellCreated = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `${order.side}-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created" && event.data.side === "SELL") {
+          resolveSellCreated(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair({ makerPercent: 0, takerPercent: 0.075 }) },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "BUY was not created",
+    )
+    const buy = createdOrders.find((order) => order.side === "BUY")
+    assert.equal(buy.type, "LIMIT_MAKER")
+
+    userDataHandler(createExecutionEvent({
+      order: buy,
+      tradeId: 51,
+      commissionAmount: "0.075",
+      commissionAsset: "DOGE",
+    }))
+
+    const sell = await Promise.race([
+      sellCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
+    ])
+
+    assert.equal(sell.type, "LIMIT_MAKER")
+    assert.equal(bot.getStats().DOGEUSDT.actualCommissionRate, "0.00075")
+    assert.equal(bot.getStats().DOGEUSDT.feeRate, "0.00075")
+  } finally {
+    await bot.stop()
+  }
+})
+
 test("preserves unexpected third-asset fees and pauses before placing a SELL", async () => {
   const events = []
   const priceHandlers = new Map()
