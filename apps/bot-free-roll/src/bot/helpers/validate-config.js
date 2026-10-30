@@ -4,8 +4,11 @@ export function validateConfig(input) {
   const { broker, tradingConfig } = input ?? {}
   const errors = []
 
-  if (!broker) {
-    errors.push(new Error("Bot requires a broker"))
+  const strategyEnabled =
+    tradingConfig?.strategies?.["free-roll"]?.enabled !== false
+
+  if (!broker && strategyEnabled) {
+    errors.push(new Error("Bot requires a broker when the strategy is enabled"))
   }
 
   const { pairs } = tradingConfig?.strategies?.["free-roll"] ?? {}
