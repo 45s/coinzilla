@@ -269,6 +269,68 @@ export function roundDecimalToIncrement({ value, increment, direction }) {
   });
 }
 
+function assertDecimalString(value, name) {
+  if (typeof value !== "string") {
+    throw new Error(`${name} must be a decimal string`);
+  }
+}
+
+export function percentageToRate({ percent }) {
+  assertDecimalString(percent, "percent");
+  return multiplyDecimal({ left: percent, right: "0.01" });
+}
+
+export function calculatePercentageOf({ value, percent }) {
+  assertDecimalString(value, "value");
+  return multiplyDecimal({ left: value, right: percentageToRate({ percent }) });
+}
+
+export function applyPercentageChange({ value, percent }) {
+  assertDecimalString(value, "value");
+  const change = calculatePercentageOf({ value, percent });
+  return addDecimal({ left: value, right: change });
+}
+
+export function calculatePercentageChange({ from, to, scale, rounding }) {
+  assertDecimalString(from, "from");
+  assertDecimalString(to, "to");
+  validateScale(scale);
+  if (scale > MAX_DECIMAL_SCALE - 2) {
+    throw new Error(`scale must not exceed ${MAX_DECIMAL_SCALE - 2} for percentage calculations`);
+  }
+  const difference = subtractDecimal({ left: to, right: from });
+  const ratio = divideDecimal({ left: difference, right: from, scale: scale + 2, rounding });
+  return multiplyDecimal({ left: ratio, right: "100" });
+}
+
+export function calculateNotional({ price, quantity }) {
+  assertDecimalString(price, "price");
+  assertDecimalString(quantity, "quantity");
+
+  if (compareDecimal({ left: price, right: "0" }) <= 0) {
+    throw new Error("price must be greater than zero");
+  }
+
+  if (compareDecimal({ left: quantity, right: "0" }) < 0) {
+    throw new Error("quantity must be non-negative");
+  }
+
+  return multiplyDecimal({ left: price, right: quantity });
+}
+
+export function meetsMinimumNotional({ price, quantity, minNotional }) {
+  assertDecimalString(minNotional, "minNotional");
+
+  if (compareDecimal({ left: minNotional, right: "0" }) < 0) {
+    throw new Error("minNotional must be non-negative");
+  }
+
+  return compareDecimal({
+    left: calculateNotional({ price, quantity }),
+    right: minNotional,
+  }) >= 0;
+}
+
 function roundToIncrement(value, increment, direction) {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error("Value must be non-negative");

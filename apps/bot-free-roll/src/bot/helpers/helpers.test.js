@@ -3,6 +3,12 @@ import assert from "node:assert/strict"
 
 import {
   calculateBuyThreshold,
+  percentageToRate,
+  calculatePercentageOf,
+  applyPercentageChange,
+  calculatePercentageChange,
+  calculateNotional,
+  meetsMinimumNotional,
   addDecimal,
   absoluteDecimal,
   divideDecimal,
@@ -333,4 +339,64 @@ test("exact increment rounding handles disabled increments and rejects unsafe in
   assert.throws(() => roundDecimalToIncrement({ value: 1.23, increment: "0.01", direction: "down" }), /decimal strings/);
   assert.throws(() => roundDecimalToIncrement({ value: "1", increment: "-0.01", direction: "down" }), /non-negative/);
   assert.throws(() => roundDecimalToIncrement({ value: "1", increment: "0.01", direction: "sideways" }), /direction/);
+});
+
+
+test("percentage points convert to exact decimal fee rates", () => {
+  assert.equal(percentageToRate({ percent: "0.075" }), "0.00075");
+  assert.equal(percentageToRate({ percent: "1" }), "0.01");
+  assert.equal(percentageToRate({ percent: "0" }), "0");
+  assert.equal(percentageToRate({ percent: "12.3456789" }), "0.123456789");
+});
+
+test("percentage calculations preserve tiny values and high precision", () => {
+  assert.equal(calculatePercentageOf({ value: "0.00000001", percent: "0.075" }), "0.0000000000075");
+  assert.equal(calculatePercentageOf({ value: "123456789.123456789", percent: "0.0001" }), "123.456789123456789");
+});
+
+test("percentage changes apply increases and decreases exactly", () => {
+  assert.equal(applyPercentageChange({ value: "100", percent: "1.25" }), "101.25");
+  assert.equal(applyPercentageChange({ value: "100", percent: "-1.25" }), "98.75");
+  assert.equal(applyPercentageChange({ value: "0.00000001", percent: "-0.075" }), "0.0000000099925");
+});
+
+test("percentage change calculation uses explicit scale and rounding", () => {
+  assert.equal(calculatePercentageChange({ from: "100", to: "101.25", scale: 4, rounding: "half-up" }), "1.25");
+  assert.equal(calculatePercentageChange({ from: "100", to: "98.75", scale: 4, rounding: "half-up" }), "-1.25");
+  assert.equal(calculatePercentageChange({ from: "3", to: "4", scale: 6, rounding: "half-up" }), "33.333333");
+  assert.equal(calculatePercentageChange({ from: "1000000000000", to: "1000000000001", scale: 10, rounding: "half-up" }), "0.0000000001");
+});
+
+test("percentage helpers reject non-string financial inputs and invalid division", () => {
+  assert.throws(() => percentageToRate({ percent: 0.075 }), { message: "percent must be a decimal string" });
+  assert.throws(() => calculatePercentageOf({ value: 1, percent: "1" }), { message: "value must be a decimal string" });
+  assert.throws(() => applyPercentageChange({ value: "1", percent: 1 }), { message: "percent must be a decimal string" });
+  assert.throws(() => calculatePercentageChange({ from: "0", to: "1", scale: 4, rounding: "half-up" }), { message: "Cannot divide by zero" });
+  assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 4 }), { message: /rounding/ });
+  assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 99, rounding: "half-up" }));
+});
+
+
+test("notional calculation multiplies exact decimal price and quantity", () => {
+  assert.equal(calculateNotional({ price: "0.1", quantity: "99.9" }), "9.99");
+  assert.equal(calculateNotional({ price: "123456789.123456789", quantity: "0.00000001" }), "1.23456789123456789");
+  assert.equal(calculateNotional({ price: "0.00000001", quantity: "0.00000001" }), "0.0000000000000001");
+});
+
+test("minimum notional check distinguishes below, equal, and above boundaries", () => {
+  const minimum = "10";
+
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "4.999", minNotional: minimum }), false);
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "5", minNotional: minimum }), true);
+  assert.equal(meetsMinimumNotional({ price: "2", quantity: "5.001", minNotional: minimum }), true);
+  assert.equal(meetsMinimumNotional({ price: "0.1", quantity: "100", minNotional: "10.0000000000000000001" }), false);
+});
+
+test("notional helpers reject invalid financial inputs", () => {
+  assert.throws(() => calculateNotional({ price: 2, quantity: "5" }), { message: "price must be a decimal string" });
+  assert.throws(() => calculateNotional({ price: "0", quantity: "5" }), { message: "price must be greater than zero" });
+  assert.throws(() => calculateNotional({ price: "-1", quantity: "5" }), { message: "price must be greater than zero" });
+  assert.throws(() => calculateNotional({ price: "2", quantity: "-1" }), { message: "quantity must be non-negative" });
+  assert.throws(() => meetsMinimumNotional({ price: "2", quantity: "5", minNotional: -1 }), { message: "minNotional must be a decimal string" });
+  assert.throws(() => meetsMinimumNotional({ price: "2", quantity: "5", minNotional: "-1" }), { message: "minNotional must be non-negative" });
 });
