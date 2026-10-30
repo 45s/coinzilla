@@ -12,6 +12,7 @@ import {
   getSellFeeRateExact,
   getOrderType,
   calculateFillAccountingExact,
+  calculateCommissionRateExact,
   calculateSellPlanExact,
   getOrderId,
   roundDecimalToIncrement,
@@ -95,7 +96,7 @@ export class FreeRollBot {
       }
 
       const orderType = getOrderType({ makerPercent: pair.makerPercent })
-      const feeRate = getSellFeeRateExact({
+      const configuredFeeRate = getSellFeeRateExact({
         makerPercent: pair.makerPercent,
         takerPercent: pair.takerPercent,
       })
@@ -103,7 +104,9 @@ export class FreeRollBot {
       this.#states.set(symbol, {
         settings: pair,
         orderType,
-        feeRate,
+        configuredFeeRate,
+        feeRate: "0",
+        actualCommissionRate: "0",
         baseAsset: null,
         quoteAsset: null,
         trackedOrderIds: new Set(),
@@ -287,6 +290,9 @@ export class FreeRollBot {
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
           orderType: state.orderType,
+          configuredFeeRate: state.configuredFeeRate,
+          actualCommissionRate: state.actualCommissionRate,
+          feeRate: state.feeRate,
           fillCount: state.fills.size,
           commissionTotals: Object.fromEntries(state.commissionTotals),
         },
@@ -299,6 +305,12 @@ export class FreeRollBot {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
       configuredFeeRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.configuredFeeRate]),
+      ),
+      actualCommissionRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.actualCommissionRate]),
+      ),
+      sellFeeRates: Object.fromEntries(
         [...this.#states].map(([symbol, state]) => [symbol, state.feeRate]),
       ),
       orderTypes: Object.fromEntries(
@@ -1028,6 +1040,8 @@ export class FreeRollBot {
     state.activeQuantity = "0"
     state.cycleCost = "0"
     state.saleProceeds = "0"
+    state.actualCommissionRate = "0"
+    state.feeRate = "0"
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
@@ -1081,6 +1095,7 @@ export class FreeRollBot {
     }
 
     let accounting
+    let actualCommissionRate
     try {
       accounting = calculateFillAccountingExact({
         side: fill.side,
@@ -1091,9 +1106,28 @@ export class FreeRollBot {
         baseAsset: state.baseAsset,
         quoteAsset: state.quoteAsset,
       })
+      actualCommissionRate = calculateCommissionRateExact({
+        price: String(fill.price ?? ""),
+        quoteQuantity: String(fill.quoteQuantity ?? ""),
+        commissionAmount,
+        commissionAsset,
+        baseAsset: state.baseAsset,
+        quoteAsset: state.quoteAsset,
+      })
     } catch (error) {
       this.#pause(symbol, `Unsupported or incomplete commission/fill data for trade ${fillId}`, error)
       return false
+    }
+
+    state.actualCommissionRate = maxDecimal({
+      left: state.actualCommissionRate,
+      right: actualCommissionRate,
+    })
+    if (compareDecimal({ left: actualCommissionRate, right: "0" }) > 0) {
+      state.feeRate = maxDecimal({
+        left: state.configuredFeeRate,
+        right: state.actualCommissionRate,
+      })
     }
 
     if (fill.side === "BUY") {
