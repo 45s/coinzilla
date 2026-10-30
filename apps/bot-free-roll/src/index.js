@@ -33,7 +33,7 @@ const { data: journal } = journalResult
 
 let broker = null
 
-if (tradingConfig.strategies["free-roll"].enabled) {
+if (tradingConfig.strategies["free-roll"].enabled !== false) {
   const brokerResult = await prepareBroker()
 
   if (!brokerResult.ok) {
