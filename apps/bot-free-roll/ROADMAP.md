@@ -215,7 +215,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 
 - [x] **FR-001 — Establish this roadmap.** Add this document, target architecture, invariants, PR sequencing, AI instructions, and release gates. Acceptance: roadmap is committed in this application and linked from its README.
 - [x] **FR-002 — Capture current behavior and gaps.** Completed in [CURRENT_STATE.md](./CURRENT_STATE.md): file/function gap matrix, severity, existing test map, and recommended implementation order. Runtime test/coverage baseline remains FR-004 and was not claimed by this source audit.
-- [ ] **FR-003 — Define strategy decisions that block correctness.** Initial and ongoing price source are approved and recorded in README v0.004: use last traded price for initial entry and ongoing price monitoring; derive subsequent BUY limits from the last qualifying buy price using `priceStepPercent`; round limits down to the valid tick and fail closed when required price/rule data is unavailable. Wait-for-full-fill behavior is approved and recorded in README v0.005: a partially filled order remains in progress; the strategy waits for full fill before advancing or making a new strategy order decision. Free-coin allocation is approved and recorded in README v0.006: allocate only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active. Still resolve market-data quality policy (FR-024), third-asset fee valuation, and manual wallet activity. Cost-basis allocation is intentionally left at current behavior for now; do not redesign it without a new discussion. Acceptance: all blocking decisions are recorded in README; no implementation silently chooses.
+- [ ] **FR-003 — Define strategy decisions that block correctness.** Initial and ongoing price source are approved and recorded in README v0.004: use last traded price for initial entry and ongoing price monitoring; derive subsequent BUY limits from the last qualifying buy price using `priceStepPercent`; round limits down to the valid tick and fail closed when required price/rule data is unavailable. Wait-for-full-fill behavior is approved and recorded in README v0.005: a partially filled order remains in progress; the strategy waits for full fill before advancing or making a new strategy order decision. Free-coin allocation is approved and recorded in README v0.006: allocate only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active. Third-asset commission use is rejected: reject a pair before startup when its effective commission configuration requires a third asset; if a third-asset fee is unexpectedly reported, record it and pause the pair without conversion or further trading. Still resolve market-data quality policy (FR-024) and manual wallet activity. Cost-basis allocation is intentionally left at current behavior for now; do not redesign it without a new discussion. Acceptance: all blocking decisions are recorded in README; no implementation silently chooses.
 - [ ] **FR-004 — Establish app test/coverage baseline.** Run and document current app tests and coverage; identify uncovered critical branches. Acceptance: reproducible command and baseline report, no arbitrary coverage target without evidence.
 - [ ] **FR-005 — Add roadmap PR template/checklist guidance.** Ensure future PRs state roadmap ID, invariants, tests, and check results. Acceptance: checklist is usable and does not duplicate repository-wide standards unnecessarily.
 - [ ] **FR-006 — Define trading readiness states.** Specify pair states such as `INITIALIZING`, `READY`, `ACTIVE`, `RECONCILING`, `PAUSED_UNSAFE`, and `STOPPED`. Acceptance: transition table and allowed actions are documented before code.
@@ -255,7 +255,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 - [ ] **FR-031 — Handle mixed commission assets and rates.** A single order may have different commission assets or amounts across fills. Acceptance: no order-level fee assumption; every commission remains attached to its fill.
 - [ ] **FR-032 — Account for quote-asset fees.** Correctly adjust quote cash flow/cost or net proceeds. Acceptance: BUY and SELL examples reconcile to exact quote balances.
 - [ ] **FR-033 — Account for base-asset fees.** BUY fees reduce received base; SELL fees consume additional base where reported. Acceptance: sellable quantity and free inventory reflect actual base debits.
-- [ ] **FR-034 — Account for third-asset fees.** Track the fee asset liability/expense and value it using the approved valuation policy and timestamp. Acceptance: unknown/stale conversion price marks P&L incomplete and blocks profitability approval.
+- [ ] **FR-034 — Reject third-asset commission requirements and handle unexpected fees.** Before a pair becomes ready, inspect the effective broker/account commission configuration and reject the pair if fees must be paid in an asset other than its base or quote. If a third-asset fee is unexpectedly reported, preserve the actual fill/commission facts, mark accounting incomplete, and pause the pair; do not convert or value the fee. Acceptance: startup rejection and unexpected-fee pause are covered by deterministic tests.
 - [ ] **FR-035 — Handle zero fees, rebates, discounts, and adjustments.** Distinguish zero commission from absent commission; represent rebates/negative fees only if canonical contract and venue semantics support them. Acceptance: no fictitious configured fee is booked as actual.
 - [ ] **FR-036 — Reconcile execution stream with trade history.** Fetch missing trades and merge idempotently; compare order cumulative totals against fills. Acceptance: gaps, duplicates, and inconsistent totals are detected and surfaced.
 
@@ -266,7 +266,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 - [ ] **FR-039 — Implement approved cost-basis allocation.** Use the explicitly approved method (initially likely weighted average) for buys, partial sells, and residual inventory. Acceptance: hand-calculated examples and conservation tests.
 - [ ] **FR-040 — Allocate quote-denominated buy/sell fees exactly once.** Prevent double counting between trade cost, fee expense, and realized proceeds. Acceptance: ledger balance identities hold.
 - [ ] **FR-041 — Allocate base-asset commission exactly.** Keep gross fill quantity, fee quantity, and net inventory delta distinct. Acceptance: repeated base-fee fills reconcile to actual base balance.
-- [ ] **FR-042 — Track third-asset fee liabilities and valuation.** Separate fee asset quantity from quote valuation; preserve valuation source/time and valuation uncertainty. Acceptance: valuation changes do not mutate original fee facts.
+- [ ] **FR-042 — Enforce the no-third-asset commission policy.** Validate effective fee-asset configuration before startup and reject ineligible pairs. Preserve any unexpected third-asset commission as an actual reported fact, mark the ledger incomplete, and pause the pair without conversion. Acceptance: no third-asset conversion, valuation, or further trading occurs.
 - [ ] **FR-043 — Implement active/free/reserved inventory buckets.** Free inventory is permanently excluded from strategy sell quantity; order reservations cannot overlap. Acceptance: invariants tested through buys, sells, cancel, and restart.
 - [ ] **FR-044 — Define recovery-cycle boundaries and allocation.** Implement the approved rule for partial recovery, previous proceeds, free-coin allocation, and subsequent cycles. Acceptance: no free coins are created from order status alone.
 - [ ] **FR-045 — Calculate realized P&L and unrealized valuation separately.** Report quote-denominated realized net P&L and clearly labeled marked valuation. Acceptance: free-coin market value is never mislabeled as realized profit.
@@ -275,7 +275,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 ### Stage 5 — Profitability and safe order lifecycle (FR-047–FR-056)
 
 - [ ] **FR-047 — Define centralized SELL profitability input/output contract.** Pure function accepts position, candidate quantity/price, cost basis, proceeds allocation, fee assumptions, valuation data, trading rules, and minProfit. Acceptance: decision includes approval, reason codes, and exact calculation breakdown.
-- [ ] **FR-048 — Calculate conservative SELL fee reserve.** Handle unknown maker/taker outcome, configured schedule, fee asset choice, and venue-supported fee discounts. Acceptance: planning reserves are distinct from actual fees.
+- [ ] **FR-048 — Calculate conservative SELL fee reserve.** Handle unknown maker/taker outcome and configured schedule, while enforcing that required commission assets are limited to the pair's base or quote asset. Reject pairs requiring third-asset fees. Acceptance: planning reserves are distinct from actual fees.
 - [ ] **FR-049 — Calculate exact minimum profitable SELL price.** Account for all remaining cost, fees, prior proceeds, minimum profit, and sell quantity. Acceptance: exact price rounded upward and revalidated after rounding.
 - [ ] **FR-050 — Enforce profitability gate at execution boundary.** All SELL intents pass the same validator immediately before submission. Acceptance: no alternate strategy path can submit SELL directly.
 - [ ] **FR-051 — Revalidate partial SELL fills.** Apply each actual fill and recalculate remaining position/profitability. Acceptance: a partially filled order cannot cause double recovery or premature free allocation.
@@ -283,7 +283,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 - [ ] **FR-053 — Make order creation idempotent.** Use canonical client order IDs and reconcile ambiguous timeouts before retry. Acceptance: no duplicate live orders after response loss/retry.
 - [ ] **FR-054 — Make cancel/replace lifecycle race-safe.** Reconcile final order and fills after cancellation; handle fill-during-cancel and late stream events. Acceptance: no replacement until old reservation is released with proof.
 - [ ] **FR-055 — Normalize order state transitions.** Translate exchange statuses into canonical lifecycle states with explicit unknown/unsupported cases. Acceptance: strategy does not compare CEX status strings.
-- [ ] **FR-056 — Add pair-level fail-closed trading guard.** Central guard blocks new orders on stale data, unknown fee valuation, invalid rules, ledger mismatch, uncertain order state, or failed profitability proof. Acceptance: every guard reason is observable and tested.
+- [ ] **FR-056 — Add pair-level fail-closed trading guard.** Central guard blocks startup or new orders when the effective commission configuration requires a third asset, an unexpected third-asset fee is reported, market data is stale, rules are invalid, the ledger mismatches, order state is uncertain, or profitability is unproven. Acceptance: every guard reason is observable and tested.
 
 ### Stage 6 — Reconciliation and restart recovery (FR-057–FR-066)
 
@@ -314,7 +314,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 ### Stage 8 — Simulation, observability, and release readiness (FR-077–FR-086)
 
 - [ ] **FR-077 — Build deterministic fake exchange simulator.** Simulate ticks, fills, partial fills, fee assets, order errors, latency, and reconnects without network. Acceptance: repeatable seeded scenarios.
-- [ ] **FR-078 — Add adversarial commission scenario matrix.** Cover quote/base/third asset, zero, mixed assets per order, rebates where supported, missing asset, stale conversion, and precision edges. Acceptance: every matrix row has an automated assertion.
+- [ ] **FR-078 — Add adversarial commission scenario matrix.** Cover quote/base assets, explicit zero, mixed quote/base assets across fills, unexpected third-asset fees, rebates where supported, missing asset, and precision edges. Acceptance: third-asset requirements are rejected before startup and unexpected third-asset fees pause the pair.
 - [ ] **FR-079 — Add adversarial price/order-rule matrix.** Cover tick/step/minNotional boundaries, price bands, gaps, stale prices, partial fills, and changed trading rules. Acceptance: no invalid or under-profitable SELL submission.
 - [ ] **FR-080 — Add state-machine/model-based scenario suite.** Cover fill/cancel races, restart at every lifecycle point, duplicate events, out-of-order events, and API timeouts. Acceptance: invariants checked after every transition.
 - [ ] **FR-081 — Add broker adapter contract suite to every CEX adapter.** Run same canonical fixtures against Binance and future adapters. Acceptance: strategy test suite does not import any CEX package.
@@ -334,10 +334,10 @@ The following cases are mandatory. They are not optional “edge cases”; they 
 |---|---|---|
 | BUY | Quote | Increase quote acquisition cost / cash outflow |
 | BUY | Base | Reduce net base inventory received; preserve gross fill |
-| BUY | Third asset | Record third-asset expense and approved quote valuation |
+| BUY | Third asset | Reject pair at startup if required; otherwise record unexpected fee and pause pair |
 | SELL | Quote | Reduce net quote proceeds |
 | SELL | Base | Increase base inventory consumed / reduce net base balance |
-| SELL | Third asset | Record third-asset expense and approved quote valuation |
+| SELL | Third asset | Reject pair at startup if required; otherwise record unexpected fee and pause pair |
 | BUY/SELL | Zero | Record explicit zero; do not estimate it as an actual fee |
 | BUY/SELL | Missing/unknown | Mark accounting incomplete; do not claim profitability |
 | BUY/SELL | Mixed assets across fills | Account each fill's fee independently |
@@ -349,7 +349,9 @@ Also test:
 - One fill with a commission amount of zero and a non-empty fee asset.
 - Fee asset missing but fee amount non-zero.
 - Fee amount missing but venue indicates commission was charged.
-- Third-asset conversion missing, stale, or outside approved time window.
+- Pair requires a third-asset commission at startup.
+- Third-asset commission unexpectedly appears on an execution.
+- Fee discount/token settings change and make the pair require third-asset payment.
 - Fee discount token balance depleted mid-order, changing fee asset/rate.
 - Commission precision finer than asset transfer/quantity step.
 - Fees that cause net base quantity to fall below the intended keep quantity.
@@ -385,7 +387,7 @@ Paste this section into future AI development prompts or provide the full `READM
 > 4. Keep strategy code CEX-agnostic. Exchange-specific payload mapping belongs in the corresponding broker adapter, outside this app.
 > 5. Use exact decimal strings/integer arithmetic for all financial values and exchange increments. Do not convert financial values to JavaScript Number for decisions.
 > 6. Prefer small pure functions with one object argument, no mutation, explicit result objects, and deterministic native Node.js tests. Keep I/O and stateful orchestration at boundaries.
-> 7. Treat actual fill-level commissions as authoritative. Support quote, base, third-asset, zero, mixed, and unknown commission cases. Never replace actual fees with configured estimates.
+> 7. Treat actual fill-level commissions as authoritative. Support quote, base, zero, mixed, and unknown commission cases. Reject pairs configured to require third-asset commissions; if one is unexpectedly reported, preserve the actual fact and pause the pair without conversion. Never replace actual fees with configured estimates.
 > 8. Never submit a SELL without the centralized profitability approval. If a required fact is unknown, stale, unsupported, or unreconciled, fail closed and pause the affected pair.
 > 9. Preserve active, free, reserved, and external inventory separately. Never sell free inventory or double-reserve assets.
 > 10. Handle partial fills, duplicate/out-of-order events, cancel/fill races, ambiguous timeouts, reconnects, and restarts.
