@@ -233,6 +233,42 @@ export function compareDecimal({ left, right }) {
   return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1;
 }
 
+export function roundDecimalToIncrement({ value, increment, direction }) {
+  if (typeof value !== "string" || typeof increment !== "string") {
+    throw new Error("Value and increment must be decimal strings");
+  }
+
+  if (!["down", "up", "nearest"].includes(direction)) {
+    throw new Error("direction must be down, up, or nearest");
+  }
+
+  const parsedValue = parseDecimal(value);
+  const parsedIncrement = parseDecimal(increment);
+
+  if (parsedValue.coefficient < 0n || parsedIncrement.coefficient < 0n) {
+    throw new Error("Value and increment must be non-negative");
+  }
+
+  if (parsedIncrement.coefficient === 0n) {
+    return formatDecimalString(parsedValue);
+  }
+
+  const aligned = alignDecimals(parsedValue, parsedIncrement);
+  const quotient = aligned.left / aligned.right;
+  const remainder = aligned.left % aligned.right;
+
+  const units = direction === "up" && remainder !== 0n
+    ? quotient + 1n
+    : direction === "nearest" && remainder * 2n >= aligned.right
+      ? quotient + 1n
+      : quotient;
+
+  return formatDecimalString({
+    coefficient: units * parsedIncrement.coefficient,
+    scale: parsedIncrement.scale,
+  });
+}
+
 function roundToIncrement(value, increment, direction) {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error("Value must be non-negative");
