@@ -597,6 +597,8 @@ test("zero maker commission selects post-only orders and zero SELL fee reserve",
   assert.equal(getSellFeeRateExact({ makerPercent: 0, takerPercent: 0.075 }), "0");
   assert.equal(getOrderType({ makerPercent: 0.075 }), "LIMIT");
   assert.equal(getSellFeeRateExact({ makerPercent: 0.075, takerPercent: 0.1 }), "0.001");
+  assert.throws(() => getSellFeeRateExact({ makerPercent: 0, takerPercent: -0.1 }));
+  assert.throws(() => getOrderType({ makerPercent: -0.1 }));
 });
 
 test("actual BUY commissions are applied in the asset Binance charged", () => {
