@@ -511,7 +511,12 @@ export class FreeRollBot {
         `cancel BUY ${symbol} ${order.id}`,
       )
 
-      const remaining = String(canceled?.quantity)
+      const remaining = canceled?.originalQuantity !== undefined && canceled?.executedQuantity !== undefined
+        ? subtractDecimal({
+            left: String(canceled.originalQuantity),
+            right: String(canceled.executedQuantity),
+          })
+        : String(canceled?.quantity)
       const status = String(canceled?.status ?? "").toUpperCase()
 
       if (
@@ -796,7 +801,12 @@ export class FreeRollBot {
         `cancel SELL ${symbol} ${order.id}`,
       )
 
-      const remaining = String(canceled?.quantity)
+      const remaining = canceled?.originalQuantity !== undefined && canceled?.executedQuantity !== undefined
+        ? subtractDecimal({
+            left: String(canceled.originalQuantity),
+            right: String(canceled.executedQuantity),
+          })
+        : String(canceled?.quantity)
 
       if (compareDecimal({ left: remaining, right: "0" }) < 0) {
         throw new Error("Cannot determine remaining quantity after cancel")
