@@ -889,7 +889,7 @@ export function getOrderType({ makerPercent }) {
   return makerPercent === 0 ? "LIMIT_MAKER" : "LIMIT";
 }
 
-export function getSellFeeRateExact({ makerPercent, takerPercent }) {
+export function getConfiguredSellFeeRateExact({ makerPercent, takerPercent }) {
   const orderType = getOrderType({ makerPercent });
   const configuredRate = getFeeRateExact({ makerPercent, takerPercent });
 
