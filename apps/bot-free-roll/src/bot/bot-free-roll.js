@@ -180,6 +180,8 @@ export class FreeRollBot {
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
           onEvent: (payload) => {
+            if (!this.#isRunning) return
+
             const event = payload?.event ?? payload
             if (event?.eventType === "outboundAccountPosition") {
               this.#handleBalanceUpdate(event)
@@ -229,6 +231,7 @@ export class FreeRollBot {
     } catch (error) {
       this.#isRunning = false
       await this.#disconnectSubscriptions()
+      await this.#queue.drain()
       handleErr({ where: "FreeRollBot.run()", error })
       throw error
     }
