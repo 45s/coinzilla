@@ -16,6 +16,68 @@ function createPair() {
   }
 }
 
+test("disabled Free-Roll strategy does not initialize pairs or subscribe to broker streams", async () => {
+  const brokerCalls = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => {
+        brokerCalls.push("getSymbolFilters")
+        return { ok: true, data: { tickSize: 0.00001, stepSize: 1 } }
+      },
+      subscribeForUserData: async () => {
+        brokerCalls.push("subscribeForUserData")
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async () => {
+        brokerCalls.push("subscribeForPrices")
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async () => {
+        brokerCalls.push("createOrder")
+        return { ok: true, data: { orderId: "unexpected-order" } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          enabled: false,
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+
+  assert.deepEqual(brokerCalls, [])
+  assert.deepEqual(bot.getStats(), {})
+  assert.equal(bot.getSummary().running, false)
+
+  await bot.stop()
+})
+
+test("disabled Free-Roll strategy can run without a broker", async () => {
+  const bot = new FreeRollBot({
+    broker: null,
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          enabled: false,
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await assert.doesNotReject(bot.run())
+  assert.deepEqual(bot.getStats(), {})
+  assert.equal(bot.getSummary().running, false)
+})
+
 test("stop drains queued fill events without submitting follow-up orders", async () => {
   const priceHandlers = new Map()
   let userDataHandler
