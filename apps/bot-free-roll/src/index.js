@@ -31,15 +31,21 @@ if (!journalResult.ok) {
 
 const { data: journal } = journalResult
 
-const brokerResult = await prepareBroker()
+let broker = null
 
-if (!brokerResult.ok) {
-  throw new Error("Failed to prepare broker", {
-    cause: brokerResult.errors,
-  })
+if (tradingConfig.strategies["free-roll"].enabled) {
+  const brokerResult = await prepareBroker()
+
+  if (!brokerResult.ok) {
+    throw new Error("Failed to prepare broker", {
+      cause: brokerResult.errors,
+    })
+  }
+
+  broker = brokerResult.data
+} else {
+  logger.info?.("[bot] Free-Roll strategy disabled; skipping broker connection")
 }
-
-const { data: broker } = brokerResult
 
 const bot = new FreeRollBot({
   broker,
