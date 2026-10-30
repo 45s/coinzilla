@@ -106,6 +106,7 @@ export class FreeRollBot {
         baseAsset: null,
         quoteAsset: null,
         processedTradeIds: new Set(),
+        fills: new Map(),
         fillsByOrder: new Map(),
         filledQuantityByOrder: new Map(),
         commissionTotals: new Map(),
@@ -284,6 +285,7 @@ export class FreeRollBot {
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
           orderType: state.orderType,
+          fillCount: state.fills.size,
           commissionTotals: Object.fromEntries(state.commissionTotals),
         },
       ]),
@@ -1030,6 +1032,7 @@ export class FreeRollBot {
     if (state.processedTradeIds.has(fillId)) return true
 
     state.processedTradeIds.add(fillId)
+    state.fills.set(fillId, { ...fill })
     state.fillsByOrder.set(orderId, (state.fillsByOrder.get(orderId) ?? 0) + 1)
 
     const commissionAmount = String(fill.commissionAmount ?? "")
