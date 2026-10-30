@@ -236,7 +236,7 @@ Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verifie
 ### Stage 2 — Exact arithmetic and market rules (FR-017–FR-026)
 
 - [~] **FR-017 — Harden decimal parser and formatter.** Reject malformed signs, exponent abuse, whitespace-only values, NaN/Infinity, unsafe scales, and unsupported forms. Acceptance: exhaustive table-driven tests and round-trip properties.
-- [ ] **FR-018 — Complete exact decimal operations.** Add exact division with explicit rounding, absolute value, min/max, compare, negate, and scale operations as needed. Acceptance: no hidden Number conversion; all operations tested at scale boundaries.
+- [~] **FR-018 — Complete exact decimal operations.** Add exact division with explicit rounding, absolute value, min/max, compare, negate, and scale operations as needed. Acceptance: no hidden Number conversion; all operations tested at scale boundaries.
 - [ ] **FR-019 — Exact increment rounding.** Implement price/quantity rounding using decimal strings and integer arithmetic only. Acceptance: round down/up/nearest behavior is explicit; large and tiny increments tested.
 - [ ] **FR-020 — Exact percentage and rate calculations.** Implement percentage points, fee rates, and percentage changes without Number arithmetic. Acceptance: examples and boundary tests cover tiny prices and high precision.
 - [ ] **FR-021 — Exact notional calculation.** Calculate price × quantity and min-notional checks exactly. Acceptance: values at minNotional - one unit, exactly minNotional, and + one unit.
