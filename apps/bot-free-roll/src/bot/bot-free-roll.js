@@ -797,7 +797,7 @@ export class FreeRollBot {
         right: subtractDecimal({ left: String(order.quantity), right: remaining }),
       })
 
-      if (filledQuantity > 0) {
+      if (compareDecimal({ left: filledQuantity, right: "0" }) > 0) {
         this.#recordSellFill(state, order, filledQuantity)
       }
 
