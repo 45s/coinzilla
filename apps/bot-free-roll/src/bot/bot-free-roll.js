@@ -986,6 +986,15 @@ export class FreeRollBot {
     state.sellOrder = null
     state.sellFills += 1
 
+    if (compareDecimal({
+      left: state.activeQuantity,
+      right: String(state.settings.keepQuantity),
+    }) < 0) {
+      this.#pause(symbol, "Completed sale consumed the configured keep quantity")
+      this.#publishTradingSummary({ symbol, reason: "sell_filled_below_keep_quantity" })
+      return
+    }
+
     const required = addDecimal({
       left: state.cycleCost,
       right: this.settings.minProfit,
