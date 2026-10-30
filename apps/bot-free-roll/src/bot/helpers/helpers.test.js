@@ -3,6 +3,12 @@ import assert from "node:assert/strict"
 
 import {
   calculateBuyThreshold,
+  addDecimal,
+  compareDecimal,
+  multiplyDecimal,
+  subtractDecimal,
+  estimateBuyAccounting,
+  estimateSellAccounting,
   getFeeRate,
   calculateSellPlan,
   roundPriceDown,
@@ -158,4 +164,61 @@ test("tick and step rounding uses exact decimal increments", () => {
   assert.equal(roundPriceUp(1.5530000000000002, 0.001), 1.554);
   assert.equal(roundQuantityDown(0.3, 0.1), 0.3);
   assert.equal(roundQuantityDown(0.29999999999999993, 0.1), 0.2);
+});
+
+
+test("decimal accounting helpers preserve exact sums and comparisons", () => {
+  assert.equal(addDecimal({ left: "0.1", right: "0.2" }), "0.3");
+  assert.equal(addDecimal({ left: "0.01", right: "0.02" }), "0.03");
+  assert.equal(subtractDecimal({ left: "0.3", right: "0.1" }), "0.2");
+  assert.equal(multiplyDecimal({ left: "0.1", right: "0.2" }), "0.02");
+  assert.equal(compareDecimal({ left: "0.30000000000000001", right: "0.3" }), 1);
+  assert.equal(compareDecimal({ left: "1.2", right: "1.20" }), 0);
+});
+
+test("buy and sell quote accounting return exact decimal strings", () => {
+  const buy = estimateBuyAccounting({
+    quantity: 100,
+    price: 0.1,
+    feeRate: 0.001,
+  });
+  const sell = estimateSellAccounting({
+    quantity: 100,
+    price: 0.1,
+    feeRate: 0.001,
+  });
+
+  assert.equal(buy.estimatedCost, "10.01");
+  assert.equal(sell.estimatedProceeds, "9.99");
+});
+
+test("repeated quote-cost accumulation does not drift", () => {
+  let cycleCost = "0";
+
+  for (let fill = 0; fill < 100; fill += 1) {
+    const accounting = estimateBuyAccounting({
+      quantity: 0.1,
+      price: 0.1,
+      feeRate: 0,
+    });
+
+    cycleCost = addDecimal({
+      left: cycleCost,
+      right: accounting.estimatedCost,
+    });
+  }
+
+  assert.equal(cycleCost, "1");
+});
+
+test("minimum-profit comparison has no arbitrary floating-point tolerance", () => {
+  const required = addDecimal({ left: "12.34", right: "0.01" });
+
+  assert.equal(compareDecimal({ left: "12.35", right: required }), 0);
+  assert.equal(compareDecimal({ left: "12.34999999", right: required }), -1);
+});
+
+test("decimal helpers reject invalid decimal input", () => {
+  assert.throws(() => addDecimal({ left: "not-a-number", right: "1" }));
+  assert.throws(() => compareDecimal({ left: "Infinity", right: "1" }));
 });
