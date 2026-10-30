@@ -48,6 +48,18 @@ test("valid config returns success and original config", () => {
   assert.equal("errors" in result, false)
 })
 
+test("validation is deterministic and does not mutate the config", () => {
+  const tradingConfig = createValidConfig()
+  const originalConfig = structuredClone(tradingConfig)
+
+  const firstResult = validateTradingConfig({ tradingConfig })
+  const secondResult = validateTradingConfig({ tradingConfig })
+
+  assert.deepEqual(firstResult, secondResult)
+  assert.deepEqual(tradingConfig, originalConfig)
+  assert.notStrictEqual(firstResult, secondResult)
+})
+
 test("missing config returns validation errors", () => {
   const result = validateTradingConfig({})
 
