@@ -59,6 +59,26 @@ test("disabled Free-Roll strategy does not initialize pairs or subscribe to brok
   await bot.stop();
 });
 
+test("disabled Free-Roll strategy can run without a broker", async () => {
+  const bot = new FreeRollBot({
+    broker: null,
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          enabled: false,
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await assert.doesNotReject(bot.run())
+  assert.deepEqual(bot.getStats(), {})
+  assert.equal(bot.getSummary().running, false)
+})
+
 test("unexpected queued-task failures pause only the affected pair and publish diagnostics", async () => {
   const priceHandlers = new Map()
   const journalEvents = []
