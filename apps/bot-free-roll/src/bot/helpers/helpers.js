@@ -879,3 +879,84 @@ export function calculateBuyThresholdExact({ referencePrice, lastBuyPrice, price
   const basePrice = lastBuyPrice ?? referencePrice;
   return calculatePercentageDropExact({ price: basePrice, percent: priceStepPercent });
 }
+
+
+export function getOrderType({ makerPercent }) {
+  if (!Number.isFinite(makerPercent) || makerPercent < 0 || makerPercent >= 100) {
+    throw new Error("makerPercent must be a number from 0 (inclusive) to 100 (exclusive)");
+  }
+
+  return makerPercent === 0 ? "LIMIT_MAKER" : "LIMIT";
+}
+
+export function getSellFeeRateExact({ makerPercent, takerPercent }) {
+  const orderType = getOrderType({ makerPercent });
+
+  if (orderType === "LIMIT_MAKER") return "0";
+
+  return getFeeRateExact({ makerPercent, takerPercent });
+}
+
+export function calculateFillAccountingExact({
+  side,
+  quantity,
+  quoteQuantity,
+  commissionAmount,
+  commissionAsset,
+  baseAsset,
+  quoteAsset,
+}) {
+  for (const [name, value] of Object.entries({
+    quantity,
+    quoteQuantity,
+    commissionAmount,
+  })) {
+    assertDecimalString(value, name);
+  }
+
+  if (!["BUY", "SELL"].includes(side)) {
+    throw new Error("side must be BUY or SELL");
+  }
+  if (typeof baseAsset !== "string" || !baseAsset.trim() ||
+      typeof quoteAsset !== "string" || !quoteAsset.trim() ||
+      baseAsset === quoteAsset) {
+    throw new Error("baseAsset and quoteAsset must be distinct non-empty strings");
+  }
+  if (compareDecimal({ left: quantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: quoteQuantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: commissionAmount, right: "0" }) < 0) {
+    throw new Error("Fill quantity, quote quantity, and commission must be non-negative; trade quantities must be positive");
+  }
+
+  const hasCommission = compareDecimal({ left: commissionAmount, right: "0" }) > 0;
+  if (hasCommission && !commissionAsset) {
+    throw new Error("A non-zero commission must include its asset");
+  }
+  if (hasCommission && commissionAsset !== baseAsset && commissionAsset !== quoteAsset) {
+    throw new Error(`Unsupported commission asset: ${commissionAsset}`);
+  }
+
+  const baseCommission = hasCommission && commissionAsset === baseAsset
+    ? commissionAmount
+    : "0";
+  const quoteCommission = hasCommission && commissionAsset === quoteAsset
+    ? commissionAmount
+    : "0";
+
+  const baseQuantity = side === "BUY"
+    ? subtractDecimal({ left: quantity, right: baseCommission })
+    : addDecimal({ left: quantity, right: baseCommission });
+  const netQuoteQuantity = side === "BUY"
+    ? addDecimal({ left: quoteQuantity, right: quoteCommission })
+    : subtractDecimal({ left: quoteQuantity, right: quoteCommission });
+
+  if (compareDecimal({ left: baseQuantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: netQuoteQuantity, right: "0" }) < 0) {
+    throw new Error("Commission exceeds the corresponding fill amount");
+  }
+
+  return {
+    baseQuantity,
+    quoteQuantity: netQuoteQuantity,
+  };
+}
