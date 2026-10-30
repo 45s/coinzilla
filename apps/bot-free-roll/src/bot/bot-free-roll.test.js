@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { FreeRollBot } from "./bot-free-roll.js"
+import { multiplyDecimal } from "./helpers/helpers.js"
 
 function waitForCondition(predicate, message, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
@@ -23,7 +24,7 @@ function waitForCondition(predicate, message, timeoutMs = 1000) {
   })
 }
 
-function createPair() {
+function createPair(overrides = {}) {
   return {
     enabled: true,
     priceStepPercent: 0.05,
@@ -33,6 +34,48 @@ function createPair() {
     keepQuantity: 1,
     makerPercent: 0,
     takerPercent: 0.075,
+    ...overrides,
+  }
+}
+
+function createMarketFilters() {
+  return {
+    tickSize: "0.00001",
+    stepSize: "1",
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+    supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+  }
+}
+
+function createExecutionEvent({ order, tradeId, commissionAmount = "0", commissionAsset = null }) {
+  const quantity = String(order.quantity)
+  const price = String(order.price)
+
+  return {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: {
+      symbol: "DOGEUSDT",
+      orderId: String(order.orderId),
+      status: "FILLED",
+      side: order.side,
+      price,
+      quantity,
+    },
+    fill: {
+      id: String(tradeId),
+      orderId: String(order.orderId),
+      symbol: "DOGEUSDT",
+      side: order.side,
+      price,
+      quantity,
+      quoteQuantity: multiplyDecimal({ left: quantity, right: price }),
+      commissionAmount,
+      commissionAsset,
+      isMaker: true,
+      time: tradeId,
+    },
   }
 }
 
@@ -42,7 +85,7 @@ test("disabled Free-Roll strategy does not initialize pairs or subscribe to brok
     broker: {
       getSymbolFilters: async () => {
         brokerCalls.push("getSymbolFilters")
-        return { ok: true, data: { tickSize: 0.00001, stepSize: 1 } }
+        return { ok: true, data: createMarketFilters() }
       },
       subscribeForUserData: async () => {
         brokerCalls.push("subscribeForUserData")
@@ -107,7 +150,7 @@ test("stop drains queued fill events without submitting follow-up orders", async
 
   const bot = new FreeRollBot({
     broker: {
-      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
       subscribeForUserData: async ({ onEvent }) => {
         userDataHandler = onEvent
         return { ok: true, data: { disconnect() {} } }
@@ -148,18 +191,7 @@ test("stop drains queued fill events without submitting follow-up orders", async
     new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
   ])
 
-  userDataHandler({
-    eventType: "executionReport",
-    executionType: "TRADE",
-    executedOrder: {
-      symbol: "DOGEUSDT",
-      orderId: buy.orderId,
-      status: "FILLED",
-      side: "BUY",
-      price: String(buy.price),
-      quantity: String(buy.quantity),
-    },
-  })
+  userDataHandler(createExecutionEvent({ order: { ...buy, side: "BUY" }, tradeId: 1 }))
 
   await bot.stop()
 
@@ -180,7 +212,7 @@ test("unexpected queued-task failures pause only the affected pair and publish d
 
   const bot = new FreeRollBot({
     broker: {
-      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
       subscribeForUserData: async () => ({ ok: true, data: { disconnect() {} } }),
       subscribeForPrices: async ({ symbol, onPrice }) => {
         priceHandlers.set(symbol, onPrice)
@@ -260,7 +292,7 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
 
   const bot = new FreeRollBot({
     broker: {
-      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
       subscribeForUserData: async ({ onEvent }) => {
         userDataHandler = onEvent
         return { ok: true, data: { disconnect() {} } }
@@ -305,18 +337,10 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
       new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
     ])
 
-    const fillEvent = {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: {
-        symbol: "DOGEUSDT",
-        orderId: buy.orderId,
-        status: "FILLED",
-        side: "BUY",
-        price: String(buy.price),
-        quantity: String(buy.quantity),
-      },
-    }
+    const fillEvent = createExecutionEvent({
+      order: { ...buy, side: "BUY" },
+      tradeId: 10,
+    })
 
     userDataHandler(fillEvent)
     userDataHandler(fillEvent)
@@ -327,20 +351,12 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     ])
 
     // Quote totals must remain normalized decimal strings after the first fill.
-    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10002.49625")
+    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10000")
 
-    userDataHandler({
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: {
-        symbol: "DOGEUSDT",
-        orderId: sell.orderId,
-        status: "FILLED",
-        side: "SELL",
-        price: String(sell.price),
-        quantity: String(sell.quantity),
-      },
-    })
+    userDataHandler(createExecutionEvent({
+      order: { ...sell, side: "SELL" },
+      tradeId: 11,
+    }))
 
     await waitForCondition(
       () => bot.getStats().DOGEUSDT.profitableCycles === 1,
@@ -355,6 +371,7 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     assert.equal(stats.saleProceeds, "0")
     assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+    assert.ok(createdOrders.every((order) => order.type === "LIMIT_MAKER"))
   } finally {
     await bot.stop()
   }
@@ -368,7 +385,7 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
     broker: {
       getSymbolFilters: async () => ({
         ok: true,
-        data: { tickSize: 0.00001, stepSize: 1 },
+        data: createMarketFilters(),
       }),
       subscribeForUserData: async () => ({
         ok: true,
@@ -423,20 +440,11 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
   }
 })
 
-test("continues startup with precision fallbacks when warning logger throws", async () => {
-  const priceHandlers = new Map()
+test("fails startup when exact market metadata is unavailable", async () => {
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => {
         throw new Error("exchange filters unavailable")
-      },
-      subscribeForUserData: async () => ({
-        ok: true,
-        data: { disconnect() {} },
-      }),
-      subscribeForPrices: async ({ symbol, onPrice }) => {
-        priceHandlers.set(symbol, onPrice)
-        return { ok: true, data: { disconnect() {} } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -450,19 +458,6 @@ test("continues startup with precision fallbacks when warning logger throws", as
     },
   })
 
-  bot.logger = {
-    debug() {},
-    warn() {
-      throw new Error("logger unavailable")
-    },
-    error() {},
-  }
-
-  try {
-    await assert.doesNotReject(bot.run())
-    assert.equal(bot.getSummary().running, true)
-    assert.equal(typeof priceHandlers.get("DOGEUSDT"), "function")
-  } finally {
-    await bot.stop()
-  }
+  await assert.rejects(bot.run(), /exchange filters unavailable/)
+  assert.equal(bot.getSummary().running, false)
 })
