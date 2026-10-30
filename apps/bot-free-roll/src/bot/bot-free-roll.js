@@ -1025,19 +1025,12 @@ export class FreeRollBot {
 
     const fillId = String(fill.id ?? "")
     const orderId = String(fill.orderId ?? "")
-    if (!fillId || fillId === "-1" || !orderId || orderId === "undefined") {
+    if (!fillId || fillId === "-1" || fillId === "undefined" ||
+        !orderId || orderId === "undefined") {
       this.#pause(symbol, "Execution fill is missing a stable trade or order ID")
       return false
     }
     if (state.processedTradeIds.has(fillId)) return true
-    if (typeof fill.isMaker !== "boolean") {
-      this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
-      return false
-    }
-    if (state.orderType === "LIMIT_MAKER" && !fill.isMaker) {
-      this.#pause(symbol, `LIMIT_MAKER order produced a taker fill for trade ${fillId}`)
-      return false
-    }
 
     state.processedTradeIds.add(fillId)
     state.fills.set(fillId, { ...fill })
@@ -1054,6 +1047,15 @@ export class FreeRollBot {
           right: commissionAmount,
         }),
       )
+    }
+
+    if (typeof fill.isMaker !== "boolean") {
+      this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
+      return false
+    }
+    if (state.orderType === "LIMIT_MAKER" && !fill.isMaker) {
+      this.#pause(symbol, `LIMIT_MAKER order produced a taker fill for trade ${fillId}`)
+      return false
     }
 
     let accounting
