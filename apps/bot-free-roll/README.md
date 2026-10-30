@@ -5,6 +5,8 @@
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
 
+**Engineering roadmap:** [ROADMAP.md](./ROADMAP.md) — long-term architecture, safety invariants, AI contributor instructions, and sequenced PR backlog. Read it together with this strategy specification and the repository-root `ENGINEERING_STANDARDS.md` before implementing changes.
+
 > **AI AGENT INSTRUCTIONS**
 >
 > This document is the source of truth for the current Free-Roll strategy.
