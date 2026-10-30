@@ -463,10 +463,10 @@ export class FreeRollBot {
       })
       await this.#placeBuy(
         symbol,
-        calculateBuyThreshold({
-          referencePrice: price,
+        calculateBuyThresholdExact({
+          referencePrice: String(price),
           lastBuyPrice: null,
-          priceStepPercent: state.settings.priceStepPercent,
+          priceStepPercent: String(state.settings.priceStepPercent),
         }),
       )
       return
