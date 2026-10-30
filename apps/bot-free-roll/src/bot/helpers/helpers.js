@@ -891,10 +891,9 @@ export function getOrderType({ makerPercent }) {
 
 export function getSellFeeRateExact({ makerPercent, takerPercent }) {
   const orderType = getOrderType({ makerPercent });
+  const configuredRate = getFeeRateExact({ makerPercent, takerPercent });
 
-  if (orderType === "LIMIT_MAKER") return "0";
-
-  return getFeeRateExact({ makerPercent, takerPercent });
+  return orderType === "LIMIT_MAKER" ? "0" : configuredRate;
 }
 
 export function calculateFillAccountingExact({
