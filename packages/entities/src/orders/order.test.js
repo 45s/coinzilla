@@ -61,7 +61,7 @@ describe(`${Order.name}`, () => {
   })
 
   it("should support every declared order type", () => {
-    for (const supportedType of ["LIMIT", "MARKET"]) {
+    for (const supportedType of ["LIMIT", "LIMIT_MAKER", "MARKET"]) {
       assert.strictEqual(validOrder({ type: supportedType }).type, supportedType)
     }
   })
