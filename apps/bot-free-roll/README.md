@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.007`
+**Document version:** `v0.008`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -167,7 +167,7 @@ The commission values above are examples, not universal defaults. Configure them
 
 ### Price tick-size resolution
 
-Before subscribing to prices, the bot tries to fetch each enabled symbol's `PRICE_FILTER.tickSize` and `LOT_SIZE.stepSize` from Binance exchange information. If the request fails or either filter is unavailable, it falls back to the pair's configured `pricePrecision` and `quantityPrecision`, converted to increments of `10 ** -precision`. These fallbacks are manual safety nets and must be kept consistent with the symbol's actual exchange filters.
+Before subscribing to prices, the bot must fetch each enabled symbol's `PRICE_FILTER.tickSize`, `LOT_SIZE.stepSize`, base asset, quote asset, and supported order types from broker market information. If this metadata is unavailable or incomplete, the pair must fail startup; configured precision values must not be treated as substitutes for exchange trading rules.
 
 Recovery SELL quantities are rounded **down** to the resolved quantity step before calculating the minimum profitable price. This avoids Binance precision errors without selling more than the available strategy quantity. If rounding leaves no valid quantity, the bot does not submit a SELL order.
 
@@ -181,11 +181,20 @@ Commission rates are configured **per trading pair** as human-readable percentag
 
 The bot converts percentages to decimal rates by dividing by 100. For example, `0.075` becomes `0.00075` for calculations.
 
-The bot conservatively uses the higher of a pair's `makerPercent` and `takerPercent` for buy and sell estimates. This avoids assuming that a limit order will always receive maker fees. Configure both values for the actual account and pair; do not assume zero fees unless the account's current fee schedule confirms them.
+Configured rates are planning assumptions only. Actual BUY and SELL accounting must use the commission amount and asset reported for each executed fill. Never book a configured percentage as an actual fee.
 
-Configured rates are estimates used to calculate safe order prices. Actual execution commissions should be recorded and used in the accounting ledger.
+For a fee-bearing pair, the strategy uses the higher of `makerPercent` and `takerPercent` as a conservative SELL fee reserve because a regular LIMIT order can execute as either maker or taker. BUY commissions are not estimated into accounting: each actual BUY fill supplies its own commission amount and asset.
 
-A limit order is not automatically a maker order. Depending on how it executes, it may be charged a maker or taker fee.
+### Order type selection
+
+The configured maker rate also selects the order type for both BUY and SELL:
+
+- `makerPercent: 0` — submit `LIMIT_MAKER` (post-only). Binance must reject an order that would immediately take liquidity. An accepted order can only fill as maker. The expected SELL fee reserve is zero, but actual fill commission is still recorded and checked.
+- `makerPercent > 0` — submit regular `LIMIT`. It may execute as maker or taker, so the SELL fee reserve uses the higher configured maker/taker rate. Actual BUY and SELL commissions always replace estimates in accounting.
+
+`LIMIT_MAKER` does not guarantee an order will be accepted or filled, and maker execution does not universally guarantee zero commission. The configured zero maker rate must match the effective account/symbol fee schedule. If the exchange reports an unexpected non-zero fee, actual accounting uses it.
+
+A regular LIMIT order may execute immediately as taker. Its actual commission is read from each fill and included in the recovery calculation.
 
 ### Commission-asset restriction
 
@@ -680,7 +689,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.007`**
+Current version: **`v0.008`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -695,6 +704,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.008` — Approved and documented commission-aware order selection: use `LIMIT_MAKER` when `makerPercent` is zero, regular `LIMIT` otherwise; account actual base/quote commissions from each fill and reserve the configured conservative SELL fee only for regular LIMIT orders.
 - `v0.007` — Clarified the approved commission policy: support quote/base/zero commissions, reject pairs requiring third-asset fees, and pause on unexpected third-asset fees without conversion or valuation.
 - `v0.006` — Approved free-coin allocation: allocate `keepQuantity` only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active.
 - `v0.005` — Approved wait-for-full-fill behavior: a partially filled order remains in progress and the strategy does not advance to its next step or create a replacement/new strategy order based on the partial fill alone.
