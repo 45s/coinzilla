@@ -710,3 +710,144 @@ export function estimateSellAccounting({ quantity, price, feeRate }) {
     estimatedBaseDeduction: quantity * (1 + feeRate),
   }
 }
+
+
+// Exact financial accounting used by the Free-Roll orchestrator.
+// Inputs and outputs are decimal strings; Number is intentionally not used.
+export function getFeeRateExact({ makerPercent, takerPercent }) {
+  for (const [name, percent] of Object.entries({ makerPercent, takerPercent })) {
+    if (!Number.isFinite(percent) || percent < 0 || percent >= 100) {
+      throw new Error(`${name} must be a number from 0 (inclusive) to 100 (exclusive)`);
+    }
+  }
+
+  const makerRate = divideDecimal({ left: String(makerPercent), right: "100", scale: 18, rounding: "half-up" });
+  const takerRate = divideDecimal({ left: String(takerPercent), right: "100", scale: 18, rounding: "half-up" });
+  return maxDecimal({ left: makerRate, right: takerRate });
+}
+
+export function estimateBuyAccountingExact({ quantity, price, feeRate }) {
+  for (const [name, value] of Object.entries({ quantity, price, feeRate })) {
+    assertDecimalString(value, name);
+  }
+  if (compareDecimal({ left: quantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: price, right: "0" }) <= 0 ||
+      compareDecimal({ left: feeRate, right: "0" }) < 0 ||
+      compareDecimal({ left: feeRate, right: "1" }) >= 0) {
+    throw new Error("Invalid buy accounting inputs");
+  }
+
+  return {
+    netQuantity: multiplyDecimal({
+      left: quantity,
+      right: subtractDecimal({ left: "1", right: feeRate }),
+    }),
+    estimatedCost: multiplyDecimal({
+      left: multiplyDecimal({ left: quantity, right: price }),
+      right: addDecimal({ left: "1", right: feeRate }),
+    }),
+  };
+}
+
+export function estimateSellAccountingExact({ quantity, price, feeRate }) {
+  for (const [name, value] of Object.entries({ quantity, price, feeRate })) {
+    assertDecimalString(value, name);
+  }
+  if (compareDecimal({ left: quantity, right: "0" }) < 0 ||
+      compareDecimal({ left: price, right: "0" }) <= 0 ||
+      compareDecimal({ left: feeRate, right: "0" }) < 0 ||
+      compareDecimal({ left: feeRate, right: "1" }) >= 0) {
+    throw new Error("Invalid sell accounting inputs");
+  }
+
+  return {
+    estimatedProceeds: multiplyDecimal({
+      left: multiplyDecimal({ left: quantity, right: price }),
+      right: subtractDecimal({ left: "1", right: feeRate }),
+    }),
+    estimatedBaseDeduction: multiplyDecimal({
+      left: quantity,
+      right: addDecimal({ left: "1", right: feeRate }),
+    }),
+  };
+}
+
+export function calculateSellPlanExact({
+  activeQuantity,
+  keepQuantity,
+  cycleCost,
+  saleProceeds,
+  minProfit,
+  feeRate,
+  priceTickSize = "0",
+  quantityStepSize = "0",
+}) {
+  const values = {
+    activeQuantity,
+    keepQuantity,
+    cycleCost,
+    saleProceeds,
+    minProfit,
+    feeRate,
+    priceTickSize,
+    quantityStepSize,
+  };
+  for (const [name, value] of Object.entries(values)) assertDecimalString(value, name);
+
+  if (
+    compareDecimal({ left: activeQuantity, right: "0" }) <= 0 ||
+    compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
+    compareDecimal({ left: cycleCost, right: "0" }) < 0 ||
+    compareDecimal({ left: saleProceeds, right: "0" }) < 0 ||
+    compareDecimal({ left: minProfit, right: "0" }) <= 0 ||
+    compareDecimal({ left: feeRate, right: "0" }) < 0 ||
+    compareDecimal({ left: feeRate, right: "1" }) >= 0 ||
+    compareDecimal({ left: priceTickSize, right: "0" }) < 0 ||
+    compareDecimal({ left: quantityStepSize, right: "0" }) < 0
+  ) {
+    throw new Error("Invalid sell plan inputs");
+  }
+
+  const sellableQuantity = maxDecimal({
+    left: "0",
+    right: subtractDecimal({ left: activeQuantity, right: keepQuantity }),
+  });
+  const quantityBeforeStep = divideDecimal({
+    left: sellableQuantity,
+    right: addDecimal({ left: "1", right: feeRate }),
+    scale: 36,
+    rounding: "toward-zero",
+  });
+  const quantity = roundDecimalToIncrement({
+    value: quantityBeforeStep,
+    increment: quantityStepSize,
+    direction: "down",
+  });
+  const requiredNetProceeds = maxDecimal({
+    left: "0",
+    right: subtractDecimal({
+      left: addDecimal({ left: cycleCost, right: minProfit }),
+      right: saleProceeds,
+    }),
+  });
+
+  if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
+    return { quantity: "0", price: null, requiredNetProceeds };
+  }
+
+  const netSellRate = subtractDecimal({ left: "1", right: feeRate });
+  const netQuotePerBase = multiplyDecimal({ left: quantity, right: netSellRate });
+  const minimumPrice = divideDecimal({
+    left: requiredNetProceeds,
+    right: netQuotePerBase,
+    scale: 36,
+    rounding: "away-from-zero",
+  });
+  const price = roundDecimalToIncrement({
+    value: minimumPrice,
+    increment: priceTickSize,
+    direction: "up",
+  });
+
+  return { quantity, price, requiredNetProceeds };
+}
