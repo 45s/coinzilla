@@ -292,7 +292,7 @@ test("exact decimal division rejects zero divisors and invalid rounding", () => 
   assert.throws(() => divideDecimal({ left: "1", right: "0", scale: 2, rounding: "half-up" }), /zero/);
   assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 2 }), /rounding/);
   assert.throws(() => divideDecimal({ left: "1", right: "2", scale: -1, rounding: "half-up" }), /scale/);
-  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 101, rounding: "half-up" }), /scale/);
+  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 99, rounding: "half-up" }), /scale/);
 });
 
 test("absolute and negate decimal operations preserve exact values", () => {
@@ -362,7 +362,7 @@ test("percentage change calculation uses explicit scale and rounding", () => {
   assert.equal(calculatePercentageChange({ from: "100", to: "101.25", scale: 4, rounding: "half-up" }), "1.25");
   assert.equal(calculatePercentageChange({ from: "100", to: "98.75", scale: 4, rounding: "half-up" }), "-1.25");
   assert.equal(calculatePercentageChange({ from: "3", to: "4", scale: 6, rounding: "half-up" }), "33.333333");
-  assert.equal(calculatePercentageChange({ from: "1000000000000", to: "1000000000001", scale: 8, rounding: "half-up" }), "0.0000001");
+  assert.equal(calculatePercentageChange({ from: "1000000000000", to: "1000000000001", scale: 10, rounding: "half-up" }), "0.0000000001");
 });
 
 test("percentage helpers reject non-string financial inputs and invalid division", () => {
