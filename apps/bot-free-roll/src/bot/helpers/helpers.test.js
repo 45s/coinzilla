@@ -463,7 +463,7 @@ test("trading-rule validator enforces exact notional and price-band boundaries",
   };
 
   assert.equal(validateOrderAgainstTradingRules({
-    order: { type: "LIMIT", price: "90", quantity: "0.2" },
+    order: { type: "LIMIT", price: "90", quantity: "0.1" },
     rules,
   }).valid, false);
   assert.equal(validateOrderAgainstTradingRules({
