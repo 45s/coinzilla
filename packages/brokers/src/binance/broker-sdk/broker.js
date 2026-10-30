@@ -170,7 +170,7 @@ export class BinanceSdkBroker extends CoreBroker {
       if (orderId !== undefined && orderId !== null) params.orderId = orderId
 
       const response = await this.tradingConnection.allOrders(params)
-      return toResult({ data: response.data.map(adaptTrade) })
+      return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
       return toResult({ errors: [error] })
@@ -188,7 +188,7 @@ export class BinanceSdkBroker extends CoreBroker {
       if (orderId !== undefined && orderId !== null) params.orderId = orderId
 
       const response = await this.tradingConnection.myTrades(params)
-      return toResult({ data: response.data })
+      return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
       return toResult({ errors: [error] })
