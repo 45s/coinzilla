@@ -104,7 +104,7 @@ export class FreeRollBot {
         settings: pair,
         orderType,
         configuredFeeRate,
-        feeRate: "0",
+        feeRate: configuredFeeRate,
         actualCommissionRate: "0",
         baseAsset: null,
         quoteAsset: null,
@@ -1040,7 +1040,7 @@ export class FreeRollBot {
     state.cycleCost = "0"
     state.saleProceeds = "0"
     state.actualCommissionRate = "0"
-    state.feeRate = "0"
+    state.feeRate = state.configuredFeeRate
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
@@ -1122,12 +1122,10 @@ export class FreeRollBot {
       left: state.actualCommissionRate,
       right: actualCommissionRate,
     })
-    if (compareDecimal({ left: actualCommissionRate, right: "0" }) > 0) {
-      state.feeRate = maxDecimal({
-        left: state.configuredFeeRate,
-        right: state.actualCommissionRate,
-      })
-    }
+    state.feeRate = maxDecimal({
+      left: state.configuredFeeRate,
+      right: state.actualCommissionRate,
+    })
 
     if (fill.side === "BUY") {
       state.activeQuantity = addDecimal({
