@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.004`
+**Document version:** `v0.005`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -298,6 +298,10 @@ The strategy must:
 6. Prepare a new recovery sell order for any newly acquired active position.
 
 If the outstanding buy order subsequently fills, the new purchase starts or extends an active trading position. The previously retained free DOGE remains excluded.
+
+### Partial-fill policy
+
+If any order is partially filled, the strategy waits until that order is fully filled before proceeding to the next strategy step. A partial fill does not trigger position recalculation for the purpose of advancing the strategy, a replacement order, or another buy/sell decision. The order remains in progress; the strategy must continue observing and reconciling its status and executions. Fill-level records still need to be captured accurately, including while the order is partially filled.
 
 ### Cancellation and replacement safety
 
@@ -632,6 +636,10 @@ Do not place orders when configuration is invalid or the active position cannot 
 
 ## 11. Approved decisions and open design questions
 
+### Approved decision — wait for full order fills
+
+A partially filled order remains in progress. The strategy waits until the order is fully filled before proceeding to its next strategy step. Partial execution alone does not trigger a new buy/sell decision or replacement order. The broker's order status and actual fills must still be observed and reconciled while waiting.
+
 ### Approved decision — initial and ongoing price source
 
 Use the **last traded price** as the market-data source for both initial entry and ongoing price monitoring.
@@ -652,7 +660,7 @@ This decision selects the price source only. Freshness thresholds, stream-gap ha
 These questions remain unresolved and must not be silently guessed during implementation.
 
 1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-2. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, especially when the sell order partially fills or is canceled?
+2. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, including when a sell order is canceled after partial execution?
 3. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
 4. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
 5. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
@@ -664,7 +672,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.003`**
+Current version: **`v0.005`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -679,6 +687,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.005` — Approved wait-for-full-fill behavior: a partially filled order remains in progress and the strategy does not advance to its next step or create a replacement/new strategy order based on the partial fill alone.
 - `v0.004` — Approved last-traded-price source for both initial entry and ongoing price monitoring; clarified that subsequent BUY limits remain anchored to the last qualifying buy price. Market-data freshness and quality rules remain under FR-024.
 - `v0.003` — Approved initial entry pricing: use the last traded price as the reference, apply the configured `priceStepPercent`, and round the BUY limit down to the broker's valid tick size; fail closed when required price/rule data is unavailable.
 - `v0.002` — Replaced the absolute `priceStep` setting with `priceStepPercent`; documented percentage semantics and the buy-threshold calculation.
