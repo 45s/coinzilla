@@ -497,3 +497,33 @@ test("trading-rule validator rejects incomplete or malformed canonical rules", (
     },
   }), /Percent price bands require/);
 });
+
+
+test("trading-rule validator reports non-positive order values without throwing", () => {
+  const result = validateOrderAgainstTradingRules({
+    order: { type: "LIMIT", price: "0", quantity: "-1" },
+    rules: {
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      supportedOrderTypes: ["LIMIT"],
+    },
+  });
+
+  assert.deepEqual(result.reasons.map(({ code }) => code), [
+    "PRICE_NOT_POSITIVE",
+    "QUANTITY_NOT_POSITIVE",
+  ]);
+});
+
+test("trading-rule validator rejects inconsistent rule bounds", () => {
+  assert.throws(() => validateOrderAgainstTradingRules({
+    order: { type: "LIMIT", price: "1", quantity: "1" },
+    rules: {
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minQuantity: "2",
+      maxQuantity: "1",
+      supportedOrderTypes: ["LIMIT"],
+    },
+  }), /must not exceed/);
+});
