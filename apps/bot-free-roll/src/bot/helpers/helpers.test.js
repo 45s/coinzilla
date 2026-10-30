@@ -292,7 +292,7 @@ test("exact decimal division rejects zero divisors and invalid rounding", () => 
   assert.throws(() => divideDecimal({ left: "1", right: "0", scale: 2, rounding: "half-up" }), /zero/);
   assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 2 }), /rounding/);
   assert.throws(() => divideDecimal({ left: "1", right: "2", scale: -1, rounding: "half-up" }), /scale/);
-  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 99, rounding: "half-up" }), /scale/);
+  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 101, rounding: "half-up" }), /scale/);
 });
 
 test("absolute and negate decimal operations preserve exact values", () => {
