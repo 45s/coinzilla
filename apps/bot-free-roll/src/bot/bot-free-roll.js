@@ -105,6 +105,7 @@ export class FreeRollBot {
         feeRate,
         baseAsset: null,
         quoteAsset: null,
+        trackedOrderIds: new Set(),
         processedTradeIds: new Set(),
         fills: new Map(),
         fillsByOrder: new Map(),
@@ -612,6 +613,7 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
+      state.trackedOrderIds.add(id)
       state.buyOrder = { id, side: "BUY", quantity, price: String(price) }
       state.lastAdjustmentPrice = Number(
         (price / (1 - state.settings.priceStepPercent / 100)).toFixed(
@@ -652,7 +654,7 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id) return
+    if (!state || !id || !state.trackedOrderIds.has(id)) return
 
     if (event.executionType === "TRADE") {
       if (!event.fill) {
@@ -905,6 +907,7 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: SELL response missing order ID`)
 
+      state.trackedOrderIds.add(id)
       state.sellOrder = {
         id,
         side: "SELL",
