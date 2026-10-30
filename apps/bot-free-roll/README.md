@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.002`
+**Document version:** `v0.003`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -626,11 +626,19 @@ Do not place orders when configuration is invalid or the active position cannot 
 
 ---
 
-## 11. Open design questions
+## 11. Approved decisions and open design questions
+
+### Approved decision — initial entry price
+
+The first BUY uses the **last traded price** as its initial reference price, then applies the pair's configured `priceStepPercent` using the existing buy-step formula:
+
+`initialBuyLimit = lastTradedPrice * (1 - priceStepPercent / 100)`
+
+The resulting limit price is rounded down to the broker's valid price increment before submission. If a valid, sufficiently fresh last-trade price or required trading rule is unavailable, the strategy must not submit the initial BUY. This decision defines the initial reference price only; it does not yet finalize the market-data source/quality policy for ongoing price monitoring (FR-024).
+
 
 These questions remain unresolved and must not be silently guessed during implementation.
 
-1. **Initial entry price:** How should the first buy limit price be selected when no previous buy price exists?
 2. **Price trigger source:** Should the next buy price be based on last trade, best bid/ask, or another market-data source?
 3. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
 4. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, especially when the sell order partially fills or is canceled?
@@ -645,7 +653,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.002`**
+Current version: **`v0.003`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -660,5 +668,6 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.003` — Approved initial entry pricing: use the last traded price as the reference, apply the configured `priceStepPercent`, and round the BUY limit down to the broker's valid tick size; fail closed when required price/rule data is unavailable.
 - `v0.002` — Replaced the absolute `priceStep` setting with `priceStepPercent`; documented percentage semantics and the buy-threshold calculation.
 - `v0.001` — Initial Free-Roll specification covering broker-independent design, keyed JSON configuration, standing buy and sell orders, replacement behavior after new buys, net-profit accounting, commissions, free-coin accounting, statistics, safety rules, and unresolved design questions.
