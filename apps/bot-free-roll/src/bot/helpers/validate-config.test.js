@@ -18,6 +18,21 @@ test("returns an error when broker is missing", () => {
   assert.deepEqual(result.errors.map((error) => error.message), ["Bot requires a broker"])
 })
 
+test("does not require a broker when the strategy is disabled", () => {
+  const result = validateConfig({
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          enabled: false,
+          pairs: { DOGEFDUSD: {} },
+        },
+      },
+    },
+  })
+
+  assert.equal(result.ok, true)
+})
+
 test("returns an error when pairs are missing", () => {
   const result = validateConfig({ broker: {}, tradingConfig: { strategies: { "free-roll": { pairs: {} } } } })
   assert.equal(result.ok, false)
