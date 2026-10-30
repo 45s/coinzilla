@@ -851,3 +851,31 @@ export function calculateSellPlanExact({
 
   return { quantity, price, requiredNetProceeds };
 }
+
+
+export function calculatePercentageDropExact({ price, percent }) {
+  assertDecimalString(price, "price");
+  assertDecimalString(percent, "percent");
+  if (
+    compareDecimal({ left: price, right: "0" }) <= 0 ||
+    compareDecimal({ left: percent, right: "0" }) <= 0 ||
+    compareDecimal({ left: percent, right: "100" }) >= 0
+  ) {
+    throw new Error("Invalid percentage drop inputs");
+  }
+
+  return multiplyDecimal({
+    left: price,
+    right: divideDecimal({
+      left: subtractDecimal({ left: "100", right: percent }),
+      right: "100",
+      scale: 36,
+      rounding: "toward-zero",
+    }),
+  });
+}
+
+export function calculateBuyThresholdExact({ referencePrice, lastBuyPrice, priceStepPercent }) {
+  const basePrice = lastBuyPrice ?? referencePrice;
+  return calculatePercentageDropExact({ price: basePrice, percent: priceStepPercent });
+}
