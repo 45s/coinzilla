@@ -67,10 +67,10 @@ function createExecutionEvent({
     executedOrder: {
       symbol: "DOGEUSDT",
       orderId: String(order.orderId),
-      status: "FILLED",
+      status,
       side: order.side,
       price,
-      quantity,
+      quantity: orderQuantity,
     },
     fill: {
       id: String(tradeId),
