@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.003`
+**Document version:** `v0.004`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -226,9 +226,13 @@ The buy trigger determines the price of the next standing buy order; it is not a
 
 ### Market-price source
 
-The precise market-data source used to establish or monitor prices must be explicitly selected during implementation. Possible sources include the last trade or best bid/ask.
+Use the **last traded price** as the market-price source for both initial entry and ongoing price monitoring.
 
-Do not silently change the trigger semantics without documenting the decision.
+- For the initial BUY, use the last traded price as the reference, then apply the pair's configured `priceStepPercent` using the initial-entry formula below.
+- For subsequent BUYs, use the last traded price to monitor the market against the standing BUY limit. The standing BUY limit itself is calculated from the last qualifying buy price (or the initial reference when no qualifying buy exists) using the existing buy-step formula.
+- Do not substitute best bid/ask or another market-data source without an explicitly approved strategy decision.
+
+This decision selects the price source; it does not define freshness thresholds, stream-gap handling, or other market-data quality rules. Those remain implementation requirements under FR-024. If the last-trade observation is invalid, stale under the eventual FR-024 policy, or unavailable, the strategy must fail closed rather than make a price-based trading decision.
 
 ---
 
@@ -240,7 +244,7 @@ The strategy maintains a working position and manages its buy and sell orders as
 
 When a pair has no active trading position and no outstanding orders, the strategy needs a defined initial buy price and sufficient available funds before placing the first buy order.
 
-The initial entry-price mechanism is not yet finalized and must be decided before implementation.
+The initial BUY reference is the last traded price. Apply the pair's configured `priceStepPercent` and round the resulting limit down to the broker's valid price increment. Do not submit if the required last-trade observation or trading rules are unavailable or invalid.
 
 ### After a buy order fills
 
@@ -628,18 +632,25 @@ Do not place orders when configuration is invalid or the active position cannot 
 
 ## 11. Approved decisions and open design questions
 
-### Approved decision — initial entry price
+### Approved decision — initial and ongoing price source
 
-The first BUY uses the **last traded price** as its initial reference price, then applies the pair's configured `priceStepPercent` using the existing buy-step formula:
+Use the **last traded price** as the market-data source for both initial entry and ongoing price monitoring.
+
+For the first BUY, calculate the limit from the last traded price:
 
 `initialBuyLimit = lastTradedPrice * (1 - priceStepPercent / 100)`
 
-The resulting limit price is rounded down to the broker's valid price increment before submission. If a valid, sufficiently fresh last-trade price or required trading rule is unavailable, the strategy must not submit the initial BUY. This decision defines the initial reference price only; it does not yet finalize the market-data source/quality policy for ongoing price monitoring (FR-024).
+For subsequent BUYs, monitor the last traded price against the standing BUY limit. Calculate that limit from the last qualifying buy price (or the initial reference price when no qualifying buy exists):
+
+`nextBuyLimit = lastQualifyingBuyPrice * (1 - priceStepPercent / 100)`
+
+Round BUY limit prices down to the broker's valid price increment. If the required last-trade observation or trading rule is unavailable or invalid, the strategy must not make the corresponding price-based trading decision.
+
+This decision selects the price source only. Freshness thresholds, stream-gap handling, and other market-data quality rules remain open implementation requirements under FR-024.
 
 
 These questions remain unresolved and must not be silently guessed during implementation.
 
-2. **Price trigger source:** Should the next buy price be based on last trade, best bid/ask, or another market-data source?
 3. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
 4. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, especially when the sell order partially fills or is canceled?
 5. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
@@ -668,6 +679,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.004` — Approved last-traded-price source for both initial entry and ongoing price monitoring; clarified that subsequent BUY limits remain anchored to the last qualifying buy price. Market-data freshness and quality rules remain under FR-024.
 - `v0.003` — Approved initial entry pricing: use the last traded price as the reference, apply the configured `priceStepPercent`, and round the BUY limit down to the broker's valid tick size; fail closed when required price/rule data is unavailable.
 - `v0.002` — Replaced the absolute `priceStep` setting with `priceStepPercent`; documented percentage semantics and the buy-threshold calculation.
 - `v0.001` — Initial Free-Roll specification covering broker-independent design, keyed JSON configuration, standing buy and sell orders, replacement behavior after new buys, net-profit accounting, commissions, free-coin accounting, statistics, safety rules, and unresolved design questions.
