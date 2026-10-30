@@ -461,6 +461,8 @@ test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recover
     assert.equal(sell.type, "LIMIT")
     assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "99.925")
     assert.equal(bot.getStats().DOGEUSDT.cycleCost, "9995")
+    assert.equal(bot.getStats().DOGEUSDT.actualCommissionRate, "0.00075")
+    assert.equal(bot.getStats().DOGEUSDT.feeRate, "0.00075")
 
     const grossQuote = multiplyDecimal({
       left: String(sell.quantity),
@@ -761,6 +763,82 @@ test("ignores fills from orders that do not belong to this bot", async () => {
     assert.equal(bot.getStats().DOGEUSDT.fillCount, 0)
     assert.equal(events.some((event) => event.name === "fill.received"), false)
     assert.equal(createdOrders.length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("does not reserve SELL commission when actual BUY fills were commission-free", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  let resolveSellCreated
+  const sellCreated = new Promise((resolve) => {
+    resolveSellCreated = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `${order.side}-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created" && event.data.side === "SELL") {
+          resolveSellCreated(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: {
+            DOGEUSDT: createPair({ makerPercent: 0.075, takerPercent: 0.075 }),
+          },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "BUY was not created",
+    )
+    const buy = createdOrders.find((order) => order.side === "BUY")
+    assert.equal(buy.type, "LIMIT")
+
+    userDataHandler(createExecutionEvent({
+      order: buy,
+      tradeId: 50,
+      commissionAmount: "0",
+      commissionAsset: null,
+    }))
+
+    const sell = await Promise.race([
+      sellCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
+    ])
+
+    assert.equal(sell.type, "LIMIT")
+    assert.equal(bot.getStats().DOGEUSDT.actualCommissionRate, "0")
+    assert.equal(bot.getStats().DOGEUSDT.feeRate, "0")
   } finally {
     await bot.stop()
   }
