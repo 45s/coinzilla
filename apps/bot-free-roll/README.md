@@ -183,11 +183,11 @@ The bot converts percentages to decimal rates by dividing by 100. For example, `
 
 Configured rates are planning assumptions only. Actual BUY and SELL accounting must use the commission amount and asset reported for each executed fill. Never book a configured percentage as an actual fee.
 
-Configured rates are not automatically charged into the SELL calculation. The bot first inspects actual BUY fills:
+The bot uses the configured maker rate to choose the execution mode, then combines the expected fee ceiling with actual fill data:
 
-- If every BUY fill reports zero commission, the SELL fee reserve stays zero, even when configured rates are non-zero.
-- If a BUY fill reports a commission, the bot derives its effective rate from the actual amount, asset, and fill notional.
-- Once a non-zero fee has been observed, the SELL reserve uses the higher of that observed rate and the configured maker/taker rate ceiling. The ceiling is the higher configured rate because a regular LIMIT may execute as either maker or taker.
+- With `makerPercent: 0`, the order is `LIMIT_MAKER`; the configured SELL fee reserve starts at zero, regardless of `takerPercent`. If an actual BUY fill nevertheless reports a fee, its effective rate is used for SELL coverage.
+- With `makerPercent > 0`, the order is regular `LIMIT`; the configured SELL fee ceiling is the higher of maker/taker rates because the order may execute as either maker or taker.
+- Every actual BUY fill is inspected. Its effective commission rate (amount converted from base/quote asset to quote notional) can raise the SELL fee reserve above the configured ceiling.
 - Actual SELL commissions are also recorded and can raise the rate used by subsequent SELL plans.
 
 BUY commissions are never estimated into accounting: each actual BUY fill supplies its own commission amount and asset.
