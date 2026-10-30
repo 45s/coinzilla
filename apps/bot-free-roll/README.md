@@ -161,8 +161,8 @@ The commission values above are examples, not universal defaults. Configure them
 | `pairs`                     | Object containing per-pair settings                                                   |
 | `priceStepPercent`                 | Percentage decrease from the reference or last buy price that triggers the next buy; 0.05 means 0.05% |
 | `orderQuantity`             | Base-asset quantity for each buy order                                                |
-| `pricePrecision`          | Fallback decimal precision used only when the broker cannot fetch a valid `tickSize`; 5 means a fallback tick size of 0.00001 |
-| `quantityPrecision`       | Fallback decimal precision used only when the broker cannot fetch a valid `stepSize`; 0 means whole-number quantities |
+| `pricePrecision`          | Internal price-formatting precision; submitted prices are always rounded to the broker's actual tick size |
+| `quantityPrecision`       | Legacy configuration metadata; submitted quantities are always rounded to the broker's actual step size |
 | `keepQuantity`              | Base-asset quantity to retain as free coins per completed recovery cycle              |
 
 ### Price tick-size resolution
