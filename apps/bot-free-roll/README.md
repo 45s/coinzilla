@@ -183,14 +183,21 @@ The bot converts percentages to decimal rates by dividing by 100. For example, `
 
 Configured rates are planning assumptions only. Actual BUY and SELL accounting must use the commission amount and asset reported for each executed fill. Never book a configured percentage as an actual fee.
 
-For a fee-bearing pair, the strategy uses the higher of `makerPercent` and `takerPercent` as a conservative SELL fee reserve because a regular LIMIT order can execute as either maker or taker. BUY commissions are not estimated into accounting: each actual BUY fill supplies its own commission amount and asset.
+Configured rates are not automatically charged into the SELL calculation. The bot first inspects actual BUY fills:
+
+- If every BUY fill reports zero commission, the SELL fee reserve stays zero, even when configured rates are non-zero.
+- If a BUY fill reports a commission, the bot derives its effective rate from the actual amount, asset, and fill notional.
+- Once a non-zero fee has been observed, the SELL reserve uses the higher of that observed rate and the configured maker/taker rate ceiling. The ceiling is the higher configured rate because a regular LIMIT may execute as either maker or taker.
+- Actual SELL commissions are also recorded and can raise the rate used by subsequent SELL plans.
+
+BUY commissions are never estimated into accounting: each actual BUY fill supplies its own commission amount and asset.
 
 ### Order type selection
 
 The configured maker rate also selects the order type for both BUY and SELL:
 
 - `makerPercent: 0` — submit `LIMIT_MAKER` (post-only). Binance must reject an order that would immediately take liquidity. An accepted order can only fill as maker. The expected SELL fee reserve is zero, but actual fill commission is still recorded and checked.
-- `makerPercent > 0` — submit regular `LIMIT`. It may execute as maker or taker, so the SELL fee reserve uses the higher configured maker/taker rate. Actual BUY and SELL commissions always replace estimates in accounting.
+- `makerPercent > 0` — submit regular `LIMIT`. It may execute as maker or taker. The configured maker/taker rate ceiling is used for SELL coverage only after an actual fill reports a non-zero commission. If BUY fills are commission-free, no SELL fee reserve is added.
 
 `LIMIT_MAKER` does not guarantee an order will be accepted or filled. If Binance rejects it because it would immediately match, the pair pauses; the bot must not silently fall back to a regular LIMIT order. Maker execution also does not universally guarantee zero commission. The configured zero maker rate must match the effective account/symbol fee schedule. If the exchange reports an unexpected non-zero fee, actual accounting uses it.
 
