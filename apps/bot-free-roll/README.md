@@ -670,9 +670,9 @@ This decision selects the price source only. Freshness thresholds, stream-gap ha
 These questions remain unresolved and must not be silently guessed during implementation.
 
 1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-3. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
-4. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
-5. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
+2. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
+3. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
+4. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
 
 Ask only the question that blocks the current design decision. Do not overwhelm the user with every open question at once.
 
