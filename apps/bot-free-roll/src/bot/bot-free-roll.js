@@ -1035,6 +1035,10 @@ export class FreeRollBot {
     state.processedTradeIds.add(fillId)
     state.fills.set(fillId, { ...fill })
     state.fillsByOrder.set(orderId, (state.fillsByOrder.get(orderId) ?? 0) + 1)
+    this.#publish("fill.received", {
+      symbol,
+      fill: { ...fill },
+    })
 
     const commissionAmount = String(fill.commissionAmount ?? "")
     const commissionAsset = fill.commissionAsset ?? null
