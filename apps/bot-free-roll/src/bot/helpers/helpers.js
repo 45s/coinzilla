@@ -295,6 +295,9 @@ export function calculatePercentageChange({ from, to, scale, rounding }) {
   assertDecimalString(from, "from");
   assertDecimalString(to, "to");
   validateScale(scale);
+  if (scale > MAX_DECIMAL_SCALE - 2) {
+    throw new Error(`scale must not exceed ${MAX_DECIMAL_SCALE - 2} for percentage calculations`);
+  }
   const difference = subtractDecimal({ left: to, right: from });
   const ratio = divideDecimal({ left: difference, right: from, scale: scale + 2, rounding });
   return multiplyDecimal({ left: ratio, right: "100" });
