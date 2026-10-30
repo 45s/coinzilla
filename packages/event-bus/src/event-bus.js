@@ -4,6 +4,73 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
 
 const ALL_EVENTS = Symbol("all-events")
 
+function deepFreeze(value, seen = new WeakSet()) {
+  if (value === null || typeof value !== "object" || seen.has(value)) {
+    return value
+  }
+
+  seen.add(value)
+
+  if (value instanceof Map) {
+    for (const [key, child] of value) {
+      deepFreeze(key, seen)
+      deepFreeze(child, seen)
+    }
+
+    Object.defineProperties(value, {
+      set: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+      delete: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+      clear: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+    })
+
+    return Object.freeze(value)
+  }
+
+  if (value instanceof Set) {
+    for (const child of value) {
+      deepFreeze(child, seen)
+    }
+
+    Object.defineProperties(value, {
+      add: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+      delete: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+      clear: {
+        value() {
+          throw new TypeError("Cannot mutate frozen event data")
+        },
+      },
+    })
+
+    return Object.freeze(value)
+  }
+
+  for (const child of Object.values(value)) {
+    deepFreeze(child, seen)
+  }
+
+  return Object.freeze(value)
+}
+
 export class EventBus {
   constructor({ logger = defaultLogger, onError } = {}) {
     this.logger = logger
@@ -42,12 +109,20 @@ export class EventBus {
       })
     }
 
+    let eventData
+
+    try {
+      eventData = deepFreeze(structuredClone(data))
+    } catch (error) {
+      return toResult({ error })
+    }
+
     const event = Object.freeze({
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       name,
       source,
-      data,
+      data: eventData,
     })
 
     this.emitter.emit(name, event)

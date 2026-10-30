@@ -14,33 +14,36 @@ export const VR = {
 
 export class Validator {
   static validate({ isSoft = true, items } = {}) {
-    if (!items || !Array.isArray(items)) {
+    if (!Array.isArray(items)) {
       throw new Error(EM.invalidParameter('items'))
     }
 
     const errors = []
     for (const [value, rules, fieldName] of items) {
       const msgs = []
-      for (const r of rules) {
-        if (r === VR.required && !value) {
+      for (const rule of rules) {
+        if (rule === VR.required && !value) {
           msgs.push(EM.required())
         }
-        if (r === VR.notEmptyString && !value?.trim()) {
+        if (rule === VR.notEmptyString && (typeof value !== 'string' || !value.trim())) {
           msgs.push(EM.emptyString())
         }
-        if (r === VR.num && (typeof value !== 'number' || !Number.isFinite(value))) {
+        if (rule === VR.num && (typeof value !== 'number' || !Number.isFinite(value))) {
           msgs.push(EM.notNumber())
         }
-        if (r === VR.str && typeof value !== 'string') {
+        if (rule === VR.str && typeof value !== 'string') {
           msgs.push(EM.notString())
         }
-        if (r === VR.notUndefined && typeof value === 'undefined') {
+        if (rule === VR.fn && typeof value !== 'function') {
+          msgs.push(EM.notFunction())
+        }
+        if (rule === VR.notUndefined && typeof value === 'undefined') {
           msgs.push(EM.undefined())
         }
-        if (r === VR.arr && !Array.isArray(value)) {
+        if (rule === VR.arr && !Array.isArray(value)) {
           msgs.push(EM.arr())
         }
-        if (r === VR.notEmptyArr && (!Array.isArray(value) || value.length === 0)) {
+        if (rule === VR.notEmptyArr && (!Array.isArray(value) || value.length === 0)) {
           msgs.push(EM.emptyArray())
         }
       }
@@ -61,8 +64,9 @@ export class Validator {
     }
   }
 
-  static isRequiredNumberValid = (n) =>
-    typeof n === 'number' && Number.isFinite(n) && Boolean(n)
+  static isRequiredNumberValid = (number) =>
+    typeof number === 'number' && Number.isFinite(number) && Boolean(number)
 
-  static isRequiredNotEmptyString = (s) => typeof s === 'string' && Boolean(s.trim())
+  static isRequiredNotEmptyString = (value) =>
+    typeof value === 'string' && Boolean(value.trim())
 }

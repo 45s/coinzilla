@@ -146,10 +146,14 @@ export class FreeRollBot {
     })
 
     if (!result?.ok) {
-      this.logger.error?.("Failed to publish journal event", {
-        name,
-        errors: result?.errors,
-      })
+      try {
+        this.logger.error?.("Failed to publish journal event", {
+          name,
+          errors: result?.errors,
+        })
+      } catch {
+        // Logging must not interrupt bot event handling.
+      }
     }
   }
 
@@ -341,16 +345,20 @@ export class FreeRollBot {
       } catch (error) {
         state.priceTickSize = fallbackTickSize
         state.quantityStepSize = fallbackQuantityStepSize
-        this.logger.warn?.({
-          message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
-          details: {
-            pricePrecision: state.settings.pricePrecision,
-            quantityPrecision: state.settings.quantityPrecision,
-            tickSize: fallbackTickSize,
-            stepSize: fallbackQuantityStepSize,
-            error: error?.message ?? String(error),
-          },
-        })
+        try {
+          this.logger.warn?.({
+            message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
+            details: {
+              pricePrecision: state.settings.pricePrecision,
+              quantityPrecision: state.settings.quantityPrecision,
+              tickSize: fallbackTickSize,
+              stepSize: fallbackQuantityStepSize,
+              error: error?.message ?? String(error),
+            },
+          })
+        } catch {
+          // Diagnostics must not prevent configured fallbacks from being used.
+        }
         this.#debug(`[${symbol}] Exchange filter fallbacks selected`, {
           tickSize: fallbackTickSize,
           pricePrecision: state.settings.pricePrecision,
@@ -995,10 +1003,14 @@ export class FreeRollBot {
       timestamp: new Date().toISOString(),
     }
 
-    this.logger.error?.({
-      message: `[${symbol}] PAUSED: ${message}`,
-      ...diagnostic,
-    })
+    try {
+      this.logger.error?.({
+        message: `[${symbol}] PAUSED: ${message}`,
+        ...diagnostic,
+      })
+    } catch {
+      // The pause event must still be published if logging fails.
+    }
 
     this.#publish("bot.pair_paused", diagnostic)
     this.#debug(`[${symbol}] State paused`, diagnostic)

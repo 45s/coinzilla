@@ -1,4 +1,4 @@
-import { defaultLogger } from './index.js'
+import { defaultLogger } from './logger.js'
 
 export const handleErr = ({ logger = defaultLogger, where, error }) => {
   logger.error({

@@ -28,24 +28,32 @@ describe('addTextToFile', () => {
   it('rejects when the file name is missing', async () => {
     await assert.rejects(
       addTextToFile({ fileName: '', text: '' }),
-      { message: 'Error appending data to file' },
+      (error) => {
+        assert.equal(error.message, 'Error appending data to file')
+        assert.equal(error.cause.message, 'Invalid "fileName" parameter')
+        return true
+      },
     )
   })
 
-  it('wraps file-system errors in a stable error message', async () => {
+  it('preserves the original filesystem error as the cause', async () => {
     await assert.rejects(
       addTextToFile({ fileName: path.join(directory, 'missing', 'output.txt'), text: 'data' }),
-      { message: 'Error appending data to file' },
+      (error) => {
+        assert.equal(error.message, 'Error appending data to file')
+        assert.equal(error.cause.code, 'ENOENT')
+        return true
+      },
     )
   })
 })
 
-it("appends UTF-8 text without changing Unicode characters", async () => {
-  const localDirectory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-unicode-"))
-  const localFile = path.join(localDirectory, "unicode.txt")
+it('appends Latin Unicode text without changing Unicode characters', async () => {
+  const localDirectory = await mkdtemp(path.join(os.tmpdir(), 'coinzilla-unicode-'))
+  const localFile = path.join(localDirectory, 'unicode.txt')
   try {
-    await addTextToFile({ fileName: localFile, text: "Київ 🚀\n" })
-    assert.equal(await readFile(localFile, "utf8"), "Київ 🚀\n")
+    await addTextToFile({ fileName: localFile, text: 'café 🚀\n' })
+    assert.equal(await readFile(localFile, 'utf8'), 'café 🚀\n')
   } finally {
     await rm(localDirectory, { recursive: true, force: true })
   }

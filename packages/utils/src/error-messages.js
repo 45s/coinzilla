@@ -11,6 +11,7 @@ export const EM = {
   emptyArray: () => 'Empty array not allowed',
   notNumber: () => 'Must be a number',
   notString: () => 'Must be a string',
+  notFunction: () => 'Must be a function',
   undefined: () => 'Value is undefined',
   arr: () => 'It should be an array',
 }

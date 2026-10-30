@@ -1,4 +1,4 @@
-import { isProdMode, isTestingMode } from './index.js'
+import { isProdMode, isTestingMode } from './environment-mode.js'
 
 const colors = {
   reset: '\x1b[0m',
@@ -44,10 +44,17 @@ const levelColorsMap = {
   success: [colors.fg.green],
 }
 
-const formatContent = (data) =>
-  ['string', 'number', 'boolean'].some((type) => typeof data === type)
-    ? data
-    : JSON.stringify(data, null, 2)
+const formatContent = (data) => {
+  if (['string', 'number', 'boolean'].some((type) => typeof data === type)) {
+    return data
+  }
+
+  try {
+    return JSON.stringify(data, null, 2)
+  } catch {
+    return String(data)
+  }
+}
 
 /**
  *

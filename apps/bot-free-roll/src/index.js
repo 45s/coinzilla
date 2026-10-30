@@ -17,13 +17,29 @@ if (!validatedTradingConfig.ok) {
 }
 
 const eventBus = new EventBus({ logger })
-const { data: journal } = prepareJournal({
+const journalResult = prepareJournal({
   eventBus,
   logger,
   folderPath: "../../../logs_bot-free-roll",
 })
 
-const { data: broker } = await prepareBroker()
+if (!journalResult.ok) {
+  throw new Error("Failed to prepare journal", {
+    cause: journalResult.errors,
+  })
+}
+
+const { data: journal } = journalResult
+
+const brokerResult = await prepareBroker()
+
+if (!brokerResult.ok) {
+  throw new Error("Failed to prepare broker", {
+    cause: brokerResult.errors,
+  })
+}
+
+const { data: broker } = brokerResult
 
 const bot = new FreeRollBot({
   broker,
@@ -293,11 +309,11 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
-  const journalResult = await journal.start()
+  const journalStartResult = await journal.start()
 
-  if (!journalResult.ok) {
+  if (!journalStartResult.ok) {
     throw new Error("Failed to start journal", {
-      cause: journalResult.errors,
+      cause: journalStartResult.errors,
     })
   }
 

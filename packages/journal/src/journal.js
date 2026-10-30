@@ -15,13 +15,14 @@ export class Journal {
     this.writeQueue = Promise.resolve()
 
     this.started = false
+    this.starting = false
     this.closing = false
     this.closed = false
     this.writeErrors = []
   }
 
   async start({} = {}) {
-    if (this.started || this.closing || this.closed) {
+    if (this.started || this.starting || this.closing || this.closed) {
       return toResult({
         error: new Error("Journal has already started or closed"),
       })
@@ -39,13 +40,30 @@ export class Journal {
       })
     }
 
+    this.starting = true
+
     try {
       await mkdir(this.directory, { recursive: true })
+
+      if (this.closing || this.closed) {
+        return toResult({
+          error: new Error("Journal was closed during startup"),
+        })
+      }
 
       const { fileHandle, filePath } = await this.createSessionFile()
 
       this.fileHandle = fileHandle
       this.filePath = filePath
+
+      if (this.closing || this.closed) {
+        await this.fileHandle.close()
+        this.fileHandle = null
+
+        return toResult({
+          error: new Error("Journal was closed during startup"),
+        })
+      }
 
       const result = this.eventBus.subscribeAll({
         handler: async (event) => {
@@ -97,6 +115,8 @@ export class Journal {
       })
 
       return toResult({ error })
+    } finally {
+      this.starting = false
     }
   }
 

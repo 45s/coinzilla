@@ -48,6 +48,18 @@ test("valid config returns success and original config", () => {
   assert.equal("errors" in result, false)
 })
 
+test("validation is deterministic and does not mutate the config", () => {
+  const tradingConfig = createValidConfig()
+  const originalConfig = structuredClone(tradingConfig)
+
+  const firstResult = validateTradingConfig({ tradingConfig })
+  const secondResult = validateTradingConfig({ tradingConfig })
+
+  assert.deepEqual(firstResult, secondResult)
+  assert.deepEqual(tradingConfig, originalConfig)
+  assert.notStrictEqual(firstResult, secondResult)
+})
+
 test("missing config returns validation errors", () => {
   const result = validateTradingConfig({})
 
@@ -247,3 +259,18 @@ test("fractional precision values are rejected", () => {
   ))
 })
 
+
+
+test("rejects an empty pairs object", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs = {}
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(
+    result.errors.includes(
+      'strategies["free-roll"].pairs must contain at least one pair',
+    ),
+  )
+})

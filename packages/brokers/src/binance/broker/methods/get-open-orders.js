@@ -9,8 +9,9 @@ import {
 /**
  * @see {@link https://binance-docs.github.io/apidocs/spot/en/#current-open-orders-user_data}
  */
-export async function getOpenOrders() {
-  const fullQuery = generateSignQuery()
+export async function getOpenOrders({ symbol } = {}) {
+  const query = symbol ? `symbol=${encodeURIComponent(symbol)}&` : ""
+  const fullQuery = `${query}${generateSignQuery()}`
   const path = `openOrders?${fullQuery}&signature=${generateSignature(fullQuery)}`
   const r = await send({ path })
   if ("msg" in r) {

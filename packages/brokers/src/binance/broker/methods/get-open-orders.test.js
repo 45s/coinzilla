@@ -40,6 +40,22 @@ describe("getOpenOrders", () => {
       (error) => error.code === -1003 && error.msg === "Rate limit exceeded.",
     )
   })
+
+  it("filters open orders by symbol and signs the complete query", async (t) => {
+    let requestedUrl
+    t.mock.method(globalThis, "fetch", async (url) => {
+      requestedUrl = String(url)
+      return {
+        headers: { get: () => "application/json" },
+        json: async () => [exchangeOrder(3)],
+      }
+    })
+
+    const result = await getOpenOrders({ symbol: "BTCUSDT" })
+
+    assert.equal(result.length, 1)
+    assert.match(requestedUrl, /openOrders\?symbol=BTCUSDT&recvWindow=5000&timestamp=\d+&signature=/)
+  })
 })
 
 it("returns an empty list when no open orders exist", async (t) => {

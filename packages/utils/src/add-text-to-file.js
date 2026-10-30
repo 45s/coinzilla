@@ -14,6 +14,6 @@ export async function addTextToFile({ text, fileName }) {
     await fsPromises.appendFile(fileName, text, 'utf-8')
   } catch (err) {
     logger.error(err)
-    throw new Error('Error appending data to file')
+    throw new Error('Error appending data to file', { cause: err })
   }
 }

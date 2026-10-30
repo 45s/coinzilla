@@ -39,6 +39,20 @@ describe('Logger', () => {
     )
   })
 
+  it('does not throw when log data cannot be serialized as JSON', () => {
+    calls = []
+    console.log = (...args) => calls.push(args)
+    const logger = new Logger()
+    const circular = {}
+    circular.self = circular
+
+    assert.doesNotThrow(() => logger.info(circular))
+    assert.doesNotThrow(() => logger.info({ amount: 1n }))
+    assert.equal(calls.length, 2)
+    assert.equal(calls[0].includes('[object Object]'), true)
+    assert.equal(calls[1].includes('[object Object]'), true)
+  })
+
   it('exposes all supported logging methods', () => {
     const logger = new Logger()
 

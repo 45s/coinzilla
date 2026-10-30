@@ -14,6 +14,7 @@ describe('Validator', () => {
       [42, [VR.required, VR.num, VR.notUndefined], 'price'],
       ['BTC', [VR.required, VR.str, VR.notEmptyString], 'symbol'],
       [[1], [VR.arr, VR.notEmptyArr], 'values'],
+      [() => {}, [VR.fn], 'callback'],
     ]
 
     assert.equal(Validator.validate({ items }), undefined)
@@ -26,6 +27,7 @@ describe('Validator', () => {
       [undefined, [VR.notUndefined], 'timestamp'],
       ['not-an-array', [VR.arr], 'items'],
       [[], [VR.notEmptyArr], 'orders'],
+      ['not-a-function', [VR.fn], 'callback'],
     ]
 
     assert.deepEqual(Validator.validate({ items }), [
@@ -34,6 +36,7 @@ describe('Validator', () => {
       { value: undefined, msgs: [EM.undefined()], fieldName: 'timestamp' },
       { value: 'not-an-array', msgs: [EM.arr()], fieldName: 'items' },
       { value: [], msgs: [EM.emptyArray()], fieldName: 'orders' },
+      { value: 'not-a-function', msgs: [EM.notFunction()], fieldName: 'callback' },
     ])
   })
 
@@ -80,8 +83,16 @@ describe('Validator', () => {
     assert.equal(Validator.isRequiredNotEmptyString('   '), false)
     assert.equal(Validator.isRequiredNotEmptyString(123), false)
   })
-})
 
-it("ignores entries with an empty rules list", () => {
-  assert.equal(Validator.validate({ items: [["anything", []], [undefined, []]] }), undefined)
+  it('ignores entries with an empty rules list', () => {
+    assert.equal(Validator.validate({ items: [['anything', []], [undefined, []]] }), undefined)
+  })
+
+  it('reports non-string values for the non-empty-string rule without throwing', () => {
+    for (const value of [undefined, null, 0, 123, false, {}]) {
+      assert.deepEqual(Validator.validate({ items: [[value, [VR.notEmptyString], 'field']] }), [
+        { value, msgs: [EM.emptyString()], fieldName: 'field' },
+      ])
+    }
+  })
 })
