@@ -16,7 +16,9 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 2. Protect main and improve change safety
 
-- [ ] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate. Current repository settings show branch protection is not enabled.
+- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
+
+  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
 
@@ -29,8 +31,10 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 4. Improve code quality and dependency safety
 
-- [ ] Add consistent linting and formatting checks if the repository does not already enforce them.
-- [ ] Add dependency vulnerability checks to CI.
+- [ ] Add consistent linting and formatting checks if the repository does not already enforce them. GitHub Actions workflow linting is enforced by the existing JavaScript Syntax workflow; JavaScript linting and formatting are still follow-up work.
+- [x] Add dependency vulnerability checks to CI.
+
+  Current check: `pnpm audit --prod --audit-level high` runs on pull requests, pushes to `main`, and the weekly schedule.
 - [x] Keep the existing mock Binance key/secret examples in `.env.example` to demonstrate expected format, with an explicit comment that the values are fake.
 
 ## 5. Release safely
