@@ -1,17 +1,17 @@
 export function adaptTrade(trade) {
   if (!trade || typeof trade !== "object") {
-    throw new Error("Binance trade must be an object");
+    throw new Error("Binance trade must be an object")
   }
 
-  const required = ["id", "orderId", "symbol", "price", "qty", "quoteQty", "commission"];
+  const required = ["id", "orderId", "symbol", "price", "qty", "quoteQty", "commission"]
   for (const field of required) {
     if (trade[field] === undefined || trade[field] === null) {
-      throw new Error(`Binance trade is missing ${field}`);
+      throw new Error(`Binance trade is missing ${field}`)
     }
   }
 
   if (typeof trade.isBuyer !== "boolean" || typeof trade.isMaker !== "boolean") {
-    throw new Error("Binance trade must include isBuyer and isMaker flags");
+    throw new Error("Binance trade must include isBuyer and isMaker flags")
   }
 
   return {
@@ -26,5 +26,5 @@ export function adaptTrade(trade) {
     commissionAsset: trade.commissionAsset ?? null,
     isMaker: trade.isMaker,
     time: trade.time ?? null,
-  };
+  }
 }
