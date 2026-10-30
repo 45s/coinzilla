@@ -550,6 +550,85 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
   }
 })
 
+test("preserves unexpected third-asset fees and pauses before placing a SELL", async () => {
+  const events = []
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  let resolveBuyCreated
+  const buyCreated = new Promise((resolve) => {
+    resolveBuyCreated = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        if (event.name === "order.created" && event.data.side === "BUY") {
+          resolveBuyCreated(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    const buy = await Promise.race([
+      buyCreated,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
+    ])
+
+    userDataHandler(createExecutionEvent({
+      order: { ...buy, side: "BUY" },
+      tradeId: 30,
+      commissionAmount: "0.001",
+      commissionAsset: "BNB",
+    }))
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.paused,
+      "unexpected third-asset commission did not pause the pair",
+    )
+
+    const stats = bot.getStats().DOGEUSDT
+    const fillEvent = events.find((event) => event.name === "fill.received")
+
+    assert.equal(stats.paused, true)
+    assert.equal(stats.fillCount, 1)
+    assert.equal(stats.commissionTotals.BNB, "0.001")
+    assert.equal(fillEvent.data.fill.commissionAsset, "BNB")
+    assert.equal(fillEvent.data.fill.commissionAmount, "0.001")
+    assert.equal(createdOrders.length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
 test("fails startup when exact market metadata is unavailable", async () => {
   const bot = new FreeRollBot({
     broker: {
