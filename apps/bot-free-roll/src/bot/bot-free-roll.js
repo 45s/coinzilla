@@ -188,6 +188,8 @@ export class FreeRollBot {
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
           onEvent: (payload) => {
+            if (!this.#isRunning) return
+
             const event = payload?.event ?? payload
             if (event?.eventType === "outboundAccountPosition") {
               this.#handleBalanceUpdate(event)
@@ -237,6 +239,7 @@ export class FreeRollBot {
     } catch (error) {
       this.#isRunning = false
       await this.#disconnectSubscriptions()
+      await this.#queue.drain()
       handleErr({ where: "FreeRollBot.run()", error })
       throw error
     }
@@ -246,8 +249,9 @@ export class FreeRollBot {
     this.#debug("Stopping bot")
     this.#isRunning = false
     await this.#disconnectSubscriptions()
+    await this.#queue.drain()
 
-    this.#debug("Bot stopped; existing exchange orders were left untouched")
+    this.#debug("Bot stopped; pending tasks completed and existing exchange orders were left untouched")
   }
 
   getStats() {
@@ -491,7 +495,7 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     const order = state.buyOrder
 
-    if (!order || state.paused) return
+    if (!this.#isRunning || !order || state.paused) return
 
     state.cancelingOrderIds.add(order.id)
     this.#debug(`[${symbol}] Canceling BUY before trailing replacement`, {
@@ -562,7 +566,7 @@ export class FreeRollBot {
 
   async #placeBuy(symbol, rawPrice) {
     const state = this.#states.get(symbol)
-    if (state.paused || state.buyOrder) return
+    if (!this.#isRunning || state.paused || state.buyOrder) return
 
     const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
 
@@ -747,6 +751,8 @@ export class FreeRollBot {
   async #replaceSell(symbol) {
     const state = this.#states.get(symbol)
 
+    if (!this.#isRunning || state.paused) return false
+
     if (state.sellOrder && !(await this.#cancelSell(symbol))) {
       return false
     }
@@ -816,7 +822,7 @@ export class FreeRollBot {
 
   async #placeSell(symbol) {
     const state = this.#states.get(symbol)
-    if (state.paused) return false
+    if (!this.#isRunning || state.paused) return false
 
     const plan = calculateSellPlan({
       activeQuantity: state.activeQuantity,
@@ -890,7 +896,7 @@ export class FreeRollBot {
 
   async #placeNextBuy(symbol) {
     const state = this.#states.get(symbol)
-    if (state.paused || state.buyOrder) return
+    if (!this.#isRunning || state.paused || state.buyOrder) return
 
     const threshold = calculateBuyThreshold({
       referencePrice: state.referencePrice,
