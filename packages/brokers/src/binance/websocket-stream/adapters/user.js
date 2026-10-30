@@ -58,7 +58,7 @@ export const adaptUser = {
     commissionAsset: m.N,
     tradeId: m.t,
     isOrderWorking: m.w,
-    isMaker: m.m,
+    isBuyerMaker: m.m,
     creationTime: m.O,
     totalQuoteTradeQuantity: m.Z,
     orderListId: m.g,
