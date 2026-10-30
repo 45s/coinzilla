@@ -140,3 +140,22 @@ test("calculateSellPlan uses realistic 0.075% commission without the former 1% a
   assert.equal(plan.quantity, 394)
   assert.equal(plan.price, 0.08094)
 })
+
+
+test("calculateBuyThreshold avoids binary floating-point artifacts", () => {
+  const threshold = calculateBuyThreshold({
+    referencePrice: 1.554,
+    lastBuyPrice: null,
+    priceStepPercent: 0.05,
+  });
+
+  assert.equal(threshold, 1.553223);
+  assert.equal(String(threshold), "1.553223");
+});
+
+test("tick and step rounding uses exact decimal increments", () => {
+  assert.equal(roundPriceDown(1.5532230000000002, 0.001), 1.553);
+  assert.equal(roundPriceUp(1.5530000000000002, 0.001), 1.554);
+  assert.equal(roundQuantityDown(0.3, 0.1), 0.3);
+  assert.equal(roundQuantityDown(0.29999999999999993, 0.1), 0.2);
+});
