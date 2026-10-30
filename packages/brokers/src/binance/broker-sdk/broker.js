@@ -177,7 +177,7 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getMyTrades({ symbol, orderId, limit = 100 } = {}) {
+  async getMyTrades({ symbol, orderId, limit = 1000 } = {}) {
     try {
       if (!symbol) throw new Error("getMyTrades requires symbol")
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
