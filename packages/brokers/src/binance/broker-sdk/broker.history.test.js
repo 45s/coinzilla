@@ -49,7 +49,7 @@ test("getMyTrades returns normalized exact fills including commission details", 
     price: "0.05", quantity: "10", quoteQuantity: "0.5",
     commissionAmount: "0.001", commissionAsset: "DOGE", isMaker: true, time: 789,
   }])
-  assert.deepEqual(received, { symbol: "DOGEFDUSD", limit: 100, orderId: 123 })
+  assert.deepEqual(received, { symbol: "DOGEFDUSD", limit: 1000, orderId: 123 })
 })
 
 test("history methods reject missing symbols and invalid limits", async () => {
