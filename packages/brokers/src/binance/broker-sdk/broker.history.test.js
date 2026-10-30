@@ -29,7 +29,7 @@ test("getOrderHistory returns raw Binance orders and supports an order ID filter
   assert.deepEqual(received, { symbol: "DOGEFDUSD", limit: 25, orderId: 123 })
 })
 
-test("getMyTrades returns raw executions including commission details", async () => {
+test("getMyTrades returns normalized exact fills including commission details", async () => {
   const trades = [
     { id: 456, symbol: "DOGEFDUSD", orderId: 123, qty: "10", price: "0.05", quoteQty: "0.5", commission: "0.001", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 789 },
   ]
