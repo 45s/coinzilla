@@ -959,3 +959,52 @@ export function calculateFillAccountingExact({
     quoteQuantity: netQuoteQuantity,
   };
 }
+
+
+export function calculateCommissionRateExact({
+  price,
+  quoteQuantity,
+  commissionAmount,
+  commissionAsset,
+  baseAsset,
+  quoteAsset,
+}) {
+  for (const [name, value] of Object.entries({
+    price,
+    quoteQuantity,
+    commissionAmount,
+  })) {
+    assertDecimalString(value, name);
+  }
+
+  if (compareDecimal({ left: price, right: "0" }) <= 0 ||
+      compareDecimal({ left: quoteQuantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: commissionAmount, right: "0" }) < 0) {
+    throw new Error("Price and quote quantity must be positive; commission must be non-negative");
+  }
+  if (typeof baseAsset !== "string" || !baseAsset.trim() ||
+      typeof quoteAsset !== "string" || !quoteAsset.trim() ||
+      baseAsset === quoteAsset) {
+    throw new Error("baseAsset and quoteAsset must be distinct non-empty strings");
+  }
+
+  if (compareDecimal({ left: commissionAmount, right: "0" }) === 0) return "0";
+
+  let quoteCommission;
+  if (commissionAsset === quoteAsset) {
+    quoteCommission = commissionAmount;
+  } else if (commissionAsset === baseAsset) {
+    quoteCommission = multiplyDecimal({
+      left: commissionAmount,
+      right: price,
+    });
+  } else {
+    throw new Error(`Unsupported commission asset: ${commissionAsset ?? "unknown"}`);
+  }
+
+  return divideDecimal({
+    left: quoteCommission,
+    right: quoteQuantity,
+    scale: 18,
+  });
+}
