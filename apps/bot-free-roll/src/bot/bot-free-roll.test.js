@@ -698,6 +698,74 @@ test("reconciles partial SELL history and deduplicates a later stream replay", a
   }
 })
 
+test("ignores fills from orders that do not belong to this bot", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  const events = []
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `bot-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.length === 1,
+      "bot BUY was not created",
+    )
+
+    userDataHandler(createExecutionEvent({
+      order: {
+        orderId: "manual-order",
+        side: "BUY",
+        quantity: "100",
+        price: "100",
+      },
+      tradeId: 999,
+    }))
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 0)
+    assert.equal(events.some((event) => event.name === "fill.received"), false)
+    assert.equal(createdOrders.length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
 test("preserves unexpected third-asset fees and pauses before placing a SELL", async () => {
   const events = []
   const priceHandlers = new Map()
