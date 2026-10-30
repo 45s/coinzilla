@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.006`
+**Document version:** `v0.007`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -433,13 +433,13 @@ The price must then be rounded up to a valid price increment, and the result mus
 
 This simplified calculation assumes the relevant costs and commissions are denominated in the quote currency and that the entire relevant active-position cost must be recovered by this sale.
 
-### Different commission assets
+### Base-asset commissions and unsupported third assets
 
-If commissions are charged in the base asset or a third asset, the strategy must account for them correctly.
+The strategy supports commissions charged in the pair's quote asset or base asset, as well as explicit zero commissions. A base-asset commission changes the net base quantity available after a BUY or consumed by a SELL, so it must be recorded and reflected in inventory accounting.
 
-For example, a commission deducted in DOGE can reduce the amount of DOGE actually available to sell. A commission charged in another asset must be recorded separately and converted or valued consistently when calculating net profit.
+Third-asset commissions are not supported. Reject a pair before startup when its effective account/pair commission configuration requires a third asset. If a non-zero third-asset commission unexpectedly appears on a fill, preserve the reported fill and fee facts unchanged, mark accounting incomplete, and pause the pair. Do not convert or value the fee, claim net profitability, or place further orders until the discrepancy is resolved.
 
-Do not assume that every broker charges fees in the quote currency.
+A missing commission amount or asset is not equivalent to zero; mark the affected accounting incomplete and fail closed.
 
 ### Zero-fee executions
 
@@ -670,10 +670,9 @@ This decision selects the price source only. Freshness thresholds, stream-gap ha
 These questions remain unresolved and must not be silently guessed during implementation.
 
 1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-2. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
-3. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
-4. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
-5. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
+2. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
+3. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
+4. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
 
 Ask only the question that blocks the current design decision. Do not overwhelm the user with every open question at once.
 
@@ -681,7 +680,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.006`**
+Current version: **`v0.007`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -696,6 +695,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.007` — Clarified the approved commission policy: support quote/base/zero commissions, reject pairs requiring third-asset fees, and pause on unexpected third-asset fees without conversion or valuation.
 - `v0.006` — Approved free-coin allocation: allocate `keepQuantity` only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active.
 - `v0.005` — Approved wait-for-full-fill behavior: a partially filled order remains in progress and the strategy does not advance to its next step or create a replacement/new strategy order based on the partial fill alone.
 - `v0.004` — Approved last-traded-price source for both initial entry and ongoing price monitoring; clarified that subsequent BUY limits remain anchored to the last qualifying buy price. Market-data freshness and quality rules remain under FR-024.

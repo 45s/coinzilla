@@ -18,7 +18,7 @@ The strategy may depend only on Coinzilla-owned domain entities and broker capab
 The application must:
 
 1. Account for **actual executions**, not order acknowledgements or estimated fills.
-2. Correctly account for commissions charged in quote, base, or third-party assets, including zero-fee executions and mixed fee assets across fills.
+2. Correctly account for quote- and base-asset commissions, explicit zero-fee executions, and mixed quote/base fees across fills; reject pairs requiring third-asset commissions and pause if one unexpectedly appears.
 3. Use exact decimal arithmetic for all financial values and exchange increments.
 4. Never intentionally submit a SELL that fails the configured minimum **net** profitability rule.
 5. Never sell free inventory or reserve the same inventory for multiple orders.
@@ -111,7 +111,7 @@ Support, at minimum:
 
 - Quote-asset commission.
 - Base-asset commission.
-- Third-asset commission (for example, BNB).
+- Third-asset commission is unsupported: reject a pair before startup when its effective fee configuration requires a third asset; if one unexpectedly appears, preserve the reported fill/fee facts, mark accounting incomplete, and pause the pair without conversion or valuation.
 - Explicit zero commission.
 - Multiple commission entries if a venue can report them.
 - Different commission assets/rates on fills belonging to the same order.
@@ -121,7 +121,7 @@ Support, at minimum:
 
 Never replace actual commission with a configured rate. Configured fee rates are estimates/reserves for planning only. Actual fill accounting uses actual reported fees. If a required fee fact is unavailable, the affected accounting must be marked incomplete and trading must fail closed until resolved.
 
-Third-asset fees require a documented valuation policy and a trustworthy conversion price/time. If valuation cannot be established, do not claim net profitability in quote currency and do not approve a new recovery SELL based on incomplete accounting.
+Do not acquire, hold, convert, or spend third assets for fees. Do not value an unexpected third-asset fee; preserve the reported fact, mark accounting incomplete, and pause the affected pair until the discrepancy is resolved.
 
 ### III. Exact financial values
 
