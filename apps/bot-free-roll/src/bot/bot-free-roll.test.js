@@ -169,15 +169,48 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     userDataHandler(fillEvent)
     userDataHandler(fillEvent)
 
-    await Promise.race([
+    const sell = await Promise.race([
       sellCreated,
       new Promise((_, reject) => setTimeout(() => reject(new Error("SELL was not created")), 1000)),
     ])
 
-    // Let the second queued event run after the first fill has been processed.
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Quote totals must remain normalized decimal strings after the first fill.
+    assert.equal(bot.getStats().DOGEUSDT.cycleCost, "10002.49625")
 
-    assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
+    userDataHandler({
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        orderId: sell.orderId,
+        status: "FILLED",
+        side: "SELL",
+        price: String(sell.price),
+        quantity: String(sell.quantity),
+      },
+    })
+
+    await Promise.race([
+      new Promise((resolve) => {
+        const check = () => {
+          if (bot.getStats().DOGEUSDT.profitableCycles === 1) {
+            resolve()
+          } else {
+            setTimeout(check, 5)
+          }
+        }
+        check()
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL accounting did not complete")), 1000)),
+    ])
+
+    const stats = bot.getStats().DOGEUSDT
+    assert.equal(stats.buyFills, 1)
+    assert.equal(stats.sellFills, 1)
+    assert.equal(stats.profitableCycles, 1)
+    assert.equal(stats.cycleCost, "0")
+    assert.equal(stats.saleProceeds, "0")
+    assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
   } finally {
     await bot.stop()

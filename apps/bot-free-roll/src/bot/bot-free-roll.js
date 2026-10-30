@@ -716,7 +716,10 @@ export class FreeRollBot {
     state.lastBuyPrice = order.price
     state.buyFills += 1
     state.activeQuantity += accounting.netQuantity
-    state.cycleCost += accounting.estimatedCost
+    state.cycleCost = addDecimal({
+      left: state.cycleCost,
+      right: accounting.estimatedCost,
+    })
 
     this.#debug(`[${symbol}] BUY accounted`, {
       order,
@@ -909,7 +912,10 @@ export class FreeRollBot {
     state.sellFills += 1
     this.#recordSellFill(state, order, order.quantity)
 
-    const required = state.cycleCost + this.settings.minProfit
+    const required = addDecimal({
+      left: state.cycleCost,
+      right: String(this.settings.minProfit),
+    })
 
     this.#debug(`[${symbol}] SELL filled; checking recovery`, {
       saleProceeds: state.saleProceeds,
@@ -924,11 +930,17 @@ export class FreeRollBot {
     }
 
     state.profitableCycles += 1
-    state.estimatedRealizedProfit += state.saleProceeds - state.cycleCost
+    state.estimatedRealizedProfit = addDecimal({
+      left: state.estimatedRealizedProfit,
+      right: subtractDecimal({
+        left: state.saleProceeds,
+        right: state.cycleCost,
+      }),
+    })
     state.freeQuantity += Math.max(0, state.activeQuantity)
     state.activeQuantity = 0
-    state.cycleCost = 0
-    state.saleProceeds = 0
+    state.cycleCost = "0"
+    state.saleProceeds = "0"
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
@@ -950,7 +962,10 @@ export class FreeRollBot {
       state.activeQuantity - accounting.estimatedBaseDeduction,
     )
 
-    state.saleProceeds += accounting.estimatedProceeds
+    state.saleProceeds = addDecimal({
+      left: state.saleProceeds,
+      right: accounting.estimatedProceeds,
+    })
 
     this.#debug("SELL fill accounted", {
       quantity,
