@@ -1030,6 +1030,14 @@ export class FreeRollBot {
       return false
     }
     if (state.processedTradeIds.has(fillId)) return true
+    if (typeof fill.isMaker !== "boolean") {
+      this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
+      return false
+    }
+    if (state.orderType === "LIMIT_MAKER" && !fill.isMaker) {
+      this.#pause(symbol, `LIMIT_MAKER order produced a taker fill for trade ${fillId}`)
+      return false
+    }
 
     state.processedTradeIds.add(fillId)
     state.fills.set(fillId, { ...fill })
