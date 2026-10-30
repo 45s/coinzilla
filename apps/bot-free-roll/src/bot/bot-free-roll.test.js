@@ -17,25 +17,24 @@ function createPair() {
 }
 
 test("disabled Free-Roll strategy does not initialize pairs or subscribe to broker streams", async () => {
-  const brokerCalls = [];
-
+  const brokerCalls = []
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => {
-        brokerCalls.push("getSymbolFilters");
-        return { ok: true, data: { tickSize: 0.00001, stepSize: 1 } };
+        brokerCalls.push("getSymbolFilters")
+        return { ok: true, data: { tickSize: 0.00001, stepSize: 1 } }
       },
       subscribeForUserData: async () => {
-        brokerCalls.push("subscribeForUserData");
-        return { ok: true, data: { disconnect() {} } };
+        brokerCalls.push("subscribeForUserData")
+        return { ok: true, data: { disconnect() {} } }
       },
       subscribeForPrices: async () => {
-        brokerCalls.push("subscribeForPrices");
-        return { ok: true, data: { disconnect() {} } };
+        brokerCalls.push("subscribeForPrices")
+        return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async () => {
-        brokerCalls.push("createOrder");
-        return { ok: true, data: { orderId: "unexpected-order" } };
+        brokerCalls.push("createOrder")
+        return { ok: true, data: { orderId: "unexpected-order" } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -48,16 +47,16 @@ test("disabled Free-Roll strategy does not initialize pairs or subscribe to brok
         },
       },
     },
-  });
+  })
 
-  await bot.run();
+  await bot.run()
 
-  assert.deepEqual(brokerCalls, []);
-  assert.deepEqual(bot.getStats(), {});
-  assert.equal(bot.getSummary().running, false);
+  assert.deepEqual(brokerCalls, [])
+  assert.deepEqual(bot.getStats(), {})
+  assert.equal(bot.getSummary().running, false)
 
-  await bot.stop();
-});
+  await bot.stop()
+})
 
 test("disabled Free-Roll strategy can run without a broker", async () => {
   const bot = new FreeRollBot({
@@ -76,6 +75,76 @@ test("disabled Free-Roll strategy can run without a broker", async () => {
 
   await assert.doesNotReject(bot.run())
   assert.deepEqual(bot.getStats(), {})
+  assert.equal(bot.getSummary().running, false)
+})
+
+test("stop drains queued fill events without submitting follow-up orders", async () => {
+  const priceHandlers = new Map()
+  let userDataHandler
+  const createdOrders = []
+  let resolveBuyCreated
+  const buyCreated = new Promise((resolve) => { resolveBuyCreated = resolve })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: { tickSize: 0.00001, stepSize: 1 } }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        const response = { orderId: `${order.side}-${createdOrders.length}` }
+        return { ok: true, data: response }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created" && event.data.side === "BUY") {
+          resolveBuyCreated(event.data)
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+  priceHandlers.get("DOGEUSDT")({ price: 100 })
+
+  const buy = await Promise.race([
+    buyCreated,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("BUY was not created")), 1000)),
+  ])
+
+  userDataHandler({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: {
+      symbol: "DOGEUSDT",
+      orderId: buy.orderId,
+      status: "FILLED",
+      side: "BUY",
+      price: String(buy.price),
+      quantity: String(buy.quantity),
+    },
+  })
+
+  await bot.stop()
+
+  assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
+  assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 0)
   assert.equal(bot.getSummary().running, false)
 })
 
