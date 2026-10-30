@@ -14,7 +14,7 @@ import {
   estimateSellAccountingExact,
   getOrderId,
   roundPriceDown,
-  roundQuantityDown,
+  roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
 
@@ -515,14 +515,13 @@ export class FreeRollBot {
         `cancel BUY ${symbol} ${order.id}`,
       )
 
-      const remaining = Number(canceled?.quantity)
+      const remaining = String(canceled?.quantity)
       const status = String(canceled?.status ?? "").toUpperCase()
 
       if (
         status === "FILLED" ||
-        !Number.isFinite(remaining) ||
-        remaining < 0 ||
-        remaining < order.quantity - 1e-8
+        compareDecimal({ left: remaining, right: "0" }) < 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) < 0
       ) {
         state.cancelingOrderIds.delete(order.id)
         this.#pause(
@@ -575,12 +574,13 @@ export class FreeRollBot {
 
     const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
 
-    const quantity = roundQuantityDown(
-      state.settings.orderQuantity,
-      state.quantityStepSize ?? 0,
-    )
+    const quantity = roundDecimalToIncrement({
+      value: String(state.settings.orderQuantity),
+      increment: String(state.quantityStepSize ?? 0),
+      direction: "down",
+    })
 
-    if (quantity <= 0) {
+    if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
       this.#pause(symbol, "BUY quantity is below the exchange quantity step")
       return
     }
@@ -594,7 +594,7 @@ export class FreeRollBot {
           side: "BUY",
           type: "LIMIT",
           timeInForce: "GTC",
-          quantity: String(quantity),
+          quantity,
           price: String(price),
         }),
         `create BUY ${symbol}`,
@@ -603,7 +603,7 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
-      state.buyOrder = { id, quantity, price }
+      state.buyOrder = { id, quantity, price: String(price) }
       state.lastAdjustmentPrice = Number(
         (price / (1 - state.settings.priceStepPercent / 100)).toFixed(
           state.settings.pricePrecision,
@@ -786,13 +786,16 @@ export class FreeRollBot {
       )
 
       // Existing adapter reports remaining quantity in .quantity.
-      const remaining = Number(canceled?.quantity)
+      const remaining = String(canceled?.quantity)
 
-      if (!Number.isFinite(remaining) || remaining < 0) {
+      if (compareDecimal({ left: remaining, right: "0" }) < 0) {
         throw new Error("Cannot determine remaining quantity after cancel")
       }
 
-      const filledQuantity = Math.max(0, order.quantity - remaining)
+      const filledQuantity = maxDecimal({
+        left: "0",
+        right: subtractDecimal({ left: String(order.quantity), right: remaining }),
+      })
 
       if (filledQuantity > 0) {
         this.#recordSellFill(state, order, filledQuantity)
@@ -963,7 +966,7 @@ export class FreeRollBot {
       left: state.freeQuantity,
       right: maxDecimal({ left: "0", right: state.activeQuantity }),
     })
-    state.activeQuantity = 0
+    state.activeQuantity = "0"
     state.cycleCost = "0"
     state.saleProceeds = "0"
     state.trailingBuy = true
