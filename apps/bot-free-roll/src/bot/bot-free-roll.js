@@ -48,8 +48,8 @@ export class FreeRollBot {
     const { pairs, settings = {} } = strategy
     this.#isEnabled = strategy.enabled !== false
 
-    if (!broker || !pairs || typeof pairs !== "object") {
-      throw new Error("FreeRollBot requires broker and pairs")
+    if ((!broker && this.#isEnabled) || !pairs || typeof pairs !== "object") {
+      throw new Error("FreeRollBot requires a broker when enabled and a pairs object")
     }
 
     this.broker = broker
