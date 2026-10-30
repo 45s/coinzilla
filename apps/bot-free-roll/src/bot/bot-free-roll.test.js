@@ -3,6 +3,26 @@ import assert from "node:assert/strict"
 
 import { FreeRollBot } from "./bot-free-roll.js"
 
+function waitForCondition(predicate, message, timeoutMs = 1000) {
+  return new Promise((resolve, reject) => {
+    let interval
+    const timeout = setTimeout(() => {
+      clearInterval(interval)
+      reject(new Error(message))
+    }, timeoutMs)
+
+    const check = () => {
+      if (!predicate()) return
+      clearTimeout(timeout)
+      clearInterval(interval)
+      resolve()
+    }
+
+    interval = setInterval(check, 5)
+    check()
+  })
+}
+
 function createPair() {
   return {
     enabled: true,
@@ -322,19 +342,10 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
       },
     })
 
-    await Promise.race([
-      new Promise((resolve) => {
-        const check = () => {
-          if (bot.getStats().DOGEUSDT.profitableCycles === 1) {
-            resolve()
-          } else {
-            setTimeout(check, 5)
-          }
-        }
-        check()
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("SELL accounting did not complete")), 1000)),
-    ])
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.profitableCycles === 1,
+      "SELL accounting did not complete",
+    )
 
     const stats = bot.getStats().DOGEUSDT
     assert.equal(stats.buyFills, 1)
@@ -400,21 +411,10 @@ test("publishes pair-paused diagnostics even when error logging throws", async (
     await bot.run()
     priceHandlers.get("DOGEUSDT")({ price: 100 })
 
-    await Promise.race([
-      new Promise((resolve) => {
-        const check = () => {
-          if (events.some((event) => event.name === "bot.pair_paused")) {
-            resolve()
-          } else {
-            setTimeout(check, 5)
-          }
-        }
-        check()
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("pause event was not published")), 1000),
-      ),
-    ])
+    await waitForCondition(
+      () => events.some((event) => event.name === "bot.pair_paused"),
+      "pause event was not published",
+    )
 
     assert.equal(bot.getStats().DOGEUSDT.paused, true)
     assert.ok(events.some((event) => event.name === "bot.pair_paused"))
