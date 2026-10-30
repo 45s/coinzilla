@@ -12,7 +12,7 @@ export function adaptOrder(binanceOrder) {
     symbol,
   } = binanceOrder
   const quantity = +origQty - +executedQty
-  return new Order({
+  const order = new Order({
     type,
     side,
     symbol,
@@ -21,4 +21,11 @@ export function adaptOrder(binanceOrder) {
     id: String(orderId),
     ...(clientOrderId ? { clientOrderId } : {}),
   })
+
+  // Keep exact exchange quantities and terminal status available to reconciliation.
+  order.originalQuantity = String(origQty)
+  order.executedQuantity = String(executedQty)
+  order.status = binanceOrder.status
+
+  return order
 }
