@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.005`
+**Document version:** `v0.006`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -292,7 +292,7 @@ The strategy must:
 
 1. Reconcile the actual sale proceeds and commissions.
 2. Verify that the sale satisfies the required net-profit condition.
-3. Account for the remaining 1 DOGE as free coins once the cycle's accounting confirms that allocation.
+3. Allocate the remaining 1 DOGE as free coins only after the recovery SELL is fully filled and actual net profit meets `minProfit`.
 4. Exclude that free DOGE from all future trading-position calculations and sell quantities.
 5. Maintain or place the next buy order as appropriate.
 6. Prepare a new recovery sell order for any newly acquired active position.
@@ -361,7 +361,7 @@ For example:
 
 The free-coin amount shown in this table assumes the corresponding recovery sale subsequently completes and the required accounting conditions are satisfied.
 
-If a sale partially fills, is canceled, or fails to meet the profitability requirement, the bot must reconcile the actual outcome before allocating free coins.
+Free coins are allocated only after the recovery SELL is fully filled and the actual net profit meets `minProfit`. If the SELL is canceled after a partial fill, allocate no free coins: reconcile the actual execution, and keep the remaining position active. A partial fill or order status alone never creates free inventory.
 
 ### Separate accounting buckets
 
@@ -640,6 +640,10 @@ Do not place orders when configuration is invalid or the active position cannot 
 
 A partially filled order remains in progress. The strategy waits until the order is fully filled before proceeding to its next strategy step. Partial execution alone does not trigger a new buy/sell decision or replacement order. The broker's order status and actual fills must still be observed and reconciled while waiting.
 
+### Approved decision — free-coin allocation
+
+Allocate `keepQuantity` as free coins only after the recovery SELL is fully filled and the actual net profit meets `minProfit`. If the SELL is canceled after a partial fill, allocate no free coins. Reconcile the actual execution and keep the remaining position active. A partial fill, cancellation request, or order status alone does not complete a recovery cycle or create free inventory.
+
 ### Approved decision — initial and ongoing price source
 
 Use the **last traded price** as the market-data source for both initial entry and ongoing price monitoring.
@@ -660,7 +664,6 @@ This decision selects the price source only. Freshness thresholds, stream-gap ha
 These questions remain unresolved and must not be silently guessed during implementation.
 
 1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-2. **Free-coin allocation:** What exact event confirms a recovery cycle and makes its retained quantity permanently free, including when a sell order is canceled after partial execution?
 3. **Commission assets:** How should commissions charged in base or third-party assets be valued for net-profit and cost-basis reporting?
 4. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
 5. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
@@ -672,7 +675,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.005`**
+Current version: **`v0.006`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -687,6 +690,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.006` — Approved free-coin allocation: allocate `keepQuantity` only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active.
 - `v0.005` — Approved wait-for-full-fill behavior: a partially filled order remains in progress and the strategy does not advance to its next step or create a replacement/new strategy order based on the partial fill alone.
 - `v0.004` — Approved last-traded-price source for both initial entry and ongoing price monitoring; clarified that subsequent BUY limits remain anchored to the last qualifying buy price. Market-data freshness and quality rules remain under FR-024.
 - `v0.003` — Approved initial entry pricing: use the last traded price as the reference, apply the configured `priceStepPercent`, and round the BUY limit down to the broker's valid tick size; fail closed when required price/rule data is unavailable.
