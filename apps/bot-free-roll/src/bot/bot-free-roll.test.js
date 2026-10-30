@@ -16,6 +16,49 @@ function createPair() {
   }
 }
 
+test("disabled Free-Roll strategy does not initialize pairs or subscribe to broker streams", async () => {
+  const brokerCalls = [];
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => {
+        brokerCalls.push("getSymbolFilters");
+        return { ok: true, data: { tickSize: 0.00001, stepSize: 1 } };
+      },
+      subscribeForUserData: async () => {
+        brokerCalls.push("subscribeForUserData");
+        return { ok: true, data: { disconnect() {} } };
+      },
+      subscribeForPrices: async () => {
+        brokerCalls.push("subscribeForPrices");
+        return { ok: true, data: { disconnect() {} } };
+      },
+      createOrder: async () => {
+        brokerCalls.push("createOrder");
+        return { ok: true, data: { orderId: "unexpected-order" } };
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          enabled: false,
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  });
+
+  await bot.run();
+
+  assert.deepEqual(brokerCalls, []);
+  assert.deepEqual(bot.getStats(), {});
+  assert.equal(bot.getSummary().running, false);
+
+  await bot.stop();
+});
+
 test("unexpected queued-task failures pause only the affected pair and publish diagnostics", async () => {
   const priceHandlers = new Map()
   const journalEvents = []
