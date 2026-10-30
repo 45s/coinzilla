@@ -63,6 +63,38 @@ test("reports a failed task and continues the same key queue", async () => {
   assert.deepEqual(order, ["continued"])
 })
 
+test("drain waits for pending tasks across all keys", async () => {
+  const queue = createKeyedQueue()
+  let releaseTask
+  const taskGate = new Promise((resolve) => { releaseTask = resolve })
+  let taskFinished = false
+  let drainFinished = false
+
+  const first = queue.enqueue({
+    key: "DOGEUSDT",
+    task: async () => {
+      await taskGate
+      taskFinished = true
+    },
+  })
+  const second = queue.enqueue({
+    key: "BTCUSDT",
+    task: async () => {},
+  })
+  const drain = queue.drain().then(() => { drainFinished = true })
+
+  await second
+  await Promise.resolve()
+  assert.equal(taskFinished, false)
+  assert.equal(drainFinished, false)
+
+  releaseTask()
+  await Promise.all([first, drain])
+
+  assert.equal(taskFinished, true)
+  assert.equal(drainFinished, true)
+})
+
 test("disconnects supported subscription types and reports failures", async () => {
   const calls = []
   const result = await disconnectSubscriptions({

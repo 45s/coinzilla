@@ -29,7 +29,11 @@ export function createKeyedQueue({ onError } = {}) {
     return next
   }
 
-  return { enqueue }
+  async function drain() {
+    await Promise.all([...queues.values()])
+  }
+
+  return { enqueue, drain }
 }
 
 export async function disconnectSubscriptions({ subscriptions }) {
