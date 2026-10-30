@@ -37,5 +37,5 @@ it("preserves zero fill and commission values", () => {
   assert.equal(result.totalTradeQuantity, "0")
   assert.equal(result.commission, "0")
   assert.equal(result.commissionAsset, null)
-  assert.equal(result.isBuyerMaker, false)
+  assert.equal(result.isMaker, false)
 })
