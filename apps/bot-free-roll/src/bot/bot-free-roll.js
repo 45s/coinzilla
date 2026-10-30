@@ -5,12 +5,13 @@ import {
   validateConfig,
   calculateBuyThreshold,
   addDecimal,
+  maxDecimal,
   compareDecimal,
   subtractDecimal,
-  getFeeRate,
-  calculateSellPlan,
-  estimateBuyAccounting,
-  estimateSellAccounting,
+  getFeeRateExact,
+  calculateSellPlanExact,
+  estimateBuyAccountingExact,
+  estimateSellAccountingExact,
   getOrderId,
   roundPriceDown,
   roundQuantityDown,
@@ -68,7 +69,7 @@ export class FreeRollBot {
     })
 
     this.settings = {
-      minProfit: settings.minProfit ?? 0.01,
+      minProfit: String(settings.minProfit ?? 0.01),
     }
 
     if (!Number.isFinite(this.settings.minProfit) || this.settings.minProfit <= 0) {
@@ -94,7 +95,7 @@ export class FreeRollBot {
         throw new Error(`${symbol}: invalid pair settings`)
       }
 
-      const feeRate = getFeeRate({
+      const feeRate = getFeeRateExact({
         makerPercent: pair.makerPercent,
         takerPercent: pair.takerPercent,
       })
@@ -112,10 +113,10 @@ export class FreeRollBot {
         lastBuyPrice: null,
         buyOrder: null,
         sellOrder: null,
-        activeQuantity: 0,
+        activeQuantity: "0",
         cycleCost: "0",
         saleProceeds: "0",
-        freeQuantity: 0,
+        freeQuantity: "0",
         buyFills: 0,
         sellFills: 0,
         profitableCycles: 0,
@@ -302,10 +303,15 @@ export class FreeRollBot {
     for (const balance of balances) {
       if (!balance?.asset) continue
 
-      const free = Number(balance.free)
-      const locked = Number(balance.locked)
+      const free = String(balance.free)
+      const locked = String(balance.locked)
 
-      if (!Number.isFinite(free) || !Number.isFinite(locked)) continue
+      try {
+        compareDecimal({ left: free, right: "0" })
+        compareDecimal({ left: locked, right: "0" })
+      } catch {
+        continue
+      }
 
       this.#confirmedBalances.set(balance.asset, { free, locked })
     }
@@ -719,15 +725,18 @@ export class FreeRollBot {
     state.buyOrder = null
     state.trailingBuy = false
 
-    const accounting = estimateBuyAccounting({
-      quantity: order.quantity,
-      price: order.price,
+    const accounting = estimateBuyAccountingExact({
+      quantity: String(order.quantity),
+      price: String(order.price),
       feeRate: state.feeRate,
     })
 
     state.lastBuyPrice = order.price
     state.buyFills += 1
-    state.activeQuantity += accounting.netQuantity
+    state.activeQuantity = addDecimal({
+      left: state.activeQuantity,
+      right: accounting.netQuantity,
+    })
     state.cycleCost = addDecimal({
       left: state.cycleCost,
       right: accounting.estimatedCost,
@@ -824,15 +833,15 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused) return false
 
-    const plan = calculateSellPlan({
+    const plan = calculateSellPlanExact({
       activeQuantity: state.activeQuantity,
-      keepQuantity: state.settings.keepQuantity,
-      cycleCost: Number(state.cycleCost),
-      saleProceeds: Number(state.saleProceeds),
+      keepQuantity: String(state.settings.keepQuantity),
+      cycleCost: state.cycleCost,
+      saleProceeds: state.saleProceeds,
       minProfit: this.settings.minProfit,
       feeRate: state.feeRate,
-      priceTickSize: state.priceTickSize ?? 0,
-      quantityStepSize: state.quantityStepSize ?? 0,
+      priceTickSize: String(state.priceTickSize ?? 0),
+      quantityStepSize: String(state.quantityStepSize ?? 0),
     })
 
     this.#debug(`[${symbol}] SELL plan calculated`, {
@@ -843,7 +852,7 @@ export class FreeRollBot {
       keepQuantity: state.settings.keepQuantity,
     })
 
-    if (plan.quantity <= 0 || plan.price === null) return true
+    if (compareDecimal({ left: plan.quantity, right: "0" }) <= 0 || plan.price === null) return true
 
     try {
       const order = unwrapResult(
@@ -852,8 +861,8 @@ export class FreeRollBot {
           side: "SELL",
           type: "LIMIT",
           timeInForce: "GTC",
-          quantity: String(plan.quantity),
-          price: String(plan.price),
+          quantity: plan.quantity,
+          price: plan.price,
         }),
         `create SELL ${symbol}`,
       )
@@ -928,7 +937,7 @@ export class FreeRollBot {
 
     const required = addDecimal({
       left: state.cycleCost,
-      right: String(this.settings.minProfit),
+      right: this.settings.minProfit,
     })
 
     this.#debug(`[${symbol}] SELL filled; checking recovery`, {
@@ -951,7 +960,10 @@ export class FreeRollBot {
         right: state.cycleCost,
       }),
     })
-    state.freeQuantity += Math.max(0, state.activeQuantity)
+    state.freeQuantity = addDecimal({
+      left: state.freeQuantity,
+      right: maxDecimal({ left: "0", right: state.activeQuantity }),
+    })
     state.activeQuantity = 0
     state.cycleCost = "0"
     state.saleProceeds = "0"
@@ -965,16 +977,19 @@ export class FreeRollBot {
   }
 
   #recordSellFill(state, order, quantity) {
-    const accounting = estimateSellAccounting({
-      quantity,
-      price: order.price,
+    const accounting = estimateSellAccountingExact({
+      quantity: String(quantity),
+      price: String(order.price),
       feeRate: state.feeRate,
     })
 
-    state.activeQuantity = Math.max(
-      0,
-      state.activeQuantity - accounting.estimatedBaseDeduction,
-    )
+    state.activeQuantity = maxDecimal({
+      left: "0",
+      right: subtractDecimal({
+        left: state.activeQuantity,
+        right: accounting.estimatedBaseDeduction,
+      }),
+    })
 
     state.saleProceeds = addDecimal({
       left: state.saleProceeds,
