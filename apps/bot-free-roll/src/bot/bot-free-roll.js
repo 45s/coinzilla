@@ -68,13 +68,12 @@ export class FreeRollBot {
       },
     })
 
-    this.settings = {
-      minProfit: String(settings.minProfit ?? 0.01),
-    }
-
-    if (!Number.isFinite(this.settings.minProfit) || this.settings.minProfit <= 0) {
+    const minProfit = settings.minProfit ?? 0.01
+    if (!Number.isFinite(minProfit) || minProfit <= 0) {
       throw new Error("Invalid minProfit setting")
     }
+
+    this.settings = { minProfit: String(minProfit) }
 
     for (const [symbol, pair] of Object.entries(pairs)) {
       if (!this.#isEnabled || pair.enabled === false) {
