@@ -46,7 +46,27 @@ describe(`_utils/${NH.name}`, () => {
     })
   })
 
+  describe('"fix" precision validation', () => {
+    for (const digits of [-1, 1.5, 101, NaN, Infinity, '2']) {
+      it(`rejects invalid digits: ${String(digits)}`, () => {
+        assert.throws(() => NH.fix(1.2345, digits), {
+          name: 'RangeError',
+          message: 'digits must be an integer between 0 and 100',
+        })
+      })
+    }
+  })
+
   describe(`"${NH.precise.name}" method`, () => {
+    for (const precision of [0, -1, 1.5, 101, NaN, Infinity, '2']) {
+      it(`rejects invalid precision: ${String(precision)}`, () => {
+        assert.throws(() => NH.precise(1.2345, precision), {
+          name: 'RangeError',
+          message: 'precision must be an integer between 1 and 100',
+        })
+      })
+    }
+
     it('should precise number', () => {
       assert.strictEqual(NH.precise(0.1286, 4), 0.1286)
       assert.strictEqual(NH.precise(2.0456, 4), 2.046)

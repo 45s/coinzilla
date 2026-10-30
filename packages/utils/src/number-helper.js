@@ -21,7 +21,13 @@ export class NH {
    * @param {number} number
    * @returns number
    */
-  static fix = (number, digits = 4) => Number(number.toFixed(digits))
+  static fix = (number, digits = 4) => {
+    if (!Number.isInteger(digits) || digits < 0 || digits > 100) {
+      throw new RangeError("digits must be an integer between 0 and 100")
+    }
+
+    return Number(number.toFixed(digits))
+  }
 
   /**
    * precise number "2.0456" to "2.046" with precision "4"
@@ -29,5 +35,11 @@ export class NH {
    * @param {*} precision
    * @returns
    */
-  static precise = (number, precision = 2) => Number(number.toPrecision(precision))
+  static precise = (number, precision = 2) => {
+    if (!Number.isInteger(precision) || precision < 1 || precision > 100) {
+      throw new RangeError("precision must be an integer between 1 and 100")
+    }
+
+    return Number(number.toPrecision(precision))
+  }
 }
