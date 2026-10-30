@@ -371,5 +371,5 @@ test("percentage helpers reject non-string financial inputs and invalid division
   assert.throws(() => applyPercentageChange({ value: "1", percent: 1 }), { message: "percent must be a decimal string" });
   assert.throws(() => calculatePercentageChange({ from: "0", to: "1", scale: 4, rounding: "half-up" }), { message: "Cannot divide by zero" });
   assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 4 }), { message: /rounding/ });
-  assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 101, rounding: "half-up" }));
+  assert.throws(() => calculatePercentageChange({ from: "1", to: "2", scale: 99, rounding: "half-up" }));
 });
