@@ -117,6 +117,116 @@ export function multiplyDecimal({ left, right }) {
   });
 }
 
+function validateScale(scale) {
+  if (!Number.isInteger(scale) || scale < 0 || scale > MAX_DECIMAL_SCALE) {
+    throw new Error(`scale must be an integer from 0 to ${MAX_DECIMAL_SCALE}`);
+  }
+}
+
+function divideIntegers({ numerator, denominator, rounding }) {
+  if (denominator === 0n) {
+    throw new Error("Cannot divide by zero");
+  }
+
+  if (!["toward-zero", "away-from-zero", "half-up"].includes(rounding)) {
+    throw new Error("rounding must be toward-zero, away-from-zero, or half-up");
+  }
+
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+
+  if (remainder === 0n || rounding === "toward-zero") {
+    return quotient;
+  }
+
+  const sameSign = (numerator < 0n) === (denominator < 0n);
+  const adjustment = sameSign ? 1n : -1n;
+
+  if (rounding === "away-from-zero") {
+    return quotient + adjustment;
+  }
+
+  return remainder < 0n
+    ? (-remainder * 2n >= (denominator < 0n ? -denominator : denominator)
+        ? quotient + adjustment
+        : quotient)
+    : (remainder * 2n >= (denominator < 0n ? -denominator : denominator)
+        ? quotient + adjustment
+        : quotient);
+}
+
+export function divideDecimal({ left, right, scale, rounding }) {
+  validateScale(scale);
+  const parsedLeft = parseDecimal(left);
+  const parsedRight = parseDecimal(right);
+
+  let numerator = parsedLeft.coefficient;
+  let denominator = parsedRight.coefficient;
+  const exponent = parsedRight.scale + scale - parsedLeft.scale;
+
+  if (exponent >= 0) {
+    numerator *= 10n ** BigInt(exponent);
+  } else {
+    denominator *= 10n ** BigInt(-exponent);
+  }
+
+  return formatDecimalString({
+    coefficient: divideIntegers({ numerator, denominator, rounding }),
+    scale,
+  });
+}
+
+export function absoluteDecimal({ value }) {
+  const parsed = parseDecimal(value);
+  return formatDecimalString({
+    coefficient: parsed.coefficient < 0n ? -parsed.coefficient : parsed.coefficient,
+    scale: parsed.scale,
+  });
+}
+
+export function negateDecimal({ value }) {
+  const parsed = parseDecimal(value);
+  return formatDecimalString({
+    coefficient: -parsed.coefficient,
+    scale: parsed.scale,
+  });
+}
+
+export function minDecimal({ left, right }) {
+  return compareDecimal({ left, right }) <= 0
+    ? formatDecimalString(parseDecimal(left))
+    : formatDecimalString(parseDecimal(right));
+}
+
+export function maxDecimal({ left, right }) {
+  return compareDecimal({ left, right }) >= 0
+    ? formatDecimalString(parseDecimal(left))
+    : formatDecimalString(parseDecimal(right));
+}
+
+export function rescaleDecimal({ value, scale, rounding }) {
+  validateScale(scale);
+  const parsed = parseDecimal(value);
+
+  if (scale >= parsed.scale) {
+    return formatDecimalString({
+      coefficient: parsed.coefficient * 10n ** BigInt(scale - parsed.scale),
+      scale,
+    });
+  }
+
+  const divisor = 10n ** BigInt(parsed.scale - scale);
+
+  return formatDecimalString({
+    coefficient: divideIntegers({
+      numerator: parsed.coefficient,
+      denominator: divisor,
+      rounding,
+    }),
+    scale,
+  });
+}
+
 export function compareDecimal({ left, right }) {
   const aligned = alignDecimals(parseDecimal(left), parseDecimal(right));
 

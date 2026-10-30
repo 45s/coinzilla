@@ -4,6 +4,12 @@ import assert from "node:assert/strict"
 import {
   calculateBuyThreshold,
   addDecimal,
+  absoluteDecimal,
+  divideDecimal,
+  maxDecimal,
+  minDecimal,
+  negateDecimal,
+  rescaleDecimal,
   compareDecimal,
   multiplyDecimal,
   subtractDecimal,
@@ -266,4 +272,42 @@ test("decimal helpers enforce the supported scale and exponent limits", () => {
   assert.equal(addDecimal({ left: "1e100", right: "0" }), `1${"0".repeat(100)}`);
   assert.throws(() => addDecimal({ left: "1e-101", right: "0" }));
   assert.throws(() => addDecimal({ left: "1e101", right: "0" }));
+});
+
+test("exact decimal division requires explicit scale and rounding", () => {
+  assert.equal(divideDecimal({ left: "1", right: "3", scale: 4, rounding: "toward-zero" }), "0.3333");
+  assert.equal(divideDecimal({ left: "2", right: "3", scale: 4, rounding: "half-up" }), "0.6667");
+  assert.equal(divideDecimal({ left: "-1", right: "6", scale: 2, rounding: "half-up" }), "-0.17");
+  assert.equal(divideDecimal({ left: "-1", right: "6", scale: 2, rounding: "toward-zero" }), "-0.16");
+  assert.equal(divideDecimal({ left: "1", right: "-6", scale: 2, rounding: "away-from-zero" }), "-0.17");
+  assert.equal(divideDecimal({ left: "1.25", right: "0.5", scale: 3, rounding: "half-up" }), "2.5");
+});
+
+test("exact decimal division rejects zero divisors and invalid rounding", () => {
+  assert.throws(() => divideDecimal({ left: "1", right: "0", scale: 2, rounding: "half-up" }), /zero/);
+  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 2 }), /rounding/);
+  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: -1, rounding: "half-up" }), /scale/);
+  assert.throws(() => divideDecimal({ left: "1", right: "2", scale: 101, rounding: "half-up" }), /scale/);
+});
+
+test("absolute and negate decimal operations preserve exact values", () => {
+  assert.equal(absoluteDecimal({ value: "-0.0012300" }), "0.00123");
+  assert.equal(absoluteDecimal({ value: "0" }), "0");
+  assert.equal(negateDecimal({ value: "12.3400" }), "-12.34");
+  assert.equal(negateDecimal({ value: "-0.25" }), "0.25");
+});
+
+test("min and max compare decimal values without converting to Number", () => {
+  assert.equal(minDecimal({ left: "0.30000000000000001", right: "0.3" }), "0.3");
+  assert.equal(maxDecimal({ left: "0.30000000000000001", right: "0.3" }), "0.30000000000000001");
+  assert.equal(minDecimal({ left: "-10", right: "-2" }), "-10");
+  assert.equal(maxDecimal({ left: "-10", right: "-2" }), "-2");
+});
+
+test("rescale decimal applies explicit rounding when reducing precision", () => {
+  assert.equal(rescaleDecimal({ value: "1.2349", scale: 2, rounding: "toward-zero" }), "1.23");
+  assert.equal(rescaleDecimal({ value: "1.235", scale: 2, rounding: "half-up" }), "1.24");
+  assert.equal(rescaleDecimal({ value: "-1.235", scale: 2, rounding: "half-up" }), "-1.24");
+  assert.equal(rescaleDecimal({ value: "1.2", scale: 4 }), "1.2");
+  assert.throws(() => rescaleDecimal({ value: "1.234", scale: 2 }), /rounding/);
 });
