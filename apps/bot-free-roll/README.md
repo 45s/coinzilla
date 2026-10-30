@@ -187,6 +187,12 @@ Configured rates are estimates used to calculate safe order prices. Actual execu
 
 A limit order is not automatically a maker order. Depending on how it executes, it may be charged a maker or taker fee.
 
+### Commission-asset restriction
+
+The strategy must reject an enabled trading pair before startup if the broker/account commission configuration requires commissions to be paid in a third asset (an asset other than that pair's base or quote asset). The strategy does not acquire, hold, convert, or spend third assets to pay trading fees. Do not assume a pair is eligible merely because its quote asset is FDUSD or because a zero-fee promotion may exist; verify the effective commission configuration for the account and pair.
+
+If an execution unexpectedly reports a non-zero commission in a third asset despite the pre-start check, record the reported fill and fee facts unchanged, mark accounting incomplete, and pause the affected pair. Do not convert or value the fee, approve further orders, or claim net profitability until the discrepancy is resolved. Explicit zero commission is not a third-asset fee.
+
 ### Settings deliberately omitted
 
 Do not add settings such as `profitTarget`, `maxInvestment`, `maxPositionQuantity`, `cooldown`, or `orderTimeout` unless the user requests them or a concrete implementation requirement justifies them.
