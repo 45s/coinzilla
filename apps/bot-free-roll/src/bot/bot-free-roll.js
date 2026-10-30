@@ -3,7 +3,7 @@ import {
   createKeyedQueue,
   disconnectSubscriptions,
   validateConfig,
-  calculateBuyThreshold,
+  calculateBuyThresholdExact,
   addDecimal,
   maxDecimal,
   compareDecimal,
@@ -13,7 +13,6 @@ import {
   estimateBuyAccountingExact,
   estimateSellAccountingExact,
   getOrderId,
-  roundPriceDown,
   roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
@@ -477,10 +476,10 @@ export class FreeRollBot {
     state.highestPrice = Math.max(state.highestPrice ?? state.referencePrice, price)
     state.referencePrice = state.highestPrice
 
-    const threshold = calculateBuyThreshold({
-      referencePrice: state.referencePrice,
-      lastBuyPrice: state.lastBuyPrice,
-      priceStepPercent: state.settings.priceStepPercent,
+    const threshold = calculateBuyThresholdExact({
+      referencePrice: String(state.referencePrice),
+      lastBuyPrice: state.lastBuyPrice === null ? null : String(state.lastBuyPrice),
+      priceStepPercent: String(state.settings.priceStepPercent),
     })
 
     this.#debug(`[${symbol}] Buy threshold evaluated`, {
@@ -572,7 +571,11 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused || state.buyOrder) return
 
-    const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
+    const price = roundDecimalToIncrement({
+      value: String(rawPrice),
+      increment: String(state.priceTickSize ?? 0),
+      direction: "down",
+    })
 
     const quantity = roundDecimalToIncrement({
       value: String(state.settings.orderQuantity),
@@ -917,10 +920,14 @@ export class FreeRollBot {
 
     this.#debug(`[${symbol}] Scheduling next BUY`, {
       triggerThreshold: threshold,
-      buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
+      buyLimitPrice: roundDecimalToIncrement({
+        value: threshold,
+        increment: String(state.priceTickSize ?? 0),
+        direction: "down",
+      }),
     })
 
-    if (threshold <= 0) {
+    if (compareDecimal({ left: threshold, right: "0" }) <= 0) {
       this.#pause(symbol, "Next BUY price is not positive")
       return
     }
