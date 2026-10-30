@@ -1006,5 +1006,6 @@ export function calculateCommissionRateExact({
     left: quoteCommission,
     right: quoteQuantity,
     scale: 18,
+    rounding: "half-up",
   });
 }
