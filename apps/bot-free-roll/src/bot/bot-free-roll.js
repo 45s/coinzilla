@@ -4,6 +4,9 @@ import {
   disconnectSubscriptions,
   validateConfig,
   calculateBuyThreshold,
+  addDecimal,
+  compareDecimal,
+  subtractDecimal,
   getFeeRate,
   calculateSellPlan,
   estimateBuyAccounting,
@@ -107,13 +110,13 @@ export class FreeRollBot {
         buyOrder: null,
         sellOrder: null,
         activeQuantity: 0,
-        cycleCost: 0,
-        saleProceeds: 0,
+        cycleCost: "0",
+        saleProceeds: "0",
         freeQuantity: 0,
         buyFills: 0,
         sellFills: 0,
         profitableCycles: 0,
-        estimatedRealizedProfit: 0,
+        estimatedRealizedProfit: "0",
         cancelingOrderIds: new Set(),
         paused: false,
       })
@@ -254,7 +257,10 @@ export class FreeRollBot {
           buyFills: state.buyFills,
           sellFills: state.sellFills,
           profitableCycles: state.profitableCycles,
-          estimatedCyclePnl: state.saleProceeds - state.cycleCost,
+          estimatedCyclePnl: subtractDecimal({
+            left: state.saleProceeds,
+            right: state.cycleCost,
+          }),
           estimatedRealizedProfit: state.estimatedRealizedProfit,
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
@@ -804,8 +810,8 @@ export class FreeRollBot {
     const plan = calculateSellPlan({
       activeQuantity: state.activeQuantity,
       keepQuantity: state.settings.keepQuantity,
-      cycleCost: state.cycleCost,
-      saleProceeds: state.saleProceeds,
+      cycleCost: Number(state.cycleCost),
+      saleProceeds: Number(state.saleProceeds),
       minProfit: this.settings.minProfit,
       feeRate: state.feeRate,
       priceTickSize: state.priceTickSize ?? 0,
@@ -911,7 +917,7 @@ export class FreeRollBot {
       activeQuantity: state.activeQuantity,
     })
 
-    if (state.saleProceeds + 1e-8 < required) {
+    if (compareDecimal({ left: state.saleProceeds, right: required }) < 0) {
       this.#pause(symbol, "Completed sale did not meet estimated profit target")
       this.#publishTradingSummary({ symbol, reason: "sell_filled_below_target" })
       return

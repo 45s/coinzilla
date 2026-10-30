@@ -1,9 +1,11 @@
 function parseDecimal(value) {
-  if (!Number.isFinite(value)) {
+  const decimal = String(value).trim();
+
+  if (!Number.isFinite(Number(decimal))) {
     throw new Error("Decimal value must be finite");
   }
 
-  const [coefficient, exponentText = "0"] = String(value)
+  const [coefficient, exponentText = "0"] = decimal
     .toLowerCase()
     .split("e");
   const exponent = Number(exponentText);
@@ -41,6 +43,54 @@ function alignDecimals(left, right) {
     right: right.coefficient * 10n ** BigInt(scale - right.scale),
     scale,
   };
+}
+
+function formatDecimalString({ coefficient, scale }) {
+  const negative = coefficient < 0n;
+  const absolute = negative ? -coefficient : coefficient;
+  const digits = absolute.toString().padStart(scale + 1, "0");
+  const value = scale === 0
+    ? digits
+    : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+  const normalized = value.includes(".")
+    ? value.replace(/0+$/, "").replace(/\.$/, "")
+    : value;
+
+  return `${negative ? "-" : ""}${normalized}`;
+}
+
+export function addDecimal({ left, right }) {
+  const aligned = alignDecimals(parseDecimal(left), parseDecimal(right));
+
+  return formatDecimalString({
+    coefficient: aligned.left + aligned.right,
+    scale: aligned.scale,
+  });
+}
+
+export function subtractDecimal({ left, right }) {
+  const aligned = alignDecimals(parseDecimal(left), parseDecimal(right));
+
+  return formatDecimalString({
+    coefficient: aligned.left - aligned.right,
+    scale: aligned.scale,
+  });
+}
+
+export function multiplyDecimal({ left, right }) {
+  const parsedLeft = parseDecimal(left);
+  const parsedRight = parseDecimal(right);
+
+  return formatDecimalString({
+    coefficient: parsedLeft.coefficient * parsedRight.coefficient,
+    scale: parsedLeft.scale + parsedRight.scale,
+  });
+}
+
+export function compareDecimal({ left, right }) {
+  const aligned = alignDecimals(parseDecimal(left), parseDecimal(right));
+
+  return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1;
 }
 
 function roundToIncrement(value, increment, direction) {
@@ -257,8 +307,11 @@ export function estimateBuyAccounting({ quantity, price, feeRate }) {
     // Conservative reserve in case fees are charged in the base asset.
     netQuantity: quantity * (1 - feeRate),
 
-    // Conservative quote-cost estimate.
-    estimatedCost: quantity * price * (1 + feeRate),
+    // Keep quote accounting as a decimal string; do not accumulate binary floats.
+    estimatedCost: multiplyDecimal({
+      left: multiplyDecimal({ left: quantity, right: price }),
+      right: addDecimal({ left: "1", right: feeRate }),
+    }),
   }
 }
 
@@ -276,8 +329,11 @@ export function estimateSellAccounting({ quantity, price, feeRate }) {
   }
 
   return {
-    // Conservative quote-proceeds estimate.
-    estimatedProceeds: quantity * price * (1 - feeRate),
+    // Keep quote accounting as a decimal string; do not accumulate binary floats.
+    estimatedProceeds: multiplyDecimal({
+      left: multiplyDecimal({ left: quantity, right: price }),
+      right: subtractDecimal({ left: "1", right: feeRate }),
+    }),
 
     // Conservative base-asset deduction.
     estimatedBaseDeduction: quantity * (1 + feeRate),
