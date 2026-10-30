@@ -107,6 +107,7 @@ export class FreeRollBot {
         quoteAsset: null,
         processedTradeIds: new Set(),
         fillsByOrder: new Map(),
+        filledQuantityByOrder: new Map(),
         commissionTotals: new Map(),
         priceTickSize: null,
         quantityStepSize: null,
@@ -646,9 +647,17 @@ export class FreeRollBot {
     if (!state || !id) return
 
     if (event.executionType === "TRADE") {
-      if (!event.fill || !this.#applyExecutionFill({ symbol, fill: event.fill })) {
+      if (!event.fill) {
+        this.#pause(symbol, `TRADE execution report for order ${id} is missing its fill details`)
         return
       }
+      if (String(event.fill.orderId) !== id ||
+          event.fill.symbol !== symbol ||
+          event.fill.side !== order.side) {
+        this.#pause(symbol, `TRADE fill identity does not match order ${id}`)
+        return
+      }
+      if (!this.#applyExecutionFill({ symbol, fill: event.fill })) return
     }
 
     if (status === "FILLED") {
@@ -728,8 +737,12 @@ export class FreeRollBot {
     const order = state.buyOrder
     if (!order || state.paused) return
 
-    if ((state.fillsByOrder.get(order.id) ?? 0) === 0) {
-      this.#pause(symbol, `BUY ${order.id} is FILLED but no actual trade fills were recorded`)
+    const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
+      this.#pause(
+        symbol,
+        `BUY ${order.id} is FILLED but actual fills total ${filledQuantity}, expected ${order.quantity}`,
+      )
       return
     }
 
@@ -794,6 +807,12 @@ export class FreeRollBot {
         left: "0",
         right: subtractDecimal({ left: String(order.quantity), right: remaining }),
       })
+      const reconciledFilledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+      if (compareDecimal({ left: reconciledFilledQuantity, right: filledQuantity }) !== 0) {
+        throw new Error(
+          `SELL ${order.id} history mismatch: fills total ${reconciledFilledQuantity}, expected ${filledQuantity}`,
+        )
+      }
 
       state.cancelingOrderIds.delete(order.id)
       if (compareDecimal({ left: remaining, right: "0" }) === 0) {
@@ -935,8 +954,12 @@ export class FreeRollBot {
     const order = state.sellOrder
     if (!order || state.paused) return
 
-    if ((state.fillsByOrder.get(order.id) ?? 0) === 0) {
-      this.#pause(symbol, `SELL ${order.id} is FILLED but no actual trade fills were recorded`)
+    const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
+      this.#pause(
+        symbol,
+        `SELL ${order.id} is FILLED but actual fills total ${filledQuantity}, expected ${order.quantity}`,
+      )
       return
     }
 
@@ -1038,12 +1061,13 @@ export class FreeRollBot {
         right: accounting.quoteQuantity,
       })
     } else if (fill.side === "SELL") {
-      state.activeQuantity = maxDecimal({
-        left: "0",
-        right: subtractDecimal({
-          left: state.activeQuantity,
-          right: accounting.baseQuantity,
-        }),
+      if (compareDecimal({ left: state.activeQuantity, right: accounting.baseQuantity }) < 0) {
+        this.#pause(symbol, `SELL fill ${fillId} consumes more base inventory than the strategy owns`)
+        return false
+      }
+      state.activeQuantity = subtractDecimal({
+        left: state.activeQuantity,
+        right: accounting.baseQuantity,
       })
       state.saleProceeds = addDecimal({
         left: state.saleProceeds,
@@ -1053,6 +1077,14 @@ export class FreeRollBot {
       this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
       return false
     }
+
+    state.filledQuantityByOrder.set(
+      orderId,
+      addDecimal({
+        left: state.filledQuantityByOrder.get(orderId) ?? "0",
+        right: String(fill.quantity),
+      }),
+    )
 
     this.#debug(`[${symbol}] Actual fill accounted`, {
       fill,
