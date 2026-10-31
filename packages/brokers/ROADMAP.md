@@ -363,17 +363,27 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Document that event timestamps are not a global replay cursor and that recovery requires state reconciliation.
 - [ ] Phase 6A follow-up: deterministic account-update duplicate tests and callback/error isolation review.
 
-#### Phase 6B — reconnect, resubscribe, and reconciliation (not started)
-- [ ] Handle subscription failure, explicit termination, unexpected socket close, reconnect, resubscription, and remote unsubscribe failure explicitly.
-- [ ] Keep one remote signature subscription per broker/account connection and fan out to local callbacks; never attach duplicate callbacks after recovery.
-- [ ] Recreate one-shot native RPC transport/client safely after unexpected close; preserve intentional shutdown semantics and bounded backoff.
-- [ ] Re-subscribe only after the replacement socket is open; never replay state-changing RPC requests.
-- [ ] Emit explicit recovery lifecycle status so consumers know when to reconcile before treating live events as healthy.
-- [ ] Add deterministic tests for reconnect races, failed reconnects, resubscribe failures, duplicate callback prevention, account updates, execution reports, and shutdown during recovery.
-- [ ] Add opt-in Binance testnet coverage for signature subscription and user-data event receipt.
-- [ ] Document reconciliation boundaries: use `account.status` and `openOrders.status` for current snapshots; use symbol-scoped `myTrades` / `allOrders` for trade/order history. A current snapshot cannot reconstruct every missed intermediate balance delta or prove every event was observed.
-- **Exit criteria:** deterministic lifecycle/recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe.
+#### Phase 6B — reconnect, resubscribe, and reconciliation (split into 6B.1 and 6B.2)
 
+**6B.1 — single-subscription session manager and safe recovery coordinator (PR #288)**
+- [x] Maintain one remote signature subscription per account/API connection and fan out to local subscriber handles.
+- [x] Coalesce concurrent local subscribe calls; detach a handle locally and remotely unsubscribe only after the last handle is removed.
+- [x] Recreate the one-shot RPC client/transport after unexpected close; preserve the injected factory seam and intentional shutdown semantics.
+- [x] Use a single-flight reconnect loop with bounded exponential backoff, cancellable on explicit broker shutdown, and a finite retry budget.
+- [x] Re-subscribe only after the replacement socket is open; bind events to the new subscription ID and ignore stale events.
+- [x] Never replay pending or uncertain state-changing RPC requests during recovery.
+- [x] If a subscribe request has an uncertain outcome, query `session.subscriptions` and adopt the single active subscription only when unambiguous.
+- [x] Keep trading fail-closed while recovery is underway and after resubscription until every active consumer explicitly acknowledges reconciliation.
+- [x] Add deterministic tests for concurrent subscriptions, listener fan-out, handle cleanup, reconnect races, retry exhaustion, resubscribe failures, stale IDs, cross-reconnect duplicate events, and shutdown during recovery.
+- [x] Isolate callback exceptions and preserve connection-close observability even without active user-data handles.
+
+**6B.2 — reconciliation contract and integration verification (not started)**
+- [ ] Complete any remaining account-update / execution-report event-ordering and reconciliation edge-case tests.
+- [ ] Document the consumer reconciliation procedure: `account.status` and `openOrders.status` for current snapshots; symbol-scoped `myTrades` / `allOrders` for available trade/order history. These cannot reconstruct every missed intermediate balance delta.
+- [ ] Add opt-in Binance testnet coverage for signature subscription, disconnect/reconnect, resubscription, and user-data event receipt.
+- [ ] Verify the consumer can reconcile and call the handle's `acknowledgeRecovery()` before new order/cancel operations are re-enabled.
+- [ ] Re-audit the read-only bot consumer contract; do not modify bot app code in this migration.
+- **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; recovery acknowledgement contract is clear to consumers.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
 - [ ] Confirm all repository consumers use the supported WebSocket broker contract.
