@@ -72,7 +72,7 @@ Calling a subscription's `unsubscribe()` prevents that subscription from being s
 
 - `flush()` waits until all currently pending deliveries settle, including additional events published by those handlers. It resolves with a success result when the pending set becomes empty.
 - A handler that never settles can keep `flush()` pending indefinitely.
-- `close()` marks the bus closed synchronously, so subsequent publishes and subscriptions are rejected. It then waits for the same transitive pending-work drain as `flush()` and clears subscription registries.
+- `close()` marks the bus closed synchronously, so subsequent publishes and subscriptions are rejected. It waits for already accepted deliveries to settle and clears subscription registries. Unlike `flush()`, it does not accept nested publishes attempted by handlers after shutdown begins.
 - `close({ timeoutMs })` can bound the wait for pending work. `timeoutMs` must be an integer from 1 through 2,147,483,647 milliseconds. If it expires, the result has `ok: false`, `timedOut: true`, and a timeout error. The bus remains closed, subscriptions are invalidated, and already accepted handlers continue running; a later `close()` call can wait for them to drain. The timeout does not forcibly cancel handler work.
 - Repeated and concurrent close calls are supported; each caller waits for the pending work to drain (or for its own configured timeout).
 
