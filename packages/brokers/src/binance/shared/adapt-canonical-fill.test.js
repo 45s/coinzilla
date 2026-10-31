@@ -102,6 +102,7 @@ describe("adaptCanonicalFill", () => {
       { trade: { ...trade, price: "not-a-price" }, market },
       { trade: { ...trade, qty: "-1" }, market },
       { trade: { ...trade, quoteQty: "0" }, market },
+      { trade: { ...trade, commission: "-0.01", commissionAsset: null }, market },
       { trade, market: {} },
     ]) {
       assert.throws(() => adaptCanonicalFill(input))
