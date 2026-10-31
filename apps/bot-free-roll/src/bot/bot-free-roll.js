@@ -439,6 +439,7 @@ export class FreeRollBot {
       await this.broker.getBalances(),
       "getBalances recovery snapshot",
     )
+    if (!this.#isRunning) throw new Error("Bot stopped during user-data balance reconciliation")
     const balanceResult = validateRecoveryBalances({ balances })
     if (!balanceResult.ok) throw new Error(balanceResult.reason)
 
@@ -455,6 +456,7 @@ export class FreeRollBot {
         await this.broker.getOpenOrders({ symbol }),
         `getOpenOrders(${symbol}) recovery snapshot`,
       )
+      if (!this.#isRunning) throw new Error("Bot stopped during user-data order reconciliation")
       if (!Array.isArray(openOrders)) {
         throw new Error(`getOpenOrders(${symbol}) must return an array`)
       }
@@ -475,6 +477,10 @@ export class FreeRollBot {
           await this.broker.getMyTrades({ symbol, orderId: order.id, limit: 1000 }),
           `getMyTrades(${symbol}, ${order.id}) recovery history`,
         )
+        if (!this.#isRunning) throw new Error("Bot stopped during user-data fill reconciliation")
+        if (!Array.isArray(fills)) {
+          throw new Error(`getMyTrades(${symbol}, ${order.id}) must return an array`)
+        }
         for (const fill of fills) {
           const validation = validateOrderFill({ fill, symbol, order })
           if (!validation.ok) throw new Error(validation.reason)
