@@ -57,6 +57,34 @@ test("indexes each cycle BUY and every historical SELL attempt", () => {
   assert.equal(Object.isFrozen(result.data.orders), true)
 })
 
+test("indexes the pending BUY separately from completed cycle orders", () => {
+  const cycle = createCycle()
+  const pendingBuyOrder = {
+    id: "buy-pending",
+    clientOrderId: "client-buy-pending",
+    symbol: "DOGEFDUSD",
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    quantity: "100",
+    price: "0.099",
+    status: "NEW",
+  }
+  const result = buildGridOrderIndex({
+    cycles: [cycle],
+    pendingBuyOrder,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.orders.length, 2)
+  assert.equal(result.data.byOrderId["buy-pending"].role, "BUY")
+  assert.equal(result.data.byOrderId["buy-pending"].cycleId, null)
+  assert.equal(result.data.byClientOrderId["client-buy-pending"].symbol, "DOGEFDUSD")
+  assert.equal(buildGridOrderIndex({
+    cycles: [cycle],
+    pendingBuyOrder: { ...pendingBuyOrder, symbol: "BTCUSDT" },
+  }).ok, false)
+})
+
 test("resolves an order by either identity and validates both when supplied", () => {
   const cycle = addSell(createCycle())
   const index = buildGridOrderIndex({ cycles: [cycle] }).data
