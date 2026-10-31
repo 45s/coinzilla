@@ -45,3 +45,13 @@ jobs:
 
       - name: Run package tests
         run: pnpm test
+
+  required-tests:
+    name: Run package tests
+    if: always()
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported Node version to pass
+        run: test "${{ needs.test.result }}" = "success"
