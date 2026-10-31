@@ -109,7 +109,7 @@ test("appends immutably and freezes both the entry and the new ledger", () => {
   assert.equal(Object.isFrozen(result.entry), true)
 })
 
-test("keeps an already frozen ledger and treats identical repeated fills as duplicates", () => {
+test("keeps a fully frozen ledger and treats identical repeated fills as duplicates", () => {
   const first = appendFillLedgerEntry({
     entries: Object.freeze([]),
     fill: createFill(),
@@ -123,6 +123,29 @@ test("keeps an already frozen ledger and treats identical repeated fills as dupl
   assert.equal(repeated.duplicate, true)
   assert.equal(repeated.entries, first.entries)
   assert.equal(repeated.entries.length, 1)
+})
+
+test("freezes existing entries before returning a ledger snapshot", () => {
+  const mutableEntry = createFill()
+  const result = appendFillLedgerEntry({
+    entries: Object.freeze([mutableEntry]),
+    fill: createFill({ id: "trade-2" }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(Object.isFrozen(result.entries), true)
+  assert.equal(Object.isFrozen(result.entries[0]), true)
+  assert.equal(Object.isFrozen(mutableEntry), false)
+})
+
+test("rejects malformed pre-existing ledger entries", () => {
+  const result = appendFillLedgerEntry({
+    entries: Object.freeze([null]),
+    fill: createFill(),
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /invalid entry/)
 })
 
 test("rejects reuse of a trade ID when any recorded execution fact changes", () => {
