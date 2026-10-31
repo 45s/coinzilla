@@ -198,7 +198,7 @@ export class BinanceUserDataSession {
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || client.state !== "open") {
         try {
-          await client.request("userDataStream.unsubscribe", { subscriptionId })
+          await this.#unsubscribeRemoteSubscription(client, subscriptionId)
         } catch (error) {
           logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
         }
@@ -239,6 +239,47 @@ export class BinanceUserDataSession {
     }
     if (ids.length === 1) return ids[0]
     throw originalError
+  }
+
+  async #unsubscribeRemoteSubscription(client, subscriptionId) {
+    try {
+      await client.request("userDataStream.unsubscribe", { subscriptionId })
+      return
+    } catch (originalError) {
+      let response
+      try {
+        response = await client.request("session.subscriptions")
+      } catch (lookupError) {
+        logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
+        throw originalError
+      }
+
+      if (!Array.isArray(response.data)) {
+        throw new Error("Cannot safely verify the Binance user-data unsubscribe outcome", {
+          cause: originalError,
+        })
+      }
+
+      const activeIds = response.data.map((item) => item?.subscriptionId)
+      if (activeIds.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+        throw new Error("Cannot safely verify malformed Binance user-data subscription state", {
+          cause: originalError,
+        })
+      }
+      if (!activeIds.includes(subscriptionId)) return
+
+      try {
+        await client.request("userDataStream.unsubscribe", { subscriptionId })
+      } catch (retryError) {
+        logSafely(this.logger, "warn", "Binance user-data subscription remains active after verified unsubscribe retry", {
+          subscriptionId,
+          error: retryError,
+        })
+        throw new Error("Unable to unsubscribe the verified active Binance user-data subscription", {
+          cause: retryError,
+        })
+      }
+    }
   }
 
   #bindClient(client, { includeUserData = true } = {}) {
