@@ -10,6 +10,7 @@ import { BinanceStreamsClient } from "./streams-client.js"
 import { NativeWebSocketTransport } from "./transport.js"
 import { BinanceUserDataSession } from "./user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./history-query-params.js"
+import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -212,6 +213,12 @@ export class BinanceSdkBroker extends CoreBroker {
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
       if (!Array.isArray(response.data)) {
         throw new TypeError("Binance allOrders response should be an array")
+      }
+      for (const order of response.data) {
+        if (!order || typeof order !== "object" || Array.isArray(order)) {
+          throw new TypeError("Binance allOrders response contains an invalid order")
+        }
+        normalizeBinanceId(order.orderId, "order history cursor ID")
       }
       return toResult({ data: response.data })
     } catch (error) {
