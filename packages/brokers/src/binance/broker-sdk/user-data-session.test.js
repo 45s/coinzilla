@@ -513,6 +513,45 @@ describe("Binance user-data session recovery", () => {
   })
 
 
+
+  it("keeps event fan-out working when the logger itself throws", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: 61 }),
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: {
+        error() { throw new Error("logger failed") },
+        info() {},
+        warn() {},
+      },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+    const received = []
+    const first = await broker.subscribeForUserData({
+      onEvent() { throw new Error("consumer failed") },
+    })
+    const second = await broker.subscribeForUserData({
+      onEvent: (event) => received.push(event),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: first.data.subscriptionId,
+      event: { e: "balanceUpdate", a: "USDT", d: "7", T: 30, E: 31 },
+    })
+
+    assert.equal(received.length, 1)
+    assert.equal(received[0].event.balanceDelta, "7")
+    await first.data.disconnect()
+    await second.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("isolates a throwing local callback from other subscribers", async () => {
     const { broker, clients } = createBroker()
     await broker.connect()
