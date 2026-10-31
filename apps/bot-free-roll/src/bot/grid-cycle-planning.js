@@ -1,8 +1,9 @@
 import { toResult } from "@coinzilla/utils"
 import { calculateFillAccountingExact } from "./helpers/accounting.js"
 import { calculateSellPlanExact } from "./helpers/order-planning.js"
-import { addDecimal, compareDecimal, multiplyDecimal } from "./helpers/decimal.js"
+import { addDecimal, compareDecimal } from "./helpers/decimal.js"
 import { createGridCycle, projectGridCycles } from "./grid-cycles.js"
+import { calculateGridSellInventoryPlan } from "./grid-sell-inventory.js"
 
 function failure(reason) {
   return toResult({ errors: [reason] })
@@ -111,11 +112,23 @@ export function calculateGridCycleSellPlan({
       priceTickSize,
       quantityStepSize,
     })
-    const reservedQuantity = multiplyDecimal({
-      left: plan.quantity,
-      right: addDecimal({ left: "1", right: feeRate }),
+    const inventoryPlan = calculateGridSellInventoryPlan({
+      availableQuantity: cycle.remainingQuantity,
+      keepQuantity,
+      feeRate,
+      quantityStepSize,
     })
-    return toResult({ data: { ...plan, reservedQuantity } })
+    if (!inventoryPlan.ok) return inventoryPlan
+    if (inventoryPlan.data.quantity !== plan.quantity) {
+      throw new Error("SELL quantity and inventory reservation plans do not match")
+    }
+    return toResult({
+      data: {
+        ...plan,
+        reservedQuantity: inventoryPlan.data.reservedQuantity,
+        unreservedQuantity: inventoryPlan.data.unreservedQuantity,
+      },
+    })
   } catch (error) {
     return failure(error.message)
   }
