@@ -26,12 +26,29 @@ function createBuyFill(overrides = {}) {
   }
 }
 
+function createBuyOrder(overrides = {}) {
+  return {
+    id: "buy-1",
+    clientOrderId: "client-buy-1",
+    symbol: "DOGEFDUSD",
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    quantity: "100",
+    price: "0.1",
+    ...overrides,
+  }
+}
+
 function createCycle(overrides = {}) {
+  const buyOrder = overrides.buyOrder ?? createBuyOrder({
+    id: overrides.buyOrderId ?? "buy-1",
+  })
   const result = createGridCycle({
     symbol: "DOGEFDUSD",
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrderId: buyOrder.id,
+    buyOrder,
     buyFillIds: ["trade-1"],
     acquiredQuantity: "100",
     recoveryCost: "10",
@@ -46,7 +63,7 @@ test("builds a cycle from actual multi-fill BUY accounting and fee facts", () =>
     symbol: "DOGEFDUSD",
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrder: createBuyOrder(),
     buyFills: [
       createBuyFill({
         id: "trade-1",
@@ -77,7 +94,7 @@ test("derives identical cycles from identical canonical fill facts", () => {
     symbol: "DOGEFDUSD",
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrder: createBuyOrder(),
     buyFills: [createBuyFill()],
   }
   const first = createGridCycleFromBuyFills(input)
@@ -93,7 +110,7 @@ test("rejects missing, duplicate, mismatched, or non-BUY fill history", () => {
     symbol: "DOGEFDUSD",
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrder: createBuyOrder(),
   }
   const invalid = [
     { ...base, buyFills: [] },
@@ -113,7 +130,7 @@ test("rejects third-asset BUY commissions rather than guessing their value", () 
     symbol: "DOGEFDUSD",
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrder: createBuyOrder(),
     buyFills: [createBuyFill({
       commissionAmount: "0.01",
       commissionAsset: "BNB",
@@ -146,6 +163,9 @@ test("includes reconciled partial-sale proceeds when replanning a canceled cycle
   const initial = appendGridCycleSellOrder({
     cycle: createCycle(),
     orderId: "sell-1",
+    clientOrderId: "client-sell-1",
+    type: "LIMIT_MAKER",
+    price: "0.102",
     quantity: "99",
     reservedQuantity: "99",
   })
@@ -188,6 +208,11 @@ test("refuses to plan a replacement while a cycle SELL is still live", () => {
     ...cycle,
     sellOrders: [{
       id: "sell-1",
+      clientOrderId: "client-sell-1",
+      symbol: "DOGEFDUSD",
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      price: "0.102",
       quantity: "99",
       filledQuantity: "0",
       reservedQuantity: "99",
