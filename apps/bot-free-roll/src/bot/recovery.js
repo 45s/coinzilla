@@ -50,8 +50,9 @@ export function reconcileTrackedOrder({
   fills,
 } = {}) {
   const orderId = getOrderId(order)
+  const expectedQuantity = order?.originalQuantity ?? order?.quantity
   if (!symbol || !orderId || !order ||
-      typeof order.quantity !== "string" ||
+      typeof expectedQuantity !== "string" ||
       !Array.isArray(openOrders) || !Array.isArray(fills)) {
     return failure("Tracked order reconciliation input is incomplete")
   }
@@ -102,7 +103,7 @@ export function reconcileTrackedOrder({
 
       if ((remoteOrder.symbol !== undefined && remoteOrder.symbol !== symbol) ||
           String(remoteOrder.side ?? "") !== order.side ||
-          compareDecimal({ left: originalQuantity, right: order.quantity }) !== 0 ||
+          compareDecimal({ left: originalQuantity, right: expectedQuantity }) !== 0 ||
           !["NEW", "PARTIALLY_FILLED"].includes(status) ||
           compareDecimal({ left: executedQuantity, right: historyQuantity }) !== 0 ||
           (status === "NEW" &&
@@ -116,7 +117,7 @@ export function reconcileTrackedOrder({
       return { ok: true, status: "OPEN", historyQuantity, remoteOrder }
     }
 
-    if (compareDecimal({ left: historyQuantity, right: order.quantity }) === 0) {
+    if (compareDecimal({ left: historyQuantity, right: expectedQuantity }) === 0) {
       return { ok: true, status: "FILLED", historyQuantity }
     }
 
