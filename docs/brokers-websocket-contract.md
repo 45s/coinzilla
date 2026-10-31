@@ -89,7 +89,7 @@ The optional `onStatus` callback currently reports:
 - `{ type: "rpcError", error, recoveryRequired: false }`
 - `{ type: "connectionClosed", code, reason, recoveryRequired: true }`
 
-Intentional broker shutdown is not reported as an unexpected recovery gap. The callback is additive; the existing bot consumer does not currently pass it.
+Intentional broker shutdown is not reported as an unexpected recovery gap. Unexpected API socket closure is logged even when no `onStatus` callback is supplied. After a subscription attempt fails, terminates, is explicitly disconnected, or loses its API socket, the broker fails closed for new `createOrder()` calls until a new user-data subscription succeeds. The callback is additive; the existing bot consumer does not currently pass it.
 
 Execution reports can be deduplicated using the documented `symbol`, `orderId`, and `executionId` tuple. Other event types do not expose a universal unique event ID, so the current bounded fallback cache suppresses only exact repeated payloads. This is best-effort idempotency, not a claim that all semantic duplicates can be recognized.
 
