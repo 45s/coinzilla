@@ -105,11 +105,11 @@ function createRecoverySnapshotPorts({
       return {
         ok: true,
         data: [new CanonicalOrder({
-          clientOrderId: `client-${orderId}`,
+          clientOrderId: order.clientOrderId,
           brokerOrderId: orderId,
           market: dogeUsdtMarket,
           side: order.side,
-          type: "LIMIT",
+          type: order.type ?? "LIMIT",
           limitPrice: new Money({ amount: String(order.price), asset: usdtAsset }),
           originalQuantity: new Quantity({ amount: String(order.quantity), asset: dogeAsset }),
           executedQuantity: new Quantity({ amount: execution.executedQuantity, asset: dogeAsset }),
@@ -2783,8 +2783,9 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
       },
       createOrder: async (order) => {
         const orderId = String(createdOrders.length + 1)
-        createdOrders.push({ ...order, orderId })
-        return { ok: true, data: { orderId } }
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -2868,8 +2869,9 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
       },
       createOrder: async (order) => {
         const orderId = String(createdOrders.length + 1)
-        createdOrders.push({ ...order, orderId })
-        return { ok: true, data: { orderId } }
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
       },
     },
     eventBus: {
@@ -2962,8 +2964,9 @@ test("buffers user-data events during reconciliation and replays them before ack
       },
       createOrder: async (order) => {
         const orderId = String(createdOrders.length + 1)
-        createdOrders.push({ ...order, orderId })
-        return { ok: true, data: { orderId } }
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },

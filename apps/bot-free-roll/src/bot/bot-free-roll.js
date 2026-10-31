@@ -17,7 +17,7 @@ import {
 import { reconcileExecutionFill, toExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
-import { reconcileTrackedOrder, validateRecoveryBalances } from "./recovery.js"
+import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
 import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
 
 const TERMINAL_FAILURES = new Set([
@@ -482,12 +482,13 @@ export class FreeRollBot {
         if (!canonicalOrder) {
           throw new Error(`Canonical order history is missing tracked order ${orderId}`)
         }
-        if (
-          canonicalOrder.side !== order.side ||
-          compareDecimal({ left: canonicalOrder.originalQuantity.amount, right: order.originalQuantity ?? order.quantity }) !== 0
-        ) {
-          throw new Error(`Canonical order history does not match tracked order ${orderId}`)
-        }
+        const identityValidation = validateTrackedOrderIdentity({
+          symbol,
+          order,
+          canonicalOrder,
+          expectedType: state.orderType,
+        })
+        if (!identityValidation.ok) throw new Error(identityValidation.reason)
 
         const canonicalFills = symbolSnapshot.fills.items.filter(
           (fill) => fill.brokerOrderId === orderId,
