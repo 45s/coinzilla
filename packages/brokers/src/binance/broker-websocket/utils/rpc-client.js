@@ -168,6 +168,7 @@ export class BinanceWebSocketApiClient {
     } catch (error) {
       this.#state = "closed"
       this.#rejectPending(new BinanceRpcConnectionError("Binance WebSocket API connection failed"))
+      this.#removeListeners()
       throw error
     }
   }
