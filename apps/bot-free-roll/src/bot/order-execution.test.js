@@ -304,3 +304,40 @@ test("does not submit a SELL when the exact plan has no sellable quantity", asyn
   assert.equal(calls.created.length, 0)
   assert.equal(state.sellOrder, null)
 })
+
+test("reconciles a partially filled SELL before clearing it after cancellation", async () => {
+  const order = { id: "partial-sell", side: "SELL", quantity: "10", price: "1.1" }
+  const state = createState({ sellOrder: order })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async (request) => {
+        calls.canceled.push(request)
+        return {
+          ok: true,
+          data: {
+            originalQuantity: "10",
+            executedQuantity: "2",
+            quantity: "8",
+            status: "CANCELED",
+          },
+        }
+      },
+    },
+    reconcileOrderFills: async () => {
+      state.filledQuantityByOrder.set(order.id, "2")
+    },
+  })
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(state.sellOrder, null)
+  assert.equal(state.cancelingOrderIds.has(order.id), false)
+  assert.deepEqual(calls.reconciliations, [{ symbol: "DOGEUSDT", order }])
+  assert.ok(calls.events.some(({ name, data }) =>
+    name === "order.cancelled" &&
+    data.orderId === order.id &&
+    data.remainingQuantity === "8" &&
+    data.filledQuantity === "2"))
+  assert.equal(calls.pauses.length, 0)
+})
