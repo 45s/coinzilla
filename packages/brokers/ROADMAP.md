@@ -57,7 +57,7 @@ The migration is complete only when all of the following are true:
 
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
-- [ ] Phase 2 — native WebSocket transport.
+- [ ] Phase 2 — native WebSocket transport (in progress; draft PR #260).
 - [ ] Phase 3 — WebSocket API RPC client.
 - [ ] Phase 4 — public WebSocket Streams client.
 - [ ] Phase 5 — rebuild the broker on native clients.
@@ -67,10 +67,10 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Complete Phase 2 on `migration/binance-phase-2-transport`; do not start Phase 3 until the transport exit criteria are verified.
-2. Before opening the Phase 2 PR, recheck latest `main` and sync only if broker/API/consumer-contract changes require it.
-3. Run broker tests on Node.js 22.23.4, including the local raw-WebSocket ping/pong integration test, plus workspace tests, syntax checks, and dependency audit.
-4. Review the complete diff and open a PR against `migration/binance-native-ws`. Do not merge it automatically.
+1. Validate the exact head of draft PR #260; fix any failing or canceled checks with meaningful changes.
+2. Verify the local raw-WebSocket ping/pong integration test on Node.js 22.23.4 and confirm the pong payload is copied exactly.
+3. Recheck latest `main` before declaring Phase 2 complete; synchronize only if broker/API/consumer-contract changes require it.
+4. Review the complete diff, update this roadmap from verified evidence, and wait for explicit merge approval. Do not start Phase 3 early.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -262,7 +262,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Normalize open/message/error/close events, message data, close codes/reasons, and send failures behind one internal interface.
 - [x] Implement explicit connect/close state, connection timeout, idempotent shutdown, and listener cleanup.
 - [ ] Verify the local raw-WebSocket ping/pong integration test on Node >=22.23.4 and confirm the pong payload is copied exactly; do not call unsupported low-level methods.
-- [ ] Complete remaining duplicate error/close and constructor-failure cases, and verify complete cleanup.
+- [x] Add duplicate close/error, constructor-failure, close-during-connect, and listener-cleanup regression cases.
 - [x] Exercise the Phase 1 fake socket and fake clock in transport tests; avoid unused testing scaffolding.
 - [ ] Verify documented Binance connection lifetime, reconnect requirements, and connection/message limits relevant to the transport.
 - **Exit criteria:** transport tests pass on the supported Node runtime; ping/pong behavior is evidenced; no third-party WebSocket package is added.
