@@ -11,6 +11,7 @@ import {
   createGridCycle,
   recordGridCycleSellFill,
 } from "./grid-cycles.js"
+import { compareDecimal } from "./helpers/decimal.js"
 
 function createBuyFill(overrides = {}) {
   return {
