@@ -83,7 +83,7 @@ function hasSameDecimalFact(left, right) {
 }
 
 function hasSameFillFacts(left, right) {
-  const identityMatches = IDENTITY_FIELDS.every((field) => left?.[field] === right[field])
+  const identityMatches = IDENTITY_FIELDS.every((field) => left[field] === right[field])
   return identityMatches &&
     DECIMAL_FIELDS.every((field) => hasSameDecimalFact(left[field], right[field]))
 }
