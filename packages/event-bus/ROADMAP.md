@@ -146,7 +146,7 @@ The audit also identified these risks:
 3. **Unbounded pending work:** every delivery creates a promise and enters an unbounded pending set; no backpressure or overload policy exists.
 4. **Shutdown can hang:** a handler that never settles can block `flush()` and `close()` forever.
 5. **Ordering is unspecified:** asynchronous handlers may complete out of publish order.
-6. **Logging context mismatch:** the event bus passes message and context as two arguments, while the repository Logger currently accepts one argument; context can be lost.
+6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
 7. **Subscription lifecycle ambiguity:** close removes listeners without synchronizing subscription-handle state.
 8. **Validation gaps:** constructor options and event-name normalization/reserved semantics need an explicit contract.
 9. **Coverage gap:** package-level coverage thresholds and several adversarial tests are missing.
@@ -168,7 +168,7 @@ Acceptance: public behavior is documented and tests encode the intended contract
 
 - [x] Remove Node EventEmitter special-name behavior from event dispatch.
 - [ ] Define and enforce truly safe payload immutability.
-- [ ] Align structured logging with the repository logger contract.
+- [x] Align structured logging with the repository logger contract (single structured argument).
 - [ ] Validate constructor options and normalize/reject malformed event names.
 - [x] Make subscription state consistent after close.
 - [ ] Add regression tests for every corrected defect.
@@ -188,7 +188,7 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 
 ### Phase 3 — Observability and test quality
 
-- [ ] Use structured error context consistently.
+- [x] Use structured error context consistently (message, error, event ID, event name, and source).
 - [ ] Expose useful counters/gauges without leaking mutable internal state.
 - [ ] Add deterministic race/concurrency tests and bounded stress tests.
 - [ ] Add package-specific line and branch coverage gates.

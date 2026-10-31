@@ -8,8 +8,8 @@ function createTestBus({ onError } = {}) {
 
   const bus = new EventBus({
     logger: {
-      error: (message, context) => {
-        logs.push({ message, context })
+      error: (entry) => {
+        logs.push(entry)
       },
     },
     onError,
@@ -173,7 +173,10 @@ test("consumer failure is logged without blocking other consumers", async () => 
   assert.equal(secondConsumerCalled, true)
   assert.equal(logs.length, 1)
   assert.equal(logs[0].message, "Event consumer failed")
-  assert.equal(logs[0].context.eventName, "order.filled")
+  assert.equal(logs[0].eventName, "order.filled")
+  assert.equal(logs[0].source, "binance")
+  assert.ok(logs[0].error instanceof Error)
+  assert.match(logs[0].eventId, /^[0-9a-f-]{36}$/i)
 
   await bus.close()
 })

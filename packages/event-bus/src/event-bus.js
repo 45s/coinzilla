@@ -180,7 +180,8 @@ export class EventBus {
                 eventName: event.name,
               })
             } else {
-              this.logger.error?.("Event consumer failed", {
+              this.logger.error?.({
+                message: "Event consumer failed",
                 error,
                 eventId: event.id,
                 eventName: event.name,
