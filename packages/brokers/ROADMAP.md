@@ -67,7 +67,7 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `f6dce3514f198eb25df3d4e8459ef16d5170c0c0` (PR #355).
+1. The source of truth is `develop`, currently at merge commit `7050a5f1810791ab1c2a21ba1a7e0b1ec3d3fbb3` (PR #357).
 2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
 3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
 4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
