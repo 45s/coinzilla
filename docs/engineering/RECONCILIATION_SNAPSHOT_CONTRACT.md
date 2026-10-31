@@ -33,7 +33,15 @@ The bot consumes an exchange-neutral object. Binance wire fields, raw payloads, 
   symbols: {
     DOGEFDUSD: {
       openOrders: {
-        items: [],
+        items: [{
+          id: "0",
+          symbol: "DOGEFDUSD",
+          side: "BUY",
+          originalQuantity: "0",
+          executedQuantity: "0",
+          remainingQuantity: "0",
+          status: "NEW",
+        }],
         observedAtServerTime: 0,
         completeness: "COMPLETE",
       },
@@ -82,8 +90,9 @@ The top-level snapshot is usable only when every required section is `COMPLETE`.
 ### Open orders
 
 - Fetch all open orders for each enabled symbol.
-- Preserve exact original, executed, and remaining quantities, order identity, status, and order update timestamp.
+- Preserve exact original, executed, and remaining quantities, order identity, and status. Remaining quantity is derived with exact decimal arithmetic.
 - The section is complete only when the broker confirms the full open-order response and every returned order validates.
+- Tracked order creation/update timestamps come from the matching canonical order-history record; an unexpected open order without resolvable history is a discrepancy.
 - Any unexpected, duplicate, changed, or unresolvable order is a reconciliation discrepancy, not something to silently discard.
 
 ### Order history and fills
@@ -125,11 +134,11 @@ The validator is a pure function: same input, same result; it does not mutate in
 
 ## Broker port dependency
 
-The consumer requires the broker-owned capabilities in [request #316](https://github.com/45s/coinzilla/issues/316):
+The consumer requires the broker-owned capabilities delivered by [PR #320](https://github.com/45s/coinzilla/pull/320) and [PR #325](https://github.com/45s/coinzilla/pull/325):
 
 - `getServerTime()` for exchange server timestamps.
 - `getAccountSnapshot()` for canonical balances plus the account source `updateTime`, while preserving the existing `getBalances()` array contract.
-- `getCanonicalOrderHistory()` for exchange-neutral `CanonicalOrder[]` records scoped to a tracked order.
+- `getCanonicalOrderHistory()` for exchange-neutral `CanonicalOrder[]` records scoped to a tracked order (requested in [#321](https://github.com/45s/coinzilla/issues/321)).
 - Cursor-aware `getFills()` (canonical Entities Fill[]) for each tracked order, preserving exact source IDs/timestamps and allowing every page to be collected.
 
 The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation. The snapshot collector and pure validator are implemented in `apps/bot-free-roll/src/bot/reconciliation-snapshot.js`; integration into the running recovery flow is a separate consumer step.
