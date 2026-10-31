@@ -88,7 +88,7 @@ test("validates dependencies and tolerates logger failure", async () => {
   assert.throws(() => subscribeTelegramNotifications({}), /eventBus/)
   assert.throws(() => subscribeTelegramNotifications({ eventBus: {} }), /eventBus/)
   assert.throws(() => subscribeTelegramNotifications({ eventBus: createEventBus() }), /notifier/)
-  assert.throws(() => subscribeTelegramNotifications({ eventBus: createEventBus(), notifier: {} , logger: { error: true } }), /logger.error/)
+  assert.throws(() => subscribeTelegramNotifications({ eventBus: createEventBus(), notifier: { sendMessage() {} }, logger: { error: true } }), /logger.error/)
   const warnings = []
   const originalEmitWarning = process.emitWarning
   process.emitWarning = (message) => warnings.push(message)
