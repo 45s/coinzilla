@@ -147,6 +147,82 @@ test("records a partial SELL fill using actual base debit and net quote proceeds
   assert.equal(result.data.currentSellOrderId, "sell-1")
 })
 
+test("preserves BUY and SELL commission totals by supported asset", () => {
+  const cycle = addSell(createCycle({
+    buyCommissionTotals: { DOGE: "0.1", FDUSD: "0.02" },
+  }), {
+    quantity: "99",
+    reservedQuantity: "99.1",
+  })
+  const baseFee = recordGridCycleSellFill({
+    cycle,
+    fill: {
+      id: "sell-base-fee",
+      orderId: "sell-1",
+      side: "SELL",
+      quantity: "99",
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    },
+    accounting: { baseQuantity: "99.01", quoteQuantity: "10.02" },
+  })
+  const quoteFeeCycle = addSell(createCycle(), {
+    orderId: "sell-quote-fee",
+    quantity: "99",
+    reservedQuantity: "99",
+  })
+  const quoteFee = recordGridCycleSellFill({
+    cycle: quoteFeeCycle,
+    fill: {
+      id: "sell-quote-fee-trade",
+      orderId: "sell-quote-fee",
+      side: "SELL",
+      quantity: "99",
+      commissionAmount: "0.01",
+      commissionAsset: "FDUSD",
+    },
+    accounting: { baseQuantity: "99", quoteQuantity: "10.01" },
+  })
+  const unsupportedFee = recordGridCycleSellFill({
+    cycle: quoteFeeCycle,
+    fill: {
+      id: "sell-third-fee",
+      orderId: "sell-quote-fee",
+      side: "SELL",
+      quantity: "1",
+      commissionAmount: "0.01",
+      commissionAsset: "BNB",
+    },
+    accounting: { baseQuantity: "1", quoteQuantity: "1" },
+  })
+
+  assert.equal(baseFee.ok, true)
+  assert.deepEqual(baseFee.data.commissionTotals, { DOGE: "0.11", FDUSD: "0.02" })
+  assert.equal(quoteFee.ok, true)
+  assert.deepEqual(quoteFee.data.commissionTotals, { FDUSD: "0.01" })
+  assert.equal(unsupportedFee.ok, false)
+})
+
+test("normalizes equivalent zero commission amounts without requiring an asset", () => {
+  const cycle = addSell(createCycle())
+  const result = recordGridCycleSellFill({
+    cycle,
+    fill: {
+      id: "zero-fee-trade",
+      orderId: "sell-1",
+      side: "SELL",
+      quantity: "1",
+      commissionAmount: "0.00",
+      commissionAsset: null,
+    },
+    accounting: { baseQuantity: "1", quoteQuantity: "1" },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.sellFills[0].commissionAmount, "0.00")
+  assert.equal(result.data.sellFills[0].commissionAsset, null)
+})
+
 test("replays an identical SELL fill idempotently and rejects conflicting reuse", () => {
   const cycle = fillSell(addSell(createCycle()))
   const repeated = recordGridCycleSellFill({
@@ -311,7 +387,6 @@ test("projects pair totals from independent cycles without mutating them", () =>
 test("cycle projections are independent of input ordering", () => {
   const first = createCycle()
   const second = createCycle({
-    cycleId: "cycle-2",
     buyOrderId: "buy-2",
     buyFillIds: ["buy-trade-2"],
     acquiredQuantity: "10",
