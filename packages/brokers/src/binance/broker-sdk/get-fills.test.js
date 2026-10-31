@@ -186,7 +186,8 @@ describe("BinanceSdkBroker.getFills", () => {
 })
 
 
-test("canonical fills reject unsafe response trade and order IDs", async () => {
+describe("canonical fill response ID precision", () => {
+  it("rejects unsafe response trade and order IDs", async () => {
   for (const trade of [
     { ...{
       id: Number.MAX_SAFE_INTEGER + 1,
@@ -219,4 +220,5 @@ test("canonical fills reject unsafe response trade and order IDs", async () => {
     assert.equal(result.ok, false)
     assert.ok(result.errors?.length)
   }
+})
 })
