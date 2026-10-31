@@ -55,3 +55,112 @@ test("history methods reject missing symbols and invalid limits before sending",
   }
   assert.equal(rpc.calls.length, 0)
 })
+
+
+test("getMyTrades supports fromId pagination without losing stable trade IDs", async () => {
+  const trades = [{
+    id: 456,
+    symbol: "DOGEFDUSD",
+    orderId: 123,
+    qty: "10",
+    price: "0.05",
+    quoteQty: "0.5",
+    commission: "0.001",
+    commissionAsset: "DOGE",
+    isBuyer: true,
+    isMaker: true,
+    time: 789,
+  }]
+  const { broker, rpc } = createBroker({ myTrades: () => trades })
+  const result = await broker.getMyTrades({
+    symbol: " dogefdusd ",
+    orderId: "123",
+    fromId: "456",
+    limit: 1000,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data[0].id, "456")
+  assert.equal(result.data[0].time, 789)
+  assert.deepEqual(rpc.calls[0], {
+    method: "myTrades",
+    params: { symbol: "DOGEFDUSD", limit: 1000, orderId: 123, fromId: 456 },
+    options: { signed: true },
+  })
+})
+
+test("getMyTrades supports bounded time-window history queries", async () => {
+  const { broker, rpc } = createBroker({ myTrades: () => [] })
+  const result = await broker.getMyTrades({
+    symbol: "DOGEFDUSD",
+    startTime: 1000,
+    endTime: 2000,
+    limit: 500,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(rpc.calls[0].params, {
+    symbol: "DOGEFDUSD",
+    limit: 500,
+    startTime: 1000,
+    endTime: 2000,
+  })
+})
+
+test("getOrderHistory supports cursor and bounded time-window queries", async () => {
+  const orders = [{
+    symbol: "DOGEFDUSD",
+    orderId: 123,
+    status: "FILLED",
+    origQty: "10.00000000",
+    executedQty: "10.00000000",
+    time: 789,
+    updateTime: 900,
+  }]
+  const { broker, rpc } = createBroker({ allOrders: () => orders })
+  const cursorResult = await broker.getOrderHistory({
+    symbol: "DOGEFDUSD",
+    orderId: "123",
+    limit: 1000,
+  })
+  const timeResult = await broker.getOrderHistory({
+    symbol: "DOGEFDUSD",
+    startTime: 1000,
+    endTime: 2000,
+  })
+
+  assert.deepEqual(cursorResult.data, orders)
+  assert.equal(cursorResult.data[0].updateTime, 900)
+  assert.deepEqual(rpc.calls[0].params, {
+    symbol: "DOGEFDUSD",
+    limit: 1000,
+    orderId: 123,
+  })
+  assert.deepEqual(rpc.calls[1].params, {
+    symbol: "DOGEFDUSD",
+    limit: 100,
+    startTime: 1000,
+    endTime: 2000,
+  })
+})
+
+test("history methods reject conflicting cursors and malformed response pages", async () => {
+  const { broker, rpc } = createBroker({
+    allOrders: () => ({ malformed: true }),
+    myTrades: () => ({ malformed: true }),
+  })
+
+  for (const result of [
+    await broker.getMyTrades({ symbol: "DOGEFDUSD", fromId: 10, startTime: 100 }),
+    await broker.getMyTrades({ symbol: "DOGEFDUSD", orderId: 10, endTime: 100 }),
+    await broker.getOrderHistory({ symbol: "DOGEFDUSD", orderId: 10, startTime: 100 }),
+    await broker.getOrderHistory({ symbol: "DOGEFDUSD", startTime: 0, endTime: 86_400_001 }),
+    await broker.getMyTrades({ symbol: "DOGEFDUSD" }),
+    await broker.getOrderHistory({ symbol: "DOGEFDUSD" }),
+  ]) {
+    assert.equal(result.ok, false)
+    assert.ok(result.errors?.length)
+  }
+
+  assert.equal(rpc.calls.length, 2)
+})
