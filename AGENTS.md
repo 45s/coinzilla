@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-Before making changes, read ENGINEERING_STANDARDS.md, inspect the affected package's instructions and conventions, and understand the relevant implementation and tests.
+Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles
 
@@ -46,8 +46,6 @@ Before making changes, read ENGINEERING_STANDARDS.md, inspect the affected packa
 7. Review the complete diff and update the owning domain roadmap and docs when appropriate.
 8. Follow the target-aware branch synchronization and PR rules in `AI_AGENT_WORKFLOW.md`.
 9. Report exact commands, outcomes, and the final commit SHA. Never claim an unrun check passed.
-
-## Mandatory AI-agent workflow
 
 ## Mandatory AI-agent development workflow
 
