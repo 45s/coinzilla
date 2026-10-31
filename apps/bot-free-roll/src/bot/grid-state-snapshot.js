@@ -109,6 +109,7 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
       type: intent.type,
       quantity: intent.quantity,
       price: intent.price,
+      reservedQuantity: intent.reservedQuantity,
       createdAtServerTime: intent.createdAtServerTime,
       cycleId: intent.cycleId,
     })
