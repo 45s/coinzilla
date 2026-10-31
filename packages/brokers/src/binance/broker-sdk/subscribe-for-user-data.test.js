@@ -18,6 +18,22 @@ function createBroker(handler) {
 }
 
 describe("BinanceSdkBroker.subscribeForUserData", () => {
+
+  it("validates user-data callbacks before issuing RPC requests", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 57 }))
+    broker.connected = true
+
+    const missingEvent = await broker.subscribeForUserData({ onEvent: null })
+    const invalidStatus = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: "not-a-function",
+    })
+
+    assert.equal(missingEvent.ok, false)
+    assert.equal(invalidStatus.ok, false)
+    assert.equal(rpc.calls.length, 0)
+  })
+
   it("uses the signature subscription method and forwards adapted events", async () => {
     const { broker, rpc } = createBroker(() => ({ subscriptionId: 7 }))
     broker.connected = true
