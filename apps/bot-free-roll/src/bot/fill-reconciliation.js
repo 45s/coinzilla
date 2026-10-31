@@ -1,15 +1,17 @@
 import { Fill } from "@coinzilla/entities"
 import { appendFillLedgerEntry } from "./fill-ledger.js"
 import {
+  appendUnmanagedMovement,
+  applyMarketInventoryFill,
+  createMarketInventoryLedger,
+} from "./market-inventory-ledger.js"
+import {
   addDecimal,
   compareDecimal,
   maxDecimal,
   subtractDecimal,
 } from "./helpers/decimal.js"
-import {
-  calculateCommissionRateExact,
-  calculateFillAccountingExact,
-} from "./helpers/accounting.js"
+import { calculateCommissionRateExact } from "./helpers/accounting.js"
 
 function failure({ reason, updates, recordedFill, error }) {
   return {
@@ -161,18 +163,38 @@ export function reconcileExecutionFill({ fill, state }) {
     })
   }
 
-  let accounting
+  const marketLedger = state.marketInventory
+    ? { ok: true, ledger: state.marketInventory }
+    : createMarketInventoryLedger({
+        market: {
+          symbol: recordedFill.symbol,
+          baseAsset: state.baseAsset,
+          quoteAsset: state.quoteAsset,
+        },
+      })
+  if (!marketLedger.ok) {
+    return failure({
+      reason: marketLedger.reason,
+      updates,
+      recordedFill,
+    })
+  }
+
+  const marketFill = applyMarketInventoryFill({
+    ledger: marketLedger.ledger,
+    fill: recordedFill,
+  })
+  if (!marketFill.ok) {
+    return failure({
+      reason: `Unsupported or incomplete commission/fill data for trade ${fillId}: ${marketFill.reason}`,
+      updates,
+      recordedFill,
+    })
+  }
+
+  const accounting = marketFill.accounting
   let actualCommissionRate
   try {
-    accounting = calculateFillAccountingExact({
-      side: fill.side,
-      quantity: String(fill.quantity ?? ""),
-      quoteQuantity: String(fill.quoteQuantity ?? ""),
-      commissionAmount,
-      commissionAsset,
-      baseAsset: state.baseAsset,
-      quoteAsset: state.quoteAsset,
-    })
     actualCommissionRate = calculateCommissionRateExact({
       price: String(fill.price ?? ""),
       quoteQuantity: String(fill.quoteQuantity ?? ""),
@@ -201,6 +223,7 @@ export function reconcileExecutionFill({ fill, state }) {
     })
   }
 
+  updates.marketInventory = marketFill.ledger
   updates.actualCommissionRate = maxDecimal({
     left: state.actualCommissionRate,
     right: actualCommissionRate,
@@ -382,14 +405,19 @@ export function reconcileFillHistory({
 // Rebuild the execution-derived projection for one accounting window. Cycle
 // completion and inventory-bucket events are deliberately not inferred from
 // fills; those belong to the broader inventory ledger stages.
-export function replayExecutionFills({ entries, pairState } = {}) {
+export function replayExecutionFills({ entries, pairState, unmanagedMovements = [] } = {}) {
   if (!Array.isArray(entries)) {
     return { ok: false, reason: "Execution fill ledger entries must be an array" }
+  }
+  if (!Array.isArray(unmanagedMovements)) {
+    return { ok: false, reason: "Unmanaged movement ledger entries must be an array" }
   }
   if (
     !pairState ||
     typeof pairState !== "object" ||
     Array.isArray(pairState) ||
+    typeof pairState.symbol !== "string" ||
+    !pairState.symbol ||
     !["LIMIT", "LIMIT_MAKER"].includes(pairState.orderType) ||
     typeof pairState.baseAsset !== "string" ||
     !pairState.baseAsset ||
@@ -414,7 +442,13 @@ export function replayExecutionFills({ entries, pairState } = {}) {
     }
   }
 
+  const marketLedger = createMarketInventoryLedger({ market: pairState })
+  if (!marketLedger.ok) {
+    return { ok: false, reason: marketLedger.reason }
+  }
+
   const state = {
+    marketInventory: marketLedger.ledger,
     orderType: pairState.orderType,
     baseAsset: pairState.baseAsset,
     quoteAsset: pairState.quoteAsset,
@@ -443,6 +477,22 @@ export function replayExecutionFills({ entries, pairState } = {}) {
         state,
       }
     }
+  }
+
+  for (const movement of unmanagedMovements) {
+    const result = appendUnmanagedMovement({
+      ledger: state.marketInventory,
+      movement,
+    })
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: result.reason,
+        failedMovementId: movement?.id ?? null,
+        state,
+      }
+    }
+    state.marketInventory = result.ledger
   }
 
   return { ok: true, state }
