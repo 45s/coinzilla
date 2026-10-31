@@ -142,11 +142,13 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 
 | Broker method | Current SDK method | Binance Spot WebSocket API method | Security class | Notes |
 |---|---|---|---|---|
+| `getServerTime()` | — | `time` | NONE, public | Returns the validated exchange `serverTime` in milliseconds; never substitute local time. |
 | `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns account balances; preserve current asset adapter behavior. |
+| `getAccountSnapshot()` | — | `account.status` | USER_DATA, signed | Returns canonical `Balance[]` plus source `updateTime` as `sourceTime`; `getBalances()` remains unchanged. |
 | `getOpenOrders({ symbol? })` | `openOrdersStatus(params)` | `openOrders.status` | USER_DATA, signed | Symbol is optional; omitted means all open orders. |
 | `getOrder({ symbol, orderId })` | `orderStatus(params)` | `order.status` | USER_DATA, signed | Preserve order adapter and ID representation. |
-| `getOrderHistory({ symbol, orderId?, limit })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Current implementation returns raw Binance order history data; do not accidentally change this result shape in a transport rewrite. |
-| `getMyTrades({ symbol, orderId?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Current implementation adapts trades; preserve exact decimal strings and commission metadata. |
+| `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Preserves raw response fields and timestamps. Time filters take precedence over `orderId`; the time window cannot exceed 24 hours. |
+| `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Adapts trades and preserves exact IDs/decimal strings. `orderId + fromId` is supported; time filters cannot combine with either. Time window max 24 hours. |
 | `createOrder(input)` | `orderPlace(params)` | `order.place` | TRADE, signed | State-changing request. Never automatically replay after uncertain disconnect. Preserve client order ID mapping and LIMIT/LIMIT_MAKER defaults. |
 | `cancelOrder({ symbol, orderId })` | `orderCancel(params)` | `order.cancel` | TRADE, signed | State-changing request; uncertain outcome must be reconciled. |
 | `cancelAllOpenOrders({ symbol })` | `openOrdersCancelAll(params)` | `openOrders.cancelAll` | TRADE, signed | State-changing request; response can contain order and order-list reports. |
@@ -262,3 +264,21 @@ The additive `BinanceSdkBroker.getFills({ symbol, orderId?, limit? })` API retur
 - A positive commission is represented by a `Commission` with its explicit commission Asset. A confirmed zero commission is `COMPLETE` with an empty commission list. If a positive commission has no known denomination, its status is `UNKNOWN`; no fee Asset is fabricated.
 - Missing maker/taker metadata maps to `UNKNOWN`, and missing execution timestamps remain absent.
 - The legacy `getMyTrades()` API and its plain-object result shape are unchanged for compatibility. Consumer migration to `getFills()` is a separate task owned by the consumer domain.
+
+## 12. Reconciliation snapshot broker ports (FR-057)
+
+The broker exposes exchange-owned source times and bounded history queries for the consumer's reconciliation snapshot. Binance's WebSocket API documents `time` as a public method returning `result.serverTime`; `account.status` returns `updateTime` and balances. The adapter exposes these in stable neutral result shapes:
+
+- `getServerTime()` returns `{ serverTime }` under the normal broker result wrapper. The value is validated as a non-negative safe integer from Binance, not sampled from the local process clock.
+- `getAccountSnapshot()` returns `{ balances: Balance[], sourceTime }`; `sourceTime` is the exact account `updateTime`. It requests `omitZeroBalances: false` and leaves `getBalances()` untouched for compatibility.
+- `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` supports the documented cursor/time filters. `orderId + fromId` is allowed; `fromId` or `orderId` combined with either time filter is rejected. A two-sided time range must be ordered and no longer than 24 hours.
+- `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })` supports ID and time pagination. When a time filter is supplied, the adapter omits `orderId`, matching Binance's documented precedence (time filters cause `orderId` to be ignored). A two-sided time range is limited to 24 hours.
+- Existing array result shapes are preserved. The adapter does not claim a page is complete: if the returned count equals the requested limit, the caller must continue with the last returned trade/order ID plus one, or advance its bounded time window. It must not interpret a full page as an exhausted history.
+
+The consumer-owned reconciliation snapshot and pagination rules are specified in [`RECONCILIATION_SNAPSHOT_CONTRACT.md`](./engineering/RECONCILIATION_SNAPSHOT_CONTRACT.md); the cross-domain request is [#316](https://github.com/45s/coinzilla/issues/316).
+
+Protocol references:
+- [Binance WebSocket API — Check server time](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/general#check-server-time)
+- [Binance WebSocket API — Account information](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account#account-information-user_data)
+- [Binance WebSocket API — Account trade history](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account#account-trade-history-user_data)
+- [Binance WebSocket API — Account order history](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account#account-order-history-user_data)
