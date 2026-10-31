@@ -25,7 +25,7 @@ test("Binance TESTNET integration suites stay offline without explicit opt-in", 
       },
     })
 
-    const output = [result.stdout, result.stderr].filter(Boolean).join("\\n")
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n")
 
     assert.equal(result.error, undefined, output)
     assert.equal(result.status, 0, output)
