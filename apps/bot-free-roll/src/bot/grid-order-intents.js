@@ -51,6 +51,12 @@ export function createGridOrderIntent({
     if (cycleId !== null && !isNonEmptyString(cycleId)) {
       throw new Error("cycleId must be null or a non-empty string")
     }
+    if (side === "BUY" && cycleId !== null) {
+      throw new Error("BUY order intents cannot reference a recovery cycle")
+    }
+    if (side === "SELL" && !isNonEmptyString(cycleId)) {
+      throw new Error("SELL order intents must reference their owning cycle")
+    }
     if (!Number.isSafeInteger(createdAtServerTime) || createdAtServerTime < 0) {
       throw new Error("createdAtServerTime must be a non-negative safe integer")
     }
