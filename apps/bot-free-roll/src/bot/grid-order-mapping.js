@@ -16,6 +16,10 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
   const projection = projectGridCycles({ cycles })
   if (!projection.ok) return projection
 
+  if (pendingBuyOrder && cycles.some((cycle) => cycle.symbol !== pendingBuyOrder.symbol)) {
+    return failure("Pending BUY order symbol does not match the cycle collection")
+  }
+
   const byOrderId = Object.create(null)
   const byClientOrderId = Object.create(null)
   const entries = []
@@ -49,8 +53,13 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
   }
 
   for (const { order, role, status, symbol, cycleId } of ordersToIndex) {
-    if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId)) {
-      return failure(`Grid ${role} order has incomplete canonical identity`)
+    if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId) ||
+        !isNonEmptyString(symbol) || order.symbol !== symbol ||
+        order.side !== role ||
+        !["LIMIT", "LIMIT_MAKER"].includes(order.type) ||
+        !isNonEmptyString(order.quantity) || !isNonEmptyString(order.price) ||
+        !isNonEmptyString(status)) {
+      return failure(`Grid ${role} order has incomplete or mismatched canonical identity`)
     }
     if (Object.hasOwn(byOrderId, order.id)) {
       return failure(`Grid broker order ID ${order.id} is assigned more than once`)
