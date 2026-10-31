@@ -251,7 +251,11 @@ export class NativeWebSocketTransport {
 
     if (this.#handlers && this.#socket) {
       for (const [type, handler] of Object.entries(this.#handlers)) {
-        this.#socket.removeEventListener(type, handler)
+        try {
+          this.#socket.removeEventListener(type, handler)
+        } catch (error) {
+          this.#emit("error", error)
+        }
       }
     }
     this.#handlers = null
