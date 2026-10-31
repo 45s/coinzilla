@@ -115,7 +115,9 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       eventTime: 123456,
       recoveryRequired: true,
     }])
-    assert.deepEqual(received, [])
+    assert.deepEqual(received, [{
+      event: { e: "eventStreamTerminated", E: 123456 },
+    }])
     await result.data.disconnect()
   })
 
