@@ -3,6 +3,14 @@ import assert from "node:assert/strict"
 
 import { EventBus } from "../src/index.js"
 
+function createDeferred() {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 function createTestBus({ onError } = {}) {
   const logs = []
 
@@ -266,19 +274,34 @@ test("supports asynchronous error handlers", async () => {
 
 test("flush waits for pending asynchronous handlers", async () => {
   const { bus } = createTestBus()
+  const started = createDeferred()
+  const release = createDeferred()
   let completed = false
 
   bus.subscribe({
     name: "bot.started",
     handler: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      started.resolve()
+      await release.promise
       completed = true
     },
   })
 
   bus.publish({ name: "bot.started", source: "bot" })
+  await started.promise
 
-  const result = await bus.flush()
+  let flushCompleted = false
+  const flushing = bus.flush().then((result) => {
+    flushCompleted = true
+    return result
+  })
+
+  await Promise.resolve()
+  assert.equal(flushCompleted, false)
+  assert.equal(completed, false)
+
+  release.resolve()
+  const result = await flushing
 
   assert.equal(result.ok, true)
   assert.equal(completed, true)
@@ -288,25 +311,24 @@ test("flush waits for pending asynchronous handlers", async () => {
 
 test("close waits for pending handlers and rejects new work", async () => {
   const { bus } = createTestBus()
+  const started = createDeferred()
+  const release = createDeferred()
   let completed = false
 
   bus.subscribe({
     name: "bot.started",
     handler: async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      started.resolve()
+      await release.promise
       completed = true
     },
   })
 
   bus.publish({ name: "bot.started", source: "bot" })
+  await started.promise
 
-  const result = await bus.close()
-
-  assert.equal(result.ok, true)
-  assert.equal(completed, true)
-
+  const closing = bus.close()
   assert.equal(bus.publish({ name: "bot.stopped", source: "bot" }).ok, false)
-
   assert.equal(
     bus.subscribe({
       name: "bot.stopped",
@@ -315,6 +337,14 @@ test("close waits for pending handlers and rejects new work", async () => {
     false,
   )
 
+  await Promise.resolve()
+  assert.equal(completed, false)
+
+  release.resolve()
+  const result = await closing
+
+  assert.equal(result.ok, true)
+  assert.equal(completed, true)
   await bus.close()
 })
 
