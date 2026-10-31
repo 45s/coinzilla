@@ -101,10 +101,14 @@ export class BinanceUserDataSession {
 
     try {
       await this.#ensureRemoteSubscription()
+      if (this.#stopped || !this.#subscribers.has(id)) {
+        throw new Error("User-data subscription was canceled during setup")
+      }
     } catch (error) {
       this.#subscribers.delete(id)
       if (this.#subscribers.size === 0) {
         this.#clearReconnectTimer()
+        this.#detachUserDataListeners()
         this.setUnavailable(true)
       }
       throw error
