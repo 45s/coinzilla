@@ -137,3 +137,12 @@ Rotate a potentially exposed bot token with BotFather and update the deployment 
     pnpm --filter @coinzilla/notifiers test:coverage
 
 The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Tests use Node's built-in test runner and injected transport boundaries; they require no credentials, external packages, or live network access.
+
+
+## Manual live Telegram smoke test
+
+The default unit and coverage suites never contact Telegram. For an operator-controlled check of real credentials and chat permissions, run the explicit smoke-test command from a trusted environment where `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` have been injected by your approved secret manager:
+
+    pnpm --filter @coinzilla/notifiers test:telegram-smoke
+
+This command sends exactly one clearly labeled test message and prints only the returned message ID. It does not retry. A successful result means Telegram accepted the API request; it does not mean the message was read. Do not run this command in ordinary pull-request CI, against a production alert channel without approval, or with credentials copied into shell history. The smoke test is intentionally excluded from the default test suite.
