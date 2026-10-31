@@ -79,6 +79,12 @@ export function validateTradingConfig({ tradingConfig } = {}) {
         errors.push(`pairs.${symbol}.enabled must be a boolean`)
       }
 
+      if (pair.mode !== undefined && !["aggregated", "grid"].includes(pair.mode)) {
+        errors.push(`pairs.${symbol}.mode must be "aggregated" or "grid"`)
+      } else if (pair.mode === "grid") {
+        errors.push(`pairs.${symbol}.mode "grid" is not available until Grid execution and recovery are integrated`)
+      }
+
       if (
         !Number.isInteger(pair.pricePrecision) ||
         pair.pricePrecision < 0 ||
