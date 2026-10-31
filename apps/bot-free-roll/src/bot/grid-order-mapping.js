@@ -35,7 +35,7 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
         order: cycle.buyOrder,
         role: "BUY",
         status: "FILLED",
-        symbol,
+        symbol: cycle.symbol,
         cycleId: cycle.id,
       },
       ...cycle.sellOrders.map((order) => ({
@@ -50,24 +50,24 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
 
   for (const { order, role, status, symbol, cycleId } of ordersToIndex) {
     if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId)) {
-        return failure(`Grid ${role} order has incomplete canonical identity`)
-      }
+      return failure(`Grid ${role} order has incomplete canonical identity`)
+    }
     if (Object.hasOwn(byOrderId, order.id)) {
-        return failure(`Grid broker order ID ${order.id} is assigned more than once`)
-      }
+      return failure(`Grid broker order ID ${order.id} is assigned more than once`)
+    }
     if (Object.hasOwn(byClientOrderId, order.clientOrderId)) {
-        return failure(`Grid client order ID ${order.clientOrderId} is assigned more than once`)
-      }
+      return failure(`Grid client order ID ${order.clientOrderId} is assigned more than once`)
+    }
 
     const entry = Object.freeze({
-        orderId: order.id,
-        clientOrderId: order.clientOrderId,
-        symbol: cycle.symbol,
-        side: order.side,
-        role,
-        status,
-        cycleId,
-      })
+      orderId: order.id,
+      clientOrderId: order.clientOrderId,
+      symbol,
+      side: order.side,
+      role,
+      status,
+      cycleId,
+    })
     byOrderId[order.id] = entry
     byClientOrderId[order.clientOrderId] = entry
     entries.push(entry)
