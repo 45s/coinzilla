@@ -42,7 +42,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     marketClientFactory = createMarketClient,
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
-    maxUserDataReconnectAttempts = 5,
+    userDataRecoveryWarningThreshold = 5,
   } = {}) {
     super(input)
 
@@ -60,7 +60,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       setUnavailable: (unavailable) => { this.userDataUnavailable = unavailable },
       logger: this.logger,
       reconnectDelay: this.config.reconnectDelay,
-      maxReconnectAttempts: maxUserDataReconnectAttempts,
+      recoveryWarningThreshold: userDataRecoveryWarningThreshold,
       setTimeoutFn,
       clearTimeoutFn,
     })
