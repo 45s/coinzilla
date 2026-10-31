@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.010`
+**Document version:** `v0.011`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -656,6 +656,45 @@ The strategy must:
 - Avoid silently rounding quantities in a way that violates the configured free-coin target.
 - Validate configuration before trading starts.
 
+### Trading readiness states (FR-006)
+
+Readiness is tracked **per enabled pair**. The bot process lifecycle (running or stopped) is separate from a pair's trading readiness. Disabled pairs are excluded from this state machine.
+
+A state describes which operations are currently safe; it is not merely a display label.
+
+| State | Meaning | Allowed actions | Forbidden actions |
+| --- | --- | --- | --- |
+| `INITIALIZING` | The pair is being prepared. Configuration, required broker capabilities, effective commission policy, market rules, connections, and the available local/broker state are being checked. | Validate configuration; inspect broker capabilities and fee policy; load market rules; connect and subscribe; read balances, orders, and fills; reconcile facts. | Submit, cancel, or replace strategy orders. |
+| `READY` | All required readiness gates have passed and the pair has a consistent starting state. No strategy order is currently being managed for this pair. | Evaluate the initial strategy action; submit an initial order only after its order-specific validation and profitability/funding checks pass; observe market and account events. | Submit an order with missing, stale, invalid, or unreconciled inputs; bypass order validation. |
+| `ACTIVE` | The pair is operating the strategy with a consistent position/order view. Working orders may exist. | Observe events; account and reconcile fills; submit, cancel, or replace strategy orders only through the approved safety and profitability workflows. | Sell free/external inventory; overlap reservations; replace an order before final status/fills are reconciled; act on uncertain inputs. |
+| `RECONCILING` | The pair's state may be incomplete or uncertain and is being compared with authoritative broker facts. | Read balances, open orders, order history, fills, and market rules; deduplicate/apply known executions; produce discrepancy diagnostics. | Create, cancel, or replace strategy orders; release reservations without evidence; resume strategy decisions before reconciliation completes. |
+| `PAUSED_UNSAFE` | A safety invariant failed, required facts are unknown/inconsistent, or the pair cannot prove that another action is safe. | Preserve diagnostics; inspect state through read-only broker queries; record the pause reason; request an explicit recovery/reconciliation action. | Any automatic strategy order creation, cancellation, replacement, or automatic resume. Existing exchange orders are not implicitly canceled. |
+| `STOPPED` | The pair has been explicitly stopped, or the bot process has been stopped. | Read statistics and diagnostics; perform an explicit later start, which begins again at `INITIALIZING`. | New strategy orders or automatic resumption. Existing exchange orders are left untouched unless a separate, explicit and safe operator workflow is approved. |
+
+#### Transition rules
+
+| From | To | Required trigger / guard |
+| --- | --- | --- |
+| `INITIALIZING` | `READY` | Every required startup gate passes: valid pair configuration; required broker capabilities and fee policy verified; usable trading rules loaded; required connections established; market-data quality accepted under FR-024; and local state, balances, open orders, and fills reconciled to the extent required by the recovery contract. |
+| `INITIALIZING` | `PAUSED_UNSAFE` | A required fact is invalid, unavailable, unsupported, or inconsistent and cannot be safely resolved during initialization. |
+| `READY` | `ACTIVE` | The pair is explicitly activated for strategy operation. The first order still passes all order-specific validation immediately before submission. |
+| `READY` or `ACTIVE` | `RECONCILING` | Disconnect/reconnect, stream gap, ambiguous create/cancel outcome, cancel/fill race, restart, or any other event makes local order, fill, balance, or reservation state uncertain. |
+| Any non-`STOPPED` state | `PAUSED_UNSAFE` | A safety invariant fails, including unexpected third-asset commission, unexplained balance/inventory mismatch, invalid trading rules, incomplete accounting, or an unresolvable order/fill discrepancy. |
+| `RECONCILING` | `READY` | Reconciliation succeeds and proves there is no active strategy position or working strategy order. |
+| `RECONCILING` | `ACTIVE` | Reconciliation succeeds and reconstructs a consistent active position and/or working strategy orders. |
+| `RECONCILING` | `PAUSED_UNSAFE` | Required evidence is unavailable or any discrepancy remains unresolved. |
+| `PAUSED_UNSAFE` | `RECONCILING` | An operator explicitly requests recovery. This does not itself authorize trading. |
+| Any state | `STOPPED` | An explicit stop is requested. The stop operation does not imply cancellation of exchange orders. |
+| `STOPPED` | `INITIALIZING` | An explicit start/restart is requested. Startup gates and reconciliation must run again; the pair must never jump directly to `READY` or `ACTIVE`. |
+
+A pair that entered `PAUSED_UNSAFE` must not return to `READY` or `ACTIVE` automatically. It first enters `RECONCILING` through an explicit recovery request. Only a successful reconciliation can select the safe destination state. A failed or incomplete reconciliation returns it to `PAUSED_UNSAFE`.
+
+#### Readiness is a gate, not a claim about current implementation
+
+The state names and rules above define the target contract. They do **not** mean the current bot already enforces these states. The current implementation has a process-level running flag and a per-pair `paused` boolean; it does not yet perform complete startup reconciliation of persisted state, balances, open orders, and fills. Until the relevant readiness and reconciliation work is implemented and tested, the application must not be considered production-ready, and a successful subscription setup alone must not be described as `READY`.
+
+The exact reconciliation snapshot, persistence, stream recovery, and operator-controlled resume mechanisms remain implementation work under FR-057–FR-066. Market-data freshness and gap criteria remain under FR-024. This section defines their required relationship to readiness without prematurely choosing their detailed contracts.
+
 ### Configuration validation
 
 At minimum:
@@ -737,6 +776,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.011` — Defined per-pair trading readiness states, safe transitions, and allowed/forbidden actions. Clarified that readiness requires reconciliation and is not currently enforced by the existing running/paused flags.
 - `v0.010` — Approved pooled recovery accounting: actual net SELL proceeds are credited cumulatively against BUY costs across partial fills, cancellations, and replacement sells; free coins are allocated only after a fully filled recovery SELL and the cumulative net-profit threshold is met.
 - `v0.009` — Approved manual wallet activity policy: deposits/transfers and manual buys/sells remain external to strategy accounting; pause when withdrawals or unexplained changes may affect strategy-owned inventory; resume only after explicit reconciliation. Added external inventory as a separate accounting bucket.
 - `v0.008` — Approved and documented commission-aware order selection: use `LIMIT_MAKER` when `makerPercent` is zero, regular `LIMIT` otherwise; account actual base/quote commissions from each fill and reserve the configured conservative SELL fee only for regular LIMIT orders.
