@@ -93,3 +93,162 @@ test("exact repeated position accumulation and minimum-profit boundary do not dr
   assert.equal(compareDecimal({ left: "1.01", right: required }), 0);
   assert.equal(compareDecimal({ left: "1.00999999", right: required }), -1);
 });
+
+
+test("calculateSellPlan rejects non-finite values for every input", () => {
+  const fields = [
+    "activeQuantity",
+    "keepQuantity",
+    "cycleCost",
+    "saleProceeds",
+    "minProfit",
+    "feeRate",
+    "priceTickSize",
+    "quantityStepSize",
+  ]
+
+  for (const field of fields) {
+    assert.throws(
+      () => calculateSellPlan({ ...validNumberSellPlan, [field]: Number.NaN }),
+      new RegExp(`${field} must be a finite number`),
+    )
+    assert.throws(
+      () => calculateSellPlan({ ...validNumberSellPlan, [field]: Number.POSITIVE_INFINITY }),
+      new RegExp(`${field} must be a finite number`),
+    )
+  }
+})
+
+test("calculateSellPlan rejects each invalid sign and fee boundary", () => {
+  const invalidInputs = [
+    ["activeQuantity", 0],
+    ["keepQuantity", -1],
+    ["cycleCost", -1],
+    ["saleProceeds", -1],
+    ["minProfit", 0],
+    ["feeRate", -0.0001],
+    ["feeRate", 1],
+    ["priceTickSize", -0.00001],
+    ["quantityStepSize", -0.00001],
+  ]
+
+  for (const [field, value] of invalidInputs) {
+    assert.throws(
+      () => calculateSellPlan({ ...validNumberSellPlan, [field]: value }),
+      /Invalid sell plan inputs/,
+      `${field}=${value}`,
+    )
+  }
+})
+
+test("calculateSellPlan returns zero quantity when retained inventory consumes the position", () => {
+  const plan = calculateSellPlan({
+    ...validNumberSellPlan,
+    activeQuantity: 1,
+    keepQuantity: 2,
+  })
+
+  assert.deepEqual(plan, {
+    quantity: 0,
+    price: null,
+    requiredNetProceeds: 1.01,
+  })
+})
+
+test("calculateSellPlanExact rejects non-string and malformed values for every input", () => {
+  const fields = [
+    "activeQuantity",
+    "keepQuantity",
+    "cycleCost",
+    "saleProceeds",
+    "minProfit",
+    "feeRate",
+    "priceTickSize",
+    "quantityStepSize",
+  ]
+
+  for (const field of fields) {
+    assert.throws(
+      () => calculateSellPlanExact({ ...validExactSellPlan, [field]: 1 }),
+      /must be a decimal string/,
+      `${field} must be a string`,
+    )
+    assert.throws(
+      () => calculateSellPlanExact({ ...validExactSellPlan, [field]: "invalid" }),
+      /invalid format/,
+      `${field} must be a valid decimal`,
+    )
+  }
+})
+
+test("calculateSellPlanExact rejects each invalid sign and fee boundary", () => {
+  const invalidInputs = [
+    ["activeQuantity", "0"],
+    ["keepQuantity", "-1"],
+    ["cycleCost", "-1"],
+    ["saleProceeds", "-1"],
+    ["minProfit", "0"],
+    ["feeRate", "-0.0001"],
+    ["feeRate", "1"],
+    ["priceTickSize", "-0.00001"],
+    ["quantityStepSize", "-0.00001"],
+  ]
+
+  for (const [field, value] of invalidInputs) {
+    assert.throws(
+      () => calculateSellPlanExact({ ...validExactSellPlan, [field]: value }),
+      /Invalid sell plan inputs/,
+      `${field}=${value}`,
+    )
+  }
+})
+
+test("calculateSellPlanExact returns zero quantity when retained inventory consumes the position", () => {
+  const plan = calculateSellPlanExact({
+    ...validExactSellPlan,
+    activeQuantity: "1",
+    keepQuantity: "2",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "0",
+    price: null,
+    requiredNetProceeds: "1.01",
+  })
+})
+
+test("calculateSellPlanExact returns a zero price when prior proceeds already cover the target", () => {
+  const plan = calculateSellPlanExact({
+    ...validExactSellPlan,
+    cycleCost: "1",
+    saleProceeds: "2",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "99",
+    price: "0",
+    requiredNetProceeds: "0",
+  })
+})
+
+const validNumberSellPlan = {
+  activeQuantity: 10,
+  keepQuantity: 1,
+  cycleCost: 1,
+  saleProceeds: 0,
+  minProfit: 0.01,
+  feeRate: 0.001,
+  priceTickSize: 0.01,
+  quantityStepSize: 1,
+}
+
+const validExactSellPlan = {
+  activeQuantity: "10",
+  keepQuantity: "1",
+  cycleCost: "1",
+  saleProceeds: "0",
+  minProfit: "0.01",
+  feeRate: "0.001",
+  priceTickSize: "0.01",
+  quantityStepSize: "1",
+}
