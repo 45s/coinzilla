@@ -277,3 +277,10 @@ CI should run package tests on every pull request. Coverage thresholds should be
 - Correctness and bug resistance take precedence over feature count and micro-optimizations.
 - Do not create GitHub issues as a substitute for this roadmap; track progress here and in focused pull requests.
 - Update this file whenever a guarantee, phase, or acceptance criterion changes.
+
+
+## AI-agent ownership and workflow
+
+This roadmap is owned by `packages/event-bus/`. Read [the local agent instructions](./AGENTS.md) and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md) before changing this package.
+
+Use short-lived task branches from `develop`; do not create permanent per-domain branches. Keep event-bus implementation, tests, and roadmap changes within this domain. Route consumer requests and cross-package contract needs through [the cross-domain request process](../../docs/engineering/CROSS_DOMAIN_REQUESTS.md). Mark roadmap items complete only after the focused PR is merged into `develop` and required checks pass.
