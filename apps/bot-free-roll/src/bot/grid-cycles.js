@@ -31,6 +31,7 @@ function freezeCycle(cycle) {
     buyFillIds: Object.freeze([...cycle.buyFillIds]),
     sellOrders: Object.freeze(cycle.sellOrders.map((order) => Object.freeze({ ...order }))),
     sellFills: Object.freeze(cycle.sellFills.map((fill) => Object.freeze({ ...fill }))),
+    commissionTotals: Object.freeze({ ...cycle.commissionTotals }),
   })
 }
 
@@ -39,8 +40,21 @@ function validateCycle(cycle) {
     throw new Error("cycle must be an object")
   }
   if (!isNonEmptyString(cycle.id) || !isNonEmptyString(cycle.symbol) ||
-      !isNonEmptyString(cycle.buyOrderId)) {
-    throw new Error("cycle requires stable id, symbol, and BUY order ID")
+      !isNonEmptyString(cycle.buyOrderId) || !isNonEmptyString(cycle.baseAsset) ||
+      !isNonEmptyString(cycle.quoteAsset) || cycle.baseAsset === cycle.quoteAsset) {
+    throw new Error("cycle requires stable identity and distinct base/quote assets")
+  }
+  const expectedId = `grid-cycle:${cycle.symbol.length}:${cycle.symbol}:${cycle.buyOrderId.length}:${cycle.buyOrderId}`
+  if (cycle.id !== expectedId) throw new Error("cycle ID does not match its BUY order identity")
+  if (!cycle.commissionTotals || typeof cycle.commissionTotals !== "object" ||
+      Array.isArray(cycle.commissionTotals)) {
+    throw new Error("cycle commission totals must be an asset map")
+  }
+  for (const [asset, amount] of Object.entries(cycle.commissionTotals)) {
+    if (asset !== cycle.baseAsset && asset !== cycle.quoteAsset) {
+      throw new Error("cycle contains an unsupported commission asset")
+    }
+    validateDecimal({ value: amount, name: `commissionTotals.${asset}` })
   }
   if (!["OPEN", "COMPLETED"].includes(cycle.status)) {
     throw new Error("cycle has an unsupported status")
@@ -122,6 +136,16 @@ function validateCycle(cycle) {
     validateDecimal({ value: fill.quantity, name: "SELL fill quantity", allowZero: false })
     validateDecimal({ value: fill.baseQuantity, name: "SELL fill baseQuantity", allowZero: false })
     validateDecimal({ value: fill.quoteQuantity, name: "SELL fill quoteQuantity" })
+    validateDecimal({ value: fill.commissionAmount, name: "SELL fill commissionAmount" })
+    if (compareDecimal({ left: fill.commissionAmount, right: "0" }) > 0 &&
+        fill.commissionAsset !== cycle.baseAsset &&
+        fill.commissionAsset !== cycle.quoteAsset) {
+      throw new Error("cycle SELL fill contains an unsupported commission asset")
+    }
+    if (compareDecimal({ left: fill.commissionAmount, right: "0" }) === 0 &&
+        fill.commissionAsset !== null) {
+      throw new Error("zero-commission SELL fill must not specify a commission asset")
+    }
     fillIds.add(fill.id)
     filledQuantityByOrder.set(fill.orderId, addDecimal({
       left: filledQuantityByOrder.get(fill.orderId),
@@ -174,8 +198,9 @@ function validateCycle(cycle) {
 }
 
 function hasSameSellFill(left, right) {
-  if (left.id !== right.id || left.orderId !== right.orderId) return false
-  for (const field of ["quantity", "baseQuantity", "quoteQuantity"]) {
+  if (left.id !== right.id || left.orderId !== right.orderId ||
+      left.commissionAsset !== right.commissionAsset) return false
+  for (const field of ["quantity", "baseQuantity", "quoteQuantity", "commissionAmount"]) {
     try {
       if (compareDecimal({ left: left[field], right: right[field] }) !== 0) return false
     } catch {
@@ -185,20 +210,49 @@ function hasSameSellFill(left, right) {
   return true
 }
 
+// Cycle identity is deterministic across event replay and process restart.
+// BUY order IDs are scoped by market; length prefixes avoid delimiter collisions.
+export function createGridCycleId({ symbol, buyOrderId } = {}) {
+  if (!isNonEmptyString(symbol) || !isNonEmptyString(buyOrderId)) {
+    return fail("symbol and buyOrderId must be non-empty strings")
+  }
+  return toResult({
+    data: {
+      cycleId: `grid-cycle:${symbol.length}:${symbol}:${buyOrderId.length}:${buyOrderId}`,
+    },
+  })
+}
+
 // Create one immutable recovery cycle from a fully reconciled BUY order.
-// The caller supplies actual net acquired base and actual quote cost.
+// The caller supplies actual net acquired base, actual quote cost, and the
+// commission totals already captured for the BUY fills.
 export function createGridCycle({
-  cycleId,
   symbol,
+  baseAsset,
+  quoteAsset,
   buyOrderId,
   buyFillIds,
   acquiredQuantity,
   recoveryCost,
+  buyCommissionTotals = {},
 } = {}) {
   try {
-    if (!isNonEmptyString(cycleId) || !isNonEmptyString(symbol) ||
-        !isNonEmptyString(buyOrderId)) {
-      throw new Error("cycleId, symbol, and buyOrderId must be non-empty strings")
+    if (!isNonEmptyString(symbol) || !isNonEmptyString(buyOrderId) ||
+        !isNonEmptyString(baseAsset) || !isNonEmptyString(quoteAsset) ||
+        baseAsset === quoteAsset) {
+      throw new Error("symbol, BUY order ID, and distinct base/quote assets are required")
+    }
+    if (!buyCommissionTotals || typeof buyCommissionTotals !== "object" ||
+        Array.isArray(buyCommissionTotals)) {
+      throw new Error("buyCommissionTotals must be an asset map")
+    }
+    const identity = createGridCycleId({ symbol, buyOrderId })
+    if (!identity.ok) throw new Error(identity.errors[0])
+    for (const [asset, amount] of Object.entries(buyCommissionTotals)) {
+      if (asset !== baseAsset && asset !== quoteAsset) {
+        throw new Error(`Unsupported BUY commission asset: ${asset}`)
+      }
+      validateDecimal({ value: amount, name: `buyCommissionTotals.${asset}` })
     }
     if (!Array.isArray(buyFillIds) || buyFillIds.length === 0 ||
         buyFillIds.some((id) => !isNonEmptyString(id))) {
@@ -211,10 +265,13 @@ export function createGridCycle({
     validateDecimal({ value: recoveryCost, name: "recoveryCost", allowZero: false })
 
     const cycle = freezeCycle({
-      id: cycleId,
+      id: identity.data.cycleId,
       symbol,
+      baseAsset,
+      quoteAsset,
       buyOrderId,
       buyFillIds,
+      commissionTotals: buyCommissionTotals,
       status: "OPEN",
       acquiredQuantity,
       remainingQuantity: acquiredQuantity,
@@ -299,6 +356,25 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
     validateDecimal({ value: fill.quantity, name: "fill.quantity", allowZero: false })
     validateDecimal({ value: accounting.baseQuantity, name: "accounting.baseQuantity", allowZero: false })
     validateDecimal({ value: accounting.quoteQuantity, name: "accounting.quoteQuantity" })
+    if (fill.symbol !== undefined && fill.symbol !== cycle.symbol) {
+      throw new Error("SELL fill market does not match its cycle")
+    }
+    if (compareDecimal({ left: accounting.baseQuantity, right: fill.quantity }) < 0) {
+      throw new Error("SELL base debit cannot be smaller than gross fill quantity")
+    }
+    const commissionAmount = String(fill.commissionAmount ?? "0")
+    validateDecimal({ value: commissionAmount, name: "fill.commissionAmount" })
+    const commissionAsset = compareDecimal({ left: commissionAmount, right: "0" }) > 0
+      ? fill.commissionAsset
+      : null
+    if (commissionAmount !== "0" && !isNonEmptyString(commissionAsset)) {
+      throw new Error("non-zero SELL commission requires an asset")
+    }
+    if (commissionAsset !== null &&
+        commissionAsset !== cycle.baseAsset &&
+        commissionAsset !== cycle.quoteAsset) {
+      throw new Error("SELL commission asset is not the cycle base or quote asset")
+    }
 
     const existingFill = cycle.sellFills.find((entry) => entry.id === fill.id)
     if (existingFill) {
@@ -308,6 +384,8 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
         quantity: fill.quantity,
         baseQuantity: accounting.baseQuantity,
         quoteQuantity: accounting.quoteQuantity,
+        commissionAmount,
+        commissionAsset,
       }
       if (!hasSameSellFill(existingFill, candidate)) {
         throw new Error(`conflicting facts for SELL trade ${fill.id}`)
@@ -360,6 +438,15 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
       quantity: fill.quantity,
       baseQuantity: accounting.baseQuantity,
       quoteQuantity: accounting.quoteQuantity,
+      commissionAmount,
+      commissionAsset,
+    }
+    const commissionTotals = { ...cycle.commissionTotals }
+    if (commissionAsset !== null) {
+      commissionTotals[commissionAsset] = addDecimal({
+        left: commissionTotals[commissionAsset] ?? "0",
+        right: commissionAmount,
+      })
     }
 
     return toResult({
@@ -380,6 +467,7 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
         sellOrders,
         currentSellOrderId: isFilled ? null : cycle.currentSellOrderId,
         sellFills: [...cycle.sellFills, sellFill],
+        commissionTotals,
       }),
       duplicate: false,
     })
@@ -493,6 +581,7 @@ export function projectGridCycles({ cycles } = {}) {
       saleProceeds: "0",
       realizedProfit: "0",
       residualQuantity: "0",
+      commissionTotals: {},
       openCycles: 0,
       completedCycles: 0,
     }
@@ -507,6 +596,12 @@ export function projectGridCycles({ cycles } = {}) {
         left: totals.freeQuantity,
         right: cycle.freeQuantityAllocated,
       })
+      for (const [asset, amount] of Object.entries(cycle.commissionTotals)) {
+        totals.commissionTotals[asset] = addDecimal({
+          left: totals.commissionTotals[asset] ?? "0",
+          right: amount,
+        })
+      }
       if (cycle.status === "COMPLETED") {
         totals.completedCycles += 1
         totals.residualQuantity = addDecimal({
