@@ -112,7 +112,6 @@ export class BinanceUserDataSession {
       onEvent,
       onStatus,
       recoveryAcknowledged: false,
-      recoveryNotified: false,
       active: true,
     }
     this.#subscribers.set(id, subscriber)
@@ -332,12 +331,10 @@ export class BinanceUserDataSession {
     this.setUnavailable(true)
     for (const subscriber of this.#subscribers.values()) {
       subscriber.recoveryAcknowledged = false
-      subscriber.recoveryNotified = false
     }
   }
 
   #notifySubscriber(subscriber, status) {
-    if (status.type === "recovered") subscriber.recoveryNotified = true
     if (!subscriber.active || typeof subscriber.onStatus !== "function") return
     try {
       subscriber.onStatus(status)
