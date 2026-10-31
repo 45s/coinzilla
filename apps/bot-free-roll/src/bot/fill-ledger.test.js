@@ -181,6 +181,34 @@ test("deduplicates identical malformed decimal facts without hiding changed valu
   assert.equal(changed.ok, false)
 })
 
+test("rejects a duplicate trade ID with changed source identity", () => {
+  const first = appendFillLedgerEntry({
+    entries: Object.freeze([]),
+    fill: createFill(),
+  })
+  const changed = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ orderId: "other-order" }),
+  })
+
+  assert.equal(changed.ok, false)
+  assert.match(changed.reason, /Conflicting facts/)
+})
+
+test("rejects a duplicate when a previously missing decimal fact appears", () => {
+  const first = appendFillLedgerEntry({
+    entries: Object.freeze([]),
+    fill: createFill({ price: null }),
+  })
+  const changed = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ price: "2" }),
+  })
+
+  assert.equal(changed.ok, false)
+  assert.match(changed.reason, /Conflicting facts/)
+})
+
 test("rejects reuse of a trade ID when any recorded execution fact changes", () => {
   const first = appendFillLedgerEntry({
     entries: Object.freeze([]),
