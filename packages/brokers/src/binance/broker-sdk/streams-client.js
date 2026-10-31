@@ -414,7 +414,7 @@ export class BinanceStreamsClient {
 
     if (parsed.serverShutdown) {
       this.#reportError(new Error("Binance Streams server is shutting down"))
-      this.#transport?.close(1012, "Binance server shutdown").catch((error) => this.#reportError(error))
+      this.#transport?.close(1000, "Binance server shutdown").catch((error) => this.#reportError(error))
       return
     }
 
@@ -469,7 +469,7 @@ export class BinanceStreamsClient {
     this.#clearRotationTimer()
     this.#rotationTimer = this.setTimeout(() => {
       this.#rotationTimer = null
-      this.#transport?.close(1012, "Scheduled Binance Streams rotation")
+      this.#transport?.close(1000, "Scheduled Binance Streams rotation")
         .catch((error) => this.#reportError(error))
     }, this.rotationDelay)
   }
