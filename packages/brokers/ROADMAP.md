@@ -351,7 +351,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 #### Phase 6A — lifecycle observability and event idempotency (current PR)
 - [x] Expose RPC socket-close notifications without changing existing request/event behavior.
 - [x] Detect explicit `eventStreamTerminated` events and unexpected API socket closure.
-- [x] Add an optional `onStatus` callback that reports `terminated`, `connectionError`, and `connectionClosed` with `recoveryRequired: true`; keep the existing `onEvent({ event })` contract unchanged.
+- [x] Add an optional `onStatus` callback that reports `terminated` and `connectionClosed` with `recoveryRequired: true`, plus `rpcError` diagnostics without claiming a recovery gap; keep the existing `onEvent({ event })` contract unchanged.
 - [x] Ignore events whose `subscriptionId` does not match the active subscription.
 - [x] Deduplicate execution reports using `symbol`, `orderId`, and `executionId`; use a bounded exact-payload cache for event types without a stable unique ID.
 - [x] Avoid reporting intentional broker shutdown as an unexpected recovery gap.
@@ -367,7 +367,6 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Add deterministic tests for reconnect races, failed reconnects, resubscribe failures, duplicate callback prevention, account updates, execution reports, and shutdown during recovery.
 - [ ] Add opt-in Binance testnet coverage for signature subscription and user-data event receipt.
 - [ ] Document reconciliation boundaries: use `account.status` and `openOrders.status` for current snapshots; use symbol-scoped `myTrades` / `allOrders` for trade/order history. A current snapshot cannot reconstruct every missed intermediate balance delta or prove every event was observed.
-- [ ] Add an opt-in testnet integration test for subscription and user-data events.
 - **Exit criteria:** deterministic lifecycle/recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe.
 
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
