@@ -93,10 +93,10 @@ describe(Market.name, () => {
   })
 
   it("rejects distinct Asset instances with the same canonical identity", () => {
-    const duplicateBaseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
+    const duplicateQuoteAsset = new Asset({ id: "dogecoin", code: "DOGE" })
 
     assert.throws(
-      () => createMarket({ baseAsset: duplicateBaseAsset }),
+      () => createMarket({ quoteAsset: duplicateQuoteAsset }),
       { message: marketErrMsgs.sameAssets },
     )
   })
