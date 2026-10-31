@@ -52,6 +52,8 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       params: { subscriptionId: 7 },
       options: {},
     })
+    await result.data.disconnect()
+    assert.equal(rpc.calls.length, 2)
   })
 
   it("removes its event listener when subscription setup fails", async () => {
@@ -73,4 +75,22 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.deepEqual(received, [])
     assert.equal(rpc.listenerCount, 0)
   })
+})
+
+it("removes local observers when remote unsubscribe fails and does not replay it", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 12 }),
+    "userDataStream.unsubscribe": async () => { throw new Error("unsubscribe unavailable") },
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+  }, { apiClientFactory: () => rpc })
+  broker.connected = true
+
+  const result = await broker.subscribeForUserData({ onEvent: () => {} })
+  await assert.rejects(() => result.data.disconnect(), /unsubscribe unavailable/)
+  assert.equal(rpc.listenerCount, 0)
+  await result.data.disconnect()
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
 })
