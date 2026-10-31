@@ -1,39 +1,32 @@
 import assert from "node:assert/strict"
-import { EventEmitter } from "node:events"
 import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "./broker.js"
+import { createFakeStreamsClient } from "./test-helpers/fake-broker-clients.js"
 
 function createBroker() {
-  return new BinanceSdkBroker({
+  const streams = createFakeStreamsClient()
+  const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
-  })
+  }, { marketClientFactory: () => streams })
+  return { broker, streams }
 }
 
 describe("BinanceSdkBroker.subscribeForPrices", () => {
-  it("subscribes to lowercase symbols and forwards adapted trade messages", async () => {
-    const broker = createBroker()
-    const stream = new EventEmitter()
-    let requestedSymbol
-    broker.marketConnection = {
-      aggTrade: ({ symbol }) => {
-        requestedSymbol = symbol
-        return stream
-      },
-    }
+  it("subscribes to lowercase aggregate-trade streams and forwards adapted messages", async () => {
+    const { broker, streams } = createBroker()
     const prices = []
-
     const result = await broker.subscribeForPrices({
       symbol: "BTCUSDT",
       onPrice: (price) => prices.push(price),
     })
 
     assert.equal(result.ok, true)
-    assert.equal(result.data, stream)
-    assert.equal(requestedSymbol, "btcusdt")
+    assert.equal(result.data.stream, "btcusdt@aggTrade")
+    assert.equal(streams.calls[0].stream, "btcusdt@aggTrade")
 
-    stream.emit("message", {
+    streams.emit("btcusdt@aggTrade", {
       e: "aggTrade", E: 100, T: 99, s: "BTCUSDT", p: "65000.10", q: "0.25",
       m: true, M: false, a: 123, f: 120, l: 124,
     })
@@ -43,35 +36,23 @@ describe("BinanceSdkBroker.subscribeForPrices", () => {
       price: "65000.10", quantity: "0.25", isBuyerMaker: true,
       wasBestPrice: false, aggId: 123, firstId: 120, lastId: 124,
     }])
+
+    await result.data.unsubscribe()
+    assert.equal(streams.calls.at(-1).method, "unsubscribe")
   })
 
-  it("returns a structured error when the stream cannot be created", async () => {
-    const broker = createBroker()
-    broker.marketConnection = {
-      aggTrade: () => { throw new Error("stream unavailable") },
-    }
-
-    const result = await broker.subscribeForPrices({
-      symbol: "BTCUSDT",
-      onPrice: () => {},
-    })
-
+  it("returns a structured error when the stream cannot be subscribed", async () => {
+    const { broker, streams } = createBroker()
+    streams.subscribe = async () => { throw new Error("stream unavailable") }
+    const result = await broker.subscribeForPrices({ symbol: "BTCUSDT", onPrice: () => {} })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].message, "stream unavailable")
   })
-})
 
-it("keeps the subscription result valid when a consumer callback throws", async () => {
-  const broker = createBroker()
-  const stream = new EventEmitter()
-  broker.marketConnection = { aggTrade: () => stream }
-  const result = await broker.subscribeForPrices({
-    symbol: "BTCUSDT",
-    onPrice: () => { throw new Error("consumer callback failed") },
+  it("rejects invalid callback and symbol input as a structured error", async () => {
+    const { broker, streams } = createBroker()
+    const result = await broker.subscribeForPrices({ symbol: "", onPrice: () => {} })
+    assert.equal(result.ok, false)
+    assert.equal(streams.calls.length, 0)
   })
-  assert.equal(result.ok, true)
-  assert.throws(() => stream.emit("message", {
-    e: "aggTrade", E: 1, T: 1, s: "BTCUSDT", p: "1", q: "1",
-    m: false, M: false, a: 1, f: 1, l: 1,
-  }), { message: "consumer callback failed" })
 })
