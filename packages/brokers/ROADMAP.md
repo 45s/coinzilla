@@ -581,10 +581,10 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 ### Last recorded main review
 
 - **Main SHA synchronized by PR #279:** `da0d3f434741d3e3b5892666c4906cbc4bcb8a28` (2026-10-31).
-- **Latest main SHA re-reviewed before Phase 6:** `9903365e724ffa5887d77aa297abf5d0077d8762` (2026-10-31); 28 commits after the PR #279 sync snapshot.
-- The later commits include bot-free-roll event/fill/order-cancellation test coverage, `packages/event-bus` validation/refactoring, and updated root `AGENTS.md` / `ENGINEERING_STANDARDS.md`. The current broker source, package manifest, public API, and read-only bot consumer contract were re-audited. No broker/API/consumer-contract/runtime/dependency change requires synchronization at this checkpoint.
-- PR #279 merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`, preserving main and integration as merge parents. The integration branch is identical to this merge commit at Phase 6 kickoff.
-- Recheck latest `main` before opening the Phase 6 PR and before declaring Phase 6 complete; sync immediately if a significant broker/API/consumer-contract change lands.
+- **Latest main SHA re-reviewed before Phase 6B.1 PR #288:** `ae7fe07b498a5b28d9169e67acf56e1173619141` (2026-10-31); 14 commits after the PR #279 synchronization snapshot.
+- The latest changes include the updated repository PR template, bot-only documentation, and bot-free-roll partial-sell cancellation tests. The broker package source/manifest, public broker API, and read-only bot consumer contract were rechecked. No broker/API/consumer-contract/runtime/dependency change requires synchronization. Do not import unrelated bot-only changes into the broker integration branch.
+- PR #279 merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`, preserving main and integration as merge parents. PR #285 Phase 6A merged at `244508790402d0044f9e880799db3c0088822448`; Phase 6B.1 branch `migration/binance-phase-6b-user-data-reconnect` is based on that integration commit.
+- Recheck latest `main` before Phase 6B.2, before declaring Phase 6 complete, and before the final release PR. Sync immediately if a significant broker/API/consumer-contract change lands.
 
 ---
 
