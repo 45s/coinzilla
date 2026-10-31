@@ -143,3 +143,13 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 - [ ] Record exact PR-head CI evidence and merge only after branch freshness and all required checks are verified.
 
 **Acceptance:** supported Node lines are continuously exercised, operational guidance matches implementation, and any stronger quality gate is evidence-based rather than cosmetic.
+
+
+## Phase 6 — Operator-controlled live verification
+
+- [~] Add an explicit, credential-gated smoke-test command that sends one labeled message, validates the API result, and never retries.
+- [~] Keep live delivery outside default CI and unit tests; document secure secret injection and the meaning of API acceptance.
+- [~] Evaluate mutation testing. Deferred for now: the package has no established mutation-test infrastructure, the current test/coverage gates are stable and fast, and adding a separate mutation runner would add maintenance and CI cost without a demonstrated defect signal. Revisit if notifier complexity or regression history grows.
+- [ ] Run the smoke test manually with a dedicated Telegram test chat after an operator supplies credentials.
+
+**Acceptance:** live delivery can be verified deliberately without exposing secrets or making ordinary CI depend on external Telegram availability.
