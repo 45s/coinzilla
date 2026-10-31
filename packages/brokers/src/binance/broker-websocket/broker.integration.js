@@ -19,23 +19,35 @@ const symbol = "DOGEFDUSD"
 const price = 0.05
 const quantity = 1_000
 
-const broker = new BinanceWebSocketBroker(
-  new BinanceWebSocketConfig({
-    apiKey: process.env.BINANCE_API_KEY,
-    apiSecret: process.env.BINANCE_API_SECRET_KEY,
-  }),
-)
+let broker
 
 describe(
   "BinanceWebSocketBroker native WebSocket integration (TESTNET)",
   { skip: !hasTestnetCredentials && "Set Binance TESTNET credentials to run these tests" },
   () => {
     before(async () => {
+      const config = new BinanceWebSocketConfig({
+        apiKey: process.env.BINANCE_API_KEY,
+        apiSecret: process.env.BINANCE_API_SECRET_KEY,
+      })
+
+      assert.match(
+        config.websocketApiUrl,
+        /^wss:\/\/ws-api\.testnet\.binance\.vision\//,
+        "Broker integration tests must never connect to the production WebSocket API",
+      )
+      assert.match(
+        config.websocketStreamsUrl,
+        /^wss:\/\/stream\.testnet\.binance\.vision\//,
+        "Broker integration tests must never connect to production WebSocket Streams",
+      )
+
+      broker = new BinanceWebSocketBroker(config)
       await broker.connect()
     })
 
     after(async () => {
-      await broker.disconnect()
+      await broker?.disconnect()
     })
 
     it("fetches account assets", async () => {
