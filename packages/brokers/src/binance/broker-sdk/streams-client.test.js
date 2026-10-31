@@ -228,7 +228,7 @@ test("reconnects after an unexpected close and restores desired subscriptions", 
   const { client, clock, transports } = createClient()
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
   transports[0].serverClose()
@@ -251,7 +251,7 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   const { client, clock, transports } = createClient({ rotationDelay: 1_000 })
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
   transports[0].receive({ e: "serverShutdown", E: 123 })
@@ -287,7 +287,7 @@ test("disconnect is idempotent and prevents future reconnects", async () => {
   const { client, transports, clock } = createClient()
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
   await Promise.all([client.disconnect(), client.disconnect()])
