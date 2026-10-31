@@ -12,29 +12,40 @@ function isNonEmptyString(value) {
 // Build one canonical routing index for every order owned by a Grid cycle.
 // Historical SELL attempts remain indexed so late stream/history fills can
 // still be attributed to their original cycle after a replacement is placed.
-export function buildGridOrderIndex({ cycles } = {}) {
+export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
   const projection = projectGridCycles({ cycles })
   if (!projection.ok) return projection
 
   const byOrderId = Object.create(null)
   const byClientOrderId = Object.create(null)
   const entries = []
+  const ordersToIndex = pendingBuyOrder
+    ? [{
+        order: pendingBuyOrder,
+        role: "BUY",
+        status: pendingBuyOrder.status ?? "OPEN",
+        cycleId: null,
+      }]
+    : []
 
   for (const cycle of cycles) {
-    const orders = [
+    ordersToIndex.push(
       {
         order: cycle.buyOrder,
         role: "BUY",
         status: "FILLED",
+        cycleId: cycle.id,
       },
       ...cycle.sellOrders.map((order) => ({
         order,
         role: "SELL",
         status: order.status,
+        cycleId: cycle.id,
       })),
-    ]
+    )
+  }
 
-    for (const { order, role, status } of orders) {
+  for (const { order, role, status, cycleId } of ordersToIndex) {
       if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId)) {
         return failure(`Grid ${role} order has incomplete canonical identity`)
       }
@@ -52,12 +63,11 @@ export function buildGridOrderIndex({ cycles } = {}) {
         side: order.side,
         role,
         status,
-        cycleId: cycle.id,
+        cycleId,
       })
       byOrderId[order.id] = entry
       byClientOrderId[order.clientOrderId] = entry
       entries.push(entry)
-    }
   }
 
   return toResult({
