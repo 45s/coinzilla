@@ -45,7 +45,7 @@ export function createSignedBinanceParams(params, {
   }
   if (recvWindow !== undefined &&
       (typeof recvWindow !== "number" || !Number.isFinite(recvWindow) ||
-       recvWindow <= 0 || recvWindow > 60_000 || Number((recvWindow % 1).toFixed(3)) !== recvWindow % 1)) {
+       recvWindow <= 0 || recvWindow > 60_000 || Number(recvWindow.toFixed(3)) !== recvWindow)) {
     throw new RangeError("Binance recvWindow must be greater than 0 and at most 60000 ms with up to 3 decimals")
   }
 
