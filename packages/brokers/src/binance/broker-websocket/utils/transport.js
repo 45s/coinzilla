@@ -105,16 +105,39 @@ export class NativeWebSocketTransport {
         }),
       }
 
-      for (const [type, handler] of Object.entries(this.#handlers)) {
-        this.#socket.addEventListener(type, handler)
-      }
+      const registeredHandlers = []
+      try {
+        for (const [type, handler] of Object.entries(this.#handlers)) {
+          this.#socket.addEventListener(type, handler)
+          registeredHandlers.push([type, handler])
+        }
 
-      this.#connectTimer = this.setTimeout(() => {
-        if (this.#state !== "connecting") return
-        reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
+        this.#connectTimer = this.setTimeout(() => {
+          if (this.#state !== "connecting") return
+          reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
+          this.#rejectConnect = null
+          this.#beginClosing()
+        }, this.connectTimeout)
+      } catch (error) {
+        this.#state = "closed"
         this.#rejectConnect = null
-        this.#beginClosing()
-      }, this.connectTimeout)
+        for (const [type, handler] of registeredHandlers) {
+          try {
+            this.#socket.removeEventListener(type, handler)
+          } catch {
+            // Preserve the original startup error while attempting all cleanup.
+          }
+        }
+        this.#handlers = null
+        const socket = this.#socket
+        this.#socket = null
+        try {
+          socket?.close()
+        } catch {
+          // Preserve the original startup error; the transport is already closed.
+        }
+        reject(error)
+      }
     })
 
     return this.#connectPromise
