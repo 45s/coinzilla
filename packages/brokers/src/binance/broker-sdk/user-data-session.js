@@ -1,6 +1,14 @@
 import { createUserDataEventDeduplicator } from "./user-data-event-deduplicator.js"
 import { adaptMsg } from "../websocket-stream/index.js"
 
+function logSafely(logger, level, ...args) {
+  try {
+    logger?.[level]?.(...args)
+  } catch {
+    // Logging failures must not interrupt subscription recovery or event delivery.
+  }
+}
+
 function validateCallback(callback, name) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
@@ -175,7 +183,7 @@ export class BinanceUserDataSession {
         try {
           await client.request("userDataStream.unsubscribe", { subscriptionId })
         } catch (error) {
-          this.logger.warn?.("Unable to clean up an unused Binance user-data subscription", error)
+          logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
         }
         return subscriptionId
       }
@@ -204,7 +212,7 @@ export class BinanceUserDataSession {
     try {
       response = await client.request("session.subscriptions")
     } catch (lookupError) {
-      this.logger.warn?.("Unable to verify Binance user-data subscription after an uncertain response", lookupError)
+      logSafely(this.logger, "warn", "Unable to verify Binance user-data subscription after an uncertain response", lookupError)
       throw originalError
     }
 
@@ -244,7 +252,7 @@ export class BinanceUserDataSession {
       : message
 
     if (event.e === "eventStreamTerminated") {
-      this.logger.warn?.("Binance user-data subscription terminated", {
+      logSafely(this.logger, "warn", "Binance user-data subscription terminated", {
         subscriptionId: message.subscriptionId,
       })
       this.#subscriptionId = null
@@ -271,13 +279,13 @@ export class BinanceUserDataSession {
       try {
         subscriber.onEvent({ event })
       } catch (error) {
-        this.logger.error?.("Binance user-data event callback failed", error)
+        logSafely(this.logger, "error", "Binance user-data event callback failed", error)
       }
     }
   }
 
   #handleError(error) {
-    this.logger.error?.("Binance user data stream error", error)
+    logSafely(this.logger, "error", "Binance user data stream error", error)
     this.#notify({ type: "rpcError", error, recoveryRequired: false })
   }
 
@@ -288,7 +296,7 @@ export class BinanceUserDataSession {
     if (this.#subscribers.size === 0) return
     this.#subscriptionId = null
     this.#recoveryRequired = true
-    this.logger.error?.("Binance user-data API connection closed", {
+    logSafely(this.logger, "error", "Binance user-data API connection closed", {
       code: event?.code ?? null,
       reason: event?.reason ?? "",
     })
@@ -308,7 +316,7 @@ export class BinanceUserDataSession {
       try {
         subscriber.onStatus(status)
       } catch (error) {
-        this.logger.error?.("Binance user-data status callback failed", error)
+        logSafely(this.logger, "error", "Binance user-data status callback failed", error)
       }
     }
   }
@@ -359,7 +367,7 @@ export class BinanceUserDataSession {
       } catch (error) {
         if (this.#stopped || generation !== this.#generation) return
         this.setUnavailable(true)
-        this.logger.error?.("Binance user-data recovery attempt failed", { attempt, error })
+        logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt, error })
         this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
         if (attempt >= this.maxReconnectAttempts) {
           this.#notify({
