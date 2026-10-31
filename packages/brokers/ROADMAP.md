@@ -328,9 +328,18 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Preserve order/fill normalization, client order ID mapping, order defaults, result wrappers, and exact fill decimal strings.
 - [x] Mark order placement, cancellation, and cancel-all as state-changing RPC operations so uncertain outcomes are surfaced and never blindly replayed.
 - [x] Remove direct `@binance/spot` imports from the broker implementation and config defaults; use explicit official production/testnet WebSocket endpoints.
-- [ ] Verify failure-safe startup, partial shutdown, idempotent disconnect, and callback/resource cleanup with deterministic tests.
-- [ ] Complete the full broker contract and regression suite on the native client interfaces.
-- [ ] Re-audit all current consumers read-only and confirm no bot application files changed.
+- [x] Verify failure-safe startup cleanup, partial-shutdown cleanup, idempotent disconnect, and callback/resource cleanup with deterministic tests; exact-head CI remains the verification gate.
+- [ ] Complete the full broker contract and regression suite on the native client interfaces; require exact-head CI.
+- [x] Re-audit current consumers read-only against latest `main`; no bot application files were changed.
+**Read-only consumer contract audit (main `49c5aba675e71490123181d757641376be35c78a`):**
+
+- `apps/bot-free-roll/src/prepare-broker.js` constructs `BinanceSdkConfig` and `BinanceSdkBroker`, calls `connect()`, and calls `disconnect()` on startup failure. Constructor and lifecycle remain compatible.
+- `bot-free-roll.js` expects `subscribeForUserData()` to return a lifecycle handle with `disconnect()`, and each `subscribeForPrices()` result to expose `unsubscribe()`. The native broker returns both expected cleanup methods.
+- The bot consumes `getSymbolFilters()` as decimal strings and converts them to numbers itself; exact string outputs are preserved.
+- Fill reconciliation expects `getMyTrades()` to return an array of canonical fills. `adaptTrade` remains the normalizer.
+- Order execution consumes `createOrder()`/`cancelOrder()` results with IDs, status, and original/executed quantities. `adaptOrder` remains the normalizer.
+- No `apps/` changes are included in this PR. User-data remote unsubscribe and reconnect recovery remain Phase 6.
+
 - **Exit criteria:** every supported broker method uses native WebSocket clients; the supported broker path performs no REST requests; deterministic broker contract/failure tests and exact-head CI pass; consumer-facing behavior remains compatible.
 
 ### Phase 6 — User-data session lifecycle and recovery
