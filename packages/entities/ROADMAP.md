@@ -17,8 +17,8 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [x] **FR-008 — Asset and Market identity.** Stable Asset identity and explicit Market base/quote assets; symbol remains opaque. Implemented in `@coinzilla/entities` and integrated into `develop` via PR #295.
 - [x] **FR-009 — Exact Money and Quantity.** Implemented immutable `Money` and `Quantity` values using validated, canonical decimal strings and explicit `Asset` identity. Money supports signed values; Quantity is non-negative. Numeric JavaScript inputs and scientific notation are rejected. Integrated into `develop` via PR #299.
 - [x] **FR-010 — Canonical Order lifecycle.** Implemented immutable `CanonicalOrder` with client/broker identity, canonical Market, exact limit price and quantities, derived remaining quantity, normalized lifecycle including `UNKNOWN`, and optional timestamps. Integrated into `develop` via PR #300.
-- [~] **FR-011 — Fill.** Add immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Commission entries remain FR-012.
-- [ ] **FR-012 — Commission.** Zero, one, or multiple fee entries with exact amount, asset identity, and completeness/unknown semantics.
+- [x] **FR-011 — Fill.** Implemented immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Integrated into `develop` via PR #301.
+- [~] **FR-012 — Commission.** Implement an immutable commission value with an exact non-negative `Money` amount and explicit asset identity. Add zero, one, or multiple commission entries to Fill, with explicit `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics. Unknown or incomplete fees must never be interpreted as zero.
 - [ ] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
 - [ ] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit unsupported/dynamic constraints.
 - [ ] **FR-015 — Broker capability contracts.** Shared capability vocabulary without exchange-specific assumptions.
@@ -55,6 +55,16 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Liquidity role is `MAKER`, `TAKER`, or `UNKNOWN`; missing information defaults to `UNKNOWN`, never an inferred value.
 - Execution time is an optional non-negative safe-integer Unix epoch millisecond timestamp. Missing time remains absent.
 - Commission facts are deliberately excluded and belong to FR-012.
+
+### FR-012 contract boundary
+
+- `Commission` is an immutable fee value containing an exact `Money` amount; the Money asset identifies the fee denomination explicitly.
+- Commission amounts are non-negative. Zero is valid, although a confirmed zero-fee fill is represented by an empty commission list with `COMPLETE` status.
+- A Fill's `commissions` is an immutable array of Commission values and may contain entries denominated in different assets.
+- `COMPLETE` means the collection is authoritative; an empty list explicitly means no commission was charged.
+- `PARTIAL` means one or more commission entries are known, but the collection is incomplete.
+- `UNKNOWN` means commission information is unavailable; its collection must be empty. Missing status defaults to `UNKNOWN`.
+- Consumers must not treat `PARTIAL` or `UNKNOWN` commission information as zero when calculating realized profitability.
 
 ## Completion policy
 
