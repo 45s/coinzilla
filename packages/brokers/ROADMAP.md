@@ -379,13 +379,15 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add deterministic tests for concurrent subscriptions, listener fan-out, handle cleanup, reconnect races, retry exhaustion, resubscribe failures, stale IDs, cross-reconnect duplicate events, late subscribers, repeated interruptions, and shutdown during recovery.
 - [x] Isolate callback exceptions and preserve connection-close observability even without active user-data handles.
 
-**6B.2 — reconciliation contract and integration verification (not started)**
-- [ ] Complete any remaining account-update / execution-report event-ordering and reconciliation edge-case tests.
-- [ ] Document the consumer reconciliation procedure: `account.status` and `openOrders.status` for current snapshots; symbol-scoped `myTrades` / `allOrders` for available trade/order history. These cannot reconstruct every missed intermediate balance delta.
-- [ ] Add opt-in Binance testnet coverage for signature subscription, disconnect/reconnect, resubscription, and user-data event receipt.
-- [ ] Verify the consumer can reconcile and call the handle's `acknowledgeRecovery()` before new order/cancel operations are re-enabled.
-- [ ] Re-audit the read-only bot consumer contract; do not modify bot app code in this migration.
-- **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; recovery acknowledgement contract is clear to consumers.
+**6B.2 — reconciliation contract and integration verification (in progress)**
+- [x] Complete deterministic account-update / execution-report duplicate and recovery-acknowledgement coverage in Phase 6B.1.
+- [x] Document the consumer reconciliation procedure: `account.status` and `openOrders.status` for current snapshots; symbol-scoped `myTrades` / `allOrders` for available trade/order history. These cannot reconstruct every missed intermediate balance delta.
+- [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
+- [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
+- [ ] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. Default CI remains offline and skips these tests without credentials.
+- [ ] Complete the bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304): subscribe with `onStatus`, reconcile its tracked state, and call `acknowledgeRecovery()` only after reconciliation succeeds. This is bot-domain work; do not modify `apps/bot-free-roll` here.
+- [ ] Re-audit the read-only bot consumer contract; confirm no bot application files were changed by the broker migration.
+- **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
 - [ ] Confirm all repository consumers use the supported WebSocket broker contract.
