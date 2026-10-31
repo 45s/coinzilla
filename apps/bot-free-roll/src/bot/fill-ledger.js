@@ -1,18 +1,5 @@
 import { compareDecimal } from "./helpers/decimal.js"
 
-const LEDGER_FIELDS = Object.freeze([
-  "id",
-  "orderId",
-  "symbol",
-  "side",
-  "price",
-  "quantity",
-  "quoteQuantity",
-  "commissionAmount",
-  "commissionAsset",
-  "isMaker",
-])
-
 function failure(reason) {
   return { ok: false, reason }
 }
