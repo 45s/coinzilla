@@ -67,12 +67,12 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Finish Phase 5 broker contract coverage and lifecycle/failure tests on `migration/binance-phase-5-broker`.
-2. Verify every supported broker method uses the native RPC client; verify market-price subscriptions use the native Streams client and no REST request remains in the supported broker path.
-3. Keep the existing `BinanceSdkBroker` and `BinanceSdkConfig` public export names. Preserve exact decimal strings, normalized order/fill fields, result wrappers, and callback payloads.
-4. Keep the signature-based user-data subscription on the WebSocket API connection; Phase 6 will add session recovery, termination handling, duplicate/gap management, and reconciliation behavior.
-5. Recheck `main` before opening the Phase 5 PR. Sync only if broker/API/consumer-contract/runtime/dependency changes have landed; preserve bot-only app changes.
-6. Run required CI on the exact PR head, update this roadmap from evidence, and wait for explicit merge approval.
+1. Wait for explicit merge approval for PR #271; do not merge automatically.
+2. After merge, record the merge SHA and mark Phase 5 complete.
+3. Recheck latest `main` before Phase 6; sync only if broker/API/consumer-contract/runtime/dependency changes have landed. Preserve bot-only app changes.
+4. Begin Phase 6: implement user-data session termination detection, reconnect/resubscription without duplicate callbacks, event ordering/deduplication, gap handling, and reconciliation.
+5. Keep HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -318,7 +318,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 5 — Rebuild the broker on native clients
 
-**Status: In progress on `migration/binance-phase-5-broker`.**
+**Status: Implementation and deterministic tests complete. PR #271 is open; all four required CI workflows pass on exact head `88f56339d7f6ede226776574c0fdadce2037f0f9`. Awaiting explicit merge approval.**
 
 - [x] Replace the SDK-backed `BinanceSdkBroker` internals with the native WebSocket API RPC client and native public Streams client; preserve the public broker/config export names.
 - [x] Map broker request methods to native RPC methods: `account.status`, `openOrders.status`, `order.status`, `allOrders`, `myTrades`, `order.place`, `order.cancel`, `openOrders.cancelAll`, `ticker.price`, and `exchangeInfo`.
@@ -329,7 +329,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Mark order placement, cancellation, and cancel-all as state-changing RPC operations so uncertain outcomes are surfaced and never blindly replayed.
 - [x] Remove direct `@binance/spot` imports from the broker implementation and config defaults; use explicit official production/testnet WebSocket endpoints.
 - [x] Verify failure-safe startup cleanup, partial-shutdown cleanup, idempotent disconnect, and callback/resource cleanup with deterministic tests; exact-head CI remains the verification gate.
-- [ ] Complete the full broker contract and regression suite on the native client interfaces; require exact-head CI.
+- [x] Complete the full broker contract and regression suite on the native client interfaces; Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit all pass on the exact PR head.
 - [x] Re-audit current consumers read-only against latest `main`; no bot application files were changed.
 **Read-only consumer contract audit (main `49c5aba675e71490123181d757641376be35c78a`):**
 
@@ -340,6 +340,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - Order execution consumes `createOrder()`/`cancelOrder()` results with IDs, status, and original/executed quantities. `adaptOrder` remains the normalizer.
 - No `apps/` changes are included in this PR. User-data remote unsubscribe and reconnect recovery remain Phase 6.
 
+- **Exact-head CI evidence:** PR #271 head `88f56339d7f6ede226776574c0fdadce2037f0f9` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
 - **Exit criteria:** every supported broker method uses native WebSocket clients; the supported broker path performs no REST requests; deterministic broker contract/failure tests and exact-head CI pass; consumer-facing behavior remains compatible.
 
 ### Phase 6 — User-data session lifecycle and recovery
