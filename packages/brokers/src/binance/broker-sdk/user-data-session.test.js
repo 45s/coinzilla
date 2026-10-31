@@ -296,6 +296,104 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+
+  it("retries failed remote resubscriptions without replaying trading requests", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": index === 0
+            ? () => ({ subscriptionId: 10 })
+            : async () => { throw new Error("resubscribe rejected") },
+          "session.subscriptions": () => [],
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+      maxUserDataReconnectAttempts: 2,
+    })
+    await broker.connect()
+    const statuses = []
+    const subscription = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+    assert.equal(scheduler.pendingCount, 1)
+    await scheduler.runNext()
+
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 2)
+    assert.equal(clients[1].calls.filter((call) => call.method === "session.subscriptions").length, 2)
+    assert.ok(statuses.some((status) => status.type === "recoveryFailed"))
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
+
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
+  it("does not complete a reconnect after intentional shutdown invalidates the attempt", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    let finishReconnect
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 10 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        if (clients.length > 0) {
+          client.connect = () => new Promise((resolve) => {
+            finishReconnect = () => {
+              client.state = "open"
+              resolve(client)
+            }
+          })
+        }
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+    assert.equal(typeof finishReconnect, "function")
+
+    await broker.disconnect()
+    finishReconnect()
+    for (let index = 0; index < 12; index += 1) await Promise.resolve()
+
+    assert.equal(clients[1].state, "closed")
+    assert.equal(clients[1].calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
+    await subscription.data.disconnect()
+  })
+
   it("does not reconnect after the final subscriber disconnects", async () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
