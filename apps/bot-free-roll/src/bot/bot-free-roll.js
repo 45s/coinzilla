@@ -17,6 +17,7 @@ import {
 import { reconcileExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
+import { reconcileTrackedOrder, validateRecoveryBalances } from "./recovery.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -32,6 +33,10 @@ export class FreeRollBot {
   #isEnabled = true
   #subscriptions = new Map()
   #userDataSubscription = null
+  #isRecovering = false
+  #recoveryPromise = null
+  #bufferedUserDataEvents = []
+  #recoveryBufferOverflow = false
   #states = new Map()
   #queue
   #startedAt = null
@@ -59,7 +64,7 @@ export class FreeRollBot {
     this.eventBus = eventBus
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
-      isRunning: () => this.#isRunning,
+      isRunning: () => this.#isRunning && !this.#isRecovering,
       minProfit: () => this.settings.minProfit,
       publish: (name, data) => this.#publish(name, data),
       debug: (message, data) => this.#debug(message, data),
@@ -229,8 +234,18 @@ export class FreeRollBot {
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
-          onEvent: (payload) =>
-            this.#eventHandling.onUserDataEvent({ payload }),
+          onEvent: (payload) => {
+            if (this.#isRecovering) {
+              if (this.#bufferedUserDataEvents.length >= 10_000) {
+                this.#recoveryBufferOverflow = true
+                return
+              }
+              this.#bufferedUserDataEvents.push(payload)
+              return
+            }
+            this.#eventHandling.onUserDataEvent({ payload })
+          },
+          onStatus: (status) => this.#handleUserDataStatus(status),
         }),
         "subscribeForUserData",
       )
@@ -264,6 +279,8 @@ export class FreeRollBot {
   async stop() {
     this.#debug("Stopping bot")
     this.#isRunning = false
+    this.#isRecovering = false
+    this.#bufferedUserDataEvents = []
     await this.#disconnectSubscriptions()
     await this.#queue.drain()
 
@@ -307,6 +324,7 @@ export class FreeRollBot {
     return {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
+      recovering: this.#isRecovering,
       configuredFeeRates: Object.fromEntries(
         [...this.#states].map(([symbol, state]) => [symbol, state.configuredFeeRate]),
       ),
@@ -322,6 +340,165 @@ export class FreeRollBot {
       minProfit: this.settings.minProfit,
       confirmedBalances: Object.fromEntries(this.#confirmedBalances),
       pairs: this.getStats(),
+    }
+  }
+
+  #handleUserDataStatus(status) {
+    if (!status?.recoveryRequired) return
+
+    if ([
+      "connectionClosed",
+      "terminated",
+      "recovering",
+      "recovered",
+      "recoveryFailed",
+    ].includes(status.type)) {
+      this.#isRecovering = true
+    }
+
+    if (status.type === "recovered") {
+      this.#startUserDataRecovery()
+    }
+  }
+
+  #startUserDataRecovery() {
+    if (this.#recoveryPromise || !this.#isRunning) return
+
+    this.#recoveryPromise = this.#runUserDataRecovery()
+      .catch((error) => {
+        try {
+          this.logger.error?.("Free-Roll user-data recovery failed; trading remains gated", {
+            error,
+          })
+        } catch {
+          // Recovery must remain fail-closed even when logging fails.
+        }
+        this.#publish("bot.recovery_failed", {
+          reason: error?.message ?? String(error),
+        })
+      })
+      .finally(() => {
+        this.#recoveryPromise = null
+      })
+  }
+
+  async #runUserDataRecovery() {
+    if (this.#recoveryBufferOverflow) {
+      throw new Error("User-data recovery event buffer capacity was exceeded")
+    }
+
+    await this.#queue.drain()
+    await this.#reconcileUserDataState()
+
+    while (this.#bufferedUserDataEvents.length > 0) {
+      if (!this.#isRunning || this.#recoveryBufferOverflow) {
+        throw new Error("User-data recovery was interrupted before event replay completed")
+      }
+
+      const pendingEvents = this.#bufferedUserDataEvents.splice(0)
+      for (const payload of pendingEvents) {
+        this.#eventHandling.onUserDataEvent({ payload })
+      }
+      await this.#queue.drain()
+    }
+
+    if (!this.#isRunning || this.#recoveryBufferOverflow) {
+      throw new Error("User-data recovery was interrupted before acknowledgement")
+    }
+
+    const acknowledgeRecovery = this.#userDataSubscription?.acknowledgeRecovery
+    if (typeof acknowledgeRecovery !== "function" || acknowledgeRecovery() !== true) {
+      throw new Error("Broker did not accept the user-data recovery acknowledgement")
+    }
+
+    this.#isRecovering = false
+    this.#recoveryBufferOverflow = false
+
+    for (const [symbol, state] of this.#states) {
+      if (!state.paused && !state.buyOrder && !state.sellOrder &&
+          compareDecimal({ left: state.activeQuantity, right: "0" }) > 0) {
+        await this.#replaceSell(symbol)
+      }
+    }
+
+    this.#publish("bot.recovery_completed", {
+      summary: this.getSummary(),
+    })
+  }
+
+  async #reconcileUserDataState() {
+    if (typeof this.broker.getBalances !== "function") {
+      throw new Error("Broker does not support required getBalances() recovery snapshot")
+    }
+    if (typeof this.broker.getOpenOrders !== "function" ||
+        typeof this.broker.getMyTrades !== "function") {
+      throw new Error("Broker does not support required order and trade reconciliation")
+    }
+
+    const balances = unwrapResult(
+      await this.broker.getBalances(),
+      "getBalances recovery snapshot",
+    )
+    const balanceResult = validateRecoveryBalances({ balances })
+    if (!balanceResult.ok) throw new Error(balanceResult.reason)
+
+    this.#confirmedBalances.clear()
+    for (const [asset, amounts] of balanceResult.balances) {
+      this.#confirmedBalances.set(asset, {
+        free: amounts.free,
+        locked: amounts.locked,
+      })
+    }
+
+    for (const [symbol, state] of this.#states) {
+      const openOrders = unwrapResult(
+        await this.broker.getOpenOrders({ symbol }),
+        `getOpenOrders(${symbol}) recovery snapshot`,
+      )
+      if (!Array.isArray(openOrders)) {
+        throw new Error(`getOpenOrders(${symbol}) must return an array`)
+      }
+
+      const trackedOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
+      const trackedIds = new Set(trackedOrders.map((order) => String(order.id)))
+      const unexpectedOrder = openOrders.find(
+        (order) => !trackedIds.has(getOrderId(order)),
+      )
+      if (unexpectedOrder) {
+        throw new Error(
+          `Unexpected open order ${getOrderId(unexpectedOrder) ?? "unknown"} found for ${symbol}`,
+        )
+      }
+
+      for (const order of trackedOrders) {
+        const fills = unwrapResult(
+          await this.broker.getMyTrades({ symbol, orderId: order.id, limit: 1000 }),
+          `getMyTrades(${symbol}, ${order.id}) recovery history`,
+        )
+        for (const fill of fills) {
+          const validation = validateOrderFill({ fill, symbol, order })
+          if (!validation.ok) throw new Error(validation.reason)
+          if (!this.#applyExecutionFill({ symbol, fill })) {
+            throw new Error(`Could not account recovered fill ${fill?.id ?? "unknown"}`)
+          }
+        }
+
+        const reconciliation = reconcileTrackedOrder({
+          symbol,
+          order,
+          openOrders,
+          fills,
+        })
+        if (!reconciliation.ok) throw new Error(reconciliation.reason)
+
+        if (reconciliation.status === "FILLED") {
+          if (order.side === "BUY") {
+            await this.#handleBuyFilled(symbol)
+          } else {
+            await this.#handleSellFilled(symbol)
+          }
+        }
+      }
     }
   }
 
@@ -447,7 +624,7 @@ export class FreeRollBot {
       state.lastPriceLogKey = priceLogKey
     }
 
-    if (!this.#isRunning || state.paused) return
+    if (!this.#isRunning || this.#isRecovering || state.paused) return
 
     if (state.buyOrder) {
       // Only the initial BUY trails. Once it fills, subsequent BUYs stay fixed.
