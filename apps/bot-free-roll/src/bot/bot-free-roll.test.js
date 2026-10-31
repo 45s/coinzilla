@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { FreeRollBot } from "./bot-free-roll.js"
-import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/helpers.js"
+import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/index.js"
 
 function waitForCondition(predicate, message, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
