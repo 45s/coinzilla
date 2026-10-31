@@ -122,6 +122,16 @@ function validateCycle(cycle) {
       if (compareDecimal({ left: order.reservedQuantity, right: "0" }) <= 0) {
         throw new Error("live SELL order must retain a positive reservation")
       }
+      const unfilledOrderQuantity = subtractDecimal({
+        left: order.quantity,
+        right: order.filledQuantity,
+      })
+      if (compareDecimal({
+        left: order.reservedQuantity,
+        right: unfilledOrderQuantity,
+      }) < 0) {
+        throw new Error("live SELL reservation does not cover its remaining gross quantity")
+      }
       if (compareDecimal({ left: order.reservedQuantity, right: cycle.remainingQuantity }) > 0) {
         throw new Error("live SELL reservation exceeds cycle remaining quantity")
       }
