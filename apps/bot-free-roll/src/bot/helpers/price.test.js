@@ -1,7 +1,14 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import {\n  calculateBuyThreshold,\n  calculateBuyThresholdExact,\n  calculatePercentageDropExact,\n  roundPriceDown,\n  roundPriceUp,\n  roundQuantityDown,\n} from "./price.js"
+import {
+  calculateBuyThreshold,
+  calculateBuyThresholdExact,
+  calculatePercentageDropExact,
+  roundPriceDown,
+  roundPriceUp,
+  roundQuantityDown,
+} from "./price.js"
 
 test("calculateBuyThreshold applies a percentage drop to the initial reference price", () => {
   const threshold = calculateBuyThreshold({
