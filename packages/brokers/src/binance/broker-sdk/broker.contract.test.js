@@ -132,7 +132,10 @@ test("connect failure cleans the API client and leaves the broker disconnected",
   const rpc = createFakeRpcClient()
   let cleanupCalls = 0
   rpc.connect = async () => { throw new Error("API socket failed") }
-  rpc.disconnect = async () => { cleanupCalls += 1 }
+  rpc.disconnect = () => {
+    cleanupCalls += 1
+    throw new Error("cleanup failed")
+  }
   const streams = createFakeStreamsClient()
   const broker = new BinanceSdkBroker(config, {
     apiClientFactory: () => rpc,
