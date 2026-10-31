@@ -53,6 +53,7 @@ it("logs an unexpected user-data socket close even without an onStatus callback"
   broker.connected = true
 
   const result = await broker.subscribeForUserData({ onEvent: () => {} })
+  rpc.state = "closed"
   rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
 
   assert.equal(broker.connected, false)
