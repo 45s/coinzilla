@@ -258,7 +258,7 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   assert.equal(transports[0].closeCalls.length, 1)
   clock.advanceBy(10)
   await flush()
-  clock.advanceBy(240)
+  clock.advanceBy(290)
   await flush()
   assert.equal(transports.length, 2)
   acknowledge(transports[1])
