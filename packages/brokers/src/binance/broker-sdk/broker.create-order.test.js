@@ -3,9 +3,11 @@ import assert from "node:assert/strict"
 
 import { BinanceSdkBroker } from "./broker.js"
 
-function createBroker(orderPlace) {
+function createBroker(orderPlace, sendSignedMessage = async () => {
+  throw new Error("Unexpected signed raw WebSocket request")
+}) {
   const broker = Object.create(BinanceSdkBroker.prototype)
-  broker.tradingConnection = { orderPlace }
+  broker.tradingConnection = { orderPlace, sendSignedMessage }
   broker.logger = { error() {} }
   return broker
 }
@@ -64,13 +66,19 @@ test("createOrder omits Binance client order ID when it is not provided", async 
   assert.equal(result.data.clientOrderId, "binance-generated-id")
 })
 
-
-test("createOrder omits timeInForce for LIMIT_MAKER post-only orders", async () => {
+test("createOrder submits LIMIT_MAKER through the signed raw WebSocket method", async () => {
   let received
-  const broker = createBroker(async (params) => {
-    received = params
-    return { data: { ...exchangeOrder, type: "LIMIT_MAKER" } }
-  })
+  let method
+  const broker = createBroker(
+    async () => {
+      assert.fail("LIMIT_MAKER must bypass enum-validated orderPlace()")
+    },
+    async (requestMethod, params) => {
+      method = requestMethod
+      received = params
+      return { data: { ...exchangeOrder, type: "LIMIT_MAKER" } }
+    },
+  )
 
   const result = await broker.createOrder({
     symbol: "DOGEFDUSD",
@@ -82,6 +90,8 @@ test("createOrder omits timeInForce for LIMIT_MAKER post-only orders", async () 
   })
 
   assert.equal(result.ok, true)
+  assert.equal(method, "order.place")
   assert.equal(received.type, "LIMIT_MAKER")
   assert.equal("timeInForce" in received, false)
+  assert.equal(result.data.type, "LIMIT_MAKER")
 })
