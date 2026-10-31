@@ -106,7 +106,13 @@ export class BinanceUserDataSession {
     if (this.#stopped) throw new Error("User-data session is stopped")
 
     const id = ++this.#nextSubscriberId
-    const subscriber = { onEvent, onStatus, recoveryAcknowledged: false, active: true }
+    const subscriber = {
+      onEvent,
+      onStatus,
+      recoveryAcknowledged: false,
+      recoveryNotified: false,
+      active: true,
+    }
     this.#subscribers.set(id, subscriber)
 
     try {
@@ -122,6 +128,16 @@ export class BinanceUserDataSession {
         this.setUnavailable(true)
       }
       throw error
+    }
+
+    if (this.#recoveryRequired && this.#subscriptionId !== null &&
+        !subscriber.recoveryNotified) {
+      this.#notifySubscriber(subscriber, {
+        type: "recovered",
+        subscriptionId: this.#subscriptionId,
+        reconciliationRequired: true,
+        recoveryRequired: true,
+      })
     }
 
     const data = {
@@ -194,6 +210,7 @@ export class BinanceUserDataSession {
       }
 
       this.#subscriptionId = subscriptionId
+      this.#clearReconnectTimer()
       this.#reconnectAttempts = 0
       this.setUnavailable(this.#recoveryRequired)
       if (this.#recoveryRequired) {
@@ -263,8 +280,7 @@ export class BinanceUserDataSession {
         subscriptionId: message.subscriptionId,
       })
       this.#subscriptionId = null
-      this.#recoveryRequired = true
-      this.setUnavailable(true)
+      this.#markRecoveryRequired()
       this.#notify({
         type: "terminated",
         subscriptionId: message.subscriptionId,
@@ -302,7 +318,7 @@ export class BinanceUserDataSession {
     this.setUnavailable(true)
     if (this.#subscribers.size === 0) return
     this.#subscriptionId = null
-    this.#recoveryRequired = true
+    this.#markRecoveryRequired()
     logSafely(this.logger, "error", "Binance user-data API connection closed", {
       code: event?.code ?? null,
       reason: event?.reason ?? "",
@@ -317,14 +333,28 @@ export class BinanceUserDataSession {
     this.#scheduleRecovery()
   }
 
+  #markRecoveryRequired() {
+    this.#recoveryRequired = true
+    this.setUnavailable(true)
+    for (const subscriber of this.#subscribers.values()) {
+      subscriber.recoveryAcknowledged = false
+      subscriber.recoveryNotified = false
+    }
+  }
+
+  #notifySubscriber(subscriber, status) {
+    if (status.type === "recovered") subscriber.recoveryNotified = true
+    if (!subscriber.active || typeof subscriber.onStatus !== "function") return
+    try {
+      subscriber.onStatus(status)
+    } catch (error) {
+      logSafely(this.logger, "error", "Binance user-data status callback failed", error)
+    }
+  }
+
   #notify(status) {
     for (const subscriber of this.#subscribers.values()) {
-      if (!subscriber.active || typeof subscriber.onStatus !== "function") continue
-      try {
-        subscriber.onStatus(status)
-      } catch (error) {
-        logSafely(this.logger, "error", "Binance user-data status callback failed", error)
-      }
+      this.#notifySubscriber(subscriber, status)
     }
   }
 
