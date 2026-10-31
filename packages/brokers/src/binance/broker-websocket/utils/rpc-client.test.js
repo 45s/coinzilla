@@ -327,3 +327,32 @@ test("notifies close observers when the transport closes unexpectedly", async ()
   }])
   assert.equal(context.client.state, "closed")
 })
+
+
+test("RPC client detaches every transport listener when connection setup rejects", async () => {
+  const removed = []
+  const transport = {
+    send() {},
+    async connect() {
+      throw new Error("transport startup failed")
+    },
+    onMessage() {
+      return () => removed.push("message")
+    },
+    onError() {
+      return () => removed.push("error")
+    },
+    onClose() {
+      return () => removed.push("close")
+    },
+  }
+  const client = new BinanceWebSocketApiClient({ transport })
+
+  await assert.rejects(client.connect(), /transport startup failed/)
+  assert.equal(client.state, "closed")
+  assert.deepEqual(removed.sort(), ["close", "error", "message"])
+
+  // A failed startup is terminal for this client; cleanup remains idempotent.
+  await client.disconnect()
+  assert.deepEqual(removed.sort(), ["close", "error", "message"])
+})
