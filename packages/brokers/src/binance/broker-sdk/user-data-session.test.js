@@ -367,6 +367,56 @@ describe("Binance user-data session recovery", () => {
 
 
 
+
+  it("schedules recovery when an explicit resume subscription attempt fails", async () => {
+    const scheduler = createScheduler()
+    let subscriptionAttempts = 0
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => {
+        subscriptionAttempts += 1
+        if (subscriptionAttempts === 2) throw new Error("resume subscribe rejected")
+        return { subscriptionId: 10 + subscriptionAttempts }
+      },
+      "session.subscriptions": () => [],
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const statuses = []
+    const subscription = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: subscription.data.subscriptionId,
+      event: { e: "eventStreamTerminated", E: 123459 },
+    })
+    await broker.connect()
+
+    assert.equal(scheduler.pendingCount, 1)
+    assert.ok(statuses.some((status) => status.type === "recovering" && status.attempt === 0))
+    await scheduler.runNext()
+
+    assert.equal(subscription.data.subscriptionId, 12)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("allows an explicit connect call to resume a terminated stream and cancel its timer", async () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
@@ -527,6 +577,12 @@ describe("Binance user-data session recovery", () => {
     assert.ok(statuses.some((status) => status.type === "recoveryFailed"))
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
+
+    clients[1].state = "closed"
+    clients[1].emitClose({ code: 1006, reason: "socket closed after retry exhaustion", wasClean: false })
+    await scheduler.runNext()
+    assert.equal(scheduler.pendingCount, 0)
+    assert.equal(clients.length, 2)
 
     await subscription.data.disconnect()
     await broker.disconnect()
