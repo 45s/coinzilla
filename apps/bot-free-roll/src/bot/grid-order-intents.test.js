@@ -81,9 +81,29 @@ test("rejects invalid order intent identity, time, side, type, and decimal value
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "0", price: "1", createdAtServerTime: 1 },
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "-1", createdAtServerTime: 1 },
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "1", createdAtServerTime: -1 },
+    { intentId: "i", symbol: "DOGEFDUSD", side: "SELL", type: "LIMIT", quantity: "1", price: "1", reservedQuantity: "0.9", createdAtServerTime: 1 },
+    { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "1", reservedQuantity: "1", createdAtServerTime: 1 },
   ]
 
   for (const input of invalid) assert.equal(createGridOrderIntent(input).ok, false)
+})
+
+test("stores SELL inventory reservation separately from broker order quantity", () => {
+  const result = createGridOrderIntent({
+    intentId: "sell-intent",
+    symbol: "DOGEFDUSD",
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    quantity: "98.901",
+    price: "0.102",
+    reservedQuantity: "98.999901",
+    createdAtServerTime: 1,
+    cycleId: "cycle-1",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.quantity, "98.901")
+  assert.equal(result.data.reservedQuantity, "98.999901")
 })
 
 test("acknowledges only a broker order matching the prepared intent", () => {
