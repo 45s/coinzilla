@@ -385,8 +385,8 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
 - [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
 - [ ] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. Default CI remains offline and skips these tests without credentials.
-- [ ] Complete the bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304): subscribe with `onStatus`, reconcile its tracked state, and call `acknowledgeRecovery()` only after reconciliation succeeds. This is bot-domain work; do not modify `apps/bot-free-roll` here.
-- [ ] Re-audit the read-only bot consumer contract; confirm no bot application files were changed by the broker migration.
+- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304). The bot now subscribes with `onStatus`, reconciles tracked state, replays buffered events, and acknowledges recovery only after successful reconciliation. Completed in bot-domain [PR #314](https://github.com/45s/coinzilla/pull/314) and [PR #315](https://github.com/45s/coinzilla/pull/315); request #304 is closed. No bot application files were changed by broker-domain migration PRs.
+- [x] Re-audit the read-only bot consumer contract; confirm no bot application files were changed by the broker migration.
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
@@ -579,8 +579,14 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ### Exact account balances (request #310)
 
-- [~] Additive `getBalances()` API returns canonical Entities `Balance` values with exact free/locked `Quantity` amounts and a derived total.
-- Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
-- Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
-- Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
-- Consumer: Free-Roll recovery request #304. Close this work only after the exact snapshot API is integrated and verified by the consumer.
+- [x] Additive `getBalances()` API returns canonical Entities `Balance` values with exact free/locked `Quantity` amounts and a derived total (PR #312).
+- [x] Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
+- [x] Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
+- [x] Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
+- [x] Consumer: Free-Roll recovery request #304 is integrated and verified through PRs #314/#315.
+
+### Timestamped reconciliation snapshot ports (request #316)
+- [~] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
+- [~] Add validated `fromId` pagination to `getMyTrades()` and time-window filters to `getOrderHistory()` while preserving existing result shapes.
+- [ ] Keep full pages potentially incomplete; consumers must advance by the last exact ID + 1 until an exhausted page is observed.
+- Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
