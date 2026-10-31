@@ -10,7 +10,6 @@ import {
   subtractDecimal,
   getConfiguredSellFeeRateExact,
   getOrderType,
-  calculateSellPlanExact,
   getOrderId,
   roundDecimalToIncrement,
   unwrapResult,
