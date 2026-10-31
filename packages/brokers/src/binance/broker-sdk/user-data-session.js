@@ -81,7 +81,9 @@ export class BinanceUserDataSession {
 
   onConnected() {
     const client = this.getClient()
-    if (!this.#stopped && client?.state === "open") this.#bindClient(client)
+    if (!this.#stopped && client?.state === "open") {
+      this.#bindClient(client, { includeUserData: false })
+    }
   }
 
   async resume() {
@@ -230,14 +232,16 @@ export class BinanceUserDataSession {
     throw originalError
   }
 
-  #bindClient(client) {
+  #bindClient(client, { includeUserData = true } = {}) {
     this.#detachClientListeners()
-    this.#removeEventListener = client.onEvent((message) => {
-      if (this.getClient() === client) this.#handleEvent(message)
-    })
-    this.#removeErrorListener = client.onError?.((error) => {
-      if (this.getClient() === client) this.#handleError(error)
-    }) ?? null
+    if (includeUserData) {
+      this.#removeEventListener = client.onEvent((message) => {
+        if (this.getClient() === client) this.#handleEvent(message)
+      })
+      this.#removeErrorListener = client.onError?.((error) => {
+        if (this.getClient() === client) this.#handleError(error)
+      }) ?? null
+    }
     this.#removeCloseListener = client.onClose?.((event) => {
       if (this.getClient() === client) this.#handleClose(event)
     }) ?? null
