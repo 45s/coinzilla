@@ -373,3 +373,43 @@ test("treats zero-fee asset metadata as economically irrelevant", () => {
 
   assert.deepEqual(result, { ok: true, missingFills: [] })
 })
+
+test("rejects invalid inputs and local fill identity mismatches", () => {
+  assert.equal(reconcileFillHistory({}).ok, false)
+  assert.equal(toExecutionFill({ fill: {} }).ok, false)
+
+  const identityMismatch = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ isMaker: false })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(identityMismatch.ok, false)
+  assert.match(identityMismatch.reason, /identity differs/)
+})
+
+test("rejects changed commission assets and malformed exact fill values", () => {
+  const commission = new Commission({
+    amount: new Money({ amount: "0.01", asset: quoteAsset }),
+  })
+  const commissionMismatch = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({
+      commissionAmount: "0.01",
+      commissionAsset: "BNB",
+    })],
+    canonicalFills: [createCanonicalFill({ commissions: [commission] })],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(commissionMismatch.ok, false)
+  assert.match(commissionMismatch.reason, /commission asset differs/)
+
+  const malformed = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ quantity: "not-a-quantity" })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(malformed.ok, false)
+  assert.match(malformed.reason, /invalid exact values/)
+})
