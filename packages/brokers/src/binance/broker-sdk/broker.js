@@ -1,160 +1,121 @@
-import { Spot } from "@binance/spot"
-import { handleErr, isProdMode, toResult } from "@coinzilla/utils"
+import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptOrder, adaptSpotAsset, adaptTrade } from "../shared/index.js"
 import { adaptMsg } from "../websocket-stream/index.js"
+import { BinanceSdkConfig } from "./binance-sdk-config.js"
+import { BinanceWebSocketApiClient } from "./rpc-client.js"
+import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
+import { createStreamName } from "./streams-protocol.js"
+import { BinanceStreamsClient } from "./streams-client.js"
+import { NativeWebSocketTransport } from "./transport.js"
+
+function createApiClient(config) {
+  const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
+  return new BinanceWebSocketApiClient({
+    transport,
+    apiKey: config.apiKey,
+    apiSecret: config.apiSecret,
+  })
+}
+
+function createMarketClient(config, logger) {
+  return new BinanceStreamsClient({
+    url: config.websocketStreamsUrl,
+    reconnectDelay: Math.max(1, config.reconnectDelay),
+    onError: (error) => logger.error?.("Binance market stream error", error),
+  })
+}
+
+function validateCallback(callback, name) {
+  if (typeof callback !== "function") {
+    throw new TypeError(`${name} callback must be a function`)
+  }
+}
 
 export class BinanceSdkBroker extends CoreBroker {
-  constructor(input) {
+  constructor(input = {}, {
+    apiClientFactory = createApiClient,
+    marketClientFactory = createMarketClient,
+  } = {}) {
     super(input)
-    const {
-      apiKey,
-      apiSecret,
-      websocketApiUrl,
-      websocketStreamsUrl,
-      reconnectDelay,
-    } = input
 
-    if (!apiKey || !apiSecret) {
-      throw new Error("Missing Binance API credentials")
-    }
-
-    this.client = new Spot({
-      configurationWebsocketAPI: {
-        apiKey,
-        apiSecret,
-        wsURL: websocketApiUrl,
-        reconnectDelay,
-      },
-      configurationWebsocketStreams: {
-        wsURL: websocketStreamsUrl,
-        reconnectDelay,
-      },
-    })
-
-    this.tradingConnection = null
-    this.marketConnection = null
-  }
-
-  async getSymbolFilters({ symbol }) {
-    try {
-      const baseUrl = isProdMode
-        ? "https://api.binance.com"
-        : "https://testnet.binance.vision"
-      const response = await fetch(
-        `${baseUrl}/api/v3/exchangeInfo?symbol=${encodeURIComponent(symbol)}`,
-      )
-
-      if (!response.ok) {
-        throw new Error(`Binance exchangeInfo returned HTTP ${response.status}`)
-      }
-
-      const exchangeInfo = await response.json()
-      const symbolInfo = exchangeInfo.symbols?.find(
-        (item) => item.symbol === symbol,
-      )
-      const priceFilter = symbolInfo?.filters?.find(
-        (filter) => filter.filterType === "PRICE_FILTER",
-      )
-      const lotSizeFilter = symbolInfo?.filters?.find(
-        (filter) => filter.filterType === "LOT_SIZE",
-      )
-      const tickSize = priceFilter?.tickSize
-      const stepSize = lotSizeFilter?.stepSize
-
-      if (!tickSize || Number(tickSize) <= 0) {
-        throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
-      }
-
-      if (!stepSize || Number(stepSize) <= 0) {
-        throw new Error(`Binance LOT_SIZE stepSize missing for ${symbol}`)
-      }
-
-      if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
-          !Array.isArray(symbolInfo?.orderTypes) || symbolInfo.orderTypes.length === 0) {
-        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
-      }
-
-      return toResult({
-        data: {
-          symbol,
-          baseAsset: symbolInfo.baseAsset,
-          quoteAsset: symbolInfo.quoteAsset,
-          tickSize: String(tickSize),
-          stepSize: String(stepSize),
-          supportedOrderTypes: symbolInfo.orderTypes,
-        },
-      })
-    } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
-      return toResult({ errors: [error] })
-    }
+    this.config = new BinanceSdkConfig(input)
+    this.tradingConnection = apiClientFactory(this.config)
+    this.marketConnection = marketClientFactory(this.config, this.logger)
+    this.connected = false
   }
 
   async connect() {
-    this.tradingConnection = await this.client.websocketAPI.connect()
-    this.marketConnection = await this.client.websocketStreams.connect()
-    this.logger.info?.("Binance SDK connected")
+    if (this.connected && this.tradingConnection.state === "open") return
+
+    try {
+      await this.tradingConnection.connect()
+      this.connected = true
+      this.logger.info?.("Binance native WebSocket clients connected")
+    } catch (error) {
+      this.connected = false
+      await Promise.allSettled([
+        this.tradingConnection.disconnect(),
+        this.marketConnection.disconnect(),
+      ])
+      handleErr({ where: "BinanceSdkBroker.connect()", error })
+      throw error
+    }
   }
 
   async disconnect() {
-    await Promise.allSettled([
+    this.connected = false
+    const results = await Promise.allSettled([
       this.tradingConnection?.disconnect(),
       this.marketConnection?.disconnect(),
     ])
-    this.tradingConnection = null
-    this.marketConnection = null
-    this.logger.info?.("Binance SDK disconnected")
+    this.logger.info?.("Binance native WebSocket clients disconnected")
+
+    const failure = results.find((result) => result.status === "rejected")
+    if (failure) {
+      handleErr({ where: "BinanceSdkBroker.disconnect()", error: failure.reason })
+      throw failure.reason
+    }
   }
 
   async getAssets() {
     try {
-      const response = await this.tradingConnection.accountStatus({
-        omitZeroBalances: true,
-      })
-      return toResult({
-        data: adaptSpotAsset(response.data.balances),
-      })
+      const response = await this.tradingConnection.request(
+        "account.status",
+        { omitZeroBalances: true },
+        { signed: true },
+      )
+      return toResult({ data: adaptSpotAsset(response.data.balances) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.getAssets()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.getAssets()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async getOpenOrders({ symbol } = {}) {
     try {
-      const response = await this.tradingConnection.openOrdersStatus(
+      const response = await this.tradingConnection.request(
+        "openOrders.status",
         symbol ? { symbol } : {},
+        { signed: true },
       )
-      return toResult({
-        data: response.data.map(adaptOrder),
-      })
+      return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.getOpenOrders()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.getOpenOrders()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async getOrder({ symbol, orderId }) {
     try {
-      const response = await this.tradingConnection.orderStatus({
-        symbol,
-        orderId,
-      })
-      return toResult({
-        data: adaptOrder(response.data),
-      })
+      const response = await this.tradingConnection.request(
+        "order.status",
+        { symbol, orderId },
+        { signed: true },
+      )
+      return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.getOrder()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.getOrder()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -169,7 +130,7 @@ export class BinanceSdkBroker extends CoreBroker {
       const params = { symbol, limit }
       if (orderId !== undefined && orderId !== null) params.orderId = orderId
 
-      const response = await this.tradingConnection.allOrders(params)
+      const response = await this.tradingConnection.request("allOrders", params, { signed: true })
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
@@ -187,7 +148,7 @@ export class BinanceSdkBroker extends CoreBroker {
       const params = { symbol, limit }
       if (orderId !== undefined && orderId !== null) params.orderId = orderId
 
-      const response = await this.tradingConnection.myTrades(params)
+      const response = await this.tradingConnection.request("myTrades", params, { signed: true })
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
@@ -211,57 +172,49 @@ export class BinanceSdkBroker extends CoreBroker {
         params.timeInForce = input.timeInForce ?? "GTC"
       }
 
-      const response = await this.tradingConnection.orderPlace(params)
-      return toResult({
-        data: adaptOrder(response.data),
-      })
+      const response = await this.tradingConnection.request(
+        "order.place",
+        params,
+        { signed: true, stateChanging: true },
+      )
+      return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.createOrder()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.createOrder()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async cancelOrder({ symbol, orderId }) {
     try {
-      const response = await this.tradingConnection.orderCancel({
-        symbol,
-        orderId,
-      })
-      return toResult({
-        data: adaptOrder(response.data),
-      })
+      const response = await this.tradingConnection.request(
+        "order.cancel",
+        { symbol, orderId },
+        { signed: true, stateChanging: true },
+      )
+      return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.cancelOrder()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.cancelOrder()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async cancelAllOpenOrders({ symbol }) {
     try {
-      const response = await this.tradingConnection.openOrdersCancelAll({
-        symbol,
-      })
-      return toResult({
-        data: response.data.map(adaptOrder),
-      })
+      const response = await this.tradingConnection.request(
+        "openOrders.cancelAll",
+        { symbol },
+        { signed: true, stateChanging: true },
+      )
+      return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.cancelAllOpenOrders()",
-        error,
-      })
+      handleErr({ where: "BinanceSdkBroker.cancelAllOpenOrders()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async getPrices({ symbol }) {
     try {
-      const response = await this.tradingConnection.tickerPrice({ symbol })
+      const response = await this.tradingConnection.request("ticker.price", { symbol })
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getPrices()", error })
@@ -269,43 +222,92 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async subscribeForPrices({ symbol, onPrice }) {
+  async getSymbolFilters({ symbol }) {
     try {
-      const stream = this.marketConnection.aggTrade({
-        symbol: symbol.toLowerCase(),
+      if (typeof symbol !== "string" || symbol.length === 0) {
+        throw new TypeError("getSymbolFilters requires a symbol")
+      }
+
+      const response = await this.tradingConnection.request("exchangeInfo", { symbol })
+      const symbolInfo = response.data?.symbols?.find((item) => item.symbol === symbol)
+      const priceFilter = symbolInfo?.filters?.find((filter) => filter.filterType === "PRICE_FILTER")
+      const lotSizeFilter = symbolInfo?.filters?.find((filter) => filter.filterType === "LOT_SIZE")
+      const tickSize = priceFilter?.tickSize
+      const stepSize = lotSizeFilter?.stepSize
+
+      if (typeof tickSize !== "string" || !Number.isFinite(Number(tickSize)) || Number(tickSize) <= 0) {
+        throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
+      }
+      if (typeof stepSize !== "string" || !Number.isFinite(Number(stepSize)) || Number(stepSize) <= 0) {
+        throw new Error(`Binance LOT_SIZE stepSize missing for ${symbol}`)
+      }
+      if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
+          !Array.isArray(symbolInfo.orderTypes) || symbolInfo.orderTypes.length === 0) {
+        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
+      }
+
+      return toResult({
+        data: {
+          symbol,
+          baseAsset: symbolInfo.baseAsset,
+          quoteAsset: symbolInfo.quoteAsset,
+          tickSize,
+          stepSize,
+          supportedOrderTypes: symbolInfo.orderTypes,
+        },
       })
-      stream.on("message", (m) => {
-        onPrice(adaptMsg(m))
-      })
-      stream.on("error", (error) => {
-        this.logger.error?.("Binance price stream error", error)
-      })
-      return toResult({ data: stream })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.subscribeForPrices()",
-        error,
+      handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async subscribeForPrices({ symbol, onPrice }) {
+    let stream
+    try {
+      validateCallback(onPrice, "onPrice")
+      stream = createStreamName("aggTrade", { symbol })
+      const listener = (message) => onPrice(adaptPublicStreamMessage(message))
+      await this.marketConnection.subscribe(stream, listener)
+
+      return toResult({
+        data: {
+          stream,
+          unsubscribe: () => this.marketConnection.unsubscribe(stream, listener),
+        },
       })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.subscribeForPrices()", error })
       return toResult({ errors: [error] })
     }
   }
 
   async subscribeForUserData({ onEvent }) {
+    let removeListener
     try {
-      const { stream } =
-        await this.tradingConnection.userDataStreamSubscribeSignature()
-      stream.on("message", (event) => {
+      validateCallback(onEvent, "onEvent")
+      removeListener = this.tradingConnection.onEvent((message) => {
+        const event = message?.event && typeof message.event === "object"
+          ? message.event
+          : message
         onEvent({ event: adaptMsg(event) })
       })
-      stream.on("error", (error) => {
-        this.logger.error?.("Binance user data stream error", error)
+
+      const response = await this.tradingConnection.request(
+        "userDataStream.subscribe.signature",
+        {},
+        { signed: true },
+      )
+
+      return toResult({
+        data: {
+          subscriptionId: response.data?.subscriptionId ?? null,
+          unsubscribeLocal: removeListener,
+        },
       })
-      return toResult({ data: stream })
     } catch (error) {
-      handleErr({
-        where: "BinanceSdkBroker.subscribeForUserData()",
-        error,
-      })
+      removeListener?.()
+      handleErr({ where: "BinanceSdkBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
   }
