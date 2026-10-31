@@ -24,7 +24,7 @@ export class Market {
     }
 
     const normalizedSymbol = normalizeRequiredString(symbol)
-    if (!normalizedSymbol || normalizedSymbol.includes(":")) {
+    if (!normalizedSymbol) {
       throw new Error(marketErrMsgs.symbol)
     }
 
