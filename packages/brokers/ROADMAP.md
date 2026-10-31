@@ -61,7 +61,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-- [ ] Phase 6 — user-data session lifecycle and recovery (Phase 6A merged; Phase 6B in progress).
+- [~] Phase 6 — user-data session lifecycle and recovery (Phase 6A and 6B.1 integrated into `develop`; 6B.2 reconciliation/testnet verification in progress).
 - [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
 - [ ] Phase 8 — operational hardening and completion.
 
@@ -69,10 +69,12 @@ The migration is complete only when all of the following are true:
 
 1. Phase 5 is merged (PR #271, merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
 2. Main synchronization PR #279 is merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`.
-3. Phase 6A is merged via PR #285 at `244508790402d0044f9e880799db3c0088822448`; its exact PR head `361e0184f1d6059c63e17544e738a1e8fd90faec` passed all five CI workflows.
-4. Re-reviewed `main` through `ae7fe07b498a5b28d9169e67acf56e1173619141`. Eight commits since `46ffd669d064e8e33f6ed59e31cc9d70d93150f5` update the repository PR template and bot-only documentation/tests. The two newest commits only add a bot-free-roll partial-sell cancellation test. No broker/API/consumer-contract/runtime/dependency change requires synchronization. PR #288 follows the updated repository template; do not import unrelated bot-only work into the broker branch.
-5. Phase 6B implementation branch: `migration/binance-phase-6b-user-data-reconnect`, based on integration commit `244508790402d0044f9e880799db3c0088822448`.
-6. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+3. Phase 6A and 6B.1 are integrated into `develop` by PR #298 at `d2c247bbd641cdabfd5393e36de271cae4c35321`. PR #285's exact head `361e0184f1d6059c63e17544e738a1e8fd90faec` passed all five workflows; PR #288's exact head `ce602729d51ec16d5fe4c41ca45da4d024fbc375` passed the six listed repository workflows before its implementation was consolidated.
+4. Current `main` is `ad43543bb7c58c407f04ffdc092bbcda187723a6`; `develop` at `e837a2f405fa8dd59f7fdb81274a8519181b02f6` contains that `main` tip as an ancestor. The later main changes add the mandatory AI-agent/domain ownership workflow and package instructions. They do not change broker runtime or Binance API behavior. Do not import unrelated bot-only changes into this broker task.
+5. Phase 6B.1 is complete through consolidated PR #298. The original PR #288 was superseded, not merged separately.
+6. Current Phase 6B.2 branch: `feature/brokers/user-data-reconciliation`, created from latest `develop` commit `e837a2f405fa8dd59f7fdb81274a8519181b02f6`.
+7. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+8. Consumer adoption is a separate bot-domain task tracked by issue #304. Until that consumer acknowledges reconciliation, its trading path intentionally remains fail-closed after user-data interruption.
 7. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
 8. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
 
