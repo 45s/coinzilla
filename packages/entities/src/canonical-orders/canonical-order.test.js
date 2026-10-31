@@ -191,7 +191,6 @@ describe(CanonicalOrder.name, () => {
     )
     assert.throws(
       () => createOrder({
-        brokerOrderId: "123456",
         status: "PENDING",
         executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
       }),
@@ -215,6 +214,13 @@ describe(CanonicalOrder.name, () => {
   })
 
   it("validates client identity, side, type, and status", () => {
+    assert.throws(
+      () => createOrder({
+        brokerOrderId: "123456",
+        status: "PENDING",
+      }),
+      { message: canonicalOrderErrMsgs.pendingBrokerId },
+    )
     assert.throws(
       () => createOrder({ clientOrderId: " " }),
       { message: canonicalOrderErrMsgs.clientOrderId },
