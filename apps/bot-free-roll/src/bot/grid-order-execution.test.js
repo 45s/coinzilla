@@ -155,6 +155,30 @@ test("attaches an independent SELL order to its owning cycle reservation", async
   assert.equal(updatedCycle.currentSellOrderId, "sell-broker-1")
 })
 
+test("rejects an intent for another pair or an invalid side-to-cycle mapping", async () => {
+  const state = createState()
+  const { calls, execution } = createExecution()
+  const wrongPair = createIntent()
+  const mismatch = await execution.submit({
+    state,
+    intent: {
+      ...wrongPair,
+      symbol: "BTCUSDT",
+    },
+  })
+  const invalidBuyCycle = await execution.submit({
+    state,
+    intent: {
+      ...wrongPair,
+      cycleId: "unexpected-cycle",
+    },
+  })
+
+  assert.equal(mismatch.ok, false)
+  assert.equal(invalidBuyCycle.ok, false)
+  assert.equal(calls.length, 0)
+})
+
 test("blocks broker submission when the PREPARED intent cannot be persisted", async () => {
   const state = createState()
   const intent = createIntent()
