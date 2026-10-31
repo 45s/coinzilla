@@ -45,7 +45,7 @@ Assume:
 - Both BUYs execute with no actual commission for this simplified example.
 - Broker trading rules allow the shown quantities.
 
-<PRIVATE_PERSON> buys 100 DOGE in cycle A:
+The bot buys 100 DOGE in cycle A:
 
 | Cycle | BUY quantity | Target SELL quantity | Target retained quantity |
 |---|---:|---:|---:|
