@@ -50,11 +50,11 @@ const fills = [
 test("accepts a tracked order present in open orders when exact history matches executed quantity", () => {
   const result = reconcileTrackedOrder({
     symbol: "BTCUSDT",
-    order: trackedOrder,
+    order: { ...trackedOrder, quantity: "3" },
     openOrders: [{
       id: "order-1",
       side: "BUY",
-      originalQuantity: "2",
+      originalQuantity: "3",
       executedQuantity: "2",
       status: "PARTIALLY_FILLED",
     }],
