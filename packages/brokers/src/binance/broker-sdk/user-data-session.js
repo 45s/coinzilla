@@ -82,9 +82,6 @@ export class BinanceUserDataSession {
     if (this.#reconnectPromise) return this.#reconnectPromise
     try {
       await this.#ensureRemoteSubscription()
-      if (this.#stopped || !this.#subscribers.has(id)) {
-        throw new Error("User-data subscription was canceled during setup")
-      }
     } catch (error) {
       this.setUnavailable(true)
       this.#reconnectAttempts = 0
@@ -317,7 +314,7 @@ export class BinanceUserDataSession {
   }
 
   #scheduleRecovery(delay) {
-    if (this.#stopped || this.#subscribers.size === 0 ||
+    if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
         this.#reconnectTimer !== null || this.#reconnectPromise) return
     const wait = delay ?? Math.min(this.reconnectDelay * (2 ** this.#reconnectAttempts), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
