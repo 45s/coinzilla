@@ -27,8 +27,7 @@ function createScheduler() {
       if (!entry) throw new Error("No scheduled task")
       const [id, task] = entry
       tasks.delete(id)
-      task.callback()
-      for (let index = 0; index < 12; index += 1) await Promise.resolve()
+      await task.callback()
     },
   }
 }
@@ -77,7 +76,20 @@ function createBroker({ warningThreshold = 3 } = {}) {
 }
 
 describe("Binance user-data session recovery", () => {
+  it("awaits asynchronous scheduled callbacks before advancing", async () => {
+    const scheduler = createScheduler()
+    let completed = false
 
+    scheduler.setTimeout(async () => {
+      await Promise.resolve()
+      completed = true
+    }, 0)
+
+    await scheduler.runNext()
+
+    assert.equal(completed, true)
+    assert.equal(scheduler.pendingCount, 0)
+  })
 
 
   it("validates required dependencies and retry policy", () => {
@@ -134,7 +146,7 @@ describe("Binance user-data session recovery", () => {
     clients[1].state = "closed"
     clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
     resolveDelayedSubscribe({ subscriptionId: 110 })
-    for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    await broker.userDataSession.waitForRecovery()
 
     assert.equal(scheduler.pendingCount, 1)
     await scheduler.runNext()
@@ -819,7 +831,7 @@ describe("Binance user-data session recovery", () => {
 
     await broker.disconnect()
     finishReconnect()
-    for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    await broker.userDataSession.waitForRecovery()
 
     assert.equal(clients[1].state, "closed")
     assert.equal(clients[1].calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
