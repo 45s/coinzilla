@@ -170,7 +170,7 @@ Acceptance: public behavior is documented and tests encode the intended contract
 - [ ] Define and enforce truly safe payload immutability.
 - [ ] Align structured logging with the repository logger contract.
 - [ ] Validate constructor options and normalize/reject malformed event names.
-- [ ] Make subscription state consistent after close.
+- [x] Make subscription state consistent after close.
 - [ ] Add regression tests for every corrected defect.
 
 Acceptance: all accepted events have consistent envelopes; event names cannot trigger host runtime behavior; payload guarantees are accurate and tested.
