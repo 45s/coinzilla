@@ -174,10 +174,20 @@ test("applies base and quote commissions to their own asset totals", () => {
       commissionAsset: "DOGE",
     }),
   })
-  const quoteFee = applyMarketInventoryFill({
+  const secondBaseFee = applyMarketInventoryFill({
     ledger: baseFee.ledger,
     fill: createFill({
       id: "trade-2",
+      quantity: "1",
+      quoteQuantity: "2",
+      commissionAmount: "0.05",
+      commissionAsset: "DOGE",
+    }),
+  })
+  const quoteFee = applyMarketInventoryFill({
+    ledger: secondBaseFee.ledger,
+    fill: createFill({
+      id: "trade-3",
       side: "SELL",
       price: "3",
       quantity: "2",
@@ -189,10 +199,12 @@ test("applies base and quote commissions to their own asset totals", () => {
 
   assert.equal(baseFee.ledger.strategy.baseQuantity, "9.9")
   assert.equal(baseFee.ledger.strategy.quoteCashFlow, "-20")
-  assert.equal(quoteFee.ledger.strategy.baseQuantity, "7.9")
-  assert.equal(quoteFee.ledger.strategy.quoteCashFlow, "-14.03")
+  assert.equal(secondBaseFee.ledger.strategy.baseQuantity, "10.85")
+  assert.equal(secondBaseFee.ledger.strategy.quoteCashFlow, "-22")
+  assert.equal(quoteFee.ledger.strategy.baseQuantity, "8.85")
+  assert.equal(quoteFee.ledger.strategy.quoteCashFlow, "-16.03")
   assert.deepEqual(quoteFee.ledger.strategy.commissionsByAsset, [
-    { asset: "DOGE", amount: "0.1" },
+    { asset: "DOGE", amount: "0.15" },
     { asset: "USDT", amount: "0.03" },
   ])
 })
