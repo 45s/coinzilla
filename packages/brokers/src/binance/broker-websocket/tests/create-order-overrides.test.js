@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { BinanceSdkBroker } from "./broker.js"
-import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
+import { BinanceSdkBroker } from "../broker.js"
+import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 describe("BinanceSdkBroker.createOrder overrides", () => {
   it("preserves explicitly supplied order options", async () => {
