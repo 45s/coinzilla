@@ -1119,3 +1119,134 @@ describe("Binance user-data listener detach resilience", () => {
     assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
   })
 })
+
+
+describe("Binance user-data unsubscribe outcome", () => {
+  function createUnsubscribeBroker({ unsubscribe, subscriptions }) {
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 81 }),
+          "userDataStream.unsubscribe": unsubscribe,
+          "session.subscriptions": subscriptions,
+        })
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    return { broker, get client() { return client } }
+  }
+
+  it("does not retry unsubscribe when the first response is lost but the remote state confirms removal", async () => {
+    let activeSubscriptionId = null
+    let unsubscribeAttempts = 0
+    const failure = new Error("unsubscribe response timed out")
+    const setup = createUnsubscribeBroker({
+      unsubscribe: () => {
+        unsubscribeAttempts += 1
+        activeSubscriptionId = null
+        throw failure
+      },
+      subscriptions: () => activeSubscriptionId === null ? [] : [{ subscriptionId: activeSubscriptionId }],
+    })
+
+    await setup.broker.connect()
+    activeSubscriptionId = 81
+    const subscription = await setup.broker.subscribeForUserData({ onEvent() {} })
+    await assert.doesNotReject(subscription.data.disconnect())
+
+    assert.equal(unsubscribeAttempts, 1)
+    assert.equal(setup.client.calls.filter((call) => call.method === "session.subscriptions").length, 1)
+    await setup.broker.disconnect()
+  })
+
+  it("retries unsubscribe once only after lookup confirms the subscription is still active", async () => {
+    let activeSubscriptionId = null
+    let unsubscribeAttempts = 0
+    const setup = createUnsubscribeBroker({
+      unsubscribe: () => {
+        unsubscribeAttempts += 1
+        if (unsubscribeAttempts === 1) throw new Error("unsubscribe response timed out")
+        activeSubscriptionId = null
+        return {}
+      },
+      subscriptions: () => activeSubscriptionId === null ? [] : [{ subscriptionId: activeSubscriptionId }],
+    })
+
+    await setup.broker.connect()
+    activeSubscriptionId = 81
+    const subscription = await setup.broker.subscribeForUserData({ onEvent() {} })
+    await assert.doesNotReject(subscription.data.disconnect())
+
+    assert.equal(unsubscribeAttempts, 2)
+    assert.equal(setup.client.calls.filter((call) => call.method === "session.subscriptions").length, 1)
+    await setup.broker.disconnect()
+  })
+
+  it("does not retry unsubscribe when remote state cannot be verified", async () => {
+    let unsubscribeAttempts = 0
+    const failure = new Error("unsubscribe response timed out")
+    const setup = createUnsubscribeBroker({
+      unsubscribe: () => {
+        unsubscribeAttempts += 1
+        throw failure
+      },
+      subscriptions: () => { throw new Error("subscription lookup unavailable") },
+    })
+
+    await setup.broker.connect()
+    const subscription = await setup.broker.subscribeForUserData({ onEvent() {} })
+    await assert.rejects(subscription.data.disconnect(), (error) => error === failure)
+
+    assert.equal(unsubscribeAttempts, 1)
+    assert.equal(setup.client.listenerCount, 0)
+    assert.equal(setup.client.errorListenerCount, 0)
+    await setup.broker.disconnect()
+  })
+})
+
+
+describe("Binance user-data unsubscribe retry failure", () => {
+  it("preserves both errors when the verified unsubscribe retry also fails", async () => {
+    let unsubscribeAttempts = 0
+    const originalError = new Error("first unsubscribe response timed out")
+    const retryError = new Error("second unsubscribe request failed")
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 82 }),
+          "userDataStream.unsubscribe": () => {
+            unsubscribeAttempts += 1
+            throw unsubscribeAttempts === 1 ? originalError : retryError
+          },
+          "session.subscriptions": () => [{ subscriptionId: 82 }],
+        })
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+    await assert.rejects(subscription.data.disconnect(), (error) => {
+      assert.ok(error instanceof AggregateError)
+      assert.deepEqual(error.errors, [originalError, retryError])
+      return true
+    })
+
+    assert.equal(unsubscribeAttempts, 2)
+    assert.equal(client.listenerCount, 0)
+    assert.equal(client.errorListenerCount, 0)
+    await broker.disconnect()
+  })
+})
