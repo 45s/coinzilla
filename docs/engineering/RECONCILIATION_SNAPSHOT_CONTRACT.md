@@ -48,7 +48,7 @@ The bot consumes an exchange-neutral object. Binance wire fields, raw payloads, 
       },
 
       fills: {
-        items: [],
+        items: [], // canonical Entities Fill[] from getFills()
         firstTradeId: null,
         nextTradeId: null,
         pagesFetched: 1,
@@ -92,6 +92,7 @@ The top-level snapshot is usable only when every required section is `COMPLETE`.
 - Use stable order/trade IDs as cursors. Keep page boundaries and the next cursor in the snapshot.
 - A page at the maximum supported limit is potentially truncated. Request the next page; do not mark it complete just because the request succeeded.
 - The next cursor must advance strictly beyond the last returned ID. Repeated IDs are deduplicated only when the exact payload matches; conflicting duplicates make the section incomplete.
+- Binance order/trade IDs are int64 values. The current JSON RPC boundary accepts cursor IDs only when they fit JavaScript's safe-integer range; larger IDs are rejected rather than rounded, and the affected history section must remain incomplete. Supporting larger IDs requires a transport-level int64 representation.
 - A history query with a bounded time range must record that range and respect the source's maximum supported window.
 - An order or trade history that cannot be paginated to exhaustion remains incomplete.
 
@@ -125,7 +126,7 @@ The consumer requires the broker-owned capabilities in [request #316](https://gi
 
 - `getServerTime()` for exchange server timestamps.
 - `getAccountSnapshot()` for canonical balances plus the account source `updateTime`, while preserving the existing `getBalances()` array contract.
-- Cursor-aware `getMyTrades()` and `getOrderHistory()` queries that preserve exact source IDs/timestamps and allow every page to be collected.
+- Cursor-aware `getFills()` (canonical Entities Fill[]) and compatibility `getMyTrades()` / `getOrderHistory()` queries that preserve exact source IDs/timestamps and allow every page to be collected.
 
 The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation.
 
