@@ -8,6 +8,7 @@ import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
 import { createStreamName } from "./streams-protocol.js"
 import { BinanceStreamsClient } from "./streams-client.js"
 import { NativeWebSocketTransport } from "./transport.js"
+import { createUserDataEventDeduplicator } from "./user-data-event-deduplicator.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -283,20 +284,63 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async subscribeForUserData({ onEvent }) {
+  async subscribeForUserData({ onEvent, onStatus }) {
     let removeListener
     let removeErrorListener
+    let removeCloseListener
+    let subscriptionId = null
+    let disconnected = false
+    const deduplicator = createUserDataEventDeduplicator()
+
+    const reportStatus = (status) => {
+      if (typeof onStatus !== "function") return
+      try {
+        onStatus(status)
+      } catch (error) {
+        this.logger.error?.("Binance user-data status callback failed", error)
+      }
+    }
+
     try {
       validateCallback(onEvent, "onEvent")
+      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
       if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
+
       removeListener = this.tradingConnection.onEvent((message) => {
+        if (disconnected || message?.subscriptionId !== subscriptionId) return
+
         const event = message?.event && typeof message.event === "object"
           ? message.event
           : message
+
+        if (event.e === "eventStreamTerminated") {
+          reportStatus({
+            type: "terminated",
+            subscriptionId,
+            eventTime: event.E ?? null,
+            recoveryRequired: true,
+          })
+          this.logger.warn?.("Binance user-data subscription terminated", { subscriptionId })
+          return
+        }
+
+        if (deduplicator.isDuplicate(message)) return
         onEvent({ event: adaptMsg(event) })
       })
+
       removeErrorListener = this.tradingConnection.onError?.((error) => {
         this.logger.error?.("Binance user data stream error", error)
+        reportStatus({ type: "connectionError", error, recoveryRequired: true })
+      })
+
+      removeCloseListener = this.tradingConnection.onClose?.((event) => {
+        if (disconnected) return
+        reportStatus({
+          type: "connectionClosed",
+          code: event?.code ?? null,
+          reason: event?.reason ?? "",
+          recoveryRequired: true,
+        })
       })
 
       const response = await this.tradingConnection.request(
@@ -304,12 +348,11 @@ export class BinanceSdkBroker extends CoreBroker {
         {},
         { signed: true },
       )
-      const subscriptionId = response.data?.subscriptionId
+      subscriptionId = response.data?.subscriptionId
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
         throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
       }
 
-      let disconnected = false
       return toResult({
         data: {
           subscriptionId,
@@ -324,13 +367,18 @@ export class BinanceSdkBroker extends CoreBroker {
             } finally {
               removeListener?.()
               removeErrorListener?.()
+              removeCloseListener?.()
+              deduplicator.clear()
             }
           },
         },
       })
     } catch (error) {
+      disconnected = true
       removeListener?.()
       removeErrorListener?.()
+      removeCloseListener?.()
+      deduplicator.clear()
       handleErr({ where: "BinanceSdkBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
