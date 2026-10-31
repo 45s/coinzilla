@@ -6,7 +6,7 @@ const DEFAULT_ACK_TIMEOUT = 5_000
 const DEFAULT_RECONNECT_DELAY = 1_000
 const MAX_RECONNECT_DELAY = 30_000
 const CONNECTION_ROTATION_DELAY = 23 * 60 * 60 * 1_000 + 50 * 60 * 1_000
-const CONTROL_MESSAGE_INTERVAL = 250
+const CONTROL_MESSAGE_INTERVAL = 300
 const MAX_STREAMS_PER_CONNECTION = 1_024
 const MAX_STREAMS_PER_SUBSCRIBE = 200
 
@@ -163,6 +163,7 @@ export class BinanceStreamsClient {
 
   async unsubscribe(streamNames, listener) {
     const streams = (Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName)
+    if (streams.length === 0) throw new TypeError("At least one stream is required")
     if (listener !== undefined && typeof listener !== "function") {
       throw new TypeError("listener must be a function when provided")
     }
@@ -237,7 +238,6 @@ export class BinanceStreamsClient {
         throw new Error("Binance Streams connection was superseded")
       }
       this.#state = "open"
-      this.#reconnectAttempts = 0
       this.#scheduleRotation()
       if (isReconnect && this.#listeners.size > 0) {
         const desired = [...this.#listeners.keys()]
@@ -246,6 +246,7 @@ export class BinanceStreamsClient {
           for (const stream of batch) this.#activeStreams.add(stream)
         }
       }
+      this.#reconnectAttempts = 0
       return this
     }).catch(async (error) => {
       if (this.#transport === transport) {
