@@ -32,6 +32,7 @@ function freezeCycle(cycle) {
     sellOrders: Object.freeze(cycle.sellOrders.map((order) => Object.freeze({ ...order }))),
     sellFills: Object.freeze(cycle.sellFills.map((fill) => Object.freeze({ ...fill }))),
     commissionTotals: Object.freeze({ ...cycle.commissionTotals }),
+    buyOrder: Object.freeze({ ...cycle.buyOrder }),
   })
 }
 
@@ -44,6 +45,17 @@ function validateCycle(cycle) {
       !isNonEmptyString(cycle.quoteAsset) || cycle.baseAsset === cycle.quoteAsset) {
     throw new Error("cycle requires stable identity and distinct base/quote assets")
   }
+  const buyOrder = cycle.buyOrder
+  if (!buyOrder || typeof buyOrder !== "object" ||
+      buyOrder.id !== cycle.buyOrderId ||
+      buyOrder.symbol !== cycle.symbol ||
+      buyOrder.side !== "BUY" ||
+      !isNonEmptyString(buyOrder.clientOrderId) ||
+      !["LIMIT", "LIMIT_MAKER"].includes(buyOrder.type)) {
+    throw new Error("cycle requires complete canonical BUY order identity")
+  }
+  validateDecimal({ value: buyOrder.quantity, name: "BUY order quantity", allowZero: false })
+  validateDecimal({ value: buyOrder.price, name: "BUY order price", allowZero: false })
   const expectedId = `grid-cycle:${cycle.symbol.length}:${cycle.symbol}:${cycle.buyOrderId.length}:${cycle.buyOrderId}`
   if (cycle.id !== expectedId) throw new Error("cycle ID does not match its BUY order identity")
   if (!cycle.commissionTotals || typeof cycle.commissionTotals !== "object" ||
@@ -91,10 +103,13 @@ function validateCycle(cycle) {
   const filledQuantityByOrder = new Map()
   for (const order of cycle.sellOrders) {
     if (!order || typeof order !== "object" || !isNonEmptyString(order.id) ||
+        !isNonEmptyString(order.clientOrderId) || order.symbol !== cycle.symbol ||
+        order.side !== "SELL" || !["LIMIT", "LIMIT_MAKER"].includes(order.type) ||
         ordersById.has(order.id) ||
         !["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"].includes(order.status)) {
       throw new Error("cycle contains an invalid or duplicate SELL order")
     }
+    validateDecimal({ value: order.price, name: "SELL order price", allowZero: false })
     validateDecimal({ value: order.quantity, name: "SELL quantity", allowZero: false })
     validateDecimal({ value: order.filledQuantity, name: "SELL filledQuantity" })
     validateDecimal({ value: order.reservedQuantity, name: "SELL reservedQuantity" })
@@ -254,6 +269,7 @@ export function createGridCycle({
   symbol,
   baseAsset,
   quoteAsset,
+  buyOrder,
   buyOrderId,
   buyFillIds,
   acquiredQuantity,
@@ -265,6 +281,12 @@ export function createGridCycle({
         !isNonEmptyString(baseAsset) || !isNonEmptyString(quoteAsset) ||
         baseAsset === quoteAsset) {
       throw new Error("symbol, BUY order ID, and distinct base/quote assets are required")
+    }
+    if (!buyOrder || typeof buyOrder !== "object" || buyOrder.id !== buyOrderId ||
+        buyOrder.symbol !== symbol || buyOrder.side !== "BUY" ||
+        !isNonEmptyString(buyOrder.clientOrderId) ||
+        !["LIMIT", "LIMIT_MAKER"].includes(buyOrder.type)) {
+      throw new Error("buyOrder must contain the complete canonical BUY order identity")
     }
     if (!buyCommissionTotals || typeof buyCommissionTotals !== "object" ||
         Array.isArray(buyCommissionTotals)) {
@@ -294,6 +316,7 @@ export function createGridCycle({
       baseAsset,
       quoteAsset,
       buyOrderId,
+      buyOrder,
       buyFillIds,
       commissionTotals: buyCommissionTotals,
       status: "OPEN",
@@ -320,13 +343,20 @@ export function createGridCycle({
 export function appendGridCycleSellOrder({
   cycle,
   orderId,
+  clientOrderId,
+  type,
+  price,
   quantity,
   reservedQuantity,
 } = {}) {
   try {
     validateCycle(cycle)
     if (cycle.status !== "OPEN") throw new Error("completed cycles cannot receive SELL orders")
-    if (!isNonEmptyString(orderId)) throw new Error("orderId must be a non-empty string")
+    if (!isNonEmptyString(orderId) || !isNonEmptyString(clientOrderId) ||
+        !["LIMIT", "LIMIT_MAKER"].includes(type)) {
+      throw new Error("SELL order requires broker ID, clientOrderId, and supported type")
+    }
+    validateDecimal({ value: price, name: "SELL order price", allowZero: false })
     if (cycle.sellOrders.some((order) => order.id === orderId)) {
       throw new Error(`SELL order ${orderId} is already recorded for this cycle`)
     }
@@ -344,6 +374,11 @@ export function appendGridCycleSellOrder({
 
     const order = {
       id: orderId,
+      clientOrderId,
+      symbol: cycle.symbol,
+      side: "SELL",
+      type,
+      price,
       quantity,
       filledQuantity: "0",
       reservedQuantity,
