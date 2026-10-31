@@ -50,6 +50,7 @@ export function replayGridFillLedger({ state, ledgerEntries } = {}) {
   for (const fill of ledgerEntries) {
     if (!fill || typeof fill !== "object" || Array.isArray(fill) ||
         typeof fill.id !== "string" || !fill.id.trim() ||
+        !["BUY", "SELL"].includes(fill.side) ||
         ledgerById.has(fill.id)) {
       return failure("Grid fill ledger contains invalid or duplicate fill identities")
     }
