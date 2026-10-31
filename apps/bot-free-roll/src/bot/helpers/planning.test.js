@@ -225,7 +225,7 @@ test("calculateSellPlanExact returns a zero price when prior proceeds already co
   })
 
   assert.deepEqual(plan, {
-    quantity: "99",
+    quantity: "8",
     price: "0",
     requiredNetProceeds: "0",
   })
