@@ -55,7 +55,9 @@ export class BinanceSdkBroker extends CoreBroker {
       this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
       this.connected = false
-      await Promise.allSettled([this.tradingConnection.disconnect()])
+      await Promise.allSettled([
+        Promise.resolve().then(() => this.tradingConnection.disconnect()),
+      ])
       handleErr({ where: "BinanceSdkBroker.connect()", error })
       throw error
     }
@@ -64,8 +66,8 @@ export class BinanceSdkBroker extends CoreBroker {
   async disconnect() {
     this.connected = false
     const results = await Promise.allSettled([
-      this.tradingConnection?.disconnect(),
-      this.marketConnection?.disconnect(),
+      Promise.resolve().then(() => this.tradingConnection?.disconnect()),
+      Promise.resolve().then(() => this.marketConnection?.disconnect()),
     ])
     this.logger.info?.("Binance native WebSocket clients disconnected")
 
