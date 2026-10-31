@@ -67,12 +67,12 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Validate the latest PR #265 head with all required CI workflows; fix any failures with meaningful code/test changes and verify the exact final SHA.
-2. Keep the existing exported `BinanceStreamClient` and its method surface untouched until Phase 5; use the compatibility matrix above when adding native wrappers there.
-3. Keep `adaptPublicStreamMessage` public-only: adapt `aggTrade`, pass other public market-data events through, and reject authenticated user-data event types.
-4. Do not wire this client into `BinanceSdkBroker` in Phase 4; broker wiring belongs to Phase 5.
-5. Recheck `main` before merge and immediately after any broker/API/consumer-contract change. Sync only when that trigger is met.
-6. Wait for explicit merge approval. Do not merge automatically.
+1. Wait for explicit merge approval for PR #265; do not merge automatically.
+2. After merge, record the merge SHA and mark Phase 4 complete.
+3. Recheck `main` immediately before Phase 5. Merge/sync only if broker/API/consumer-contract changes have landed; preserve bot-only app changes.
+4. Begin Phase 5 by adding native method wrappers using the compatibility matrix above, integrating `adaptPublicStreamMessage` at the callback boundary, and rebuilding `BinanceSdkBroker` without touching `apps/`.
+5. Keep authenticated user-data subscription/session work in Phase 6; do not reintroduce the legacy REST listen-key path.
+
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -286,7 +286,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 4 — Public WebSocket Streams client
 
-**Status: Native Streams core, public adapter boundary, and legacy method-to-stream compatibility matrix implemented. PR #265 is open; exact-head CI is the remaining Phase 4 gate.**
+**Status: Phase 4 implementation and deterministic tests are complete. PR #265 is open and all four workflows pass on its exact head; awaiting explicit merge approval.**
 
 - [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
 - [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
@@ -301,7 +301,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Handle `serverShutdown` and rotate before the 24-hour connection lifetime.
 - [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
 - [x] Audit/reuse the existing public aggregate-trade adapter through `adaptPublicStreamMessage`; other public market-data events pass through unchanged, while authenticated user-data events are rejected at this boundary.
-- **Core-client CI evidence:** PR #265 exact head `a9c7070042bf01b2ab9bf590526313c146d04eb7` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. Public adapter files and the latest roadmap edits were added after that head; fresh CI on the current PR head is mandatory.
+- **Exact-head CI evidence:** PR #265 head `39095bf7bac4724ec7380cbc112ee30b2902a40b` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
 **Legacy method-to-stream compatibility matrix** (the old exported methods remain untouched until Phase 5):
 
 | Legacy method | Required parameters | Native stream mapping |
