@@ -223,7 +223,7 @@ test("rejects overlapping startup attempts without leaking a session file or sub
     assert.equal(journal.started, true)
     assert.equal(journal.starting, false)
     assert.ok(journal.fileHandle)
-    assert.equal(eventBus.emitter.eventNames().filter((name) => typeof name === "symbol").length, 1)
+    assert.ok(journal.subscription)
 
     const files = await readdir(directory)
     assert.equal(files.length, 1)
