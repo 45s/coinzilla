@@ -42,7 +42,7 @@ function createExecution(overrides = {}) {
     broker: {
       createOrder: async (order) => {
         calls.created.push(order)
-        return { ok: true, data: { orderId: `order-${calls.created.length}` } }
+        return { ok: true, data: { orderId: `order-${calls.created.length}`, clientOrderId: `client-order-${calls.created.length}` } }
       },
       cancelOrder: async (order) => {
         calls.canceled.push(order)
@@ -90,7 +90,9 @@ test("places a BUY with tick/step-rounded values and records the accepted order"
   })
   assert.deepEqual(state.buyOrder, {
     id: "order-1",
+    clientOrderId: "client-order-1",
     side: "BUY",
+    type: "LIMIT",
     quantity: "10",
     price: "0.12",
   })
