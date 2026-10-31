@@ -55,7 +55,7 @@ export class BinanceSdkBroker extends CoreBroker {
       this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
       this.connected = false
-      await this.tradingConnection.disconnect()
+      await Promise.allSettled([this.tradingConnection.disconnect()])
       handleErr({ where: "BinanceSdkBroker.connect()", error })
       throw error
     }
