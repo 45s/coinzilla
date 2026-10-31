@@ -227,11 +227,14 @@ export class BinanceUserDataSession {
       throw originalError
     }
 
-    const subscriptions = Array.isArray(response.data) ? response.data : []
-    const ids = subscriptions
-      .map((item) => item?.subscriptionId)
-      .filter((id) => Number.isSafeInteger(id) && id >= 0)
+    if (!Array.isArray(response.data)) throw originalError
 
+    const ids = response.data.map((item) => item?.subscriptionId)
+    if (ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+      throw new Error("Cannot safely identify the user-data subscription: malformed subscription state", {
+        cause: originalError,
+      })
+    }
     if (ids.length > 1) {
       throw new Error("Cannot safely identify the user-data subscription: multiple active subscriptions exist", {
         cause: originalError,
