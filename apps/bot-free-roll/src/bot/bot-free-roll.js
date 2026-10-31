@@ -324,6 +324,7 @@ export class FreeRollBot {
     return {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
+      recovering: this.#isRecovering,
       configuredFeeRates: Object.fromEntries(
         [...this.#states].map(([symbol, state]) => [symbol, state.configuredFeeRate]),
       ),
@@ -474,6 +475,14 @@ export class FreeRollBot {
           await this.broker.getMyTrades({ symbol, orderId: order.id, limit: 1000 }),
           `getMyTrades(${symbol}, ${order.id}) recovery history`,
         )
+        for (const fill of fills) {
+          const validation = validateOrderFill({ fill, symbol, order })
+          if (!validation.ok) throw new Error(validation.reason)
+          if (!this.#applyExecutionFill({ symbol, fill })) {
+            throw new Error(`Could not account recovered fill ${fill?.id ?? "unknown"}`)
+          }
+        }
+
         const reconciliation = reconcileTrackedOrder({
           symbol,
           order,
@@ -481,12 +490,6 @@ export class FreeRollBot {
           fills,
         })
         if (!reconciliation.ok) throw new Error(reconciliation.reason)
-
-        for (const fill of fills) {
-          if (!this.#applyExecutionFill({ symbol, fill })) {
-            throw new Error(`Could not account recovered fill ${fill?.id ?? "unknown"}`)
-          }
-        }
 
         if (reconciliation.status === "FILLED") {
           if (order.side === "BUY") {
