@@ -76,7 +76,7 @@ The migration is complete only when all of the following are true:
 7. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
 8. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
 9. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
-10. Consumer adoption is a separate bot-domain task tracked by issue #304. Until that consumer acknowledges reconciliation, its trading path intentionally remains fail-closed after user-data interruption.
+10. Bot consumer adoption for issue #304 is implemented by PR #314, with follow-up lifecycle hardening in PR #315. The broker task remains responsible only for the broker contract; do not modify bot application code here. Opt-in TESTNET verification with read-only-capable credentials remains outstanding.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -385,8 +385,8 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
 - [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
 - [ ] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. Default CI remains offline and skips these tests without credentials.
-- [ ] Complete the bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304): subscribe with `onStatus`, reconcile its tracked state, and call `acknowledgeRecovery()` only after reconciliation succeeds. This is bot-domain work; do not modify `apps/bot-free-roll` here.
-- [ ] Re-audit the read-only bot consumer contract; confirm no bot application files were changed by the broker migration.
+- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304) via [PR #314](https://github.com/45s/coinzilla/pull/314); [PR #315](https://github.com/45s/coinzilla/pull/315) adds repeated-interruption and shutdown hardening. This is bot-domain work; no bot files are changed by the Brokers domain.
+- [x] Re-audit the read-only bot consumer contract; broker changes do not modify bot application files.
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
