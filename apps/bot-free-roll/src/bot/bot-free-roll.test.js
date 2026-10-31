@@ -1044,3 +1044,325 @@ test("fails startup when exact market metadata is unavailable", async () => {
   await assert.rejects(bot.run(), /exchange filters unavailable/)
   assert.equal(bot.getSummary().running, false)
 })
+
+test("startup failure disconnects every subscription already opened", async () => {
+  const disconnected = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async () => ({
+        ok: true,
+        data: { disconnect: async () => { disconnected.push("user-data") } },
+      }),
+      subscribeForPrices: async ({ symbol }) => {
+        if (symbol === "SOLUSDT") throw new Error("SOL subscription failed")
+        return {
+          ok: true,
+          data: { disconnect: async () => { disconnected.push(symbol) } },
+        }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: {
+            DOGEUSDT: createPair(),
+            SOLUSDT: createPair(),
+          },
+        },
+      },
+    },
+  })
+
+  await assert.rejects(bot.run(), /SOL subscription failed/)
+  assert.equal(bot.getSummary().running, false)
+  assert.deepEqual(disconnected.sort(), ["DOGEUSDT", "user-data"])
+  await bot.stop()
+})
+
+test("partial fill discovered during trailing BUY cancellation pauses without replacement", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  let historyRequested = false
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+      cancelOrder: async ({ orderId }) => {
+        const order = createdOrders.find((item) => item.orderId === orderId)
+        return {
+          ok: true,
+          data: {
+            orderId,
+            originalQuantity: String(order.quantity),
+            executedQuantity: "10",
+            quantity: subtractDecimal({ left: String(order.quantity), right: "10" }),
+            status: "CANCELED",
+          },
+        }
+      },
+      getMyTrades: async ({ orderId }) => {
+        historyRequested = true
+        const order = createdOrders.find((item) => item.orderId === orderId)
+        return {
+          ok: true,
+          data: [{
+            id: "trailing-partial-fill",
+            orderId,
+            symbol: "DOGEUSDT",
+            side: "BUY",
+            price: String(order.price),
+            quantity: "10",
+            quoteQuantity: multiplyDecimal({ left: "10", right: String(order.price) }),
+            commissionAmount: "0",
+            commissionAsset: null,
+            isMaker: true,
+            time: 1,
+          }],
+        }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "initial BUY was not created")
+
+    priceHandlers.get("DOGEUSDT")({ price: 100.2 })
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "partial cancellation did not pause pair")
+
+    assert.equal(historyRequested, true)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "10")
+    assert.equal(bot.getStats().DOGEUSDT.buyFills, 0)
+    assert.equal(createdOrders.length, 1, "must not replace an order that may have partially filled")
+    assert.ok(events.some((event) => event.name === "bot.pair_paused"))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("fill identity mismatch pauses the pair before accounting or submitting a SELL", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `order-${createdOrders.length}` } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    const order = { ...createdOrders[0], orderId: "order-1" }
+    const event = createExecutionEvent({ order, tradeId: 700 })
+    event.fill.symbol = "SOLUSDT"
+    userDataHandler(event)
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "identity mismatch did not pause pair")
+
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 0)
+    assert.equal(createdOrders.length, 1)
+    assert.ok(events.some((entry) => entry.name === "bot.pair_paused" &&
+      /identity does not match/.test(entry.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("SELL cancellation history mismatch pauses instead of placing a replacement SELL", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  let cancelRequested = false
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+      cancelOrder: async ({ orderId }) => {
+        cancelRequested = true
+        const order = createdOrders.find((item) => item.orderId === orderId)
+        return {
+          ok: true,
+          data: {
+            orderId,
+            originalQuantity: String(order.quantity),
+            executedQuantity: "1",
+            quantity: subtractDecimal({ left: String(order.quantity), right: "1" }),
+            status: "CANCELED",
+          },
+        }
+      },
+      getMyTrades: async () => ({ ok: true, data: [] }),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "first BUY was not created")
+
+    const firstBuy = createdOrders[0]
+    userDataHandler(createExecutionEvent({ order: firstBuy, tradeId: 801 }))
+    await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+    const secondBuy = createdOrders.find((order) => order.side === "BUY" && order.orderId !== firstBuy.orderId)
+    userDataHandler(createExecutionEvent({ order: secondBuy, tradeId: 802 }))
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "SELL history mismatch did not pause pair")
+
+    assert.equal(cancelRequested, true)
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+    assert.ok(events.some((event) => event.name === "order.cancel_failed"))
+    assert.ok(events.some((event) => event.name === "bot.pair_paused" &&
+      /history mismatch/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("account balance updates retain only valid non-negative decimal balances", async () => {
+  const events = []
+  let userDataHandler
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async () => ({ ok: true, data: { disconnect() {} } }),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    userDataHandler({
+      eventType: "outboundAccountPosition",
+      balances: [
+        { asset: "DOGE", free: "12.5", locked: "0.5" },
+        { asset: "USDT", free: "-1", locked: "0" },
+        { asset: "BAD", free: "not-a-number", locked: "0" },
+        { asset: "", free: "1", locked: "0" },
+      ],
+    })
+
+    assert.deepEqual(bot.getSummary().confirmedBalances, {
+      DOGE: { free: "12.5", locked: "0.5" },
+    })
+    const summaryEvent = events.find((event) =>
+      event.name === "trading.summary" && event.data.reason === "exchange_balance_update")
+    assert.ok(summaryEvent)
+    assert.deepEqual(summaryEvent.data.summary.confirmedBalances, {
+      DOGE: { free: "12.5", locked: "0.5" },
+    })
+  } finally {
+    await bot.stop()
+  }
+})
