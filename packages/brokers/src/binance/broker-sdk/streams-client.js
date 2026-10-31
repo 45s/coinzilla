@@ -40,6 +40,7 @@ export class BinanceStreamsClient {
   #state = "idle"
   #connectPromise = null
   #manualDisconnect = false
+  #ready = false
   #listeners = new Map()
   #activeStreams = new Set()
   #pending = new Map()
@@ -98,7 +99,10 @@ export class BinanceStreamsClient {
   }
 
   connect() {
-    return this.#connect(false)
+    if (this.#listeners.size === 0) {
+      return Promise.reject(new Error("Subscribe to at least one stream before connecting"))
+    }
+    return this.#connect(false, [...this.#listeners.keys()])
   }
 
   async subscribe(streamNames, listener) {
@@ -107,10 +111,7 @@ export class BinanceStreamsClient {
     if (streams.length === 0) throw new TypeError("At least one stream is required")
 
     return this.#enqueueOperation(async () => {
-      await this.#connect(false)
-      const newStreams = []
       const addedListeners = []
-
       for (const stream of new Set(streams)) {
         let listeners = this.#listeners.get(stream)
         if (!listeners) {
@@ -121,40 +122,27 @@ export class BinanceStreamsClient {
           listeners.add(listener)
           addedListeners.push(stream)
         }
-        if (!this.#activeStreams.has(stream) && !newStreams.includes(stream)) newStreams.push(stream)
       }
 
-      if (this.#activeStreams.size + newStreams.length > MAX_STREAMS_PER_CONNECTION) {
-        for (const stream of addedListeners) {
-          const listeners = this.#listeners.get(stream)
-          listeners?.delete(listener)
-          if (listeners?.size === 0) this.#listeners.delete(stream)
-        }
+      const desiredStreams = [...this.#listeners.keys()]
+      if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
+        this.#removeListenerFromStreams(addedListeners, listener)
         throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
       }
 
-      if (newStreams.length > 0) {
-        const activated = []
-        try {
-          for (const batch of this.#chunk(newStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
-            await this.#request("SUBSCRIBE", batch)
-            for (const stream of batch) {
-              this.#activeStreams.add(stream)
-              activated.push(stream)
-            }
-          }
-        } catch (error) {
-          for (const stream of addedListeners) {
-            const listeners = this.#listeners.get(stream)
-            listeners?.delete(listener)
-            if (listeners?.size === 0) this.#listeners.delete(stream)
-          }
-          if (activated.length > 0) {
-            this.#request("UNSUBSCRIBE", activated).catch((cleanupError) => this.#reportError(cleanupError))
-            for (const stream of activated) this.#activeStreams.delete(stream)
-          }
-          throw error
+      try {
+        if (this.#state !== "open") {
+          await this.#connect(false, desiredStreams)
         }
+
+        const missingStreams = streams.filter((stream) => !this.#activeStreams.has(stream))
+        for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
+          await this.#request("SUBSCRIBE", batch)
+          for (const stream of batch) this.#activeStreams.add(stream)
+        }
+      } catch (error) {
+        this.#removeListenerFromStreams(addedListeners, listener)
+        throw error
       }
 
       return streams
@@ -218,17 +206,22 @@ export class BinanceStreamsClient {
     return result
   }
 
-  async #connect(isReconnect) {
+  async #connect(isReconnect, initialStreams = []) {
     if (this.#state === "open") return this
     if (this.#state === "connecting") return this.#connectPromise
     if (this.#manualDisconnect) throw new Error("Binance Streams client has been disconnected")
 
+    const connectionStreams = isReconnect ? [...this.#listeners.keys()] : [...initialStreams]
+    if (connectionStreams.length === 0) throw new Error("At least one desired stream is required to connect")
+
     this.#clearReconnectTimer()
     this.#state = "connecting"
+    this.#ready = false
 
     let transport
     try {
-      transport = this.transportFactory({ url: this.url })
+      const url = this.#buildCombinedUrl(connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE))
+      transport = this.transportFactory({ url })
       for (const method of ["connect", "send", "close", "onMessage", "onError", "onClose"]) {
         if (typeof transport?.[method] !== "function") {
           throw new TypeError(`Streams transport must implement ${method}()`)
@@ -250,18 +243,28 @@ export class BinanceStreamsClient {
         await transport.close()
         throw new Error("Binance Streams connection was superseded")
       }
+
       this.#state = "open"
       this.#scheduleRotation()
-      if (isReconnect && this.#listeners.size > 0) {
-        const desired = [...this.#listeners.keys()]
-        for (const batch of this.#chunk(desired, MAX_STREAMS_PER_SUBSCRIBE)) {
-          await this.#request("SUBSCRIBE", batch)
-          for (const stream of batch) this.#activeStreams.add(stream)
-        }
+
+      const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
+      const listedStreams = await this.#request("LIST_SUBSCRIPTIONS")
+      if (!Array.isArray(listedStreams) || !initialBatch.every((stream) => listedStreams.includes(stream))) {
+        throw new Error("Binance combined-stream connection did not confirm its initial subscriptions")
       }
+      for (const stream of initialBatch) this.#activeStreams.add(stream)
+
+      const remainingStreams = connectionStreams.slice(MAX_STREAMS_PER_SUBSCRIBE)
+      for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
+        await this.#request("SUBSCRIBE", batch)
+        for (const stream of batch) this.#activeStreams.add(stream)
+      }
+
+      this.#ready = true
       this.#reconnectAttempts = 0
       return this
     }).catch(async (error) => {
+      this.#ready = false
       if (this.#transport === transport) {
         this.#transport = null
         this.#state = "closed"
@@ -280,6 +283,25 @@ export class BinanceStreamsClient {
     return this.#connectPromise
   }
 
+  #buildCombinedUrl(streams) {
+    const url = new URL(this.url)
+    if (url.pathname.endsWith("/ws")) {
+      url.pathname = `${url.pathname.slice(0, -3)}/stream`
+    } else if (!url.pathname.endsWith("/stream")) {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/stream`
+    }
+    url.searchParams.set("streams", streams.join("/"))
+    return url.toString()
+  }
+
+  #removeListenerFromStreams(streams, listener) {
+    for (const stream of streams) {
+      const listeners = this.#listeners.get(stream)
+      listeners?.delete(listener)
+      if (listeners?.size === 0) this.#listeners.delete(stream)
+    }
+  }
+
   #request(method, streams) {
     if (this.#state !== "open" || !this.#transport) {
       return Promise.reject(new Error(`Cannot ${method} streams while disconnected`))
@@ -296,10 +318,9 @@ export class BinanceStreamsClient {
       this.#ackTimeouts.add(timeout)
       this.#pending.set(id, { resolve, reject, timeout, method })
 
-      this.#controlQueue.push({
-        id,
-        payload: JSON.stringify({ method, params: streams, id }),
-      })
+      const request = { method, id }
+      if (streams !== undefined) request.params = streams
+      this.#controlQueue.push({ id, payload: JSON.stringify(request) })
       this.#pumpControlQueue()
     })
   }
@@ -356,7 +377,7 @@ export class BinanceStreamsClient {
       } else if (result !== null) {
         pending.reject(new Error(`Malformed Binance Streams ${pending.method} acknowledgement`))
       } else {
-        pending.resolve()
+        pending.resolve(result)
       }
       return
     }
@@ -389,6 +410,8 @@ export class BinanceStreamsClient {
   }
 
   #handleClose(event) {
+    const wasReady = this.#ready
+    this.#ready = false
     this.#state = "closed"
     this.#transport = null
     this.#activeStreams.clear()
@@ -396,7 +419,7 @@ export class BinanceStreamsClient {
     this.#clearPumpTimer()
     this.#controlQueue.length = 0
     this.#rejectPending(new Error(`Binance Streams connection closed (${event.code}): ${event.reason}`))
-    if (!this.#manualDisconnect && this.#listeners.size > 0) this.#scheduleReconnect()
+    if (!this.#manualDisconnect && wasReady && this.#listeners.size > 0) this.#scheduleReconnect()
   }
 
   #scheduleReconnect() {
