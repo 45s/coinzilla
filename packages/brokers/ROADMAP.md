@@ -67,9 +67,9 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Finish the compatibility matrix between legacy `stream-client.js` methods and `createStreamName`, including parameter defaults/validation; preserve the old exported class until Phase 5.
-2. Keep the new `adaptPublicStreamMessage` boundary limited to public events: adapt `aggTrade`, pass other public market events through unchanged, and reject authenticated user-data event types.
-3. Add/finish deterministic tests for the full method-to-stream mapping and adapter callback behavior.
+1. Validate the latest PR #265 head with all required CI workflows; fix any failures with meaningful code/test changes and verify the exact final SHA.
+2. Keep the existing exported `BinanceStreamClient` and its method surface untouched until Phase 5; use the compatibility matrix above when adding native wrappers there.
+3. Keep `adaptPublicStreamMessage` public-only: adapt `aggTrade`, pass other public market-data events through, and reject authenticated user-data event types.
 4. Do not wire this client into `BinanceSdkBroker` in Phase 4; broker wiring belongs to Phase 5.
 5. Recheck `main` before merge and immediately after any broker/API/consumer-contract change. Sync only when that trigger is met.
 6. Wait for explicit merge approval. Do not merge automatically.
@@ -286,7 +286,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 4 — Public WebSocket Streams client
 
-**Status: Native Streams core and public adapter boundary implemented; final method-compatibility matrix and exact-head CI remain. PR #265 is open from `migration/binance-phase-4-streams`.**
+**Status: Native Streams core, public adapter boundary, and legacy method-to-stream compatibility matrix implemented. PR #265 is open; exact-head CI is the remaining Phase 4 gate.**
 
 - [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
 - [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
