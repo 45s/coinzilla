@@ -1,26 +1,25 @@
-# Bug-Resistance Roadmap
+# Coinzilla Engineering Roadmap
 
-Goal: make Coinzilla safer to change and release, without adding product features.
+## Purpose
 
-Prioritize demonstrated engineering risks over checklist progress. Keep changes focused, inspect complete affected files against current `main`, and verify mergeability and checks before calling work complete.
+Make Coinzilla safer to change, test, and release without adding unnecessary product features. Prioritize demonstrated engineering risks over checklist progress.
+
+This file tracks **repository-wide engineering goals and rules**. Package-specific architecture, implementation phases, protocol details, and operational instructions belong in the relevant package roadmap.
 
 ## 1. Make CI trustworthy
 
 - [x] Provide repository workflows for package tests and workspace test coverage.
-- [x] Audit which tests need environment variables, network access, exchange APIs, or other external services.
-- [x] Separate deterministic unit tests from integration tests that contact exchanges or other services.
-
-  Audit result: the broker package has two `.integration.js` tests that require network access. The default `pnpm test` runs package `node --test` scripts and discovers `.test.js` files, so those integration tests are not part of the deterministic unit-test run. Run them explicitly with `pnpm --filter @coinzilla/brokers test:integration`; the Binance SDK integration suite skips unless non-placeholder credentials are configured. Integration tests are not currently run in CI.
+- [x] Identify tests that require credentials, network access, external APIs, or other services.
+- [x] Separate deterministic unit tests from opt-in integration tests.
 - [ ] Verify all relevant checks consistently pass on pull requests; distinguish checks that run from checks enforced by branch protection.
-- [ ] Give unit tests explicit test configuration and mocks. Keep live API tests opt-in and use GitHub Secrets only when genuinely required.
+- [ ] Give unit tests explicit configuration and mocks. Keep live external-service tests opt-in and use GitHub Secrets only when genuinely required.
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
-
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+- [x] Protect `main`: require pull requests and passing required status checks.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
+- [ ] Keep shared branches current with `main`; review incoming changes before synchronizing and preserve other teams' work.
 
 ## 3. Test critical behavior
 
@@ -31,193 +30,31 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 4. Improve code quality and dependency safety
 
-- [ ] Add consistent linting and formatting checks if the repository does not already enforce them. GitHub Actions workflow linting is enforced by the existing JavaScript Syntax workflow; JavaScript linting and formatting are still follow-up work.
-- [x] Add dependency vulnerability checks to CI.
-
-  Current check: `pnpm audit --prod --audit-level high` runs on pull requests, pushes to `main`, and the weekly schedule.
-- [x] Keep the existing mock Binance key/secret examples in `.env.example` to demonstrate expected format, with an explicit comment that the values are fake.
+- [ ] Add consistent linting and formatting checks where they provide value and are not already enforced.
+- [x] Run dependency vulnerability checks in CI.
+- [ ] Keep runtime dependencies minimal, justified, and reviewed.
+- [ ] Prefer small, deterministic, testable functions and explicit contracts between packages.
 
 ## 5. Release safely
 
 - [x] Document release and rollback steps.
 - [ ] Verify critical workflows in a staging/test environment before production use.
+- [ ] Require evidence from the exact commit being proposed for release; do not treat pending, canceled, or failed checks as green.
 
-## 6. Remove third-party runtime dependencies from the Binance broker
+## 6. Package-level roadmaps
 
-### Goal and non-goals
+Package roadmaps are the operational source of truth for work scoped to an individual package. When asked to implement or improve a package, an agent should be able to open that package's roadmap and begin from its current status, next action, constraints, tests, and acceptance criteria without relying on chat history.
 
-The target is a Binance broker implementation with **zero third-party runtime dependencies**. Use Node.js built-in capabilities for WebSocket transport and cryptography. Existing internal workspace packages such as `@coinzilla/entities` and `@coinzilla/utils` may remain where they provide shared project contracts; they are not third-party dependencies.
-
-For the supported Binance integration, use WebSockets for both:
-- **WebSocket API (request/response):** order placement, order cancellation, order status/history, account status, trade history, symbol exchange information, and authenticated user-data subscription.
-- **WebSocket Streams (push events):** public market data. User-data subscription and events are delivered on the authenticated WebSocket API connection; they are not a user-data stream on the separate market-data Streams connection.
-
-Do not build a new REST trading client. Move symbol-filter retrieval to the WebSocket API `exchangeInfo` method. The old custom REST broker and REST helpers are legacy code: mark them deprecated, stop expanding them, and remove them once compatibility and consumer checks prove they are unused.
-
-This is a transport/dependency modernization, not a bot feature project. Do not modify `apps/bot-free-roll` or other bot application code as part of this roadmap. Preserve the existing broker-facing behavior used by consumers while the implementation is replaced.
-
-### Current findings (baseline; re-check before implementation)
-
-- `packages/brokers/package.json` declares `@binance/spot` as a runtime dependency.
-- `BinanceSdkBroker` delegates WebSocket API and WebSocket Streams work to `@binance/spot`.
-- Its order/account methods already use the WebSocket API. `getSymbolFilters()` is currently the notable direct REST call and should move to WebSocket API `exchangeInfo`.
-- The SDK broker's `subscribeForUserData()` uses `userDataStream.subscribe.signature` on the WebSocket API connection; user-data events are received on that connection. This signature-subscription method does not require Ed25519 or a prior authenticated session and supports any Binance API key type. Preserve the current HMAC API-key configuration: the existing `apiKey` plus `apiSecret` are sufficient, with the secret used for HMAC-SHA-256 signing. Do not substitute the separate Ed25519-session `userDataStream.subscribe` method.
-- The old custom `BinanceStreamClient` is not a safe replacement yet: `WS.js` has a stubbed `createWebSocket()`, assumes an EventEmitter-style socket with low-level `ping()`/`pong()`, and its legacy `userData()` listen-key management uses the REST path.
-- Existing public exports and consumer method names are compatibility requirements until a deliberate migration proves otherwise.
-
-These are audit observations, not permission to assume undocumented Binance protocol behavior. Verify each method and event against current official Binance Spot WebSocket API and Streams documentation during implementation.
-
-### Architecture rules
-
-- One small, well-defined native WebSocket transport; inject a socket factory for deterministic tests.
-- Separate the WebSocket API connection (RPC plus authenticated user-data subscription/events) from public market-data Streams connections. Do not blur their message formats, authentication, reconnect rules, or lifecycle.
-- Keep protocol handling, signing, message validation/adaptation, and broker-level result mapping in separate testable modules.
-- Use Node.js built-in `WebSocket` and `node:crypto` only if the repository's supported Node runtime provides the required behavior. Prove this in CI and integration tests before removing the SDK. Do not add another WebSocket package as a shortcut.
-- No hidden network calls in unit tests. Use fake sockets and deterministic clocks/timers where needed; keep live exchange tests opt-in.
-- Never automatically replay an order-placing or other state-changing RPC after an uncertain disconnect. Surface an explicit uncertain outcome and reconcile by client order ID/order query before retrying.
-- Reconnect market streams safely and restore desired subscriptions without duplicating handlers. Make connection state and shutdown behavior explicit.
-- Treat credentials and signed payloads as secrets: never log API secrets, private keys, signatures, or full authenticated payloads.
-- Do not claim zero third-party runtime dependencies until the production dependency tree and lockfile confirm it.
-
-### Phased delivery plan
-
-Each phase is a separate, reviewable PR unless a tightly coupled test or documentation change belongs with its implementation. Keep each PR limited to the broker package, its tests, root dependency metadata/lockfile when required, and relevant documentation. Never stack work on a stale base.
-
-#### Phase 0 — Contract and dependency inventory
-
-- [x] Inventory every export from `packages/brokers`, every method used by repository consumers, and all imports of `@binance/spot`.
-- [x] Map each required broker method to its Binance WebSocket API or Streams operation, including parameters, response shape, authentication, and error behavior.
-- [x] Resolve the supported Node.js floor before selecting the native WebSocket transport. **Decision: `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.4.0.** This is an intentional compatibility-floor increase from the `node >=20` range declared by `@coinzilla/event-bus` and `@coinzilla/journal`; reflect it in package `engines` metadata and consumer/runtime documentation as implementation proceeds. Node's built-in WebSocket is stable and flag-free from Node 22.4.0.
-- [x] Verify current official Binance Spot WebSocket API and Streams documentation for the operations and lifecycle constraints mapped in the Phase 0 audit. The selected `userDataStream.subscribe.signature` method supports all API key types and does not require Ed25519 session authentication. For the current HMAC key configuration, use `apiKey` + `apiSecret` and HMAC-SHA-256; exact payload canonicalization still requires test vectors. Native ping/pong behavior remains an implementation gate; do not guess.
-- [x] Record the compatibility contract and identify legacy REST exports that can be deprecated.
-- **Exit criteria:** met by [the checked-in Phase 0 contract and audit](docs/brokers-websocket-contract.md). Exports, repository consumer calls, dependency inventory, protocol mappings, the Node.js >=22.4.0 runtime decision, user-data authentication compatibility, and legacy implementation gaps are recorded. No runtime code changes were made.
-
-#### Phase 1 — Characterization tests and test seams
-
-- [x] Add broker contract tests for the public methods that must remain compatible. Existing method-level tests plus `broker.contract.test.js` cover the public SDK broker methods and their result shapes.
-- [x] Add fake-socket infrastructure that can simulate open, message, error, close, timeout, and late/duplicate responses. The reusable WHATWG-style fake socket and fake clock are covered by deterministic tests.
-- [x] Capture existing normalization and `toResult` behavior in tests before changing implementation. Existing adapter tests and broker contract assertions pin normalized orders, fills, balances, and success/error result shapes.
-- [ ] Add regression cases for concurrent requests, malformed messages, unknown request IDs, and disconnects during requests.
-  - **Sequencing clarification:** these are WebSocket API RPC-client behaviors, but the current SDK owns the underlying socket and request correlation. Meaningful tests for those cases must execute against the native RPC client introduced in Phase 3; Phase 1 establishes the reusable fake socket and clock without inventing an unimplemented RPC layer.
-- **Exit criteria:** met for the existing public broker contract and reusable deterministic test seams. RPC correlation and transport-failure regression cases remain explicit Phase 3 gates; no live credentials or network access are needed for the Phase 1 suite.
-
-#### Phase 2 — Native WebSocket transport
-
-- [ ] Implement a small Node-native WebSocket transport with injectable construction.
-- [ ] Normalize lifecycle events, message data, close codes/reasons, and send failures behind one internal interface.
-- [ ] Implement explicit connect/close state, connection timeout, idempotent shutdown, and listener cleanup.
-- [ ] Verify server ping/pong behavior using the native implementation; do not call unsupported low-level socket methods.
-- [ ] Test duplicate close/error events, connect failure, close during connect, send while disconnected, and cleanup.
-- **Exit criteria:** transport unit tests pass on every supported Node version; no third-party WebSocket package is introduced.
-
-#### Phase 3 — WebSocket API RPC client
-
-- [ ] Implement request IDs and a pending-request map with deterministic response correlation.
-- [ ] Implement bounded request timeouts, cleanup on every success/failure path, and rejection of pending work on disconnect.
-- [ ] Implement the authentication/signature scheme required by the selected Binance WebSocket API methods using `node:crypto`. Preserve the existing HMAC API-key flow (`apiKey` + `apiSecret`, HMAC-SHA-256); do not require Ed25519 or `session.logon` for `userDataStream.subscribe.signature`.
-- [ ] Validate response envelopes and normalize Binance API errors without losing error codes or useful context; reject malformed envelopes and safely ignore or surface unknown request IDs without leaking pending entries.
-- [ ] Handle concurrent requests and out-of-order responses with deterministic response correlation.
-- [ ] Cover late and duplicate responses, unknown request IDs, disconnects during multiple pending requests, timeout cleanup, and malformed response payloads with the Phase 1 fake socket and clock.
-- [ ] Make reconnect behavior explicit; never silently replay state-changing requests.
-- **Exit criteria:** fake-socket tests cover successful, failed, timed-out, malformed, concurrent, out-of-order, unknown-ID, duplicate/late, and interrupted RPCs; signing has known test vectors.
-
-#### Phase 4 — WebSocket Streams client
-
-- [ ] Implement public market-data Streams connection and subscription management using the native transport. User-data subscription/events belong to the WebSocket API connection (Phase 6).
-- [ ] Support the streams required by current consumers first, then preserve other already-exported stream methods where they are part of the compatibility contract.
-- [ ] Validate stream names and parameters before sending or opening a connection.
-- [ ] Handle raw and combined-stream envelopes consistently and adapt events through pure functions.
-- [ ] Track desired subscriptions and restore them after reconnect without duplicate listeners.
-- [ ] Respect Binance connection, subscription, and message limits; expose actionable errors for rejected subscriptions.
-- **Exit criteria:** deterministic tests cover subscribe/unsubscribe, combined streams, message adaptation, reconnect/resubscribe, malformed events, and shutdown.
-
-#### Phase 5 — Rebuild the broker on the native clients
-
-- [ ] Replace `BinanceSdkBroker` internals with the new WebSocket API and Streams clients while preserving its public methods and result shapes.
-- [ ] Implement order place/cancel/query, open orders, account status, order history, and trade history through WebSocket API methods.
-- [ ] Move `getSymbolFilters()` from REST to WebSocket API `exchangeInfo`; preserve validated `tickSize`/`stepSize` output and error behavior.
-- [ ] Preserve `subscribeForPrices()` and `subscribeForUserData()` consumer contracts, including normalized event payloads.
-- [ ] Make `connect()` failure-safe if either connection fails; make `disconnect()` idempotent and ensure all resources are released.
-- [ ] Keep order mutation uncertainty visible to callers; do not retry blindly after connection loss.
-- **Exit criteria:** broker contract tests pass against the native clients; no REST request is required by the supported broker path.
-
-#### Phase 6 — User-data session lifecycle and recovery
-
-- [ ] Implement the current documented WebSocket API `userDataStream.subscribe.signature` compatibility flow on the WebSocket API connection using the existing HMAC `apiKey` + `apiSecret` credentials; no Ed25519 key pair or `session.logon` is required. Do not carry forward the legacy REST listen-key timer or switch to the Ed25519-session `userDataStream.subscribe` method.
-- [ ] Handle session expiration, subscription failure, disconnect, reconnect, and resubscription explicitly.
-- [ ] Define event ordering/deduplication expectations and ensure reconnect does not register duplicate callbacks.
-- [ ] Test execution reports, account updates, duplicate events, gaps, and recovery behavior.
-- [ ] Document what cannot be recovered from the stream alone and which WebSocket API queries are used for reconciliation.
-- **Exit criteria:** user-data subscription and recovery behavior is covered by deterministic tests and an opt-in testnet integration test.
-
-#### Phase 7 — Remove the SDK and retire legacy REST implementation
-
-- [ ] Confirm all repository consumers use the supported WebSocket broker contract.
-- [ ] Mark the old custom REST broker and REST-specific exports as deprecated before removal, with a clear migration note.
-- [ ] Remove `@binance/spot` from `packages/brokers/package.json` and regenerate `pnpm-lock.yaml`.
-- [ ] Remove dead REST transport/signing/adaptation code only after confirming no supported consumer imports it.
-- [ ] Remove or replace obsolete tests and examples; retain useful compatibility tests.
-- [ ] Search the full repository for remaining `@binance/spot` imports and obsolete REST broker references.
-- **Exit criteria:** no `@binance/spot` reference remains in runtime manifests or source; production dependency audit and lockfile confirm no third-party runtime dependency is required by `@coinzilla/brokers`; all supported consumer imports remain valid.
-
-#### Phase 8 — Operational hardening and completion
-
-- [ ] Add opt-in Binance testnet integration coverage for connection, public stream, signed RPC, order lifecycle where safe, and user-data events.
-- [ ] Document supported Node versions, required API permissions, endpoints, reconnect semantics, rate limits, failure modes, and safe shutdown.
-- [ ] Verify package tests, full workspace tests, syntax checks, production dependency audit, and the repository's required branch-protection checks.
-- [ ] Review logs for secret leakage and ensure timers, sockets, and listeners are cleaned up on shutdown.
-- **Exit criteria:** all required CI checks pass on the exact PR head; opt-in integration checks are documented and their results recorded; no bot application files were changed; roadmap completion is based on verified evidence.
-
-### PR sequencing and review policy
-
-1. Phase 0 is the first PR: inventory and protocol matrix only.
-2. Complete and review each phase before beginning the next phase's implementation.
-3. Keep PRs small enough to review, but replace complete affected files when that reduces merge-conflict risk.
-4. Do not merge PRs automatically. Wait for the user's review/merge instruction.
-5. If Binance documentation, Node runtime behavior, or a consumer contract contradicts this plan, stop and update the roadmap before coding around the discrepancy.
-6. Update checkboxes only after the phase's exit criteria are verified. A PR being opened or CI merely starting does not mean a phase is complete.
-
-
-## 7. Keep the migration branch synchronized with main
-
-The migration branch is an integration branch, not a long-lived fork. `main` remains the source of truth because other teams continue developing bot and broker functionality there. Prevent drift throughout the migration, not only during the final release.
-
-### Mandatory monitoring and immediate sync triggers
-
-- Before starting **every** migration task or phase, inspect the latest `main` and compare it with `migration/binance-native-ws` since the last recorded sync.
-- Recheck `main` before opening each migration PR and before declaring a phase complete. For long-running work, recheck before finalizing the work; do not rely on a snapshot taken at task start.
-- **Immediately after significant broker/API changes land on `main`, stop further migration implementation and synchronize `main` into `migration/binance-native-ws` before continuing.** Do not wait for the next phase or the final release.
-- Treat a change as significant if it changes broker package exports or implementation, Binance/API or WebSocket behavior, broker method signatures or result/event shapes, shared entities/configuration used by brokers, Node.js or package-manager/runtime requirements, dependency manifests/lockfiles, or tests/fixtures that define those contracts. Also treat new broker consumers or changes to existing consumers' broker usage as significant.
-- When uncertain whether a main-branch change affects the migration, inspect it and treat it as significant until proven otherwise.
-- Record the last synchronized `main` commit SHA and a concise summary of relevant changes in the migration PR/roadmap notes. Never claim continuous background monitoring: the agent must perform these checks at each work session and at the checkpoints above.
-
-### Safe synchronization procedure
-
-1. Fetch the latest `main` and integration branch refs. Compare the commits since the last sync and review the commit messages and changed-file list; inspect the full relevant diffs for broker/API, consumer, runtime, dependency, and test changes.
-2. Update the migration branch by merging the latest `main` into `migration/binance-native-ws`. Preserve a merge commit; do not rebase or force-push the shared integration branch.
-3. Resolve conflicts by understanding both sides' intent and reconciling the complete affected files. Never blindly choose ours/theirs, discard bot-team changes, or revert unrelated work to make the merge easy.
-4. Do not independently edit bot application files (including `apps/bot-free-roll`) as part of this migration. Changes already made by other teams and merged through `main` must be preserved. If those changes reveal a broker contract requirement, adapt the broker migration and tests on the migration branch without taking ownership of bot feature work.
-5. Re-run the relevant package tests, workspace tests, syntax checks, and dependency audit. Verify all required checks on the exact synchronized integration-branch commit before continuing.
-6. Re-audit the broker consumer inventory, method/protocol matrix, and migration assumptions. Update this roadmap and the phase scope if `main` introduced new consumers, changed contracts, or invalidated earlier findings.
-7. If conflicts or behavior changes cannot be resolved confidently, stop and report the exact files/contracts in question rather than guessing.
-
-Use a dedicated synchronization PR from `main` into `migration/binance-native-ws` when direct branch synchronization is not available or when review of the incoming changes is useful. The synchronization PR must target the integration branch, preserve the merge history, and pass the integration branch's required checks. Never merge migration work into `main` during the phased implementation.
-
-### Required checkpoints
-
-- Last inspected `main` SHA for Phase 1: `7ffc35723a2081289b094653b7f6ed56916915a2`. PR #254 was reviewed after merge; it changed only free-roll bot logic/tests, the bot coverage script, and the coverage workflow. It did not change broker exports, broker method calls, broker configuration, or consumer setup, so no integration-branch sync was required for Phase 1.
-- Before Phase 0 inventory and before each subsequent phase begins.
-- Immediately after any significant broker/API or consumer-contract change is detected on `main`.
-- Before each phase PR is opened and before its completion is reported.
-- Before the final release PR from `migration/binance-native-ws` to `main`.
-
-The final release PR is not a substitute for ongoing synchronization. Its purpose is to deliver an already-current, fully tested integration branch to `main`.
+- **[Broker package roadmap](packages/brokers/ROADMAP.md)** — Binance broker architecture, compatibility contract, native WebSocket migration phases, test strategy, agent procedure, and main-branch synchronization rules.
+- Add links here when other packages gain their own maintained roadmaps.
 
 ## Working rules
 
 - Work one meaningful change at a time.
-- Before editing, inspect the latest `main`, the complete affected file(s), related tests, and branches/PRs touching the same paths.
-- When changes overlap, reconcile the full file against current `main`; do not stack stale, partial patches.
-- Run the narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
-- Check mergeability and all relevant CI results after pushing. Never claim checks are green while they are pending or failed.
-- Update this roadmap when a task is actually verified complete; distinguish repository configuration from checks that are merely present.
+- Before editing, inspect the latest `main`, complete affected files, related tests, package scripts/manifests, and relevant open branches/PRs.
+- When changes overlap, reconcile the complete file against current `main`; do not stack stale partial patches.
+- Keep PRs focused and reviewable. Replace complete affected files when that materially reduces merge-conflict risk.
+- Run narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
+- Verify mergeability and all relevant CI results on the exact PR head. Never claim checks are green while they are pending or failed.
+- Do not merge PRs automatically; wait for explicit user approval.
+- Update roadmaps only when work or decisions are supported by verified evidence.
