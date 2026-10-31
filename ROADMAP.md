@@ -61,7 +61,7 @@ This is a transport/dependency modernization, not a bot feature project. Do not 
 - `packages/brokers/package.json` declares `@binance/spot` as a runtime dependency.
 - `BinanceSdkBroker` delegates WebSocket API and WebSocket Streams work to `@binance/spot`.
 - Its order/account methods already use the WebSocket API. `getSymbolFilters()` is currently the notable direct REST call and should move to WebSocket API `exchangeInfo`.
-- The SDK broker's `subscribeForUserData()` uses `userDataStream.subscribe.signature` on the WebSocket API connection; user-data events are received on that connection. Binance's separate `userDataStream.subscribe` method requires an Ed25519-authenticated session and must not be substituted without a deliberate compatibility decision.
+- The SDK broker's `subscribeForUserData()` uses `userDataStream.subscribe.signature` on the WebSocket API connection; user-data events are received on that connection. This signature-subscription method does not require Ed25519 or a prior authenticated session and supports any Binance API key type. Preserve the current HMAC API-key configuration: the existing `apiKey` plus `apiSecret` are sufficient, with the secret used for HMAC-SHA-256 signing. Do not substitute the separate Ed25519-session `userDataStream.subscribe` method.
 - The old custom `BinanceStreamClient` is not a safe replacement yet: `WS.js` has a stubbed `createWebSocket()`, assumes an EventEmitter-style socket with low-level `ping()`/`pong()`, and its legacy `userData()` listen-key management uses the REST path.
 - Existing public exports and consumer method names are compatibility requirements until a deliberate migration proves otherwise.
 
@@ -87,10 +87,10 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 
 - [x] Inventory every export from `packages/brokers`, every method used by repository consumers, and all imports of `@binance/spot`.
 - [x] Map each required broker method to its Binance WebSocket API or Streams operation, including parameters, response shape, authentication, and error behavior.
-- [ ] Resolve the supported Node.js floor before selecting the native WebSocket transport. CI uses Node 22, but `@coinzilla/event-bus` and `@coinzilla/journal` declare `node >=20`, while the root and brokers manifests declare no `engines` range. Node's built-in WebSocket is stable and flag-free from Node 22.4.0; do not silently raise the package/runtime floor.
-- [x] Verify current official Binance Spot WebSocket API and Streams documentation for the operations and lifecycle constraints mapped in the Phase 0 audit. Signing/key-algorithm details and native ping/pong behavior remain explicit implementation gates; do not guess.
+- [x] Resolve the supported Node.js floor before selecting the native WebSocket transport. **Decision: `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.4.0.** This is an intentional compatibility-floor increase from the `node >=20` range declared by `@coinzilla/event-bus` and `@coinzilla/journal`; reflect it in package `engines` metadata and consumer/runtime documentation as implementation proceeds. Node's built-in WebSocket is stable and flag-free from Node 22.4.0.
+- [x] Verify current official Binance Spot WebSocket API and Streams documentation for the operations and lifecycle constraints mapped in the Phase 0 audit. The selected `userDataStream.subscribe.signature` method supports all API key types and does not require Ed25519 session authentication. For the current HMAC key configuration, use `apiKey` + `apiSecret` and HMAC-SHA-256; exact payload canonicalization still requires test vectors. Native ping/pong behavior remains an implementation gate; do not guess.
 - [x] Record the compatibility contract and identify legacy REST exports that can be deprecated.
-- **Exit criteria:** partially met by [the checked-in Phase 0 contract and audit](docs/brokers-websocket-contract.md). Exports, repository consumer calls, dependency inventory, protocol mappings, Node runtime evidence, and legacy implementation gaps are recorded. Phase 0 remains open until the supported Node.js floor is explicitly decided; no runtime code changes were made.
+- **Exit criteria:** met by [the checked-in Phase 0 contract and audit](docs/brokers-websocket-contract.md). Exports, repository consumer calls, dependency inventory, protocol mappings, the Node.js >=22.4.0 runtime decision, user-data authentication compatibility, and legacy implementation gaps are recorded. No runtime code changes were made.
 
 #### Phase 1 — Characterization tests and test seams
 
@@ -113,7 +113,7 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 
 - [ ] Implement request IDs and a pending-request map with deterministic response correlation.
 - [ ] Implement bounded request timeouts, cleanup on every success/failure path, and rejection of pending work on disconnect.
-- [ ] Implement the authentication/signature scheme required by the selected Binance WebSocket API methods using `node:crypto`.
+- [ ] Implement the authentication/signature scheme required by the selected Binance WebSocket API methods using `node:crypto`. Preserve the existing HMAC API-key flow (`apiKey` + `apiSecret`, HMAC-SHA-256); do not require Ed25519 or `session.logon` for `userDataStream.subscribe.signature`.
 - [ ] Validate response envelopes and normalize Binance API errors without losing error codes or useful context.
 - [ ] Handle concurrent requests and out-of-order responses.
 - [ ] Make reconnect behavior explicit; never silently replay state-changing requests.
@@ -141,7 +141,7 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 
 #### Phase 6 — User-data session lifecycle and recovery
 
-- [ ] Implement the current documented WebSocket API `userDataStream.subscribe.signature` compatibility flow on the WebSocket API connection; do not carry forward the legacy REST listen-key timer or switch to the Ed25519-session `userDataStream.subscribe` method by assumption.
+- [ ] Implement the current documented WebSocket API `userDataStream.subscribe.signature` compatibility flow on the WebSocket API connection using the existing HMAC `apiKey` + `apiSecret` credentials; no Ed25519 key pair or `session.logon` is required. Do not carry forward the legacy REST listen-key timer or switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Handle session expiration, subscription failure, disconnect, reconnect, and resubscription explicitly.
 - [ ] Define event ordering/deduplication expectations and ensure reconnect does not register duplicate callbacks.
 - [ ] Test execution reports, account updates, duplicate events, gaps, and recovery behavior.
