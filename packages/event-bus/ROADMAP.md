@@ -148,7 +148,7 @@ The audit also identified these risks:
 5. **Ordering is unspecified:** asynchronous handlers may complete out of publish order.
 6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
 7. **Subscription lifecycle ambiguity:** close removes listeners without synchronizing subscription-handle state.
-8. **Validation gaps:** constructor options and event-name normalization/reserved semantics need an explicit contract.
+8. **Validation gaps (addressed in this change):** constructor options now reject malformed option objects, unknown keys, invalid logger hooks, and invalid error handlers. Event names are validated against a bounded, documented character set and preserved exactly; Node-special names remain ordinary application names.
 9. **Coverage gap:** package-level coverage thresholds and several adversarial tests are missing.
 
 These are audit observations to verify against the current implementation before each fix; do not blindly apply stale line numbers or assumptions.
@@ -159,17 +159,19 @@ These are audit observations to verify against the current implementation before
 
 - [ ] Document publish, delivery, ordering, error, unsubscribe, flush, and close semantics.
 - [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and primitive values only; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
-- [ ] Inspect all in-repository consumers for compatibility constraints.
+- [x] Inspect all in-repository consumers for compatibility constraints.
 - [ ] Capture baseline test results and package coverage.
 
 Acceptance: public behavior is documented and tests encode the intended contract.
 
 ### Phase 1 — Correctness
 
+Event names are preserved exactly when valid. They must be 1–128 ASCII characters, begin with a letter, digit, or underscore, and contain only letters, digits, underscore, period, colon, or hyphen. Names such as `error`, `newListener`, `removeListener`, and `__proto__` remain valid ordinary application names. Constructor options are a plain object with only `logger` and `onError`; `logger` is an object with an optional `error` function, and `onError`, when supplied, must be a function.
+
 - [x] Remove Node EventEmitter special-name behavior from event dispatch.
 - [x] Define and enforce truly safe payload immutability (reject mutable built-ins, accessors, symbol keys, and unsupported object shapes; clone and freeze supported data graphs).
 - [x] Align structured logging with the repository logger contract (single structured argument).
-- [ ] Validate constructor options and normalize/reject malformed event names.
+- [x] Validate constructor options and reject malformed event names without rewriting accepted names.
 - [x] Make subscription state consistent after close.
 - [x] Add regression tests for corrected payload immutability defects.
 
@@ -213,7 +215,7 @@ Acceptance: each feature has a documented use case, failure semantics, tests, an
 
 At minimum, maintain tests for:
 
-- Valid and invalid event names, sources, constructor options, and payloads.
+- Valid and invalid event names (including whitespace, control characters, unsupported punctuation, and length boundaries), sources, constructor options, and payloads.
 - Special-looking names including `error`, `newListener`, `removeListener`, and `__proto__`.
 - No-subscriber publish behavior.
 - Multiple matching subscribers and subscribe-all delivery.
