@@ -34,12 +34,12 @@ The bot consumes an exchange-neutral object. Binance wire fields, raw payloads, 
     DOGEFDUSD: {
       openOrders: {
         items: [{
-          id: "0",
+          id: "1",
           symbol: "DOGEFDUSD",
           side: "BUY",
-          originalQuantity: "0",
+          originalQuantity: "1",
           executedQuantity: "0",
-          remainingQuantity: "0",
+          remainingQuantity: "1",
           status: "NEW",
         }],
         observedAtServerTime: 0,
