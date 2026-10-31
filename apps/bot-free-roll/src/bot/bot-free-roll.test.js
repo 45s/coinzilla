@@ -2968,6 +2968,7 @@ test("reconciles repeated user-data interruptions without requiring a bot restar
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
       getBalances: async () => ({ ok: true, data: [] }),
       getOpenOrders: async () => ({ ok: true, data: [] }),
+      getMyTrades: async () => ({ ok: true, data: [] }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -3034,6 +3035,7 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
         openOrderRequests += 1
         return { ok: true, data: [] }
       },
+      getMyTrades: async () => ({ ok: true, data: [] }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
