@@ -221,8 +221,8 @@ The following sequence is the immediate, reviewable improvement plan. It complem
 | Priority | Focused PR | Goal | Related roadmap work |
 |---:|---|---|---|
 | 1 [x] | Pure-function test hardening | Strengthen edge, boundary, invalid-input, immutability, and deterministic invariant tests for decimal arithmetic, percentages, trading rules, price/order planning, accounting, and exchange normalization. Use native Node tests and deterministic property-style cases; add no test dependency without a clear need. | FR-017–FR-026, especially FR-025 and FR-026 |
-| 2 [~] | Extract fill reconciliation | Isolate trade-history processing, fill validation, deduplication, and reconciliation from the main bot orchestration. Preserve actual fill and commission facts and idempotent behavior. | FR-027–FR-036, FR-059 |
-| 3 | Extract order execution | Separate order placement, cancellation, and replacement orchestration behind explicit dependencies. Preserve profitability checks, inventory reservations, and cancel/fill race safety. | FR-047–FR-056 |
+| 2 [x] | Extract fill reconciliation | Isolate trade-history processing, fill validation, deduplication, and reconciliation from the main bot orchestration. Preserve actual fill and commission facts and idempotent behavior. | FR-027–FR-036, FR-059 |
+| 3 [~] | Extract order execution | Separate order placement, cancellation, and replacement orchestration behind explicit dependencies. Preserve profitability checks, inventory reservations, and cancel/fill race safety. | FR-047–FR-056 |
 | 4 | Extract event handling | Separate exchange-event intake/normalization and dispatch from strategy decisions. Keep exchange-specific payload interpretation at the adapter boundary. | FR-027, FR-055, FR-067 |
 | 5 | Improve coverage gates | Establish or refresh the whole-app test/coverage baseline, identify critical uncovered paths, and raise thresholds incrementally without gaming the numbers. | FR-004, FR-025, FR-026 |
 
