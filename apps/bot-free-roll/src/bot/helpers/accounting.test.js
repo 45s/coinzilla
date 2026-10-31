@@ -186,3 +186,150 @@ test("calculates effective commission rate from the actual commission asset", ()
     quoteAsset: "USDT",
   }), /Unsupported commission asset/);
 });
+
+
+test("legacy accounting rejects invalid quantities, prices, and fee rates", () => {
+  for (const value of [0, -1, Number.NaN, Infinity, undefined]) {
+    assert.throws(() => estimateBuyAccounting({ quantity: value, price: 1, feeRate: 0 }))
+    assert.throws(() => estimateBuyAccounting({ quantity: 1, price: value, feeRate: 0 }))
+    assert.throws(() => estimateSellAccounting({ quantity: value, price: 1, feeRate: 0 }))
+    assert.throws(() => estimateSellAccounting({ quantity: 1, price: value, feeRate: 0 }))
+  }
+
+  for (const feeRate of [-0.001, 1, Number.NaN, Infinity, undefined]) {
+    assert.throws(() => estimateBuyAccounting({ quantity: 1, price: 1, feeRate }))
+    assert.throws(() => estimateSellAccounting({ quantity: 1, price: 1, feeRate }))
+  }
+})
+
+test("exact accounting rejects malformed decimal strings and invalid ranges", () => {
+  for (const value of [undefined, null, "", "1e-3", "not-a-number"]) {
+    assert.throws(() => estimateBuyAccountingExact({ quantity: value, price: "1", feeRate: "0" }))
+    assert.throws(() => estimateBuyAccountingExact({ quantity: "1", price: value, feeRate: "0" }))
+    assert.throws(() => estimateBuyAccountingExact({ quantity: value, price: "1", feeRate: "0" }))
+    assert.throws(() => estimateSellAccountingExact({ quantity: "1", price: value, feeRate: "0" }))
+  }
+
+  for (const [quantity, price, feeRate] of [
+    ["0", "1", "0"],
+    ["-1", "1", "0"],
+    ["1", "0", "0"],
+    ["1", "-1", "0"],
+    ["1", "1", "-0.01"],
+    ["1", "1", "1"],
+  ]) {
+    assert.throws(() => estimateBuyAccountingExact({ quantity, price, feeRate }))
+  }
+
+  for (const [quantity, price, feeRate] of [
+    ["-0.01", "1", "0"],
+    ["1", "0", "0"],
+    ["1", "-1", "0"],
+    ["1", "1", "-0.01"],
+    ["1", "1", "1"],
+  ]) {
+    assert.throws(() => estimateSellAccountingExact({ quantity, price, feeRate }))
+  }
+})
+
+test("exact fill accounting rejects invalid trade facts and commissions exceeding fills", () => {
+  const base = {
+    side: "BUY",
+    quantity: "10",
+    quoteQuantity: "20",
+    commissionAmount: "0",
+    commissionAsset: null,
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }
+
+  for (const side of ["", "HOLD", null]) {
+    assert.throws(() => calculateFillAccountingExact({ ...base, side }), /side must be BUY or SELL/)
+  }
+
+  for (const [baseAsset, quoteAsset] of [
+    ["", "USDT"],
+    ["DOGE", ""],
+    ["DOGE", "DOGE"],
+    [null, "USDT"],
+  ]) {
+    assert.throws(() => calculateFillAccountingExact({ ...base, baseAsset, quoteAsset }))
+  }
+
+  for (const [quantity, quoteQuantity, commissionAmount] of [
+    ["0", "20", "0"],
+    ["-1", "20", "0"],
+    ["10", "0", "0"],
+    ["10", "-1", "0"],
+    ["10", "20", "-0.01"],
+    ["10", "20", "not-a-number"],
+  ]) {
+    assert.throws(() => calculateFillAccountingExact({
+      ...base, quantity, quoteQuantity, commissionAmount,
+    }))
+  }
+
+  assert.throws(() => calculateFillAccountingExact({
+    ...base,
+    commissionAmount: "10",
+    commissionAsset: "DOGE",
+  }), /Commission exceeds/)
+
+  assert.throws(() => calculateFillAccountingExact({
+    ...base,
+    side: "SELL",
+    commissionAmount: "20",
+    commissionAsset: "USDT",
+  }), /Commission exceeds/)
+})
+
+test("exact commission-rate calculation validates inputs and asset identity", () => {
+  const base = {
+    price: "2",
+    quoteQuantity: "20",
+    commissionAmount: "0.1",
+    commissionAsset: "DOGE",
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }
+
+  for (const value of [undefined, null, "", "1e-3", "invalid"]) {
+    assert.throws(() => calculateCommissionRateExact({ ...base, price: value }))
+    assert.throws(() => calculateCommissionRateExact({ ...base, quoteQuantity: value }))
+    assert.throws(() => calculateCommissionRateExact({ ...base, commissionAmount: value }))
+  }
+
+  for (const [price, quoteQuantity, commissionAmount] of [
+    ["0", "20", "0"],
+    ["-1", "20", "0"],
+    ["2", "0", "0"],
+    ["2", "-1", "0"],
+    ["2", "20", "-0.1"],
+  ]) {
+    assert.throws(() => calculateCommissionRateExact({
+      ...base, price, quoteQuantity, commissionAmount,
+    }))
+  }
+
+  assert.throws(() => calculateCommissionRateExact({
+    ...base,
+    baseAsset: "DOGE",
+    quoteAsset: "DOGE",
+  }), /distinct non-empty strings/)
+
+  assert.throws(() => calculateCommissionRateExact({
+    ...base,
+    commissionAsset: "BNB",
+  }), /Unsupported commission asset/)
+})
+
+test("exact commission-rate calculation accepts zero fee without an asset", () => {
+  assert.equal(calculateCommissionRateExact({
+    price: "2",
+    quoteQuantity: "20",
+    commissionAmount: "0",
+    commissionAsset: null,
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  }), "0")
+})
