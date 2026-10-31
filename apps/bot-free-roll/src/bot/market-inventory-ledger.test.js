@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { calculateFillAccountingExact } from "./helpers/accounting.js"
 
 import {
   appendUnmanagedMovement,
@@ -86,6 +87,39 @@ test("applies a buy fill as base inventory and negative quote cash flow", () => 
   assert.deepEqual(result.ledger.processedTradeIds, ["trade-1"])
   assert.equal(ledger.strategy.baseQuantity, "0")
   assert.equal(ledger.fillCount, 0)
+})
+
+test("accepts the already-validated exact accounting projection", () => {
+  const fill = createFill()
+  const accounting = calculateFillAccountingExact({
+    side: fill.side,
+    quantity: fill.quantity,
+    quoteQuantity: fill.quoteQuantity,
+    commissionAmount: fill.commissionAmount,
+    commissionAsset: fill.commissionAsset,
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  })
+  const result = applyMarketInventoryFill({
+    ledger: createLedger(),
+    fill,
+    accounting,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.ledger.strategy.baseQuantity, "10")
+  assert.equal(result.ledger.strategy.quoteCashFlow, "-20")
+})
+
+test("rejects an invalid supplied accounting projection", () => {
+  const result = applyMarketInventoryFill({
+    ledger: createLedger(),
+    fill: createFill(),
+    accounting: { baseQuantity: "0", quoteQuantity: "1" },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /accounting is invalid/)
 })
 
 test("applies base and quote commissions to their own asset totals", () => {
