@@ -520,9 +520,9 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed after Phase 3 merge and before Phase 4:** `01cf72ca3baa1e838034abed0f57030959406ef5`.
-- Compared all 7 commits since prior reviewed main SHA `d4158240f3f06f1306c9d7622cd54725df626a71`. The changes are confined to `apps/bot-free-roll` (including fill-reconciliation implementation/tests and roadmap edits); no broker package, export, API, dependency/lockfile, runtime, or consumer-contract changes were found. PR #264 is an open bot-only PR and is outside this migration. Do not merge unrelated bot work into the integration branch.
-- Recheck latest main before opening the Phase 4 PR and immediately if a broker/API/consumer-contract change lands.
+- **Main SHA reviewed before Phase 4 PR validation:** `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`.
+- Compared the 6 new commits since reviewed main SHA `01cf72ca3baa1e838034abed0f57030959406ef5`. All changed files are confined to `apps/bot-free-roll` (bot implementation, order-execution module/tests, and bot roadmap); no broker package, export, API, dependency/lockfile, runtime, or consumer-contract changes were found. Preserve this bot-team work and do not merge unrelated app changes into the integration branch.
+- Recheck latest main before Phase 4 merge and immediately if a broker/API/consumer-contract change lands.
 
 ---
 
