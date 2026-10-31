@@ -15,6 +15,9 @@ export function createFakeRpcClient(handlers = {}) {
 
     async disconnect() {
       this.state = "closed"
+      for (const listener of closeListeners) {
+        listener({ code: 1000, reason: "", wasClean: true })
+      }
       listeners.clear()
       errorListeners.clear()
       closeListeners.clear()
