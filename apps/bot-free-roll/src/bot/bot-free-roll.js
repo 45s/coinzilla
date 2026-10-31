@@ -20,10 +20,25 @@ import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderId
 import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
 import { allocateFreeInventory } from "./inventory-allocation.js"
 import {
+  calculateGridCycleSellPlan,
+  createGridCycleFromBuyFills,
+} from "./grid-cycle-planning.js"
+import {
+  completeGridCycle,
+  recordGridCycleSellFill,
+} from "./grid-cycles.js"
+import {
+  buildGridOrderIndex,
+  resolveGridOrderOwner,
+} from "./grid-order-mapping.js"
+import { createGridOrderExecution } from "./grid-order-execution.js"
+import { createGridOrderIntent } from "./grid-order-intents.js"
+import {
   createGridConfigFingerprint,
 } from "./grid-state-snapshot.js"
 import {
   createGridStateSnapshot,
+  projectGridPairAccounting,
   restoreGridStateSnapshot,
 } from "./grid-state-runtime.js"
 
@@ -51,6 +66,7 @@ export class FreeRollBot {
   #confirmedBalances = new Map()
   #orderExecution
   #eventHandling
+  #gridOrderExecution
   #gridStateStore
   #gridStateRevision = null
 
@@ -73,6 +89,11 @@ export class FreeRollBot {
     this.broker = broker
     this.eventBus = eventBus
     this.#gridStateStore = gridStateStore
+    this.#gridOrderExecution = createGridOrderExecution({
+      broker: this.broker,
+      persistGridState: () => this.#persistGridState(),
+    })
+
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
       isRunning: () => this.#isRunning && !this.#isRecovering,
@@ -83,6 +104,7 @@ export class FreeRollBot {
       reconcileOrderFills: ({ symbol, order }) =>
         this.#reconcileOrderFills({ symbol, order }),
       handleSellFilled: ({ symbol }) => this.#handleSellFilled(symbol),
+      placeGridBuy: (input) => this.#placeGridBuy(input),
     })
 
     this.#queue = createKeyedQueue({
