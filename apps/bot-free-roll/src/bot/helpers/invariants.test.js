@@ -26,10 +26,13 @@ test("decimal arithmetic identities hold across a deterministic input set", () =
 
     assert.equal(addDecimal({ left, right }), addDecimal({ left: right, right: left }));
     assert.equal(multiplyDecimal({ left, right }), multiplyDecimal({ left: right, right: left }));
-    assert.equal(subtractDecimal({
-      left: addDecimal({ left, right }),
-      right,
-    }), left);
+    assert.equal(compareDecimal({
+      left: subtractDecimal({
+        left: addDecimal({ left, right }),
+        right,
+      }),
+      right: left,
+    }), 0);
     assert.equal(
       Math.sign(compareDecimal({ left, right })),
       -Math.sign(compareDecimal({ left: right, right: left })),
@@ -210,6 +213,7 @@ test("fill accounting handles commission assets and rejects fees exceeding a fil
   }), /Commission exceeds/);
   assert.throws(() => calculateFillAccountingExact({
     ...common,
+    side: "SELL",
     commissionAmount: "2.01",
     commissionAsset: "QUOTE",
   }), /Commission exceeds/);
