@@ -600,8 +600,8 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 - [~] Add `getServerTime()` using the WebSocket API `time` method; expose only the validated exchange `serverTime` (never local clock time).
 - [~] Add `getAccountSnapshot()` using signed `account.status`; return canonical `Balance[]` and the exchange's `updateTime` as neutral `sourceTime`. Preserve `getBalances()` unchanged.
-- [~] Extend `getMyTrades()` with `fromId`, `startTime`, and `endTime`; permit `orderId + fromId`, reject time filters combined with either cursor filter, and enforce the 24-hour time-window limit.
+- [~] Extend `getMyTrades()` and canonical `getFills()` with the same `fromId`, `startTime`, and `endTime` filters; permit `orderId + fromId`, reject time filters combined with either cursor filter, and enforce the 24-hour time-window limit.
 - [~] Extend `getOrderHistory()` with `startTime` and `endTime`; when either time filter is present, omit `orderId` because Binance ignores it. Enforce the 24-hour maximum and preserve exact source order fields including `time` and `updateTime`.
-- Do not add a misleading `complete` flag. A returned page whose length equals the requested limit may be truncated; the consumer must request the next page using the last trade/order ID plus one, or advance the time window.
+- Reject trade/fill/order cursor IDs outside JavaScript's safe-integer range rather than rounding them. Do not add a misleading `complete` flag. A returned page whose length equals the requested limit may be truncated; the consumer must request the next page using the last trade/order ID plus one, or advance the time window.
 - Keep existing array result shapes and bot consumers unchanged. Consumer-side snapshot assembly and validation remain owned by `apps/bot-free-roll`.
 - **Cross-domain request:** [#316](https://github.com/45s/coinzilla/issues/316). **Task branch:** `feature/brokers/reconciliation-history-ports`.
