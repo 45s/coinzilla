@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { CanonicalOrder } from "@coinzilla/entities"
-import { BinanceSdkBroker } from "./broker.js"
-import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
+import { BinanceSdkBroker } from "../broker.js"
+import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 const symbolInfo = {
   symbol: "DOGEFDUSD",
