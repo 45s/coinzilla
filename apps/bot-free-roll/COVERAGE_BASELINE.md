@@ -1,8 +1,8 @@
 # Free-Roll coverage baseline
 
 **Captured:** 2026-10-31  
-**Commit:** `fc12c8fc907588bd77fa6ffbc371a717e032fa17` (PR #280 head)  
-**Workflow:** [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41188613086)  
+**Commit:** `e90d093302366ba7d62565d93c2ab6f54dd823ce` (PR #282 head)  
+**Workflow:** [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41190093220)  
 **Runtime:** Node.js 22, built-in test runner and coverage reporter
 
 This is a source-file baseline for `apps/bot-free-roll`, captured after the helper, fill-reconciliation, order-execution, and event-handling extractions.
@@ -15,11 +15,11 @@ This is a source-file baseline for `apps/bot-free-roll`, captured after the help
 | `event-handling.js` | 100.00% | 96.15% | 90% / 90% |
 | `fill-reconciliation.js` | 100.00% | 83.33% | 95% / 75% |
 | `helpers/accounting.js` | 100.00% | 100.00% | 90% / 85% |
-| `helpers/decimal.js` | 98.55% | 96.00% | 95% / 90% |
+| `helpers/decimal.js` | 98.55% | 95.96% | 95% / 90% |
 | `helpers/order-planning.js` | 100.00% | 100.00% | 90% / 60% |
 | `helpers/price.js` | 96.90% | 95.83% | 80% / 65% |
 | `helpers/trading-rules.js` | 95.06% | 93.94% | 90% / 90% |
-| `order-execution.js` | 100.00% | 79.71% | 95% / 75% |
+| `order-execution.js` | 100.00% | 81.94% | 95% / 75% |
 | `prepare-broker.js` | 89.58% | 100.00% | 80% / 70% |
 | `validate-config.js` | 94.52% | 92.86% | 90% / 90% |
 
@@ -27,13 +27,13 @@ The gate values are conservative floors below the captured results. They are int
 
 ## Highest-value uncovered paths
 
-The latest report is from PR #280's final CI run. PRs #270, #272, #273, #274, and #280 have already closed the earlier price, broker-preparation, planning, accounting, event-envelope, and fill-input gaps.
+The latest report is from PR #282's final CI run. PRs #270, #272, #273, #274, #280, and #282 have closed the earlier price, broker-preparation, planning, accounting, event-envelope, fill-input, and order-cancellation/replacement gaps.
 
-1. **Strategy orchestration — `bot-free-roll.js` (97.45% lines, 87.78% branches).** Remaining uncovered lines include the rising-reference-price path, cancel-in-flight event handling, and non-positive next-BUY threshold guard. Prioritize tests only where they exercise a real state transition or safety invariant.
-2. **Order lifecycle — `order-execution.js` (100.00% lines, 79.71% branches).** Branch coverage is the largest remaining gap in this safety-critical module. Focus on meaningful cancel/replace outcomes and race conditions, not line execution for its own sake.
-3. **Fill reconciliation — `fill-reconciliation.js` (100.00% lines, 83.33% branches).** The latest follow-up covers missing state and malformed fill objects. Remaining branch cases should be assessed for distinct accounting or idempotency behavior.
+1. **Strategy orchestration — `bot-free-roll.js` (97.45% lines, 87.78% branches).** The remaining uncovered executable paths are the post-reference BUY trigger (`514–515`), cancel-in-flight event handling (`574–584`), the unused `#placeSell` wrapper (`673–677`), and the defensive non-positive next-BUY guard (`699–701`). The `#placeSell` wrapper has no caller; the non-positive guard is unreachable with validated positive price/step inputs. Do not add artificial tests for unreachable defensive paths. Assess the remaining trigger and cancellation paths only through realistic public-API state transitions.
+2. **Order lifecycle — `order-execution.js` (100.00% lines, 81.94% branches).** PR #282 added cancellation/replacement outcomes and improved branch coverage from 79.71%. Remaining branches should be pursued only when they protect a distinct safety invariant or race outcome.
+3. **Fill reconciliation — `fill-reconciliation.js` (100.00% lines, 83.33% branches).** Missing state and malformed fill objects are covered. Remaining branch cases should be assessed for distinct accounting or idempotency behavior.
 4. **Trading rules — `helpers/trading-rules.js` (95.06% lines, 93.94% branches).** A few validation branches remain; add tests only where they correspond to distinct configuration or exchange-rule failures.
-5. **Other small gaps.** Decimal and price helpers are already strongly covered; broker preparation now has full branch coverage. Do not chase the remaining uncovered lines unless they protect a meaningful contract.
+5. **Other small gaps.** Decimal and price helpers are already strongly covered; broker preparation now has full branch coverage. Do not chase remaining uncovered lines unless they protect a meaningful contract.
 
 ## Interpreting the workspace report
 
