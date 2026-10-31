@@ -33,13 +33,14 @@ export function createStreamName(type, options = {}) {
   switch (type) {
     case "trade":
     case "aggTrade":
+      if (!normalizedSymbol) throw new TypeError(`symbol is required for ${type}`)
+      return validateStreamName(`${normalizedSymbol}@${type}`)
     case "miniTicker":
     case "ticker":
-    case "bookTicker":
-      if (type === "bookTicker" && !normalizedSymbol) {
-        throw new TypeError("symbol is required for bookTicker")
-      }
       return validateStreamName(normalizedSymbol ? `${normalizedSymbol}@${type}` : `!${type}@arr`)
+    case "bookTicker":
+      if (!normalizedSymbol) throw new TypeError("symbol is required for bookTicker")
+      return validateStreamName(`${normalizedSymbol}@bookTicker`)
     case "kline":
       if (!normalizedSymbol) throw new TypeError("symbol is required for kline")
       if (!INTERVALS.has(interval)) throw new TypeError("interval is not a supported Binance kline interval")
