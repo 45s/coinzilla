@@ -73,7 +73,7 @@ function createClient(options = {}) {
     setTimeoutFn: clock.setTimeout.bind(clock),
     clearTimeoutFn: clock.clearTimeout.bind(clock),
     nowFn: () => clock.now,
-    ackTimeout: 100,
+    ackTimeout: 1_000,
     reconnectDelay: 10,
     maxReconnectDelay: 40,
     rotationDelay: 1_000,
@@ -206,7 +206,7 @@ test("rejects Binance subscription errors and times out missing acknowledgements
 
   const timedOut = client.subscribe("ethusdt@trade", () => {})
   await flush()
-  clock.advanceBy(100)
+  clock.advanceBy(1_000)
   await assert.rejects(timedOut, /acknowledgement timed out/)
   assert.deepEqual(client.subscriptions, [])
   await client.disconnect()
