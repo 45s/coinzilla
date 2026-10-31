@@ -80,6 +80,10 @@ export class FreeRollBot {
 
     this.#queue = createKeyedQueue({
       onError: ({ key, error }) => {
+        if (this.#userDataRecoveryRequired) {
+          this.#recoveryDiscrepancy =
+            `Queued task for ${key} failed during user-data recovery: ${error?.message ?? String(error)}`
+        }
         handleErr({ where: `FreeRollBot(${key})`, error })
         this.#pause(
           key,
@@ -880,7 +884,13 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id) return
+    if (!state) return
+    if (!id) {
+      const reason = `Order event for ${symbol} is missing its order ID`
+      this.#pause(symbol, reason)
+      if (this.#userDataRecoveryRequired) this.#recoveryDiscrepancy = reason
+      return
+    }
     if (!state.trackedOrderIds.has(id)) {
       const reason = `Untracked order ${id} reported for managed pair ${symbol}`
       this.#pause(symbol, reason)
@@ -892,16 +902,25 @@ export class FreeRollBot {
 
     if (event.executionType === "TRADE") {
       if (!event.fill) {
-        this.#pause(symbol, `TRADE execution report for order ${id} is missing its fill details`)
+        const reason = `TRADE execution report for order ${id} is missing its fill details`
+        this.#pause(symbol, reason)
+        if (this.#userDataRecoveryRequired) this.#recoveryDiscrepancy = reason
         return
       }
       if (String(event.fill.orderId) !== id ||
           event.fill.symbol !== symbol ||
           event.fill.side !== order.side) {
-        this.#pause(symbol, `TRADE fill identity does not match order ${id}`)
+        const reason = `TRADE fill identity does not match order ${id}`
+        this.#pause(symbol, reason)
+        if (this.#userDataRecoveryRequired) this.#recoveryDiscrepancy = reason
         return
       }
-      if (!this.#applyExecutionFill({ symbol, fill: event.fill })) return
+      if (!this.#applyExecutionFill({ symbol, fill: event.fill })) {
+        if (this.#userDataRecoveryRequired) {
+          this.#recoveryDiscrepancy = `Could not account buffered fill for order ${id}`
+        }
+        return
+      }
     }
 
     if (status === "FILLED") {
