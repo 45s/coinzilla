@@ -114,3 +114,72 @@ test("fails closed for unexpected, mismatched, and potentially truncated order h
     })),
   }).ok, false)
 })
+
+
+test("accepts a new open order with zero execution and empty history", () => {
+  const result = reconcileTrackedOrder({
+    symbol: "BTCUSDT",
+    order: trackedOrder,
+    openOrders: [{
+      id: "order-1",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      originalQuantity: "2",
+      executedQuantity: "0",
+      status: "NEW",
+    }],
+    fills: [],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.status, "OPEN")
+  assert.equal(result.historyQuantity, "0")
+})
+
+test("rejects duplicate, cross-market, and incomplete open-order snapshots", () => {
+  const validOpenOrder = {
+    id: "order-1",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    originalQuantity: "2",
+    executedQuantity: "0",
+    status: "NEW",
+  }
+
+  assert.equal(reconcileTrackedOrder({
+    symbol: "BTCUSDT",
+    order: trackedOrder,
+    openOrders: [validOpenOrder, validOpenOrder],
+    fills: [],
+  }).ok, false)
+
+  assert.equal(reconcileTrackedOrder({
+    symbol: "BTCUSDT",
+    order: trackedOrder,
+    openOrders: [{ ...validOpenOrder, symbol: "ETHUSDT" }],
+    fills: [],
+  }).ok, false)
+
+  assert.equal(reconcileTrackedOrder({
+    symbol: "BTCUSDT",
+    order: trackedOrder,
+    openOrders: [{ id: "order-1", side: "BUY", status: "NEW" }],
+    fills: [],
+  }).ok, false)
+})
+
+test("rejects invalid balance decimal values and incomplete order inputs", () => {
+  assert.equal(validateRecoveryBalances({ balances: [{
+    asset: { code: "USDT" },
+    free: { amount: "not-a-number" },
+    locked: { amount: "0" },
+    total: { amount: "0" },
+  }] }).ok, false)
+
+  assert.equal(reconcileTrackedOrder({
+    symbol: "BTCUSDT",
+    order: { id: "order-1", side: "BUY", quantity: 2 },
+    openOrders: [],
+    fills: [],
+  }).ok, false)
+})
