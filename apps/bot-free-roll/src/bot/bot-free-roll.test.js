@@ -2837,30 +2837,17 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => ({
-        ok: true,
-        data: [{
-          asset: { code: "USDT" },
-          free: { amount: "10000" },
-          locked: { amount: "0" },
-          total: { amount: "10000" },
-        }],
-      }),
-      getOpenOrders: async () => ({ ok: true, data: [] }),
-      getMyTrades: async ({ orderId }) => ({
-        ok: true,
-        data: [{
-          id: "partial-trade",
-          orderId,
-          symbol: "DOGEUSDT",
-          side: "BUY",
-          price: "100",
-          quantity: "50",
-          quoteQuantity: "5000",
-          commissionAmount: "0",
-          commissionAsset: null,
-          isMaker: true,
-        }],
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        getExecution: ({ orderId }) => ({
+          status: "PARTIALLY_FILLED",
+          executedQuantity: "50",
+          fills: [createRecoveryFill({
+            tradeId: "102",
+            orderId,
+            quantity: "50",
+          })],
+        }),
       }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
@@ -2880,8 +2867,9 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: {
