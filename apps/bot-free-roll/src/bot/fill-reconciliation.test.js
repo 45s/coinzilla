@@ -57,6 +57,35 @@ test("reconciles a BUY fill into new state without mutating the input", () => {
   assert.equal(result.updates.processedTradeIds.has("trade-1"), true)
 })
 
+test("accounts for base-asset BUY commission as reduced received inventory", () => {
+  const result = reconcileExecutionFill({
+    fill: createFill({
+      commissionAmount: "0.1",
+      commissionAsset: "DOGE",
+    }),
+    state: createState(),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.updates.activeQuantity, "9.9")
+  assert.equal(result.updates.cycleCost, "20")
+})
+
+test("accounts for quote-asset SELL commission as reduced net proceeds", () => {
+  const result = reconcileExecutionFill({
+    fill: createFill({
+      side: "SELL",
+      commissionAmount: "0.2",
+      commissionAsset: "USDT",
+    }),
+    state: createState({ activeQuantity: "10" }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.updates.activeQuantity, "0")
+  assert.equal(result.updates.saleProceeds, "19.8")
+})
+
 test("deduplicates a fill already processed from another source", () => {
   const state = createState({
     processedTradeIds: new Set(["trade-1"]),
