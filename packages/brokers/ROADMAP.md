@@ -76,7 +76,7 @@ The migration is complete only when all of the following are true:
 7. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
 8. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
 9. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
-10. Consumer adoption is a separate bot-domain task tracked by issue #304. Until that consumer acknowledges reconciliation, its trading path intentionally remains fail-closed after user-data interruption.
+10. Bot consumer adoption for issue #304 is implemented by PR #314, with follow-up lifecycle hardening in PR #315. The broker task remains responsible only for the broker contract; do not modify bot application code here. Opt-in TESTNET verification with read-only-capable credentials remains outstanding.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -385,8 +385,8 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
 - [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
 - [ ] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. Default CI remains offline and skips these tests without credentials.
-- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304). The bot now subscribes with `onStatus`, reconciles tracked state, replays buffered events, and acknowledges recovery only after successful reconciliation. Completed in bot-domain [PR #314](https://github.com/45s/coinzilla/pull/314) and [PR #315](https://github.com/45s/coinzilla/pull/315); request #304 is closed. No bot application files were changed by broker-domain migration PRs.
-- [x] Re-audit the read-only bot consumer contract; confirm no bot application files were changed by the broker migration.
+- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304) via [PR #314](https://github.com/45s/coinzilla/pull/314); [PR #315](https://github.com/45s/coinzilla/pull/315) adds repeated-interruption and shutdown hardening. This is bot-domain work; no bot files are changed by the Brokers domain.
+- [x] Re-audit the read-only bot consumer contract; broker changes do not modify bot application files.
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
@@ -522,7 +522,6 @@ When a new discovery changes an implementation decision:
 | 2026-10-31 | Do not edit bot application files during this migration. | Other teams are actively developing bot behavior; avoid conflicts and preserve ownership. | All phases; consumer source is read-only audit evidence. |
 | 2026-10-31 | Treat `eventStreamTerminated` as an explicit subscription lifecycle signal, not an order/account event. | Binance Spot User Data Streams documentation defines the event and its termination causes. | Phase 6 lifecycle state machine and tests. |
 | 2026-10-31 | Treat a socket interruption as an unrecoverable event-history gap; do not use event timestamps as a global sequence cursor. | Binance user-data event schemas expose event/transaction timestamps and execution IDs, but no universal replay cursor. | Phase 6 status signaling, idempotency, and reconciliation. |
-| 2026-10-31 | Add timestamped account and cursor-aware history ports for FR-057 without changing existing balance/history result contracts. | Binance `time`, `account.status.updateTime`, `myTrades.fromId`, and `allOrders.orderId` provide the required exchange-owned timestamps/cursors. | Add `getServerTime()`, `getAccountSnapshot()`, and validated history query filters; consumer builds exchange-neutral completeness metadata. Request #316. |
 | 2026-10-31 | Reconcile current account/order state from WebSocket API snapshots after recovery; do not claim snapshots reconstruct missed intermediate events. | `account.status`, `openOrders.status`, `myTrades`, and `allOrders` provide current or queryable state, not a replay log for every event. | Phase 6 recovery contract. |
 
 ---
@@ -580,14 +579,19 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ### Exact account balances (request #310)
 
-- [x] Additive `getBalances()` API returns canonical Entities `Balance` values with exact free/locked `Quantity` amounts and a derived total (PR #312).
-- [x] Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
-- [x] Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
-- [x] Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
-- [x] Consumer: Free-Roll recovery request #304 is integrated and verified through PRs #314/#315.
+- [~] Additive `getBalances()` API returns canonical Entities `Balance` values with exact free/locked `Quantity` amounts and a derived total.
+- Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
+- Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
+- Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
+- Consumer: Free-Roll recovery request #304. Close this work only after the exact snapshot API is integrated and verified by the consumer.
 
-### Timestamped reconciliation snapshot ports (request #316)
-- [x] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
-- [x] Add validated `fromId` pagination to `getMyTrades()` and time-window filters to `getOrderHistory()` while preserving existing result shapes.
-- [x] Keep full pages potentially incomplete by returning the unchanged array result without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
-- Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
+## 12. Shared Entities contract adoption
+
+### Canonical fills and commissions
+
+- [~] Additive `getFills({ symbol, orderId?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values.
+- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
+- Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
+- Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
+- Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
+- **Task branch:** `feature/brokers/canonical-fills`; PR targets `develop`.

@@ -31,8 +31,10 @@ describe("CoreBroker", () => {
     "getSymbolFilters",
     "getMyTrades",
     "getOrderHistory",
+    "getBalances",
     "getAccountSnapshot",
     "getServerTime",
+    "getFills",
     "subscribeForPrices",
   ]) {
     it(`throws a clear implementation error for ${methodName}`, () => {

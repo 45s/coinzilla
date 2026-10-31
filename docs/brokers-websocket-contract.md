@@ -48,7 +48,7 @@ No other `@binance/spot` imports were found in the inspected broker source tree.
 | `wsEventsMap` | `binance/websocket-stream/adapters/index.js` | Preserve unless consumer search proves unused and a removal is explicitly planned. |
 | `CoreBroker` | `broker.core.js` | Shared broker base class; preserve its public contract. |
 
-The SDK broker also inherits `CoreBroker`. The base class provides shared logger/state fields and placeholder methods including `getAssets`, `cancelOrder`, `getOpenOrders`, `getPrice`, `createOrder`, `subscribeForPrices`, `getSymbolFilters`, `getMyTrades`, `getOrderHistory`, `getBalances`, `getAccountSnapshot`, and `getServerTime`.
+The SDK broker also inherits `CoreBroker`. The base class provides shared logger/state fields and placeholder methods including `getAssets`, `cancelOrder`, `getOpenOrders`, `getPrice`, `createOrder`, `subscribeForPrices`, `getSymbolFilters`, and `getMyTrades`.
 
 ## 3. Repository consumer contract
 
@@ -64,19 +64,16 @@ The current bot consumer invokes these broker operations:
 | `getSymbolFilters({ symbol })` | Load symbol metadata before trading | Preserve `symbol`, `baseAsset`, `quoteAsset`, string `tickSize`, string `stepSize`, and `supportedOrderTypes`. |
 | `createOrder(input)` | Submit bot orders | Preserve accepted input fields, `clientOrderId` mapping, defaults, and adapted order result. |
 | `cancelOrder({ symbol, orderId })` | Cancel bot orders | Preserve adapted order result and structured errors. |
-| `getBalances()` | Canonical account balance reconciliation after user-data recovery | Preserve the existing `Balance[]` result, including zero balances. |
-| `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | Reconcile fills after cancellation/races and page trade history | Preserve normalized fill fields, exact quantity/price/commission strings, commission asset, stable trade IDs, and source `time`. A full page is potentially incomplete; advance with `fromId` until a shorter page is observed. |
+| `getMyTrades({ symbol, orderId, limit })` | Reconcile fills after cancellation/races | Preserve normalized fill fields, including exact quantity/price/commission strings and commission asset. |
 
-The bot source also has explicit capability checks for `getSymbolFilters()`, `getBalances()`, `getOpenOrders()`, and `getMyTrades()`; absence of a required recovery capability is a fail-closed runtime contract failure. This migration must not edit `apps/bot-free-roll`; consumer source is read-only audit evidence.
+The bot source also has explicit capability checks for `getSymbolFilters()` and `getMyTrades()`; absence of either is a startup/runtime contract failure. This migration must not edit `apps/bot-free-roll`; consumer source is read-only audit evidence.
 
 Other SDK broker methods are public compatibility candidates even though the current bot source does not call them directly:
 
 - `getAssets()`
 - `getOpenOrders({ symbol? })`
 - `getOrder({ symbol, orderId })`
-- `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })`
-- `getAccountSnapshot()` — additive timestamped account snapshot for FR-057.
-- `getServerTime()` — exchange server time for FR-057.
+- `getOrderHistory({ symbol, orderId?, limit? })`
 - `cancelAllOpenOrders({ symbol })`
 - `getPrices({ symbol })`
 
@@ -117,8 +114,8 @@ Consumers should perform reconciliation serially with their normal event-process
 
 1. Pause order placement and cancellation while the broker reports `connectionClosed`, `terminated`, or `recovering`. The broker independently enforces this pause.
 2. Wait for `recovered`. This means the replacement API connection and signature subscription are active; it does **not** mean account/order state is reconciled.
-3. Fetch a current account snapshot with `getAccountSnapshot()` (`account.status`) to retain canonical balances and account `updateTime`; use `getOpenOrders()` (`openOrders.status`) for current open orders. Sample `getServerTime()` before and after collection.
-4. For every symbol relevant to the consumer's tracked orders/fills, query `getOrderHistory({ symbol, orderId?, startTime?, endTime? })` (`allOrders`) and `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime? })` (`myTrades`). Paginate by advancing the last order/trade ID by one; a full 1000-item page is not proof of completeness. Time windows must not exceed 24 hours.
+3. Fetch a current account snapshot with `getAssets()` (`account.status`) and the current open-order snapshot with `getOpenOrders()` (`openOrders.status`).
+4. For every symbol relevant to the consumer's tracked orders/fills, query `getOrderHistory({ symbol })` (`allOrders`) and `getMyTrades({ symbol })` (`myTrades`). Use known order IDs and bounded time/ID checkpoints where supported by the consumer's own state model.
 5. Apply the snapshots/history idempotently, while ensuring newly arriving user-data events are serialized or buffered so a snapshot cannot overwrite a newer event.
 6. Only after the consumer has established a consistent state, call `acknowledgeRecovery()` on that specific local subscription handle. If multiple handles exist, every active handle must acknowledge before the broker re-enables order mutations.
 7. If any query or state application is incomplete, do not acknowledge. Keep the mutation gate closed and retry/reconcile under the consumer's own bounded policy.
@@ -127,7 +124,7 @@ Consumers should perform reconciliation serially with their normal event-process
 
 A handle added after recovery receives a `recovered` status with `reconciliationRequired: true` and must also acknowledge. A later interruption resets acknowledgements for every active handle. Disconnecting an unacknowledged handle removes it from the all-consumer acknowledgement barrier.
 
-The bot consumer adopted `onStatus`, tracked-state reconciliation, buffered event replay, and `acknowledgeRecovery()` in bot-domain [PR #314](https://github.com/45s/coinzilla/pull/314) and [PR #315](https://github.com/45s/coinzilla/pull/315); cross-domain request [#304](https://github.com/45s/coinzilla/issues/304) is complete. Those consumer changes were kept in the bot domain, not this broker migration.
+The current bot consumer audit is tracked separately in [issue #304](https://github.com/45s/coinzilla/issues/304). The broker migration does not modify bot application code. Until the bot domain adopts `onStatus` and `acknowledgeRecovery()`, that consumer intentionally remains fail-closed after an interruption.
 
 ### Opt-in TESTNET verification
 
@@ -145,14 +142,11 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 
 | Broker method | Current SDK method | Binance Spot WebSocket API method | Security class | Notes |
 |---|---|---|---|---|
-| `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns legacy asset summaries; preserve current adapter behavior. |
-| `getBalances()` | `accountStatus({ omitZeroBalances: false })` | `account.status` | USER_DATA, signed | Returns canonical `Balance[]` including zero balances. |
+| `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns account balances; preserve current asset adapter behavior. |
 | `getOpenOrders({ symbol? })` | `openOrdersStatus(params)` | `openOrders.status` | USER_DATA, signed | Symbol is optional; omitted means all open orders. |
 | `getOrder({ symbol, orderId })` | `orderStatus(params)` | `order.status` | USER_DATA, signed | Preserve order adapter and ID representation. |
-| `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Returns raw order history; `orderId` is an inclusive lower-bound cursor. Time filters cannot be combined with `orderId`; maximum time window is 24 hours. |
-| `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Adapts trades; `fromId` is an inclusive trade-ID cursor. Cursor and time filters are mutually exclusive; `orderId` cannot be combined with time filters. |
-| `getAccountSnapshot()` | `accountStatus({ omitZeroBalances: false })` | `account.status` | USER_DATA, signed | Returns canonical balances plus exact account `updateTime`; additive to `getBalances()`. |
-| `getServerTime()` | `time()` | `time` | NONE, public | Returns exact exchange `serverTime` milliseconds for snapshot observation windows. |
+| `getOrderHistory({ symbol, orderId?, limit })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Current implementation returns raw Binance order history data; do not accidentally change this result shape in a transport rewrite. |
+| `getMyTrades({ symbol, orderId?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Current implementation adapts trades; preserve exact decimal strings and commission metadata. |
 | `createOrder(input)` | `orderPlace(params)` | `order.place` | TRADE, signed | State-changing request. Never automatically replay after uncertain disconnect. Preserve client order ID mapping and LIMIT/LIMIT_MAKER defaults. |
 | `cancelOrder({ symbol, orderId })` | `orderCancel(params)` | `order.cancel` | TRADE, signed | State-changing request; uncertain outcome must be reconciled. |
 | `cancelAllOpenOrders({ symbol })` | `openOrdersCancelAll(params)` | `openOrders.cancelAll` | TRADE, signed | State-changing request; response can contain order and order-list reports. |
@@ -160,8 +154,6 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 | `getSymbolFilters({ symbol })` | Direct global `fetch()` to REST `/api/v3/exchangeInfo` | `exchangeInfo` | NONE, public | The WebSocket API exposes this method; move metadata retrieval there. Preserve the validated filter output contract. |
 
 The official Spot WebSocket API uses a request envelope containing a client-generated `id`, a `method`, and optional `params`; responses correlate by `id` and carry a status/result or error. The RPC implementation must support out-of-order responses and concurrent requests rather than relying on request/response arrival order.
-
-**Cursor precision:** Binance order/trade IDs are int64 values. The current JSON RPC boundary accepts numeric strings only when they fit JavaScript's safe-integer range, then sends them as JSON integers. Values outside that range are rejected rather than rounded. A future transport-level int64 representation is required before supporting larger IDs safely.
 
 ## 5. User-data subscription is part of the WebSocket API connection
 
@@ -239,7 +231,7 @@ This is not a substitute for the SDK broker contract. It does not currently prov
 
 - [Binance Spot WebSocket API — Account](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/account): `account.status`, `openOrders.status`, `order.status`, `allOrders`, and `myTrades`.
 - [Binance Spot WebSocket API — Trade](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/trade): `order.place`, `order.cancel`, and `openOrders.cancelAll`.
-- [Binance Spot WebSocket API — General](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/general): public `exchangeInfo` and `time` server-time query.
+- [Binance Spot WebSocket API — General](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/general): public `exchangeInfo`.
 - [Binance Spot WebSocket API — Market](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/market): `ticker.price`.
 - [Binance Spot WebSocket API — User Data Stream](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/user-data-stream): signature subscription and Ed25519 authenticated-session subscription are distinct methods.
 - [Binance Spot WebSocket Streams — General](https://developers.binance.com/en/docs/products/spot/web-socket-streams): endpoints, raw/combined payloads, 24-hour connection lifetime, server ping requirements, message and stream limits, and shutdown behavior.
@@ -260,3 +252,13 @@ Before implementation proceeds, preserve these decisions:
 6. Keep all bot application files read-only throughout this migration.
 
 **Phase 0 status:** complete. Inventory, consumer contract, protocol mapping, the Node.js >=22.4.0 runtime decision, and user-data credential compatibility are documented. HMAC-SHA-256 signing payload canonicalization still requires known test vectors in Phase 3, and native ping/pong behavior remains an implementation gate in Phase 2; neither is a reason to guess.
+
+## 11. Canonical fill API
+
+The additive `BinanceSdkBroker.getFills({ symbol, orderId?, limit? })` API returns shared Entities `Fill` instances. It requests exact market metadata for the requested Binance symbol through WebSocket API `exchangeInfo`, constructs a canonical `Market` from the returned base/quote asset codes, then requests signed `myTrades` and adapts each execution.
+
+- Trade IDs are scoped by canonical Market identity; Binance symbols are opaque and are never split to infer assets.
+- Price and quote quantity are exact quote-asset `Money`; base quantity is exact base-asset `Quantity`. No financial value passes through JavaScript `Number`.
+- A positive commission is represented by a `Commission` with its explicit commission Asset. A confirmed zero commission is `COMPLETE` with an empty commission list. If a positive commission has no known denomination, its status is `UNKNOWN`; no fee Asset is fabricated.
+- Missing maker/taker metadata maps to `UNKNOWN`, and missing execution timestamps remain absent.
+- The legacy `getMyTrades()` API and its plain-object result shape are unchanged for compatibility. Consumer migration to `getFills()` is a separate task owned by the consumer domain.
