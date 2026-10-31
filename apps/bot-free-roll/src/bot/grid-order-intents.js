@@ -145,6 +145,9 @@ export function resolveGridOrderIntent({
     }
     if (ordersById.size === 1) {
       const [order] = ordersById.values()
+      if (intent.status === "ACKNOWLEDGED" && order.id !== intent.brokerOrderId) {
+        throw new Error("recovered broker order ID does not match the acknowledged intent")
+      }
       return toResult({
         data: {
           status: "FOUND",
@@ -153,7 +156,7 @@ export function resolveGridOrderIntent({
         },
       })
     }
-    if (historyComplete) {
+    if (historyComplete && intent.status === "PREPARED") {
       return toResult({
         data: {
           status: "ABSENT",
@@ -161,6 +164,9 @@ export function resolveGridOrderIntent({
           safeToRetry: true,
         },
       })
+    }
+    if (historyComplete && intent.status === "ACKNOWLEDGED") {
+      throw new Error("acknowledged broker order is missing from complete order history")
     }
     return toResult({
       data: {
