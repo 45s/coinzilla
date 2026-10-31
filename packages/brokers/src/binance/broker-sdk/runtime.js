@@ -1,5 +1,5 @@
 function parseVersion(value) {
-  const match = /^(\\d+)\\.(\\d+)\\.(\\d+)/.exec(String(value ?? ""))
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(String(value ?? ""))
   return match ? match.slice(1).map(Number) : null
 }
 
