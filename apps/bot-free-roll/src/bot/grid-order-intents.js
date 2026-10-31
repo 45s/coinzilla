@@ -38,6 +38,7 @@ export function createGridOrderIntent({
   type,
   quantity,
   price,
+  reservedQuantity,
   createdAtServerTime,
   cycleId = null,
 } = {}) {
@@ -55,6 +56,23 @@ export function createGridOrderIntent({
     }
     validatePositiveDecimal({ value: quantity, name: "quantity" })
     validatePositiveDecimal({ value: price, name: "price" })
+    const normalizedReservedQuantity = side === "SELL"
+      ? String(reservedQuantity ?? quantity)
+      : null
+    if (side === "SELL") {
+      validatePositiveDecimal({
+        value: normalizedReservedQuantity,
+        name: "reservedQuantity",
+      })
+      if (compareDecimal({
+        left: normalizedReservedQuantity,
+        right: quantity,
+      }) < 0) {
+        throw new Error("SELL reservedQuantity cannot be smaller than order quantity")
+      }
+    } else if (reservedQuantity !== undefined && reservedQuantity !== null) {
+      throw new Error("BUY order intents cannot reserve base inventory")
+    }
 
     const clientOrderResult = createGridClientOrderId({ symbol, side, intentId })
     if (!clientOrderResult.ok) throw new Error(clientOrderResult.errors[0])
@@ -66,6 +84,7 @@ export function createGridOrderIntent({
       type,
       quantity,
       price,
+      reservedQuantity: normalizedReservedQuantity,
       createdAtServerTime,
       cycleId,
       status: "PREPARED",
