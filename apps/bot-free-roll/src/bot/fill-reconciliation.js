@@ -1,3 +1,4 @@
+import { Fill } from "@coinzilla/entities"
 import {
   addDecimal,
   compareDecimal,
