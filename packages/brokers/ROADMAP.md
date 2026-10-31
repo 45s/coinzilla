@@ -318,20 +318,6 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 5 — Rebuild the broker on native clients
 
-- [ ] Replace `BinanceSdkBroker` internals with native WebSocket API and Streams clients while preserving public methods and result shapes.
-- [ ] Implement order placement/cancellation/query, open orders, account status, order history, and trade history through WebSocket API operations.
-- [ ] Move `getSymbolFilters()` from REST to WebSocket API `exchangeInfo`; preserve validated `tickSize`/`stepSize` string output and error behavior.
-- [ ] Preserve `subscribeForPrices()` and `subscribeForUserData()` consumer contracts, including normalized event payloads.
-- [ ] Make `connect()` failure-safe if either required connection fails.
-- [ ] Make `disconnect()` idempotent and ensure all resources are released.
-- [ ] Keep order mutation uncertainty visible; never retry blindly after connection loss.
-- [ ] Re-run the read-only consumer contract audit against latest `main`.
-- **Exit criteria:** broker contract tests pass against native clients; supported broker path requires no REST request; consumer-facing behavior is preserved.
-
-### Phase 6 — User-data session lifecycle and recovery
-
-- [ ] Implement the documented `userDataStream.subscribe.signatur### Phase 5 — Rebuild the broker on native clients
-
 **Status: In progress on `migration/binance-phase-5-broker`.**
 
 - [x] Replace the SDK-backed `BinanceSdkBroker` internals with the native WebSocket API RPC client and native public Streams client; preserve the public broker/config export names.
