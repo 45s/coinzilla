@@ -69,7 +69,7 @@ describe("BinanceSdkBroker.getFills", () => {
   })
 
   it("fails closed when market metadata is missing or ambiguous", async () => {
-    for (const symbols of [undefined, [], [{ ...marketInfo, baseAsset: "" }]]) {
+    for (const symbols of [undefined, [], [{ ...marketInfo, baseAsset: "" }], [marketInfo, marketInfo]]) {
       const broker = createBroker({
         exchangeInfo: () => ({ symbols }),
         myTrades: () => [trade],
