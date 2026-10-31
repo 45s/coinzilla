@@ -189,6 +189,10 @@ test("runtime gate requires the approved Node floor and patched Undici", () => {
     undiciVersion: "7.30.1",
   }))
   assert.throws(() => assertNativeWebSocketRuntime({
+    nodeVersion: "22.23.4-rc.1",
+    undiciVersion: "6.29.1",
+  }), /Node.js >=22.23.4/)
+  assert.throws(() => assertNativeWebSocketRuntime({
     nodeVersion: "22.23.3",
     undiciVersion: "6.29.1",
   }), /Node.js >=22.23.4/)
