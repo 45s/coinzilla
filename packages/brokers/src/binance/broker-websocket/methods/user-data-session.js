@@ -243,17 +243,41 @@ export class BinanceUserDataSession {
 
   #bindClient(client, { includeUserData = true } = {}) {
     this.#detachClientListeners()
-    if (includeUserData) {
-      this.#removeEventListener = client.onEvent((message) => {
-        if (this.getClient() === client) this.#handleEvent(message)
+    const removers = []
+
+    try {
+      if (includeUserData) {
+        const removeEventListener = client.onEvent((message) => {
+          if (this.getClient() === client) this.#handleEvent(message)
+        })
+        if (typeof removeEventListener === "function") removers.push(removeEventListener)
+        this.#removeEventListener = removeEventListener ?? null
+
+        const removeErrorListener = client.onError?.((error) => {
+          if (this.getClient() === client) this.#handleError(error)
+        })
+        if (typeof removeErrorListener === "function") removers.push(removeErrorListener)
+        this.#removeErrorListener = removeErrorListener ?? null
+      }
+
+      const removeCloseListener = client.onClose?.((event) => {
+        if (this.getClient() === client) this.#handleClose(event)
       })
-      this.#removeErrorListener = client.onError?.((error) => {
-        if (this.getClient() === client) this.#handleError(error)
-      }) ?? null
+      if (typeof removeCloseListener === "function") removers.push(removeCloseListener)
+      this.#removeCloseListener = removeCloseListener ?? null
+    } catch (error) {
+      for (const remove of removers.reverse()) {
+        try {
+          remove()
+        } catch (cleanupError) {
+          logSafely(this.logger, "warn", "Unable to roll back Binance user-data listener setup", cleanupError)
+        }
+      }
+      this.#removeEventListener = null
+      this.#removeErrorListener = null
+      this.#removeCloseListener = null
+      throw error
     }
-    this.#removeCloseListener = client.onClose?.((event) => {
-      if (this.getClient() === client) this.#handleClose(event)
-    }) ?? null
   }
 
   #handleEvent(message) {
