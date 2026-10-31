@@ -375,7 +375,7 @@ describe("Binance user-data session recovery", () => {
       "userDataStream.subscribe.signature": () => {
         subscriptionAttempts += 1
         if (subscriptionAttempts === 2) throw new Error("resume subscribe rejected")
-        return { subscriptionId: 10 + subscriptionAttempts }
+        return { subscriptionId: 9 + subscriptionAttempts }
       },
       "session.subscriptions": () => [],
       "userDataStream.unsubscribe": () => ({}),
