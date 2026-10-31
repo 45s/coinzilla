@@ -14,10 +14,11 @@ import {
   roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
-import { reconcileExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
+import { reconcileExecutionFill, toExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
 import { reconcileTrackedOrder, validateRecoveryBalances } from "./recovery.js"
+import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -427,20 +428,28 @@ export class FreeRollBot {
   }
 
   async #reconcileUserDataState() {
-    if (typeof this.broker.getBalances !== "function") {
-      throw new Error("Broker does not support required getBalances() recovery snapshot")
+    const trackedOrdersBySymbol = Object.fromEntries(
+      [...this.#states].map(([symbol, state]) => [
+        symbol,
+        [state.buyOrder, state.sellOrder].filter(Boolean),
+      ]),
+    )
+    const snapshotResult = await collectReconciliationSnapshot({
+      broker: this.broker,
+      trackedOrdersBySymbol,
+      isActive: () => this.#isRunning,
+    })
+    if (!snapshotResult.ok) {
+      throw new Error(snapshotResult.reason)
     }
-    if (typeof this.broker.getOpenOrders !== "function" ||
-        typeof this.broker.getMyTrades !== "function") {
-      throw new Error("Broker does not support required order and trade reconciliation")
+    if (!this.#isRunning) {
+      throw new Error("Bot stopped during user-data snapshot reconciliation")
     }
 
-    const balances = unwrapResult(
-      await this.broker.getBalances(),
-      "getBalances recovery snapshot",
-    )
-    if (!this.#isRunning) throw new Error("Bot stopped during user-data balance reconciliation")
-    const balanceResult = validateRecoveryBalances({ balances })
+    const snapshot = snapshotResult.snapshot
+    const balanceResult = validateRecoveryBalances({
+      balances: snapshot.account.balances,
+    })
     if (!balanceResult.ok) throw new Error(balanceResult.reason)
 
     this.#confirmedBalances.clear()
@@ -452,17 +461,10 @@ export class FreeRollBot {
     }
 
     for (const [symbol, state] of this.#states) {
-      const openOrders = unwrapResult(
-        await this.broker.getOpenOrders({ symbol }),
-        `getOpenOrders(${symbol}) recovery snapshot`,
-      )
-      if (!this.#isRunning) throw new Error("Bot stopped during user-data order reconciliation")
-      if (!Array.isArray(openOrders)) {
-        throw new Error(`getOpenOrders(${symbol}) must return an array`)
-      }
-
+      const symbolSnapshot = snapshot.symbols[symbol]
+      const openOrders = symbolSnapshot.openOrders.items
       const trackedOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
-      const trackedIds = new Set(trackedOrders.map((order) => String(order.id)))
+      const trackedIds = new Set(trackedOrders.map((order) => getOrderId(order)))
       const unexpectedOrder = openOrders.find(
         (order) => !trackedIds.has(getOrderId(order)),
       )
@@ -473,14 +475,29 @@ export class FreeRollBot {
       }
 
       for (const order of trackedOrders) {
-        const fills = unwrapResult(
-          await this.broker.getMyTrades({ symbol, orderId: order.id, limit: 1000 }),
-          `getMyTrades(${symbol}, ${order.id}) recovery history`,
+        const orderId = getOrderId(order)
+        const canonicalOrder = symbolSnapshot.orderHistory.items.find(
+          (item) => item.brokerOrderId === orderId,
         )
-        if (!this.#isRunning) throw new Error("Bot stopped during user-data fill reconciliation")
-        if (!Array.isArray(fills)) {
-          throw new Error(`getMyTrades(${symbol}, ${order.id}) must return an array`)
+        if (!canonicalOrder) {
+          throw new Error(`Canonical order history is missing tracked order ${orderId}`)
         }
+        if (
+          canonicalOrder.side !== order.side ||
+          canonicalOrder.originalQuantity.amount !== order.quantity
+        ) {
+          throw new Error(`Canonical order history does not match tracked order ${orderId}`)
+        }
+
+        const canonicalFills = symbolSnapshot.fills.items.filter(
+          (fill) => fill.brokerOrderId === orderId,
+        )
+        const fills = canonicalFills.map((fill) => {
+          const execution = toExecutionFill({ fill })
+          if (!execution.ok) throw new Error(execution.reason)
+          return execution.fill
+        })
+
         for (const fill of fills) {
           const validation = validateOrderFill({ fill, symbol, order })
           if (!validation.ok) throw new Error(validation.reason)
@@ -496,6 +513,16 @@ export class FreeRollBot {
           fills,
         })
         if (!reconciliation.ok) throw new Error(reconciliation.reason)
+        if (canonicalOrder.executedQuantity.amount !== reconciliation.historyQuantity) {
+          throw new Error(`Canonical execution quantity does not match recovered fills for order ${orderId}`)
+        }
+        if (
+          (reconciliation.status === "FILLED" && canonicalOrder.status !== "FILLED") ||
+          (reconciliation.status === "OPEN" &&
+            !["OPEN", "PARTIALLY_FILLED"].includes(canonicalOrder.status))
+        ) {
+          throw new Error(`Canonical lifecycle status does not match recovered order ${orderId}`)
+        }
 
         if (reconciliation.status === "FILLED") {
           if (order.side === "BUY") {
