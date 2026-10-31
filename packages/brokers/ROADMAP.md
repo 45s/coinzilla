@@ -584,3 +584,14 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
 - Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
 - Consumer: Free-Roll recovery request #304. Close this work only after the exact snapshot API is integrated and verified by the consumer.
+
+## 12. Shared Entities contract adoption
+
+### Canonical fills and commissions
+
+- [~] Additive `getFills({ symbol, orderId?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values.
+- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
+- Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
+- Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
+- Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
+- **Task branch:** `feature/brokers/canonical-fills`; PR targets `develop`.
