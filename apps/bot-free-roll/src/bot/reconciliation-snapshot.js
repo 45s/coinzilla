@@ -360,23 +360,27 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
       tradeIds.add(fill.tradeId)
     }
 
-    for (const order of section.orderHistory.items) {
-      const orderFills = section.fills.items.filter(
-        (fill) => fill.brokerOrderId === order.brokerOrderId,
-      )
-      const filledQuantity = orderFills.reduce(
-        (total, fill) => addDecimal({
-          left: total,
-          right: fill.quantity.amount,
-        }),
-        "0",
-      )
-      if (compareDecimal({
-        left: filledQuantity,
-        right: order.executedQuantity.amount,
-      }) !== 0) {
-        return failure(`Reconciliation snapshot fill quantity does not match tracked order ${order.brokerOrderId}`)
+    try {
+      for (const order of section.orderHistory.items) {
+        const orderFills = section.fills.items.filter(
+          (fill) => fill.brokerOrderId === order.brokerOrderId,
+        )
+        const filledQuantity = orderFills.reduce(
+          (total, fill) => addDecimal({
+            left: total,
+            right: fill.quantity.amount,
+          }),
+          "0",
+        )
+        if (compareDecimal({
+          left: filledQuantity,
+          right: order.executedQuantity.amount,
+        }) !== 0) {
+          return failure(`Reconciliation snapshot fill quantity does not match tracked order ${order.brokerOrderId}`)
+        }
       }
+    } catch (error) {
+      return failure(`Reconciliation snapshot contains invalid fill quantities for ${symbol}: ${error.message}`)
     }
 
     const firstTradeId = section.fills.items.length
