@@ -58,8 +58,8 @@ The migration is complete only when all of the following are true:
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
-- [ ] Phase 3 — WebSocket API RPC client (implementation and deterministic tests prepared on `migration/binance-phase-3-rpc`; exact-head CI pending).
-- [ ] Phase 4 — public WebSocket Streams client.
+- [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
+- [ ] Phase 4 — public WebSocket Streams client (active phase; implementation on `migration/binance-phase-4-streams`).
 - [ ] Phase 5 — rebuild the broker on native clients.
 - [ ] Phase 6 — user-data session lifecycle and recovery.
 - [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
@@ -67,11 +67,12 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Validate draft PR #263 on its exact head; all RPC and signing tests must pass on Node.js 22.23.4.
-2. Review the full diff and fix failures with meaningful changes; do not rerun CI using empty commits.
-3. Do not wire the RPC client into `BinanceSdkBroker` or add order-method retry behavior in this phase.
-4. Before declaring Phase 3 complete, recheck latest `main` and synchronize only if broker/API/consumer-contract changes require it.
-5. Wait for explicit merge approval. Do not merge automatically.
+1. Wait for explicit merge approval for PR #265; do not merge automatically.
+2. After merge, record the merge SHA and mark Phase 4 complete.
+3. Recheck `main` immediately before Phase 5. Merge/sync only if broker/API/consumer-contract changes have landed; preserve bot-only app changes.
+4. Begin Phase 5 by adding native method wrappers using the compatibility matrix above, integrating `adaptPublicStreamMessage` at the callback boundary, and rebuilding `BinanceSdkBroker` without touching `apps/`.
+5. Keep authenticated user-data subscription/session work in Phase 6; do not reintroduce the legacy REST listen-key path.
+
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -265,7 +266,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Verify the local raw-WebSocket ping/pong integration test on Node >=22.23.4; the server receives a pong with the exact ping payload.
 - [x] Add duplicate close/error, constructor-failure, close-during-connect, and listener-cleanup regression cases.
 - [x] Exercise the Phase 1 fake socket and fake clock in transport tests; avoid unused testing scaffolding.
-- [ ] Verify documented Binance connection lifetime, reconnect requirements, and connection/message limits relevant to the transport.
+- [x] Verify official Binance connection lifetime (24 hours), server-shutdown notification, ping/pong behavior, 5 incoming messages/second, 1024 streams/connection, and 300 connection attempts/5 minutes/IP. Phase 4 must enforce application-level subscription/message limits and rotate/reconnect safely.
 - **Exit criteria:** deterministic transport tests and the local ping/pong protocol test pass on Node.js 22.23.4; no third-party WebSocket package is added. CI evidence on PR #261 head `e4c442c61109807ee841485d40f5c0b64db8397e`.
 
 ### Phase 3 — WebSocket API RPC client
@@ -279,19 +280,45 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Handle concurrent requests and out-of-order responses.
 - [x] Add deterministic tests for unknown/duplicate/late IDs, malformed payloads, multiple pending requests on disconnect, and timeout cleanup using the Phase 1 fake socket/clock.
 - [x] Make reconnect behavior explicit: this client is one-connection/one-lifecycle; it never retries or replays requests.
-- [ ] Verify all tests on exact PR head and review edge cases before merge.
+- [x] Verify all tests on exact PR #263 head `1300fd57651cd5809feb0a5d0fd66541ee1ced6a`; Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit passed before merge.
 - **Exit criteria:** deterministic tests cover success, API error, timeout, malformed response, concurrency, out-of-order, unknown ID, duplicate/late response, send failure, and disconnect. Signing has known test vectors.
+- **PR:** [#263 — feat(brokers): add Binance WebSocket API RPC client](https://github.com/45s/coinzilla/pull/263). Merged into the integration branch with merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`.
 
 ### Phase 4 — Public WebSocket Streams client
 
-- [ ] Implement public market-data Streams connection and subscription management using the native transport. User-data subscription/events remain on the WebSocket API connection.
-- [ ] Implement streams required by current consumers first, then preserve other already-exported stream methods where required by compatibility.
-- [ ] Validate stream names and parameters before sending/opening a connection.
-- [ ] Handle raw and combined-stream envelopes and adapt events through pure functions.
-- [ ] Track desired subscriptions and restore them after reconnect without duplicate listeners/callbacks.
-- [ ] Respect current Binance connection, subscription, and message limits; surface actionable errors for rejected subscriptions.
-- [ ] Handle server shutdown, connection lifetime, reconnect backoff, and explicit disconnect.
-- **Exit criteria:** deterministic tests cover subscribe/unsubscribe, raw/combined envelopes, message adaptation, reconnect/resubscribe, malformed events, limits/error paths, and shutdown.
+**Status: Phase 4 implementation and deterministic tests are complete. PR #265 is open and all four workflows pass on its exact head; awaiting explicit merge approval.**
+
+- [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
+- [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
+- [x] Keep the existing exported `BinanceStreamClient` and its stream methods untouched during this phase; implement method wrappers during Phase 5, not by promoting the legacy socket/REST listen-key path.
+- [x] Use Binance's combined `/stream?streams=...` endpoint so each event retains its exact stream name; verify URL-provided initial subscriptions with `LIST_SUBSCRIPTIONS`, then use acknowledged SUBSCRIBE/UNSUBSCRIBE commands for dynamic changes. Keep raw-envelope parsing as a defensive protocol path.
+- [x] Validate stream names and method parameters (symbol, interval, rolling window, depth levels, update speed) before sending; rolling-window streams are limited to Binance's supported 1h and 4h windows.
+- [x] Correlate SUBSCRIBE/UNSUBSCRIBE acknowledgements by request ID; validate LIST_SUBSCRIPTIONS results; normalize API errors and reject pending operations on timeout, socket failure, or disconnect.
+- [x] Track desired subscriptions separately from active subscriptions. Multiple callers subscribing to the same stream must not create duplicate server subscriptions; unsubscribe only when the final local listener is removed.
+- [x] Bound control-message sends to 4 messages/second to leave headroom for automatic protocol pong frames.
+- [x] Enforce the 1024-stream-per-connection limit and batch subscription setup.
+- [x] Reconnect with bounded backoff, create a fresh one-lifecycle transport, and restore desired subscriptions exactly once; never replay unrelated RPC/order operations.
+- [x] Handle `serverShutdown` and rotate before the 24-hour connection lifetime.
+- [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
+- [x] Audit/reuse the existing public aggregate-trade adapter through `adaptPublicStreamMessage`; other public market-data events pass through unchanged, while authenticated user-data events are rejected at this boundary.
+- **Exact-head CI evidence:** PR #265 head `39095bf7bac4724ec7380cbc112ee30b2902a40b` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
+**Legacy method-to-stream compatibility matrix** (the old exported methods remain untouched until Phase 5):
+
+| Legacy method | Required parameters | Native stream mapping |
+|---|---|---|
+| `trade({ tickets })` | First ticket/symbol | `{symbol}@trade` |
+| `kline({ tickets, interval })` | First ticket/symbol, interval | `{symbol}@kline_{interval}` |
+| `miniTicker({ symbol? })` | Optional symbol | `{symbol}@miniTicker` or `!miniTicker@arr` |
+| `ticker({ symbol? })` | Optional symbol | `{symbol}@ticker` or `!ticker@arr` |
+| `rollingWindowTicker({ windowSize, symbol? })` | Window `1h` or `4h`; optional symbol | `{symbol}@ticker_{windowSize}` or `!ticker_{windowSize}@arr` |
+| `bookTicker({ symbol })` | Symbol | `{symbol}@bookTicker` |
+| `partialBookDepth({ symbol, levels, speed })` | Symbol, levels `5/10/20`, speed `100ms/1000ms` | `{symbol}@depth{levels}@{speed}` |
+| `diffBookDepth({ symbol, speed })` | Symbol, speed `100ms/1000ms` | `{symbol}@depth@{speed}` |
+| `aggTrade({ tickets })` | First ticket/symbol | `{symbol}@aggTrade` |
+
+`userData()` is intentionally excluded: its current REST listen-key lifecycle is legacy behavior and the replacement belongs to Phase 6 on the authenticated WebSocket API connection.
+
+- **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. Adapter-boundary tests and exact-head CI must pass before Phase 4 is complete. No live credentials/network calls in unit tests.
 
 ### Phase 5 — Rebuild the broker on native clients
 
@@ -510,9 +537,9 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed after Phase 2 merge and before Phase 3:** `d4158240f3f06f1306c9d7622cd54725df626a71`.
-- Compared all 32 commits since baseline `bec7266e9f2c2dddbc638e66f9dbd1cfe67a92ea`. Changes are confined to `apps/bot-free-roll` implementation/tests/roadmap/package metadata and `.github/workflows/test-coverage.yml`. Read-only review found no broker package, broker export, broker API, dependency/lockfile, runtime, or consumer-contract changes. No significant trigger was found, so do not merge unrelated bot work into the integration branch.
-- Recheck latest main before the Phase 3 PR and immediately if a broker/API/consumer-contract change lands.
+- **Main SHA reviewed before Phase 4 PR validation:** `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`.
+- Compared the 6 new commits since reviewed main SHA `01cf72ca3baa1e838034abed0f57030959406ef5`. All changed files are confined to `apps/bot-free-roll` (bot implementation, order-execution module/tests, and bot roadmap); no broker package, export, API, dependency/lockfile, runtime, or consumer-contract changes were found. Preserve this bot-team work and do not merge unrelated app changes into the integration branch.
+- Recheck latest main before Phase 4 merge and immediately if a broker/API/consumer-contract change lands.
 
 ---
 
