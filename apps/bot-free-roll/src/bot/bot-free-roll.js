@@ -10,8 +10,8 @@ import {
   subtractDecimal,
   getConfiguredSellFeeRateExact,
   getOrderType,
-  calculateFillAccountingExact,
-  calculateCommissionRateExact,
+  reconcileExecutionFill,
+  validateOrderFill,
   calculateSellPlanExact,
   getOrderId,
   roundDecimalToIncrement,
@@ -1063,121 +1063,26 @@ export class FreeRollBot {
 
   #applyExecutionFill({ symbol, fill }) {
     const state = this.#states.get(symbol)
-    if (!state || !fill || typeof fill !== "object") return false
+    if (!state) return false
 
-    const fillId = String(fill.id ?? "")
-    const orderId = String(fill.orderId ?? "")
-    if (!fillId || fillId === "-1" || fillId === "undefined" ||
-        !orderId || orderId === "undefined") {
-      this.#pause(symbol, "Execution fill is missing a stable trade or order ID")
+    const result = reconcileExecutionFill({ fill, state })
+    if (result.updates) Object.assign(state, result.updates)
+
+    if (result.duplicate) return true
+    if (result.recordedFill) {
+      this.#publish("fill.received", {
+        symbol,
+        fill: result.recordedFill,
+      })
+    }
+    if (!result.ok) {
+      this.#pause(symbol, result.reason, result.error)
       return false
     }
-    if (state.processedTradeIds.has(fillId)) return true
-
-    state.processedTradeIds.add(fillId)
-    state.fills.set(fillId, { ...fill })
-    state.fillsByOrder.set(orderId, (state.fillsByOrder.get(orderId) ?? 0) + 1)
-    this.#publish("fill.received", {
-      symbol,
-      fill: { ...fill },
-    })
-
-    const commissionAmount = String(fill.commissionAmount ?? "")
-    const commissionAsset = fill.commissionAsset ?? null
-    if (commissionAmount && compareDecimal({ left: commissionAmount, right: "0" }) > 0) {
-      const asset = commissionAsset ?? "UNKNOWN"
-      state.commissionTotals.set(
-        asset,
-        addDecimal({
-          left: state.commissionTotals.get(asset) ?? "0",
-          right: commissionAmount,
-        }),
-      )
-    }
-
-    if (fill.side !== "BUY" && fill.side !== "SELL") {
-      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
-      return false
-    }
-
-    if (typeof fill.isMaker !== "boolean") {
-      this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
-      return false
-    }
-    if (state.orderType === "LIMIT_MAKER" && !fill.isMaker) {
-      this.#pause(symbol, `LIMIT_MAKER order produced a taker fill for trade ${fillId}`)
-      return false
-    }
-
-    let accounting
-    let actualCommissionRate
-    try {
-      accounting = calculateFillAccountingExact({
-        side: fill.side,
-        quantity: String(fill.quantity ?? ""),
-        quoteQuantity: String(fill.quoteQuantity ?? ""),
-        commissionAmount,
-        commissionAsset,
-        baseAsset: state.baseAsset,
-        quoteAsset: state.quoteAsset,
-      })
-      actualCommissionRate = calculateCommissionRateExact({
-        price: String(fill.price ?? ""),
-        quoteQuantity: String(fill.quoteQuantity ?? ""),
-        commissionAmount,
-        commissionAsset,
-        baseAsset: state.baseAsset,
-        quoteAsset: state.quoteAsset,
-      })
-    } catch (error) {
-      this.#pause(symbol, `Unsupported or incomplete commission/fill data for trade ${fillId}`, error)
-      return false
-    }
-
-    state.actualCommissionRate = maxDecimal({
-      left: state.actualCommissionRate,
-      right: actualCommissionRate,
-    })
-    state.feeRate = maxDecimal({
-      left: state.configuredFeeRate,
-      right: state.actualCommissionRate,
-    })
-
-    if (fill.side === "BUY") {
-      state.activeQuantity = addDecimal({
-        left: state.activeQuantity,
-        right: accounting.baseQuantity,
-      })
-      state.cycleCost = addDecimal({
-        left: state.cycleCost,
-        right: accounting.quoteQuantity,
-      })
-    } else if (fill.side === "SELL") {
-      if (compareDecimal({ left: state.activeQuantity, right: accounting.baseQuantity }) < 0) {
-        this.#pause(symbol, `SELL fill ${fillId} consumes more base inventory than the strategy owns`)
-        return false
-      }
-      state.activeQuantity = subtractDecimal({
-        left: state.activeQuantity,
-        right: accounting.baseQuantity,
-      })
-      state.saleProceeds = addDecimal({
-        left: state.saleProceeds,
-        right: accounting.quoteQuantity,
-      })
-    }
-
-    state.filledQuantityByOrder.set(
-      orderId,
-      addDecimal({
-        left: state.filledQuantityByOrder.get(orderId) ?? "0",
-        right: String(fill.quantity),
-      }),
-    )
 
     this.#debug(`[${symbol}] Actual fill accounted`, {
-      fill,
-      accounting,
+      fill: result.recordedFill,
+      accounting: result.accounting,
       activeQuantity: state.activeQuantity,
       cycleCost: state.cycleCost,
       saleProceeds: state.saleProceeds,
@@ -1200,11 +1105,8 @@ export class FreeRollBot {
     }
 
     for (const fill of fills) {
-      if (String(fill?.orderId) !== String(order.id) ||
-          fill?.symbol !== symbol ||
-          fill?.side !== order.side) {
-        throw new Error(`Trade history returned a fill outside order ${order.id}`)
-      }
+      const validation = validateOrderFill({ fill, symbol, order })
+      if (!validation.ok) throw new Error(validation.reason)
       if (!this.#applyExecutionFill({ symbol, fill })) {
         throw new Error(`Could not account trade fill ${fill?.id ?? "unknown"}`)
       }
