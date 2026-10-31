@@ -76,6 +76,24 @@ function createBroker({ maxAttempts = 3 } = {}) {
 }
 
 describe("Binance user-data session recovery", () => {
+
+  it("tracks API socket loss even when no user-data handle is active", async () => {
+    const { broker, clients } = createBroker()
+    await broker.connect()
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+    assert.equal(broker.connected, false)
+    assert.equal(broker.userDataUnavailable, true)
+
+    await broker.connect()
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].state, "open")
+    assert.equal(broker.connected, true)
+    assert.equal(broker.userDataUnavailable, true)
+    await broker.disconnect()
+  })
+
   it("uses one remote subscription and fans events out to local handles", async () => {
     const { broker, clients } = createBroker()
     await broker.connect()
