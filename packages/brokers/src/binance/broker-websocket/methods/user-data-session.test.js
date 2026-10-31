@@ -124,7 +124,10 @@ describe("Binance user-data session recovery", () => {
           "userDataStream.subscribe.signature": index === 0
             ? () => ({ subscriptionId: 10 })
             : index === 1
-              ? () => new Promise((resolve) => { resolveDelayedSubscribe = resolve })
+              ? () => new Promise((resolve) => {
+                  resolveDelayedSubscribe = resolve
+                  markDelayedSubscribeStarted()
+                })
               : () => ({ subscriptionId: index * 100 + 10 }),
           "userDataStream.unsubscribe": () => ({}),
         })
@@ -770,7 +773,6 @@ describe("Binance user-data session recovery", () => {
               resolve(client)
             }
             markReconnectStarted()
-            markReconnectStarted()
           })
         }
         clients.push(client)
@@ -828,6 +830,7 @@ describe("Binance user-data session recovery", () => {
               client.state = "open"
               resolve(client)
             }
+            markReconnectStarted()
           })
         }
         clients.push(client)
