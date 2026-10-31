@@ -3,8 +3,10 @@ import test from "node:test"
 
 import { createGridCycle, appendGridCycleSellOrder, recordGridCycleSellFill, completeGridCycle } from "./grid-cycles.js"
 import {
+  createGridStateSnapshot,
   projectGridPairAccounting,
   replayGridFillLedger,
+  restoreGridStateSnapshot,
 } from "./grid-state-runtime.js"
 
 function createCycle() {
@@ -199,6 +201,57 @@ test("fails closed when cycle snapshots reference missing canonical fills", () =
   })
 
   assert.equal(result.ok, false)
+})
+
+test("creates and restores a complete multi-pair Grid state snapshot", () => {
+  const cycle = createCompletedCycle()
+  const state = createState({ cycle })
+  state.ledgerEntries = Object.freeze([createBuyFill(), createSellFill()])
+  const states = new Map([["DOGEFDUSD", state]])
+  const fingerprints = new Map([["DOGEFDUSD", "config-v1"]])
+  const snapshot = createGridStateSnapshot({
+    revision: 7,
+    states,
+    configFingerprints: fingerprints,
+  })
+  const restored = restoreGridStateSnapshot({
+    snapshot: snapshot.data,
+    states: new Map([["DOGEFDUSD", createState()]]),
+    configFingerprints: fingerprints,
+  })
+
+  assert.equal(snapshot.ok, true)
+  assert.equal(snapshot.data.revision, 7)
+  assert.equal(restored.ok, true)
+  const restoredState = restored.data.states.get("DOGEFDUSD")
+  assert.equal(restoredState.gridCycles.size, 1)
+  assert.equal(restoredState.fills.size, 2)
+  assert.equal(restoredState.activeQuantity, "0")
+  assert.equal(restoredState.freeQuantity, "1")
+  assert.equal(restoredState.marketInventory.strategy.baseQuantity, "1")
+})
+
+test("rejects Grid restore when configured pair set or fingerprint changed", () => {
+  const state = createState()
+  const snapshot = createGridStateSnapshot({
+    revision: 0,
+    states: new Map([["DOGEFDUSD", state]]),
+    configFingerprints: new Map([["DOGEFDUSD", "config-v1"]]),
+  }).data
+
+  const missingPair = restoreGridStateSnapshot({
+    snapshot,
+    states: new Map(),
+    configFingerprints: new Map(),
+  })
+  const changedConfig = restoreGridStateSnapshot({
+    snapshot,
+    states: new Map([["DOGEFDUSD", createState()]]),
+    configFingerprints: new Map([["DOGEFDUSD", "config-v2"]]),
+  })
+
+  assert.equal(missingPair.ok, false)
+  assert.equal(changedConfig.ok, false)
 })
 
 test("fails closed when pair active/free totals do not match market inventory", () => {
