@@ -13,7 +13,7 @@ export function normalizeDecimalString({
   }
 
   const input = value.trim()
-  const match = /^(-?)(\d+)(?:\\.(\d+))?$/.exec(input)
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(input)
 
   if (!match) {
     return toResult({ error: new Error(`${field} has an invalid decimal format`) })
