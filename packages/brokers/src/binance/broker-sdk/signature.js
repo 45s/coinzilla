@@ -37,6 +37,9 @@ export function createSignedBinanceParams(params, {
   timestamp = Date.now(),
   recvWindow,
 } = {}) {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    throw new TypeError("Binance signed params must be an object")
+  }
   if (typeof apiKey !== "string" || apiKey.length === 0) {
     throw new TypeError("Binance API key is required for signed requests")
   }
