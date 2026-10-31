@@ -12,6 +12,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
       apiSecret: "test-secret",
       logger: { error: (...args) => logs.push(args), info() {} },
     }, { apiClientFactory: () => rpc })
+    broker.connected = true
     let eventCalls = 0
     const result = await broker.subscribeForUserData({ onEvent: () => { eventCalls += 1 } })
     assert.equal(result.ok, true)
