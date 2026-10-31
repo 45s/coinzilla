@@ -44,6 +44,24 @@ Before making changes, read ENGINEERING_STANDARDS.md, inspect the affected packa
 5. Implement the smallest cohesive change, separating pure logic from side effects where practical.
 6. Run the focused test and coverage commands, followed by relevant workspace and repository checks when feasible.
 7. Review the final diff and report evidence accurately.
+8. Before merging any pull request into main, follow the mandatory **Keep PR branches up to date** procedure below. The PR must contain the latest main commit.
+9. In the completion summary, report what changed, tests actually run and their results, the exact commit checked, and any checks that could not be run.
+
+## Mandatory: keep PR branches up to date before merge
+
+**Never merge a pull request into main while its head branch is behind or has not been verified against the latest main. The agent—not the user—owns this update.**
+
+For every PR targeting main, immediately before merging:
+
+1. Fetch the latest remote main and the PR head; do not rely on a previously cached local or API snapshot.
+2. Compare the PR branch with the current main. Confirm that the PR branch contains the current main tip (equivalently, that the current main tip is an ancestor of the PR head).
+3. If it does not, update the PR branch by rebasing it onto the latest main or merging the latest main into it. Prefer the repository's established history policy. Never rewrite or force-push shared history unless explicitly authorized and safe.
+4. Resolve conflicts on the PR branch, review the resulting diff, and push the updated branch. Do not ask the user to update the branch manually.
+5. Wait for all required CI checks to finish successfully on the exact final PR head commit. If the branch changes, or main advances while checks are running, repeat the freshness check and wait for checks on the new final commit.
+6. Re-fetch both refs immediately before merge. Merge only if the PR still contains the latest main tip, required reviews are satisfied, and all required checks pass for the exact head SHA.
+7. If the agent cannot fetch, update, push, or verify the branch with its available permissions/tools, do not merge. Explain the precise blocker and the action that is unavailable; never silently leave branch synchronization to the user.
+
+Do not merge directly to main as a shortcut. This rule applies to every PR, including documentation-only and agent-authored PRs.
 
 ## Repository-specific constraints
 
