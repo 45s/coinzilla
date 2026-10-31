@@ -1,4 +1,5 @@
 import { Fill } from "@coinzilla/entities"
+import { appendFillLedgerEntry } from "./fill-ledger.js"
 import {
   addDecimal,
   compareDecimal,
@@ -84,11 +85,30 @@ export function reconcileExecutionFill({ fill, state }) {
     })
   }
 
-  if (state.processedTradeIds.has(fillId)) {
-    return { ok: true, duplicate: true }
+  const ledger = appendFillLedgerEntry({
+    entries: state.ledgerEntries ?? [],
+    fill,
+  })
+  if (!ledger.ok) {
+    return failure({ reason: ledger.reason })
   }
 
-  const recordedFill = { ...fill }
+  const wasProcessed = state.processedTradeIds.has(fillId)
+  if (wasProcessed) {
+    if (!ledger.duplicate) {
+      return failure({
+        reason: `Processed trade ${fillId} is missing from the immutable fill ledger`,
+      })
+    }
+    return { ok: true, duplicate: true }
+  }
+  if (ledger.duplicate) {
+    return failure({
+      reason: `Fill ledger contains unprocessed trade ${fillId}`,
+    })
+  }
+
+  const recordedFill = ledger.entry
   const processedTradeIds = new Set(state.processedTradeIds)
   processedTradeIds.add(fillId)
   const fills = new Map(state.fills)
@@ -111,6 +131,7 @@ export function reconcileExecutionFill({ fill, state }) {
   }
 
   const updates = {
+    ledgerEntries: ledger.entries,
     processedTradeIds,
     fills,
     fillsByOrder,
@@ -355,4 +376,74 @@ export function reconcileFillHistory({
     ok: true,
     missingFills: Object.freeze(missingFills),
   }
+}
+
+
+// Rebuild the execution-derived projection for one accounting window. Cycle
+// completion and inventory-bucket events are deliberately not inferred from
+// fills; those belong to the broader inventory ledger stages.
+export function replayExecutionFills({ entries, pairState } = {}) {
+  if (!Array.isArray(entries)) {
+    return { ok: false, reason: "Execution fill ledger entries must be an array" }
+  }
+  if (
+    !pairState ||
+    typeof pairState !== "object" ||
+    Array.isArray(pairState) ||
+    !["LIMIT", "LIMIT_MAKER"].includes(pairState.orderType) ||
+    typeof pairState.baseAsset !== "string" ||
+    !pairState.baseAsset ||
+    typeof pairState.quoteAsset !== "string" ||
+    !pairState.quoteAsset ||
+    typeof pairState.configuredFeeRate !== "string"
+  ) {
+    return { ok: false, reason: "Execution fill replay requires valid pair accounting settings" }
+  }
+
+  try {
+    if (compareDecimal({ left: pairState.configuredFeeRate, right: "0" }) < 0) {
+      return {
+        ok: false,
+        reason: "Execution fill replay configured fee rate must be non-negative",
+      }
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      reason: `Execution fill replay has an invalid configured fee rate: ${error.message}`,
+    }
+  }
+
+  const state = {
+    orderType: pairState.orderType,
+    baseAsset: pairState.baseAsset,
+    quoteAsset: pairState.quoteAsset,
+    configuredFeeRate: pairState.configuredFeeRate,
+    feeRate: pairState.configuredFeeRate,
+    actualCommissionRate: "0",
+    activeQuantity: "0",
+    cycleCost: "0",
+    saleProceeds: "0",
+    processedTradeIds: new Set(),
+    fills: new Map(),
+    fillsByOrder: new Map(),
+    filledQuantityByOrder: new Map(),
+    commissionTotals: new Map(),
+    ledgerEntries: Object.freeze([]),
+  }
+
+  for (const fill of entries) {
+    const result = reconcileExecutionFill({ fill, state })
+    if (result.updates) Object.assign(state, result.updates)
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: result.reason,
+        failedFillId: fill?.id ?? null,
+        state,
+      }
+    }
+  }
+
+  return { ok: true, state }
 }
