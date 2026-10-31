@@ -203,22 +203,19 @@ export class EventBus {
     return toResult({ flushed: true })
   }
 
-  async close({} = {}) {
-    if (this.closed) {
-      const result = await this.flush()
-      return result.ok
-        ? toResult({ closed: true })
-        : toResult({ error: new Error("Failed to flush EventBus") })
-    }
+  /**
+   * Return an immutable snapshot of the bus's current resource and lifecycle state.
+   * @returns {{ pendingCount: number, maxPending: number, closed: boolean }}
+   */
+  getDiagnostics() {
+    return Object.freeze({
+      pendingCount: this.pending.size,
+      maxPending: this.maxPending,
+      closed: this.closed,
+    })
+  }
 
-    this.closed = true
-
-    const result = await this.flush()
-
-    if (!result.ok) {
-      return result
-    }
-
+  #clearSubscriptions() {
     for (const record of this.subscriptions) {
       record.active = false
       record.registry.delete(record.listener)
@@ -227,7 +224,76 @@ export class EventBus {
     this.subscriptions.clear()
     this.listeners.clear()
     this.allListeners.clear()
+  }
 
+  /**
+   * Stop accepting work and wait for accepted deliveries to settle.
+   * When timeoutMs expires, the bus remains closed and pending handlers continue
+   * running; a later close() call can wait for them to drain.
+   * @param {{ timeoutMs?: number }} options (1–2,147,483,647 milliseconds when provided)
+   */
+  async close(options = {}) {
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      Array.isArray(options) ||
+      (Object.getPrototypeOf(options) !== Object.prototype &&
+        Object.getPrototypeOf(options) !== null)
+    ) {
+      return toResult({
+        error: new TypeError("EventBus close options must be a plain object"),
+      })
+    }
+
+    for (const key of Reflect.ownKeys(options)) {
+      if (key !== "timeoutMs") {
+        return toResult({
+          error: new TypeError(`Unknown EventBus close option: ${String(key)}`),
+        })
+      }
+    }
+
+    const { timeoutMs } = options
+    if (
+      timeoutMs !== undefined &&
+      (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647)
+    ) {
+      return toResult({
+        error: new TypeError("EventBus close timeoutMs must be an integer between 1 and 2147483647"),
+      })
+    }
+
+    this.closed = true
+
+    let result
+    if (timeoutMs === undefined) {
+      result = await this.flush()
+    } else {
+      let timeoutHandle
+      const timeout = new Promise((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(null), timeoutMs)
+      })
+
+      try {
+        result = await Promise.race([this.flush(), timeout])
+      } finally {
+        clearTimeout(timeoutHandle)
+      }
+
+      if (result === null) {
+        this.#clearSubscriptions()
+        return toResult({
+          error: new Error(`EventBus close timed out after ${timeoutMs}ms`),
+          timedOut: true,
+        })
+      }
+    }
+
+    if (!result.ok) {
+      return result
+    }
+
+    this.#clearSubscriptions()
     return toResult({ closed: true })
   }
 }
