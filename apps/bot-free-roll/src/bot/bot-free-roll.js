@@ -1165,9 +1165,6 @@ export class FreeRollBot {
         left: state.saleProceeds,
         right: accounting.quoteQuantity,
       })
-    } else {
-      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
-      return false
     }
 
     state.filledQuantityByOrder.set(
