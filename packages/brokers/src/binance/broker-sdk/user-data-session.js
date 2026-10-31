@@ -201,22 +201,25 @@ export class BinanceUserDataSession {
   }
 
   async #findExistingSubscription(client, originalError) {
+    let response
     try {
-      const response = await client.request("session.subscriptions")
-      const subscriptions = Array.isArray(response.data) ? response.data : []
-      const ids = subscriptions
-        .map((item) => item?.subscriptionId)
-        .filter((id) => Number.isSafeInteger(id) && id >= 0)
-
-      if (ids.length === 1) return ids[0]
-      if (ids.length > 1) {
-        throw new Error("Cannot safely identify the user-data subscription: multiple active subscriptions exist")
-      }
+      response = await client.request("session.subscriptions")
     } catch (lookupError) {
-      if (lookupError.message?.includes("multiple active subscriptions")) throw lookupError
       this.logger.warn?.("Unable to verify Binance user-data subscription after an uncertain response", lookupError)
+      throw originalError
     }
 
+    const subscriptions = Array.isArray(response.data) ? response.data : []
+    const ids = subscriptions
+      .map((item) => item?.subscriptionId)
+      .filter((id) => Number.isSafeInteger(id) && id >= 0)
+
+    if (ids.length > 1) {
+      throw new Error("Cannot safely identify the user-data subscription: multiple active subscriptions exist", {
+        cause: originalError,
+      })
+    }
+    if (ids.length === 1) return ids[0]
     throw originalError
   }
 
