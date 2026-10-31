@@ -63,12 +63,12 @@ export function replayGridFillLedger({ state, ledgerEntries } = {}) {
         return failure(`Grid cycle ${cycle.id} is missing a canonical BUY fill`)
       }
     }
-    for (const order of cycle.sellOrders) {
-      for (const fillId of order.fillIds) {
-        const fill = ledgerById.get(fillId)
-        if (!fill || fill.orderId !== order.id || fill.side !== "SELL") {
-          return failure(`Grid SELL order ${order.id} is missing a canonical fill`)
-        }
+    for (const fill of cycle.sellFills) {
+      const ledgerFill = ledgerById.get(fill.id)
+      if (!ledgerFill || ledgerFill.orderId !== fill.orderId ||
+          ledgerFill.side !== "SELL" ||
+          !cycle.sellOrders.some((order) => order.id === fill.orderId)) {
+        return failure(`Grid SELL fill ${fill.id} is missing its canonical ledger entry or owning order`)
       }
     }
   }
@@ -95,8 +95,10 @@ export function replayGridFillLedger({ state, ledgerEntries } = {}) {
       }
     } else if (owner.role === "SELL") {
       const cycle = state.gridCycles.get(owner.cycleId)
-      const order = cycle.sellOrders.find((entry) => entry.id === owner.orderId)
-      if (!order?.fillIds.includes(fill.id)) {
+      const ownedFill = cycle.sellFills.find((entry) =>
+        entry.id === fill.id && entry.orderId === owner.orderId,
+      )
+      if (!ownedFill) {
         return failure(`Unexpected SELL fill ${fill.id} for Grid cycle ${cycle.id}`)
       }
     }
