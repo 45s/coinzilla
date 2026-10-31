@@ -230,7 +230,7 @@ export class EventBus {
    * Stop accepting work and wait for accepted deliveries to settle.
    * When timeoutMs expires, the bus remains closed and pending handlers continue
    * running; a later close() call can wait for them to drain.
-   * @param {{ timeoutMs?: number }} options
+   * @param {{ timeoutMs?: number }} options (1–2,147,483,647 milliseconds when provided)
    */
   async close(options = {}) {
     if (
