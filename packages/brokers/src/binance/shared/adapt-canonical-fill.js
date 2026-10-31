@@ -38,6 +38,9 @@ export function adaptCanonicalFill({ trade, market } = {}) {
   let commissionStatus = "UNKNOWN"
   if (trade.commission !== undefined && trade.commission !== null) {
     const commission = new Money({ amount: trade.commission, asset: market.quoteAsset })
+    if (commission.amount.startsWith("-")) {
+      throw new TypeError("Binance commission amount should be non-negative")
+    }
     if (commission.amount === "0") {
       commissionStatus = "COMPLETE"
     } else if (typeof trade.commissionAsset === "string" && trade.commissionAsset.trim()) {
