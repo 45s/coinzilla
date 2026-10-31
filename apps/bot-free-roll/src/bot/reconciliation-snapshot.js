@@ -319,6 +319,7 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
       if (
         !(order instanceof CanonicalOrder) ||
         order.market.symbol !== symbol ||
+        order.status === "UNKNOWN" ||
         !trackedOrderIds.includes(order.brokerOrderId) ||
         orderIds.has(order.brokerOrderId)
       ) {
@@ -345,6 +346,8 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
       if (
         !(fill instanceof Fill) ||
         fill.market.symbol !== symbol ||
+        fill.commissionStatus !== "COMPLETE" ||
+        fill.liquidityRole === "UNKNOWN" ||
         !trackedOrderIds.includes(fill.brokerOrderId) ||
         !/^\d+$/.test(fill.tradeId) ||
         !Number.isSafeInteger(Number(fill.tradeId)) ||
