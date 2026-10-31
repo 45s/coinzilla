@@ -46,6 +46,7 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | Utilities | `packages/utils/**` | `packages/utils/AGENTS.md`, `packages/utils/ROADMAP.md` |
 | Event bus | `packages/event-bus/**` | `packages/event-bus/AGENTS.md`, `packages/event-bus/ROADMAP.md` |
 | Journal | `packages/journal/**` | `packages/journal/AGENTS.md`, `packages/journal/ROADMAP.md` |
+| Notifications | `packages/notifiers/**` | `packages/notifiers/AGENTS.md`, `packages/notifiers/ROADMAP.md` |
 
 Root-level manifests, lockfiles, CI workflows, repository rules, shared documentation, and cross-cutting architecture are shared infrastructure. A task that changes them must explain why and identify every affected domain. Do not claim ownership of shared infrastructure merely because your task depends on it.
 

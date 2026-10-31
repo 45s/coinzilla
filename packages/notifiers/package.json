@@ -1,0 +1,16 @@
+{
+  "name": "@coinzilla/notifiers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-include=src/index.js --test-coverage-include=src/telegram-notifier.js --test-coverage-include=src/telegram-event-subscriber.js --test-coverage-include=src/format-notification.js --test-coverage-exclude=src/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
