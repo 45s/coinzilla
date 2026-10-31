@@ -94,3 +94,22 @@ test("signing rejects unsupported parameter values instead of coercing them", ()
   assert.throws(() => createSignedBinanceParams({}, { apiKey, apiSecret, timestamp: -1 }), /timestamp/)
   assert.throws(() => createSignedBinanceParams({}, { apiKey, apiSecret, timestamp: 1, recvWindow: 60_001 }), /recvWindow/)
 })
+
+test("signed params accept Binance recvWindow precision up to three decimals", () => {
+  const params = createSignedBinanceParams(
+    {},
+    { apiKey, apiSecret, timestamp: 123456, recvWindow: 6000.346 },
+  )
+  assert.equal(params.recvWindow, 6000.346)
+  assert.match(params.signature, /^[a-f0-9]{64}$/)
+})
+
+test("signed params reject recvWindow precision beyond three decimals", () => {
+  assert.throws(
+    () => createSignedBinanceParams(
+      {},
+      { apiKey, apiSecret, timestamp: 123456, recvWindow: 6000.3461 },
+    ),
+    /recvWindow/,
+  )
+})
