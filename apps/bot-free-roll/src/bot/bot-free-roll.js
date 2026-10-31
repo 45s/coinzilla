@@ -5,7 +5,6 @@ import {
   validateConfig,
   calculateBuyThresholdExact,
   addDecimal,
-  maxDecimal,
   compareDecimal,
   subtractDecimal,
   getConfiguredSellFeeRateExact,
@@ -19,6 +18,7 @@ import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
 import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
 import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
+import { allocateFreeInventory } from "./inventory-allocation.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -965,11 +965,13 @@ export class FreeRollBot {
         right: state.cycleCost,
       }),
     })
-    state.freeQuantity = addDecimal({
-      left: state.freeQuantity,
-      right: maxDecimal({ left: "0", right: state.activeQuantity }),
+    const allocation = allocateFreeInventory({
+      activeQuantity: state.activeQuantity,
+      freeQuantity: state.freeQuantity,
+      keepQuantity: String(state.settings.keepQuantity),
     })
-    state.activeQuantity = "0"
+    state.freeQuantity = allocation.freeQuantity
+    state.activeQuantity = allocation.activeQuantity
     state.cycleCost = "0"
     state.saleProceeds = "0"
     state.actualCommissionRate = "0"
@@ -977,7 +979,9 @@ export class FreeRollBot {
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
+      allocatedFreeQuantity: allocation.allocatedQuantity,
       freeQuantity: state.freeQuantity,
+      remainingActiveQuantity: state.activeQuantity,
     })
 
     this.#publishTradingSummary({ symbol, reason: "profitable_cycle_completed" })
