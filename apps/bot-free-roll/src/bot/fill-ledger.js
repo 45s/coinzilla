@@ -83,10 +83,17 @@ export function appendFillLedgerEntry({ entries, fill } = {}) {
   const created = createFillLedgerEntry({ fill })
   if (!created.ok) return created
 
-  const currentEntries = Object.isFrozen(entries)
+  if (entries.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry))) {
+    return failure("Fill ledger contains an invalid entry")
+  }
+
+  const allEntriesFrozen = entries.every((entry) => Object.isFrozen(entry))
+  const currentEntries = Object.isFrozen(entries) && allEntriesFrozen
     ? entries
-    : Object.freeze([...entries])
-  const existing = currentEntries.find((entry) => entry?.id === created.entry.id)
+    : Object.freeze(entries.map((entry) =>
+        Object.isFrozen(entry) ? entry : Object.freeze({ ...entry }),
+      ))
+  const existing = currentEntries.find((entry) => entry.id === created.entry.id)
 
   if (existing) {
     if (!hasSameFillFacts(existing, created.entry)) {
