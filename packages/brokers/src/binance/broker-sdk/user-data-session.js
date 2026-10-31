@@ -72,6 +72,9 @@ export class BinanceUserDataSession {
     if (this.#stopped || this.#subscribers.size === 0) return
     try {
       await this.#ensureRemoteSubscription()
+      if (this.#stopped || !this.#subscribers.has(id)) {
+        throw new Error("User-data subscription was canceled during setup")
+      }
     } catch (error) {
       this.setUnavailable(true)
       this.#reconnectAttempts = 0
@@ -118,7 +121,6 @@ export class BinanceUserDataSession {
     this.#clearReconnectTimer()
     this.#subscribers.clear()
     this.#subscriptionId = null
-    this.#subscribePromise = null
     this.#recoveryRequired = false
     this.setUnavailable(true)
     this.#detachClientListeners()
@@ -127,7 +129,12 @@ export class BinanceUserDataSession {
 
   async #ensureRemoteSubscription() {
     if (this.#subscriptionId !== null) return this.#subscriptionId
-    if (this.#subscribePromise) return this.#subscribePromise
+    if (this.#subscribePromise) {
+      await this.#subscribePromise
+      if (this.#stopped) throw new Error("User-data session is stopped")
+      if (this.#subscriptionId !== null) return this.#subscriptionId
+      return this.#ensureRemoteSubscription()
+    }
 
     const generation = this.#generation
     const client = this.getClient()
@@ -198,6 +205,9 @@ export class BinanceUserDataSession {
       : message
 
     if (event.e === "eventStreamTerminated") {
+      this.logger.warn?.("Binance user-data subscription terminated", {
+        subscriptionId: message.subscriptionId,
+      })
       this.#subscriptionId = null
       this.#recoveryRequired = true
       this.setUnavailable(true)
