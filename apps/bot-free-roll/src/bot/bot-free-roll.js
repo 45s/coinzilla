@@ -585,37 +585,7 @@ export class FreeRollBot {
         if (!this.#isCurrentUserDataRecovery({ generation })) return
 
         const orderId = String(trackedOrder.id)
-        const currentOrder = unwrapResult(
-          await this.broker.getOrder({ symbol, orderId }),
-          `getOrder(${symbol}, ${orderId}) during user-data recovery`,
-        )
-
-        if (
-          !currentOrder ||
-          String(currentOrder.id) !== orderId ||
-          currentOrder.symbol !== symbol ||
-          currentOrder.side !== trackedOrder.side
-        ) {
-          throw new Error(`Tracked order ${orderId} identity mismatch during recovery`)
-        }
-
-        const status = String(currentOrder.status ?? "").toUpperCase()
-        const isOpen = status === "NEW" || status === "PARTIALLY_FILLED"
-        const isInOpenSnapshot = openOrdersByKey.has(`${symbol}:${orderId}`)
-        if (isOpen !== isInOpenSnapshot) {
-          throw new Error(`Tracked order ${orderId} status disagrees with open-order snapshot`)
-        }
-
-        if (
-          currentOrder.originalQuantity === undefined ||
-          currentOrder.executedQuantity === undefined ||
-          compareDecimal({
-            left: String(currentOrder.originalQuantity),
-            right: String(trackedOrder.quantity),
-          }) !== 0
-        ) {
-          throw new Error(`Tracked order ${orderId} quantity mismatch during recovery`)
-        }
+        const currentOrder = openOrdersByKey.get(`${symbol}:${orderId}`)
 
         await this.#reconcileOrderFills({
           symbol,
@@ -623,29 +593,57 @@ export class FreeRollBot {
         })
 
         const reconciledQuantity = state.filledQuantityByOrder.get(orderId) ?? "0"
+        const originalQuantity = String(trackedOrder.quantity)
+
+        if (currentOrder) {
+          if (
+            String(currentOrder.id) !== orderId ||
+            currentOrder.symbol !== symbol ||
+            currentOrder.side !== trackedOrder.side ||
+            currentOrder.originalQuantity === undefined ||
+            currentOrder.executedQuantity === undefined ||
+            compareDecimal({
+              left: String(currentOrder.originalQuantity),
+              right: originalQuantity,
+            }) !== 0
+          ) {
+            throw new Error(`Tracked order ${orderId} identity or quantity mismatch during recovery`)
+          }
+
+          const status = String(currentOrder.status ?? "").toUpperCase()
+          if (status !== "NEW" && status !== "PARTIALLY_FILLED") {
+            throw new Error(`Open order ${orderId} has unsupported status "${status}"`)
+          }
+          if (compareDecimal({
+            left: reconciledQuantity,
+            right: String(currentOrder.executedQuantity),
+          }) !== 0) {
+            throw new Error(
+              `Tracked order ${orderId} fill history totals ${reconciledQuantity}, expected ${currentOrder.executedQuantity}`,
+            )
+          }
+          continue
+        }
+
+        // An order absent from the open-order snapshot is only considered FILLED
+        // when complete trade history accounts for its entire original quantity.
         if (compareDecimal({
           left: reconciledQuantity,
-          right: String(currentOrder.executedQuantity),
+          right: originalQuantity,
         }) !== 0) {
+          this.#pause(
+            symbol,
+            `Tracked order ${orderId} is missing from open orders and trade history does not prove it filled`,
+          )
           throw new Error(
-            `Tracked order ${orderId} fill history totals ${reconciledQuantity}, expected ${currentOrder.executedQuantity}`,
+            `Tracked order ${orderId} has an unresolved terminal outcome during recovery`,
           )
         }
 
-        if (status === "FILLED") {
-          if (trackedOrder.side === "BUY") {
-            await this.#handleBuyFilled(symbol)
-          } else {
-            await this.#handleSellFilled(symbol)
-          }
-        } else if (TERMINAL_FAILURES.has(status)) {
-          this.#pause(
-            symbol,
-            `${trackedOrder.side} ${orderId} ended as ${status} during recovery`,
-          )
-          throw new Error(`Tracked order ${orderId} ended as ${status} during recovery`)
-        } else if (!isOpen) {
-          throw new Error(`Tracked order ${orderId} has unsupported status "${status}"`)
+        if (trackedOrder.side === "BUY") {
+          await this.#handleBuyFilled(symbol)
+        } else {
+          await this.#handleSellFilled(symbol)
         }
       }
     }
