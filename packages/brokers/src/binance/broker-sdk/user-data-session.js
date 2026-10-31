@@ -78,6 +78,8 @@ export class BinanceUserDataSession {
 
   async resume() {
     if (this.#stopped || this.#subscribers.size === 0) return
+    this.#clearReconnectTimer()
+    if (this.#reconnectPromise) return this.#reconnectPromise
     try {
       await this.#ensureRemoteSubscription()
       if (this.#stopped || !this.#subscribers.has(id)) {
