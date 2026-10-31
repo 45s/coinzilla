@@ -226,7 +226,7 @@ The following sequence is the immediate, reviewable improvement plan. It complem
 | 4 [x] | Extract event handling | Separate exchange-event intake/normalization and dispatch from strategy decisions. Keep exchange-specific payload interpretation at the adapter boundary. | FR-027, FR-055, FR-067 |
 | 5 [~] | Improve coverage gates | Capture per-module Free-Roll source coverage, document critical uncovered paths, and enforce conservative non-regression floors for safety-critical modules. Raise thresholds only after new tests establish a stronger baseline. | FR-004, FR-025, FR-026 |
 
-Coverage follow-ups: PR #270 adds price-helper boundary tests. The next focused improvement covers broker setup cleanup and ensures logging failures cannot mask the original startup error.
+Coverage follow-ups: PR #270 adds price-helper boundary tests; PR #272 covers broker setup cleanup and ensures logging failures cannot mask the original startup error. This follow-up adds order-planning validation and zero-quantity boundary coverage.
 
 #### Engineering rules for this sequence
 
