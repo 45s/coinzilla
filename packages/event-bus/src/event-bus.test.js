@@ -18,6 +18,60 @@ function createTestBus({ onError } = {}) {
   return { bus, logs }
 }
 
+test("validates constructor options and callbacks", async () => {
+  for (const options of [null, [], "invalid", 123, new Date()]) {
+    assert.throws(() => new EventBus(options), /EventBus options must be a plain object/)
+  }
+
+  assert.throws(() => new EventBus({ logger: null }), /logger must be an object/)
+  assert.throws(() => new EventBus({ logger: { error: true } }), /optional error function/)
+  assert.throws(() => new EventBus({ onError: "handler" }), /onError must be a function/)
+  assert.throws(() => new EventBus({ onError: null }), /onError must be a function/)
+  assert.throws(() => new EventBus({ loger: {} }), /Unknown EventBus option/)
+
+  const bus = new EventBus({ logger: {}, onError: () => {} })
+  assert.equal((await bus.close()).ok, true)
+})
+
+test("rejects malformed event names without normalizing valid names", async () => {
+  const { bus } = createTestBus()
+  const invalidNames = [
+    "",
+    " ",
+    " leading",
+    "trailing ",
+    "contains space",
+    "line\\nbreak",
+    "name/slash",
+    "name\\u0000control",
+    "a".repeat(129),
+    123,
+    null,
+    undefined,
+  ]
+
+  for (const name of invalidNames) {
+    const published = bus.publish({ name, source: "test" })
+    assert.equal(published.ok, false, String(name))
+    assert.match(published.errors[0].message, /Event name/)
+    const subscribed = bus.subscribe({ name, handler: () => {} })
+    assert.equal(subscribed.ok, false, String(name))
+    assert.match(subscribed.errors[0].message, /Event name/)
+  }
+
+  const exactName = "Trade.Fill_v2:partial"
+  let received
+  assert.equal(bus.subscribe({
+    name: exactName,
+    handler: event => { received = event.name },
+  }).ok, true)
+  const published = bus.publish({ name: exactName, source: "test" })
+  assert.equal(published.ok, true)
+  await bus.flush()
+  assert.equal(received, exactName)
+  await bus.close()
+})
+
 test("publishes a structured event", () => {
   const { bus } = createTestBus()
 
