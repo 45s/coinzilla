@@ -59,12 +59,19 @@ describe(Market.name, () => {
     }
   })
 
-  it("rejects missing, non-string, blank, or ambiguous symbols", () => {
-    for (const symbol of [undefined, null, "", "  ", 1, "BTC:USDT"]) {
+  it("rejects missing, non-string, or blank symbols", () => {
+    for (const symbol of [undefined, null, "", "  ", 1]) {
       assert.throws(() => createMarket({ symbol }), {
         message: marketErrMsgs.symbol,
       })
     }
+  })
+
+  it("preserves symbols containing delimiters as opaque venue metadata", () => {
+    const market = createMarket({ symbol: "BTC:USDT:SPOT" })
+
+    assert.equal(market.symbol, "BTC:USDT:SPOT")
+    assert.equal(market.id, "binance:BTC:USDT:SPOT")
   })
 
   it("requires canonical Asset instances for both sides", () => {
@@ -81,6 +88,15 @@ describe(Market.name, () => {
 
     assert.throws(
       () => createMarket({ baseAsset: sameAsset, quoteAsset: sameAsset }),
+      { message: marketErrMsgs.sameAssets },
+    )
+  })
+
+  it("rejects distinct Asset instances with the same canonical identity", () => {
+    const duplicateBaseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
+
+    assert.throws(
+      () => createMarket({ baseAsset: duplicateBaseAsset }),
       { message: marketErrMsgs.sameAssets },
     )
   })
