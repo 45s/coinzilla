@@ -284,6 +284,7 @@ export class BinanceSdkBroker extends CoreBroker {
 
   async subscribeForUserData({ onEvent }) {
     let removeListener
+    let removeErrorListener
     try {
       validateCallback(onEvent, "onEvent")
       removeListener = this.tradingConnection.onEvent((message) => {
@@ -291,6 +292,9 @@ export class BinanceSdkBroker extends CoreBroker {
           ? message.event
           : message
         onEvent({ event: adaptMsg(event) })
+      })
+      removeErrorListener = this.tradingConnection.onError?.((error) => {
+        this.logger.error?.("Binance user data stream error", error)
       })
 
       const response = await this.tradingConnection.request(
@@ -302,11 +306,15 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({
         data: {
           subscriptionId: response.data?.subscriptionId ?? null,
-          unsubscribeLocal: removeListener,
+          unsubscribeLocal: () => {
+            removeListener?.()
+            removeErrorListener?.()
+          },
         },
       })
     } catch (error) {
       removeListener?.()
+      removeErrorListener?.()
       handleErr({ where: "BinanceSdkBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
