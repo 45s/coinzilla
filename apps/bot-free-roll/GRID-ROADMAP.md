@@ -385,7 +385,7 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 
 ### Stage G3 — Multi-order inventory and reconciliation foundations
 
-- [ ] **GRID-030 — Add multiple-reservation inventory helpers.** Additive API alongside current behavior; prove no overlap, no over-reservation, and safe release only after final reconciliation.
+- [~] **GRID-030 — Add multiple-reservation inventory helpers.** Added `grid-sell-reservations.js` to project concurrent SELL reservations across cycles using exact decimal totals. It rejects aggregate over-reservation, duplicate order IDs, multiple live SELLs for one cycle, under-reserved live orders, and terminal orders retaining reservations. Reservations remain locked while OPEN/PARTIALLY_FILLED (including a pending cancellation) and are released only after reconciled terminal status. Tests cover two concurrent cycles, over-reservation, release, and invalid state. Remaining: connect this projection to Grid execution and confirmed exchange inventory reconciliation.
 - [ ] **GRID-031 — Extend reconciliation snapshot for multiple tracked orders.** Accept BUY plus N cycle SELLs; retain strict validation of unknown broker orders and malformed records.
 - [ ] **GRID-032 — Extend fill reconciliation to cycle projections.** Rebuild per-cycle fill accounting from canonical fills; preserve trade-ID idempotency and actual commission facts.
 - [ ] **GRID-033 — Add cycle-aware recovery mapping.** Recover each live/terminal SELL attempt to exactly one cycle and refuse ambiguous or incomplete state.
