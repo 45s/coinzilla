@@ -211,7 +211,17 @@ export class BinanceSdkBroker extends CoreBroker {
         params.timeInForce = input.timeInForce ?? "GTC"
       }
 
-      const response = await this.tradingConnection.orderPlace(params)
+      // @binance/spot@34.0.3 validates orderPlace() against an incomplete
+      // order-type enum and rejects LIMIT_MAKER before it reaches Binance.
+      // Use the SDK's signed raw WebSocket request for this supported Binance
+      // order type; signing, request IDs, transport, and response handling
+      // remain owned by the SDK. Do not downgrade to LIMIT: that loses
+      // post-only protection.
+      const response =
+        params.type === "LIMIT_MAKER"
+          ? await this.tradingConnection.sendSignedMessage("order.place", params)
+          : await this.tradingConnection.orderPlace(params)
+
       return toResult({
         data: adaptOrder(response.data),
       })
