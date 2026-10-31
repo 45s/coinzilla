@@ -372,3 +372,44 @@ test("socket close before opening rejects the connection and cleans listeners", 
   assert.deepEqual(messages, [])
   assert.equal(await transport.close(), undefined)
 })
+
+
+test("listener registration failure closes the socket and removes previously attached handlers", async () => {
+  const clock = new FakeClock()
+  const registered = []
+  const removed = []
+  let socket
+
+  class BrokenListenerSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    addEventListener(type, listener, options) {
+      if (type === "message") throw new Error("message listener registration failed")
+      registered.push(type)
+      return super.addEventListener(type, listener, options)
+    }
+
+    removeEventListener(type, listener, options) {
+      removed.push(type)
+      return super.removeEventListener(type, listener, options)
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenListenerSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+  })
+
+  await assert.rejects(transport.connect(), /message listener registration failed/)
+
+  assert.equal(transport.state, "closed")
+  assert.deepEqual(registered, ["open"])
+  assert.deepEqual(removed, ["open"])
+  assert.equal(socket.closeCalls.length, 1)
+  assert.equal(clock.pendingCount, 0)
+})
