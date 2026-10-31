@@ -250,3 +250,27 @@ describe("BinanceSdkBroker order-history page boundaries", () => {
     assert.equal(result.data.complete, undefined)
   })
 })
+
+
+describe("BinanceSdkBroker exact history cursors", () => {
+  it("fails closed when a trade response contains an unsafe numeric ID", async () => {
+    const broker = createBroker({
+      myTrades: () => [{ ...trade, id: Number.MAX_SAFE_INTEGER + 1 }],
+    })
+    const result = await broker.getMyTrades({ symbol: "BTCUSDT" })
+    assert.equal(result.ok, false)
+  })
+
+  it("fails closed when order history contains an unsafe numeric cursor ID", async () => {
+    const broker = createBroker({
+      allOrders: () => [{
+        symbol: "BTCUSDT",
+        orderId: Number.MAX_SAFE_INTEGER + 1,
+        time: 1_000,
+        updateTime: 1_100,
+      }],
+    })
+    const result = await broker.getOrderHistory({ symbol: "BTCUSDT" })
+    assert.equal(result.ok, false)
+  })
+})
