@@ -333,8 +333,12 @@ export class FreeRollBot {
       const locked = String(balance.locked)
 
       try {
-        compareDecimal({ left: free, right: "0" })
-        compareDecimal({ left: locked, right: "0" })
+        if (
+          compareDecimal({ left: free, right: "0" }) < 0 ||
+          compareDecimal({ left: locked, right: "0" }) < 0
+        ) {
+          continue
+        }
       } catch {
         continue
       }
