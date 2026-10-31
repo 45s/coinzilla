@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { createGridOrderIntent } from "./grid-order-intents.js"
 import { projectGridCycles } from "./grid-cycles.js"
@@ -14,6 +15,43 @@ function isPlainObject(value) {
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0
+}
+
+function normalizeFingerprintValue(value) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return value
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (Array.isArray(value)) return value.map(normalizeFingerprintValue)
+  if (!isPlainObject(value)) {
+    throw new TypeError("Grid config fingerprint accepts only JSON-safe values")
+  }
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [
+      key,
+      normalizeFingerprintValue(value[key]),
+    ]),
+  )
+}
+
+export function createGridConfigFingerprint({ symbol, settings, minProfit } = {}) {
+  try {
+    if (!isNonEmptyString(symbol) || !isPlainObject(settings) ||
+        (typeof minProfit !== "string" && typeof minProfit !== "number")) {
+      throw new Error("Grid config fingerprint requires symbol, pair settings, and minProfit")
+    }
+    const normalized = normalizeFingerprintValue({
+      symbol,
+      settings,
+      minProfit: String(minProfit),
+    })
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify(normalized))
+      .digest("hex")
+    return toResult({ data: fingerprint })
+  } catch (error) {
+    return failure(error.message)
+  }
 }
 
 function validateOrderSnapshot({ order, symbol, side }) {
