@@ -7,7 +7,9 @@ export class NativeWebSocketTransport {
   #socket = null
   #state = "idle"
   #connectPromise = null
+  #rejectConnect = null
   #closePromise = null
+  #resolveClose = null
   #connectTimer = null
   #closeTimer = null
   #listeners = {
