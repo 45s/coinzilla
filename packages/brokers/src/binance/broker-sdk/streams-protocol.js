@@ -1,4 +1,4 @@
-const SYMBOL_PATTERN = /^[A-Z0-9]{1,20}$/
+const SYMBOL_PATTERN = /^[A-Za-z0-9]{1,20}$/
 const INTERVALS = new Set(["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"])
 const ROLLING_WINDOWS = new Set(["1h", "4h", "1d"])
 const DEPTH_LEVELS = new Set([5, 10, 20])
