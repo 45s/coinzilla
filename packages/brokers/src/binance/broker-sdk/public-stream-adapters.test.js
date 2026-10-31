@@ -48,9 +48,19 @@ test("passes through other public market-data events unchanged", () => {
   }
 })
 
-test("does not accept authenticated user-data events as public market data", () => {
-  const event = { e: "executionReport", s: "BTCUSDT" }
-  assert.equal(adaptPublicStreamMessage(event), event)
+test("rejects authenticated user-data events at the public adapter boundary", () => {
+  for (const eventType of [
+    "executionReport",
+    "outboundAccountPosition",
+    "account",
+    "balanceUpdate",
+    "listStatus",
+  ]) {
+    assert.throws(
+      () => adaptPublicStreamMessage({ e: eventType }),
+      /not public market-data events/,
+    )
+  }
 })
 
 test("rejects non-object event payloads", () => {
