@@ -24,3 +24,6 @@ CoreBroker.prototype.getSymbolFilters = foo("getSymbolFilters")
 CoreBroker.prototype.getMyTrades = foo("getMyTrades")
 CoreBroker.prototype.getBalances = foo("getBalances")
 CoreBroker.prototype.getFills = foo("getFills")
+
+CoreBroker.prototype.getServerTime = foo("getServerTime")
+CoreBroker.prototype.getAccountSnapshot = foo("getAccountSnapshot")
