@@ -591,6 +591,12 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Keep full pages potentially incomplete by returning unchanged array results without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
 - Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
 
+### Canonical order-history records (request #321)
+- [~] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract.
+- Use exact `exchangeInfo` metadata for Market/Asset identity, preserve decimal strings and source timestamps, and map unsupported lifecycle states to canonical `UNKNOWN` without leaking Binance field names.
+- Reject unsupported order types, malformed records, and unsafe numeric IDs; do not convert financial values through JavaScript `Number`.
+- Consumer: Free-Roll FR-057 snapshot collection. Request: [#321](https://github.com/45s/coinzilla/issues/321).
+
 ## 13. Shared Entities contract adoption
 
 ### Canonical fills and commissions
