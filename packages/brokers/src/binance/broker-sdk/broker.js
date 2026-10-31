@@ -333,7 +333,7 @@ export class BinanceSdkBroker extends CoreBroker {
 
       removeErrorListener = this.tradingConnection.onError?.((error) => {
         this.logger.error?.("Binance user data stream error", error)
-        reportStatus({ type: "connectionError", error, recoveryRequired: true })
+        reportStatus({ type: "rpcError", error, recoveryRequired: false })
       })
 
       removeCloseListener = this.tradingConnection.onClose?.((event) => {
