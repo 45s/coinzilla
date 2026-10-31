@@ -1,6 +1,131 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { reconcileTrackedOrder, validateRecoveryBalances } from "./recovery.js"
+import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
+import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
+
+
+const baseAsset = new Asset({ id: "doge", code: "DOGE" })
+const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset,
+  quoteAsset,
+})
+
+const trackedIdentity = {
+  id: "11",
+  clientOrderId: "client-11",
+  side: "BUY",
+  type: "LIMIT",
+  quantity: "10",
+  price: "0.05",
+}
+
+function createCanonicalTrackedOrder(overrides = {}) {
+  return new CanonicalOrder({
+    clientOrderId: "client-11",
+    brokerOrderId: "11",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "0.05000000", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "10.00000000", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1000,
+    updatedAt: 1010,
+    ...overrides,
+  })
+}
+
+test("validates exact canonical tracked order identity", () => {
+  const result = validateTrackedOrderIdentity({
+    symbol: "DOGEUSDT",
+    order: trackedIdentity,
+    canonicalOrder: createCanonicalTrackedOrder(),
+    expectedType: "LIMIT",
+  })
+
+  assert.deepEqual(result, { ok: true })
+})
+
+test("rejects changed order ID, client ID, market, side, type, quantity, and price", () => {
+  const cases = [
+    { canonicalOrder: createCanonicalTrackedOrder({ brokerOrderId: "12" }) },
+    { canonicalOrder: createCanonicalTrackedOrder({ clientOrderId: "other-client" }) },
+    {
+      canonicalOrder: new CanonicalOrder({
+        clientOrderId: "client-11",
+        brokerOrderId: "11",
+        market: new Market({
+          venue: "binance",
+          symbol: "ETHUSDT",
+          baseAsset: new Asset({ id: "eth", code: "ETH" }),
+          quoteAsset,
+        }),
+        side: "BUY",
+        type: "LIMIT",
+        limitPrice: new Money({ amount: "0.05", asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: "10", asset: new Asset({ id: "eth", code: "ETH" }) }),
+        executedQuantity: new Quantity({ amount: "0", asset: new Asset({ id: "eth", code: "ETH" }) }),
+        status: "OPEN",
+        createdAt: 1000,
+        updatedAt: 1010,
+      }),
+    },
+    { canonicalOrder: createCanonicalTrackedOrder({ side: "SELL" }) },
+    { canonicalOrder: createCanonicalTrackedOrder({ type: "LIMIT_MAKER" }) },
+    {
+      canonicalOrder: createCanonicalTrackedOrder({
+        originalQuantity: new Quantity({ amount: "11", asset: baseAsset }),
+      }),
+    },
+    {
+      canonicalOrder: createCanonicalTrackedOrder({
+        limitPrice: new Money({ amount: "0.06", asset: quoteAsset }),
+      }),
+    },
+  ]
+
+  for (const item of cases) {
+    assert.equal(validateTrackedOrderIdentity({
+      symbol: "DOGEUSDT",
+      order: trackedIdentity,
+      canonicalOrder: item.canonicalOrder,
+      expectedType: "LIMIT",
+    }).ok, false)
+  }
+
+  assert.equal(validateTrackedOrderIdentity({
+    symbol: "DOGEUSDT",
+    order: { ...trackedIdentity, clientOrderId: undefined },
+    canonicalOrder: createCanonicalTrackedOrder(),
+    expectedType: "LIMIT",
+  }).ok, false)
+})
+
+test("validates market order identity without inventing a limit price", () => {
+  const marketOrder = new CanonicalOrder({
+    clientOrderId: "client-11",
+    brokerOrderId: "11",
+    market,
+    side: "BUY",
+    type: "MARKET",
+    originalQuantity: new Quantity({ amount: "10", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1000,
+    updatedAt: 1010,
+  })
+
+  assert.equal(validateTrackedOrderIdentity({
+    symbol: "DOGEUSDT",
+    order: { ...trackedIdentity, type: "MARKET" },
+    canonicalOrder: marketOrder,
+    expectedType: "MARKET",
+  }).ok, true)
+})
 
 test("validates an exact canonical balance snapshot", () => {
   const result = validateRecoveryBalances({
