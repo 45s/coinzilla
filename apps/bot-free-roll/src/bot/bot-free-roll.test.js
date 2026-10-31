@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 
 import { FreeRollBot } from "./bot-free-roll.js"
 import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/index.js"
@@ -46,6 +47,104 @@ function createMarketFilters() {
     quoteAsset: "USDT",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }
+}
+
+
+const dogeAsset = new Asset({ id: "doge", code: "DOGE" })
+const usdtAsset = new Asset({ id: "usdt", code: "USDT" })
+const dogeUsdtMarket = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset: dogeAsset,
+  quoteAsset: usdtAsset,
+})
+
+function createRecoveryBalance({ free = "10000", locked = "0" } = {}) {
+  return new Balance({
+    free: new Quantity({ amount: free, asset: usdtAsset }),
+    locked: new Quantity({ amount: locked, asset: usdtAsset }),
+  })
+}
+
+function createRecoverySnapshotPorts({
+  createdOrders = [],
+  calls = [],
+  getExecution = () => ({ status: "OPEN", executedQuantity: "0", fills: [] }),
+  openOrdersForSymbol = () => [],
+  accountSnapshotFactory,
+} = {}) {
+  let serverTime = 1000
+
+  return {
+    async getServerTime() {
+      calls.push("getServerTime")
+      serverTime += 10
+      return { ok: true, data: { serverTime } }
+    },
+    async getAccountSnapshot() {
+      calls.push("getAccountSnapshot")
+      if (accountSnapshotFactory) return accountSnapshotFactory({ serverTime })
+      return {
+        ok: true,
+        data: {
+          balances: [createRecoveryBalance()],
+          sourceTime: serverTime,
+        },
+      }
+    },
+    async getOpenOrders({ symbol }) {
+      calls.push("getOpenOrders")
+      return { ok: true, data: openOrdersForSymbol({ symbol, createdOrders }) }
+    },
+    async getCanonicalOrderHistory({ symbol, orderId }) {
+      calls.push("getCanonicalOrderHistory")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      if (!order) return { ok: true, data: [] }
+      const execution = getExecution({ order, orderId })
+      const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(execution.status)
+      return {
+        ok: true,
+        data: [new CanonicalOrder({
+          clientOrderId: `client-${orderId}`,
+          brokerOrderId: orderId,
+          market: dogeUsdtMarket,
+          side: order.side,
+          type: "LIMIT",
+          limitPrice: new Money({ amount: String(order.price), asset: usdtAsset }),
+          originalQuantity: new Quantity({ amount: String(order.quantity), asset: dogeAsset }),
+          executedQuantity: new Quantity({ amount: execution.executedQuantity, asset: dogeAsset }),
+          status: execution.status,
+          createdAt: 1000,
+          updatedAt: 1010,
+          ...(terminal ? { completedAt: 1010 } : {}),
+        })],
+      }
+    },
+    async getFills({ symbol, orderId }) {
+      calls.push("getFills")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      return { ok: true, data: order ? getExecution({ order, orderId }).fills : [] }
+    },
+  }
+}
+
+function createRecoveryFill({ tradeId, orderId, side = "BUY", quantity, price = "100" }) {
+  return new Fill({
+    tradeId: String(tradeId),
+    brokerOrderId: String(orderId),
+    market: dogeUsdtMarket,
+    side,
+    price: new Money({ amount: price, asset: usdtAsset }),
+    quantity: new Quantity({ amount: quantity, asset: dogeAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: quantity, right: price }),
+      asset: usdtAsset,
+    }),
+    liquidityRole: "MAKER",
+    executedAt: 1010,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
 }
 
 function createExecutionEvent({
@@ -2651,40 +2750,19 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => {
-        calls.push("getBalances")
-        return {
-          ok: true,
-          data: [{
-            asset: { code: "USDT" },
-            free: { amount: "10000" },
-            locked: { amount: "0" },
-            total: { amount: "10000" },
-          }],
-        }
-      },
-      getOpenOrders: async () => {
-        calls.push("getOpenOrders")
-        return { ok: true, data: [] }
-      },
-      getMyTrades: async ({ orderId }) => {
-        calls.push("getMyTrades")
-        return {
-          ok: true,
-          data: [{
-            id: "trade-1",
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        calls,
+        getExecution: ({ orderId }) => ({
+          status: "FILLED",
+          executedQuantity: "100",
+          fills: [createRecoveryFill({
+            tradeId: "101",
             orderId,
-            symbol: "DOGEUSDT",
-            side: "BUY",
-            price: "100",
             quantity: "100",
-            quoteQuantity: "10000",
-            commissionAmount: "0",
-            commissionAsset: null,
-            isMaker: true,
-          }],
-        }
-      },
+          })],
+        }),
+      }),
       subscribeForUserData: async ({ onEvent: _onEvent, onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -2704,8 +2782,9 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -2735,9 +2814,10 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
       "recovery did not reconcile and resume the SELL plan",
     )
 
-    assert.ok(calls.indexOf("getBalances") < calls.indexOf("getOpenOrders"))
-    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getMyTrades"))
-    assert.ok(calls.indexOf("getMyTrades") < calls.indexOf("acknowledgeRecovery"))
+    assert.ok(calls.indexOf("getAccountSnapshot") < calls.indexOf("getOpenOrders"))
+    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getCanonicalOrderHistory"))
+    assert.ok(calls.indexOf("getCanonicalOrderHistory") < calls.indexOf("getFills"))
+    assert.ok(calls.indexOf("getFills") < calls.indexOf("acknowledgeRecovery"))
     assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
     assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "100")
     assert.equal(bot.getSummary().recovering, false)
@@ -2757,30 +2837,17 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => ({
-        ok: true,
-        data: [{
-          asset: { code: "USDT" },
-          free: { amount: "10000" },
-          locked: { amount: "0" },
-          total: { amount: "10000" },
-        }],
-      }),
-      getOpenOrders: async () => ({ ok: true, data: [] }),
-      getMyTrades: async ({ orderId }) => ({
-        ok: true,
-        data: [{
-          id: "partial-trade",
-          orderId,
-          symbol: "DOGEUSDT",
-          side: "BUY",
-          price: "100",
-          quantity: "50",
-          quoteQuantity: "5000",
-          commissionAmount: "0",
-          commissionAsset: null,
-          isMaker: true,
-        }],
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        getExecution: ({ orderId }) => ({
+          status: "PARTIALLY_FILLED",
+          executedQuantity: "50",
+          fills: [createRecoveryFill({
+            tradeId: "102",
+            orderId,
+            quantity: "50",
+          })],
+        }),
       }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
@@ -2800,8 +2867,9 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: {
@@ -2861,18 +2929,18 @@ test("buffers user-data events during reconciliation and replays them before ack
   bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => balanceSnapshot,
-      getOpenOrders: async () => ({
-        ok: true,
-        data: [{
-          id: "BUY-1",
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        accountSnapshotFactory: () => balanceSnapshot,
+        openOrdersForSymbol: ({ createdOrders: orders }) => [{
+          id: orders[0]?.orderId,
+          symbol: "DOGEUSDT",
           side: "BUY",
           originalQuantity: "100",
           executedQuantity: "0",
           status: "NEW",
         }],
       }),
-      getMyTrades: async () => ({ ok: true, data: [] }),
       subscribeForUserData: async (callbacks) => {
         onEvent = callbacks.onEvent
         onStatus = callbacks.onStatus
@@ -2893,8 +2961,9 @@ test("buffers user-data events during reconciliation and replays them before ack
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-1` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -2926,7 +2995,7 @@ test("buffers user-data events during reconciliation and replays them before ack
 
     const bufferedFillEvent = {
       event: createExecutionEvent({
-        order: { orderId: "BUY-1", side: "BUY", quantity: "100", price: "100" },
+        order: { orderId: "1", side: "BUY", quantity: "100", price: "100" },
         tradeId: 99,
         fillQuantity: "50",
         status: "PARTIALLY_FILLED",
@@ -2937,12 +3006,10 @@ test("buffers user-data events during reconciliation and replays them before ack
 
     releaseBalances({
       ok: true,
-      data: [{
-        asset: { code: "USDT" },
-        free: { amount: "10000" },
-        locked: { amount: "0" },
-        total: { amount: "10000" },
-      }],
+      data: {
+        balances: [createRecoveryBalance()],
+        sourceTime: 1010,
+      },
     })
 
     await waitForCondition(
@@ -2966,9 +3033,7 @@ test("reconciles repeated user-data interruptions without requiring a bot restar
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => ({ ok: true, data: [] }),
-      getOpenOrders: async () => ({ ok: true, data: [] }),
-      getMyTrades: async () => ({ ok: true, data: [] }),
+      ...createRecoverySnapshotPorts({ createdOrders: [] }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -3027,15 +3092,17 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => {
-        balanceRequestStarted = true
-        return balances
-      },
-      getOpenOrders: async () => {
-        openOrderRequests += 1
-        return { ok: true, data: [] }
-      },
-      getMyTrades: async () => ({ ok: true, data: [] }),
+      ...createRecoverySnapshotPorts({
+        createdOrders: [],
+        accountSnapshotFactory: () => {
+          balanceRequestStarted = true
+          return balances
+        },
+        openOrdersForSymbol: () => {
+          openOrderRequests += 1
+          return []
+        },
+      }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -3076,7 +3143,7 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
   )
 
   await bot.stop()
-  releaseBalances({ ok: true, data: [] })
+  releaseBalances({ ok: true, data: { balances: [], sourceTime: 1010 } })
 
   await waitForCondition(
     () => recoveryFailures.length === 1,

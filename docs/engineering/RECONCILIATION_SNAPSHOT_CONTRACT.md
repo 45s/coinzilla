@@ -141,7 +141,7 @@ The consumer requires the broker-owned capabilities delivered by [PR #320](https
 - `getCanonicalOrderHistory()` for exchange-neutral `CanonicalOrder[]` records scoped to a tracked order (requested in [#321](https://github.com/45s/coinzilla/issues/321)).
 - Cursor-aware `getFills()` (canonical Entities Fill[]) for each tracked order, preserving exact source IDs/timestamps and allowing every page to be collected.
 
-The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation. The snapshot collector and pure validator are implemented in `apps/bot-free-roll/src/bot/reconciliation-snapshot.js`; integration into the running recovery flow is a separate consumer step.
+The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation. The snapshot collector and pure validator are implemented in `apps/bot-free-roll/src/bot/reconciliation-snapshot.js`; runtime recovery integration is implemented in [PR #327](https://github.com/45s/coinzilla/pull/327).
 
 ## Scope boundary
 

@@ -1,10 +1,42 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 
 import {
   reconcileExecutionFill,
+  toExecutionFill,
   validateOrderFill,
 } from "./fill-reconciliation.js"
+
+
+const baseAsset = new Asset({ id: "doge", code: "DOGE" })
+const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEFDUSD",
+  baseAsset,
+  quoteAsset,
+})
+
+function createCanonicalFill({
+  commissions = [],
+  commissionStatus = "COMPLETE",
+  liquidityRole = "MAKER",
+} = {}) {
+  return new Fill({
+    tradeId: "101",
+    brokerOrderId: "11",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "0.05", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "10", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "0.5", asset: quoteAsset }),
+    liquidityRole,
+    executedAt: 1000,
+    commissions,
+    commissionStatus,
+  })
+}
 
 function createState(overrides = {}) {
   return {
@@ -41,6 +73,60 @@ function createFill(overrides = {}) {
     ...overrides,
   }
 }
+
+
+test("converts a complete canonical Fill to the existing exact accounting input", () => {
+  const result = toExecutionFill({ fill: createCanonicalFill() })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.fill, {
+    id: "101",
+    orderId: "11",
+    symbol: "DOGEFDUSD",
+    side: "BUY",
+    price: "0.05",
+    quantity: "10",
+    quoteQuantity: "0.5",
+    commissionAmount: "0",
+    commissionAsset: null,
+    isMaker: true,
+  })
+})
+
+test("preserves one known commission and liquidity role", () => {
+  const commission = new Commission({
+    amount: new Money({ amount: "0.02", asset: quoteAsset }),
+  })
+  const result = toExecutionFill({
+    fill: createCanonicalFill({
+      commissions: [commission],
+      liquidityRole: "TAKER",
+    }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.fill.commissionAmount, "0.02")
+  assert.equal(result.fill.commissionAsset, "FDUSD")
+  assert.equal(result.fill.isMaker, false)
+})
+
+test("fails closed for unresolved fees, multiple commission assets, or unknown liquidity", () => {
+  const commission = new Commission({
+    amount: new Money({ amount: "0.01", asset: quoteAsset }),
+  })
+  assert.equal(toExecutionFill({
+    fill: createCanonicalFill({ commissionStatus: "UNKNOWN" }),
+  }).ok, false)
+  assert.equal(toExecutionFill({
+    fill: createCanonicalFill({ commissions: [commission], commissionStatus: "PARTIAL" }),
+  }).ok, false)
+  assert.equal(toExecutionFill({
+    fill: createCanonicalFill({ commissions: [commission, commission] }),
+  }).ok, false)
+  assert.equal(toExecutionFill({
+    fill: createCanonicalFill({ liquidityRole: "UNKNOWN" }),
+  }).ok, false)
+})
 
 test("reconciles a BUY fill into new state without mutating the input", () => {
   const state = createState()

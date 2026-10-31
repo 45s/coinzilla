@@ -90,7 +90,7 @@ test("fails closed for missing orders with partial or empty history", () => {
   }
 })
 
-test("fails closed for unexpected, mismatched, and potentially truncated order history", () => {
+test("fails closed for unexpected and mismatched order history", () => {
   assert.equal(reconcileTrackedOrder({
     symbol: "BTCUSDT",
     order: trackedOrder,
@@ -105,14 +105,16 @@ test("fails closed for unexpected, mismatched, and potentially truncated order h
     fills: [{ ...fills[0], side: "SELL" }],
   }).ok, false)
 
-  assert.equal(reconcileTrackedOrder({
+  const paginatedHistory = reconcileTrackedOrder({
     symbol: "BTCUSDT",
     order: trackedOrder,
     openOrders: [],
     fills: Array.from({ length: 1000 }, (_, index) => ({
       id: `trade-${index}`, orderId: "order-1", symbol: "BTCUSDT", side: "BUY", quantity: "0.002",
     })),
-  }).ok, false)
+  })
+  assert.equal(paginatedHistory.ok, true)
+  assert.equal(paginatedHistory.status, "FILLED")
 })
 
 
