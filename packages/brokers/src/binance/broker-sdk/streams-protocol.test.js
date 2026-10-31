@@ -21,7 +21,7 @@ test("validates supported raw and all-market stream names", () => {
     "btcusdt@depth@1000ms",
     "!miniTicker@arr",
     "!ticker@arr",
-    "!ticker_1d@arr",
+    "!ticker_4h@arr",
   ]) {
     assert.equal(validateStreamName(stream), stream)
   }
@@ -36,6 +36,7 @@ test("rejects malformed and unsupported stream names", () => {
     "btcusdt@ticker_2h",
     "btcusdt@depth15@100ms",
     "!trade@arr",
+    "!ticker_1d@arr",
     "btcusdt@aggTrade/ethusdt@aggTrade",
   ]) {
     assert.throws(() => validateStreamName(stream), TypeError, stream)
@@ -60,6 +61,7 @@ test("requires the parameters needed by each stream type", () => {
   assert.throws(() => createStreamName("bookTicker"), /symbol is required/)
   assert.throws(() => createStreamName("kline", { symbol: "BTCUSDT" }), /interval/)
   assert.throws(() => createStreamName("rollingWindowTicker", { windowSize: "2h" }), /windowSize/)
+  assert.throws(() => createStreamName("rollingWindowTicker", { windowSize: "1d" }), /windowSize/)
   assert.throws(() => createStreamName("partialBookDepth", { symbol: "BTCUSDT", levels: 15, speed: "100ms" }), /levels/)
   assert.throws(() => createStreamName("diffBookDepth", { symbol: "BTCUSDT", speed: "1s" }), /speed/)
   assert.throws(() => createStreamName("notAStream", {}), /Unsupported/)
