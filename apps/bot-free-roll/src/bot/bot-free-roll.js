@@ -625,7 +625,8 @@ export class FreeRollBot {
           })
           if (
             compareDecimal({ left: reconciledQuantity, right: executedQuantity }) !== 0 ||
-            (status === "NEW" && executedQuantity !== "0") ||
+            (status === "NEW" &&
+              compareDecimal({ left: executedQuantity, right: "0" }) !== 0) ||
             (status === "PARTIALLY_FILLED" &&
               (compareDecimal({ left: executedQuantity, right: "0" }) <= 0 ||
                 executedComparison >= 0))
