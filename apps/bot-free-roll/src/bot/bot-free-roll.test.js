@@ -2924,14 +2924,16 @@ test("buffers user-data events during reconciliation and replays them before ack
       "balance reconciliation did not start",
     )
 
-    onEvent({
+    const bufferedFillEvent = {
       event: createExecutionEvent({
         order: { orderId: "BUY-1", side: "BUY", quantity: "100", price: "100" },
         tradeId: 99,
         fillQuantity: "50",
         status: "PARTIALLY_FILLED",
       }),
-    })
+    }
+    onEvent(bufferedFillEvent)
+    onEvent(bufferedFillEvent)
 
     releaseBalances({
       ok: true,
@@ -2954,4 +2956,132 @@ test("buffers user-data events during reconciliation and replays them before ack
   } finally {
     await bot.stop()
   }
+})
+
+
+test("reconciles repeated user-data interruptions without requiring a bot restart", async () => {
+  let onStatus
+  let acknowledgements = 0
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      getBalances: async () => ({ ok: true, data: [] }),
+      getOpenOrders: async () => ({ ok: true, data: [] }),
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgements += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async () => ({ ok: true, data: { disconnect() {} } }),
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      onStatus({ type: "connectionClosed", recoveryRequired: true })
+      onStatus({ type: "recovered", recoveryRequired: true })
+      await waitForCondition(
+        () => acknowledgements === attempt && bot.getSummary().recovering === false,
+        `recovery attempt ${attempt} did not complete`,
+      )
+    }
+
+    assert.equal(acknowledgements, 2)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("does not acknowledge or continue reconciliation when shutdown begins during recovery", async () => {
+  let onStatus
+  let releaseBalances
+  let balanceRequestStarted = false
+  let acknowledgements = 0
+  let openOrderRequests = 0
+  const recoveryFailures = []
+  const balances = new Promise((resolve) => {
+    releaseBalances = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      getBalances: async () => {
+        balanceRequestStarted = true
+        return balances
+      },
+      getOpenOrders: async () => {
+        openOrderRequests += 1
+        return { ok: true, data: [] }
+      },
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgements += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async () => ({ ok: true, data: { disconnect() {} } }),
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "bot.recovery_failed") recoveryFailures.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+  onStatus({ type: "connectionClosed", recoveryRequired: true })
+  onStatus({ type: "recovered", recoveryRequired: true })
+  await waitForCondition(
+    () => balanceRequestStarted,
+    "balance reconciliation did not start",
+  )
+
+  await bot.stop()
+  releaseBalances({ ok: true, data: [] })
+
+  await waitForCondition(
+    () => recoveryFailures.length === 1,
+    "shutdown during recovery was not handled",
+  )
+
+  assert.equal(acknowledgements, 0)
+  assert.equal(openOrderRequests, 0)
+  assert.equal(bot.getSummary().running, false)
 })
