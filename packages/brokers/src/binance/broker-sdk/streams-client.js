@@ -136,9 +136,22 @@ export class BinanceStreamsClient {
         }
 
         const missingStreams = streams.filter((stream) => !this.#activeStreams.has(stream))
-        for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
-          await this.#request("SUBSCRIBE", batch)
-          for (const stream of batch) this.#activeStreams.add(stream)
+        const activatedStreams = []
+        try {
+          for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
+            await this.#request("SUBSCRIBE", batch)
+            for (const stream of batch) {
+              this.#activeStreams.add(stream)
+              activatedStreams.push(stream)
+            }
+          }
+        } catch (error) {
+          if (activatedStreams.length > 0) {
+            for (const stream of activatedStreams) this.#activeStreams.delete(stream)
+            this.#request("UNSUBSCRIBE", activatedStreams)
+              .catch((cleanupError) => this.#reportError(cleanupError))
+          }
+          throw error
         }
       } catch (error) {
         this.#removeListenerFromStreams(addedListeners, listener)
@@ -278,6 +291,7 @@ export class BinanceStreamsClient {
       return this
     }).catch(async (error) => {
       this.#ready = false
+      this.#activeStreams.clear()
       if (this.#transport === transport) {
         this.#transport = null
         this.#state = "closed"
