@@ -49,6 +49,12 @@ function validateCycle(cycle) {
       !Array.isArray(cycle.sellFills)) {
     throw new Error("cycle fill and order histories must be arrays")
   }
+  if (cycle.buyFillIds.length === 0 ||
+      cycle.buyFillIds.some((id) => !isNonEmptyString(id)) ||
+      new Set(cycle.buyFillIds).size !== cycle.buyFillIds.length) {
+    throw new Error("cycle BUY fill identities must be stable and unique")
+  }
+
   for (const [name, value] of Object.entries({
     acquiredQuantity: cycle.acquiredQuantity,
     remainingQuantity: cycle.remainingQuantity,
@@ -60,6 +66,109 @@ function validateCycle(cycle) {
     realizedProfit: cycle.realizedProfit,
   })) {
     validateDecimal({ value, name })
+  }
+  if (compareDecimal({ left: cycle.acquiredQuantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: cycle.recoveryCost, right: "0" }) <= 0) {
+    throw new Error("cycle acquired quantity and recovery cost must be positive")
+  }
+
+  const ordersById = new Map()
+  const liveOrders = []
+  const filledQuantityByOrder = new Map()
+  for (const order of cycle.sellOrders) {
+    if (!order || typeof order !== "object" || !isNonEmptyString(order.id) ||
+        ordersById.has(order.id) ||
+        !["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
+      throw new Error("cycle contains an invalid or duplicate SELL order")
+    }
+    validateDecimal({ value: order.quantity, name: "SELL quantity", allowZero: false })
+    validateDecimal({ value: order.filledQuantity, name: "SELL filledQuantity" })
+    validateDecimal({ value: order.reservedQuantity, name: "SELL reservedQuantity" })
+    if (compareDecimal({ left: order.filledQuantity, right: order.quantity }) > 0) {
+      throw new Error("SELL filledQuantity exceeds order quantity")
+    }
+    if (LIVE_SELL_STATUSES.has(order.status)) {
+      liveOrders.push(order)
+      if (compareDecimal({ left: order.reservedQuantity, right: "0" }) <= 0) {
+        throw new Error("live SELL order must retain a positive reservation")
+      }
+    } else if (compareDecimal({ left: order.reservedQuantity, right: "0" }) !== 0) {
+      throw new Error("terminal SELL order cannot retain a reservation")
+    }
+    if (order.status === "FILLED" &&
+        compareDecimal({ left: order.filledQuantity, right: order.quantity }) !== 0) {
+      throw new Error("FILLED SELL order must have its full quantity reconciled")
+    }
+    ordersById.set(order.id, order)
+    filledQuantityByOrder.set(order.id, "0")
+  }
+  if (liveOrders.length > 1) {
+    throw new Error("cycle cannot have more than one live SELL order")
+  }
+  if ((liveOrders.length === 0 && cycle.currentSellOrderId !== null) ||
+      (liveOrders.length === 1 && cycle.currentSellOrderId !== liveOrders[0].id)) {
+    throw new Error("cycle current SELL order does not match its live order")
+  }
+
+  const fillIds = new Set()
+  let totalSoldBase = "0"
+  let totalSaleProceeds = "0"
+  for (const fill of cycle.sellFills) {
+    if (!fill || typeof fill !== "object" ||
+        !isNonEmptyString(fill.id) || !isNonEmptyString(fill.orderId) ||
+        fillIds.has(fill.id) || !ordersById.has(fill.orderId)) {
+      throw new Error("cycle contains an invalid, duplicate, or unowned SELL fill")
+    }
+    validateDecimal({ value: fill.quantity, name: "SELL fill quantity", allowZero: false })
+    validateDecimal({ value: fill.baseQuantity, name: "SELL fill baseQuantity", allowZero: false })
+    validateDecimal({ value: fill.quoteQuantity, name: "SELL fill quoteQuantity" })
+    fillIds.add(fill.id)
+    filledQuantityByOrder.set(fill.orderId, addDecimal({
+      left: filledQuantityByOrder.get(fill.orderId),
+      right: fill.quantity,
+    }))
+    totalSoldBase = addDecimal({ left: totalSoldBase, right: fill.baseQuantity })
+    totalSaleProceeds = addDecimal({ left: totalSaleProceeds, right: fill.quoteQuantity })
+  }
+  for (const [orderId, filledQuantity] of filledQuantityByOrder) {
+    if (compareDecimal({
+      left: filledQuantity,
+      right: ordersById.get(orderId).filledQuantity,
+    }) !== 0) {
+      throw new Error("SELL order filled quantity does not match its cycle fill history")
+    }
+  }
+  if (compareDecimal({ left: totalSoldBase, right: cycle.soldBaseQuantity }) !== 0 ||
+      compareDecimal({ left: totalSaleProceeds, right: cycle.saleProceeds }) !== 0) {
+    throw new Error("cycle accounting totals do not match its SELL fill history")
+  }
+
+  if (cycle.status === "OPEN") {
+    if (compareDecimal({
+      left: addDecimal({ left: cycle.remainingQuantity, right: cycle.soldBaseQuantity }),
+      right: cycle.acquiredQuantity,
+    }) !== 0 ||
+        compareDecimal({ left: cycle.freeQuantityAllocated, right: "0" }) !== 0 ||
+        compareDecimal({ left: cycle.residualQuantity, right: "0" }) !== 0 ||
+        compareDecimal({ left: cycle.realizedProfit, right: "0" }) !== 0) {
+      throw new Error("open cycle inventory or completion totals are inconsistent")
+    }
+  } else if (
+    compareDecimal({ left: cycle.remainingQuantity, right: "0" }) !== 0 ||
+    compareDecimal({
+      left: addDecimal({
+        left: addDecimal({ left: cycle.soldBaseQuantity, right: cycle.freeQuantityAllocated }),
+        right: cycle.residualQuantity,
+      }),
+      right: cycle.acquiredQuantity,
+    }) !== 0 ||
+    compareDecimal({
+      left: cycle.realizedProfit,
+      right: subtractDecimal({ left: cycle.saleProceeds, right: cycle.recoveryCost }),
+    }) !== 0 ||
+    liveOrders.length > 0
+  ) {
+    throw new Error("completed cycle inventory or accounting totals are inconsistent")
   }
   return true
 }
@@ -177,7 +286,6 @@ export function appendGridCycleSellOrder({
 export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
   try {
     validateCycle(cycle)
-    if (cycle.status !== "OPEN") throw new Error("completed cycles cannot receive SELL fills")
     if (!fill || typeof fill !== "object" || Array.isArray(fill)) {
       throw new Error("fill must be an object")
     }
@@ -206,6 +314,7 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
       }
       return toResult({ data: cycle, duplicate: true })
     }
+    if (cycle.status !== "OPEN") throw new Error("completed cycles cannot receive new SELL fills")
 
     if (cycle.currentSellOrderId !== fill.orderId) {
       throw new Error(`SELL fill ${fill.id} does not belong to the current cycle order`)
