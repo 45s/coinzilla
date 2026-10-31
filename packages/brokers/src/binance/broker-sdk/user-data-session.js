@@ -71,6 +71,14 @@ export class BinanceUserDataSession {
     this.#stopped = false
   }
 
+  get isRecovering() {
+    return this.#reconnectPromise !== null
+  }
+
+  async waitForRecovery() {
+    if (this.#reconnectPromise) await this.#reconnectPromise
+  }
+
   onConnected() {
     const client = this.getClient()
     if (!this.#stopped && client?.state === "open") {
