@@ -93,7 +93,11 @@ export class BinanceUserDataSession {
       await this.#ensureRemoteSubscription()
     } catch (error) {
       this.#subscribers.delete(id)
-      if (this.#subscribers.size === 0) this.#detachClientListeners()
+      if (this.#subscribers.size === 0) {
+        this.#clearReconnectTimer()
+        this.#detachClientListeners()
+        this.setUnavailable(true)
+      }
       throw error
     }
 
@@ -321,7 +325,13 @@ export class BinanceUserDataSession {
       this.#reconnectPromise = null
     }
 
-    if (retryDelay !== null) this.#scheduleRecovery(retryDelay)
+    if (retryDelay !== null) {
+      this.#scheduleRecovery(retryDelay)
+    } else if (this.#subscriptionId === null && this.#recoveryRequired &&
+               !this.#stopped && this.#subscribers.size > 0 &&
+               this.#reconnectAttempts < this.maxReconnectAttempts) {
+      this.#scheduleRecovery()
+    }
   }
 
   #acknowledgeRecovery(id) {
