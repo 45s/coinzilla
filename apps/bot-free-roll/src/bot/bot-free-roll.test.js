@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 
 import { FreeRollBot } from "./bot-free-roll.js"
 import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/index.js"
@@ -46,6 +47,104 @@ function createMarketFilters() {
     quoteAsset: "USDT",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }
+}
+
+
+const dogeAsset = new Asset({ id: "doge", code: "DOGE" })
+const usdtAsset = new Asset({ id: "usdt", code: "USDT" })
+const dogeUsdtMarket = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset: dogeAsset,
+  quoteAsset: usdtAsset,
+})
+
+function createRecoveryBalance({ free = "10000", locked = "0" } = {}) {
+  return new Balance({
+    free: new Quantity({ amount: free, asset: usdtAsset }),
+    locked: new Quantity({ amount: locked, asset: usdtAsset }),
+  })
+}
+
+function createRecoverySnapshotPorts({
+  createdOrders,
+  calls = [],
+  getExecution = () => ({ status: "OPEN", executedQuantity: "0", fills: [] }),
+  getOpenOrders = () => [],
+  getAccountSnapshot,
+} = {}) {
+  let serverTime = 1000
+
+  return {
+    async getServerTime() {
+      calls.push("getServerTime")
+      serverTime += 10
+      return { ok: true, data: { serverTime } }
+    },
+    async getAccountSnapshot() {
+      calls.push("getAccountSnapshot")
+      if (getAccountSnapshot) return getAccountSnapshot({ serverTime })
+      return {
+        ok: true,
+        data: {
+          balances: [createRecoveryBalance()],
+          sourceTime: serverTime,
+        },
+      }
+    },
+    async getOpenOrders({ symbol }) {
+      calls.push("getOpenOrders")
+      return { ok: true, data: getOpenOrders({ symbol, createdOrders }) }
+    },
+    async getCanonicalOrderHistory({ symbol, orderId }) {
+      calls.push("getCanonicalOrderHistory")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      if (!order) return { ok: true, data: [] }
+      const execution = getExecution({ order, orderId })
+      const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(execution.status)
+      return {
+        ok: true,
+        data: [new CanonicalOrder({
+          clientOrderId: `client-${orderId}`,
+          brokerOrderId: orderId,
+          market: dogeUsdtMarket,
+          side: order.side,
+          type: "LIMIT",
+          limitPrice: new Money({ amount: String(order.price), asset: usdtAsset }),
+          originalQuantity: new Quantity({ amount: String(order.quantity), asset: dogeAsset }),
+          executedQuantity: new Quantity({ amount: execution.executedQuantity, asset: dogeAsset }),
+          status: execution.status,
+          createdAt: 1000,
+          updatedAt: 1010,
+          ...(terminal ? { completedAt: 1010 } : {}),
+        })],
+      }
+    },
+    async getFills({ symbol, orderId }) {
+      calls.push("getFills")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      return { ok: true, data: order ? getExecution({ order, orderId }).fills : [] }
+    },
+  }
+}
+
+function createRecoveryFill({ tradeId, orderId, side = "BUY", quantity, price = "100" }) {
+  return new Fill({
+    tradeId: String(tradeId),
+    brokerOrderId: String(orderId),
+    market: dogeUsdtMarket,
+    side,
+    price: new Money({ amount: price, asset: usdtAsset }),
+    quantity: new Quantity({ amount: quantity, asset: dogeAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: quantity, right: price }),
+      asset: usdtAsset,
+    }),
+    liquidityRole: "MAKER",
+    executedAt: 1010,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
 }
 
 function createExecutionEvent({
