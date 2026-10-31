@@ -171,6 +171,9 @@ importers:
 
   apps/bot-free-roll:
     dependencies:
+      '@coinzilla/entities':
+        specifier: workspace:*
+        version: link:../../packages/entities
       '@coinzilla/brokers':
         specifier: workspace:*
         version: link:../../packages/brokers

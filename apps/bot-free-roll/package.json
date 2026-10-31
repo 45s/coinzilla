@@ -17,6 +17,7 @@
     "@coinzilla/brokers": "workspace:*",
     "@coinzilla/event-bus": "workspace:*",
     "@coinzilla/journal": "workspace:*",
-    "@coinzilla/utils": "workspace:*"
+    "@coinzilla/utils": "workspace:*",
+    "@coinzilla/entities": "workspace:*"
   }
 }
