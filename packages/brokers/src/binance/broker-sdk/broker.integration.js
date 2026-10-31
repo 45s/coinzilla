@@ -27,7 +27,7 @@ const broker = new BinanceSdkBroker(
 )
 
 describe(
-  "BinanceSdkBroker integration (TESTNET)",
+  "BinanceSdkBroker native WebSocket integration (TESTNET)",
   { skip: !hasTestnetCredentials && "Set Binance TESTNET credentials to run these tests" },
   () => {
     before(async () => {
@@ -54,8 +54,8 @@ describe(
       const { ok, data } = await broker.getSymbolFilters({ symbol })
       assert.ok(ok)
       assert.equal(data.symbol, symbol)
-      assert.ok(Number.isFinite(data.tickSize) && data.tickSize > 0)
-      assert.ok(Number.isFinite(data.stepSize) && data.stepSize > 0)
+      assert.ok(Number.isFinite(Number(data.tickSize)) && Number(data.tickSize) > 0)
+      assert.ok(Number.isFinite(Number(data.stepSize)) && Number(data.stepSize) > 0)
     })
 
     it("fetches ticker price", async () => {

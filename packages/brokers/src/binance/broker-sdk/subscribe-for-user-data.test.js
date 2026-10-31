@@ -1,34 +1,39 @@
 import assert from "node:assert/strict"
-import { EventEmitter } from "node:events"
 import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "./broker.js"
+import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
 
-function createBroker() {
-  return new BinanceSdkBroker({
+function createBroker(handler) {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": handler,
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
-  })
+  }, { apiClientFactory: () => rpc })
+  return { broker, rpc }
 }
 
 describe("BinanceSdkBroker.subscribeForUserData", () => {
-  it("forwards adapted user events from the SDK stream", async () => {
-    const broker = createBroker()
-    const stream = new EventEmitter()
-    broker.tradingConnection = {
-      userDataStreamSubscribeSignature: async () => ({ stream }),
-    }
+  it("uses the signature subscription method and forwards adapted events", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 7 }))
+    broker.connected = true
     const received = []
-
-    const result = await broker.subscribeForUserData({
-      onEvent: (event) => received.push(event),
-    })
+    const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
 
     assert.equal(result.ok, true)
-    assert.equal(result.data, stream)
+    assert.equal(result.data.subscriptionId, 7)
+    assert.deepEqual(rpc.calls[0], {
+      method: "userDataStream.subscribe.signature",
+      params: {},
+      options: { signed: true },
+    })
 
-    stream.emit("message", {
-      e: "balanceUpdate", a: "USDT", d: "12.50", T: 200, E: 201,
+    rpc.emitEvent({
+      subscriptionId: 7,
+      event: { e: "balanceUpdate", a: "USDT", d: "12.50", T: 200, E: 201 },
     })
 
     assert.deepEqual(received, [{
@@ -40,30 +45,52 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
         eventType: "balanceUpdate",
       },
     }])
+
+    await result.data.disconnect()
+    assert.deepEqual(rpc.calls[1], {
+      method: "userDataStream.unsubscribe",
+      params: { subscriptionId: 7 },
+      options: {},
+    })
+    await result.data.disconnect()
+    assert.equal(rpc.calls.length, 2)
   })
 
-  it("returns a structured error when stream setup fails", async () => {
-    const broker = createBroker()
-    broker.tradingConnection = {
-      userDataStreamSubscribeSignature: async () => {
-        throw new Error("user stream unavailable")
-      },
-    }
-
+  it("removes its event listener when subscription setup fails", async () => {
+    const { broker, rpc } = createBroker(async () => { throw new Error("user stream unavailable") })
+    broker.connected = true
     const result = await broker.subscribeForUserData({ onEvent: () => {} })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].message, "user stream unavailable")
+    assert.equal(rpc.listenerCount, 0)
+  })
+
+  it("returns a local unsubscribe function and stops forwarding after cleanup", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 8 }))
+    broker.connected = true
+    const received = []
+    const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
+    await result.data.disconnect()
+    rpc.emitEvent({ e: "futureEvent", value: 1 })
+    assert.deepEqual(received, [])
+    assert.equal(rpc.listenerCount, 0)
   })
 })
 
-it("forwards unrecognized user-data messages unchanged", async () => {
-  const broker = createBroker()
-  const stream = new EventEmitter()
-  broker.tradingConnection = { userDataStreamSubscribeSignature: async () => ({ stream }) }
-  const received = []
-  const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
-  assert.equal(result.ok, true)
-  const message = { e: "futureEvent", payload: { id: 7 } }
-  stream.emit("message", message)
-  assert.deepEqual(received, [{ event: message }])
+it("removes local observers when remote unsubscribe fails and does not replay it", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 12 }),
+    "userDataStream.unsubscribe": async () => { throw new Error("unsubscribe unavailable") },
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+  }, { apiClientFactory: () => rpc })
+  broker.connected = true
+
+  const result = await broker.subscribeForUserData({ onEvent: () => {} })
+  await assert.rejects(() => result.data.disconnect(), /unsubscribe unavailable/)
+  assert.equal(rpc.listenerCount, 0)
+  await result.data.disconnect()
+  assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
 })

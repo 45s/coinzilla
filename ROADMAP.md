@@ -1,26 +1,25 @@
-# Bug-Resistance Roadmap
+# Coinzilla Engineering Roadmap
 
-Goal: make Coinzilla safer to change and release, without adding product features.
+## Purpose
 
-Prioritize demonstrated engineering risks over checklist progress. Keep changes focused, inspect complete affected files against current `main`, and verify mergeability and checks before calling work complete.
+Make Coinzilla safer to change, test, and release without adding unnecessary product features. Prioritize demonstrated engineering risks over checklist progress.
+
+This file tracks **repository-wide engineering goals and rules**. Package-specific architecture, implementation phases, protocol details, and operational instructions belong in the relevant package roadmap.
 
 ## 1. Make CI trustworthy
 
 - [x] Provide repository workflows for package tests and workspace test coverage.
-- [x] Audit which tests need environment variables, network access, exchange APIs, or other external services.
-- [x] Separate deterministic unit tests from integration tests that contact exchanges or other services.
-
-  Audit result: the broker package has two `.integration.js` tests that require network access. The default `pnpm test` runs package `node --test` scripts and discovers `.test.js` files, so those integration tests are not part of the deterministic unit-test run. Run them explicitly with `pnpm --filter @coinzilla/brokers test:integration`; the Binance SDK integration suite skips unless non-placeholder credentials are configured. Integration tests are not currently run in CI.
+- [x] Identify tests that require credentials, network access, external APIs, or other services.
+- [x] Separate deterministic unit tests from opt-in integration tests.
 - [ ] Verify all relevant checks consistently pass on pull requests; distinguish checks that run from checks enforced by branch protection.
-- [ ] Give unit tests explicit test configuration and mocks. Keep live API tests opt-in and use GitHub Secrets only when genuinely required.
+- [ ] Give unit tests explicit configuration and mocks. Keep live external-service tests opt-in and use GitHub Secrets only when genuinely required.
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
-
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+- [x] Protect `main`: require pull requests and passing required status checks.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
+- [ ] Keep shared branches current with `main`; review incoming changes before synchronizing and preserve other teams' work.
 
 ## 3. Test critical behavior
 
@@ -31,22 +30,31 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 4. Improve code quality and dependency safety
 
-- [ ] Add consistent linting and formatting checks if the repository does not already enforce them. GitHub Actions workflow linting is enforced by the existing JavaScript Syntax workflow; JavaScript linting and formatting are still follow-up work.
-- [x] Add dependency vulnerability checks to CI.
-
-  Current check: `pnpm audit --prod --audit-level high` runs on pull requests, pushes to `main`, and the weekly schedule.
-- [x] Keep the existing mock Binance key/secret examples in `.env.example` to demonstrate expected format, with an explicit comment that the values are fake.
+- [ ] Add consistent linting and formatting checks where they provide value and are not already enforced.
+- [x] Run dependency vulnerability checks in CI.
+- [ ] Keep runtime dependencies minimal, justified, and reviewed.
+- [ ] Prefer small, deterministic, testable functions and explicit contracts between packages.
 
 ## 5. Release safely
 
 - [x] Document release and rollback steps.
 - [ ] Verify critical workflows in a staging/test environment before production use.
+- [ ] Require evidence from the exact commit being proposed for release; do not treat pending, canceled, or failed checks as green.
+
+## 6. Package-level roadmaps
+
+Package roadmaps are the operational source of truth for work scoped to an individual package. When asked to implement or improve a package, an agent should be able to open that package's roadmap and begin from its current status, next action, constraints, tests, and acceptance criteria without relying on chat history.
+
+- **[Broker package roadmap](packages/brokers/ROADMAP.md)** — Binance broker architecture, compatibility contract, native WebSocket migration phases, test strategy, agent procedure, and main-branch synchronization rules.
+- Add links here when other packages gain their own maintained roadmaps.
 
 ## Working rules
 
 - Work one meaningful change at a time.
-- Before editing, inspect the latest `main`, the complete affected file(s), related tests, and branches/PRs touching the same paths.
-- When changes overlap, reconcile the full file against current `main`; do not stack stale, partial patches.
-- Run the narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
-- Check mergeability and all relevant CI results after pushing. Never claim checks are green while they are pending or failed.
-- Update this roadmap when a task is actually verified complete; distinguish repository configuration from checks that are merely present.
+- Before editing, inspect the latest `main`, complete affected files, related tests, package scripts/manifests, and relevant open branches/PRs.
+- When changes overlap, reconcile the complete file against current `main`; do not stack stale partial patches.
+- Keep PRs focused and reviewable. Replace complete affected files when that materially reduces merge-conflict risk.
+- Run narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
+- Verify mergeability and all relevant CI results on the exact PR head. Never claim checks are green while they are pending or failed.
+- Do not merge PRs automatically; wait for explicit user approval.
+- Update roadmaps only when work or decisions are supported by verified evidence.
