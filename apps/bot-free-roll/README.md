@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.009`
+**Document version:** `v0.010`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -450,6 +450,22 @@ The price must then be rounded up to a valid price increment, and the result mus
 
 This simplified calculation assumes the relevant costs and commissions are denominated in the quote currency and that the entire relevant active-position cost must be recovered by this sale.
 
+### Pooled recovery accounting across sells
+
+Recovery accounting is cumulative for the active recovery cycle. It is separate from the per-coin cost-basis allocation model; this policy does not introduce FIFO lots or redesign how base-asset cost basis is assigned.
+
+- Add each BUY fill's actual quote-denominated acquisition cost and applicable quote-denominated BUY commission to the cycle's recovery cost.
+- Credit each SELL fill's actual quote proceeds after applicable quote-denominated SELL commission against that recovery cost. Use confirmed fills only; never count an open order's estimated or expected proceeds.
+- The outstanding recovery amount is the cycle's cumulative eligible BUY costs minus cumulative net SELL proceeds, floored at zero. Any realized surplus is tracked separately as realized profit; it is not an unrealized valuation of the remaining coins.
+- Preserve this cumulative accounting across partial fills, canceled orders, and replacement SELL orders. Replacing an order must not reset or duplicate previously recorded costs or proceeds.
+- A partial SELL fill or a SELL canceled after partial execution credits its actual net proceeds, but allocates no free coins. The unsold strategy inventory remains active, and the outstanding recovery amount carries forward to the next recovery SELL.
+- Allocate `keepQuantity` only when the recovery cycle is completed by a fully filled recovery SELL and cumulative actual net profit for that cycle is at least `minProfit`. Never infer completion from order status without reconciling its fills.
+- Do not count the market value of unsold coins as recovered capital or realized profit.
+
+Example (quote-currency fees): BUY 100 DOGE for 10.00 FDUSD including BUY fees. A SELL then fills 40 DOGE and produces 4.50 FDUSD net of SELL fees. Credit 4.50 FDUSD; the cycle's outstanding recovery amount becomes 5.50 FDUSD. If that SELL is canceled, the remaining 60 DOGE stay active and no free DOGE is allocated. A later recovery SELL continues from the same 5.50 FDUSD outstanding amount; it does not start a new recovery balance.
+
+This pooled balance is a recovery-cash accounting measure, not a replacement for the active position's quantity or cost-basis records. Actual base-asset commissions still affect inventory quantities under the existing commission rules. Third-asset commission handling remains unchanged: preserve an unexpected fee and pause the pair without converting or valuing it.
+
 ### Base-asset commissions and unsupported third assets
 
 The strategy supports commissions charged in the pair's quote asset or base asset, as well as explicit zero commissions. A base-asset commission changes the net base quantity available after a BUY or consumed by a SELL, so it must be recorded and reflected in inventory accounting.
@@ -696,10 +712,9 @@ Wallet activity outside this strategy is external activity and must never be sil
 
 These questions remain unresolved and must not be silently guessed during implementation.
 
-1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
-2. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
-3. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
-4. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
+1. **Order replacement:** When should an existing sell limit order be amended or replaced if market prices move but no new buy has filled?
+2. **Available capital:** How should the bot behave when it cannot afford the next standing buy order?
+3. **Restart recovery:** Which state must be persisted locally, and which state must be reconstructed from the broker after restart?
 
 Ask only the question that blocks the current design decision. Do not overwhelm the user with every open question at once.
 
@@ -707,7 +722,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.009`**
+Current version: **`v0.010`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -722,6 +737,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.010` — Approved pooled recovery accounting: actual net SELL proceeds are credited cumulatively against BUY costs across partial fills, cancellations, and replacement sells; free coins are allocated only after a fully filled recovery SELL and the cumulative net-profit threshold is met.
 - `v0.009` — Approved manual wallet activity policy: deposits/transfers and manual buys/sells remain external to strategy accounting; pause when withdrawals or unexplained changes may affect strategy-owned inventory; resume only after explicit reconciliation. Added external inventory as a separate accounting bucket.
 - `v0.008` — Approved and documented commission-aware order selection: use `LIMIT_MAKER` when `makerPercent` is zero, regular `LIMIT` otherwise; account actual base/quote commissions from each fill and reserve the configured conservative SELL fee only for regular LIMIT orders.
 - `v0.007` — Clarified the approved commission policy: support quote/base/zero commissions, reject pairs requiring third-asset fees, and pause on unexpected third-asset fees without conversion or valuation.
