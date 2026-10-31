@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { EventEmitter } from "node:events"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 
 const ALL_EVENTS = Symbol("all-events")
@@ -75,11 +74,11 @@ export class EventBus {
   constructor({ logger = defaultLogger, onError } = {}) {
     this.logger = logger
     this.onError = onError
-    this.emitter = new EventEmitter()
-    // Node treats an unhandled "error" event as an exception. The event bus
-    // accepts arbitrary event names, so keep publishing "error" safe even
-    // when no consumer subscribes to it.
-    this.emitter.on("error", () => {})
+    // Use an explicit registry rather than EventEmitter: event names are
+    // application data and must never trigger Node's special listener events.
+    this.listeners = new Map()
+    this.allListeners = new Set()
+    this.subscriptions = new Set()
     this.pending = new Set()
     this.closed = false
   }
@@ -125,8 +124,14 @@ export class EventBus {
       data: eventData,
     })
 
-    this.emitter.emit(name, event)
-    this.emitter.emit(ALL_EVENTS, event)
+    const namedListeners = this.listeners.get(name)
+    for (const listener of namedListeners ?? []) {
+      listener(event)
+    }
+
+    for (const listener of this.allListeners) {
+      listener(event)
+    }
 
     return toResult({ event })
   }
@@ -195,24 +200,45 @@ export class EventBus {
       this.pending.add(task)
     }
 
-    this.emitter.on(name, listener)
+    const registry = name === ALL_EVENTS
+      ? this.allListeners
+      : this.getListeners(name)
 
-    let subscribed = true
+    registry.add(listener)
+
+    const record = { registry, listener, active: true }
+    this.subscriptions.add(record)
 
     const subscription = {
       unsubscribe: () => {
-        if (!subscribed) {
+        if (!record.active) {
           return toResult({ unsubscribed: false })
         }
 
-        subscribed = false
-        this.emitter.off(name, listener)
+        record.active = false
+        record.registry.delete(record.listener)
+        this.subscriptions.delete(record)
+
+        if (name !== ALL_EVENTS && record.registry.size === 0) {
+          this.listeners.delete(name)
+        }
 
         return toResult({ unsubscribed: true })
       },
     }
 
     return toResult({ subscription })
+  }
+
+  getListeners(name) {
+    let listeners = this.listeners.get(name)
+
+    if (!listeners) {
+      listeners = new Set()
+      this.listeners.set(name, listeners)
+    }
+
+    return listeners
   }
 
   async flush({} = {}) {
@@ -239,7 +265,14 @@ export class EventBus {
       return result
     }
 
-    this.emitter.removeAllListeners()
+    for (const record of this.subscriptions) {
+      record.active = false
+      record.registry.delete(record.listener)
+    }
+
+    this.subscriptions.clear()
+    this.listeners.clear()
+    this.allListeners.clear()
 
     return toResult({ closed: true })
   }
