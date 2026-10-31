@@ -38,6 +38,7 @@ export class FreeRollBot {
   #recoveryPromise = null
   #recoveryGeneration = 0
   #recoveryRestartRequested = false
+  #recoveryDiscrepancy = null
   #subscriptions = new Map()
   #userDataSubscription = null
   #states = new Map()
@@ -453,6 +454,7 @@ export class FreeRollBot {
     }
 
     const generation = this.#recoveryGeneration
+    this.#recoveryDiscrepancy = null
     this.#publish("bot.user_data_recovery_started", { generation })
 
     this.#recoveryPromise = this.#performUserDataRecovery({ generation })
@@ -522,6 +524,9 @@ export class FreeRollBot {
 
     await this.#replayBufferedUserDataEvents({ generation })
     if (!this.#isCurrentUserDataRecovery({ generation })) return
+    if (this.#recoveryDiscrepancy) {
+      throw new Error(this.#recoveryDiscrepancy)
+    }
 
     const acknowledgeRecovery = this.#userDataSubscription?.acknowledgeRecovery
     if (typeof acknowledgeRecovery !== "function") {
@@ -875,7 +880,15 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id || !state.trackedOrderIds.has(id)) return
+    if (!state || !id) return
+    if (!state.trackedOrderIds.has(id)) {
+      const reason = `Untracked order ${id} reported for managed pair ${symbol}`
+      this.#pause(symbol, reason)
+      if (this.#userDataRecoveryRequired) {
+        this.#recoveryDiscrepancy = reason
+      }
+      return
+    }
 
     if (event.executionType === "TRADE") {
       if (!event.fill) {
