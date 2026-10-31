@@ -141,14 +141,19 @@ export function evaluateSellProfitability({
       left: baseFeeQuantity,
       right: valuationData.baseToQuoteRate,
     })
-    const feeValueInQuote = addDecimal({
-      left: baseFeeValueInQuote,
-      right: quoteFeeAmount,
-    })
-    const netProceeds = subtractDecimal({
-      left: grossProceeds,
-      right: feeValueInQuote,
-    })
+    const hasUnsupportedFeeAsset = unsupportedFeeAssets.length > 0
+    const feeValueInQuote = hasUnsupportedFeeAsset
+      ? null
+      : addDecimal({
+          left: baseFeeValueInQuote,
+          right: quoteFeeAmount,
+        })
+    const netProceeds = feeValueInQuote === null
+      ? null
+      : subtractDecimal({
+          left: grossProceeds,
+          right: feeValueInQuote,
+        })
     const inventoryRequired = addDecimal({
       left: candidate.quantity,
       right: baseFeeQuantity,
@@ -167,13 +172,15 @@ export function evaluateSellProfitability({
         right: accounting.saleProceeds,
       }),
     })
-    const projectedNetProfit = subtractDecimal({
-      left: addDecimal({
-        left: accounting.saleProceeds,
-        right: netProceeds,
-      }),
-      right: accounting.cycleCost,
-    })
+    const projectedNetProfit = netProceeds === null
+      ? null
+      : subtractDecimal({
+          left: addDecimal({
+            left: accounting.saleProceeds,
+            right: netProceeds,
+          }),
+          right: accounting.cycleCost,
+        })
     const reasons = new Set()
 
     if (unsupportedFeeAssets.length > 0) {
@@ -198,10 +205,11 @@ export function evaluateSellProfitability({
     if (compareDecimal({ left: grossProceeds, right: tradingRules.minNotional }) < 0) {
       reasons.add(SELL_PROFITABILITY_REASONS.BELOW_MIN_NOTIONAL)
     }
-    if (compareDecimal({ left: netProceeds, right: "0" }) < 0) {
+    if (netProceeds !== null && compareDecimal({ left: netProceeds, right: "0" }) < 0) {
       reasons.add(SELL_PROFITABILITY_REASONS.FEES_EXCEED_PROCEEDS)
     }
-    if (compareDecimal({ left: projectedNetProfit, right: minProfit }) < 0) {
+    if (projectedNetProfit !== null &&
+        compareDecimal({ left: projectedNetProfit, right: minProfit }) < 0) {
       reasons.add(SELL_PROFITABILITY_REASONS.BELOW_MIN_PROFIT)
     }
 
@@ -212,6 +220,8 @@ export function evaluateSellProfitability({
         unsupportedFeeAssets: [...unsupportedFeeAssets],
       },
       breakdown: {
+        candidateQuantity: candidate.quantity,
+        candidatePrice: candidate.price,
         grossProceeds,
         baseFeeQuantity,
         quoteFeeAmount,
@@ -219,9 +229,15 @@ export function evaluateSellProfitability({
         netProceeds,
         inventoryRequired,
         availableForSell,
+        cycleCost: accounting.cycleCost,
+        saleProceeds: accounting.saleProceeds,
         requiredNetProceeds,
         projectedNetProfit,
         minProfit,
+        minNotional: tradingRules.minNotional,
+        priceTickSize: tradingRules.priceTickSize,
+        quantityStepSize: tradingRules.quantityStepSize,
+        baseToQuoteRate: valuationData.baseToQuoteRate,
         notional: grossProceeds,
       },
     }
