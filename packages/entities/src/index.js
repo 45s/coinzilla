@@ -8,3 +8,4 @@ export { CanonicalOrder, canonicalOrderErrMsgs, CANONICAL_ORDER_SIDES, CANONICAL
 export { Commission, commissionErrMsgs } from "./commissions/index.js"
 export { Fill, fillErrMsgs, FILL_LIQUIDITY_ROLES, COMMISSION_STATUSES } from "./fills/index.js"
 export { Balance, balanceErrMsgs } from "./balances/index.js"
+export { TradingRules, tradingRulesErrMsgs, TRADING_RULE_CONSTRAINT_TYPES, TRADING_RULE_STATUSES } from "./trading-rules/index.js"

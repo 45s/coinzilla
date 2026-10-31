@@ -20,7 +20,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [x] **FR-011 — Fill.** Implemented immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Integrated into `develop` via PR #301.
 - [~] **FR-012 — Commission.** Implement an immutable commission value with an exact non-negative `Money` amount and explicit asset identity. Add zero, one, or multiple commission entries to Fill, with explicit `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics. Unknown or incomplete fees must never be interpreted as zero.
 - [~] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
-- [ ] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit unsupported/dynamic constraints.
+- [~] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit supported, unsupported, dynamic, and unknown constraint states.
 - [ ] **FR-015 — Broker capability contracts.** Shared capability vocabulary without exchange-specific assumptions.
 - [ ] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
 
@@ -73,6 +73,15 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Total is derived exactly as free plus locked using decimal-string integer arithmetic, never JavaScript floating-point arithmetic. It cannot be supplied inconsistently by a caller.
 - All three quantities are immutable `Quantity` values in the same Asset. Zero free, locked, or total balances are valid.
 - The value snapshot includes the canonical Asset identity and independent free, locked, and total quantity snapshots.
+
+### FR-014 contract boundary
+
+- `TradingRules` is scoped to one canonical `Market`; it contains exchange-neutral constraints and no venue-specific filter names or payloads.
+- Each constraint has a stable type and an explicit `SUPPORTED`, `UNSUPPORTED`, `DYNAMIC`, or `UNKNOWN` status. A missing constraint is not evidence that the venue does not enforce it.
+- Supported price and notional constraints use exact quote-asset `Money`; supported quantity constraints use exact base-asset `Quantity`.
+- Supported constraints require a value. Unsupported, dynamic, and unknown constraints must not carry a fabricated static value.
+- Increment constraints must be greater than zero; all supported values must be non-negative. When both minimum and maximum bounds are supported, minimum cannot exceed maximum.
+- Constraint types are unique within a snapshot. Constraint arrays and records are immutable; value snapshots are independent.
 
 ## Completion policy
 
