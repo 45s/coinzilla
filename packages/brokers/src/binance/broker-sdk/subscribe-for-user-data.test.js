@@ -19,6 +19,36 @@ function createBroker(handler) {
 
 describe("BinanceSdkBroker.subscribeForUserData", () => {
 
+
+  it("requires an open API socket before starting a user-data subscription", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: 58 }),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, { apiClientFactory: () => rpc })
+    broker.connected = true
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /must be open/)
+    assert.equal(rpc.calls.length, 0)
+  })
+
+  it("rejects a malformed subscription ID from Binance", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: "58" }))
+    broker.connected = true
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /valid subscriptionId/)
+    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+  })
+
   it("validates user-data callbacks before issuing RPC requests", async () => {
     const { broker, rpc } = createBroker(() => ({ subscriptionId: 57 }))
     broker.connected = true
