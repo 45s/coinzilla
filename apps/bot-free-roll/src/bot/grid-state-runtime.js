@@ -4,6 +4,11 @@ import { calculateFillAccountingExact } from "./helpers/accounting.js"
 import { reconcileExecutionFill } from "./fill-reconciliation.js"
 import { buildGridOrderIndex, resolveGridOrderOwner } from "./grid-order-mapping.js"
 import { projectGridCycles } from "./grid-cycles.js"
+import {
+  restoreGridPairState,
+  serializeGridPairState,
+  validateGridStateSnapshot,
+} from "./grid-state-snapshot.js"
 
 function failure(reason) {
   return toResult({ errors: [reason] })
@@ -194,6 +199,90 @@ export function projectGridPairAccounting({ state } = {}) {
       buyFills: state.gridCycles.size,
       sellFills,
       reservedQuantity: projection.data.reservedQuantity,
+    },
+  })
+}
+
+
+// Create one durable, versioned snapshot for all configured Grid pairs.
+export function createGridStateSnapshot({
+  revision,
+  states,
+  configFingerprints,
+} = {}) {
+  if (!Number.isSafeInteger(revision) || revision < 0 ||
+      !(states instanceof Map) || !(configFingerprints instanceof Map)) {
+    return failure("Grid state snapshot requires a revision and pair/config maps")
+  }
+
+  const pairs = {}
+  for (const [symbol, state] of states) {
+    if (state.mode !== "grid") continue
+    const serialized = serializeGridPairState({
+      state,
+      configFingerprint: configFingerprints.get(symbol),
+    })
+    if (!serialized.ok) return serialized
+    pairs[symbol] = serialized.data
+  }
+
+  const snapshot = Object.freeze({
+    schemaVersion: 1,
+    revision,
+    pairs: Object.freeze(pairs),
+  })
+  const validation = validateGridStateSnapshot({ snapshot })
+  if (!validation.ok) return validation
+  return toResult({ data: snapshot })
+}
+
+// Restore all Grid pairs as one operation. A missing/extra pair, changed
+// config, invalid cycle, or incomplete fill ledger rejects the whole restore.
+export function restoreGridStateSnapshot({
+  snapshot,
+  states,
+  configFingerprints,
+} = {}) {
+  const snapshotValidation = validateGridStateSnapshot({ snapshot })
+  if (!snapshotValidation.ok) return snapshotValidation
+  if (!(states instanceof Map) || !(configFingerprints instanceof Map)) {
+    return failure("Grid state restore requires pair and config maps")
+  }
+
+  const expectedSymbols = [...states]
+    .filter(([, state]) => state.mode === "grid")
+    .map(([symbol]) => symbol)
+    .sort()
+  const snapshotSymbols = Object.keys(snapshot.pairs).sort()
+  if (expectedSymbols.length !== snapshotSymbols.length ||
+      expectedSymbols.some((symbol, index) => symbol !== snapshotSymbols[index])) {
+    return failure("Persisted Grid pair set does not match the enabled Grid configuration")
+  }
+
+  const restoredStates = new Map(states)
+  for (const symbol of expectedSymbols) {
+    const restored = restoreGridPairState({
+      snapshot: snapshot.pairs[symbol],
+      state: states.get(symbol),
+      configFingerprint: configFingerprints.get(symbol),
+    })
+    if (!restored.ok) return restored
+
+    const replayed = replayGridFillLedger({
+      state: restored.data,
+      ledgerEntries: restored.data.ledgerEntries,
+    })
+    if (!replayed.ok) return replayed
+
+    const projected = projectGridPairAccounting({ state: replayed.data })
+    if (!projected.ok) return projected
+    restoredStates.set(symbol, projected.data)
+  }
+
+  return toResult({
+    data: {
+      revision: snapshot.revision,
+      states: restoredStates,
     },
   })
 }
