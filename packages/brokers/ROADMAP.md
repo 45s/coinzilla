@@ -529,7 +529,7 @@ When a new discovery changes an implementation decision:
 - Keep PRs focused on one broker task or a tightly coupled implementation/test/documentation change.
 - A task is complete only after its PR is integrated into `develop`, all required checks pass, and this roadmap reflects the verified result.
 - The responsible agent may merge a task PR after CI, target freshness, and ownership gates pass. No routine human approval is expected for `develop`.
-- Never merge task work directly into `main`. The user approves the milestone/release PR from `develop` to `main`.
+- Keep all ongoing implementation and integration work on `develop`; do not create or manage release branches/PRs as part of a package task. Any separate release workflow requires an explicit user request.
 - Do not claim a phase complete merely because a PR is open or CI has started.
 
 Historical references to `migration/binance-native-ws` and its phase PRs above describe where earlier work was developed. They do not authorize new work on that retired long-lived branch.
