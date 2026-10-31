@@ -19,6 +19,13 @@ import { createEventHandling } from "./event-handling.js"
 import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
 import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
 import { allocateFreeInventory } from "./inventory-allocation.js"
+import {
+  createGridConfigFingerprint,
+} from "./grid-state-snapshot.js"
+import {
+  createGridStateSnapshot,
+  restoreGridStateSnapshot,
+} from "./grid-state-runtime.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -247,6 +254,7 @@ export class FreeRollBot {
       }
 
       await this.#loadPriceTickSizes()
+      await this.#restoreGridState()
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
@@ -602,6 +610,99 @@ export class FreeRollBot {
 
   #enqueue(symbol, task) {
     return this.#queue.enqueue({ key: symbol, task })
+  }
+
+  #getGridConfigFingerprints() {
+    const fingerprints = new Map()
+
+    for (const [symbol, state] of this.#states) {
+      if (state.mode !== "grid") continue
+      const result = createGridConfigFingerprint({
+        symbol,
+        settings: state.settings,
+        minProfit: this.settings.minProfit,
+      })
+      if (!result.ok) {
+        throw new AggregateError(result.errors, `[${symbol}] Invalid Grid config fingerprint`)
+      }
+      fingerprints.set(symbol, result.data)
+    }
+
+    return fingerprints
+  }
+
+  async #persistGridState({} = {}) {
+    const gridStates = new Map(
+      [...this.#states].filter(([, state]) => state.mode === "grid"),
+    )
+    if (gridStates.size === 0) return { ok: true }
+
+    if (!this.#gridStateStore) {
+      throw new Error("Grid mode requires a durable Grid state store")
+    }
+
+    const revision = this.#gridStateRevision === null
+      ? 0
+      : this.#gridStateRevision + 1
+    const snapshot = createGridStateSnapshot({
+      revision,
+      states: this.#states,
+      configFingerprints: this.#getGridConfigFingerprints(),
+    })
+    if (!snapshot.ok) {
+      throw new AggregateError(snapshot.errors, "Failed to serialize Grid state")
+    }
+
+    const result = await this.#gridStateStore.write({ snapshot: snapshot.data })
+    if (!result.ok) {
+      throw new AggregateError(result.errors, "Failed to persist Grid state")
+    }
+
+    this.#gridStateRevision = revision
+    return { ok: true, revision }
+  }
+
+  async #restoreGridState() {
+    const gridStates = new Map(
+      [...this.#states].filter(([, state]) => state.mode === "grid"),
+    )
+    if (gridStates.size === 0) return { ok: true }
+
+    if (!this.#gridStateStore) {
+      throw new Error("Grid mode requires a durable Grid state store")
+    }
+
+    const stored = await this.#gridStateStore.read()
+    if (!stored.ok) {
+      throw new AggregateError(stored.errors, "Failed to read Grid state")
+    }
+
+    if (stored.data === null) {
+      this.#gridStateRevision = null
+      await this.#persistGridState()
+      this.#debug("Initialized durable Grid state snapshot", {
+        pairs: [...gridStates.keys()],
+        revision: this.#gridStateRevision,
+      })
+      return { ok: true }
+    }
+
+    const restored = restoreGridStateSnapshot({
+      snapshot: stored.data,
+      states: this.#states,
+      configFingerprints: this.#getGridConfigFingerprints(),
+    })
+    if (!restored.ok) {
+      throw new AggregateError(restored.errors, "Grid state restore failed; trading is blocked")
+    }
+
+    this.#states = restored.data.states
+    this.#gridStateRevision = restored.data.revision
+    this.#debug("Restored durable Grid state", {
+      pairs: [...gridStates.keys()],
+      revision: this.#gridStateRevision,
+    })
+    return { ok: true }
   }
 
   async #loadPriceTickSizes() {
