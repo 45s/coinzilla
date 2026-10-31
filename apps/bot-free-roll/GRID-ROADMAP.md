@@ -179,7 +179,7 @@ Audited source ref: current `develop` at the time this Grid branch was created. 
 - Exact decimal helpers, order planning, profitability calculations, lifecycle helpers, and deterministic Node.js tests already exist.
 - Existing configuration and README define commission-asset restrictions, post-only behavior, actual fee handling, wait-for-full-fill policy, readiness states, external inventory treatment, and fail-closed safety rules.
 
-These are foundations, not proof that Grid behavior is already supported.
+These are foundations, not proof that Grid behavior is already supported. The new `src/bot/grid-cycles.js` and its tests are additive domain primitives only; `FreeRollBot`, order execution, live reconciliation, and restart recovery do not call them yet.
 
 ### 6.2 Audited single-order assumptions that must change
 
@@ -196,7 +196,7 @@ These are foundations, not proof that Grid behavior is already supported.
 | Accounting projection | `fill-reconciliation.js` rebuilds an aggregate recovery-window projection | Build deterministic cycle projections keyed by stable cycle identity; preserve fill dedupe and actual commission facts |
 | Inventory allocation | Existing helper allocates `keepQuantity` from aggregate active quantity | Apply allocation to the completing cycle's reconciled residual only; update pair-level free quantity exactly once |
 
-### 6.3 Important compatibility observation
+### 6.3 New additive Grid domain primitives\n\nThe feature branch now contains `src/bot/grid-cycles.js` and `grid-cycles.test.js`. They define immutable cycle snapshots, stable BUY provenance, one live SELL attempt per cycle, explicit SELL reservations, idempotent SELL fill application, reconciliation-gated SELL closure, per-cycle profit/keep allocation, and pair-level derived projections. These helpers are intentionally not imported by the running bot yet. Their presence cannot change existing order behavior. The full test suite/coverage result for this revision must be checked before treating these primitives as validated.\n\n### 6.4 Important compatibility observation
 
 The existing README explicitly defines pooled recovery: when a second BUY fills before the first SELL, cancel the first SELL and replace it with a larger SELL (for example 199 DOGE after two 100 DOGE buys), retaining one DOGE per completed pooled recovery cycle.
 
@@ -377,10 +377,10 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 
 ### Stage G2 — Pure domain model and projections (safe additive preparation)
 
-- [ ] **GRID-020 — Define cycle identity and lifecycle contracts.** Add pure helpers for stable cycle identity, validated cycle snapshots, legal status transitions, and idempotent cycle creation. No bot integration.
-- [ ] **GRID-021 — Define per-cycle exact accounting helpers.** Pure object-input/object-output functions for actual cost, net proceeds, fees, outstanding recovery amount, net profit, and completion eligibility. Decimal strings only.
+- [~] **GRID-020 — Define cycle identity and lifecycle contracts.** In progress: `src/bot/grid-cycles.js` adds immutable cycle creation from stable BUY order/fill identity, one-live-SELL enforcement, fill/order history, terminal cancellation, completion, and pair projection. Remaining: review stable-ID derivation at the BUY completion boundary, harden status/identity mapping against canonical broker history, and add orchestrator/recovery integration contracts. No bot integration yet.
+- [~] **GRID-021 — Define per-cycle exact accounting helpers.** In progress: `recordGridCycleSellFill` applies exact decimal-string base debits and net quote proceeds supplied by the canonical fill-accounting boundary; `completeGridCycle` enforces per-cycle actual proceeds against cost plus `minProfit`. Remaining: define/implement per-cycle BUY fill aggregation, commission totals by asset, and sell-plan inputs from actual fills. No floating-point financial decisions.
 - [ ] **GRID-022 — Define sellable-quantity and free-allocation helpers.** Account for base commissions, reservations, quantity steps, residual dust, and exact `keepQuantity`; never allocate on partial/canceled SELL.
-- [ ] **GRID-023 — Define pair projection from cycles.** Derive aggregate active/free/reserved quantities and cycle statistics from immutable cycle inputs; test arbitrary completion order and immutability.
+- [~] **GRID-023 — Define pair projection from cycles.** In progress: `projectGridCycles` derives active, free, reserved, residual, recovery-cost, proceeds, realized-profit, and cycle-count totals from immutable cycle snapshots. Remaining: integrate the projection with the market inventory ledger and add more reservation/recovery cross-checks.
 - [ ] **GRID-024 — Define cycle order mapping and order-role helpers.** Map broker order IDs to one cycle and order role; reject ambiguous, duplicate, or unowned mappings.
 
 ### Stage G3 — Multi-order inventory and reconciliation foundations
