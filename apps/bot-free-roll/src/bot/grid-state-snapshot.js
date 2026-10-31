@@ -1,4 +1,5 @@
 import { toResult } from "@coinzilla/utils"
+import { createGridOrderIntent } from "./grid-order-intents.js"
 import { projectGridCycles } from "./grid-cycles.js"
 
 function failure(reason) {
@@ -71,7 +72,22 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
 
   const cycleIds = new Set(snapshot.cycles.map((cycle) => cycle.id))
   const intentIds = new Set()
+  const intentNames = new Set()
   const sellIntentCycleIds = new Set()
+  const trackedClientOrderIds = new Set()
+  const trackedBrokerOrderIds = new Set()
+  if (snapshot.buyOrder) {
+    trackedClientOrderIds.add(snapshot.buyOrder.clientOrderId)
+    trackedBrokerOrderIds.add(snapshot.buyOrder.id)
+  }
+  for (const cycle of snapshot.cycles) {
+    trackedClientOrderIds.add(cycle.buyOrder.clientOrderId)
+    trackedBrokerOrderIds.add(cycle.buyOrder.id)
+    for (const order of cycle.sellOrders) {
+      trackedClientOrderIds.add(order.clientOrderId)
+      trackedBrokerOrderIds.add(order.id)
+    }
+  }
   let buyIntentCount = 0
   for (const intent of snapshot.orderIntents) {
     if (!isPlainObject(intent) ||
@@ -81,18 +97,38 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
         !["BUY", "SELL"].includes(intent.side) ||
         !["LIMIT", "LIMIT_MAKER"].includes(intent.type) ||
         !["PREPARED", "ACKNOWLEDGED"].includes(intent.status) ||
-        intentIds.has(intent.clientOrderId)) {
+        intentIds.has(intent.clientOrderId) ||
+        intentNames.has(intent.intentId) ||
+        trackedClientOrderIds.has(intent.clientOrderId)) {
       return failure("Grid pair snapshot contains an invalid or duplicate order intent")
     }
+    const canonicalIntent = createGridOrderIntent({
+      intentId: intent.intentId,
+      symbol: intent.symbol,
+      side: intent.side,
+      type: intent.type,
+      quantity: intent.quantity,
+      price: intent.price,
+      createdAtServerTime: intent.createdAtServerTime,
+      cycleId: intent.cycleId,
+    })
+    if (!canonicalIntent.ok ||
+        canonicalIntent.data.clientOrderId !== intent.clientOrderId ||
+        (intent.status === "PREPARED" && intent.brokerOrderId !== null) ||
+        (intent.status === "ACKNOWLEDGED" && !isNonEmptyString(intent.brokerOrderId))) {
+      return failure("Grid pair snapshot contains a malformed or mismatched order intent")
+    }
     intentIds.add(intent.clientOrderId)
+    intentNames.add(intent.intentId)
     if (intent.side === "BUY") {
       buyIntentCount += 1
       if (intent.cycleId !== null) {
         return failure("BUY order intent cannot belong to an existing cycle")
       }
     } else {
-      if (!cycleIds.has(intent.cycleId)) {
-        return failure("SELL order intent references an unknown cycle")
+      const cycle = snapshot.cycles.find((entry) => entry.id === intent.cycleId)
+      if (!cycle || cycle.status !== "OPEN" || cycle.currentSellOrderId !== null) {
+        return failure("SELL order intent references a cycle that cannot accept a SELL")
       }
       if (sellIntentCycleIds.has(intent.cycleId)) {
         return failure("Grid pair snapshot contains multiple pending SELL intents for one cycle")
@@ -102,6 +138,15 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
   }
   if (buyIntentCount > 1 || (snapshot.buyOrder && buyIntentCount > 0)) {
     return failure("Grid pair snapshot has conflicting BUY order state")
+  }
+
+  if (snapshot.buyOrder && snapshot.cycles.some((cycle) =>
+    cycle.buyOrder.id === snapshot.buyOrder.id ||
+    cycle.sellOrders.some((order) => order.id === snapshot.buyOrder.id) ||
+    cycle.buyOrder.clientOrderId === snapshot.buyOrder.clientOrderId ||
+    cycle.sellOrders.some((order) => order.clientOrderId === snapshot.buyOrder.clientOrderId),
+  )) {
+    return failure("current BUY order identity conflicts with an existing cycle order")
   }
 
   const ledgerFillIds = new Set()
