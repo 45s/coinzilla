@@ -276,6 +276,7 @@ export class BinanceStreamsClient {
       const timeout = this.setTimeout(() => {
         this.#pending.delete(id)
         this.#ackTimeouts.delete(timeout)
+        this.#controlQueue = this.#controlQueue.filter((item) => item.id !== id)
         reject(new Error(`Binance Streams ${method} acknowledgement timed out`))
       }, this.ackTimeout)
       this.#ackTimeouts.add(timeout)
