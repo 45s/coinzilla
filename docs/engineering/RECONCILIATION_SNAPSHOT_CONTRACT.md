@@ -2,7 +2,7 @@
 
 **Owner:** `apps/bot-free-roll`  
 **Roadmap:** FR-057  
-**Status:** Contract defined; broker port prerequisites tracked in [cross-domain request #316](https://github.com/45s/coinzilla/issues/316).
+**Status:** Collector and pure validator implemented in PR #326. Broker timestamp/history ports are delivered by [PR #320](https://github.com/45s/coinzilla/pull/320) and canonical order history by [PR #325](https://github.com/45s/coinzilla/pull/325).
 
 ## Purpose
 
@@ -39,19 +39,19 @@ The bot consumes an exchange-neutral object. Binance wire fields, raw payloads, 
       },
 
       orderHistory: {
-        items: [],
-        firstOrderId: null,
-        nextOrderId: null,
-        pagesFetched: 1,
+        items: [], // canonical Entities CanonicalOrder[] for tracked orders only
+        trackedOrderIds: [],
+        pagesFetched: 0,
         observedAtServerTime: 0,
         completeness: "COMPLETE",
       },
 
       fills: {
         items: [], // canonical Entities Fill[] from getFills()
+        trackedOrderIds: [],
         firstTradeId: null,
         nextTradeId: null,
-        pagesFetched: 1,
+        pagesFetched: 0,
         observedAtServerTime: 0,
         completeness: "COMPLETE",
       },
@@ -89,12 +89,15 @@ The top-level snapshot is usable only when every required section is `COMPLETE`.
 ### Order history and fills
 
 - Collect order history and fills independently; an order status is not a substitute for executions.
-- Use stable order/trade IDs as cursors. Keep page boundaries and the next cursor in the snapshot.
+- Scope order history and fills to the bot's currently tracked order IDs for each enabled symbol. This snapshot does **not** claim to download the account's entire order/trade history. Binance returns only recent records when no cursor or time condition is supplied.
+- Query each tracked order with `getCanonicalOrderHistory({ symbol, orderId })`; require exactly one matching canonical `CanonicalOrder` record. The raw compatibility `getOrderHistory()` result must not enter bot logic.
+- Query fills independently with `getFills({ symbol, orderId, fromId?, limit })`. `fromId` is the next inclusive trade-ID cursor and may be combined with `orderId`.
 - A page at the maximum supported limit is potentially truncated. Request the next page; do not mark it complete just because the request succeeded.
-- The next cursor must advance strictly beyond the last returned ID. Repeated IDs are deduplicated only when the exact payload matches; conflicting duplicates make the section incomplete.
+- The next cursor must advance strictly beyond the last returned ID. Duplicate, unordered, or unsafe IDs make the section incomplete.
 - Binance order/trade IDs are int64 values. The current JSON RPC boundary accepts cursor IDs only when they fit JavaScript's safe-integer range; larger IDs are rejected rather than rounded, and the affected history section must remain incomplete. Supporting larger IDs requires a transport-level int64 representation.
-- A history query with a bounded time range must record that range and respect the source's maximum supported window.
-- An order or trade history that cannot be paginated to exhaustion remains incomplete.
+- Stop at a bounded page limit. If the cap is reached before a short page proves exhaustion, the history section is incomplete.
+- A tracked order missing from canonical order history is incomplete, not an empty history. An order with zero fills is valid when its canonical order record exists and the fills query returns an empty page.
+- Untracked historical orders are outside this snapshot; unexpected currently open orders remain a reconciliation discrepancy.
 
 ### Server time and consistency window
 
@@ -126,9 +129,10 @@ The consumer requires the broker-owned capabilities in [request #316](https://gi
 
 - `getServerTime()` for exchange server timestamps.
 - `getAccountSnapshot()` for canonical balances plus the account source `updateTime`, while preserving the existing `getBalances()` array contract.
-- Cursor-aware `getFills()` (canonical Entities Fill[]) and compatibility `getMyTrades()` / `getOrderHistory()` queries that preserve exact source IDs/timestamps and allow every page to be collected.
+- `getCanonicalOrderHistory()` for exchange-neutral `CanonicalOrder[]` records scoped to a tracked order.
+- Cursor-aware `getFills()` (canonical Entities Fill[]) for each tracked order, preserving exact source IDs/timestamps and allowing every page to be collected.
 
-The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation.
+The bot must not call Binance RPC method names directly or interpret Binance wire payloads. The broker adapter owns that translation. The snapshot collector and pure validator are implemented in `apps/bot-free-roll/src/bot/reconciliation-snapshot.js`; integration into the running recovery flow is a separate consumer step.
 
 ## Scope boundary
 
