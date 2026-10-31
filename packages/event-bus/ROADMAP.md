@@ -215,7 +215,7 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 - [x] Record a real baseline from `pnpm --filter @coinzilla/event-bus test` and `pnpm --filter @coinzilla/event-bus test:coverage`; attach command output/CI run to the implementation PR (77 tests passed; 99.54% lines / 98.63% branches; see Phase 0 CI links).
 - [x] Confirm Node's built-in coverage output and the package test script work in CI; the package-specific command runs on Node.js 22 and excludes test files from the measured source set.
 - [x] Add package-specific line and branch thresholds (>=90% lines and >=85% branches) to a CI-enforced command; the full suite passes the gate.
-- [ ] Add a negative CI self-check proving the package coverage command fails when a deliberately insufficient threshold is configured.
+- [x] Add a negative CI self-check proving the package coverage command fails when a deliberately insufficient 100% line or branch threshold is configured.
 - [x] Ensure the gate runs on every pull request that changes the package; the package-specific command is an explicit step in the Test Coverage workflow.
 - [x] Document examples, limitations, and current operational behavior in `README.md` (including in-process scope, no durability, fan-out admission, errors, unsubscribe, flush, and diagnostics and bounded shutdown behavior).
 
