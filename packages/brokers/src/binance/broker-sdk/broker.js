@@ -212,9 +212,14 @@ export class BinanceSdkBroker extends CoreBroker {
       }
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const symbolInfo = metadataResponse.data?.symbols?.find((item) => item.symbol === symbol)
+      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
+        ? metadataResponse.data.symbols.filter((item) => item?.symbol === symbol)
+        : []
+      if (symbolMatches.length !== 1) {
+        throw new Error(`Binance market metadata is missing or ambiguous for ${symbol}`)
+      }
+      const [symbolInfo] = symbolMatches
       if (
-        !symbolInfo ||
         typeof symbolInfo.baseAsset !== "string" ||
         !symbolInfo.baseAsset.trim() ||
         typeof symbolInfo.quoteAsset !== "string" ||
