@@ -171,7 +171,7 @@ export class BinanceUserDataSession {
         throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
       }
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
-          this.getClient() !== client) {
+          this.getClient() !== client || client.state !== "open") {
         try {
           await client.request("userDataStream.unsubscribe", { subscriptionId })
         } catch (error) {
