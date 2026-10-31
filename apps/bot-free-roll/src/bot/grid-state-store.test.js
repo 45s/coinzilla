@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -148,9 +148,7 @@ test("fails closed on a corrupted persisted snapshot", async () => {
   try {
     await fixture.store.read()
     await fixture.store.write({ snapshot: createSnapshot() })
-    await import("node:fs/promises").then(({ writeFile }) =>
-      writeFile(fixture.store.filePath, "{invalid json", "utf8"),
-    )
+    await writeFile(fixture.store.filePath, "{invalid json", "utf8")
 
     const restored = await fixture.store.read()
     assert.equal(restored.ok, false)
@@ -161,8 +159,10 @@ test("fails closed on a corrupted persisted snapshot", async () => {
 })
 
 test("rejects path traversal in the configured snapshot filename", async () => {
-  assert.throws(
-    () => createGridStateStore({ directory: "/tmp", fileName: "../state.json" }),
-    /file name/,
-  )
+  for (const fileName of ["../state.json", "..\\\\state.json", "nested/state.json"]) {
+    assert.throws(
+      () => createGridStateStore({ directory: "/tmp", fileName }),
+      /file name/,
+    )
+  }
 })
