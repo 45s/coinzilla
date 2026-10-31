@@ -140,13 +140,13 @@ describe("Binance user-data session recovery", () => {
 
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
-    await scheduler.runNext()
+    const recovery = scheduler.runNext()
     assert.equal(typeof resolveDelayedSubscribe, "function")
 
     clients[1].state = "closed"
     clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
     resolveDelayedSubscribe({ subscriptionId: 110 })
-    await broker.userDataSession.waitForRecovery()
+    await recovery
 
     assert.equal(scheduler.pendingCount, 1)
     await scheduler.runNext()
@@ -826,12 +826,12 @@ describe("Binance user-data session recovery", () => {
 
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
-    await scheduler.runNext()
+    const recovery = scheduler.runNext()
     assert.equal(typeof finishReconnect, "function")
 
     await broker.disconnect()
     finishReconnect()
-    await broker.userDataSession.waitForRecovery()
+    await recovery
 
     assert.equal(clients[1].state, "closed")
     assert.equal(clients[1].calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
