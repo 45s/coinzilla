@@ -427,6 +427,7 @@ export class BinanceUserDataSession {
       this.#reconnectPromise = null
     }
 
+    if (generation !== this.#generation) return
     if (retryDelay !== null) {
       this.#scheduleRecovery(retryDelay)
     } else if (this.#subscriptionId === null && this.#recoveryRequired &&
