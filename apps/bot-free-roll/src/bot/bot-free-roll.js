@@ -35,6 +35,7 @@ export class FreeRollBot {
   #userDataRecoveryRequired = false
   #pendingUserDataRecovery = false
   #bufferedUserDataEvents = []
+  #userDataEventSequence = 0
   #recoveryPromise = null
   #recoveryGeneration = 0
   #recoveryRestartRequested = false
@@ -394,6 +395,7 @@ export class FreeRollBot {
     if (!this.#isRunning) return
 
     if (this.#userDataRecoveryRequired) {
+      this.#userDataEventSequence += 1
       this.#bufferedUserDataEvents.push(payload)
       return
     }
@@ -514,16 +516,7 @@ export class FreeRollBot {
       })
     }
 
-    const openOrders = unwrapResult(
-      await this.broker.getOpenOrders(),
-      "getOpenOrders during user-data recovery",
-    )
-    if (!this.#isCurrentUserDataRecovery({ generation })) return
-    if (!Array.isArray(openOrders)) {
-      throw new Error("getOpenOrders must return an array during user-data recovery")
-    }
-
-    await this.#reconcileTrackedOrders({ openOrders, generation })
+    await this.#reconcileTrackedOrders({ generation })
     if (!this.#isCurrentUserDataRecovery({ generation })) return
 
     await this.#replayBufferedUserDataEvents({ generation })
@@ -556,8 +549,47 @@ export class FreeRollBot {
     await this.#resumePairOrders()
   }
 
-  async #reconcileTrackedOrders({ openOrders, generation }) {
+  async #reconcileTrackedOrders({ generation }) {
+    const trackedOrders = []
+
+    for (const [symbol, state] of this.#states) {
+      const activeOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
+      const activeIds = activeOrders.map(({ id }) => String(id))
+      if (new Set(activeIds).size !== activeIds.length) {
+        throw new Error(`${symbol} has duplicate active order IDs`)
+      }
+
+      for (const trackedOrder of activeOrders) {
+        if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+        const orderId = String(trackedOrder.id)
+        await this.#reconcileOrderFills({
+          symbol,
+          order: { id: orderId, side: trackedOrder.side },
+        })
+
+        trackedOrders.push({
+          symbol,
+          state,
+          trackedOrder,
+          orderId,
+          originalQuantity: String(trackedOrder.quantity),
+        })
+      }
+    }
+
+    // Query open orders after trade history. Buffer/replay any events that arrive
+    // while the snapshot is in flight, then repeat until the snapshot is stable.
+    const openOrders = await this.#getStableOpenOrderSnapshot({ generation })
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+
     const openOrdersByKey = new Map()
+    const expectedOpenOrderIds = new Map()
+    for (const { symbol, orderId } of trackedOrders) {
+      const ids = expectedOpenOrderIds.get(symbol) ?? new Set()
+      ids.add(orderId)
+      expectedOpenOrderIds.set(symbol, ids)
+    }
 
     for (const order of openOrders) {
       if (!order || typeof order !== "object") {
@@ -571,11 +603,7 @@ export class FreeRollBot {
       }
       if (!this.#states.has(symbol)) continue
 
-      const state = this.#states.get(symbol)
-      const activeOrderIds = [state.buyOrder?.id, state.sellOrder?.id]
-        .filter(Boolean)
-        .map(String)
-      if (!activeOrderIds.includes(orderId)) {
+      if (!expectedOpenOrderIds.get(symbol)?.has(orderId)) {
         this.#pause(symbol, `Unexpected open order ${orderId} found during recovery`)
         throw new Error(`Unexpected open order ${orderId} found for ${symbol}`)
       }
@@ -587,88 +615,98 @@ export class FreeRollBot {
       openOrdersByKey.set(key, order)
     }
 
-    for (const [symbol, state] of this.#states) {
-      const activeOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
-      const activeIds = activeOrders.map(({ id }) => String(id))
-      if (new Set(activeIds).size !== activeIds.length) {
-        throw new Error(`${symbol} has duplicate active order IDs`)
+    for (const { symbol, state, trackedOrder, orderId, originalQuantity } of trackedOrders) {
+      const currentOrder = openOrdersByKey.get(`${symbol}:${orderId}`)
+      const reconciledQuantity = state.filledQuantityByOrder.get(orderId) ?? "0"
+
+      if (currentOrder) {
+        if (
+          String(currentOrder.id) !== orderId ||
+          currentOrder.symbol !== symbol ||
+          currentOrder.side !== trackedOrder.side ||
+          currentOrder.originalQuantity === undefined ||
+          currentOrder.executedQuantity === undefined ||
+          compareDecimal({
+            left: String(currentOrder.originalQuantity),
+            right: originalQuantity,
+          }) !== 0
+        ) {
+          throw new Error(`Tracked order ${orderId} identity or quantity mismatch during recovery`)
+        }
+
+        const status = String(currentOrder.status ?? "").toUpperCase()
+        if (status !== "NEW" && status !== "PARTIALLY_FILLED") {
+          throw new Error(`Open order ${orderId} has unsupported status "${status}"`)
+        }
+        const executedQuantity = String(currentOrder.executedQuantity)
+        const executedComparison = compareDecimal({
+          left: executedQuantity,
+          right: originalQuantity,
+        })
+        if (
+          compareDecimal({ left: reconciledQuantity, right: executedQuantity }) !== 0 ||
+          (status === "NEW" &&
+            compareDecimal({ left: executedQuantity, right: "0" }) !== 0) ||
+          (status === "PARTIALLY_FILLED" &&
+            (compareDecimal({ left: executedQuantity, right: "0" }) <= 0 ||
+              executedComparison >= 0))
+        ) {
+          throw new Error(
+            `Tracked order ${orderId} fill history or status disagrees with executed quantity ${executedQuantity}`,
+          )
+        }
+        continue
       }
 
-      for (const trackedOrder of activeOrders) {
-        if (!this.#isCurrentUserDataRecovery({ generation })) return
-
-        const orderId = String(trackedOrder.id)
-        const currentOrder = openOrdersByKey.get(`${symbol}:${orderId}`)
-
-        await this.#reconcileOrderFills({
+      // An order absent from the open-order snapshot is only considered FILLED
+      // when complete trade history accounts for its entire original quantity.
+      if (compareDecimal({
+        left: reconciledQuantity,
+        right: originalQuantity,
+      }) !== 0) {
+        this.#pause(
           symbol,
-          order: { id: orderId, side: trackedOrder.side },
-        })
+          `Tracked order ${orderId} is missing from open orders and trade history does not prove it filled`,
+        )
+        throw new Error(
+          `Tracked order ${orderId} has an unresolved terminal outcome during recovery`,
+        )
+      }
 
-        const reconciledQuantity = state.filledQuantityByOrder.get(orderId) ?? "0"
-        const originalQuantity = String(trackedOrder.quantity)
-
-        if (currentOrder) {
-          if (
-            String(currentOrder.id) !== orderId ||
-            currentOrder.symbol !== symbol ||
-            currentOrder.side !== trackedOrder.side ||
-            currentOrder.originalQuantity === undefined ||
-            currentOrder.executedQuantity === undefined ||
-            compareDecimal({
-              left: String(currentOrder.originalQuantity),
-              right: originalQuantity,
-            }) !== 0
-          ) {
-            throw new Error(`Tracked order ${orderId} identity or quantity mismatch during recovery`)
-          }
-
-          const status = String(currentOrder.status ?? "").toUpperCase()
-          if (status !== "NEW" && status !== "PARTIALLY_FILLED") {
-            throw new Error(`Open order ${orderId} has unsupported status "${status}"`)
-          }
-          const executedQuantity = String(currentOrder.executedQuantity)
-          const executedComparison = compareDecimal({
-            left: executedQuantity,
-            right: originalQuantity,
-          })
-          if (
-            compareDecimal({ left: reconciledQuantity, right: executedQuantity }) !== 0 ||
-            (status === "NEW" &&
-              compareDecimal({ left: executedQuantity, right: "0" }) !== 0) ||
-            (status === "PARTIALLY_FILLED" &&
-              (compareDecimal({ left: executedQuantity, right: "0" }) <= 0 ||
-                executedComparison >= 0))
-          ) {
-            throw new Error(
-              `Tracked order ${orderId} fill history or status disagrees with executed quantity ${executedQuantity}`,
-            )
-          }
-          continue
-        }
-
-        // An order absent from the open-order snapshot is only considered FILLED
-        // when complete trade history accounts for its entire original quantity.
-        if (compareDecimal({
-          left: reconciledQuantity,
-          right: originalQuantity,
-        }) !== 0) {
-          this.#pause(
-            symbol,
-            `Tracked order ${orderId} is missing from open orders and trade history does not prove it filled`,
-          )
-          throw new Error(
-            `Tracked order ${orderId} has an unresolved terminal outcome during recovery`,
-          )
-        }
-
-        if (trackedOrder.side === "BUY") {
-          await this.#handleBuyFilled(symbol)
-        } else {
-          await this.#handleSellFilled(symbol)
-        }
+      if (trackedOrder.side === "BUY") {
+        await this.#handleBuyFilled(symbol)
+      } else {
+        await this.#handleSellFilled(symbol)
       }
     }
+  }
+
+  async #getStableOpenOrderSnapshot({ generation }) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      if (!this.#isCurrentUserDataRecovery({ generation })) return []
+
+      const eventSequence = this.#userDataEventSequence
+      const openOrders = unwrapResult(
+        await this.broker.getOpenOrders(),
+        "getOpenOrders during user-data recovery",
+      )
+      if (!this.#isCurrentUserDataRecovery({ generation })) return []
+      if (!Array.isArray(openOrders)) {
+        throw new Error("getOpenOrders must return an array during user-data recovery")
+      }
+
+      await this.#replayBufferedUserDataEvents({ generation })
+      if (!this.#isCurrentUserDataRecovery({ generation })) return []
+
+      if (
+        eventSequence === this.#userDataEventSequence &&
+        this.#bufferedUserDataEvents.length === 0
+      ) {
+        return openOrders
+      }
+    }
+
+    throw new Error("User-data events did not settle during open-order reconciliation")
   }
 
   async #replayBufferedUserDataEvents({ generation }) {
