@@ -49,6 +49,18 @@ function createCanonicalFill({
 }
 
 function createState(overrides = {}) {
+  const activeQuantity = overrides.activeQuantity ?? "0"
+  const defaultMarketInventory = createMarketInventoryLedger({
+    market: { symbol: "DOGEUSDT", baseAsset: "DOGE", quoteAsset: "USDT" },
+  }).ledger
+  const marketInventory = overrides.marketInventory ?? Object.freeze({
+    ...defaultMarketInventory,
+    strategy: Object.freeze({
+      ...defaultMarketInventory.strategy,
+      baseQuantity: activeQuantity,
+    }),
+  })
+
   return {
     orderType: "LIMIT",
     baseAsset: "DOGE",
@@ -56,13 +68,11 @@ function createState(overrides = {}) {
     configuredFeeRate: "0.001",
     feeRate: "0.001",
     actualCommissionRate: "0",
-    activeQuantity: "0",
+    activeQuantity,
     cycleCost: "0",
     saleProceeds: "0",
     ledgerEntries: Object.freeze([]),
-    marketInventory: createMarketInventoryLedger({
-      market: { symbol: "DOGEUSDT", baseAsset: "DOGE", quoteAsset: "USDT" },
-    }).ledger,
+    marketInventory,
     processedTradeIds: new Set(),
     fills: new Map(),
     fillsByOrder: new Map(),
