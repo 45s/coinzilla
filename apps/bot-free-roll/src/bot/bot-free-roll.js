@@ -666,24 +666,31 @@ export class FreeRollBot {
     const gridStates = new Map(
       [...this.#states].filter(([, state]) => state.mode === "grid"),
     )
-    if (gridStates.size === 0) return { ok: true }
 
     if (!this.#gridStateStore) {
-      throw new Error("Grid mode requires a durable Grid state store")
+      if (gridStates.size > 0) {
+        throw new Error("Grid mode requires a durable Grid state store")
+      }
+      return { ok: true }
     }
 
+    // Read even when no pair currently selects Grid mode. This prevents an
+    // operator from switching back to aggregated mode while a Grid snapshot
+    // still contains open cycles, orders, or inventory.
     const stored = await this.#gridStateStore.read()
     if (!stored.ok) {
       throw new AggregateError(stored.errors, "Failed to read Grid state")
     }
 
     if (stored.data === null) {
-      this.#gridStateRevision = null
-      await this.#persistGridState()
-      this.#debug("Initialized durable Grid state snapshot", {
-        pairs: [...gridStates.keys()],
-        revision: this.#gridStateRevision,
-      })
+      if (gridStates.size > 0) {
+        this.#gridStateRevision = null
+        await this.#persistGridState()
+        this.#debug("Initialized durable Grid state snapshot", {
+          pairs: [...gridStates.keys()],
+          revision: this.#gridStateRevision,
+        })
+      }
       return { ok: true }
     }
 
