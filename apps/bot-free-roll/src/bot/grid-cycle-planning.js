@@ -15,7 +15,7 @@ export function createGridCycleFromBuyFills({
   symbol,
   baseAsset,
   quoteAsset,
-  buyOrderId,
+  buyOrder,
   buyFills,
 } = {}) {
   if (!Array.isArray(buyFills) || buyFills.length === 0) {
@@ -31,7 +31,7 @@ export function createGridCycleFromBuyFills({
     for (const fill of buyFills) {
       if (!fill || typeof fill !== "object" || Array.isArray(fill) ||
           typeof fill.id !== "string" || !fill.id.trim() ||
-          String(fill.orderId) !== buyOrderId ||
+          String(fill.orderId) !== String(buyOrder?.id ?? "") ||
           fill.symbol !== symbol ||
           fill.side !== "BUY") {
         throw new Error("BUY fill identity does not match the cycle order and market")
@@ -71,7 +71,8 @@ export function createGridCycleFromBuyFills({
       symbol,
       baseAsset,
       quoteAsset,
-      buyOrderId,
+      buyOrderId: String(buyOrder?.id ?? ""),
+      buyOrder,
       buyFillIds: [...seenIds],
       acquiredQuantity,
       recoveryCost,
