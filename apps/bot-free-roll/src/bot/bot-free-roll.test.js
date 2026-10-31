@@ -2377,7 +2377,7 @@ async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
   userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1100 }))
   await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
 
-  return { bot, userDataHandler, createdOrders, events }
+  return { bot, userDataHandler, createdOrders, events, priceHandlers }
 }
 
 test("SELL fill that consumes more base inventory than owned pauses without negative inventory", async () => {
