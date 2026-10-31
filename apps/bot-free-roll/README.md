@@ -820,4 +820,4 @@ Create a bot with [@BotFather](https://t.me/BotFather), start a conversation wit
 
 The app sends alerts for completed orders, individual fills, paused trading pairs, failed/completed recovery, and bot start/stop. No raw exchange event payloads or credentials are sent. Notification network failures are isolated from trading behavior and reported through the event-bus subscriber's logger.
 
-On shutdown, the app stops trading, publishes its final lifecycle events, flushes accepted event-bus work, drains/unsubscribes the Telegram notifier, then closes the journal and event bus. Delivery is best-effort, not durable: a process crash can lose messages that were not yet delivered.
+On shutdown, the app stops trading, publishes its final lifecycle events, flushes accepted event-bus work, drains/unsubscribes the Telegram notifier, then closes the journal and event bus. If startup fails after any of these resources has been prepared, the app attempts dependency-safe cleanup of every resource already created and preserves the original startup error as the primary cause. Delivery is best-effort, not durable: a process crash can lose messages that were not yet delivered.

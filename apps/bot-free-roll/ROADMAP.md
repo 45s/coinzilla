@@ -487,6 +487,7 @@ Do not mark a roadmap item complete because code exists. Mark it complete only w
 - [x] Fail startup with a clear configuration error when only one Telegram credential is supplied.
 - [x] Subscribe only to curated order-fill, execution-fill, pair-pause, recovery, and bot lifecycle events.
 - [x] Flush accepted event-bus work and drain/unsubscribe Telegram before journal and event-bus shutdown.
+- [~] Clean up already-created Telegram, journal, broker, and event-bus resources when a later startup preparation stage fails; deterministic cleanup-order and failure-isolation tests added, pending PR validation.
 - [x] Add deterministic tests for disabled, incomplete, valid, and failing notifier setup.
 - [x] Add the helper to the application's coverage gate.
 - [ ] Configure real Telegram credentials in the deployment secret manager and perform a controlled test-chat smoke test.

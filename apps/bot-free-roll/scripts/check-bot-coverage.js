@@ -15,6 +15,7 @@ const coverageThresholds = [
   ["order-execution.js", 95, 75],
   ["prepare-broker.js", 80, 70],
   ["prepare-telegram-notifications.js", 95, 85],
+  ["cleanup-startup-resources.js", 100, 100],
   ["validate-config.js", 90, 90],
 ]
 
