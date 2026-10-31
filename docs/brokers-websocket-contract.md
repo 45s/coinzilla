@@ -164,8 +164,9 @@ This is not a substitute for the SDK broker contract. It does not currently prov
 ## 8. Runtime and platform decision
 
 - Repository CI currently sets up **Node.js 22**.
-- Root `package.json` does not declare a Node `engines` range, and there is no explicit repository-wide minimum runtime declaration in the audited root manifest.
-- Node's official v22 documentation records the global WHATWG `WebSocket` as no longer experimental from Node **22.4.0**. The runtime baseline for this migration must therefore be explicitly set to Node 22.4.0 or newer within the supported Node 22 line, unless the project intentionally chooses a newer supported LTS baseline.
+- Root `package.json` and `packages/brokers/package.json` do not declare a Node `engines` range. The current `@coinzilla/event-bus` and `@coinzilla/journal` manifests declare `node >=20`; the `@coinzilla/bot-free-roll` manifest does not declare a Node range. Repository CI currently tests Node 22.
+- Node's official v22 documentation records global WHATWG `WebSocket` as available without the experimental flag from Node 22.0.0 and no longer experimental from Node **22.4.0**. Node 20.10 introduced it behind an experimental flag. Therefore, the built-in client is a stable no-extra-flag choice only from Node 22.4.0.
+- **Runtime support is not yet resolved.** If Coinzilla intends to preserve the existing workspace `node >=20` compatibility, Node's global WebSocket cannot be assumed to be available as a stable, flag-free API across that range. If the project accepts a Node 22.4.0+ minimum for `@coinzilla/brokers` and its consumers, the native WebSocket path is viable subject to the ping/pong proof below. This decision must be made before Phase 2; do not silently raise the runtime floor.
 - The WHATWG API is EventTarget-style and does not expose `ws`-style `.ping()` or `.pong()` methods. Binance Spot Streams requires timely control-frame ping/pong handling. The implementation must prove that the Node built-in client automatically handles server ping frames correctly; if that cannot be demonstrated on the supported Node runtime, stop and revisit the transport decision rather than introducing a third-party runtime dependency by default.
 - The native WebSocket constructor and lifecycle behavior must be tested on the exact Node versions used by CI and production. Node 22 as a major version alone is not a sufficiently precise minimum-version contract.
 
@@ -193,4 +194,4 @@ Before implementation proceeds, preserve these decisions:
 5. Use Node's native WebSocket only after proving server ping/pong compliance and production runtime support.
 6. Keep all bot application files read-only throughout this migration.
 
-**Phase 0 exit status:** inventory and method mapping are documented. Remaining uncertainty is explicitly bounded to signing/key-algorithm details and runtime ping/pong behavior, which are implementation gates for Phases 2, 3, and 6—not reasons to guess during Phase 0.
+**Phase 0 status:** inventory, consumer contract, and protocol mapping are documented. Phase 0 is not complete until the project decides whether `@coinzilla/brokers` may require Node 22.4.0+ or must preserve Node 20 compatibility. Signing/key-algorithm details and native ping/pong behavior remain implementation gates for Phases 2, 3, and 6—not reasons to guess.
