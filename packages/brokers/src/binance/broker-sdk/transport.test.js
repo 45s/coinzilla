@@ -290,13 +290,18 @@ test("the supported Node WebSocket client automatically answers server ping fram
 
   try {
     await transport.connect()
-    const pong = await Promise.race([
-      pongReceived,
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Server did not receive the WebSocket pong")), 1_000)
-      }),
-    ])
-    assert.deepEqual(pong, payload)
+    let timeout
+    try {
+      const pong = await Promise.race([
+        pongReceived,
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("Server did not receive the WebSocket pong")), 1_000)
+        }),
+      ])
+      assert.deepEqual(pong, payload)
+    } finally {
+      clearTimeout(timeout)
+    }
   } finally {
     await transport.close()
     await new Promise((resolve) => server.close(resolve))
@@ -342,13 +347,17 @@ test("errors after opening are surfaced without silently replaying or reconnecti
 
 test("socket close before opening rejects the connection and cleans listeners", async () => {
   const { transport, sockets, clock } = createTransport()
+  const messages = []
+  transport.onMessage((message) => messages.push(message))
   const connected = transport.connect()
   const rejection = assert.rejects(connected, /closed before opening/)
 
   sockets[0].serverClose({ code: 1006, reason: "handshake failed", wasClean: false })
+  sockets[0].receive("late message")
   await rejection
 
   assert.equal(transport.state, "closed")
   assert.equal(clock.pendingCount, 0)
+  assert.deepEqual(messages, [])
   assert.equal(await transport.close(), undefined)
 })
