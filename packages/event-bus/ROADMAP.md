@@ -143,8 +143,8 @@ The audit also identified these risks:
 
 1. **Incomplete immutability (addressed):** payloads now accept only plain objects, arrays, and primitive values. Mutable built-ins, class instances, accessors, symbol keys, and unsupported object properties are rejected before cloning; accepted object graphs are cloned and frozen. Cycles and shared references remain supported.
 2. **Host event-name semantics (addressed):** the explicit registry avoids Node EventEmitter special-name behavior; special-looking names are ordinary application names.
-3. **Unbounded pending work (partially addressed):** a global pending-delivery cap and atomic fan-out rejection now exist; public diagnostics and adversarial lifecycle tests remain outstanding.
-4. **Shutdown can hang (open):** a handler that never settles can block `flush()` and `close()` forever; explicit timeout semantics remain outstanding.
+3. **Unbounded pending work (partially addressed):** a global pending-delivery cap, atomic fan-out rejection, and immutable pending/capacity/lifecycle diagnostics now exist; additional adversarial lifecycle tests remain outstanding.
+4. **Shutdown can hang (open):** a handler that never settles can block `flush()` indefinitely and can block `close()` indefinitely when no timeout is supplied; `close({ timeoutMs })` now offers a bounded wait without cancelling accepted handlers.
 5. **Ordering (documented; tests outstanding):** handlers are scheduled asynchronously without per-subscriber serialization; completion order is not guaranteed.
 6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
 7. **Subscription lifecycle ambiguity:** close removes listeners without synchronizing subscription-handle state.
