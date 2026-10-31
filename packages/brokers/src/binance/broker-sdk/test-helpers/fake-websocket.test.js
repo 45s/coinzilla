@@ -38,6 +38,22 @@ test("FakeWebSocket exposes deterministic WHATWG lifecycle events", () => {
   assert.equal(events[3].wasClean, true)
 })
 
+test("FakeWebSocket delivers duplicate and late messages for RPC regression tests", () => {
+  const socket = new FakeWebSocket("wss://example.test/ws")
+  const messages = []
+
+  socket.addEventListener("message", (event) => messages.push(event.data))
+  socket.open()
+  socket.receive('{"id":7,"status":200}')
+  socket.receive('{"id":7,"status":200}')
+  socket.serverClose()
+  socket.receive('{"id":7,"status":200}')
+
+  assert.equal(messages.length, 3)
+  assert.equal(messages[0], messages[1])
+  assert.equal(messages[1], messages[2])
+})
+
 test("FakeWebSocket ignores duplicate open and close transitions", () => {
   const socket = new FakeWebSocket("wss://example.test/ws")
   let openCount = 0
