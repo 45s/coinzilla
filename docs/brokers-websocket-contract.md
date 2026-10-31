@@ -43,6 +43,7 @@ packages/brokers/
         config/
           binance-websocket-config.js
           binance-websocket-config.test.js
+          config-null-url-fallback.test.js
         constants/
           websocket-endpoints.js
         helpers/
