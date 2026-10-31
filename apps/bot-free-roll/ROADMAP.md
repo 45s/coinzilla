@@ -255,7 +255,7 @@ Coverage follow-ups: PR #270 adds price-helper boundary tests; PR #272 covers br
 
 ### Stage 1 — Exchange-neutral domain contracts (FR-007–FR-016)
 
-- [ ] **FR-007 — Audit existing Coinzilla entities.** Inspect the shared entities package and broker APIs; reuse suitable entities and list only genuine contract gaps. Acceptance: no duplicate Fill/Order/Money model is introduced.
+- [x] **FR-007 — Audit existing Coinzilla entities.** Completed in [DOMAIN_ENTITY_AUDIT.md](./DOMAIN_ENTITY_AUDIT.md). Audited the shared entities package, broker base class, Binance adapters, and Free-Roll package dependencies. Reuse existing `Coin` only for non-financial display/balance compatibility where its Number-based quantity is acceptable; do not duplicate `Order` or `ExecutedOrder`. Genuine gaps are recorded for canonical Asset/Market, exact Money/Quantity, Order lifecycle, Fill, Commission, Balance, TradingRules, and broker capability contracts. No runtime model changes in this audit PR.
 - [ ] **FR-008 — Define canonical Asset and Market identity.** Represent asset identity, base/quote relationship, and symbol identity without parsing exchange-specific symbol strings in strategy code. Acceptance: deterministic validation and tests for ambiguous/invalid markets.
 - [ ] **FR-009 — Define exact Money/Quantity value contracts.** Specify decimal-string amount plus asset/unit semantics and validation. Acceptance: amount cannot be confused across assets or dimensions.
 - [ ] **FR-010 — Define canonical Order contract.** Include stable broker order ID, client order ID, market, side, type, limit price, original quantity, executed quantity, remaining quantity, status, and timestamps where available. Acceptance: no Binance field names in domain contract.
