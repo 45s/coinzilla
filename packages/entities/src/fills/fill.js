@@ -1,3 +1,4 @@
+import { Commission } from "../commissions/commission.js"
 import { Market } from "../markets/market.js"
 import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
@@ -5,6 +6,12 @@ import { Quantity } from "../quantity/quantity.js"
 export const FILL_LIQUIDITY_ROLES = Object.freeze([
   "MAKER",
   "TAKER",
+  "UNKNOWN",
+])
+
+export const COMMISSION_STATUSES = Object.freeze([
+  "COMPLETE",
+  "PARTIAL",
   "UNKNOWN",
 ])
 
@@ -25,6 +32,10 @@ export const fillErrMsgs = {
   positiveQuoteQuantity: "Fill.quoteQuantity should be greater than zero",
   liquidityRole: "Fill.liquidityRole is unsupported",
   executedAt: "Fill.executedAt should be a non-negative safe integer",
+  commissions: "Fill.commissions should be an array of Commission values",
+  commissionStatus: "Fill.commissionStatus is unsupported",
+  partialCommissions: "Fill.PARTIAL commission status should include at least one known commission",
+  unknownCommissions: "Fill.UNKNOWN commission status should not include commission entries",
 }
 
 export class Fill {
@@ -39,6 +50,8 @@ export class Fill {
   #quoteQuantity
   #liquidityRole
   #executedAt
+  #commissions
+  #commissionStatus
 
   constructor({
     tradeId,
@@ -51,6 +64,8 @@ export class Fill {
     quoteQuantity,
     liquidityRole = "UNKNOWN",
     executedAt,
+    commissions = [],
+    commissionStatus = "UNKNOWN",
   } = {}) {
     if (typeof tradeId !== "string" || !tradeId.trim()) {
       throw new Error(fillErrMsgs.tradeId)
@@ -107,6 +122,18 @@ export class Fill {
     ) {
       throw new Error(fillErrMsgs.executedAt)
     }
+    if (!Array.isArray(commissions) || commissions.some((commission) => !(commission instanceof Commission))) {
+      throw new Error(fillErrMsgs.commissions)
+    }
+    if (!COMMISSION_STATUSES.includes(commissionStatus)) {
+      throw new Error(fillErrMsgs.commissionStatus)
+    }
+    if (commissionStatus === "PARTIAL" && commissions.length === 0) {
+      throw new Error(fillErrMsgs.partialCommissions)
+    }
+    if (commissionStatus === "UNKNOWN" && commissions.length > 0) {
+      throw new Error(fillErrMsgs.unknownCommissions)
+    }
 
     this.#tradeId = tradeId.trim()
     this.#brokerOrderId = brokerOrderId.trim()
@@ -118,6 +145,8 @@ export class Fill {
     this.#quoteQuantity = quoteQuantity
     this.#liquidityRole = liquidityRole
     this.#executedAt = executedAt
+    this.#commissions = Object.freeze([...commissions])
+    this.#commissionStatus = commissionStatus
     this.#id = `${market.id}:${this.#tradeId}`
 
     Object.freeze(this)
@@ -167,6 +196,14 @@ export class Fill {
     return this.#executedAt
   }
 
+  get commissions() {
+    return this.#commissions
+  }
+
+  get commissionStatus() {
+    return this.#commissionStatus
+  }
+
   get value() {
     return {
       id: this.#id,
@@ -180,6 +217,8 @@ export class Fill {
       quoteQuantity: this.#quoteQuantity.value,
       liquidityRole: this.#liquidityRole,
       ...(this.#executedAt === undefined ? {} : { executedAt: this.#executedAt }),
+      commissions: this.#commissions.map((commission) => commission.value),
+      commissionStatus: this.#commissionStatus,
     }
   }
 }
