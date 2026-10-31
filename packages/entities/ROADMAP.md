@@ -66,11 +66,6 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - `UNKNOWN` means commission information is unavailable; its collection must be empty. Missing status defaults to `UNKNOWN`.
 - Consumers must not treat `PARTIAL` or `UNKNOWN` commission information as zero when calculating realized profitability.
 
-## Completion policy
-
-An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
-
-
 ### FR-013 contract boundary
 
 - `Balance` represents one canonical Asset and requires explicit free and locked `Quantity` values.
@@ -78,3 +73,7 @@ An item is complete only after its focused tests pass, its PR is merged into `de
 - Total is derived exactly as free plus locked using decimal-string integer arithmetic, never JavaScript floating-point arithmetic. It cannot be supplied inconsistently by a caller.
 - All three quantities are immutable `Quantity` values in the same Asset. Zero free, locked, or total balances are valid.
 - The value snapshot includes the canonical Asset identity and independent free, locked, and total quantity snapshots.
+
+## Completion policy
+
+An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
