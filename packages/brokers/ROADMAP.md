@@ -74,9 +74,9 @@ The migration is complete only when all of the following are true:
 5. Phase 6B.1 is complete through consolidated PR #298. The original PR #288 was superseded, not merged separately.
 6. Current Phase 6B.2 branch: `feature/brokers/user-data-reconciliation`, created from latest `develop` commit `e837a2f405fa8dd59f7fdb81274a8519181b02f6`.
 7. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
-8. Consumer adoption is a separate bot-domain task tracked by issue #304. Until that consumer acknowledges reconciliation, its trading path intentionally remains fail-closed after user-data interruption.
-7. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
-8. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
+8. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
+9. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
+10. Consumer adoption is a separate bot-domain task tracked by issue #304. Until that consumer acknowledges reconciliation, its trading path intentionally remains fail-closed after user-data interruption.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
