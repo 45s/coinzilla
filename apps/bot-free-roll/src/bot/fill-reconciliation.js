@@ -20,6 +20,44 @@ function failure({ reason, updates, recordedFill, error }) {
   }
 }
 
+
+export function toExecutionFill({ fill } = {}) {
+  if (!(fill instanceof Fill)) {
+    return { ok: false, reason: "Recovered execution must be a canonical Fill" }
+  }
+  if (fill.commissionStatus !== "COMPLETE") {
+    return { ok: false, reason: `Commission data is ${fill.commissionStatus.toLowerCase()} for trade ${fill.tradeId}` }
+  }
+  if (fill.liquidityRole !== "MAKER" && fill.liquidityRole !== "TAKER") {
+    return { ok: false, reason: `Liquidity role is unknown for trade ${fill.tradeId}` }
+  }
+  if (fill.commissions.length > 1) {
+    return { ok: false, reason: `Multiple commission assets are not supported for trade ${fill.tradeId}` }
+  }
+
+  const commission = fill.commissions[0]
+  const commissionAmount = commission?.amount.amount ?? "0"
+  const commissionAsset = compareDecimal({ left: commissionAmount, right: "0" }) > 0
+    ? commission.amount.asset.code
+    : null
+
+  return {
+    ok: true,
+    fill: {
+      id: fill.tradeId,
+      orderId: fill.brokerOrderId,
+      symbol: fill.market.symbol,
+      side: fill.side,
+      price: fill.price.amount,
+      quantity: fill.quantity.amount,
+      quoteQuantity: fill.quoteQuantity.amount,
+      commissionAmount,
+      commissionAsset,
+      isMaker: fill.liquidityRole === "MAKER",
+    },
+  }
+}
+
 // Pure transition: calculate the exact state changes for one canonical fill.
 // The caller owns applying updates and publishing events / pause notifications.
 export function reconcileExecutionFill({ fill, state }) {
