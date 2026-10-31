@@ -36,8 +36,9 @@ function createRpcFactory() {
   const clients = []
   const factory = () => {
     const index = clients.length
+    let subscriptionSequence = index * 100 + 10
     const client = createFakeRpcClient({
-      "userDataStream.subscribe.signature": () => ({ subscriptionId: index + 10 }),
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: subscriptionSequence++ }),
       "userDataStream.unsubscribe": () => ({}),
       "order.place": () => ({
         symbol: "BTCUSDT",
@@ -128,8 +129,8 @@ describe("Binance user-data session recovery", () => {
     assert.equal(clients.length, 2)
     assert.equal(clients[1].state, "open")
     assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
-    assert.equal(first.data.subscriptionId, 11)
-    assert.equal(second.data.subscriptionId, 11)
+    assert.equal(first.data.subscriptionId, 110)
+    assert.equal(second.data.subscriptionId, 110)
     assert.equal(broker.connected, true)
     assert.equal(broker.userDataUnavailable, true)
     assert.ok(statuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
@@ -148,6 +149,45 @@ describe("Binance user-data session recovery", () => {
 
     await first.data.disconnect()
     await second.data.disconnect()
+    await broker.disconnect()
+  })
+
+
+  it("re-subscribes after explicit stream termination on the still-open socket", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    const statuses = []
+    const received = []
+    const subscription = await broker.subscribeForUserData({
+      onEvent: (event) => received.push(event),
+      onStatus: (status) => statuses.push(status),
+    })
+    const previousId = subscription.data.subscriptionId
+
+    clients[0].emitEvent({
+      subscriptionId: previousId,
+      event: { e: "eventStreamTerminated", E: 123456 },
+    })
+    assert.equal(broker.userDataUnavailable, true)
+    await scheduler.runNext()
+
+    assert.equal(clients.length, 1)
+    assert.equal(subscription.data.subscriptionId, previousId + 1)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+    clients[0].emitEvent({
+      subscriptionId: previousId,
+      event: { e: "balanceUpdate", a: "USDT", d: "1", T: 1, E: 2 },
+    })
+    clients[0].emitEvent({
+      subscriptionId: subscription.data.subscriptionId,
+      event: { e: "balanceUpdate", a: "USDT", d: "2", T: 3, E: 4 },
+    })
+    assert.equal(received.length, 2)
+    assert.equal(received[1].event.balanceDelta, "2")
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+    assert.equal(broker.userDataUnavailable, false)
+
+    await subscription.data.disconnect()
     await broker.disconnect()
   })
 
