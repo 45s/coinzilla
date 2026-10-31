@@ -181,3 +181,126 @@ test("does not call the broker when the bot is not running", async () => {
   assert.equal(sellResult, false)
   assert.equal(calls.created.length, 0)
 })
+
+
+test("successfully replaces a trailing BUY after a confirmed zero-fill cancellation", async () => {
+  const state = createState({
+    buyOrder: { id: "old-buy", side: "BUY", quantity: "10", price: "1" },
+  })
+  const { execution, calls } = createExecution()
+
+  await execution.replaceTrailingBuy({ symbol: "DOGEUSDT", state, price: 1.2 })
+
+  assert.equal(calls.canceled.length, 1)
+  assert.equal(calls.created.length, 1)
+  assert.equal(calls.created[0].side, "BUY")
+  assert.equal(calls.created[0].price, "1.18")
+  assert.equal(state.buyOrder.id, "order-1")
+  assert.equal(state.referencePrice, 1.2)
+  assert.equal(state.highestPrice, 1.2)
+  assert.equal(state.cancelingOrderIds.size, 0)
+  assert.equal(calls.pauses.length, 0)
+})
+
+test("does not replace a trailing BUY when cancellation fails", async () => {
+  const state = createState({
+    buyOrder: { id: "old-buy", side: "BUY", quantity: "10", price: "1" },
+  })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async () => ({
+        ok: false,
+        errors: [new Error("cancel rejected")],
+      }),
+    },
+  })
+
+  await execution.replaceTrailingBuy({ symbol: "DOGEUSDT", state, price: 1.2 })
+
+  assert.equal(calls.created.length, 0)
+  assert.equal(state.buyOrder.id, "old-buy")
+  assert.equal(state.cancelingOrderIds.size, 0)
+  assert.ok(calls.events.some(({ name }) => name === "order.cancel_failed"))
+  assert.equal(calls.pauses.length, 1)
+})
+
+test("clears a canceled SELL only after zero-fill history reconciliation", async () => {
+  const state = createState({
+    sellOrder: { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" },
+  })
+  const { execution, calls } = createExecution()
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(calls.reconciliations.length, 1)
+  assert.equal(state.sellOrder, null)
+  assert.equal(state.cancelingOrderIds.size, 0)
+  assert.ok(calls.events.some(({ name }) => name === "order.cancelled"))
+  assert.equal(calls.pauses.length, 0)
+})
+
+test("routes a fully filled SELL discovered during cancellation to cycle completion", async () => {
+  const state = createState({
+    sellOrder: { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" },
+  })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async () => ({
+        ok: true,
+        data: {
+          originalQuantity: "10",
+          executedQuantity: "10",
+          quantity: "0",
+          status: "FILLED",
+        },
+      }),
+    },
+    reconcileOrderFills: async () => {
+      state.filledQuantityByOrder.set("old-sell", "10")
+    },
+  })
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(calls.sellFilled, 1)
+  assert.equal(state.cancelingOrderIds.size, 0)
+  assert.equal(calls.pauses.length, 0)
+  assert.ok(calls.events.some(({ name, data }) =>
+    name === "order.cancelled" && data.remainingQuantity === "0"))
+})
+
+test("keeps an unresolved SELL cancellation from triggering replacement", async () => {
+  const state = createState({
+    sellOrder: { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" },
+  })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async () => ({
+        ok: false,
+        errors: [new Error("cancel outcome unknown")],
+      }),
+    },
+  })
+
+  const result = await execution.replaceSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, false)
+  assert.equal(calls.created.length, 0)
+  assert.equal(state.sellOrder.id, "old-sell")
+  assert.equal(state.cancelingOrderIds.has("old-sell"), true)
+  assert.ok(calls.events.some(({ name }) => name === "order.cancel_failed"))
+  assert.equal(calls.pauses.length, 1)
+})
+
+test("does not submit a SELL when the exact plan has no sellable quantity", async () => {
+  const state = createState({ activeQuantity: "1" })
+  const { execution, calls } = createExecution()
+
+  const result = await execution.placeSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(calls.created.length, 0)
+  assert.equal(state.sellOrder, null)
+})
