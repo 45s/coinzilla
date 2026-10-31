@@ -28,7 +28,7 @@ export function validateStreamName(stream) {
 
 export function createStreamName(type, options = {}) {
   const { symbol, interval, windowSize, levels, speed } = options
-  const normalizedSymbol = symbol === undefined ? null : assertSymbol(symbol)
+  const normalizedSymbol = symbol === undefined || symbol === null ? null : assertSymbol(symbol)
 
   switch (type) {
     case "trade":
@@ -86,6 +86,9 @@ export function parseStreamMessage(rawMessage) {
   if (Object.hasOwn(parsed, "stream") && Object.hasOwn(parsed, "data")) {
     if (typeof parsed.stream !== "string" || !parsed.data || typeof parsed.data !== "object") {
       throw new TypeError("Malformed Binance combined-stream envelope")
+    }
+    if (parsed.stream === "!serverShutdown" && parsed.data.e === "serverShutdown") {
+      return { serverShutdown: true, data: parsed.data }
     }
     return { stream: validateStreamName(parsed.stream), data: parsed.data }
   }
