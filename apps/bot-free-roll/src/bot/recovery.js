@@ -1,3 +1,4 @@
+import { CanonicalOrder } from "@coinzilla/entities"
 import { addDecimal, compareDecimal } from "./helpers/decimal.js"
 import { getOrderId } from "./helpers/exchange.js"
 
@@ -41,6 +42,60 @@ export function validateRecoveryBalances({ balances } = {}) {
   }
 
   return { ok: true, balances: snapshot }
+}
+
+
+export function validateTrackedOrderIdentity({
+  symbol,
+  order,
+  canonicalOrder,
+  expectedType,
+} = {}) {
+  const orderId = getOrderId(order)
+  const type = order?.type ?? expectedType
+  const expectedQuantity = order?.originalQuantity ?? order?.quantity
+
+  if (
+    !symbol ||
+    !orderId ||
+    !(canonicalOrder instanceof CanonicalOrder) ||
+    canonicalOrder.brokerOrderId !== orderId ||
+    canonicalOrder.market.symbol !== symbol ||
+    canonicalOrder.side !== order?.side ||
+    canonicalOrder.type !== type ||
+    typeof expectedQuantity !== "string" ||
+    compareDecimal({
+      left: canonicalOrder.originalQuantity.amount,
+      right: expectedQuantity,
+    }) !== 0
+  ) {
+    return failure(`Canonical order identity does not match tracked order ${orderId ?? "unknown"}`)
+  }
+
+  if (
+    typeof order.clientOrderId !== "string" ||
+    !order.clientOrderId ||
+    canonicalOrder.clientOrderId !== order.clientOrderId
+  ) {
+    return failure(`Canonical client order ID does not match tracked order ${orderId}`)
+  }
+
+  if (type === "MARKET") {
+    if (canonicalOrder.limitPrice !== undefined) {
+      return failure(`Market order ${orderId} unexpectedly has a limit price`)
+    }
+  } else if (
+    typeof order.price !== "string" ||
+    !canonicalOrder.limitPrice ||
+    compareDecimal({
+      left: canonicalOrder.limitPrice.amount,
+      right: order.price,
+    }) !== 0
+  ) {
+    return failure(`Canonical limit price does not match tracked order ${orderId}`)
+  }
+
+  return { ok: true }
 }
 
 export function reconcileTrackedOrder({
