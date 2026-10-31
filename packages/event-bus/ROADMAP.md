@@ -166,6 +166,8 @@ Acceptance: public behavior is documented and tests encode the intended contract
 
 ### Phase 1 — Correctness
 
+Internal code is organized by responsibility: `event-bus.js` coordinates the public class; `helpers/event-name.js`, `helpers/options.js`, and `helpers/payload.js` own focused validation and payload transformation. Keep `index.js` as the public export boundary. Reserve `utils/` for genuinely shared, reusable primitives rather than one-off helpers.
+
 Event names are preserved exactly when valid. They must be 1–128 ASCII characters, begin with a letter, digit, or underscore, and contain only letters, digits, underscore, period, colon, or hyphen. Names such as `error`, `newListener`, `removeListener`, and `__proto__` remain valid ordinary application names. Constructor options are a plain object with only `logger` and `onError`; `logger` is an object with an optional `error` function, and `onError`, when supplied, must be a function.
 
 - [x] Remove Node EventEmitter special-name behavior from event dispatch.
