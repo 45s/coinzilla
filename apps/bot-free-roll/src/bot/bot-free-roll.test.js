@@ -1800,3 +1800,304 @@ test("SELL submission failures pause the pair and never leave an untracked recov
     await bot.stop()
   }
 })
+
+test("BUY FILLED status with incomplete aggregate fills pauses instead of creating a SELL", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: "tracked-buy" }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    const partialFill = createExecutionEvent({
+      order: createdOrders[0],
+      tradeId: 1001,
+      fillQuantity: "50",
+      status: "PARTIALLY_FILLED",
+    })
+    userDataHandler(partialFill)
+    await waitForCondition(() => bot.getStats().DOGEUSDT.activeQuantity === "50", "partial fill was not accounted")
+
+    const filledEvent = {
+      ...partialFill,
+      executionType: "TRADE",
+      executedOrder: { ...partialFill.executedOrder, status: "FILLED" },
+    }
+    userDataHandler(filledEvent)
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "incomplete FILLED order did not pause pair")
+    assert.equal(bot.getStats().DOGEUSDT.buyFills, 0)
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 0)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("SELL FILLED status with incomplete aggregate fills pauses without completing a cycle", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+    userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1010 }))
+    await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+    const sell = createdOrders.find((order) => order.side === "SELL")
+    const partialFill = createExecutionEvent({
+      order: sell,
+      tradeId: 1011,
+      fillQuantity: "10",
+      status: "PARTIALLY_FILLED",
+    })
+    userDataHandler(partialFill)
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.activeQuantity !== "100",
+      "partial SELL fill was not accounted",
+    )
+
+    userDataHandler({
+      ...partialFill,
+      executedOrder: { ...partialFill.executedOrder, status: "FILLED" },
+    })
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "incomplete SELL did not pause pair")
+
+    assert.equal(bot.getStats().DOGEUSDT.profitableCycles, 0)
+    assert.equal(bot.getStats().DOGEUSDT.sellFills, 0)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("completed SELL below minimum profit pauses and preserves the unrecovered position", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+    userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1020 }))
+    await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+    const sell = createdOrders.find((order) => order.side === "SELL")
+    const event = createExecutionEvent({ order: sell, tradeId: 1021 })
+    event.fill.price = "0.01"
+    event.fill.quoteQuantity = multiplyDecimal({
+      left: String(sell.quantity),
+      right: "0.01",
+    })
+    userDataHandler(event)
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "unprofitable SELL did not pause pair")
+    const stats = bot.getStats().DOGEUSDT
+    assert.equal(stats.profitableCycles, 0)
+    assert.equal(stats.freeQuantity, "0")
+    assert.equal(stats.saleProceeds, "0.99")
+    assert.equal(stats.activeQuantity, "1")
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("SELL base-asset commission that consumes the keep quantity pauses the pair", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+    userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1030 }))
+    await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+    const sell = createdOrders.find((order) => order.side === "SELL")
+    const event = createExecutionEvent({ order: sell, tradeId: 1031 })
+    event.fill.commissionAmount = "1"
+    event.fill.commissionAsset = "DOGE"
+    userDataHandler(event)
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "keep-quantity violation did not pause pair")
+    const stats = bot.getStats().DOGEUSDT
+    assert.equal(stats.activeQuantity, "0")
+    assert.equal(stats.profitableCycles, 0)
+    assert.equal(stats.freeQuantity, "0")
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("invalid fill identity and maker classification fail closed", async (t) => {
+  const cases = [
+    ["missing trade ID", (event) => { event.fill.id = "" }],
+    ["missing maker classification", (event) => { delete event.fill.isMaker }],
+    ["taker fill on LIMIT_MAKER", (event) => { event.fill.isMaker = false }],
+  ]
+
+  for (const [name, mutate] of cases) {
+    await t.test(name, async () => {
+      const priceHandlers = new Map()
+      const createdOrders = []
+      let userDataHandler
+      const bot = new FreeRollBot({
+        broker: {
+          getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+          subscribeForUserData: async ({ onEvent }) => {
+            userDataHandler = onEvent
+            return { ok: true, data: { disconnect() {} } }
+          },
+          subscribeForPrices: async ({ symbol, onPrice }) => {
+            priceHandlers.set(symbol, onPrice)
+            return { ok: true, data: { disconnect() {} } }
+          },
+          createOrder: async (order) => {
+            const created = { ...order, orderId: "tracked-buy" }
+            createdOrders.push(created)
+            return { ok: true, data: { orderId: created.orderId } }
+          },
+        },
+        eventBus: { publish: () => ({ ok: true }) },
+        tradingConfig: {
+          strategies: {
+            "free-roll": {
+              settings: { minProfit: 0.01 },
+              pairs: { DOGEUSDT: createPair() },
+            },
+          },
+        },
+      })
+
+      try {
+        await bot.run()
+        priceHandlers.get("DOGEUSDT")({ price: 100 })
+        await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+        const event = createExecutionEvent({
+          order: createdOrders[0],
+          tradeId: 1040,
+        })
+        mutate(event)
+        userDataHandler(event)
+
+        await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "invalid fill did not pause pair")
+        assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+        assert.equal(createdOrders.length, 1)
+      } finally {
+        await bot.stop()
+      }
+    })
+  }
+})
