@@ -1200,7 +1200,6 @@ describe("Binance user-data unsubscribe outcome", () => {
     })
 
     await setup.broker.connect()
-    activeSubscriptionId = 81
     const subscription = await setup.broker.subscribeForUserData({ onEvent() {} })
     await assert.rejects(subscription.data.disconnect(), (error) => error === failure)
 
