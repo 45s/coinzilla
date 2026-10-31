@@ -122,6 +122,42 @@ test("rejects an invalid supplied accounting projection", () => {
   assert.match(result.reason, /accounting is invalid/)
 })
 
+test("rejects malformed supplied accounting and unsupported supplied commission facts", () => {
+  const ledger = createLedger()
+  const fill = createFill()
+  const accounting = calculateFillAccountingExact({
+    side: fill.side,
+    quantity: fill.quantity,
+    quoteQuantity: fill.quoteQuantity,
+    commissionAmount: fill.commissionAmount,
+    commissionAsset: fill.commissionAsset,
+    baseAsset: "DOGE",
+    quoteAsset: "USDT",
+  })
+  const malformedAccounting = applyMarketInventoryFill({
+    ledger,
+    fill,
+    accounting: { baseQuantity: "bad", quoteQuantity: "1" },
+  })
+  const negativeCommission = applyMarketInventoryFill({
+    ledger,
+    fill: createFill({ commissionAmount: "-0.01", commissionAsset: "DOGE" }),
+    accounting,
+  })
+  const thirdAsset = applyMarketInventoryFill({
+    ledger,
+    fill: createFill({ commissionAmount: "0.01", commissionAsset: "BNB" }),
+    accounting,
+  })
+
+  assert.equal(malformedAccounting.ok, false)
+  assert.match(malformedAccounting.reason, /accounting is invalid/)
+  assert.equal(negativeCommission.ok, false)
+  assert.match(negativeCommission.reason, /Negative commission/)
+  assert.equal(thirdAsset.ok, false)
+  assert.match(thirdAsset.reason, /Unsupported commission asset/)
+})
+
 test("applies base and quote commissions to their own asset totals", () => {
   const ledger = createLedger()
   const baseFee = applyMarketInventoryFill({
