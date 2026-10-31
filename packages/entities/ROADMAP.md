@@ -19,7 +19,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [x] **FR-010 — Canonical Order lifecycle.** Implemented immutable `CanonicalOrder` with client/broker identity, canonical Market, exact limit price and quantities, derived remaining quantity, normalized lifecycle including `UNKNOWN`, and optional timestamps. Integrated into `develop` via PR #300.
 - [x] **FR-011 — Fill.** Implemented immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Integrated into `develop` via PR #301.
 - [~] **FR-012 — Commission.** Implement an immutable commission value with an exact non-negative `Money` amount and explicit asset identity. Add zero, one, or multiple commission entries to Fill, with explicit `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics. Unknown or incomplete fees must never be interpreted as zero.
-- [ ] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
+- [~] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
 - [ ] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit unsupported/dynamic constraints.
 - [ ] **FR-015 — Broker capability contracts.** Shared capability vocabulary without exchange-specific assumptions.
 - [ ] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
@@ -65,6 +65,14 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - `PARTIAL` means one or more commission entries are known, but the collection is incomplete.
 - `UNKNOWN` means commission information is unavailable; its collection must be empty. Missing status defaults to `UNKNOWN`.
 - Consumers must not treat `PARTIAL` or `UNKNOWN` commission information as zero when calculating realized profitability.
+
+### FR-013 contract boundary
+
+- `Balance` represents one canonical Asset and requires explicit free and locked `Quantity` values.
+- Free and locked quantities must use the same canonical Asset ID; matching display codes are not sufficient.
+- Total is derived exactly as free plus locked using decimal-string integer arithmetic, never JavaScript floating-point arithmetic. It cannot be supplied inconsistently by a caller.
+- All three quantities are immutable `Quantity` values in the same Asset. Zero free, locked, or total balances are valid.
+- The value snapshot includes the canonical Asset identity and independent free, locked, and total quantity snapshots.
 
 ## Completion policy
 
