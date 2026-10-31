@@ -225,9 +225,22 @@ export class BinanceStreamsClient {
 
     this.#clearReconnectTimer()
     this.#state = "connecting"
-    const transport = this.transportFactory({ url: this.url })
-    this.#transport = transport
 
+    let transport
+    try {
+      transport = this.transportFactory({ url: this.url })
+      for (const method of ["connect", "send", "close", "onMessage", "onError", "onClose"]) {
+        if (typeof transport?.[method] !== "function") {
+          throw new TypeError(`Streams transport must implement ${method}()`)
+        }
+      }
+    } catch (error) {
+      this.#state = "closed"
+      if (!this.#manualDisconnect && isReconnect) this.#scheduleReconnect()
+      throw error
+    }
+
+    this.#transport = transport
     transport.onMessage((message) => this.#handleMessage(message))
     transport.onError((error) => this.#reportError(error))
     transport.onClose((event) => this.#handleClose(event))
