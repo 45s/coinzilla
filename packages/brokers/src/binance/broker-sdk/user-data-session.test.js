@@ -141,6 +141,12 @@ describe("Binance user-data session recovery", () => {
     const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
     assert.equal(blocked.ok, false)
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
+    const blockedCancel = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 77 })
+    const blockedCancelAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
+    assert.equal(blockedCancel.ok, false)
+    assert.equal(blockedCancelAll.ok, false)
+    assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false)
+    assert.equal(clients[1].calls.some((call) => call.method === "openOrders.cancelAll"), false)
 
     assert.equal(second.data.acknowledgeRecovery(), true)
     assert.equal(broker.userDataUnavailable, false)
@@ -190,6 +196,30 @@ describe("Binance user-data session recovery", () => {
     assert.equal(broker.userDataUnavailable, false)
 
     await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
+
+  it("isolates a throwing local callback from other subscribers", async () => {
+    const { broker, clients } = createBroker()
+    await broker.connect()
+    const received = []
+    const first = await broker.subscribeForUserData({
+      onEvent() { throw new Error("consumer failed") },
+    })
+    const second = await broker.subscribeForUserData({
+      onEvent: (event) => received.push(event),
+    })
+
+    clients[0].emitEvent({
+      subscriptionId: first.data.subscriptionId,
+      event: { e: "balanceUpdate", a: "USDT", d: "5", T: 20, E: 21 },
+    })
+
+    assert.equal(received.length, 1)
+    assert.equal(received[0].event.balanceDelta, "5")
+    await first.data.disconnect()
+    await second.data.disconnect()
     await broker.disconnect()
   })
 
