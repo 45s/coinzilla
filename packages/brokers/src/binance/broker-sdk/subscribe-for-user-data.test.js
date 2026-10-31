@@ -56,6 +56,69 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.equal(rpc.calls.length, 2)
   })
 
+
+  it("filters stale subscriptions and deduplicates repeated execution reports", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 21 }))
+    broker.connected = true
+    const received = []
+    const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
+
+    const report = {
+      e: "executionReport",
+      s: "BTCUSDT",
+      i: 100,
+      I: 200,
+      x: "TRADE",
+      X: "FILLED",
+      c: "client-100",
+      S: "BUY",
+      o: "LIMIT",
+      q: "1.000",
+      p: "100",
+      z: "1.000",
+      l: "1.000",
+      L: "100",
+      n: "0",
+      N: null,
+      T: 300,
+      t: 400,
+      E: 301,
+    }
+
+    rpc.emitEvent({ subscriptionId: 20, event: report })
+    rpc.emitEvent({ subscriptionId: 21, event: report })
+    rpc.emitEvent({ subscriptionId: 21, event: structuredClone(report) })
+    rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
+
+    assert.equal(received.length, 2)
+    await result.data.disconnect()
+  })
+
+  it("reports explicit stream termination as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 22 }))
+    broker.connected = true
+    const received = []
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: (event) => received.push(event),
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: 22,
+      event: { e: "eventStreamTerminated", E: 123456 },
+    })
+
+    assert.deepEqual(statuses, [{
+      type: "terminated",
+      subscriptionId: 22,
+      eventTime: 123456,
+      recoveryRequired: true,
+    }])
+    assert.deepEqual(received, [])
+    await result.data.disconnect()
+  })
+
   it("removes its event listener when subscription setup fails", async () => {
     const { broker, rpc } = createBroker(async () => { throw new Error("user stream unavailable") })
     broker.connected = true
