@@ -174,6 +174,41 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 5. If Binance documentation, Node runtime behavior, or a consumer contract contradicts this plan, stop and update the roadmap before coding around the discrepancy.
 6. Update checkboxes only after the phase's exit criteria are verified. A PR being opened or CI merely starting does not mean a phase is complete.
 
+
+## 7. Keep the migration branch synchronized with main
+
+The migration branch is an integration branch, not a long-lived fork. `main` remains the source of truth because other teams continue developing bot and broker functionality there. Prevent drift throughout the migration, not only during the final release.
+
+### Mandatory monitoring and immediate sync triggers
+
+- Before starting **every** migration task or phase, inspect the latest `main` and compare it with `migration/binance-native-ws` since the last recorded sync.
+- Recheck `main` before opening each migration PR and before declaring a phase complete. For long-running work, recheck before finalizing the work; do not rely on a snapshot taken at task start.
+- **Immediately after significant broker/API changes land on `main`, stop further migration implementation and synchronize `main` into `migration/binance-native-ws` before continuing.** Do not wait for the next phase or the final release.
+- Treat a change as significant if it changes broker package exports or implementation, Binance/API or WebSocket behavior, broker method signatures or result/event shapes, shared entities/configuration used by brokers, Node.js or package-manager/runtime requirements, dependency manifests/lockfiles, or tests/fixtures that define those contracts. Also treat new broker consumers or changes to existing consumers' broker usage as significant.
+- When uncertain whether a main-branch change affects the migration, inspect it and treat it as significant until proven otherwise.
+- Record the last synchronized `main` commit SHA and a concise summary of relevant changes in the migration PR/roadmap notes. Never claim continuous background monitoring: the agent must perform these checks at each work session and at the checkpoints above.
+
+### Safe synchronization procedure
+
+1. Fetch the latest `main` and integration branch refs. Compare the commits since the last sync and review the commit messages and changed-file list; inspect the full relevant diffs for broker/API, consumer, runtime, dependency, and test changes.
+2. Update the migration branch by merging the latest `main` into `migration/binance-native-ws`. Preserve a merge commit; do not rebase or force-push the shared integration branch.
+3. Resolve conflicts by understanding both sides' intent and reconciling the complete affected files. Never blindly choose ours/theirs, discard bot-team changes, or revert unrelated work to make the merge easy.
+4. Do not independently edit bot application files (including `apps/bot-free-roll`) as part of this migration. Changes already made by other teams and merged through `main` must be preserved. If those changes reveal a broker contract requirement, adapt the broker migration and tests on the migration branch without taking ownership of bot feature work.
+5. Re-run the relevant package tests, workspace tests, syntax checks, and dependency audit. Verify all required checks on the exact synchronized integration-branch commit before continuing.
+6. Re-audit the broker consumer inventory, method/protocol matrix, and migration assumptions. Update this roadmap and the phase scope if `main` introduced new consumers, changed contracts, or invalidated earlier findings.
+7. If conflicts or behavior changes cannot be resolved confidently, stop and report the exact files/contracts in question rather than guessing.
+
+Use a dedicated synchronization PR from `main` into `migration/binance-native-ws` when direct branch synchronization is not available or when review of the incoming changes is useful. The synchronization PR must target the integration branch, preserve the merge history, and pass the integration branch's required checks. Never merge migration work into `main` during the phased implementation.
+
+### Required checkpoints
+
+- Before Phase 0 inventory and before each subsequent phase begins.
+- Immediately after any significant broker/API or consumer-contract change is detected on `main`.
+- Before each phase PR is opened and before its completion is reported.
+- Before the final release PR from `migration/binance-native-ws` to `main`.
+
+The final release PR is not a substitute for ongoing synchronization. Its purpose is to deliver an already-current, fully tested integration branch to `main`.
+
 ## Working rules
 
 - Work one meaningful change at a time.
