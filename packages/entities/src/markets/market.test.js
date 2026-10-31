@@ -43,6 +43,13 @@ describe(Market.name, () => {
     assert.equal(market.quoteAsset.id, "fdusd")
   })
 
+  it("preserves delimiter-containing venue symbols as opaque metadata", () => {
+    const market = createMarket({ symbol: "BTC:USDT:SPOT" })
+
+    assert.equal(market.symbol, "BTC:USDT:SPOT")
+    assert.equal(market.id, "binance:BTC:USDT:SPOT")
+  })
+
   it("distinguishes the same symbol listed on different venues", () => {
     const first = createMarket({ venue: "binance" })
     const second = createMarket({ venue: "other-exchange" })
@@ -59,8 +66,8 @@ describe(Market.name, () => {
     }
   })
 
-  it("rejects missing, non-string, blank, or ambiguous symbols", () => {
-    for (const symbol of [undefined, null, "", "  ", 1, "BTC:USDT"]) {
+  it("rejects missing, non-string, or blank symbols", () => {
+    for (const symbol of [undefined, null, "", "  ", 1]) {
       assert.throws(() => createMarket({ symbol }), {
         message: marketErrMsgs.symbol,
       })
