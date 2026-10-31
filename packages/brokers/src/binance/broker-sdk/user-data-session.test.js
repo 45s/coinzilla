@@ -82,8 +82,10 @@ describe("Binance user-data session recovery", () => {
 
     const firstEvents = []
     const secondEvents = []
-    const first = await broker.subscribeForUserData({ onEvent: (value) => firstEvents.push(value) })
-    const second = await broker.subscribeForUserData({ onEvent: (value) => secondEvents.push(value) })
+    const [first, second] = await Promise.all([
+      broker.subscribeForUserData({ onEvent: (value) => firstEvents.push(value) }),
+      broker.subscribeForUserData({ onEvent: (value) => secondEvents.push(value) }),
+    ])
 
     assert.equal(first.ok, true)
     assert.equal(second.ok, true)
