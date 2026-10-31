@@ -58,7 +58,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
-- [ ] Phase 3 — WebSocket API RPC client (implementation in progress on `migration/binance-phase-3-rpc`).
+- [ ] Phase 3 — WebSocket API RPC client (implementation and deterministic tests prepared on `migration/binance-phase-3-rpc`; exact-head CI pending).
 - [ ] Phase 4 — public WebSocket Streams client.
 - [ ] Phase 5 — rebuild the broker on native clients.
 - [ ] Phase 6 — user-data session lifecycle and recovery.
@@ -67,10 +67,11 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Implement Phase 3 on `migration/binance-phase-3-rpc`: request correlation, bounded pending requests, error normalization, disconnect handling, and HMAC signing with official Binance vectors.
-2. Do not wire the RPC client into `BinanceSdkBroker` or add order-method retry behavior in this phase.
-3. Before opening the Phase 3 PR, recheck latest `main`; synchronize only if broker/API/consumer-contract changes require it.
-4. Require deterministic tests for all Phase 3 exit criteria and CI on the exact PR head.
+1. Validate draft PR #263 on its exact head; all RPC and signing tests must pass on Node.js 22.23.4.
+2. Review the full diff and fix failures with meaningful changes; do not rerun CI using empty commits.
+3. Do not wire the RPC client into `BinanceSdkBroker` or add order-method retry behavior in this phase.
+4. Before declaring Phase 3 complete, recheck latest `main` and synchronize only if broker/API/consumer-contract changes require it.
+5. Wait for explicit merge approval. Do not merge automatically.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -269,15 +270,16 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 3 — WebSocket API RPC client
 
-- [ ] Implement request IDs and a pending-request map with deterministic response correlation.
-- [ ] Implement bounded request timeouts and cleanup on success, API error, malformed response, timeout, send failure, and disconnect.
-- [ ] Reject pending work on disconnect with actionable errors.
-- [ ] Implement the required authentication/signature scheme using `node:crypto`; preserve HMAC API key/secret flow for `userDataStream.subscribe.signature`.
-- [ ] Create known signing test vectors for exact parameter canonicalization and signature bytes.
-- [ ] Validate response envelopes and normalize Binance API errors without losing error codes or useful context.
-- [ ] Handle concurrent requests and out-of-order responses.
-- [ ] Test unknown IDs, duplicate/late responses, malformed payloads, disconnect with multiple pending requests, and timeout cleanup using fake socket/clock.
-- [ ] Make reconnect behavior explicit; never silently replay state-changing requests.
+- [x] Implement request IDs and a pending-request map with deterministic response correlation.
+- [x] Implement bounded request timeouts and cleanup on success, API error, malformed response, timeout, send failure, and disconnect.
+- [x] Reject pending work on disconnect with actionable errors; mark state-changing request outcomes uncertain.
+- [x] Implement HMAC-SHA-256 signing with `node:crypto`, preserving API-key/secret credentials for signed methods.
+- [x] Add official Binance ASCII and UTF-8 signing vectors, including exact signature bytes.
+- [x] Validate success/error response envelopes and preserve Binance status, error code, and message.
+- [x] Handle concurrent requests and out-of-order responses.
+- [x] Add deterministic tests for unknown/duplicate/late IDs, malformed payloads, multiple pending requests on disconnect, and timeout cleanup using the Phase 1 fake socket/clock.
+- [x] Make reconnect behavior explicit: this client is one-connection/one-lifecycle; it never retries or replays requests.
+- [ ] Verify all tests on exact PR head and review edge cases before merge.
 - **Exit criteria:** deterministic tests cover success, API error, timeout, malformed response, concurrency, out-of-order, unknown ID, duplicate/late response, send failure, and disconnect. Signing has known test vectors.
 
 ### Phase 4 — Public WebSocket Streams client
@@ -526,5 +528,6 @@ Re-check these official sources during implementation because Binance protocol d
 - [Binance Spot WebSocket Streams — General](https://developers.binance.com/en/docs/products/spot/web-socket-streams)
 - [Node.js v22 Global WebSocket documentation](https://nodejs.org/download/release/v22.23.4/docs/api/globals.html#class-websocket)
 - [Node.js v22.23.4 release notes](https://nodejs.org/en/blog/release/v22.23.4) — includes Undici 6.29.1.
+- [Binance Spot WebSocket API — protocol, responses, HMAC signing](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md) — request IDs are echoed, responses use `status` plus `result` or `error`, and HMAC-SHA-256 signs alphabetically sorted UTF-8 `key=value` parameters.
 
 The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the sources reviewed and the findings at that audit date. Official docs remain authoritative if they change.
