@@ -28,7 +28,7 @@ Email and Discord are roadmap candidates, not implemented transports. Do not cre
     } from "@coinzilla/notifiers"
 
 - TelegramNotifier: validates options and sends plain-text messages through Telegram's sendMessage Bot API method.
-- subscribeTelegramNotifications: subscribes to a curated event allowlist, serializes delivery, limits pending work, and returns an explicit close() lifecycle handle.
+- subscribeTelegramNotifications: subscribes to a curated event allowlist, serializes delivery, limits pending work, and returns an explicit close() lifecycle handle plus an immutable getDiagnostics() snapshot.
 - TELEGRAM_NOTIFICATION_EVENTS: immutable list of subscribed event names.
 - formatTelegramNotification: pure formatter for supported Telegram events.
 - formatNotification: backwards-compatible alias for formatTelegramNotification.
@@ -84,6 +84,7 @@ Both values are required by the consuming application. Leave both unset to disab
 
     // Stop publishers first, then drain accepted deliveries.
     await eventBus.flush()
+    console.info(notifications.getDiagnostics())
     await notifications.close()
     await eventBus.close()
 
@@ -110,12 +111,25 @@ High-volume events such as order.execution_report are intentionally excluded. Th
 - **Timeout:** requests use AbortSignal.timeout(); the default is 10 seconds. The timeout is configurable and validated.
 - **Serialized sends:** at most one Telegram HTTP request is in flight per subscriber. maxPending defaults to 1,000 and limits queued plus active deliveries. Overflow is reported and rejected/dropped according to the configured logger/event-bus error path; it does not create an unbounded local queue.
 - **Failure handling:** when a logger is supplied, delivery failures are reported once through that logger. Without one, the rejected handler promise is left for the event bus's error reporter. A logging failure does not poison the delivery queue.
+- **Diagnostics:** getDiagnostics() returns a frozen point-in-time snapshot with acceptedCount, deliveredCount, failedCount, overflowCount, pendingCount, and closed. Counters are process-local and cumulative for the subscriber lifetime. acceptedCount means admitted by this subscriber; deliveredCount means sendMessage() resolved successfully (Telegram API acceptance), not that a human read the message. Overflow is counted separately and is not included in acceptedCount.
 - **Cleanup:** partial subscription setup attempts to unsubscribe every successfully registered handler. close() is idempotent, attempts every unsubscribe, and drains already accepted sends. Callers should stop publishing and await eventBus.flush() before notifications.close(); callbacks that begin after close are ignored.
 - **No automatic retry:** a timed-out request may have been accepted by Telegram even when its response was lost. Retrying can duplicate a message. Retry/backoff should be added only with explicit duplicate and idempotency semantics.
 - **Best-effort delivery:** no durable outbox exists. A process crash can lose pending notifications. The event bus and this subscriber are in-memory.
 - **No formatting mode:** messages are plain text; HTML/Markdown parse modes are not enabled.
 
 The subscriber's maxPending is an additional local admission limit. Consumers should also configure the event bus's own maxPending limit to protect the full event-delivery fan-out.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Action |
+| --- | --- | --- |
+| No notifications appear | Both Telegram variables are unset, or the bot cannot post to the chat | Verify `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; confirm the bot has been started or added to the group with posting permission |
+| Setup fails immediately | Only one credential is configured, or a value is invalid | Configure both values together; keep credentials in the deployment secret manager |
+| Delivery failures are logged | Telegram rejected the request, the network failed, or the request timed out | Inspect the structured error and verify bot token, chat ID, network egress, and chat permissions; never paste the token into an issue or log |
+| Queue overflow is reported | Telegram is slower than the incoming event rate, or the process is under load | Inspect `getDiagnostics()`; tune `maxPending` only after measuring event rate and memory pressure |
+| Shutdown takes time | Accepted sends are being drained | Stop event publishers, await `eventBus.flush()`, then await `notifications.close()` |
+
+Rotate a potentially exposed bot token with BotFather and update the deployment secret. Do not print the token in shell history, CI output, diagnostics, or support logs. A successful `sendMessage` response confirms Telegram accepted the API request; it does not confirm that a user read the message.
 
 ## Development and verification
 

@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, and Free-Roll consumer integration are merged into develop (PRs #346 and #348).  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, and Free-Roll consumer integration are merged into develop (PRs #346 and #348). A follow-up quality program is in progress on `feature/notifiers/telegram-quality-phases`.  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -123,3 +123,23 @@ The refactor was merged to develop in PR #348. All required post-merge checks pa
 - Utilities unit tests: passed.
 
 CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703343), [Test Coverage](https://github.com/45s/coinzilla/actions/runs/41240703334), [JavaScript Syntax](https://github.com/45s/coinzilla/actions/runs/41240703427), [Dependency Audit](https://github.com/45s/coinzilla/actions/runs/41240703340), [Utils Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703355).
+
+
+## Phase 4 — Integration confidence and operational diagnostics
+
+- [~] Exercise the subscriber against the real EventBus implementation, including allowlisting, ordering, flush/close lifecycle, and failure reporting.
+- [~] Expose immutable, process-local delivery counters for admitted, successful, failed, overflowed, and pending notifications.
+- [~] Test the package through its public self-reference export, not only relative source imports.
+- [ ] Validate all integration and diagnostic behavior with package and workspace CI on the PR head.
+
+**Acceptance:** the adapter is verified against the real event-bus contract, and operators can distinguish admitted work, successful API sends, failures, and overload without inspecting mutable internals.
+
+## Phase 5 — CI compatibility and documentation quality
+
+- [~] Run the full unit suite on the pinned Node 22 baseline and the current Node 24 line.
+- [~] Document diagnostics semantics, overload behavior, shutdown order, secret rotation, and common Telegram setup failures.
+- [ ] Evaluate branch-coverage improvements using the resulting coverage report before raising thresholds; do not increase a percentage without evidence.
+- [ ] Evaluate mutation testing only if it can run reproducibly without destabilizing the dependency-free package or adding unjustified maintenance cost.
+- [ ] Record exact PR-head CI evidence and merge only after branch freshness and all required checks are verified.
+
+**Acceptance:** supported Node lines are continuously exercised, operational guidance matches implementation, and any stronger quality gate is evidence-based rather than cosmetic.
