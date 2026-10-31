@@ -27,5 +27,3 @@ CoreBroker.prototype.getFills = foo("getFills")
 
 CoreBroker.prototype.getServerTime = foo("getServerTime")
 CoreBroker.prototype.getAccountSnapshot = foo("getAccountSnapshot")
-CoreBroker.prototype.getServerTime = foo("getServerTime")
-CoreBroker.prototype.getAccountSnapshot = foo("getAccountSnapshot")
