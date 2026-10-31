@@ -105,6 +105,37 @@ Execution reports can be deduplicated using the documented `symbol`, `orderId`, 
 
 Do not treat `E` (event time), `T` (transaction time), or `u` (account update time) as a global monotonic sequence or replay cursor. A connection interruption means events may have been missed. Current snapshots from `account.status` and `openOrders.status`, plus symbol-scoped `myTrades` / `allOrders` queries, can reconcile present state and available order/trade history but cannot reconstruct every missed intermediate balance delta. Never replay pending or uncertain state-changing RPC requests during recovery.
 
+
+### Consumer reconciliation procedure after user-data recovery
+
+A connection interruption creates an event-history gap. A new subscription restores future delivery; it does not replay missed events. The broker therefore keeps order mutations blocked until every active local subscription handle explicitly acknowledges reconciliation.
+
+Consumers should perform reconciliation serially with their normal event-processing path:
+
+1. Pause order placement and cancellation while the broker reports `connectionClosed`, `terminated`, or `recovering`. The broker independently enforces this pause.
+2. Wait for `recovered`. This means the replacement API connection and signature subscription are active; it does **not** mean account/order state is reconciled.
+3. Fetch a current account snapshot with `getAssets()` (`account.status`) and the current open-order snapshot with `getOpenOrders()` (`openOrders.status`).
+4. For every symbol relevant to the consumer's tracked orders/fills, query `getOrderHistory({ symbol })` (`allOrders`) and `getMyTrades({ symbol })` (`myTrades`). Use known order IDs and bounded time/ID checkpoints where supported by the consumer's own state model.
+5. Apply the snapshots/history idempotently, while ensuring newly arriving user-data events are serialized or buffered so a snapshot cannot overwrite a newer event.
+6. Only after the consumer has established a consistent state, call `acknowledgeRecovery()` on that specific local subscription handle. If multiple handles exist, every active handle must acknowledge before the broker re-enables order mutations.
+7. If any query or state application is incomplete, do not acknowledge. Keep the mutation gate closed and retry/reconcile under the consumer's own bounded policy.
+
+**Reconciliation limits:** account and open-order snapshots describe current state; order/trade history queries expose available records. They cannot reconstruct every missed intermediate balance delta or prove that every event was observed. Do not synthesize missing balance events from current balances, and do not blindly replay an order placement/cancellation whose outcome was uncertain at disconnect time.
+
+A handle added after recovery receives a `recovered` status with `reconciliationRequired: true` and must also acknowledge. A later interruption resets acknowledgements for every active handle. Disconnecting an unacknowledged handle removes it from the all-consumer acknowledgement barrier.
+
+The current bot consumer audit is tracked separately in [issue #304](https://github.com/45s/coinzilla/issues/304). The broker migration does not modify bot application code. Until the bot domain adopts `onStatus` and `acknowledgeRecovery()`, that consumer intentionally remains fail-closed after an interruption.
+
+### Opt-in TESTNET verification
+
+Run the focused user-data test with `pnpm --filter @coinzilla/brokers test:user-data-integration` and read-only-capable Binance TESTNET API credentials in `.env.development` (`BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`). The test explicitly asserts the TESTNET WebSocket API hostname and performs no order placement or cancellation.
+
+The broader `pnpm --filter @coinzilla/brokers test:integration` command also runs the existing `broker.integration.js` suite, which creates and cancels a TESTNET order. Use the focused command above when validating user-data recovery without order placement.
+
+The user-data recovery integration test verifies signature subscription, active subscription lookup, socket disconnect, automatic reconnect/resubscription, account/open-order snapshots, symbol-scoped order/trade history, and the explicit acknowledgement gate. It is skipped by default when credentials are absent.
+
+Live event receipt cannot be guaranteed without account activity. To opt into that assertion, set `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1` and generate harmless account/order activity on the TESTNET account while the test is waiting. The test itself never places or cancels orders. The event timeout defaults to 60 seconds and can be changed with `BINANCE_TESTNET_EVENT_TIMEOUT_MS`.
+
 ## 4. Binance WebSocket API method matrix
 
 The current `BinanceSdkBroker` maps its request/response operations as follows. The Binance method names below are documented Spot WebSocket API operations; verify exact parameters, signing payload canonicalization, response envelopes, limits, and error codes again during implementation.
