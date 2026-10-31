@@ -76,7 +76,7 @@ function createClient(options = {}) {
     ackTimeout: 1_000,
     reconnectDelay: 10,
     maxReconnectDelay: 40,
-    rotationDelay: 1_000,
+    rotationDelay: 10_000,
     onError: (error) => errors.push(error.message),
     ...options,
   })
@@ -248,7 +248,7 @@ test("reconnects after an unexpected close and restores desired subscriptions", 
 })
 
 test("handles serverShutdown and rotates connections before the 24-hour limit", async () => {
-  const { client, clock, transports } = createClient()
+  const { client, clock, transports } = createClient({ rotationDelay: 1_000 })
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
   acknowledge(transports[0])
