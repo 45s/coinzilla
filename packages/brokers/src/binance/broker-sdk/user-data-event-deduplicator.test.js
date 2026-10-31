@@ -26,7 +26,7 @@ test("execution reports use symbol, order ID, and execution ID as identity", () 
   assert.equal(deduplicator.isDuplicate({
     ...first,
     subscriptionId: 5,
-  }), false)
+  }), true)
 })
 
 test("events without a stable unique ID use exact payload identity", () => {
