@@ -109,3 +109,21 @@ describe("BinanceSdkBroker.getFills", () => {
     assert.ok(result.errors.length > 0)
   })
 })
+
+
+describe("BinanceSdkBroker.getFills history filters", () => {
+  it("supports the fromId and orderId cursor combination", async () => {
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [marketInfo] }),
+      myTrades: (params, options) => {
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 1000, orderId: 7, fromId: 41 })
+        assert.deepEqual(options, { signed: true })
+        return [{ ...trade, id: 41 }]
+      },
+    })
+    const result = await broker.getFills({ symbol: "BTCUSDT", orderId: "7", fromId: "41" })
+    assert.equal(result.ok, true)
+    assert.equal(result.data[0].tradeId, "41")
+    assert.equal(result.data[0].brokerOrderId, "7")
+  })
+})
