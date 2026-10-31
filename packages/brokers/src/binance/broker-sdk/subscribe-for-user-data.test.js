@@ -137,6 +137,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       reason: "network lost",
       recoveryRequired: true,
     }])
+    assert.equal(broker.connected, false)
     await result.data.disconnect()
   })
 
