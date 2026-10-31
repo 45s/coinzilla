@@ -127,3 +127,20 @@ test("connect opens the WebSocket API client and disconnect closes both native c
   assert.equal(rpc.state, "closed")
   assert.deepEqual(streams.calls, [])
 })
+
+test("connect failure cleans the API client and leaves the broker disconnected", async () => {
+  const rpc = createFakeRpcClient()
+  let cleanupCalls = 0
+  rpc.connect = async () => { throw new Error("API socket failed") }
+  rpc.disconnect = async () => { cleanupCalls += 1 }
+  const streams = createFakeStreamsClient()
+  const broker = new BinanceSdkBroker(config, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => streams,
+  })
+
+  await assert.rejects(() => broker.connect(), /API socket failed/)
+  assert.equal(broker.connected, false)
+  assert.equal(cleanupCalls, 1)
+  assert.equal(streams.listenerCount, 0)
+})
