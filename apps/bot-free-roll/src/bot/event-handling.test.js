@@ -130,3 +130,18 @@ describe("createEventHandling", () => {
     assert.deepEqual(calls.priceEvents, [{ symbol: "BTCUSDT", tick }])
   })
 })
+
+
+test("ignores and reports malformed user-data event envelopes", () => {
+  const { calls, handling } = createFixture()
+
+  handling.onUserDataEvent({ payload: null })
+  handling.onUserDataEvent({ payload: [] })
+
+  assert.equal(calls.queued.length, 0)
+  assert.equal(calls.balanceUpdates.length, 0)
+  assert.deepEqual(calls.debug, [
+    ["Ignoring invalid user-data event", { reason: "User-data event must be an object" }],
+    ["Ignoring invalid user-data event", { reason: "User-data event must be an object" }],
+  ])
+})
