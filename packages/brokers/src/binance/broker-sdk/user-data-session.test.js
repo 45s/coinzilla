@@ -210,6 +210,35 @@ describe("Binance user-data session recovery", () => {
   })
 
 
+
+  it("allows an explicit connect call to resume a terminated stream and cancel its timer", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    const statuses = []
+    const subscription = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+    const previousId = subscription.data.subscriptionId
+
+    clients[0].emitEvent({
+      subscriptionId: previousId,
+      event: { e: "eventStreamTerminated", E: 123458 },
+    })
+    assert.equal(scheduler.pendingCount, 1)
+
+    await broker.connect()
+
+    assert.equal(scheduler.pendingCount, 0)
+    assert.equal(subscription.data.subscriptionId, previousId + 1)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("re-subscribes after explicit stream termination on the still-open socket", async () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
