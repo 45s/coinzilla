@@ -55,18 +55,50 @@ describe(`binance/websocket/${adapt.name}`, () => {
     const r = adapt(mockedExecutionReport)
     assert.deepStrictEqual(r, {
       eventType: 'executionReport',
+      executionType: 'CANCELED',
       executedOrder: {
         id: '15895182',
-        price: 0.116,
-        quantity: 415,
-        side: 'BUY',
         symbol: 'ZKFDUSD',
         type: 'LIMIT',
+        side: 'BUY',
+        quantity: '415.00000000',
+        price: '0.11600000',
         status: 'CANCELED',
-        commission: 0,
-        commissionAsset: null,
+        clientOrderId: 'and_a2c05f9d6e234891951e60c4341c5101',
       },
     })
+  })
+
+
+  it('preserves exact per-trade quantity, quote value, commission, and liquidity role', () => {
+    const r = adapt({
+      ...mockedExecutionReport,
+      x: 'TRADE',
+      X: 'PARTIALLY_FILLED',
+      l: '12.34000000',
+      z: '12.34000000',
+      L: '0.05000000',
+      n: '0.00925500',
+      N: 'DOGE',
+      t: 12345,
+      m: true,
+      Y: '0.61700000',
+    })
+
+    assert.deepStrictEqual(r.fill, {
+      id: '12345',
+      orderId: '15895182',
+      symbol: 'ZKFDUSD',
+      side: 'BUY',
+      price: '0.05000000',
+      quantity: '12.34000000',
+      quoteQuantity: '0.61700000',
+      commissionAmount: '0.00925500',
+      commissionAsset: 'DOGE',
+      isMaker: true,
+      time: 1728174911074,
+    })
+    assert.equal(r.executionType, 'TRADE')
   })
 
   it('should adapt "outboundAccountPosition"', () => {

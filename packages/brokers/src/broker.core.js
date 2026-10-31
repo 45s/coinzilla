@@ -19,3 +19,6 @@ CoreBroker.prototype.getOpenOrders = foo("getOpenOrders")
 CoreBroker.prototype.getPrice = foo("getPrice")
 CoreBroker.prototype.createOrder = foo("createOrder")
 CoreBroker.prototype.subscribeForPrices = foo("subscribeForPrices")
+
+CoreBroker.prototype.getSymbolFilters = foo("getSymbolFilters")
+CoreBroker.prototype.getMyTrades = foo("getMyTrades")

@@ -1,5 +1,4 @@
 import { defaultLogger as logger } from "@coinzilla/utils"
-import { ExecutedOrder } from "@coinzilla/entities"
 import { adaptUser } from "./user.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
@@ -12,34 +11,40 @@ export const wsEventsMap = {
   listStatus: "listStatus",
 }
 
-const adaptExecutedOrder = (m) => {
-  const {
-    eventType,
-    symbol,
-    side,
-    quantity,
-    price,
-    orderId,
-    commission,
-    commissionAsset,
-    orderType: type,
-    orderStatus: status,
-  } = adaptUser.executionReport(m)
+const adaptExecutedOrder = (message) => {
+  const report = adaptUser.executionReport(message)
+  const executedOrder = {
+    id: String(report.orderId),
+    symbol: report.symbol,
+    type: report.orderType,
+    side: report.side,
+    quantity: report.quantity,
+    price: report.price,
+    status: report.orderStatus,
+    clientOrderId: report.newClientOrderId,
+  }
 
-  const executedOrder = new ExecutedOrder({
-    symbol,
-    type,
-    side,
-    quantity: +quantity,
-    price: +price,
-    id: orderId.toString(),
-    status,
-    commission: +commission,
-    commissionAsset,
-  }).value
+  const fill = report.executionType === "TRADE"
+    ? {
+        id: String(report.tradeId),
+        orderId: String(report.orderId),
+        symbol: report.symbol,
+        side: report.side,
+        price: report.priceLastTrade,
+        quantity: report.lastTradeQuantity,
+        quoteQuantity: report.lastQuoteTransacted,
+        commissionAmount: report.commission,
+        commissionAsset: report.commissionAsset,
+        isMaker: report.isMaker,
+        time: report.eventTime,
+      }
+    : null
+
   return {
-    eventType,
+    eventType: report.eventType,
+    executionType: report.executionType,
     executedOrder,
+    ...(fill ? { fill } : {}),
   }
 }
 
@@ -52,11 +57,11 @@ const adaptersMap = {
   [wsEventsMap.listStatus]: adaptUser.listStatus,
 }
 
-export function adaptMsg(m) {
-  const adapter = adaptersMap[m.e]
+export function adaptMsg(message) {
+  const adapter = adaptersMap[message.e]
   if (!adapter) {
-    logger.warn(`Adapter for "${m.e}" message not found`)
-    return m
+    logger.warn(`Adapter for "${message.e}" message not found`)
+    return message
   }
-  return adapter(m)
+  return adapter(message)
 }

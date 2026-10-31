@@ -20,5 +20,10 @@
     }
   },
   "packageManager": "pnpm@12.11.2",
-  "type": "module"
+  "type": "module",
+  "pnpm": {
+    "overrides": {
+      "follow-redirects": "1.16.2"
+    }
+  }
 }

@@ -19,6 +19,9 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
         json: async () => ({
           symbols: [{
             symbol: "BTCUSDT",
+            baseAsset: "BTC",
+            quoteAsset: "USDT",
+            orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
             filters: [
               { filterType: "PRICE_FILTER", tickSize: "0.10" },
               { filterType: "LOT_SIZE", stepSize: "0.001" },
@@ -32,8 +35,11 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
     assert.equal(result.ok, true)
     assert.deepEqual(result.data, {
       symbol: "BTCUSDT",
-      tickSize: 0.1,
-      stepSize: 0.001,
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      tickSize: "0.10",
+      stepSize: "0.001",
+      supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
     })
   })
 
