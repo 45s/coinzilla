@@ -587,7 +587,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Consumer: Free-Roll recovery request #304 is integrated and verified through PRs #314/#315.
 
 ### Timestamped reconciliation snapshot ports (request #316)
-- [~] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
-- [~] Add validated `fromId` pagination to `getMyTrades()` and time-window filters to `getOrderHistory()` while preserving existing result shapes.
-- [ ] Keep full pages potentially incomplete; consumers must advance by the last exact ID + 1 until an exhausted page is observed.
+- [x] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
+- [x] Add validated `fromId` pagination to `getMyTrades()` and time-window filters to `getOrderHistory()` while preserving existing result shapes.
+- [x] Keep full pages potentially incomplete by returning the unchanged array result without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
 - Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
