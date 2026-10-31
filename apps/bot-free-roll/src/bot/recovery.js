@@ -81,7 +81,14 @@ export function reconcileTrackedOrder({
       })
     }
 
-    const remoteOrder = openOrders.find((candidate) => getOrderId(candidate) === orderId)
+    const matchingOpenOrders = openOrders.filter(
+      (candidate) => getOrderId(candidate) === orderId,
+    )
+    if (matchingOpenOrders.length > 1) {
+      return failure(`Open order ${orderId} appears more than once in the broker snapshot`)
+    }
+
+    const remoteOrder = matchingOpenOrders[0]
     if (remoteOrder) {
       const originalQuantity = remoteOrder.originalQuantity
       const executedQuantity = remoteOrder.executedQuantity
@@ -97,7 +104,8 @@ export function reconcileTrackedOrder({
         right: originalQuantity,
       })
 
-      if (String(remoteOrder.side ?? "") !== order.side ||
+      if ((remoteOrder.symbol !== undefined && remoteOrder.symbol !== symbol) ||
+          String(remoteOrder.side ?? "") !== order.side ||
           compareDecimal({ left: originalQuantity, right: order.quantity }) !== 0 ||
           !["NEW", "PARTIALLY_FILLED"].includes(status) ||
           compareDecimal({ left: executedQuantity, right: historyQuantity }) !== 0 ||
