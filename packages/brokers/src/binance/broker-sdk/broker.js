@@ -338,6 +338,7 @@ export class BinanceSdkBroker extends CoreBroker {
 
       removeCloseListener = this.tradingConnection.onClose?.((event) => {
         if (disconnected || this.disconnecting) return
+        this.connected = false
         reportStatus({
           type: "connectionClosed",
           code: event?.code ?? null,
