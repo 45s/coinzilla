@@ -22,6 +22,7 @@ function createMarketClient(config, logger) {
   return new BinanceStreamsClient({
     url: config.websocketStreamsUrl,
     reconnectDelay: Math.max(1, config.reconnectDelay),
+    maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
     onError: (error) => logger.error?.("Binance market stream error", error),
   })
 }
@@ -51,7 +52,7 @@ export class BinanceSdkBroker extends CoreBroker {
     try {
       await this.tradingConnection.connect()
       this.connected = true
-      this.logger.info?.("Binance native WebSocket clients connected")
+      this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
       this.connected = false
       await this.tradingConnection.disconnect()
