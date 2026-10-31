@@ -7,7 +7,7 @@ import {
 } from "./helpers/decimal.js"
 
 const LIVE_SELL_STATUSES = new Set(["OPEN", "PARTIALLY_FILLED"])
-const TERMINAL_SELL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
+const TERMINAL_SELL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
 
 function fail(reason) {
   return toResult({ errors: [reason] })
@@ -92,7 +92,7 @@ function validateCycle(cycle) {
   for (const order of cycle.sellOrders) {
     if (!order || typeof order !== "object" || !isNonEmptyString(order.id) ||
         ordersById.has(order.id) ||
-        !["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status)) {
+        !["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"].includes(order.status)) {
       throw new Error("cycle contains an invalid or duplicate SELL order")
     }
     validateDecimal({ value: order.quantity, name: "SELL quantity", allowZero: false })
@@ -105,6 +105,9 @@ function validateCycle(cycle) {
       liveOrders.push(order)
       if (compareDecimal({ left: order.reservedQuantity, right: "0" }) <= 0) {
         throw new Error("live SELL order must retain a positive reservation")
+      }
+      if (compareDecimal({ left: order.reservedQuantity, right: cycle.remainingQuantity }) > 0) {
+        throw new Error("live SELL reservation exceeds cycle remaining quantity")
       }
     } else if (compareDecimal({ left: order.reservedQuantity, right: "0" }) !== 0) {
       throw new Error("terminal SELL order cannot retain a reservation")
@@ -664,6 +667,9 @@ export function projectGridCycles({ cycles } = {}) {
     }
 
     if (symbols.size > 1) throw new Error("all cycles in a pair projection must use the same symbol")
+    if (compareDecimal({ left: totals.reservedQuantity, right: totals.activeQuantity }) > 0) {
+      throw new Error("pair SELL reservations exceed strategy-owned active inventory")
+    }
     return toResult({
       data: Object.freeze({
         ...(symbols.size === 1 ? { symbol: [...symbols][0] } : {}),
