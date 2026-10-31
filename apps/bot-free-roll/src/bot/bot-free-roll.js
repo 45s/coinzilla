@@ -16,6 +16,7 @@ import {
 } from "./helpers/index.js"
 import { reconcileExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
+import { createEventHandling } from "./event-handling.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -36,6 +37,7 @@ export class FreeRollBot {
   #startedAt = null
   #confirmedBalances = new Map()
   #orderExecution
+  #eventHandling
 
   constructor(input) {
     const validation = validateConfig(input)
@@ -77,6 +79,16 @@ export class FreeRollBot {
         )
         this.#debug(`[${key}] Queued task failed`, error)
       },
+    })
+
+    this.#eventHandling = createEventHandling({
+      isRunning: () => this.#isRunning,
+      hasPair: ({ symbol }) => this.#states.has(symbol),
+      enqueue: ({ symbol, task }) => this.#enqueue(symbol, task),
+      onBalanceUpdate: ({ event }) => this.#handleBalanceUpdate(event),
+      onOrderEvent: ({ symbol, event }) => this.#handleOrderEvent(symbol, event),
+      onPrice: ({ symbol, tick }) => this.#handlePrice(symbol, tick),
+      debug: (message, details) => this.#debug(message, details),
     })
 
     const minProfit = settings.minProfit ?? 0.01
@@ -217,31 +229,8 @@ export class FreeRollBot {
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
-          onEvent: (payload) => {
-            if (!this.#isRunning) return
-
-            const event = payload?.event ?? payload
-            if (event?.eventType === "outboundAccountPosition") {
-              this.#handleBalanceUpdate(event)
-              return
-            }
-            const order = event?.executedOrder
-            const symbol = order?.symbol ?? event?.symbol
-
-            this.#debug("User-data event received", {
-              eventType: event?.eventType,
-              executionType: event?.executionType,
-              symbol,
-              orderId: getOrderId(order),
-              status: order?.status,
-            })
-
-            if (!symbol || !this.#states.has(symbol)) return
-
-            void this.#enqueue(symbol, () =>
-              this.#handleOrderEvent(symbol, event),
-            )
-          },
+          onEvent: (payload) =>
+            this.#eventHandling.onUserDataEvent({ payload }),
         }),
         "subscribeForUserData",
       )
@@ -252,11 +241,8 @@ export class FreeRollBot {
         const subscription = unwrapResult(
           await this.broker.subscribeForPrices({
             symbol,
-            onPrice: (tick) => {
-              if (!this.#isRunning) return
-
-              void this.#enqueue(symbol, () => this.#handlePrice(symbol, tick))
-            },
+            onPrice: (tick) =>
+              this.#eventHandling.onPriceEvent({ symbol, tick }),
           }),
           `subscribeForPrices(${symbol})`,
         )
