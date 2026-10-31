@@ -315,8 +315,10 @@ export class BinanceUserDataSession {
   #handleClose(event) {
     if (this.#stopped) return
     this.setConnected(false)
-    this.setUnavailable(true)
-    if (this.#subscribers.size === 0) return
+    if (this.#subscribers.size === 0) {
+      this.setUnavailable(true)
+      return
+    }
     this.#subscriptionId = null
     this.#markRecoveryRequired()
     logSafely(this.logger, "error", "Binance user-data API connection closed", {
