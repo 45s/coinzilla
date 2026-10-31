@@ -1,5 +1,5 @@
 import { Balance, CanonicalOrder, Fill } from "@coinzilla/entities"
-import { compareDecimal, subtractDecimal } from "./helpers/decimal.js"
+import { addDecimal, compareDecimal, subtractDecimal } from "./helpers/decimal.js"
 import { getOrderId, unwrapResult } from "./helpers/exchange.js"
 import { validateRecoveryBalances } from "./recovery.js"
 
@@ -202,13 +202,14 @@ function validateOpenOrders({ items, symbol, window }) {
     if (
       !order ||
       typeof order.id !== "string" ||
-      !order.id ||
+      !/^\\d+$/.test(order.id) ||
+      !Number.isSafeInteger(Number(order.id)) ||
       order.symbol !== symbol ||
       (order.side !== "BUY" && order.side !== "SELL") ||
       typeof order.originalQuantity !== "string" ||
       typeof order.executedQuantity !== "string" ||
       typeof order.remainingQuantity !== "string" ||
-      typeof order.status !== "string" ||
+      !["NEW", "PARTIALLY_FILLED"].includes(order.status) ||
       ids.has(order.id)
     ) {
       return failure(`Open orders for ${symbol} contain an invalid or duplicate order`)
@@ -306,6 +307,7 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
     if (
       !Array.isArray(trackedOrderIds) ||
       new Set(trackedOrderIds).size !== trackedOrderIds.length ||
+      trackedOrderIds.some((id) => typeof id !== "string" || !/^\\d+$/.test(id) || !Number.isSafeInteger(Number(id))) ||
       !Array.isArray(section.orderHistory.items) ||
       section.orderHistory.items.length !== trackedOrderIds.length ||
       !Number.isSafeInteger(section.orderHistory.pagesFetched) ||
@@ -332,7 +334,7 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
       !Array.isArray(section.fills.trackedOrderIds) ||
       section.fills.trackedOrderIds.length !== trackedOrderIds.length ||
       new Set(section.fills.trackedOrderIds).size !== section.fills.trackedOrderIds.length ||
-      section.fills.trackedOrderIds.some((id) => !trackedOrderIds.includes(id)) ||
+      section.fills.trackedOrderIds.some((id, index) => id !== trackedOrderIds[index]) ||
       !Array.isArray(section.fills.items) ||
       !Number.isSafeInteger(section.fills.pagesFetched) ||
       section.fills.pagesFetched < trackedOrderIds.length ||
@@ -356,6 +358,25 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
         return failure(`Reconciliation snapshot contains invalid tracked fills for ${symbol}`)
       }
       tradeIds.add(fill.tradeId)
+    }
+
+    for (const order of section.orderHistory.items) {
+      const orderFills = section.fills.items.filter(
+        (fill) => fill.brokerOrderId === order.brokerOrderId,
+      )
+      const filledQuantity = orderFills.reduce(
+        (total, fill) => addDecimal({
+          left: total,
+          right: fill.quantity.amount,
+        }),
+        "0",
+      )
+      if (compareDecimal({
+        left: filledQuantity,
+        right: order.executedQuantity.amount,
+      }) !== 0) {
+        return failure(`Reconciliation snapshot fill quantity does not match tracked order ${order.brokerOrderId}`)
+      }
     }
 
     const firstTradeId = section.fills.items.length
