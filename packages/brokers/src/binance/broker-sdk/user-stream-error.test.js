@@ -17,7 +17,11 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     }, { apiClientFactory: () => rpc })
     broker.connected = true
     let eventCalls = 0
-    const result = await broker.subscribeForUserData({ onEvent: () => { eventCalls += 1 } })
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: () => { eventCalls += 1 },
+      onStatus: (status) => statuses.push(status),
+    })
     assert.equal(result.ok, true)
 
     const error = new Error("user stream disconnected")
@@ -27,6 +31,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     assert.equal(logs.length, 1)
     assert.equal(logs[0][0], "Binance user data stream error")
     assert.equal(logs[0][1], error)
+    assert.deepEqual(statuses, [{ type: "rpcError", error, recoveryRequired: false }])
     await result.data.disconnect()
     assert.equal(rpc.listenerCount, 0)
   })
