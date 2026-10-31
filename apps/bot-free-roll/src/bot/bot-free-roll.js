@@ -3,17 +3,18 @@ import {
   createKeyedQueue,
   disconnectSubscriptions,
   validateConfig,
-  calculateBuyThreshold,
+  calculateBuyThresholdExact,
   addDecimal,
+  maxDecimal,
   compareDecimal,
   subtractDecimal,
-  getFeeRate,
-  calculateSellPlan,
-  estimateBuyAccounting,
-  estimateSellAccounting,
+  getConfiguredSellFeeRateExact,
+  getOrderType,
+  calculateFillAccountingExact,
+  calculateCommissionRateExact,
+  calculateSellPlanExact,
   getOrderId,
-  roundPriceDown,
-  roundQuantityDown,
+  roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
 
@@ -67,13 +68,12 @@ export class FreeRollBot {
       },
     })
 
-    this.settings = {
-      minProfit: settings.minProfit ?? 0.01,
-    }
-
-    if (!Number.isFinite(this.settings.minProfit) || this.settings.minProfit <= 0) {
+    const minProfit = settings.minProfit ?? 0.01
+    if (!Number.isFinite(minProfit) || minProfit <= 0) {
       throw new Error("Invalid minProfit setting")
     }
+
+    this.settings = { minProfit: String(minProfit) }
 
     for (const [symbol, pair] of Object.entries(pairs)) {
       if (!this.#isEnabled || pair.enabled === false) {
@@ -94,14 +94,26 @@ export class FreeRollBot {
         throw new Error(`${symbol}: invalid pair settings`)
       }
 
-      const feeRate = getFeeRate({
+      const orderType = getOrderType({ makerPercent: pair.makerPercent })
+      const configuredFeeRate = getConfiguredSellFeeRateExact({
         makerPercent: pair.makerPercent,
         takerPercent: pair.takerPercent,
       })
 
       this.#states.set(symbol, {
         settings: pair,
-        feeRate,
+        orderType,
+        configuredFeeRate,
+        feeRate: configuredFeeRate,
+        actualCommissionRate: "0",
+        baseAsset: null,
+        quoteAsset: null,
+        trackedOrderIds: new Set(),
+        processedTradeIds: new Set(),
+        fills: new Map(),
+        fillsByOrder: new Map(),
+        filledQuantityByOrder: new Map(),
+        commissionTotals: new Map(),
         priceTickSize: null,
         quantityStepSize: null,
         lastPriceLogKey: null,
@@ -112,10 +124,10 @@ export class FreeRollBot {
         lastBuyPrice: null,
         buyOrder: null,
         sellOrder: null,
-        activeQuantity: 0,
+        activeQuantity: "0",
         cycleCost: "0",
         saleProceeds: "0",
-        freeQuantity: 0,
+        freeQuantity: "0",
         buyFills: 0,
         sellFills: 0,
         profitableCycles: 0,
@@ -276,6 +288,12 @@ export class FreeRollBot {
           estimatedRealizedProfit: state.estimatedRealizedProfit,
           buyOrderId: getOrderId(state.buyOrder),
           sellOrderId: getOrderId(state.sellOrder),
+          orderType: state.orderType,
+          configuredFeeRate: state.configuredFeeRate,
+          actualCommissionRate: state.actualCommissionRate,
+          feeRate: state.feeRate,
+          fillCount: state.fills.size,
+          commissionTotals: Object.fromEntries(state.commissionTotals),
         },
       ]),
     )
@@ -286,7 +304,16 @@ export class FreeRollBot {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
       configuredFeeRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.configuredFeeRate]),
+      ),
+      actualCommissionRates: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.actualCommissionRate]),
+      ),
+      sellFeeRates: Object.fromEntries(
         [...this.#states].map(([symbol, state]) => [symbol, state.feeRate]),
+      ),
+      orderTypes: Object.fromEntries(
+        [...this.#states].map(([symbol, state]) => [symbol, state.orderType]),
       ),
       minProfit: this.settings.minProfit,
       confirmedBalances: Object.fromEntries(this.#confirmedBalances),
@@ -302,10 +329,15 @@ export class FreeRollBot {
     for (const balance of balances) {
       if (!balance?.asset) continue
 
-      const free = Number(balance.free)
-      const locked = Number(balance.locked)
+      const free = String(balance.free)
+      const locked = String(balance.locked)
 
-      if (!Number.isFinite(free) || !Number.isFinite(locked)) continue
+      try {
+        compareDecimal({ left: free, right: "0" })
+        compareDecimal({ left: locked, right: "0" })
+      } catch {
+        continue
+      }
 
       this.#confirmedBalances.set(balance.asset, { free, locked })
     }
@@ -330,60 +362,44 @@ export class FreeRollBot {
 
   async #loadPriceTickSizes() {
     for (const [symbol, state] of this.#states) {
-      const fallbackTickSize = 10 ** -state.settings.pricePrecision
-      const fallbackQuantityStepSize = 10 ** -state.settings.quantityPrecision
-
-      try {
-        if (typeof this.broker.getSymbolFilters !== "function") {
-          throw new Error("Broker does not support getSymbolFilters()")
-        }
-
-        const filters = unwrapResult(
-          await this.broker.getSymbolFilters({ symbol }),
-          `getSymbolFilters(${symbol})`,
-        )
-        const tickSize = Number(filters?.tickSize)
-        const stepSize = Number(filters?.stepSize)
-
-        if (!Number.isFinite(tickSize) || tickSize <= 0) {
-          throw new Error(`Invalid tickSize returned for ${symbol}`)
-        }
-
-        if (!Number.isFinite(stepSize) || stepSize <= 0) {
-          throw new Error(`Invalid stepSize returned for ${symbol}`)
-        }
-
-        state.priceTickSize = tickSize
-        state.quantityStepSize = stepSize
-        this.#debug(`[${symbol}] Price tick size loaded from broker`, {
-          tickSize,
-          stepSize,
-          source: "Binance exchangeInfo",
-        })
-      } catch (error) {
-        state.priceTickSize = fallbackTickSize
-        state.quantityStepSize = fallbackQuantityStepSize
-        try {
-          this.logger.warn?.({
-            message: `[${symbol}] Could not load exchange filters; using configured precision fallbacks`,
-            details: {
-              pricePrecision: state.settings.pricePrecision,
-              quantityPrecision: state.settings.quantityPrecision,
-              tickSize: fallbackTickSize,
-              stepSize: fallbackQuantityStepSize,
-              error: error?.message ?? String(error),
-            },
-          })
-        } catch {
-          // Diagnostics must not prevent configured fallbacks from being used.
-        }
-        this.#debug(`[${symbol}] Exchange filter fallbacks selected`, {
-          tickSize: fallbackTickSize,
-          pricePrecision: state.settings.pricePrecision,
-          quantityPrecision: state.settings.quantityPrecision,
-          stepSize: fallbackQuantityStepSize,
-        })
+      if (typeof this.broker.getSymbolFilters !== "function") {
+        throw new Error("Broker does not support required getSymbolFilters() market metadata")
       }
+
+      const filters = unwrapResult(
+        await this.broker.getSymbolFilters({ symbol }),
+        `getSymbolFilters(${symbol})`,
+      )
+      const tickSize = Number(filters?.tickSize)
+      const stepSize = Number(filters?.stepSize)
+
+      if (!Number.isFinite(tickSize) || tickSize <= 0) {
+        throw new Error(`Invalid tickSize returned for ${symbol}`)
+      }
+      if (!Number.isFinite(stepSize) || stepSize <= 0) {
+        throw new Error(`Invalid stepSize returned for ${symbol}`)
+      }
+      if (typeof filters?.baseAsset !== "string" || !filters.baseAsset ||
+          typeof filters?.quoteAsset !== "string" || !filters.quoteAsset ||
+          !Array.isArray(filters?.supportedOrderTypes)) {
+        throw new Error(`Incomplete market metadata returned for ${symbol}`)
+      }
+      if (!filters.supportedOrderTypes.includes(state.orderType)) {
+        throw new Error(`${symbol} does not support configured order type ${state.orderType}`)
+      }
+
+      state.priceTickSize = tickSize
+      state.quantityStepSize = stepSize
+      state.baseAsset = filters.baseAsset
+      state.quoteAsset = filters.quoteAsset
+      this.#debug(`[${symbol}] Market metadata loaded from broker`, {
+        tickSize,
+        stepSize,
+        baseAsset: state.baseAsset,
+        quoteAsset: state.quoteAsset,
+        supportedOrderTypes: filters.supportedOrderTypes,
+        orderType: state.orderType,
+      })
     }
   }
 
@@ -459,10 +475,10 @@ export class FreeRollBot {
       })
       await this.#placeBuy(
         symbol,
-        calculateBuyThreshold({
-          referencePrice: price,
+        calculateBuyThresholdExact({
+          referencePrice: String(price),
           lastBuyPrice: null,
-          priceStepPercent: state.settings.priceStepPercent,
+          priceStepPercent: String(state.settings.priceStepPercent),
         }),
       )
       return
@@ -472,10 +488,10 @@ export class FreeRollBot {
     state.highestPrice = Math.max(state.highestPrice ?? state.referencePrice, price)
     state.referencePrice = state.highestPrice
 
-    const threshold = calculateBuyThreshold({
-      referencePrice: state.referencePrice,
-      lastBuyPrice: state.lastBuyPrice,
-      priceStepPercent: state.settings.priceStepPercent,
+    const threshold = calculateBuyThresholdExact({
+      referencePrice: String(state.referencePrice),
+      lastBuyPrice: state.lastBuyPrice === null ? null : String(state.lastBuyPrice),
+      priceStepPercent: String(state.settings.priceStepPercent),
     })
 
     this.#debug(`[${symbol}] Buy threshold evaluated`, {
@@ -510,19 +526,25 @@ export class FreeRollBot {
         `cancel BUY ${symbol} ${order.id}`,
       )
 
-      const remaining = Number(canceled?.quantity)
+      const remaining = canceled?.originalQuantity !== undefined && canceled?.executedQuantity !== undefined
+        ? subtractDecimal({
+            left: String(canceled.originalQuantity),
+            right: String(canceled.executedQuantity),
+          })
+        : String(canceled?.quantity)
       const status = String(canceled?.status ?? "").toUpperCase()
 
       if (
         status === "FILLED" ||
-        !Number.isFinite(remaining) ||
-        remaining < 0 ||
-        remaining < order.quantity - 1e-8
+        compareDecimal({ left: remaining, right: "0" }) < 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) > 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) < 0
       ) {
+        await this.#reconcileOrderFills({ symbol, order })
         state.cancelingOrderIds.delete(order.id)
         this.#pause(
           symbol,
-          `BUY ${order.id} may have filled during trailing cancellation; reconcile before replacing`,
+          `BUY ${order.id} may have filled during trailing cancellation; reconciled actual fills and paused before replacing`,
         )
         return
       }
@@ -568,14 +590,19 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused || state.buyOrder) return
 
-    const price = roundPriceDown(rawPrice, state.priceTickSize ?? 0)
+    const price = roundDecimalToIncrement({
+      value: String(rawPrice),
+      increment: String(state.priceTickSize ?? 0),
+      direction: "down",
+    })
 
-    const quantity = roundQuantityDown(
-      state.settings.orderQuantity,
-      state.quantityStepSize ?? 0,
-    )
+    const quantity = roundDecimalToIncrement({
+      value: String(state.settings.orderQuantity),
+      increment: String(state.quantityStepSize ?? 0),
+      direction: "down",
+    })
 
-    if (quantity <= 0) {
+    if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
       this.#pause(symbol, "BUY quantity is below the exchange quantity step")
       return
     }
@@ -587,9 +614,9 @@ export class FreeRollBot {
         await this.broker.createOrder({
           symbol,
           side: "BUY",
-          type: "LIMIT",
-          timeInForce: "GTC",
-          quantity: String(quantity),
+          type: state.orderType,
+          ...(state.orderType === "LIMIT" ? { timeInForce: "GTC" } : {}),
+          quantity,
           price: String(price),
         }),
         `create BUY ${symbol}`,
@@ -598,7 +625,8 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
-      state.buyOrder = { id, quantity, price }
+      state.trackedOrderIds.add(id)
+      state.buyOrder = { id, side: "BUY", quantity, price: String(price) }
       state.lastAdjustmentPrice = Number(
         (price / (1 - state.settings.priceStepPercent / 100)).toFixed(
           state.settings.pricePrecision,
@@ -609,7 +637,7 @@ export class FreeRollBot {
         orderId: id,
         symbol,
         side: "BUY",
-        type: "LIMIT",
+        type: state.orderType,
         price,
         quantity,
       })
@@ -638,7 +666,21 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id) return
+    if (!state || !id || !state.trackedOrderIds.has(id)) return
+
+    if (event.executionType === "TRADE") {
+      if (!event.fill) {
+        this.#pause(symbol, `TRADE execution report for order ${id} is missing its fill details`)
+        return
+      }
+      if (String(event.fill.orderId) !== id ||
+          event.fill.symbol !== symbol ||
+          event.fill.side !== order.side) {
+        this.#pause(symbol, `TRADE fill identity does not match order ${id}`)
+        return
+      }
+      if (!this.#applyExecutionFill({ symbol, fill: event.fill })) return
+    }
 
     if (status === "FILLED") {
       this.#publish("order.filled", {
@@ -657,6 +699,7 @@ export class FreeRollBot {
       side: order?.side,
       status,
       executionType: event.executionType,
+      fill: event.fill ?? null,
       price: order?.price,
       quantity: order?.quantity,
       event,
@@ -716,28 +759,26 @@ export class FreeRollBot {
     const order = state.buyOrder
     if (!order || state.paused) return
 
+    const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
+      this.#pause(
+        symbol,
+        `BUY ${order.id} is FILLED but actual fills total ${filledQuantity}, expected ${order.quantity}`,
+      )
+      return
+    }
+
     state.buyOrder = null
     state.trailingBuy = false
-
-    const accounting = estimateBuyAccounting({
-      quantity: order.quantity,
-      price: order.price,
-      feeRate: state.feeRate,
-    })
-
-    state.lastBuyPrice = order.price
+    state.lastBuyPrice = String(order.price)
     state.buyFills += 1
-    state.activeQuantity += accounting.netQuantity
-    state.cycleCost = addDecimal({
-      left: state.cycleCost,
-      right: accounting.estimatedCost,
-    })
 
-    this.#debug(`[${symbol}] BUY accounted`, {
+    this.#debug(`[${symbol}] BUY fills reconciled`, {
       order,
-      accounting,
+      fillCount: state.fillsByOrder.get(order.id),
       activeQuantity: state.activeQuantity,
       cycleCost: state.cycleCost,
+      commissionTotals: Object.fromEntries(state.commissionTotals),
     })
 
     if (!(await this.#replaceSell(symbol))) {
@@ -777,21 +818,38 @@ export class FreeRollBot {
         `cancel SELL ${symbol} ${order.id}`,
       )
 
-      // Existing adapter reports remaining quantity in .quantity.
-      const remaining = Number(canceled?.quantity)
+      const remaining = canceled?.originalQuantity !== undefined && canceled?.executedQuantity !== undefined
+        ? subtractDecimal({
+            left: String(canceled.originalQuantity),
+            right: String(canceled.executedQuantity),
+          })
+        : String(canceled?.quantity)
 
-      if (!Number.isFinite(remaining) || remaining < 0) {
-        throw new Error("Cannot determine remaining quantity after cancel")
+      if (
+        compareDecimal({ left: remaining, right: "0" }) < 0 ||
+        compareDecimal({ left: remaining, right: String(order.quantity) }) > 0
+      ) {
+        throw new Error("Cannot determine a valid remaining quantity after cancel")
       }
 
-      const filledQuantity = Math.max(0, order.quantity - remaining)
-
-      if (filledQuantity > 0) {
-        this.#recordSellFill(state, order, filledQuantity)
+      await this.#reconcileOrderFills({ symbol, order })
+      const filledQuantity = maxDecimal({
+        left: "0",
+        right: subtractDecimal({ left: String(order.quantity), right: remaining }),
+      })
+      const reconciledFilledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+      if (compareDecimal({ left: reconciledFilledQuantity, right: filledQuantity }) !== 0) {
+        throw new Error(
+          `SELL ${order.id} history mismatch: fills total ${reconciledFilledQuantity}, expected ${filledQuantity}`,
+        )
       }
 
-      state.sellOrder = null
       state.cancelingOrderIds.delete(order.id)
+      if (compareDecimal({ left: remaining, right: "0" }) === 0) {
+        await this.#handleSellFilled(symbol)
+      } else {
+        state.sellOrder = null
+      }
 
       this.#debug(`[${symbol}] SELL cancellation reconciled`, {
         orderId: order.id,
@@ -824,15 +882,15 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused) return false
 
-    const plan = calculateSellPlan({
+    const plan = calculateSellPlanExact({
       activeQuantity: state.activeQuantity,
-      keepQuantity: state.settings.keepQuantity,
-      cycleCost: Number(state.cycleCost),
-      saleProceeds: Number(state.saleProceeds),
+      keepQuantity: String(state.settings.keepQuantity),
+      cycleCost: state.cycleCost,
+      saleProceeds: state.saleProceeds,
       minProfit: this.settings.minProfit,
       feeRate: state.feeRate,
-      priceTickSize: state.priceTickSize ?? 0,
-      quantityStepSize: state.quantityStepSize ?? 0,
+      priceTickSize: String(state.priceTickSize ?? 0),
+      quantityStepSize: String(state.quantityStepSize ?? 0),
     })
 
     this.#debug(`[${symbol}] SELL plan calculated`, {
@@ -843,17 +901,17 @@ export class FreeRollBot {
       keepQuantity: state.settings.keepQuantity,
     })
 
-    if (plan.quantity <= 0 || plan.price === null) return true
+    if (compareDecimal({ left: plan.quantity, right: "0" }) <= 0 || plan.price === null) return true
 
     try {
       const order = unwrapResult(
         await this.broker.createOrder({
           symbol,
           side: "SELL",
-          type: "LIMIT",
-          timeInForce: "GTC",
-          quantity: String(plan.quantity),
-          price: String(plan.price),
+          type: state.orderType,
+          ...(state.orderType === "LIMIT" ? { timeInForce: "GTC" } : {}),
+          quantity: plan.quantity,
+          price: plan.price,
         }),
         `create SELL ${symbol}`,
       )
@@ -861,8 +919,10 @@ export class FreeRollBot {
       const id = getOrderId(order)
       if (!id) throw new Error(`${symbol}: SELL response missing order ID`)
 
+      state.trackedOrderIds.add(id)
       state.sellOrder = {
         id,
+        side: "SELL",
         quantity: plan.quantity,
         price: plan.price,
       }
@@ -871,7 +931,7 @@ export class FreeRollBot {
         orderId: id,
         symbol,
         side: "SELL",
-        type: "LIMIT",
+        type: state.orderType,
         price: plan.price,
         quantity: plan.quantity,
       })
@@ -898,18 +958,22 @@ export class FreeRollBot {
     const state = this.#states.get(symbol)
     if (!this.#isRunning || state.paused || state.buyOrder) return
 
-    const threshold = calculateBuyThreshold({
-      referencePrice: state.referencePrice,
+    const threshold = calculateBuyThresholdExact({
+      referencePrice: String(state.referencePrice),
       lastBuyPrice: state.lastBuyPrice,
-      priceStepPercent: state.settings.priceStepPercent,
+      priceStepPercent: String(state.settings.priceStepPercent),
     })
 
     this.#debug(`[${symbol}] Scheduling next BUY`, {
       triggerThreshold: threshold,
-      buyLimitPrice: roundPriceDown(threshold, state.priceTickSize ?? 0),
+      buyLimitPrice: roundDecimalToIncrement({
+        value: threshold,
+        increment: String(state.priceTickSize ?? 0),
+        direction: "down",
+      }),
     })
 
-    if (threshold <= 0) {
+    if (compareDecimal({ left: threshold, right: "0" }) <= 0) {
       this.#pause(symbol, "Next BUY price is not positive")
       return
     }
@@ -922,13 +986,30 @@ export class FreeRollBot {
     const order = state.sellOrder
     if (!order || state.paused) return
 
+    const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
+      this.#pause(
+        symbol,
+        `SELL ${order.id} is FILLED but actual fills total ${filledQuantity}, expected ${order.quantity}`,
+      )
+      return
+    }
+
     state.sellOrder = null
     state.sellFills += 1
-    this.#recordSellFill(state, order, order.quantity)
+
+    if (compareDecimal({
+      left: state.activeQuantity,
+      right: String(state.settings.keepQuantity),
+    }) < 0) {
+      this.#pause(symbol, "Completed sale consumed the configured keep quantity")
+      this.#publishTradingSummary({ symbol, reason: "sell_filled_below_keep_quantity" })
+      return
+    }
 
     const required = addDecimal({
       left: state.cycleCost,
-      right: String(this.settings.minProfit),
+      right: this.settings.minProfit,
     })
 
     this.#debug(`[${symbol}] SELL filled; checking recovery`, {
@@ -951,10 +1032,15 @@ export class FreeRollBot {
         right: state.cycleCost,
       }),
     })
-    state.freeQuantity += Math.max(0, state.activeQuantity)
-    state.activeQuantity = 0
+    state.freeQuantity = addDecimal({
+      left: state.freeQuantity,
+      right: maxDecimal({ left: "0", right: state.activeQuantity }),
+    })
+    state.activeQuantity = "0"
     state.cycleCost = "0"
     state.saleProceeds = "0"
+    state.actualCommissionRate = "0"
+    state.feeRate = state.configuredFeeRate
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
@@ -964,30 +1050,154 @@ export class FreeRollBot {
     this.#publishTradingSummary({ symbol, reason: "profitable_cycle_completed" })
   }
 
-  #recordSellFill(state, order, quantity) {
-    const accounting = estimateSellAccounting({
-      quantity,
-      price: order.price,
-      feeRate: state.feeRate,
+  #applyExecutionFill({ symbol, fill }) {
+    const state = this.#states.get(symbol)
+    if (!state || !fill || typeof fill !== "object") return false
+
+    const fillId = String(fill.id ?? "")
+    const orderId = String(fill.orderId ?? "")
+    if (!fillId || fillId === "-1" || fillId === "undefined" ||
+        !orderId || orderId === "undefined") {
+      this.#pause(symbol, "Execution fill is missing a stable trade or order ID")
+      return false
+    }
+    if (state.processedTradeIds.has(fillId)) return true
+
+    state.processedTradeIds.add(fillId)
+    state.fills.set(fillId, { ...fill })
+    state.fillsByOrder.set(orderId, (state.fillsByOrder.get(orderId) ?? 0) + 1)
+    this.#publish("fill.received", {
+      symbol,
+      fill: { ...fill },
     })
 
-    state.activeQuantity = Math.max(
-      0,
-      state.activeQuantity - accounting.estimatedBaseDeduction,
+    const commissionAmount = String(fill.commissionAmount ?? "")
+    const commissionAsset = fill.commissionAsset ?? null
+    if (commissionAmount && compareDecimal({ left: commissionAmount, right: "0" }) > 0) {
+      const asset = commissionAsset ?? "UNKNOWN"
+      state.commissionTotals.set(
+        asset,
+        addDecimal({
+          left: state.commissionTotals.get(asset) ?? "0",
+          right: commissionAmount,
+        }),
+      )
+    }
+
+    if (typeof fill.isMaker !== "boolean") {
+      this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
+      return false
+    }
+    if (state.orderType === "LIMIT_MAKER" && !fill.isMaker) {
+      this.#pause(symbol, `LIMIT_MAKER order produced a taker fill for trade ${fillId}`)
+      return false
+    }
+
+    let accounting
+    let actualCommissionRate
+    try {
+      accounting = calculateFillAccountingExact({
+        side: fill.side,
+        quantity: String(fill.quantity ?? ""),
+        quoteQuantity: String(fill.quoteQuantity ?? ""),
+        commissionAmount,
+        commissionAsset,
+        baseAsset: state.baseAsset,
+        quoteAsset: state.quoteAsset,
+      })
+      actualCommissionRate = calculateCommissionRateExact({
+        price: String(fill.price ?? ""),
+        quoteQuantity: String(fill.quoteQuantity ?? ""),
+        commissionAmount,
+        commissionAsset,
+        baseAsset: state.baseAsset,
+        quoteAsset: state.quoteAsset,
+      })
+    } catch (error) {
+      this.#pause(symbol, `Unsupported or incomplete commission/fill data for trade ${fillId}`, error)
+      return false
+    }
+
+    state.actualCommissionRate = maxDecimal({
+      left: state.actualCommissionRate,
+      right: actualCommissionRate,
+    })
+    state.feeRate = maxDecimal({
+      left: state.configuredFeeRate,
+      right: state.actualCommissionRate,
+    })
+
+    if (fill.side === "BUY") {
+      state.activeQuantity = addDecimal({
+        left: state.activeQuantity,
+        right: accounting.baseQuantity,
+      })
+      state.cycleCost = addDecimal({
+        left: state.cycleCost,
+        right: accounting.quoteQuantity,
+      })
+    } else if (fill.side === "SELL") {
+      if (compareDecimal({ left: state.activeQuantity, right: accounting.baseQuantity }) < 0) {
+        this.#pause(symbol, `SELL fill ${fillId} consumes more base inventory than the strategy owns`)
+        return false
+      }
+      state.activeQuantity = subtractDecimal({
+        left: state.activeQuantity,
+        right: accounting.baseQuantity,
+      })
+      state.saleProceeds = addDecimal({
+        left: state.saleProceeds,
+        right: accounting.quoteQuantity,
+      })
+    } else {
+      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
+      return false
+    }
+
+    state.filledQuantityByOrder.set(
+      orderId,
+      addDecimal({
+        left: state.filledQuantityByOrder.get(orderId) ?? "0",
+        right: String(fill.quantity),
+      }),
     )
 
-    state.saleProceeds = addDecimal({
-      left: state.saleProceeds,
-      right: accounting.estimatedProceeds,
-    })
-
-    this.#debug("SELL fill accounted", {
-      quantity,
-      price: order.price,
+    this.#debug(`[${symbol}] Actual fill accounted`, {
+      fill,
       accounting,
       activeQuantity: state.activeQuantity,
+      cycleCost: state.cycleCost,
       saleProceeds: state.saleProceeds,
+      commissionTotals: Object.fromEntries(state.commissionTotals),
     })
+    return true
+  }
+
+  async #reconcileOrderFills({ symbol, order }) {
+    if (typeof this.broker.getMyTrades !== "function") {
+      throw new Error("Broker does not support required getMyTrades() fill reconciliation")
+    }
+
+    const fills = unwrapResult(
+      await this.broker.getMyTrades({ symbol, orderId: order.id }),
+      `getMyTrades(${symbol}, ${order.id})`,
+    )
+    if (!Array.isArray(fills)) {
+      throw new Error("getMyTrades must return an array of canonical fills")
+    }
+
+    for (const fill of fills) {
+      if (String(fill?.orderId) !== String(order.id) ||
+          fill?.symbol !== symbol ||
+          fill?.side !== order.side) {
+        throw new Error(`Trade history returned a fill outside order ${order.id}`)
+      }
+      if (!this.#applyExecutionFill({ symbol, fill })) {
+        throw new Error(`Could not account trade fill ${fill?.id ?? "unknown"}`)
+      }
+    }
+
+    return fills.length
   }
 
   #pause(symbol, message, error) {

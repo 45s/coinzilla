@@ -63,3 +63,25 @@ test("createOrder omits Binance client order ID when it is not provided", async 
   assert.equal("clientOrderId" in received, false)
   assert.equal(result.data.clientOrderId, "binance-generated-id")
 })
+
+
+test("createOrder omits timeInForce for LIMIT_MAKER post-only orders", async () => {
+  let received
+  const broker = createBroker(async (params) => {
+    received = params
+    return { data: { ...exchangeOrder, type: "LIMIT_MAKER" } }
+  })
+
+  const result = await broker.createOrder({
+    symbol: "DOGEFDUSD",
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    timeInForce: "GTC",
+    price: "0.05",
+    quantity: "100",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(received.type, "LIMIT_MAKER")
+  assert.equal("timeInForce" in received, false)
+})

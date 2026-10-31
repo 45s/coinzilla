@@ -19,12 +19,13 @@ describe("adaptUser.executionReport", () => {
       orderRejectReason: "NONE", orderId: 77, orderTime: 11,
       lastTradeQuantity: "0.5", totalTradeQuantity: "1.5", priceLastTrade: "99",
       commission: "0.01", commissionAsset: "BNB", tradeId: 9, isOrderWorking: true,
-      isBuyerMaker: false, creationTime: 8, totalQuoteTradeQuantity: "148.5",
+      isMaker: false, creationTime: 8, totalQuoteTradeQuantity: "148.5",
       orderListId: -1, quoteOrderQuantity: "2.5", lastQuoteTransacted: "49.5",
       trailingTime: 7,
     })
   })
 })
+
 it("preserves zero fill and commission values", () => {
   const result = adaptUser.executionReport({
     E: 0, s: "BTCUSDT", c: "client", C: "", S: "BUY", o: "LIMIT",
@@ -36,5 +37,5 @@ it("preserves zero fill and commission values", () => {
   assert.equal(result.totalTradeQuantity, "0")
   assert.equal(result.commission, "0")
   assert.equal(result.commissionAsset, null)
-  assert.equal(result.isBuyerMaker, false)
+  assert.equal(result.isMaker, false)
 })

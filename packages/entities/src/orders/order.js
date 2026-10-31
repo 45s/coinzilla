@@ -1,7 +1,7 @@
 import { capitalize, Validator } from "@coinzilla/utils"
 import { errMsgs } from "./err-msgs.js"
 
-const supportedTypes = ["LIMIT", "MARKET"]
+const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
 
 export class Order {
   #id

@@ -44,6 +44,19 @@ describe('adaptOrder', () => {
     assert.equal('clientOrderId' in result.value, false)
   })
 
+  it('preserves exact original/executed quantities and order status', () => {
+    const result = adaptOrder({
+      ...mockedBinanceOrder,
+      origQty: '0.30000000',
+      executedQty: '0.10000000',
+      status: 'PARTIALLY_FILLED',
+    })
+
+    assert.equal(result.originalQuantity, '0.30000000')
+    assert.equal(result.executedQuantity, '0.10000000')
+    assert.equal(result.status, 'PARTIALLY_FILLED')
+  })
+
   it('subtracts executed quantity from original quantity for a partial fill', () => {
     const result = adaptOrder({
       ...mockedBinanceOrder,

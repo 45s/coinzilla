@@ -1,7 +1,7 @@
 import { Spot } from "@binance/spot"
 import { handleErr, isProdMode, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptOrder, adaptSpotAsset } from "../shared/index.js"
+import { adaptOrder, adaptSpotAsset, adaptTrade } from "../shared/index.js"
 import { adaptMsg } from "../websocket-stream/index.js"
 
 export class BinanceSdkBroker extends CoreBroker {
@@ -59,18 +59,32 @@ export class BinanceSdkBroker extends CoreBroker {
       const lotSizeFilter = symbolInfo?.filters?.find(
         (filter) => filter.filterType === "LOT_SIZE",
       )
-      const tickSize = Number(priceFilter?.tickSize)
-      const stepSize = Number(lotSizeFilter?.stepSize)
+      const tickSize = priceFilter?.tickSize
+      const stepSize = lotSizeFilter?.stepSize
 
-      if (!Number.isFinite(tickSize) || tickSize <= 0) {
+      if (!tickSize || Number(tickSize) <= 0) {
         throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
       }
 
-      if (!Number.isFinite(stepSize) || stepSize <= 0) {
+      if (!stepSize || Number(stepSize) <= 0) {
         throw new Error(`Binance LOT_SIZE stepSize missing for ${symbol}`)
       }
 
-      return toResult({ data: { symbol, tickSize, stepSize } })
+      if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
+          !Array.isArray(symbolInfo?.orderTypes) || symbolInfo.orderTypes.length === 0) {
+        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
+      }
+
+      return toResult({
+        data: {
+          symbol,
+          baseAsset: symbolInfo.baseAsset,
+          quoteAsset: symbolInfo.quoteAsset,
+          tickSize: String(tickSize),
+          stepSize: String(stepSize),
+          supportedOrderTypes: symbolInfo.orderTypes,
+        },
+      })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
       return toResult({ errors: [error] })
@@ -163,7 +177,7 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getMyTrades({ symbol, orderId, limit = 100 } = {}) {
+  async getMyTrades({ symbol, orderId, limit = 1000 } = {}) {
     try {
       if (!symbol) throw new Error("getMyTrades requires symbol")
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
@@ -174,7 +188,7 @@ export class BinanceSdkBroker extends CoreBroker {
       if (orderId !== undefined && orderId !== null) params.orderId = orderId
 
       const response = await this.tradingConnection.myTrades(params)
-      return toResult({ data: response.data })
+      return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
       return toResult({ errors: [error] })
@@ -184,13 +198,20 @@ export class BinanceSdkBroker extends CoreBroker {
   async createOrder(input) {
     try {
       const { clientOrderId, ...orderInput } = input
-      const response = await this.tradingConnection.orderPlace({
+      const params = {
         ...orderInput,
         ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
         side: input.side ?? "BUY",
         type: input.type ?? "LIMIT",
-        timeInForce: input.timeInForce ?? "GTC",
-      })
+      }
+
+      if (params.type === "LIMIT_MAKER") {
+        delete params.timeInForce
+      } else {
+        params.timeInForce = input.timeInForce ?? "GTC"
+      }
+
+      const response = await this.tradingConnection.orderPlace(params)
       return toResult({
         data: adaptOrder(response.data),
       })
