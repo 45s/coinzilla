@@ -54,6 +54,7 @@ test("approves a profitable sell and returns an exact calculation breakdown", ()
 
 test("values base-asset fees using the supplied base-to-quote valuation", () => {
   const input = baseInput()
+  input.position.keepQuantity = "0.9"
   input.feeAssumptions = [{ asset: "DOGE", rate: "0.001" }]
 
   const decision = evaluateSellProfitability(input)
@@ -127,7 +128,8 @@ test("rejects invalid exchange increments and minimum notional", () => {
 
 test("rejects fees that exceed proceeds", () => {
   const input = baseInput()
-  input.feeAssumptions = [{ asset: "USDT", rate: "0.99" }]
+  input.valuationData.baseToQuoteRate = "2"
+  input.feeAssumptions = [{ asset: "DOGE", rate: "0.9" }]
 
   const decision = evaluateSellProfitability(input)
 
