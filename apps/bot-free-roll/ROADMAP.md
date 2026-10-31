@@ -324,6 +324,8 @@ Implementation in progress: the current PR adds canonical exact-string fills fro
 
 ### Stage 6 — Reconciliation and restart recovery (FR-057–FR-066)
 
+- [~] **FR-057A — Recover after user-data interruption (issue #304).** Gate order mutations on broker recovery status; reconcile exact account balances, open orders, tracked order status, and fill history; buffer/replay events before acknowledging recovery. This establishes a live recovery baseline only; durable ledger reconciliation remains FR-058–FR-066.
+
 - [ ] **FR-057 — Define reconciliation snapshot contract.** Collect balances, open orders, order history, fills/trades, and server time/cursors through broker ports. Acceptance: snapshot carries source timestamps and completeness markers.
 - [ ] **FR-058 — Reconcile open orders against local orders.** Detect missing, unexpected, duplicate, changed, and terminal orders. Acceptance: discrepancies block the affected pair.
 - [ ] **FR-059 — Reconcile local fills against exchange trade history.** Backfill missed events and detect unknown fills. Acceptance: replay is idempotent and reports unresolved history windows.
