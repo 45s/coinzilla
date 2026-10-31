@@ -441,7 +441,12 @@ export class BinanceUserDataSession {
           client = this.createClient()
           this.setClient(client)
           this.#bindClient(client)
-          await client.connect()
+          try {
+            await client.connect()
+          } catch (error) {
+            if (this.getClient() === client) this.#detachClientListeners()
+            throw error
+          }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
               this.getClient() !== client) {
             await client.disconnect()
