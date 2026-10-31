@@ -54,6 +54,9 @@ jobs:
 
           exit "$test_status"
 
+      - name: Enforce Notifiers package coverage thresholds
+        run: pnpm --filter @coinzilla/notifiers test:coverage
+
       - name: Enforce Event Bus package coverage thresholds
         run: pnpm --filter @coinzilla/event-bus test:coverage
 
