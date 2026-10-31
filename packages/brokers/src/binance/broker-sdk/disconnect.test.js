@@ -1,62 +1,49 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "./broker.js"
+import { createFakeRpcClient, createFakeStreamsClient } from "./test-helpers/fake-broker-clients.js"
 
 function createBroker() {
-  return new BinanceSdkBroker({
+  const rpc = createFakeRpcClient()
+  const streams = createFakeStreamsClient()
+  const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, debug() {}, warn() {} },
+  }, {
+    apiClientFactory: () => rpc,
+    marketClientFactory: () => streams,
   })
+  return { broker, rpc, streams }
 }
 
 describe("BinanceSdkBroker.disconnect", () => {
-  it("disconnects both connections and clears references", async () => {
-    const broker = createBroker()
-    let tradingDisconnected = false
-    let marketDisconnected = false
-    broker.tradingConnection = {
-      disconnect: async () => { tradingDisconnected = true },
-    }
-    broker.marketConnection = {
-      disconnect: async () => { marketDisconnected = true },
-    }
-
+  it("disconnects both native clients and is idempotent", async () => {
+    const { broker, rpc, streams } = createBroker()
+    await broker.connect()
     await broker.disconnect()
+    await broker.disconnect()
+    assert.equal(rpc.state, "closed")
+    assert.equal(broker.connected, false)
+    assert.equal(streams.listenerCount, 0)
+  })
 
-    assert.equal(tradingDisconnected, true)
+  it("attempts both disconnects and logs failures without masking shutdown", async () => {
+    const { broker, rpc } = createBroker()
+    let marketDisconnected = false
+    broker.marketConnection.disconnect = () => {
+      marketDisconnected = true
+      throw new Error("market close failed")
+    }
+    await broker.connect()
+    await assert.doesNotReject(() => broker.disconnect())
+    assert.equal(rpc.state, "closed")
     assert.equal(marketDisconnected, true)
-    assert.equal(broker.tradingConnection, null)
-    assert.equal(broker.marketConnection, null)
   })
 
-  it("clears connections even when a disconnect rejects", async () => {
-    const broker = createBroker()
-    broker.tradingConnection = {
-      disconnect: async () => { throw new Error("socket closed unexpectedly") },
-    }
-    broker.marketConnection = {
-      disconnect: async () => {},
-    }
-
+  it("is safe to call before connect", async () => {
+    const { broker } = createBroker()
     await assert.doesNotReject(() => broker.disconnect())
-    assert.equal(broker.tradingConnection, null)
-    assert.equal(broker.marketConnection, null)
+    assert.equal(broker.connected, false)
   })
-
-  it("is safe to call when no connections are established", async () => {
-    const broker = createBroker()
-    await assert.doesNotReject(() => broker.disconnect())
-    assert.equal(broker.tradingConnection, null)
-    assert.equal(broker.marketConnection, null)
-  })
-})
-
-it("clears both connections when both disconnect operations reject", async () => {
-  const broker = createBroker()
-  broker.tradingConnection = { disconnect: async () => { throw new Error("trading close failed") } }
-  broker.marketConnection = { disconnect: async () => { throw new Error("market close failed") } }
-  await assert.doesNotReject(() => broker.disconnect())
-  assert.equal(broker.tradingConnection, null)
-  assert.equal(broker.marketConnection, null)
 })

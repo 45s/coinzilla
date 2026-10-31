@@ -56,22 +56,22 @@ The migration is complete only when all of the following are true:
 ### Overall status
 
 - [x] Phase 0 — contract and dependency inventory.
-- [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
+- [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 merged into `migration/binance-native-ws`.
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
-- [ ] Phase 4 — public WebSocket Streams client (active phase; implementation on `migration/binance-phase-4-streams`).
-- [ ] Phase 5 — rebuild the broker on native clients.
+- [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
+- [ ] Phase 5 — rebuild the broker on native clients (active on `migration/binance-phase-5-broker`).
 - [ ] Phase 6 — user-data session lifecycle and recovery.
 - [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
 - [ ] Phase 8 — operational hardening and completion.
 
 ### Next action
 
-1. Wait for explicit merge approval for PR #265; do not merge automatically.
-2. After merge, record the merge SHA and mark Phase 4 complete.
-3. Recheck `main` immediately before Phase 5. Merge/sync only if broker/API/consumer-contract changes have landed; preserve bot-only app changes.
-4. Begin Phase 5 by adding native method wrappers using the compatibility matrix above, integrating `adaptPublicStreamMessage` at the callback boundary, and rebuilding `BinanceSdkBroker` without touching `apps/`.
-5. Keep authenticated user-data subscription/session work in Phase 6; do not reintroduce the legacy REST listen-key path.
+1. Wait for explicit merge approval for PR #271; do not merge automatically.
+2. After merge, record the merge SHA and mark Phase 5 complete.
+3. Recheck latest `main` before Phase 6; sync only if broker/API/consumer-contract/runtime/dependency changes have landed. Preserve bot-only app changes.
+4. Begin Phase 6: implement user-data session termination detection, reconnect/resubscription without duplicate callbacks, event ordering/deduplication, gap handling, and reconciliation.
+5. Keep HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -286,22 +286,18 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 4 — Public WebSocket Streams client
 
-**Status: Phase 4 implementation and deterministic tests are complete. PR #265 is open and all four workflows pass on its exact head; awaiting explicit merge approval.**
+**Status: Complete. PR #265 merged into `migration/binance-native-ws` at merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`.**
 
-- [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
-- [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
-- [x] Keep the existing exported `BinanceStreamClient` and its stream methods untouched during this phase; implement method wrappers during Phase 5, not by promoting the legacy socket/REST listen-key path.
-- [x] Use Binance's combined `/stream?streams=...` endpoint so each event retains its exact stream name; verify URL-provided initial subscriptions with `LIST_SUBSCRIPTIONS`, then use acknowledged SUBSCRIBE/UNSUBSCRIBE commands for dynamic changes. Keep raw-envelope parsing as a defensive protocol path.
-- [x] Validate stream names and method parameters (symbol, interval, rolling window, depth levels, update speed) before sending; rolling-window streams are limited to Binance's supported 1h and 4h windows.
-- [x] Correlate SUBSCRIBE/UNSUBSCRIBE acknowledgements by request ID; validate LIST_SUBSCRIPTIONS results; normalize API errors and reject pending operations on timeout, socket failure, or disconnect.
-- [x] Track desired subscriptions separately from active subscriptions. Multiple callers subscribing to the same stream must not create duplicate server subscriptions; unsubscribe only when the final local listener is removed.
-- [x] Bound control-message sends to 4 messages/second to leave headroom for automatic protocol pong frames.
-- [x] Enforce the 1024-stream-per-connection limit and batch subscription setup.
-- [x] Reconnect with bounded backoff, create a fresh one-lifecycle transport, and restore desired subscriptions exactly once; never replay unrelated RPC/order operations.
-- [x] Handle `serverShutdown` and rotate before the 24-hour connection lifetime.
-- [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
-- [x] Audit/reuse the existing public aggregate-trade adapter through `adaptPublicStreamMessage`; other public market-data events pass through unchanged, while authenticated user-data events are rejected at this boundary.
-- **Exact-head CI evidence:** PR #265 head `39095bf7bac4724ec7380cbc112ee30b2902a40b` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
+- [x] Implemented the native public Streams client on `NativeWebSocketTransport`; the broken legacy `WS.js` class was not extended.
+- [x] Kept public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
+- [x] Preserved the existing exported `BinanceStreamClient` and its method surface for the later compatibility migration.
+- [x] Implemented combined `/stream?streams=...` setup, initial `LIST_SUBSCRIPTIONS` verification, acknowledged SUBSCRIBE/UNSUBSCRIBE operations, and defensive raw-envelope parsing.
+- [x] Validated stream names and parameters; rolling-window ticker streams are restricted to Binance-supported 1h and 4h windows.
+- [x] Added acknowledgement correlation, API error normalization, timeout/socket-failure handling, duplicate-listener management, 4-message/second control pacing, 1,024-stream limit, batching, reconnect/resubscribe, server-shutdown handling, pre-24-hour rotation, and idempotent cleanup.
+- [x] Added a public-only adapter boundary: aggregate trades are adapted, other public market-data events pass through, and authenticated user-data events are rejected.
+- [x] Added deterministic tests for the stream protocol, client lifecycle, failure paths, and adapter boundary.
+- **Exact-head CI evidence:** PR #265 head `ce9bb384b7e9ea754e9f2b558ca56f7a180d760d` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
+
 **Legacy method-to-stream compatibility matrix** (the old exported methods remain untouched until Phase 5):
 
 | Legacy method | Required parameters | Native stream mapping |
@@ -316,28 +312,43 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 | `diffBookDepth({ symbol, speed })` | Symbol, speed `100ms/1000ms` | `{symbol}@depth@{speed}` |
 | `aggTrade({ tickets })` | First ticket/symbol | `{symbol}@aggTrade` |
 
-`userData()` is intentionally excluded: its current REST listen-key lifecycle is legacy behavior and the replacement belongs to Phase 6 on the authenticated WebSocket API connection.
+`userData()` is intentionally excluded: its old REST listen-key lifecycle is legacy behavior and the replacement belongs to Phase 6 on the authenticated WebSocket API connection.
 
-- **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. Adapter-boundary tests and exact-head CI must pass before Phase 4 is complete. No live credentials/network calls in unit tests.
+**Exit criteria:** all Phase 4 implementation and deterministic test criteria were met on the exact CI-verified PR head. No live credentials or network calls are used by default unit tests.
 
 ### Phase 5 — Rebuild the broker on native clients
 
-- [ ] Replace `BinanceSdkBroker` internals with native WebSocket API and Streams clients while preserving public methods and result shapes.
-- [ ] Implement order placement/cancellation/query, open orders, account status, order history, and trade history through WebSocket API operations.
-- [ ] Move `getSymbolFilters()` from REST to WebSocket API `exchangeInfo`; preserve validated `tickSize`/`stepSize` string output and error behavior.
-- [ ] Preserve `subscribeForPrices()` and `subscribeForUserData()` consumer contracts, including normalized event payloads.
-- [ ] Make `connect()` failure-safe if either required connection fails.
-- [ ] Make `disconnect()` idempotent and ensure all resources are released.
-- [ ] Keep order mutation uncertainty visible; never retry blindly after connection loss.
-- [ ] Re-run the read-only consumer contract audit against latest `main`.
-- **Exit criteria:** broker contract tests pass against native clients; supported broker path requires no REST request; consumer-facing behavior is preserved.
+**Status: Implementation and deterministic tests complete. PR #271 is open; all four required CI workflows pass on exact head `88f56339d7f6ede226776574c0fdadce2037f0f9`. Awaiting explicit merge approval.**
+
+- [x] Replace the SDK-backed `BinanceSdkBroker` internals with the native WebSocket API RPC client and native public Streams client; preserve the public broker/config export names.
+- [x] Map broker request methods to native RPC methods: `account.status`, `openOrders.status`, `order.status`, `allOrders`, `myTrades`, `order.place`, `order.cancel`, `openOrders.cancelAll`, `ticker.price`, and `exchangeInfo`.
+- [x] Move `getSymbolFilters()` from REST `fetch()` to WebSocket API `exchangeInfo`; preserve validated exact `tickSize`/`stepSize` strings.
+- [x] Use the native Streams client for aggregate-trade price subscriptions and preserve the adapted price callback payload.
+- [x] Route `userDataStream.subscribe.signature` through the WebSocket API connection with HMAC signing, and expose a lifecycle handle that sends `userDataStream.unsubscribe` before removing local observers; reconnect/recovery remains Phase 6.
+- [x] Preserve order/fill normalization, client order ID mapping, order defaults, result wrappers, and exact fill decimal strings.
+- [x] Mark order placement, cancellation, and cancel-all as state-changing RPC operations so uncertain outcomes are surfaced and never blindly replayed.
+- [x] Remove direct `@binance/spot` imports from the broker implementation and config defaults; use explicit official production/testnet WebSocket endpoints.
+- [x] Verify failure-safe startup cleanup, partial-shutdown cleanup, idempotent disconnect, and callback/resource cleanup with deterministic tests; exact-head CI remains the verification gate.
+- [x] Complete the full broker contract and regression suite on the native client interfaces; Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit all pass on the exact PR head.
+- [x] Re-audit current consumers read-only against latest `main`; no bot application files were changed.
+**Read-only consumer contract audit (main `49c5aba675e71490123181d757641376be35c78a`):**
+
+- `apps/bot-free-roll/src/prepare-broker.js` constructs `BinanceSdkConfig` and `BinanceSdkBroker`, calls `connect()`, and calls `disconnect()` on startup failure. Constructor and lifecycle remain compatible.
+- `bot-free-roll.js` expects `subscribeForUserData()` to return a lifecycle handle with `disconnect()`, and each `subscribeForPrices()` result to expose `unsubscribe()`. The native broker returns both expected cleanup methods.
+- The bot consumes `getSymbolFilters()` as decimal strings and converts them to numbers itself; exact string outputs are preserved.
+- Fill reconciliation expects `getMyTrades()` to return an array of canonical fills. `adaptTrade` remains the normalizer.
+- Order execution consumes `createOrder()`/`cancelOrder()` results with IDs, status, and original/executed quantities. `adaptOrder` remains the normalizer.
+- No `apps/` changes are included in this PR. User-data remote unsubscribe and reconnect recovery remain Phase 6.
+
+- **Exact-head CI evidence:** PR #271 head `88f56339d7f6ede226776574c0fdadce2037f0f9` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit.
+- **Exit criteria:** every supported broker method uses native WebSocket clients; the supported broker path performs no REST requests; deterministic broker contract/failure tests and exact-head CI pass; consumer-facing behavior remains compatible.
 
 ### Phase 6 — User-data session lifecycle and recovery
 
 - [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
 - [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Do not carry forward the legacy REST listen-key timer.
-- [ ] Handle subscription failure, session expiration, disconnect, reconnect, and resubscription explicitly.
+- [ ] Handle subscription failure, session expiration, disconnect, reconnect, and resubscription explicitly (including recovery after a remote unsubscribe failure).
 - [ ] Define event ordering/deduplication expectations; ensure reconnect does not register duplicate callbacks.
 - [ ] Test execution reports, account updates, duplicate events, gaps, and recovery.
 - [ ] Document which state cannot be recovered from the stream alone and which WebSocket API queries support reconciliation.
@@ -537,9 +548,11 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed before Phase 4 PR validation:** `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`.
-- Compared the 6 new commits since reviewed main SHA `01cf72ca3baa1e838034abed0f57030959406ef5`. All changed files are confined to `apps/bot-free-roll` (bot implementation, order-execution module/tests, and bot roadmap); no broker package, export, API, dependency/lockfile, runtime, or consumer-contract changes were found. Preserve this bot-team work and do not merge unrelated app changes into the integration branch.
-- Recheck latest main before Phase 4 merge and immediately if a broker/API/consumer-contract change lands.
+- **Main SHA reviewed during Phase 5:** `c6f9020eedf335dfd7c039da5cb749f532b2caea`.
+- Compared the 6 new commits since `9aa0c0213548be9d849dcd6fae2f89ea1b856245`. They modify only `packages/event-bus` and a `packages/journal` test; no broker package, Binance API, broker exports, runtime, broker dependency/lockfile, or broker consumer-contract changes were found. These event-bus/journal changes are outside this broker migration; leave them on `main`.
+- Across the 21 commits since `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`, the other changes remain confined to `apps/bot-free-roll` and its coverage work. No broker/API/consumer-contract synchronization trigger has occurred.
+- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only unrelated work is intentionally not synchronized.
+- Recheck latest `main` before Phase 5 merge and immediately after any significant broker/API/consumer-contract change.
 
 ---
 
