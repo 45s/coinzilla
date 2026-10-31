@@ -443,3 +443,30 @@ test("fails closed when supplied accounting contains malformed decimal values", 
   assert.match(result.reason, /Market fill accounting is invalid/)
   assert.match(result.reason, /Decimal value has an invalid format/)
 })
+
+test("covers malformed ledger and supplied accounting shape boundaries", () => {
+  assert.equal(
+    applyMarketInventoryFill({
+      ledger: "not-a-ledger",
+      fill: createFill(),
+    }).ok,
+    false,
+  )
+
+  const ledger = createLedger()
+  const invalidAccounting = [
+    { baseQuantity: 1, quoteQuantity: "20" },
+    { baseQuantity: "10", quoteQuantity: 20 },
+    { baseQuantity: "10", quoteQuantity: "0" },
+  ]
+
+  for (const accounting of invalidAccounting) {
+    const result = applyMarketInventoryFill({
+      ledger,
+      fill: createFill(),
+      accounting,
+    })
+    assert.equal(result.ok, false)
+    assert.match(result.reason, /Market fill accounting is invalid/)
+  }
+})
