@@ -54,10 +54,7 @@ export class BinanceSdkBroker extends CoreBroker {
       this.logger.info?.("Binance native WebSocket clients connected")
     } catch (error) {
       this.connected = false
-      await Promise.allSettled([
-        this.tradingConnection.disconnect(),
-        this.marketConnection.disconnect(),
-      ])
+      await this.tradingConnection.disconnect()
       handleErr({ where: "BinanceSdkBroker.connect()", error })
       throw error
     }
@@ -71,10 +68,10 @@ export class BinanceSdkBroker extends CoreBroker {
     ])
     this.logger.info?.("Binance native WebSocket clients disconnected")
 
-    const failure = results.find((result) => result.status === "rejected")
-    if (failure) {
-      handleErr({ where: "BinanceSdkBroker.disconnect()", error: failure.reason })
-      throw failure.reason
+    for (const result of results) {
+      if (result.status === "rejected") {
+        handleErr({ where: "BinanceSdkBroker.disconnect()", error: result.reason })
+      }
     }
   }
 
@@ -266,6 +263,7 @@ export class BinanceSdkBroker extends CoreBroker {
     let stream
     try {
       validateCallback(onPrice, "onPrice")
+      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to prices")
       stream = createStreamName("aggTrade", { symbol })
       const listener = (message) => onPrice(adaptPublicStreamMessage(message))
       await this.marketConnection.subscribe(stream, listener)
@@ -287,6 +285,7 @@ export class BinanceSdkBroker extends CoreBroker {
     let removeErrorListener
     try {
       validateCallback(onEvent, "onEvent")
+      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
       removeListener = this.tradingConnection.onEvent((message) => {
         const event = message?.event && typeof message.event === "object"
           ? message.event
