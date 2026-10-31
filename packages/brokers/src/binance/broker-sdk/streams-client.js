@@ -163,7 +163,7 @@ export class BinanceStreamsClient {
   }
 
   async unsubscribe(streamNames, listener) {
-    const streams = (Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName)
+    const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) throw new TypeError("At least one stream is required")
     if (listener !== undefined && typeof listener !== "function") {
       throw new TypeError("listener must be a function when provided")
