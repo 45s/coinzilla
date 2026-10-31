@@ -70,7 +70,7 @@ The migration is complete only when all of the following are true:
 1. Finish Phase 5 broker contract coverage and lifecycle/failure tests on `migration/binance-phase-5-broker`.
 2. Verify every supported broker method uses the native RPC client; verify market-price subscriptions use the native Streams client and no REST request remains in the supported broker path.
 3. Keep the existing `BinanceSdkBroker` and `BinanceSdkConfig` public export names. Preserve exact decimal strings, normalized order/fill fields, result wrappers, and callback payloads.
-4. Keep the signature-based user-data subscription on the WebSocket API connection; Phase 6 will add full session recovery, remote unsubscribe, termination handling, and reconciliation behavior.
+4. Keep the signature-based user-data subscription on the WebSocket API connection; Phase 6 will add session recovery, termination handling, duplicate/gap management, and reconciliation behavior.
 5. Recheck `main` before opening the Phase 5 PR. Sync only if broker/API/consumer-contract/runtime/dependency changes have landed; preserve bot-only app changes.
 6. Run required CI on the exact PR head, update this roadmap from evidence, and wait for explicit merge approval.
 
@@ -324,7 +324,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Map broker request methods to native RPC methods: `account.status`, `openOrders.status`, `order.status`, `allOrders`, `myTrades`, `order.place`, `order.cancel`, `openOrders.cancelAll`, `ticker.price`, and `exchangeInfo`.
 - [x] Move `getSymbolFilters()` from REST `fetch()` to WebSocket API `exchangeInfo`; preserve validated exact `tickSize`/`stepSize` strings.
 - [x] Use the native Streams client for aggregate-trade price subscriptions and preserve the adapted price callback payload.
-- [x] Route the initial `userDataStream.subscribe.signature` request through the WebSocket API connection with HMAC signing; full lifecycle/recovery remains Phase 6.
+- [x] Route `userDataStream.subscribe.signature` through the WebSocket API connection with HMAC signing, and expose a lifecycle handle that sends `userDataStream.unsubscribe` before removing local observers; reconnect/recovery remains Phase 6.
 - [x] Preserve order/fill normalization, client order ID mapping, order defaults, result wrappers, and exact fill decimal strings.
 - [x] Mark order placement, cancellation, and cancel-all as state-changing RPC operations so uncertain outcomes are surfaced and never blindly replayed.
 - [x] Remove direct `@binance/spot` imports from the broker implementation and config defaults; use explicit official production/testnet WebSocket endpoints.
@@ -347,7 +347,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
 - [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Do not carry forward the legacy REST listen-key timer.
-- [ ] Handle subscription failure, session expiration, disconnect, reconnect, and resubscription explicitly.
+- [ ] Handle subscription failure, session expiration, disconnect, reconnect, and resubscription explicitly (including recovery after a remote unsubscribe failure).
 - [ ] Define event ordering/deduplication expectations; ensure reconnect does not register duplicate callbacks.
 - [ ] Test execution reports, account updates, duplicate events, gaps, and recovery.
 - [ ] Document which state cannot be recovered from the stream alone and which WebSocket API queries support reconciliation.
