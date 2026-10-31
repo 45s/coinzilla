@@ -75,6 +75,7 @@ export class BinanceSdkBroker extends CoreBroker {
       }
       await this.tradingConnection.connect()
       this.connected = true
+      this.userDataSession.onConnected()
       await this.userDataSession.resume()
       this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
