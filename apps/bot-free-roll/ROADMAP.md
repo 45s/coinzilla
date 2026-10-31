@@ -298,7 +298,7 @@ Implementation in progress: the current PR adds canonical exact-string fills fro
 
 ### Stage 4 — Ledger, cost basis, and free inventory (FR-037–FR-046)
 
-- [~] **FR-037 — Define immutable per-fill ledger entries.** The current implementation records frozen exact-decimal fill facts with stable trade/order IDs, rejects conflicting facts under a reused trade ID, and provides deterministic replay for one execution-accounting window. Broader cycle-boundary events, inventory-bucket derivation, and durable replay remain in FR-038–FR-046 and FR-062/FR-063. Mark complete only after the implementation PR is merged and validated.
+- [x] **FR-037 — Define immutable per-fill ledger entries.** Implemented in PR #334: immutable exact-decimal fill facts retain stable trade/order IDs; identical repeats are idempotent, conflicting facts fail closed, and deterministic replay reconstructs the execution-derived projection for one accounting window. Cycle-boundary events and inventory-bucket derivation remain in FR-038–FR-046; durable persistence and restart replay remain in FR-062/FR-063.
 - [ ] **FR-038 — Implement per-market inventory ledger.** Track base quantity and quote cash flows by asset, keeping external/unmanaged activity separate. Acceptance: no cross-pair or cross-asset mixing.
 - [ ] **FR-039 — Implement approved cost-basis allocation.** Use the explicitly approved method (initially likely weighted average) for buys, partial sells, and residual inventory. Acceptance: hand-calculated examples and conservation tests.
 - [ ] **FR-040 — Allocate quote-denominated buy/sell fees exactly once.** Prevent double counting between trade cost, fee expense, and realized proceeds. Acceptance: ledger balance identities hold.
