@@ -132,7 +132,7 @@ export class BinanceStreamsClient {
 
       try {
         if (this.#state !== "open") {
-          await this.#connect(false, desiredStreams)
+          await this.#connect(this.#reconnectAttempts > 0, desiredStreams)
         }
 
         const missingStreams = streams.filter((stream) => !this.#activeStreams.has(stream))
@@ -197,6 +197,7 @@ export class BinanceStreamsClient {
     const transport = this.#transport
     this.#transport = null
     this.#state = "closed"
+    this.#ready = false
     if (transport) await transport.close()
   }
 
