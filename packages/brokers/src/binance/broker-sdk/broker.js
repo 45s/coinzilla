@@ -324,6 +324,7 @@ export class BinanceSdkBroker extends CoreBroker {
             recoveryRequired: true,
           })
           this.logger.warn?.("Binance user-data subscription terminated", { subscriptionId })
+          if (!deduplicator.isDuplicate(message)) onEvent({ event })
           return
         }
 
