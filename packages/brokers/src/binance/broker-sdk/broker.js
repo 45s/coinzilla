@@ -1,14 +1,13 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptOrder, adaptSpotAsset, adaptTrade } from "../shared/index.js"
-import { adaptMsg } from "../websocket-stream/index.js"
 import { BinanceSdkConfig } from "./binance-sdk-config.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
 import { createStreamName } from "./streams-protocol.js"
 import { BinanceStreamsClient } from "./streams-client.js"
 import { NativeWebSocketTransport } from "./transport.js"
-import { createUserDataEventDeduplicator } from "./user-data-event-deduplicator.js"
+import { BinanceUserDataSession } from "./user-data-session.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -38,22 +37,42 @@ export class BinanceSdkBroker extends CoreBroker {
   constructor(input = {}, {
     apiClientFactory = createApiClient,
     marketClientFactory = createMarketClient,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
+    maxUserDataReconnectAttempts = 5,
   } = {}) {
     super(input)
 
     this.config = new BinanceSdkConfig(input)
+    this.apiClientFactory = apiClientFactory
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)
     this.connected = false
     this.disconnecting = false
     this.userDataUnavailable = false
+    this.userDataSession = new BinanceUserDataSession({
+      getClient: () => this.tradingConnection,
+      createClient: () => this.apiClientFactory(this.config),
+      setClient: (client) => { this.tradingConnection = client },
+      setConnected: (connected) => { this.connected = connected },
+      setUnavailable: (unavailable) => { this.userDataUnavailable = unavailable },
+      logger: this.logger,
+      reconnectDelay: this.config.reconnectDelay,
+      maxReconnectAttempts: maxUserDataReconnectAttempts,
+      setTimeoutFn,
+      clearTimeoutFn,
+    })
   }
 
   async connect() {
     this.disconnecting = false
+    this.userDataSession.start()
     if (this.connected && this.tradingConnection.state === "open") return
 
     try {
+      if (this.tradingConnection.state === "closed") {
+        this.tradingConnection = this.apiClientFactory(this.config)
+      }
       await this.tradingConnection.connect()
       this.connected = true
       this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
@@ -71,6 +90,7 @@ export class BinanceSdkBroker extends CoreBroker {
     this.disconnecting = true
     this.connected = false
     this.userDataUnavailable = true
+    await this.userDataSession.stop()
     const results = await Promise.allSettled([
       Promise.resolve().then(() => this.tradingConnection?.disconnect()),
       Promise.resolve().then(() => this.marketConnection?.disconnect()),
@@ -165,6 +185,9 @@ export class BinanceSdkBroker extends CoreBroker {
   async createOrder(input) {
     try {
       if (this.userDataUnavailable) {
+        throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
+      }
+      if (this.userDataUnavailable) {
         throw new Error("Cannot place a new Binance order while the user-data stream is unavailable")
       }
 
@@ -196,6 +219,9 @@ export class BinanceSdkBroker extends CoreBroker {
 
   async cancelOrder({ symbol, orderId }) {
     try {
+      if (this.userDataUnavailable) {
+        throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
+      }
       const response = await this.tradingConnection.request(
         "order.cancel",
         { symbol, orderId },
@@ -210,6 +236,9 @@ export class BinanceSdkBroker extends CoreBroker {
 
   async cancelAllOpenOrders({ symbol }) {
     try {
+      if (this.userDataUnavailable) {
+        throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
+      }
       const response = await this.tradingConnection.request(
         "openOrders.cancelAll",
         { symbol },
@@ -294,111 +323,11 @@ export class BinanceSdkBroker extends CoreBroker {
   }
 
   async subscribeForUserData({ onEvent, onStatus }) {
-    let removeListener
-    let removeErrorListener
-    let removeCloseListener
-    let subscriptionId = null
-    let disconnected = false
-    const deduplicator = createUserDataEventDeduplicator()
-
-    const reportStatus = (status) => {
-      if (typeof onStatus !== "function") return
-      try {
-        onStatus(status)
-      } catch (error) {
-        this.logger.error?.("Binance user-data status callback failed", error)
-      }
-    }
-
     try {
-      validateCallback(onEvent, "onEvent")
-      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
       if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
-
-      this.userDataUnavailable = true
-      removeListener = this.tradingConnection.onEvent((message) => {
-        if (disconnected || message?.subscriptionId !== subscriptionId) return
-
-        const event = message?.event && typeof message.event === "object"
-          ? message.event
-          : message
-
-        if (event.e === "eventStreamTerminated") {
-          this.userDataUnavailable = true
-          reportStatus({
-            type: "terminated",
-            subscriptionId,
-            eventTime: event.E ?? null,
-            recoveryRequired: true,
-          })
-          this.logger.warn?.("Binance user-data subscription terminated", { subscriptionId })
-          if (!deduplicator.isDuplicate(message)) onEvent({ event })
-          return
-        }
-
-        if (deduplicator.isDuplicate(message)) return
-        onEvent({ event: adaptMsg(event) })
-      })
-
-      removeErrorListener = this.tradingConnection.onError?.((error) => {
-        this.logger.error?.("Binance user data stream error", error)
-        reportStatus({ type: "rpcError", error, recoveryRequired: false })
-      })
-
-      removeCloseListener = this.tradingConnection.onClose?.((event) => {
-        if (disconnected || this.disconnecting) return
-        this.connected = false
-        this.userDataUnavailable = true
-        this.logger.error?.("Binance user-data API connection closed", {
-          code: event?.code ?? null,
-          reason: event?.reason ?? "",
-        })
-        reportStatus({
-          type: "connectionClosed",
-          code: event?.code ?? null,
-          reason: event?.reason ?? "",
-          recoveryRequired: true,
-        })
-      })
-
-      const response = await this.tradingConnection.request(
-        "userDataStream.subscribe.signature",
-        {},
-        { signed: true },
-      )
-      subscriptionId = response.data?.subscriptionId
-      if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
-        throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
-      }
-      this.userDataUnavailable = false
-
-      return toResult({
-        data: {
-          subscriptionId,
-          disconnect: async () => {
-            if (disconnected) return
-            disconnected = true
-            this.userDataUnavailable = true
-            try {
-              await this.tradingConnection.request(
-                "userDataStream.unsubscribe",
-                { subscriptionId },
-              )
-            } finally {
-              removeListener?.()
-              removeErrorListener?.()
-              removeCloseListener?.()
-              deduplicator.clear()
-            }
-          },
-        },
-      })
+      const result = await this.userDataSession.subscribe({ onEvent, onStatus })
+      return toResult(result)
     } catch (error) {
-      disconnected = true
-      removeListener?.()
-      removeErrorListener?.()
-      removeCloseListener?.()
-      deduplicator.clear()
       handleErr({ where: "BinanceSdkBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
