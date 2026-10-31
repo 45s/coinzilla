@@ -3,7 +3,7 @@
 **Application:** `apps/bot-free-roll`  
 **Status:** Active engineering plan — implementation not yet production-ready  
 **Principles:** SOLID · stable · simple · exchange-agnostic · test-first  
-**Last reviewed:** 2026-10-31  \n**Optional Grid migration:** [GRID-ROADMAP.md](./GRID-ROADMAP.md) and [GRID-README.md](./GRID-README.md) define a separate, opt-in BUY-cycle Grid initiative. The current roadmap and aggregated strategy remain authoritative for existing behavior; Grid changes must follow the isolated migration plan.
+**Last reviewed:** 2026-10-31
 
 > This roadmap is the long-term development contract for the Free-Roll application. Read it before planning, implementing, reviewing, or asking an AI agent to change this application. The roadmap is intentionally sequenced as small, independently reviewable PRs. It is a direction and acceptance plan, not a promise that every item must be implemented exactly as written: update it when repository evidence or an explicitly approved strategy decision requires a change.
 
@@ -487,6 +487,7 @@ Do not mark a roadmap item complete because code exists. Mark it complete only w
 - [x] Fail startup with a clear configuration error when only one Telegram credential is supplied.
 - [x] Subscribe only to curated order-fill, execution-fill, pair-pause, recovery, and bot lifecycle events.
 - [x] Flush accepted event-bus work and drain/unsubscribe Telegram before journal and event-bus shutdown.
+- [~] Clean up already-created Telegram, journal, broker, and event-bus resources when a later startup preparation stage fails; deterministic cleanup-order and failure-isolation tests added, pending PR validation.
 - [x] Add deterministic tests for disabled, incomplete, valid, and failing notifier setup.
 - [x] Add the helper to the application's coverage gate.
 - [ ] Configure real Telegram credentials in the deployment secret manager and perform a controlled test-chat smoke test.

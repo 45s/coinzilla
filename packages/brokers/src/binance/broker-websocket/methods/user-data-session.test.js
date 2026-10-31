@@ -1250,3 +1250,53 @@ describe("Binance user-data unsubscribe retry failure", () => {
     await broker.disconnect()
   })
 })
+
+
+describe("Binance user-data failed reconnect cleanup", () => {
+  it("detaches all session listeners when a replacement client's connect rejects", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: index * 100 + 10 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        const connect = client.connect
+        client.connect = async function connectClient() {
+          if (index === 1) throw new Error("replacement RPC connection failed")
+          return connect.call(this)
+        }
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+    await scheduler.runNext()
+
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].state, "idle")
+    assert.equal(clients[1].listenerCount, 0)
+    assert.equal(clients[1].errorListenerCount, 0)
+    assert.equal(clients[1].closeListenerCount, 0)
+    assert.equal(scheduler.pendingCount, 1)
+
+    await subscription.data.disconnect()
+    assert.equal(scheduler.pendingCount, 0)
+    await broker.disconnect()
+  })
+})

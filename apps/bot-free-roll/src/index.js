@@ -8,6 +8,7 @@ import { prepareJournal } from "./prepare-journal.js"
 import { prepareTelegramNotifications } from "./prepare-telegram-notifications.js"
 import { FreeRollBot } from "./bot/index.js"
 import { validateTradingConfig } from "./validate-config.js"
+import { cleanupStartupResources } from "./cleanup-startup-resources.js"
 
 const validatedTradingConfig = validateTradingConfig({ tradingConfig })
 
@@ -18,54 +19,80 @@ if (!validatedTradingConfig.ok) {
 }
 
 const eventBus = new EventBus({ logger })
-const telegramNotificationsResult = prepareTelegramNotifications({
-  eventBus,
-  logger,
-})
-
-if (!telegramNotificationsResult.ok) {
-  throw new Error("Failed to prepare Telegram notifications", {
-    cause: telegramNotificationsResult.errors,
-  })
-}
-
-const { data: telegramNotifications } = telegramNotificationsResult
-
-const journalResult = prepareJournal({
-  eventBus,
-  logger,
-  folderPath: "../../../logs_bot-free-roll",
-})
-
-if (!journalResult.ok) {
-  throw new Error("Failed to prepare journal", {
-    cause: journalResult.errors,
-  })
-}
-
-const { data: journal } = journalResult
-
+let telegramNotifications = null
+let journal = null
 let broker = null
+let bot = null
 
-if (tradingConfig.strategies["free-roll"].enabled !== false) {
-  const brokerResult = await prepareBroker()
+// Resource preparation happens before signal handlers and the normal shutdown
+// coordinator exist. If any later preparation step fails, release everything
+// that was already initialized before allowing the startup error to escape.
+try {
+  const telegramNotificationsResult = prepareTelegramNotifications({
+    eventBus,
+    logger,
+  })
 
-  if (!brokerResult.ok) {
-    throw new Error("Failed to prepare broker", {
-      cause: brokerResult.errors,
+  if (!telegramNotificationsResult.ok) {
+    throw new Error("Failed to prepare Telegram notifications", {
+      cause: telegramNotificationsResult.errors,
     })
   }
 
-  broker = brokerResult.data
-} else {
-  logger.info?.("[bot] Free-Roll strategy disabled; skipping broker connection")
-}
+  telegramNotifications = telegramNotificationsResult.data
 
-const bot = new FreeRollBot({
-  broker,
-  eventBus,
-  tradingConfig,
-})
+  const journalResult = prepareJournal({
+    eventBus,
+    logger,
+    folderPath: "../../../logs_bot-free-roll",
+  })
+
+  if (!journalResult.ok) {
+    throw new Error("Failed to prepare journal", {
+      cause: journalResult.errors,
+    })
+  }
+
+  journal = journalResult.data
+
+  if (tradingConfig.strategies["free-roll"].enabled !== false) {
+    const brokerResult = await prepareBroker()
+
+    if (!brokerResult.ok) {
+      throw new Error("Failed to prepare broker", {
+        cause: brokerResult.errors,
+      })
+    }
+
+    broker = brokerResult.data
+  } else {
+    logger.info?.("[bot] Free-Roll strategy disabled; skipping broker connection")
+  }
+
+  bot = new FreeRollBot({
+    broker,
+    eventBus,
+    tradingConfig,
+  })
+} catch (error) {
+  const cleanupErrors = await cleanupStartupResources({
+    broker,
+    journal,
+    telegramNotifications,
+    eventBus,
+    logger,
+  })
+
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [error, ...cleanupErrors.map(({ error: cleanupError }) => cleanupError)],
+      "Free-Roll startup failed and cleanup was incomplete",
+      { cause: error },
+    )
+  }
+
+  throw error
+}
 
 let shuttingDown = false
 
