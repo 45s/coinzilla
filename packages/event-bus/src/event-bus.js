@@ -49,7 +49,7 @@ function assertSupportedPayload(value, seen = new WeakSet()) {
 
     if (
       isArray &&
-      (!/^(0|[1-9]\\d*)$/.test(key) || Number(key) >= value.length)
+      (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)
     ) {
       throw new TypeError("Event arrays cannot contain custom properties")
     }
