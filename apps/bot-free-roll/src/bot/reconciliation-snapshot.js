@@ -1,5 +1,5 @@
-import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { compareDecimal } from "./helpers/decimal.js"
+import { Balance, CanonicalOrder, Fill } from "@coinzilla/entities"
+import { compareDecimal, subtractDecimal } from "./helpers/decimal.js"
 import { getOrderId, unwrapResult } from "./helpers/exchange.js"
 import { validateRecoveryBalances } from "./recovery.js"
 
@@ -40,6 +40,8 @@ function normalizeOpenOrder({ order, symbol }) {
 
   if (
     !id ||
+    !/^\\d+$/.test(id) ||
+    !Number.isSafeInteger(Number(id)) ||
     orderSymbol !== symbol ||
     (side !== "BUY" && side !== "SELL") ||
     typeof originalQuantity !== "string" ||
@@ -49,12 +51,26 @@ function normalizeOpenOrder({ order, symbol }) {
     throw new TypeError(`Open order snapshot contains an invalid order for ${symbol}`)
   }
 
+  let remainingQuantity
+  try {
+    remainingQuantity = subtractDecimal({
+      left: originalQuantity,
+      right: executedQuantity,
+    })
+    if (compareDecimal({ left: remainingQuantity, right: "0" }) < 0) {
+      throw new Error("executed quantity exceeds original quantity")
+    }
+  } catch (error) {
+    throw new TypeError(`Open order ${id} contains invalid quantities: ${error.message}`)
+  }
+
   return Object.freeze({
     id,
     symbol,
     side,
     originalQuantity,
     executedQuantity,
+    remainingQuantity,
     status,
   })
 }
@@ -191,6 +207,7 @@ function validateOpenOrders({ items, symbol, window }) {
       (order.side !== "BUY" && order.side !== "SELL") ||
       typeof order.originalQuantity !== "string" ||
       typeof order.executedQuantity !== "string" ||
+      typeof order.remainingQuantity !== "string" ||
       typeof order.status !== "string" ||
       ids.has(order.id)
     ) {
@@ -200,7 +217,11 @@ function validateOpenOrders({ items, symbol, window }) {
       if (
         compareDecimal({ left: order.originalQuantity, right: "0" }) <= 0 ||
         compareDecimal({ left: order.executedQuantity, right: "0" }) < 0 ||
-        compareDecimal({ left: order.executedQuantity, right: order.originalQuantity }) > 0
+        compareDecimal({ left: order.executedQuantity, right: order.originalQuantity }) > 0 ||
+        compareDecimal({
+          left: order.remainingQuantity,
+          right: subtractDecimal({ left: order.originalQuantity, right: order.executedQuantity }),
+        }) !== 0
       ) {
         return failure(`Open order ${order.id} contains inconsistent quantities`)
       }
@@ -240,6 +261,9 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
     account.sourceTime > account.observedAtServerTime
   ) {
     return failure("Reconciliation snapshot account section is incomplete or has invalid timestamps")
+  }
+  if (!Array.isArray(account.balances) || account.balances.some((balance) => !(balance instanceof Balance))) {
+    return failure("Reconciliation snapshot account balances must be canonical Balance values")
   }
   const balanceValidation = validateRecoveryBalances({ balances: account.balances })
   if (!balanceValidation.ok) return failure(balanceValidation.reason)
@@ -306,6 +330,7 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
     if (
       !Array.isArray(section.fills.trackedOrderIds) ||
       section.fills.trackedOrderIds.length !== trackedOrderIds.length ||
+      new Set(section.fills.trackedOrderIds).size !== section.fills.trackedOrderIds.length ||
       section.fills.trackedOrderIds.some((id) => !trackedOrderIds.includes(id)) ||
       !Array.isArray(section.fills.items) ||
       !Number.isSafeInteger(section.fills.pagesFetched) ||
