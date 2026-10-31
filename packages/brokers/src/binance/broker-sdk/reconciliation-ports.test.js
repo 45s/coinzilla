@@ -85,3 +85,148 @@ describe("BinanceSdkBroker reconciliation ports", () => {
     }
   })
 })
+
+
+describe("BinanceSdkBroker history query filters", () => {
+  it("supports fromId together with orderId and preserves normalized trade IDs", async () => {
+    const broker = createBroker({
+      myTrades: (params, options) => {
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 1000, orderId: 7, fromId: 11 })
+        assert.deepEqual(options, { signed: true })
+        return [trade]
+      },
+    })
+    const result = await broker.getMyTrades({ symbol: "BTCUSDT", orderId: "7", fromId: "11" })
+    assert.equal(result.ok, true)
+    assert.equal(result.data[0].id, "11")
+    assert.equal(result.data[0].orderId, "7")
+    assert.equal(result.data[0].time, 1_798_000_000_000)
+  })
+
+  it("supports inclusive time windows up to exactly 24 hours", async () => {
+    const broker = createBroker({
+      myTrades: (params) => {
+        assert.deepEqual(params, {
+          symbol: "BTCUSDT",
+          limit: 500,
+          startTime: 1_000,
+          endTime: 86_401_000,
+        })
+        return []
+      },
+    })
+    const result = await broker.getMyTrades({
+      symbol: "BTCUSDT",
+      limit: 500,
+      startTime: "1000",
+      endTime: 86_401_000,
+    })
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.data, [])
+  })
+
+  it("rejects invalid trade filter combinations and time ranges before RPC", async () => {
+    const broker = createBroker({})
+    const queries = [
+      { symbol: "BTCUSDT", fromId: 11, startTime: 1_000 },
+      { symbol: "BTCUSDT", fromId: 11, endTime: 2_000 },
+      { symbol: "BTCUSDT", orderId: 7, startTime: 1_000 },
+      { symbol: "BTCUSDT", orderId: 7, endTime: 2_000 },
+      { symbol: "BTCUSDT", startTime: 2_000, endTime: 1_000 },
+      { symbol: "BTCUSDT", startTime: 0, endTime: 86_400_001 },
+      { symbol: "BTCUSDT", fromId: "9007199254740992" },
+      { symbol: "BTCUSDT", fromId: -1 },
+      { symbol: "BTCUSDT", startTime: 1.5 },
+    ]
+    for (const query of queries) {
+      assert.equal((await broker.getMyTrades(query)).ok, false)
+    }
+    assert.deepEqual(broker.tradingConnection.calls, [])
+  })
+
+  it("returns a full trade page without claiming completeness", async () => {
+    const broker = createBroker({
+      myTrades: () => [trade, { ...trade, id: 12 }],
+    })
+    const result = await broker.getMyTrades({ symbol: "BTCUSDT", limit: 2 })
+    assert.equal(result.ok, true)
+    assert.equal(result.data.length, 2)
+    assert.equal(result.data[1].id, "12")
+    assert.equal(result.data.complete, undefined)
+  })
+
+  it("supports orderId cursor pagination and preserves source timestamps and exact quantities", async () => {
+    const orders = [{
+      symbol: "BTCUSDT",
+      orderId: 10,
+      origQty: "0.00010001",
+      executedQty: "0.00010001",
+      cummulativeQuoteQty: "6.5060120012",
+      time: 1_798_000_000_100,
+      updateTime: 1_798_000_000_200,
+    }]
+    const broker = createBroker({
+      allOrders: (params, options) => {
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 100, orderId: 10 })
+        assert.deepEqual(options, { signed: true })
+        return orders
+      },
+    })
+    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", orderId: "10" })
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.data, orders)
+    assert.equal(result.data[0].time, 1_798_000_000_100)
+    assert.equal(result.data[0].updateTime, 1_798_000_000_200)
+    assert.equal(result.data[0].origQty, "0.00010001")
+  })
+
+  it("gives time filters precedence over orderId as documented by Binance", async () => {
+    const broker = createBroker({
+      allOrders: (params) => {
+        assert.deepEqual(params, {
+          symbol: "BTCUSDT",
+          limit: 100,
+          startTime: 1_000,
+          endTime: 86_401_000,
+        })
+        return []
+      },
+    })
+    const result = await broker.getOrderHistory({
+      symbol: "BTCUSDT",
+      orderId: 10,
+      startTime: 1_000,
+      endTime: 86_401_000,
+    })
+    assert.equal(result.ok, true)
+    assert.deepEqual(result.data, [])
+  })
+
+  it("rejects invalid order-history windows and IDs before RPC", async () => {
+    const broker = createBroker({})
+    for (const query of [
+      { symbol: "BTCUSDT", startTime: 2_000, endTime: 1_000 },
+      { symbol: "BTCUSDT", startTime: 0, endTime: 86_400_001 },
+      { symbol: "BTCUSDT", orderId: -1 },
+      { symbol: "BTCUSDT", orderId: "not-an-id" },
+    ]) {
+      assert.equal((await broker.getOrderHistory(query)).ok, false)
+    }
+    assert.deepEqual(broker.tradingConnection.calls, [])
+  })
+
+  it("allows a one-sided order-history time filter and omits the ignored orderId", async () => {
+    const broker = createBroker({
+      allOrders: (params) => {
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 100, endTime: 86_401_000 })
+        return []
+      },
+    })
+    const result = await broker.getOrderHistory({
+      symbol: "BTCUSDT",
+      orderId: 10,
+      endTime: 86_401_000,
+    })
+    assert.equal(result.ok, true)
+  })
+})
