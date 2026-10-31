@@ -467,3 +467,72 @@ test("rejects subscriptions without a function handler", async () => {
 
   await bus.close()
 })
+
+
+test("flush also waits for events published by pending handlers", async () => {
+  const { bus } = createTestBus()
+  const received = []
+
+  bus.subscribe({
+    name: "workflow.started",
+    handler: () => {
+      received.push("started")
+      const result = bus.publish({
+        name: "workflow.completed",
+        source: "event-handler",
+      })
+      assert.equal(result.ok, true)
+    },
+  })
+
+  bus.subscribe({
+    name: "workflow.completed",
+    handler: async () => {
+      await Promise.resolve()
+      received.push("completed")
+    },
+  })
+
+  const published = bus.publish({
+    name: "workflow.started",
+    source: "test",
+  })
+  assert.equal(published.ok, true)
+
+  const flushed = await bus.flush()
+
+  assert.equal(flushed.ok, true)
+  assert.deepEqual(received, ["started", "completed"])
+
+  await bus.close()
+})
+
+test("snapshots and freezes cyclic event data without recursion errors", async () => {
+  const { bus } = createTestBus()
+  const original = { name: "root" }
+  original.self = original
+  original.children = [{ parent: original }]
+
+  const published = bus.publish({
+    name: "graph.created",
+    source: "test",
+    data: original,
+  })
+
+  assert.equal(published.ok, true)
+  assert.notEqual(published.event.data, original)
+  assert.equal(published.event.data.self, published.event.data)
+  assert.equal(
+    published.event.data.children[0].parent,
+    published.event.data,
+  )
+  assert.equal(Object.isFrozen(published.event.data), true)
+  assert.equal(Object.isFrozen(published.event.data.children), true)
+  assert.equal(Object.isFrozen(published.event.data.children[0]), true)
+
+  assert.throws(() => {
+    published.event.data.children[0].parent = null
+  }, TypeError)
+
+  await bus.close()
+})
