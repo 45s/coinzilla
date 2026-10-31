@@ -159,6 +159,7 @@ test("plans an independent SELL from only the owning cycle's cost and proceeds",
     price: "0.102",
     requiredNetProceeds: "10.01",
     reservedQuantity: "99",
+    unreservedQuantity: "0",
   })
 })
 
@@ -203,6 +204,7 @@ test("includes reconciled partial-sale proceeds when replanning a canceled cycle
   assert.equal(result.data.quantity, "49")
   assert.equal(result.data.requiredNetProceeds, "5.01")
   assert.equal(result.data.reservedQuantity, "49")
+  assert.equal(result.data.unreservedQuantity, "0")
   assert.equal(result.data.price, "0.103")
 })
 
@@ -219,6 +221,7 @@ test("reserves additional base inventory for the configured SELL fee allowance",
   assert.equal(result.ok, true)
   assert.equal(result.data.quantity, "98.901")
   assert.equal(result.data.reservedQuantity, "98.999901")
+  assert.equal(result.data.unreservedQuantity, "0.000099")
   assert.equal(compareDecimal({
     left: result.data.reservedQuantity,
     right: "99",
@@ -272,5 +275,6 @@ test("returns a successful no-sellable-quantity plan when only keep inventory re
   assert.equal(result.ok, true)
   assert.equal(result.data.quantity, "0")
   assert.equal(result.data.reservedQuantity, "0")
+  assert.equal(result.data.unreservedQuantity, "0")
   assert.equal(result.data.price, null)
 })
