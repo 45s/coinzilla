@@ -2,6 +2,12 @@
 
 Coinzilla is a pnpm workspace containing the project's applications and shared packages.
 
+## Development workflow
+
+AI agents and contributors must follow [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md). Work is integrated into `develop` through short-lived task branches and automated checks. `main` is reserved for milestone/release PRs that receive final human approval.
+
+See [the contributing guide](docs/contributing.md), [domain ownership map](docs/workspace-package-map.md), and [engineering standards](ENGINEERING_STANDARDS.md).
+
 ## Requirements
 
 - Node.js 22

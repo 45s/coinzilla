@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-Before making changes, read ENGINEERING_STANDARDS.md, inspect the affected package's instructions and conventions, and understand the relevant implementation and tests.
+Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles
 
@@ -37,31 +37,28 @@ Before making changes, read ENGINEERING_STANDARDS.md, inspect the affected packa
 
 ## Required workflow
 
-1. Identify the behavior requested and the smallest safe change.
-2. Read repository and package-level agent instructions and engineering standards.
-3. Inspect the affected code, neighboring tests, package scripts, and relevant consumers before editing.
-4. Add or update tests alongside the implementation; for defects, reproduce the defect in a regression test first whenever practical.
-5. Implement the smallest cohesive change, separating pure logic from side effects where practical.
-6. Run the focused test and coverage commands, followed by relevant workspace and repository checks when feasible.
-7. Review the final diff and report evidence accurately.
-8. Before merging any pull request into main, follow the mandatory **Keep PR branches up to date** procedure below. The PR must contain the latest main commit.
-9. In the completion summary, report what changed, tests actually run and their results, the exact commit checked, and any checks that could not be run.
+1. Read `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest applicable package/application `AGENTS.md`.
+2. Identify the owning domain and roadmap item before editing.
+3. Inspect the affected implementation, consumers, tests, scripts, and relevant current branch history.
+4. Add or update deterministic tests with the implementation; add regression coverage for defects whenever practical.
+5. Make the smallest cohesive change and keep ownership boundaries intact.
+6. Run focused tests and coverage, then applicable workspace checks.
+7. Review the complete diff and update the owning domain roadmap and docs when appropriate.
+8. Follow the target-aware branch synchronization and PR rules in `AI_AGENT_WORKFLOW.md`.
+9. Report exact commands, outcomes, and the final commit SHA. Never claim an unrun check passed.
 
-## Mandatory: keep PR branches up to date before merge
+## Mandatory AI-agent development workflow
 
-**Never merge a pull request into main while its head branch is behind or has not been verified against the latest main. The agent—not the user—owns this update.**
+**Every AI agent, coding assistant, and automated contributor MUST follow [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md).** Read it before planning or editing. The workflow applies to every task, including documentation-only work.
 
-For every PR targeting main, immediately before merging:
-
-1. Fetch the latest remote main and the PR head; do not rely on a previously cached local or API snapshot.
-2. Compare the PR branch with the current main. Confirm that the PR branch contains the current main tip (equivalently, that the current main tip is an ancestor of the PR head).
-3. If it does not, update the PR branch by rebasing it onto the latest main or merging the latest main into it. Prefer the repository's established history policy. Never rewrite or force-push shared history unless explicitly authorized and safe.
-4. Resolve conflicts on the PR branch, review the resulting diff, and push the updated branch. Do not ask the user to update the branch manually.
-5. Wait for all required CI checks to finish successfully on the exact final PR head commit. If the branch changes, or main advances while checks are running, repeat the freshness check and wait for checks on the new final commit.
-6. Re-fetch both refs immediately before merge. Merge only if the PR still contains the latest main tip, required reviews are satisfied, and all required checks pass for the exact head SHA.
-7. If the agent cannot fetch, update, push, or verify the branch with its available permissions/tools, do not merge. Explain the precise blocker and the action that is unavailable; never silently leave branch synchronization to the user.
-
-Do not merge directly to main as a shortcut. This rule applies to every PR, including documentation-only and agent-authored PRs.
+- Work from `develop`, using a short-lived task branch. Do not use permanent per-domain development branches.
+- Respect the domain ownership map and package/application instructions. Do not silently modify another domain's code.
+- For cross-domain needs, create a request for the owning domain and coordinate the required changes; do not implement a workaround in the consumer domain.
+- Keep task PRs focused and target `develop`. Run the required checks and merge the task PR after all automated gates pass; routine human approval is not required for `develop`.
+- Never merge task work directly into `main`. Only a milestone/release PR from `develop` to `main` receives the user's final review and approval.
+- Synchronize against the PR's actual target branch, not a hard-coded branch name. The agent owns branch freshness, conflict resolution, CI reruns, and verification; never ask the user to update a branch manually.
+- Update the relevant domain roadmap and documentation when work changes behavior, contracts, ownership, or completion status.
+- If required permissions, checks, or branch rules are missing, do not bypass them. Report the exact blocker and continue only with safe work.
 
 ## Repository-specific constraints
 
