@@ -441,6 +441,18 @@ test("records each accepted execution as an immutable ledger entry", () => {
   assert.equal(state.ledgerEntries.length, 0)
 })
 
+test("fails closed when a fill belongs to a different market ledger", () => {
+  const otherMarket = createMarketInventoryLedger({
+    market: { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD" },
+  })
+  const state = createState({ marketInventory: otherMarket.ledger })
+  const result = reconcileExecutionFill({ fill: createFill(), state })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /does not match DOGEFDUSD/)
+  assert.equal(result.updates.marketInventory, undefined)
+})
+
 test("fails closed when a processed trade is missing from the immutable ledger", () => {
   const state = createState({
     processedTradeIds: new Set(["trade-1"]),
@@ -498,6 +510,7 @@ function getReplayProjection(state) {
     filledQuantityByOrder: [...state.filledQuantityByOrder],
     commissionTotals: [...state.commissionTotals],
     ledgerEntries: state.ledgerEntries,
+    marketInventory: state.marketInventory,
   }
 }
 
