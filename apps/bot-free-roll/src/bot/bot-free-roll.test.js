@@ -477,6 +477,8 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     assert.equal(stats.profitableCycles, 1)
     assert.equal(stats.cycleCost, "0")
     assert.equal(stats.saleProceeds, "0")
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0")
     assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
     assert.ok(createdOrders.every((order) => order.type === "LIMIT_MAKER"))
@@ -588,6 +590,8 @@ test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recover
     assert.equal(stats.buyFills, 1)
     assert.equal(stats.sellFills, 1)
     assert.equal(stats.profitableCycles, 1)
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0.925")
     assert.ok(compareDecimal({
       left: stats.estimatedRealizedProfit,
       right: "0.01",
@@ -2428,7 +2432,7 @@ test("terminal SELL order failure pauses the pair instead of continuing the stra
   }
 })
 
-async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
+async function createActiveSellFixture({ cancelOrder, getMyTrades, pair = createPair() } = {}) {
   const priceHandlers = new Map()
   const createdOrders = []
   const events = []
@@ -2474,7 +2478,7 @@ async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
       strategies: {
         "free-roll": {
           settings: { minProfit: 0.01 },
-          pairs: { DOGEUSDT: createPair() },
+          pairs: { DOGEUSDT: pair },
         },
       },
     },
@@ -2488,6 +2492,63 @@ async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
 
   return { bot, userDataHandler, createdOrders, events, priceHandlers }
 }
+
+test("successful base-asset SELL commission allocates only keepQuantity", async () => {
+  const fixture = await createActiveSellFixture({
+    pair: createPair({ makerPercent: 0.075, takerPercent: 0.075 }),
+  })
+
+  try {
+    const sell = fixture.createdOrders.find((order) => order.side === "SELL")
+    fixture.userDataHandler(createExecutionEvent({
+      order: sell,
+      tradeId: 1105,
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    }))
+
+    await waitForCondition(
+      () => fixture.bot.getStats().DOGEUSDT.profitableCycles === 1,
+      "base-commission recovery did not complete",
+    )
+
+    const firstStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(firstStats.commissionTotals.DOGE, "0.01")
+    assert.equal(firstStats.freeQuantity, "1")
+    assert.equal(firstStats.activeQuantity, "0.99")
+    assert.equal(firstStats.paused, false)
+
+    const nextBuy = fixture.createdOrders.filter((order) => order.side === "BUY")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextBuy,
+      tradeId: 1106,
+    }))
+    await waitForCondition(
+      () => fixture.createdOrders.filter((order) => order.side === "SELL").length === 2,
+      "next recovery SELL was not created with carry-forward inventory",
+    )
+
+    const nextSell = fixture.createdOrders.filter((order) => order.side === "SELL")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextSell,
+      tradeId: 1107,
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    }))
+    await waitForCondition(
+      () => fixture.bot.getStats().DOGEUSDT.profitableCycles === 2,
+      "second base-commission recovery did not complete",
+    )
+
+    const secondStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(secondStats.commissionTotals.DOGE, "0.02")
+    assert.equal(secondStats.freeQuantity, "2")
+    assert.equal(secondStats.activeQuantity, "0.98")
+    assert.equal(secondStats.paused, false)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
 
 test("SELL fill that consumes more base inventory than owned pauses without negative inventory", async () => {
   const priceHandlers = new Map()

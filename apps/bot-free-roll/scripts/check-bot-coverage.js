@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 
 const coverageThresholds = [
   ["bot-free-roll.js", 95, 75],
+  ["inventory-allocation.js", 100, 100],
   ["event-handling.js", 90, 90],
   ["fill-reconciliation.js", 95, 75],
   ["accounting.js", 90, 85],

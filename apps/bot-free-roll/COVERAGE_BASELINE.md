@@ -46,3 +46,12 @@ The workspace coverage workflow runs package tests separately. The Free-Roll app
 - Do not add tests solely to execute lines. Tests must assert observable behavior and safety invariants.
 - Raise thresholds only after the next relevant tests are merged and the new baseline is measured.
 - Review this baseline after substantial module extraction or changes to the Node test runner.
+
+## Follow-up: exact free-inventory allocation (PR #330)
+
+PR #330 adds `src/bot/inventory-allocation.js` as a dedicated pure source module. The Test Coverage workflow for PR #330 passed the newly added strict **100% line / 100% branch** gate for this module:
+
+- Source: `inventory-allocation.js`
+- Verified coverage: **100.00% lines / 100.00% branches**
+- Workflow: [Test Coverage run #41222339144](https://github.com/45s/coinzilla/actions/runs/41222339144)
+- Regression coverage includes exact allocation, retained residual inventory, repeated cycles, zero keep quantity, invalid amounts, insufficient inventory, deterministic output, and input immutability.
