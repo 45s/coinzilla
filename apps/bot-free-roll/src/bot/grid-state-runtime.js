@@ -123,7 +123,11 @@ export function replayGridFillLedger({ state, ledgerEntries } = {}) {
     return failure("Grid fill ledger contains a pending BUY fill without a tracked BUY order")
   }
 
-  return toResult({ data: replayState })
+  // Generic fill reconciliation tracks all owned base inventory as active.
+  // Grid must split that total into active cycle exposure and free inventory.
+  // Run the canonical Grid projection before exposing the replayed state so
+  // callers never observe the generic accounting meaning by mistake.
+  return projectGridPairAccounting({ state: replayState })
 }
 
 // Derive pair-level active/free/recovery values from cycles plus any partial
