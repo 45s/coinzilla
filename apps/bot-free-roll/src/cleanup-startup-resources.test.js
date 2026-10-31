@@ -38,7 +38,7 @@ test("attempts every cleanup after thrown and failed-result errors", async () =>
     broker: {
       async disconnect() {
         calls.push("broker.disconnect")
-        return { ok: false, errors: [new Error("disconnect failed")] }
+        return { ok: false }
       },
     },
     eventBus: {
