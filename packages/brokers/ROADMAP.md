@@ -67,11 +67,10 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Review PR #256, `test(brokers): characterize Binance broker contract`, and wait for explicit merge approval. Do not merge it automatically.
-2. Before starting Phase 2, inspect the latest `main`, compare it with `migration/binance-native-ws`, and synchronize any significant broker/API/consumer-contract changes according to Section 10.
-3. Confirm the Phase 1 test helpers are present on the integration branch after PR #256 is merged.
-4. Start Phase 2 from the updated integration branch on a dedicated phase branch. Inject and exercise the fake WebSocket in actual transport tests; do not add scaffolding that is never used.
-5. Resolve the Node-native WebSocket ping/pong compliance gate with evidence before building higher layers on top of the transport.
+1. Complete Phase 2 on `migration/binance-phase-2-transport`; do not start Phase 3 until the transport exit criteria are verified.
+2. Before opening the Phase 2 PR, recheck latest `main` and sync only if broker/API/consumer-contract changes require it.
+3. Run broker tests on Node.js 22.23.4, including the local raw-WebSocket ping/pong integration test, plus workspace tests, syntax checks, and dependency audit.
+4. Review the complete diff and open a PR against `migration/binance-native-ws`. Do not merge it automatically.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -197,8 +196,10 @@ The current SDK uses `userDataStream.subscribe.signature` on the WebSocket API c
 **Updated approved decision (2026-10-31): `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.23.4, and the runtime guard verifies the bundled Undici version is patched.**
 
 - Use Node's built-in WHATWG `WebSocket` and `node:crypto` where their documented behavior meets the requirements.
-- Add the matching `engines` metadata to the broker package and document the runtime requirement as implementation proceeds.
-- Do not imply unrelated workspace packages independently require Node 22.4.0.
+- The broker package declares `engines.node: >=22.23.4`; the unit-test workflow runs on exactly Node.js 22.23.4.
+- The runtime guard checks `process.versions.undici` against fixed releases (6.29.1, 7.30.1, and 8.12.2), because a Node major version greater than 22 alone does not prove its bundled Undici is patched.
+- This floor addresses CVE-2026-109932, which affected Undici automatic WebSocket pong handling under ping floods. Node.js 22.23.4 includes Undici 6.29.1.
+- Do not imply unrelated workspace packages independently require this runtime floor.
 - Test the exact supported runtime floor in CI and in the relevant integration checks.
 
 ### Native WebSocket ping/pong is a hard gate
@@ -257,12 +258,12 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 2 — Native WebSocket transport
 
-- [ ] Implement a small Node-native WebSocket transport with injectable socket construction.
-- [ ] Normalize open/message/error/close events, message data, close codes/reasons, and send failures behind one internal interface.
-- [ ] Implement explicit connect/close state, connection timeout, idempotent shutdown, and listener cleanup.
-- [ ] Prove Binance server ping/pong compliance on Node >=22.4.0; do not call unsupported low-level methods.
-- [ ] Cover duplicate close/error events, connection failure, close during connect, send while disconnected, and complete cleanup.
-- [ ] Exercise the Phase 1 fake socket in real transport tests; avoid unused testing scaffolding.
+- [x] Implement a small Node-native WebSocket transport with injectable socket construction.
+- [x] Normalize open/message/error/close events, message data, close codes/reasons, and send failures behind one internal interface.
+- [x] Implement explicit connect/close state, connection timeout, idempotent shutdown, and listener cleanup.
+- [ ] Verify the local raw-WebSocket ping/pong integration test on Node >=22.23.4 and confirm the pong payload is copied exactly; do not call unsupported low-level methods.
+- [ ] Complete remaining duplicate error/close and constructor-failure cases, and verify complete cleanup.
+- [x] Exercise the Phase 1 fake socket and fake clock in transport tests; avoid unused testing scaffolding.
 - [ ] Verify documented Binance connection lifetime, reconnect requirements, and connection/message limits relevant to the transport.
 - **Exit criteria:** transport tests pass on the supported Node runtime; ping/pong behavior is evidenced; no third-party WebSocket package is added.
 
