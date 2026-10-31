@@ -7,3 +7,5 @@ export { adaptOrder } from "./adapt-order.js"
 export { adaptTrade } from "./adapt-fill.js"
 export { adaptSpotBalance } from "./adapt-spot-balance.js"
 export { adaptCanonicalFill } from "./adapt-canonical-fill.js"
+
+export { adaptCanonicalOrder, createCanonicalMarket } from "./adapt-canonical-order.js"
