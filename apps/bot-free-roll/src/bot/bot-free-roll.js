@@ -157,17 +157,24 @@ export class FreeRollBot {
   #publish(name, data = {}) {
     if (!this.eventBus || typeof this.eventBus.publish !== "function") return
 
-    const result = this.eventBus.publish({
-      name,
-      source: "free-roll-bot",
-      data,
-    })
+    try {
+      const result = this.eventBus.publish({
+        name,
+        source: "free-roll-bot",
+        data,
+      })
 
-    if (!result?.ok) {
-      try {
+      if (!result?.ok) {
         this.logger.error?.("Failed to publish journal event", {
           name,
           errors: result?.errors,
+        })
+      }
+    } catch (error) {
+      try {
+        this.logger.error?.("Failed to publish journal event", {
+          name,
+          error,
         })
       } catch {
         // Logging must not interrupt bot event handling.
