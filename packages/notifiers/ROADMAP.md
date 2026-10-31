@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, and Free-Roll consumer integration are merged into develop (PRs #346 and #348). A follow-up quality program is in progress on `feature/notifiers/telegram-quality-phases`.  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). The only outstanding validation is one manually initiated message to a dedicated Telegram test chat.  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -127,29 +127,29 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 
 ## Phase 4 — Integration confidence and operational diagnostics
 
-- [~] Exercise the subscriber against the real EventBus implementation, including allowlisting, ordering, flush/close lifecycle, and failure reporting.
-- [~] Expose immutable, process-local delivery counters for admitted, successful, failed, overflowed, and pending notifications.
-- [~] Test the package through its public self-reference export, not only relative source imports.
-- [ ] Validate all integration and diagnostic behavior with package and workspace CI on the PR head.
+- [x] Exercise the subscriber against the real EventBus implementation, including allowlisting, ordering, flush/close lifecycle, and failure reporting (PR #356).
+- [x] Expose immutable, process-local delivery counters for admitted, successful, failed, overflowed, and pending notifications (PR #356).
+- [x] Test the package through its public self-reference export, not only relative source imports (PR #356).
+- [x] Validate all integration and diagnostic behavior with package and workspace CI on the synchronized PR head (PR #356; Node 22 and Node 24, workspace coverage, actionlint, syntax, and dependency audit passed).
 
 **Acceptance:** the adapter is verified against the real event-bus contract, and operators can distinguish admitted work, successful API sends, failures, and overload without inspecting mutable internals.
 
 ## Phase 5 — CI compatibility and documentation quality
 
-- [~] Run the full unit suite on the pinned Node 22 baseline and the current Node 24 line.
-- [~] Document diagnostics semantics, overload behavior, shutdown order, secret rotation, and common Telegram setup failures.
-- [ ] Evaluate branch-coverage improvements using the resulting coverage report before raising thresholds; do not increase a percentage without evidence.
-- [ ] Evaluate mutation testing only if it can run reproducibly without destabilizing the dependency-free package or adding unjustified maintenance cost.
-- [ ] Record exact PR-head CI evidence and merge only after branch freshness and all required checks are verified.
+- [x] Run the full unit suite on the pinned Node 22 baseline and the current Node 24 line (PR #356; all matrix and aggregate checks passed).
+- [x] Document diagnostics semantics, overload behavior, shutdown order, secret rotation, and common Telegram setup failures.
+- [x] Evaluate branch-coverage improvements using the resulting coverage report; retain the existing 90% line / 85% branch notifier thresholds because the new paths are covered and no evidence justified an arbitrary percentage increase.
+- [x] Evaluate mutation testing; defer adding a mutation runner until notifier complexity or defect history justifies its ongoing dependency, CI, and maintenance cost.
+- [x] Record PR-head CI evidence and merge only after branch freshness and all required checks are verified (PRs #356 and #360).
 
 **Acceptance:** supported Node lines are continuously exercised, operational guidance matches implementation, and any stronger quality gate is evidence-based rather than cosmetic.
 
 
 ## Phase 6 — Operator-controlled live verification
 
-- [~] Add an explicit, credential-gated smoke-test command that sends one labeled message, validates the API result, and never retries.
-- [~] Keep live delivery outside default CI and unit tests; document secure secret injection and the meaning of API acceptance.
-- [~] Evaluate mutation testing. Deferred for now: the package has no established mutation-test infrastructure, the current test/coverage gates are stable and fast, and adding a separate mutation runner would add maintenance and CI cost without a demonstrated defect signal. Revisit if notifier complexity or regression history grows.
+- [x] Add an explicit, credential-gated smoke-test command that sends one labeled message, validates the API result, and never retries (PR #360).
+- [x] Keep live delivery outside default CI and unit tests; document secure secret injection and the meaning of API acceptance (PR #360).
+- [x] Evaluate mutation testing. Deferred for now: the package has no established mutation-test infrastructure, the current test/coverage gates are stable and fast, and adding a separate mutation runner would add maintenance and CI cost without a demonstrated defect signal. Revisit if notifier complexity or regression history grows.
 - [ ] Run the smoke test manually with a dedicated Telegram test chat after an operator supplies credentials.
 
 **Acceptance:** live delivery can be verified deliberately without exposing secrets or making ordinary CI depend on external Telegram availability.
