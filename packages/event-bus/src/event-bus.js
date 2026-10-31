@@ -1,89 +1,17 @@
 import { randomUUID } from "node:crypto"
 import { defaultLogger, toResult } from "@coinzilla/utils"
+import { isValidEventName } from "./helpers/event-name.js"
+import { assertSupportedPayload, cloneAndFreezePayload } from "./helpers/payload.js"
+import { validateOptions } from "./helpers/options.js"
 
 const ALL_EVENTS = Symbol("all-events")
-
-function assertSupportedPayload(value, seen = new WeakSet()) {
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    typeof value === "number" ||
-    typeof value === "bigint"
-  ) {
-    return
-  }
-
-  if (typeof value !== "object") {
-    throw new TypeError("Event data contains an unsupported value")
-  }
-
-  if (seen.has(value)) {
-    return
-  }
-
-  seen.add(value)
-
-  const prototype = Object.getPrototypeOf(value)
-  const isArray = Array.isArray(value)
-
-  if (
-    isArray
-      ? prototype !== Array.prototype
-      : prototype !== Object.prototype && prototype !== null
-  ) {
-    throw new TypeError(
-      "Event data supports only plain objects, arrays, and primitive values",
-    )
-  }
-
-  for (const key of Reflect.ownKeys(value)) {
-    if (typeof key !== "string") {
-      throw new TypeError("Event data cannot contain symbol properties")
-    }
-
-    if (isArray && key === "length") {
-      continue
-    }
-
-    if (
-      isArray &&
-      (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)
-    ) {
-      throw new TypeError("Event arrays cannot contain custom properties")
-    }
-
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)
-
-    if (!descriptor || !("value" in descriptor)) {
-      throw new TypeError("Event data cannot contain accessor properties")
-    }
-
-    if (!descriptor.enumerable) {
-      throw new TypeError("Event data cannot contain non-enumerable properties")
-    }
-
-    assertSupportedPayload(descriptor.value, seen)
-  }
-}
-
-function deepFreeze(value, seen = new WeakSet()) {
-  if (value === null || typeof value !== "object" || seen.has(value)) {
-    return value
-  }
-
-  seen.add(value)
-
-  for (const child of Object.values(value)) {
-    deepFreeze(child, seen)
-  }
-
-  return Object.freeze(value)
-}
-
 export class EventBus {
-  constructor({ logger = defaultLogger, onError } = {}) {
+  /**
+   * @param {{ logger?: { error?: (entry: object) => void }, onError?: (context: object) => void | Promise<void> }} options
+   * @throws {TypeError} If options or a configured callback is invalid.
+   */
+  constructor(options = {}) {
+    const { logger, onError } = validateOptions(options, defaultLogger)
     this.logger = logger
     this.onError = onError
     // Use an explicit registry rather than EventEmitter: event names are
@@ -102,9 +30,9 @@ export class EventBus {
       })
     }
 
-    if (typeof name !== "string" || name.trim() === "") {
+    if (!isValidEventName(name)) {
       return toResult({
-        error: new TypeError("Event name must be a non-empty string"),
+        error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
       })
     }
 
@@ -124,7 +52,7 @@ export class EventBus {
 
     try {
       assertSupportedPayload(data)
-      eventData = deepFreeze(structuredClone(data))
+      eventData = cloneAndFreezePayload(data)
     } catch (error) {
       return toResult({ error })
     }
@@ -150,9 +78,9 @@ export class EventBus {
   }
 
   subscribe({ name, handler } = {}) {
-    if (typeof name !== "string" || name.trim() === "") {
+    if (!isValidEventName(name)) {
       return toResult({
-        error: new TypeError("Event name must be a non-empty string"),
+        error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
       })
     }
 
