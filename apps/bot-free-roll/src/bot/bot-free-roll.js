@@ -518,9 +518,9 @@ export class FreeRollBot {
 
     await this.#reconcileTrackedOrders({ generation })
     if (!this.#isCurrentUserDataRecovery({ generation })) return
-
-    await this.#replayBufferedUserDataEvents({ generation })
-    if (!this.#isCurrentUserDataRecovery({ generation })) return
+    if (this.#bufferedUserDataEvents.length > 0) {
+      throw new Error("User-data events arrived after the stable recovery snapshot")
+    }
     if (this.#recoveryDiscrepancy) {
       throw new Error(this.#recoveryDiscrepancy)
     }
@@ -532,11 +532,6 @@ export class FreeRollBot {
 
     // The broker acknowledgement is synchronous. Do not yield between the final
     // empty-buffer check and acknowledgement, or an event could be stranded.
-    if (this.#bufferedUserDataEvents.length > 0) {
-      await this.#replayBufferedUserDataEvents({ generation })
-      if (!this.#isCurrentUserDataRecovery({ generation })) return
-    }
-
     const acknowledged = acknowledgeRecovery()
     if (acknowledged !== true) {
       throw new Error("Broker did not acknowledge the completed user-data reconciliation")
