@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import { Asset } from "../assets/asset.js"
+import { Commission } from "../commissions/commission.js"
 import { Market } from "../markets/market.js"
 import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
@@ -10,6 +11,7 @@ import { Fill, fillErrMsgs } from "./fill.js"
 describe(Fill.name, () => {
   const baseAsset = new Asset({ id: "dogecoin", code: "DOGE" })
   const quoteAsset = new Asset({ id: "fdusd", code: "FDUSD" })
+  const commissionAsset = new Asset({ id: "bnb", code: "BNB" })
   const otherQuoteAsset = new Asset({ id: "usdt", code: "USDT" })
   const market = new Market({
     venue: "binance",
@@ -31,6 +33,9 @@ describe(Fill.name, () => {
       executedAt: 1_800_000_000_000,
       ...overrides,
     })
+  const commission = new Commission({
+    amount: new Money({ amount: "0.01", asset: commissionAsset }),
+  })
 
   it("stores exact execution facts with explicit asset identity", () => {
     const fill = createFill()
@@ -55,6 +60,8 @@ describe(Fill.name, () => {
       quoteQuantity: { amount: "10", asset: quoteAsset.value },
       liquidityRole: "MAKER",
       executedAt: 1_800_000_000_000,
+      commissions: [],
+      commissionStatus: "UNKNOWN",
     })
   })
 
@@ -68,8 +75,71 @@ describe(Fill.name, () => {
     assert.equal(fill.liquidityRole, "UNKNOWN")
     assert.equal(fill.executedAt, undefined)
     assert.equal(fill.clientOrderId, undefined)
+    assert.equal(fill.commissionStatus, "UNKNOWN")
     assert.equal("executedAt" in fill.value, false)
     assert.equal("clientOrderId" in fill.value, false)
+  })
+
+  it("represents confirmed zero commission as COMPLETE with an empty list", () => {
+    const fill = createFill({ commissionStatus: "COMPLETE" })
+
+    assert.deepEqual(fill.commissions, [])
+    assert.equal(fill.commissionStatus, "COMPLETE")
+    assert.deepEqual(fill.value.commissions, [])
+  })
+
+  it("stores one or multiple commissions in different assets", () => {
+    const secondCommission = new Commission({
+      amount: new Money({ amount: "0.25", asset: quoteAsset }),
+    })
+    const commissions = [commission, secondCommission]
+    const fill = createFill({
+      commissions,
+      commissionStatus: "COMPLETE",
+    })
+
+    assert.deepEqual(fill.commissions, commissions)
+    assert.equal(fill.commissions[0].amount.amount, "0.01")
+    assert.equal(fill.commissions[0].amount.asset.id, "bnb")
+    assert.equal(fill.commissions[1].amount.asset.id, "fdusd")
+    assert.equal(fill.commissionStatus, "COMPLETE")
+    assert.equal(fill.value.commissions.length, 2)
+  })
+
+  it("represents known fees with an incomplete fee collection as PARTIAL", () => {
+    const fill = createFill({
+      commissions: [commission],
+      commissionStatus: "PARTIAL",
+    })
+
+    assert.equal(fill.commissions.length, 1)
+    assert.equal(fill.commissionStatus, "PARTIAL")
+  })
+
+  it("rejects invalid commission collections and status combinations", () => {
+    assert.throws(
+      () => createFill({ commissions: {} }),
+      { message: fillErrMsgs.commissions },
+    )
+    assert.throws(
+      () => createFill({ commissions: ["0.01"] }),
+      { message: fillErrMsgs.commissions },
+    )
+    assert.throws(
+      () => createFill({ commissionStatus: "INCOMPLETE" }),
+      { message: fillErrMsgs.commissionStatus },
+    )
+    assert.throws(
+      () => createFill({ commissionStatus: "PARTIAL" }),
+      { message: fillErrMsgs.partialCommissions },
+    )
+    assert.throws(
+      () => createFill({
+        commissions: [commission],
+        commissionStatus: "UNKNOWN",
+      }),
+      { message: fillErrMsgs.unknownCommissions },
+    )
   })
 
   it("scopes stable trade identity by market", () => {
@@ -159,18 +229,23 @@ describe(Fill.name, () => {
   })
 
   it("returns independent snapshots and is immutable", () => {
-    const fill = createFill()
+    const fill = createFill({
+      commissions: [commission],
+      commissionStatus: "COMPLETE",
+    })
     const snapshot = fill.value
 
     snapshot.tradeId = "other"
     snapshot.market.symbol = "OTHER"
     snapshot.price.amount = "99"
     snapshot.quantity.amount = "999"
+    snapshot.commissions[0].amount.amount = "999"
 
     assert.equal(fill.tradeId, "trade-1001")
     assert.equal(fill.market.symbol, "DOGEFDUSD")
     assert.equal(fill.price.amount, "0.1")
     assert.equal(fill.quantity.amount, "100")
+    assert.equal(fill.commissions[0].amount.amount, "0.01")
     assert.notStrictEqual(fill.value, snapshot)
     assert.throws(() => {
       fill.side = "SELL"
