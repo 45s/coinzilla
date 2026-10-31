@@ -242,11 +242,11 @@ describe("BinanceSdkBroker order-history page boundaries", () => {
     }))
     const broker = createBroker({
       allOrders: (params) => {
-        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 100 })
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 1000 })
         return orders
       },
     })
-    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 100 })
+    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 1000 })
     assert.equal(result.ok, true)
     assert.equal(result.data.length, 1000)
     assert.equal(result.data[999].orderId, 1000)
