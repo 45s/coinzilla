@@ -55,10 +55,6 @@ export function reconcileTrackedOrder({
       !Array.isArray(openOrders) || !Array.isArray(fills)) {
     return failure("Tracked order reconciliation input is incomplete")
   }
-  if (fills.length >= 1000) {
-    return failure(`Trade history for order ${orderId} may be truncated`)
-  }
-
   const seenTradeIds = new Set()
   let historyQuantity = "0"
 
