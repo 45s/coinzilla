@@ -47,6 +47,8 @@ test("builds stream names and normalizes symbols to lowercase", () => {
   assert.equal(createStreamName("trade", { symbol: "ETHUSDT" }), "ethusdt@trade")
   assert.equal(createStreamName("kline", { symbol: "BTCUSDT", interval: "1m" }), "btcusdt@kline_1m")
   assert.equal(createStreamName("miniTicker"), "!miniTicker@arr")
+  assert.equal(createStreamName("miniTicker", { symbol: null }), "!miniTicker@arr")
+  assert.equal(createStreamName("aggTrade", { symbol: "btcusdt" }), "btcusdt@aggTrade")
   assert.equal(createStreamName("ticker", { symbol: "BTCUSDT" }), "btcusdt@ticker")
   assert.equal(createStreamName("rollingWindowTicker", { windowSize: "4h" }), "!ticker_4h@arr")
   assert.equal(createStreamName("partialBookDepth", { symbol: "BTCUSDT", levels: 10, speed: "100ms" }), "btcusdt@depth10@100ms")
@@ -77,13 +79,30 @@ test("unwraps combined-stream envelopes without changing payload data", () => {
   })
 })
 
-test("identifies subscription acknowledgements and server shutdown events", () => {
+test("identifies subscription acknowledgements and raw/combined server shutdown events", () => {
   assert.deepEqual(parseStreamMessage({ id: 12, result: null }), {
     acknowledgement: { id: 12, result: null },
   })
   assert.deepEqual(parseStreamMessage({ e: "serverShutdown", E: 123 }), {
     serverShutdown: true,
     data: { e: "serverShutdown", E: 123 },
+  })
+  assert.deepEqual(parseStreamMessage({
+    stream: "!serverShutdown",
+    data: { e: "serverShutdown", E: 123 },
+  }), {
+    serverShutdown: true,
+    data: { e: "serverShutdown", E: 123 },
+  })
+  assert.deepEqual(parseStreamMessage([
+    { e: "24hrMiniTicker", s: "BTCUSDT" },
+    { e: "24hrMiniTicker", s: "ETHUSDT" },
+  ]), {
+    stream: null,
+    data: [
+      { e: "24hrMiniTicker", s: "BTCUSDT" },
+      { e: "24hrMiniTicker", s: "ETHUSDT" },
+    ],
   })
 })
 
