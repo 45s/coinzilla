@@ -1,6 +1,7 @@
+import { Asset, Market } from "@coinzilla/entities"
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade } from "../shared/index.js"
+import { adaptCanonicalFill, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade } from "../shared/index.js"
 import { BinanceSdkConfig } from "./binance-sdk-config.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
@@ -197,6 +198,57 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getFills({ symbol, orderId, limit = 1000 } = {}) {
+    try {
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("getFills requires a symbol")
+      }
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new TypeError("getFills limit must be an integer between 1 and 1000")
+      }
+
+      const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
+      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
+        ? metadataResponse.data.symbols.filter((item) => item?.symbol === symbol)
+        : []
+      if (symbolMatches.length !== 1) {
+        throw new Error(`Binance market metadata is missing or ambiguous for ${symbol}`)
+      }
+      const [symbolInfo] = symbolMatches
+      if (
+        typeof symbolInfo.baseAsset !== "string" ||
+        !symbolInfo.baseAsset.trim() ||
+        typeof symbolInfo.quoteAsset !== "string" ||
+        !symbolInfo.quoteAsset.trim()
+      ) {
+        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
+      }
+
+      const baseCode = symbolInfo.baseAsset.trim().toUpperCase()
+      const quoteCode = symbolInfo.quoteAsset.trim().toUpperCase()
+      const market = new Market({
+        venue: "binance",
+        symbol: symbolInfo.symbol,
+        baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
+        quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
+      })
+
+      const params = { symbol, limit }
+      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+      const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
+      if (!Array.isArray(tradesResponse.data)) {
+        throw new TypeError("Binance myTrades response should be an array")
+      }
+
+      return toResult({
+        data: tradesResponse.data.map((trade) => adaptCanonicalFill({ trade, market })),
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getFills()", error })
       return toResult({ errors: [error] })
     }
   }
