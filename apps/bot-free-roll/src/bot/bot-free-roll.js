@@ -138,6 +138,7 @@ export class FreeRollBot {
         baseAsset: null,
         quoteAsset: null,
         trackedOrderIds: new Set(),
+        ledgerEntries: Object.freeze([]),
         processedTradeIds: new Set(),
         fills: new Map(),
         fillsByOrder: new Map(),

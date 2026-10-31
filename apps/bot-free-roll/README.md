@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.012`
+**Document version:** `v0.013`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -324,6 +324,12 @@ If the outstanding buy order subsequently fills, the new purchase starts or exte
 ### Partial-fill policy
 
 If any order is partially filled, the strategy waits until that order is fully filled before proceeding to the next strategy step. A partial fill does not trigger position recalculation for the purpose of advancing the strategy, a replacement order, or another buy/sell decision. The order remains in progress; the strategy must continue observing and reconciling its status and executions. Fill-level records still need to be captured accurately, including while the order is partially filled.
+
+### Immutable execution records
+
+Each accepted fill is captured as an immutable record containing its trade ID, broker order ID, market, side, exact price/quantity/quote values, and reported commission facts. Repeated identical fills are idempotent; reusing a trade ID with changed execution facts is treated as an accounting discrepancy and pauses the pair.
+
+The current replay projection reconstructs execution-derived accounting for one recovery window. It is not durable storage and does not yet reconstruct completed-cycle, free, reserved, or external inventory events. Those remain separate roadmap work under FR-038–FR-046 and FR-062/FR-063.
 
 ### Cancellation and replacement safety
 
