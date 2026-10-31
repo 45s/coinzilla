@@ -11,8 +11,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
       "userDataStream.unsubscribe": () => ({}),
     })
     rpc.state = "open"
-    rpc.state = "open"
-  const broker = new BinanceSdkBroker({
+    const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error: (...args) => logs.push(args), info() {} },
@@ -45,6 +44,7 @@ it("logs an unexpected user-data socket close even without an onStatus callback"
     "userDataStream.subscribe.signature": () => ({ subscriptionId: 10 }),
     "userDataStream.unsubscribe": () => ({}),
   })
+  rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
