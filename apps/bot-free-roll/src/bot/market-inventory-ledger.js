@@ -161,10 +161,22 @@ export function applyMarketInventoryFill({ ledger, fill, accounting: suppliedAcc
         right: accounting.quoteQuantity,
       })
 
+  const commissionSign = compareDecimal({ left: commissionAmount, right: "0" })
+  if (commissionSign < 0) {
+    return failure(`Negative commission is unsupported for trade ${fillId}`)
+  }
+  if (
+    commissionSign > 0 &&
+    commissionAsset !== ledger.market.baseAsset &&
+    commissionAsset !== ledger.market.quoteAsset
+  ) {
+    return failure(`Unsupported commission asset for trade ${fillId}`)
+  }
+
   const commissionTotals = new Map(
     ledger.strategy.commissionsByAsset.map(({ asset, amount }) => [asset, amount]),
   )
-  if (compareDecimal({ left: commissionAmount, right: "0" }) > 0) {
+  if (commissionSign > 0) {
     commissionTotals.set(
       commissionAsset,
       addDecimal({
