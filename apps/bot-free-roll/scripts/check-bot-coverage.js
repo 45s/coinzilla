@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 
 const result = spawnSync(
   process.execPath,
-  ["--test", "--experimental-test-coverage", "src/bot"],
+  ["--test", "--experimental-test-coverage"],
   { encoding: "utf8" },
 )
 
