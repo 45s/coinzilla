@@ -16,6 +16,7 @@ function createBroker() {
 describe("BinanceSdkBroker.subscribeForPrices", () => {
   it("subscribes to lowercase aggregate-trade streams and forwards adapted messages", async () => {
     const { broker, streams } = createBroker()
+    broker.connected = true
     const prices = []
     const result = await broker.subscribeForPrices({
       symbol: "BTCUSDT",
@@ -43,6 +44,7 @@ describe("BinanceSdkBroker.subscribeForPrices", () => {
 
   it("returns a structured error when the stream cannot be subscribed", async () => {
     const { broker, streams } = createBroker()
+    broker.connected = true
     streams.subscribe = async () => { throw new Error("stream unavailable") }
     const result = await broker.subscribeForPrices({ symbol: "BTCUSDT", onPrice: () => {} })
     assert.equal(result.ok, false)
@@ -51,6 +53,7 @@ describe("BinanceSdkBroker.subscribeForPrices", () => {
 
   it("rejects invalid callback and symbol input as a structured error", async () => {
     const { broker, streams } = createBroker()
+    broker.connected = true
     const result = await broker.subscribeForPrices({ symbol: "", onPrice: () => {} })
     assert.equal(result.ok, false)
     assert.equal(streams.calls.length, 0)
