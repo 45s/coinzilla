@@ -64,35 +64,39 @@ export function validateTrackedOrderIdentity({
     canonicalOrder.side !== order?.side ||
     canonicalOrder.type !== type ||
     typeof expectedQuantity !== "string" ||
-    compareDecimal({
-      left: canonicalOrder.originalQuantity.amount,
-      right: expectedQuantity,
-    }) !== 0
-  ) {
-    return failure(`Canonical order identity does not match tracked order ${orderId ?? "unknown"}`)
-  }
-
-  if (
     typeof order.clientOrderId !== "string" ||
     !order.clientOrderId ||
     canonicalOrder.clientOrderId !== order.clientOrderId
   ) {
-    return failure(`Canonical client order ID does not match tracked order ${orderId}`)
+    return failure(`Canonical order identity does not match tracked order ${orderId ?? "unknown"}`)
   }
 
-  if (type === "MARKET") {
-    if (canonicalOrder.limitPrice !== undefined) {
-      return failure(`Market order ${orderId} unexpectedly has a limit price`)
+  try {
+    if (compareDecimal({
+      left: canonicalOrder.originalQuantity.amount,
+      right: expectedQuantity,
+    }) !== 0) {
+      return failure(`Canonical original quantity does not match tracked order ${orderId}`)
     }
-  } else if (
-    typeof order.price !== "string" ||
-    !canonicalOrder.limitPrice ||
-    compareDecimal({
-      left: canonicalOrder.limitPrice.amount,
-      right: order.price,
-    }) !== 0
-  ) {
-    return failure(`Canonical limit price does not match tracked order ${orderId}`)
+
+    if (type === "MARKET") {
+      if (canonicalOrder.limitPrice !== undefined) {
+        return failure(`Market order ${orderId} unexpectedly has a limit price`)
+      }
+    } else {
+      if (
+        typeof order.price !== "string" ||
+        !canonicalOrder.limitPrice ||
+        compareDecimal({
+          left: canonicalOrder.limitPrice.amount,
+          right: order.price,
+        }) !== 0
+      ) {
+        return failure(`Canonical limit price does not match tracked order ${orderId}`)
+      }
+    }
+  } catch (error) {
+    return failure(`Canonical order identity for ${orderId} contains invalid values: ${error.message}`)
   }
 
   return { ok: true }
