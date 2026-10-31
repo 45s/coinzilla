@@ -57,8 +57,8 @@ The migration is complete only when all of the following are true:
 
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
-- [ ] Phase 2 — native WebSocket transport (implementation and CI validation complete; awaiting review in draft PR #261).
-- [ ] Phase 3 — WebSocket API RPC client.
+- [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
+- [ ] Phase 3 — WebSocket API RPC client (implementation in progress on `migration/binance-phase-3-rpc`).
 - [ ] Phase 4 — public WebSocket Streams client.
 - [ ] Phase 5 — rebuild the broker on native clients.
 - [ ] Phase 6 — user-data session lifecycle and recovery.
@@ -67,9 +67,10 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Review draft PR #261; its exact head has passing Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit workflows.
-2. Wait for explicit merge approval. Do not merge automatically.
-3. After merge, recheck latest `main` and the integration branch before starting Phase 3; synchronize immediately if a significant broker/API/consumer-contract change has landed.
+1. Implement Phase 3 on `migration/binance-phase-3-rpc`: request correlation, bounded pending requests, error normalization, disconnect handling, and HMAC signing with official Binance vectors.
+2. Do not wire the RPC client into `BinanceSdkBroker` or add order-method retry behavior in this phase.
+3. Before opening the Phase 3 PR, recheck latest `main`; synchronize only if broker/API/consumer-contract changes require it.
+4. Require deterministic tests for all Phase 3 exit criteria and CI on the exact PR head.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -507,9 +508,9 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed for Phase 1:** `7ffc35723a2081289b094653b7f6ed56916915a2`.
-- PR #254 was reviewed after landing. Its changes were confined to free-roll bot implementation/tests, bot coverage script, and coverage workflow. It did not change broker exports, broker method calls, broker configuration, or consumer setup. It therefore did not trigger a broker/API integration sync for Phase 1.
-- Recheck current main before Phase 2; this SHA is historical evidence, not a current-main guarantee.
+- **Main SHA reviewed after Phase 2 merge and before Phase 3:** `d4158240f3f06f1306c9d7622cd54725df626a71`.
+- Compared all 32 commits since baseline `bec7266e9f2c2dddbc638e66f9dbd1cfe67a92ea`. Changes are confined to `apps/bot-free-roll` implementation/tests/roadmap/package metadata and `.github/workflows/test-coverage.yml`. Read-only review found no broker package, broker export, broker API, dependency/lockfile, runtime, or consumer-contract changes. No significant trigger was found, so do not merge unrelated bot work into the integration branch.
+- Recheck latest main before the Phase 3 PR and immediately if a broker/API/consumer-contract change lands.
 
 ---
 
