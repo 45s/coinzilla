@@ -159,7 +159,7 @@ test("fails closed on a corrupted persisted snapshot", async () => {
 })
 
 test("rejects path traversal in the configured snapshot filename", async () => {
-  for (const fileName of ["../state.json", "..\\\\state.json", "nested/state.json"]) {
+  for (const fileName of ["../state.json", "..\\state.json", "nested/state.json"]) {
     assert.throws(
       () => createGridStateStore({ directory: "/tmp", fileName }),
       /file name/,
