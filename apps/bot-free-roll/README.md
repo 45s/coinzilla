@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.008`
+**Document version:** `v0.009`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -392,6 +392,7 @@ The strategy must distinguish:
 1. **Active trading position:** Coins whose acquisition costs are currently managed by the strategy.
 2. **Free coins:** Coins retained from completed recovery cycles and permanently excluded from future trading orders.
 3. **Open-order reservations:** Quantities reserved by active orders or involved in partial fills.
+4. **External inventory:** Deposits, transfers, and manual trading activity that do not belong to the strategy. Keep these quantities and their history separate from active-position cost basis and free coins; never automatically adopt them into the strategy position.
 
 Never calculate the active sell quantity by blindly subtracting a fixed amount from the exchange's total wallet balance. Other holdings, fees, open orders, and deposits may affect that balance.
 
@@ -683,6 +684,16 @@ Round BUY limit prices down to the broker's valid price increment. If the requir
 This decision selects the price source only. Freshness thresholds, stream-gap handling, and other market-data quality rules remain open implementation requirements under FR-024.
 
 
+### Approved decision — manual wallet activity
+
+Wallet activity outside this strategy is external activity and must never be silently incorporated into strategy accounting.
+
+- Deposits and transfers into the trading wallet are classified as **external inventory**. They do not increase the strategy's active position or count as recovered capital.
+- Manual buys and sells are recorded as **external activity**, not as strategy executions. They do not change strategy cost basis, realized proceeds, or free-coin allocation.
+- If a withdrawal or an unexplained balance change affects, or may affect, strategy-owned inventory, pause the affected pair.
+- Resume the pair only after explicit reconciliation establishes a safe, consistent ownership and order state. Never silently adjust the strategy ledger to match the wallet balance.
+- Keep external inventory distinct from active trading inventory, free coins, and open-order reservations. If ownership cannot be established confidently, fail closed and require reconciliation.
+
 These questions remain unresolved and must not be silently guessed during implementation.
 
 1. **Recovery accounting:** How should previous realized proceeds be credited against remaining active-position costs when a cycle includes partial fills or repeated replacement sales?
@@ -696,7 +707,7 @@ Ask only the question that blocks the current design decision. Do not overwhelm 
 
 ## 12. Versioning
 
-Current version: **`v0.008`**
+Current version: **`v0.009`**
 
 This document is the initial strategy specification. It does not imply that the strategy is implemented, tested, or production-ready.
 
@@ -711,6 +722,7 @@ Do not change agreed strategy behavior without explicit discussion.
 
 ### Changelog
 
+- `v0.009` — Approved manual wallet activity policy: deposits/transfers and manual buys/sells remain external to strategy accounting; pause when withdrawals or unexplained changes may affect strategy-owned inventory; resume only after explicit reconciliation. Added external inventory as a separate accounting bucket.
 - `v0.008` — Approved and documented commission-aware order selection: use `LIMIT_MAKER` when `makerPercent` is zero, regular `LIMIT` otherwise; account actual base/quote commissions from each fill and reserve the configured conservative SELL fee only for regular LIMIT orders.
 - `v0.007` — Clarified the approved commission policy: support quote/base/zero commissions, reject pairs requiring third-asset fees, and pause on unexpected third-asset fees without conversion or valuation.
 - `v0.006` — Approved free-coin allocation: allocate `keepQuantity` only after the recovery SELL is fully filled and actual net profit meets `minProfit`; a SELL canceled after partial execution allocates no free coins and the remaining position stays active.
