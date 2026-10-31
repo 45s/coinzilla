@@ -14,6 +14,7 @@ const hasTestnetCredentials =
   Boolean(process.env.BINANCE_API_SECRET_KEY) &&
   !/replace-with|mock/i.test(process.env.BINANCE_API_KEY) &&
   !/replace-with|mock/i.test(process.env.BINANCE_API_SECRET_KEY)
+const isExplicitlyOptedIn = process.env.BINANCE_TESTNET_INTEGRATION === "1"
 
 const symbol = "DOGEFDUSD"
 const price = 0.05
@@ -23,7 +24,8 @@ let broker
 
 describe(
   "BinanceWebSocketBroker native WebSocket integration (TESTNET)",
-  { skip: !hasTestnetCredentials && "Set Binance TESTNET credentials to run these tests" },
+  { skip: !(isExplicitlyOptedIn && hasTestnetCredentials) &&
+      "Set BINANCE_TESTNET_INTEGRATION=1 and non-placeholder Binance TESTNET credentials to run these tests" },
   () => {
     before(async () => {
       const config = new BinanceWebSocketConfig({
