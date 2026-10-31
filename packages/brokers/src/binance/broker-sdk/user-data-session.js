@@ -68,6 +68,11 @@ export class BinanceUserDataSession {
     this.#stopped = false
   }
 
+  onConnected() {
+    const client = this.getClient()
+    if (!this.#stopped && client?.state === "open") this.#bindClient(client)
+  }
+
   async resume() {
     if (this.#stopped || this.#subscribers.size === 0) return
     try {
@@ -98,7 +103,6 @@ export class BinanceUserDataSession {
       this.#subscribers.delete(id)
       if (this.#subscribers.size === 0) {
         this.#clearReconnectTimer()
-        this.#detachClientListeners()
         this.setUnavailable(true)
       }
       throw error
@@ -243,8 +247,9 @@ export class BinanceUserDataSession {
   }
 
   #handleClose(event) {
-    if (this.#stopped || this.#subscribers.size === 0) return
+    if (this.#stopped) return
     this.setConnected(false)
+    if (this.#subscribers.size === 0) return
     this.setUnavailable(true)
     this.#subscriptionId = null
     this.#recoveryRequired = true
@@ -385,7 +390,6 @@ export class BinanceUserDataSession {
         await client.request("userDataStream.unsubscribe", { subscriptionId })
       }
     } finally {
-      this.#detachClientListeners()
       this.#deduplicator.clear()
     }
   }
