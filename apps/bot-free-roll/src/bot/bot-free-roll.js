@@ -973,6 +973,17 @@ export class FreeRollBot {
       executionType: event.executionType,
     })
 
+    if (state.mode === "grid") {
+      await this.#handleGridOrderStatus({
+        symbol,
+        state,
+        order,
+        orderId: id,
+        status,
+      })
+      return
+    }
+
     if (state.buyOrder?.id === id) {
       if (status === "FILLED") {
         await this.#handleBuyFilled(symbol)
