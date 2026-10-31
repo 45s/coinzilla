@@ -184,3 +184,39 @@ describe("BinanceSdkBroker.getFills", () => {
     )
   })
 })
+
+
+test("canonical fills reject unsafe response trade and order IDs", async () => {
+  for (const trade of [
+    { ...{
+      id: Number.MAX_SAFE_INTEGER + 1,
+      orderId: 7,
+      isBuyer: true,
+      isMaker: true,
+      price: "1",
+      qty: "1",
+      quoteQty: "1",
+      commission: "0",
+      commissionAsset: "DOGE",
+    } },
+    { ...{
+      id: 42,
+      orderId: Number.MAX_SAFE_INTEGER + 1,
+      isBuyer: true,
+      isMaker: true,
+      price: "1",
+      qty: "1",
+      quoteQty: "1",
+      commission: "0",
+      commissionAsset: "DOGE",
+    } },
+  ]) {
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [{ symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD" }] }),
+      myTrades: () => [trade],
+    })
+    const result = await broker.getFills({ symbol: "DOGEFDUSD" })
+    assert.equal(result.ok, false)
+    assert.ok(result.errors?.length)
+  }
+})
