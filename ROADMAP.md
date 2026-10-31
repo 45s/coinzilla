@@ -94,11 +94,12 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 
 #### Phase 1 — Characterization tests and test seams
 
-- [ ] Add broker contract tests for the public methods that must remain compatible.
-- [ ] Add fake-socket infrastructure that can simulate open, message, error, close, timeout, and late/duplicate responses.
-- [ ] Capture existing normalization and `toResult` behavior in tests before changing implementation.
+- [x] Add broker contract tests for the public methods that must remain compatible. Existing method-level tests plus `broker.contract.test.js` cover the public SDK broker methods and their result shapes.
+- [x] Add fake-socket infrastructure that can simulate open, message, error, close, timeout, and late/duplicate responses. The reusable WHATWG-style fake socket and fake clock are covered by deterministic tests.
+- [x] Capture existing normalization and `toResult` behavior in tests before changing implementation. Existing adapter tests and broker contract assertions pin normalized orders, fills, balances, and success/error result shapes.
 - [ ] Add regression cases for concurrent requests, malformed messages, unknown request IDs, and disconnects during requests.
-- **Exit criteria:** tests describe existing required behavior without relying on live credentials or network access.
+  - **Sequencing clarification:** these are WebSocket API RPC-client behaviors, but the current SDK owns the underlying socket and request correlation. Meaningful tests for those cases must execute against the native RPC client introduced in Phase 3; Phase 1 establishes the reusable fake socket and clock without inventing an unimplemented RPC layer.
+- **Exit criteria:** met for the existing public broker contract and reusable deterministic test seams. RPC correlation and transport-failure regression cases remain explicit Phase 3 gates; no live credentials or network access are needed for the Phase 1 suite.
 
 #### Phase 2 — Native WebSocket transport
 
@@ -114,10 +115,11 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 - [ ] Implement request IDs and a pending-request map with deterministic response correlation.
 - [ ] Implement bounded request timeouts, cleanup on every success/failure path, and rejection of pending work on disconnect.
 - [ ] Implement the authentication/signature scheme required by the selected Binance WebSocket API methods using `node:crypto`. Preserve the existing HMAC API-key flow (`apiKey` + `apiSecret`, HMAC-SHA-256); do not require Ed25519 or `session.logon` for `userDataStream.subscribe.signature`.
-- [ ] Validate response envelopes and normalize Binance API errors without losing error codes or useful context.
-- [ ] Handle concurrent requests and out-of-order responses.
+- [ ] Validate response envelopes and normalize Binance API errors without losing error codes or useful context; reject malformed envelopes and safely ignore or surface unknown request IDs without leaking pending entries.
+- [ ] Handle concurrent requests and out-of-order responses with deterministic response correlation.
+- [ ] Cover late and duplicate responses, unknown request IDs, disconnects during multiple pending requests, timeout cleanup, and malformed response payloads with the Phase 1 fake socket and clock.
 - [ ] Make reconnect behavior explicit; never silently replay state-changing requests.
-- **Exit criteria:** fake-socket tests cover successful, failed, timed-out, malformed, concurrent, and interrupted RPCs; signing has known test vectors.
+- **Exit criteria:** fake-socket tests cover successful, failed, timed-out, malformed, concurrent, out-of-order, unknown-ID, duplicate/late, and interrupted RPCs; signing has known test vectors.
 
 #### Phase 4 — WebSocket Streams client
 
@@ -203,6 +205,7 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Required checkpoints
 
+- Last inspected `main` SHA for Phase 1: `7ffc35723a2081289b094653b7f6ed56916915a2`. PR #254 was reviewed after merge; it changed only free-roll bot logic/tests, the bot coverage script, and the coverage workflow. It did not change broker exports, broker method calls, broker configuration, or consumer setup, so no integration-branch sync was required for Phase 1.
 - Before Phase 0 inventory and before each subsequent phase begins.
 - Immediately after any significant broker/API or consumer-contract change is detected on `main`.
 - Before each phase PR is opened and before its completion is reported.
