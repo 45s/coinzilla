@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { runTelegramSmokeTest } from "./telegram-smoke-test.js"
+import { runTelegramSmokeTest } from "./telegram-smoke.js"
 
 const timestamp = new Date("2026-10-31T12:00:00.000Z")
 

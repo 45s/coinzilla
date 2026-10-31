@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-include=src/index.js --test-coverage-include=src/telegram/index.js --test-coverage-include=src/telegram/telegram-notifier.js --test-coverage-include=src/telegram/telegram-event-subscriber.js --test-coverage-include=src/telegram/format-telegram-notification.js --test-coverage-exclude=src/**/*.test.js",
-    "test:telegram-smoke": "node scripts/telegram-smoke-test.js"
+    "test:telegram-smoke": "node scripts/telegram-smoke.js"
   },
   "engines": {
     "node": ">=20"
