@@ -161,6 +161,8 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 
 The official Spot WebSocket API uses a request envelope containing a client-generated `id`, a `method`, and optional `params`; responses correlate by `id` and carry a status/result or error. The RPC implementation must support out-of-order responses and concurrent requests rather than relying on request/response arrival order.
 
+**Cursor precision:** Binance order/trade IDs are int64 values. The current JSON RPC boundary accepts numeric strings only when they fit JavaScript's safe-integer range, then sends them as JSON integers. Values outside that range are rejected rather than rounded. A future transport-level int64 representation is required before supporting larger IDs safely.
+
 ## 5. User-data subscription is part of the WebSocket API connection
 
 This is an important architectural distinction:
