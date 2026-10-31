@@ -421,6 +421,22 @@ test("cycle projections are independent of input ordering", () => {
   )
 })
 
+test("rejects duplicate client order IDs across Grid cycles", () => {
+  const first = addSell(createCycle(), {
+    orderId: "sell-1",
+    clientOrderId: "shared-client-id",
+  })
+  const second = addSell(createCycle({
+    buyOrderId: "buy-2",
+    buyFillIds: ["buy-trade-2"],
+  }), {
+    orderId: "sell-2",
+    clientOrderId: "shared-client-id",
+  })
+
+  assert.equal(projectGridCycles({ cycles: [first, second] }).ok, false)
+})
+
 test("rejects one broker SELL order being assigned to multiple cycles", () => {
   const first = addSell(createCycle())
   const second = addSell(createCycle({
