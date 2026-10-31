@@ -291,7 +291,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
 - [ ] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
 - [ ] Preserve existing stream methods: `trade`, `kline`, `miniTicker`, `ticker`, `rollingWindowTicker`, `bookTicker`, `partialBookDepth`, `diffBookDepth`, and `aggTrade`; retain the old exported class until a later compatibility migration.
-- [ ] Use Binance's documented raw `/ws` endpoint for dynamic subscriptions; parse both raw events and combined `{ stream, data }` envelopes.
+- [ ] Use Binance's combined `/stream?streams=...` endpoint so each event retains its exact stream name; verify URL-provided initial subscriptions with `LIST_SUBSCRIPTIONS`, then use acknowledged SUBSCRIBE/UNSUBSCRIBE commands for dynamic changes. Keep raw-envelope parsing as a defensive protocol path.
 - [ ] Validate stream names and method parameters (symbol, interval, rolling window, depth levels, update speed) before sending.
 - [ ] Correlate SUBSCRIBE/UNSUBSCRIBE acknowledgements by request ID; normalize API errors and reject pending operations on timeout, socket failure, or disconnect.
 - [ ] Track desired subscriptions separately from active subscriptions. Multiple callers subscribing to the same stream must not create duplicate server subscriptions; unsubscribe only when the final local listener is removed.
