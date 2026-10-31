@@ -36,3 +36,27 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     assert.equal(rpc.listenerCount, 0)
   })
 })
+
+it("logs an unexpected user-data socket close even without an onStatus callback", async () => {
+  const logs = []
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 10 }),
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
+  }, { apiClientFactory: () => rpc })
+  broker.connected = true
+
+  const result = await broker.subscribeForUserData({ onEvent: () => {} })
+  rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+  assert.equal(broker.connected, false)
+  assert.equal(broker.userDataUnavailable, true)
+  assert.equal(logs.length, 1)
+  assert.equal(logs[0][0], "Binance user-data API connection closed")
+  assert.deepEqual(logs[0][1], { code: 1006, reason: "network lost" })
+  await result.data.disconnect()
+})
