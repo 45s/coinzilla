@@ -198,7 +198,7 @@ export class BinanceUserDataSession {
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || client.state !== "open") {
         try {
-          await client.request("userDataStream.unsubscribe", { subscriptionId })
+          await this.#unsubscribeRemoteSubscription(client, subscriptionId)
         } catch (error) {
           logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
         }
