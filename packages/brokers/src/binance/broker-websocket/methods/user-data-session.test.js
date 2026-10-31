@@ -1041,3 +1041,75 @@ describe("Binance user-data listener setup cleanup", () => {
     await broker.disconnect()
   })
 })
+
+
+describe("Binance user-data listener detach resilience", () => {
+  it("attempts every listener cleanup even when an earlier remover throws", async () => {
+    const removals = { event: 0, error: 0, close: 0 }
+    const logs = []
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: {
+        error() {},
+        info() {},
+        warn: (...args) => logs.push(args),
+      },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 79 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        const registerEvent = client.onEvent.bind(client)
+        const registerError = client.onError.bind(client)
+        const registerClose = client.onClose.bind(client)
+        client.onEvent = (listener) => {
+          const remove = registerEvent(listener)
+          return () => {
+            removals.event += 1
+            remove()
+            throw new Error("event remover failed")
+          }
+        }
+        client.onError = (listener) => {
+          const remove = registerError(listener)
+          return () => {
+            removals.error += 1
+            remove()
+            throw new Error("error remover failed")
+          }
+        }
+        client.onClose = (listener) => {
+          const remove = registerClose(listener)
+          return () => {
+            removals.close += 1
+            remove()
+            throw new Error("close remover failed")
+          }
+        }
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+    assert.equal(subscription.ok, true)
+
+    await assert.doesNotReject(broker.disconnect())
+
+    assert.equal(removals.event, 1)
+    assert.equal(removals.error, 1)
+    assert.equal(removals.close, 2)
+    assert.equal(client.listenerCount, 0)
+    assert.equal(client.errorListenerCount, 0)
+    assert.equal(client.closeListenerCount, 0)
+    assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data listener"))
+    assert.ok(logs.some(([message]) => message === "Unable to detach Binance user-data close listener"))
+
+    await assert.doesNotReject(broker.disconnect())
+    assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+  })
+})
