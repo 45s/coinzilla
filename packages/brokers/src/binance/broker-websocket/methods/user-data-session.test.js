@@ -254,6 +254,36 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+  it("does not select a valid ID from a lookup containing malformed subscription entries", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": async () => {
+        throw new Error("subscription response timed out")
+      },
+      "session.subscriptions": () => [
+        { subscriptionId: 59 },
+        {},
+      ],
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /malformed subscription state/)
+    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 0)
+    await broker.disconnect()
+  })
+
   it("cleans up a remote subscription that resolves after intentional shutdown", async () => {
     let resolveSubscribe
     const rpc = createFakeRpcClient({
