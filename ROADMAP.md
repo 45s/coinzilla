@@ -87,10 +87,10 @@ Each phase is a separate, reviewable PR unless a tightly coupled test or documen
 
 - [x] Inventory every export from `packages/brokers`, every method used by repository consumers, and all imports of `@binance/spot`.
 - [x] Map each required broker method to its Binance WebSocket API or Streams operation, including parameters, response shape, authentication, and error behavior.
-- [x] Confirm the CI runtime and native WebSocket availability. Node.js 22 is used in CI; the repository does not declare an `engines` range. The migration's minimum stable built-in WebSocket baseline is Node 22.4.0 or newer, subject to the ping/pong proof required in Phase 2.
+- [ ] Resolve the supported Node.js floor before selecting the native WebSocket transport. CI uses Node 22, but `@coinzilla/event-bus` and `@coinzilla/journal` declare `node >=20`, while the root and brokers manifests declare no `engines` range. Node's built-in WebSocket is stable and flag-free from Node 22.4.0; do not silently raise the package/runtime floor.
 - [x] Verify current official Binance Spot WebSocket API and Streams documentation for the operations and lifecycle constraints mapped in the Phase 0 audit. Signing/key-algorithm details and native ping/pong behavior remain explicit implementation gates; do not guess.
 - [x] Record the compatibility contract and identify legacy REST exports that can be deprecated.
-- **Exit criteria:** met by [the checked-in Phase 0 contract and audit](docs/brokers-websocket-contract.md). It records exports, repository consumer calls, dependency inventory, protocol mappings, Node runtime evidence, legacy implementation gaps, and unresolved implementation gates. No runtime code changes were made in this phase.
+- **Exit criteria:** partially met by [the checked-in Phase 0 contract and audit](docs/brokers-websocket-contract.md). Exports, repository consumer calls, dependency inventory, protocol mappings, Node runtime evidence, and legacy implementation gaps are recorded. Phase 0 remains open until the supported Node.js floor is explicitly decided; no runtime code changes were made.
 
 #### Phase 1 — Characterization tests and test seams
 
