@@ -58,6 +58,32 @@ test("normalizes optional facts without inventing financial values", () => {
   assert.equal(result.entry.isMaker, null)
 })
 
+test("treats zero-fee asset metadata as economically irrelevant", () => {
+  const first = appendFillLedgerEntry({
+    entries: Object.freeze([]),
+    fill: createFill({ commissionAsset: "BNB" }),
+  })
+  const repeated = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ commissionAsset: null }),
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(first.entry.commissionAsset, null)
+  assert.equal(repeated.ok, true)
+  assert.equal(repeated.duplicate, true)
+})
+
+test("preserves commission asset facts when the reported amount is malformed", () => {
+  const result = createFillLedgerEntry({
+    fill: createFill({ commissionAmount: "invalid-fee", commissionAsset: "BNB" }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.entry.commissionAmount, "invalid-fee")
+  assert.equal(result.entry.commissionAsset, "BNB")
+})
+
 test("rejects missing, primitive, array, and unstable fill identities", () => {
   for (const fill of [undefined, null, "fill", [], createFill({ id: "" }),
     createFill({ id: "-1" }), createFill({ id: "undefined" }),
