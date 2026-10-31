@@ -3,7 +3,7 @@
 **Application:** `apps/bot-free-roll`  
 **Status:** Active engineering plan — implementation not yet production-ready  
 **Principles:** SOLID · stable · simple · exchange-agnostic · test-first  
-**Last reviewed:** 2026-10-30
+**Last reviewed:** 2026-10-31
 
 > This roadmap is the long-term development contract for the Free-Roll application. Read it before planning, implementing, reviewing, or asking an AI agent to change this application. The roadmap is intentionally sequenced as small, independently reviewable PRs. It is a direction and acceptance plan, not a promise that every item must be implemented exactly as written: update it when repository evidence or an explicitly approved strategy decision requires a change.
 
@@ -210,6 +210,37 @@ The roadmap deliberately contains more than 80 PR-sized items. Some may be combi
 ## 7. Detailed PR backlog
 
 Status legend: `[ ]` planned · `[~]` in progress · `[x]` completed and verified · `[!]` blocked/decision required.
+
+
+### Near-term maintainability sequence — after the helper split
+
+**Context:** PR #257 modularized the helper layer and its tests. The main `bot-free-roll.js` orchestrator was still approximately 1,290 lines when this sequence was agreed. That is an architectural opportunity, not a reason to split the file mechanically. Re-check its current size and responsibilities before each extraction.
+
+The following sequence is the immediate, reviewable improvement plan. It complements the domain roadmap below; it does not replace or reorder its safety invariants.
+
+| Priority | Focused PR | Goal | Related roadmap work |
+|---:|---|---|---|
+| 1 | Pure-function test hardening | Strengthen edge, boundary, invalid-input, immutability, and deterministic invariant tests for decimal arithmetic, percentages, trading rules, price/order planning, accounting, and exchange normalization. Use native Node tests and deterministic property-style cases; add no test dependency without a clear need. | FR-017–FR-026, especially FR-025 and FR-026 |
+| 2 | Extract fill reconciliation | Isolate trade-history processing, fill validation, deduplication, and reconciliation from the main bot orchestration. Preserve actual fill and commission facts and idempotent behavior. | FR-027–FR-036, FR-059 |
+| 3 | Extract order execution | Separate order placement, cancellation, and replacement orchestration behind explicit dependencies. Preserve profitability checks, inventory reservations, and cancel/fill race safety. | FR-047–FR-056 |
+| 4 | Extract event handling | Separate exchange-event intake/normalization and dispatch from strategy decisions. Keep exchange-specific payload interpretation at the adapter boundary. | FR-027, FR-055, FR-067 |
+| 5 | Improve coverage gates | Establish or refresh the whole-app test/coverage baseline, identify critical uncovered paths, and raise thresholds incrementally without gaming the numbers. | FR-004, FR-025, FR-026 |
+
+#### Engineering rules for this sequence
+
+- **Pure by default:** calculations and business decisions receive explicit inputs and return predictable outputs; they do not access the bot, broker, logger, clock, filesystem, or network.
+- **No hidden dependencies:** inject side-effecting capabilities at orchestration boundaries.
+- **No mutation in pure helpers:** do not modify input objects or arrays; return new values.
+- **Deterministic behavior:** identical inputs produce identical outputs. Use fixed-seed or bounded deterministic property-style tests.
+- **Explicit module APIs:** keep each module's public exports intentional. Internal modules import directly from the module they depend on; avoid circular imports and unnecessary barrel re-exports. Keep `index.js` as the supported public entry point.
+- **Validate at boundaries:** validate and normalize broker/exchange responses and other external data before they enter domain logic. Missing or malformed required data must fail closed, not become plausible defaults.
+- **Small cohesive responsibilities:** extract complete responsibilities, not arbitrary groups of methods or dozens of tiny files.
+- **Test behavior, not implementation:** tests should verify observable results and invariants and remain useful through internal refactors.
+- **No premature abstractions or dependencies:** prefer a small helper and Node built-ins until a real need proves otherwise.
+- **Preserve safety invariants:** no extraction may weaken exact arithmetic, fee accounting, fill idempotency, profitability approval, inventory reservations, or reconciliation.
+
+**Execution rule:** complete and review each priority as its own PR before starting the next. PR 1 is test-focused: do not change production behavior merely to increase coverage. If tests expose a real defect, add a focused regression test and keep any production fix narrowly scoped and explicit. Update this roadmap as each item is verified; do not mark work complete based only on code being present.
+
 
 ### Stage 0 — Roadmap and baseline (FR-001–FR-006)
 
