@@ -37,7 +37,7 @@ function validateCallback(callback, name) {
 const MAX_HISTORY_WINDOW_MS = 24 * 60 * 60 * 1000
 
 function normalizeNonNegativeInteger(value, name) {
-  const normalized = typeof value === "string" && /^\\d+$/.test(value)
+  const normalized = typeof value === "string" && /^\d+$/.test(value)
     ? Number(value)
     : value
   if (!Number.isSafeInteger(normalized) || normalized < 0) {
