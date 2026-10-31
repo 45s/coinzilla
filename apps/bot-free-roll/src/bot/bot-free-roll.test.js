@@ -129,8 +129,8 @@ function createRecoveryTrade({ order, tradeId, quantity }) {
 
 async function createUserDataRecoveryFixture({
   getBalances,
-  getOpenOrders = async () => [],
-  getMyTrades = async () => [],
+  getOpenOrders = async () => ({ ok: true, data: [] }),
+  getMyTrades = async () => ({ ok: true, data: [] }),
   acknowledgeRecovery = () => true,
 } = {}) {
   const priceHandlers = new Map()
@@ -2777,8 +2777,11 @@ test("user-data recovery reconciles exact balances and fills, replays buffered e
   let historyTrades = []
   const fixture = await createUserDataRecoveryFixture({
     getBalances: () => deferredBalances.promise,
-    getOpenOrders: async () => [],
-    getMyTrades: async ({ orderId }) => historyTrades.filter((fill) => fill.orderId === orderId),
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getMyTrades: async ({ orderId }) => ({
+      ok: true,
+      data: historyTrades.filter((fill) => fill.orderId === orderId),
+    }),
   })
   const buyOrder = fixture.createdOrders[0]
   const trade = createRecoveryTrade({
@@ -2829,7 +2832,7 @@ test("user-data recovery reconciles exact balances and fills, replays buffered e
 test("failed fill-history reconciliation leaves trading gated and does not acknowledge", async () => {
   const fixture = await createUserDataRecoveryFixture({
     getBalances: async () => ({ ok: true, data: [createBalance()] }),
-    getOpenOrders: async () => [],
+    getOpenOrders: async () => ({ ok: true, data: [] }),
     getMyTrades: async () => ({
       ok: false,
       errors: [new Error("trade history is temporarily unavailable")],
@@ -2866,14 +2869,17 @@ test("repeated user-data interruptions invalidate stale recovery and retry the l
     getBalances: ({ calls }) => calls === 1
       ? firstBalances.promise
       : Promise.resolve({ ok: true, data: [createBalance()] }),
-    getOpenOrders: async () => [],
-    getMyTrades: async ({ orderId }) => orderId === fixture.createdOrders[0]?.orderId
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getMyTrades: async ({ orderId }) => ({
+      ok: true,
+      data: orderId === fixture.createdOrders[0]?.orderId
       ? [createRecoveryTrade({
           order: fixture.createdOrders[0],
           tradeId: 2003,
           quantity: String(fixture.createdOrders[0].quantity),
         })]
       : [],
+    }),
   })
   const buyOrder = fixture.createdOrders[0]
 
