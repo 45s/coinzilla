@@ -1,4 +1,4 @@
-import { alignDecimals, formatDecimal, parseDecimal, multiplyDecimal, compareDecimal, divideDecimal, subtractDecimal } from "./decimal.js"
+import { alignDecimals, formatDecimal, parseDecimal, multiplyDecimal, compareDecimal, divideDecimal, subtractDecimal, assertDecimalString } from "./decimal.js"
 
 function roundToIncrement(value, increment, direction) {
   if (!Number.isFinite(value) || value < 0) {

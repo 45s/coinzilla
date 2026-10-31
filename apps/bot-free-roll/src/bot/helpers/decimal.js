@@ -268,3 +268,9 @@ export function roundDecimalToIncrement({ value, increment, direction }) {
     scale: parsedIncrement.scale,
   });
 }
+
+export function assertDecimalString(value, name) {
+  if (typeof value !== "string") {
+    throw new Error(`${name} must be a decimal string`);
+  }
+}
