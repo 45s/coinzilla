@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   Asset,
+  Balance,
   CanonicalOrder,
   Fill,
   Market,
@@ -76,12 +77,10 @@ function createBroker({ fillsByCursor, trackedOrder, openOrders = [] } = {}) {
         ok: true,
         data: {
           sourceTime: 1015,
-          balances: [{
-            asset: { code: "FDUSD" },
-            free: { amount: "100" },
-            locked: { amount: "0" },
-            total: { amount: "100" },
-          }],
+          balances: [new Balance({
+            free: new Quantity({ amount: "100", asset: quoteAsset }),
+            locked: new Quantity({ amount: "0", asset: quoteAsset }),
+          })],
         },
       }
     },
