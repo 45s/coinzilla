@@ -119,6 +119,41 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     await result.data.disconnect()
   })
 
+
+  it("reports an unexpected API socket close as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 23 }))
+    broker.connected = true
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: () => {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+    assert.deepEqual(statuses, [{
+      type: "connectionClosed",
+      code: 1006,
+      reason: "network lost",
+      recoveryRequired: true,
+    }])
+    await result.data.disconnect()
+  })
+
+  it("does not report intentional broker shutdown as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 24 }))
+    broker.connected = true
+    const statuses = []
+    await broker.subscribeForUserData({
+      onEvent: () => {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    await broker.disconnect()
+    assert.deepEqual(statuses, [])
+    assert.equal(rpc.state, "closed")
+  })
+
   it("removes its event listener when subscription setup fails", async () => {
     const { broker, rpc } = createBroker(async () => { throw new Error("user stream unavailable") })
     broker.connected = true
