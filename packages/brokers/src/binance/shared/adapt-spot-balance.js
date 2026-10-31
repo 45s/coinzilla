@@ -14,12 +14,19 @@ export function adaptSpotBalance(input) {
     throw new TypeError("Binance account balances should be an array")
   }
 
+  const seenAssets = new Set()
+
   return input.map((balance) => {
     if (!balance || typeof balance !== "object" || Array.isArray(balance)) {
       throw new TypeError("Binance account balance should be an object")
     }
 
     const asset = normalizeAssetCode({ asset: balance.asset })
+    if (seenAssets.has(asset.id)) {
+      throw new TypeError(`Binance account contains duplicate balance asset "${asset.code}"`)
+    }
+    seenAssets.add(asset.id)
+
     const free = new Quantity({ amount: balance.free, asset })
     const locked = new Quantity({ amount: balance.locked, asset })
 
