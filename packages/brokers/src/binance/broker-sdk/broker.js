@@ -252,6 +252,12 @@ export class BinanceSdkBroker extends CoreBroker {
       if (!Array.isArray(response.data)) {
         throw new TypeError("Binance allOrders response should be an array")
       }
+      for (const order of response.data) {
+        if (!order || typeof order !== "object" || Array.isArray(order)) {
+          throw new TypeError("Binance allOrders response contains an invalid order")
+        }
+        normalizeNonNegativeInteger(order.orderId, "Binance allOrders response orderId")
+      }
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
@@ -296,7 +302,7 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getFills({ symbol, orderId, limit = 1000 } = {}) {
+  async getFills({ symbol, orderId, fromId, startTime, endTime, limit = 1000 } = {}) {
     try {
       if (typeof symbol !== "string" || !symbol.trim()) {
         throw new TypeError("getFills requires a symbol")
@@ -331,8 +337,22 @@ export class BinanceSdkBroker extends CoreBroker {
         quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
       })
 
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+      const timeWindow = normalizeTimeWindow({ startTime, endTime }, "getFills")
+      const hasTimeWindow = timeWindow.startTime !== undefined || timeWindow.endTime !== undefined
+      if (hasTimeWindow && fromId !== undefined && fromId !== null) {
+        throw new TypeError("getFills fromId cannot be combined with startTime or endTime")
+      }
+      if (hasTimeWindow && orderId !== undefined && orderId !== null) {
+        throw new TypeError("getFills orderId cannot be combined with startTime or endTime")
+      }
+
+      const params = { symbol, limit, ...timeWindow }
+      if (orderId !== undefined && orderId !== null) {
+        params.orderId = normalizeNonNegativeInteger(orderId, "getFills orderId")
+      }
+      if (fromId !== undefined && fromId !== null) {
+        params.fromId = normalizeNonNegativeInteger(fromId, "getFills fromId")
+      }
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
       if (!Array.isArray(tradesResponse.data)) {
         throw new TypeError("Binance myTrades response should be an array")
