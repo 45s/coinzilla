@@ -1,6 +1,6 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptOrder, adaptSpotAsset, adaptTrade } from "../shared/index.js"
+import { adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade } from "../shared/index.js"
 import { BinanceSdkConfig } from "./binance-sdk-config.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
@@ -119,6 +119,20 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({ data: adaptSpotAsset(response.data.balances) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getAssets()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getBalances() {
+    try {
+      const response = await this.tradingConnection.request(
+        "account.status",
+        { omitZeroBalances: false },
+        { signed: true },
+      )
+      return toResult({ data: adaptSpotBalance(response.data?.balances) })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getBalances()", error })
       return toResult({ errors: [error] })
     }
   }
