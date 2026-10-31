@@ -1,3 +1,4 @@
+import { Balance } from "@coinzilla/entities"
 import { handleErr, defaultLogger as logger } from "@coinzilla/utils"
 import {
   createKeyedQueue,
@@ -30,6 +31,13 @@ export class FreeRollBot {
 
   #isRunning = false
   #isEnabled = true
+  #tradingReady = true
+  #userDataRecoveryRequired = false
+  #pendingUserDataRecovery = false
+  #bufferedUserDataEvents = []
+  #recoveryPromise = null
+  #recoveryGeneration = 0
+  #recoveryRestartRequested = false
   #subscriptions = new Map()
   #userDataSubscription = null
   #states = new Map()
@@ -59,7 +67,7 @@ export class FreeRollBot {
     this.eventBus = eventBus
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
-      isRunning: () => this.#isRunning,
+      isRunning: () => this.#isRunning && this.#tradingReady,
       minProfit: () => this.settings.minProfit,
       publish: (name, data) => this.#publish(name, data),
       debug: (message, data) => this.#debug(message, data),
@@ -217,6 +225,10 @@ export class FreeRollBot {
     }
 
     this.#isRunning = true
+    this.#tradingReady = true
+    this.#userDataRecoveryRequired = false
+    this.#pendingUserDataRecovery = false
+    this.#bufferedUserDataEvents = []
     this.#startedAt = Date.now()
     this.#debug("Starting bot")
 
@@ -229,13 +241,17 @@ export class FreeRollBot {
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
-          onEvent: (payload) =>
-            this.#eventHandling.onUserDataEvent({ payload }),
+          onEvent: (payload) => this.#receiveUserDataEvent({ payload }),
+          onStatus: (status) => this.#handleUserDataStatus({ status }),
         }),
         "subscribeForUserData",
       )
 
       this.#userDataSubscription = userData
+      if (this.#pendingUserDataRecovery) {
+        this.#pendingUserDataRecovery = false
+        this.#startUserDataRecovery()
+      }
 
       for (const [symbol] of this.#states) {
         const subscription = unwrapResult(
@@ -254,8 +270,12 @@ export class FreeRollBot {
       this.#debug("Bot started successfully")
     } catch (error) {
       this.#isRunning = false
+      this.#tradingReady = false
+      this.#recoveryGeneration += 1
+      this.#bufferedUserDataEvents = []
       await this.#disconnectSubscriptions()
       await this.#queue.drain()
+      if (this.#recoveryPromise) await this.#recoveryPromise
       handleErr({ where: "FreeRollBot.run()", error })
       throw error
     }
@@ -264,8 +284,14 @@ export class FreeRollBot {
   async stop() {
     this.#debug("Stopping bot")
     this.#isRunning = false
+    this.#tradingReady = false
+    this.#userDataRecoveryRequired = false
+    this.#recoveryGeneration += 1
+    this.#recoveryRestartRequested = false
+    this.#bufferedUserDataEvents = []
     await this.#disconnectSubscriptions()
     await this.#queue.drain()
+    if (this.#recoveryPromise) await this.#recoveryPromise
 
     this.#debug("Bot stopped; pending tasks completed and existing exchange orders were left untouched")
   }
@@ -343,17 +369,323 @@ export class FreeRollBot {
         ) {
           continue
         }
+        this.#confirmedBalances.set(balance.asset, {
+          free,
+          locked,
+          total: addDecimal({ left: free, right: locked }),
+        })
       } catch {
         continue
       }
-
-      this.#confirmedBalances.set(balance.asset, { free, locked })
     }
 
     this.#publish("trading.summary", {
       reason: "exchange_balance_update",
       summary: this.getSummary(),
     })
+  }
+
+  #receiveUserDataEvent({ payload }) {
+    if (!this.#isRunning) return
+
+    if (this.#userDataRecoveryRequired) {
+      this.#bufferedUserDataEvents.push(payload)
+      return
+    }
+
+    this.#eventHandling.onUserDataEvent({ payload })
+  }
+
+  #handleUserDataStatus({ status }) {
+    if (!this.#isRunning || !status || typeof status.type !== "string") return
+
+    const { type } = status
+    if (type === "connectionClosed" || type === "terminated") {
+      this.#recoveryGeneration += 1
+      this.#recoveryRestartRequested = false
+    }
+
+    if (
+      type === "connectionClosed" ||
+      type === "terminated" ||
+      type === "recovering" ||
+      type === "recoveryFailed" ||
+      type === "recovered"
+    ) {
+      this.#userDataRecoveryRequired = true
+      this.#tradingReady = false
+    }
+
+    if (type === "recovered") {
+      if (!this.#userDataSubscription) {
+        this.#pendingUserDataRecovery = true
+        return
+      }
+      this.#startUserDataRecovery()
+      return
+    }
+
+    if (type === "reconciled") {
+      this.#userDataRecoveryRequired = false
+      this.#tradingReady = true
+      this.#publish("bot.user_data_reconciled", { status })
+      return
+    }
+
+    if (type === "recoveryFailed") {
+      this.#publish("bot.user_data_recovery_failed", {
+        reason: "Broker exhausted user-data reconnect attempts",
+        status,
+      })
+    }
+  }
+
+  #startUserDataRecovery() {
+    if (!this.#isRunning || !this.#userDataRecoveryRequired) return
+
+    if (this.#recoveryPromise) {
+      this.#recoveryRestartRequested = true
+      return
+    }
+
+    const generation = this.#recoveryGeneration
+    this.#publish("bot.user_data_recovery_started", { generation })
+
+    this.#recoveryPromise = this.#performUserDataRecovery({ generation })
+      .catch((error) => {
+        if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+        this.#userDataRecoveryRequired = true
+        this.#tradingReady = false
+        this.#publish("bot.user_data_recovery_failed", {
+          reason: error?.message ?? String(error),
+          error,
+        })
+        this.#debug("User-data recovery failed; order mutations remain blocked", error)
+      })
+      .finally(() => {
+        this.#recoveryPromise = null
+        if (
+          this.#recoveryRestartRequested &&
+          this.#isRunning &&
+          this.#userDataRecoveryRequired
+        ) {
+          this.#recoveryRestartRequested = false
+          this.#startUserDataRecovery()
+        }
+      })
+  }
+
+  #isCurrentUserDataRecovery({ generation }) {
+    return this.#isRunning &&
+      this.#userDataRecoveryRequired &&
+      generation === this.#recoveryGeneration
+  }
+
+  async #performUserDataRecovery({ generation }) {
+    await this.#queue.drain()
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+    const balances = unwrapResult(
+      await this.broker.getBalances(),
+      "getBalances during user-data recovery",
+    )
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+    if (!Array.isArray(balances) || balances.some((balance) => !(balance instanceof Balance))) {
+      throw new Error("getBalances must return a complete array of canonical Balance entities")
+    }
+
+    this.#confirmedBalances.clear()
+    for (const balance of balances) {
+      this.#confirmedBalances.set(balance.asset.code, {
+        free: balance.free.amount,
+        locked: balance.locked.amount,
+        total: balance.total.amount,
+      })
+    }
+
+    const openOrders = unwrapResult(
+      await this.broker.getOpenOrders(),
+      "getOpenOrders during user-data recovery",
+    )
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+    if (!Array.isArray(openOrders)) {
+      throw new Error("getOpenOrders must return an array during user-data recovery")
+    }
+
+    await this.#reconcileTrackedOrders({ openOrders, generation })
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+    await this.#replayBufferedUserDataEvents({ generation })
+    if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+    const acknowledgeRecovery = this.#userDataSubscription?.acknowledgeRecovery
+    if (typeof acknowledgeRecovery !== "function") {
+      throw new Error("Broker user-data subscription does not expose acknowledgeRecovery()")
+    }
+
+    // The broker acknowledgement is synchronous. Do not yield between the final
+    // empty-buffer check and acknowledgement, or an event could be stranded.
+    if (this.#bufferedUserDataEvents.length > 0) {
+      await this.#replayBufferedUserDataEvents({ generation })
+      if (!this.#isCurrentUserDataRecovery({ generation })) return
+    }
+
+    const acknowledged = acknowledgeRecovery()
+    if (acknowledged !== true) {
+      throw new Error("Broker did not acknowledge the completed user-data reconciliation")
+    }
+
+    this.#userDataRecoveryRequired = false
+    this.#tradingReady = true
+    this.#publish("bot.user_data_recovery_completed", { generation })
+
+    await this.#resumePairOrders()
+  }
+
+  async #reconcileTrackedOrders({ openOrders, generation }) {
+    const openOrdersByKey = new Map()
+
+    for (const order of openOrders) {
+      if (!order || typeof order !== "object") {
+        throw new Error("Open-order snapshot contains an invalid order")
+      }
+
+      const symbol = String(order.symbol ?? "")
+      const orderId = String(order.id ?? "")
+      if (!symbol || !orderId) {
+        throw new Error("Open-order snapshot contains an order without symbol or ID")
+      }
+      if (!this.#states.has(symbol)) continue
+
+      const state = this.#states.get(symbol)
+      const activeOrderIds = [state.buyOrder?.id, state.sellOrder?.id]
+        .filter(Boolean)
+        .map(String)
+      if (!activeOrderIds.includes(orderId)) {
+        this.#pause(symbol, `Unexpected open order ${orderId} found during recovery`)
+        throw new Error(`Unexpected open order ${orderId} found for ${symbol}`)
+      }
+
+      const key = `${symbol}:${orderId}`
+      if (openOrdersByKey.has(key)) {
+        throw new Error(`Duplicate open order ${orderId} returned for ${symbol}`)
+      }
+      openOrdersByKey.set(key, order)
+    }
+
+    for (const [symbol, state] of this.#states) {
+      const activeOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
+      const activeIds = activeOrders.map(({ id }) => String(id))
+      if (new Set(activeIds).size !== activeIds.length) {
+        throw new Error(`${symbol} has duplicate active order IDs`)
+      }
+
+      for (const trackedOrder of activeOrders) {
+        if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+        const orderId = String(trackedOrder.id)
+        const currentOrder = unwrapResult(
+          await this.broker.getOrder({ symbol, orderId }),
+          `getOrder(${symbol}, ${orderId}) during user-data recovery`,
+        )
+
+        if (
+          !currentOrder ||
+          String(currentOrder.id) !== orderId ||
+          currentOrder.symbol !== symbol ||
+          currentOrder.side !== trackedOrder.side
+        ) {
+          throw new Error(`Tracked order ${orderId} identity mismatch during recovery`)
+        }
+
+        const status = String(currentOrder.status ?? "").toUpperCase()
+        const isOpen = status === "NEW" || status === "PARTIALLY_FILLED"
+        const isInOpenSnapshot = openOrdersByKey.has(`${symbol}:${orderId}`)
+        if (isOpen !== isInOpenSnapshot) {
+          throw new Error(`Tracked order ${orderId} status disagrees with open-order snapshot`)
+        }
+
+        if (
+          currentOrder.originalQuantity === undefined ||
+          currentOrder.executedQuantity === undefined ||
+          compareDecimal({
+            left: String(currentOrder.originalQuantity),
+            right: String(trackedOrder.quantity),
+          }) !== 0
+        ) {
+          throw new Error(`Tracked order ${orderId} quantity mismatch during recovery`)
+        }
+
+        await this.#reconcileOrderFills({
+          symbol,
+          order: { id: orderId, side: trackedOrder.side },
+        })
+
+        const reconciledQuantity = state.filledQuantityByOrder.get(orderId) ?? "0"
+        if (compareDecimal({
+          left: reconciledQuantity,
+          right: String(currentOrder.executedQuantity),
+        }) !== 0) {
+          throw new Error(
+            `Tracked order ${orderId} fill history totals ${reconciledQuantity}, expected ${currentOrder.executedQuantity}`,
+          )
+        }
+
+        if (status === "FILLED") {
+          if (trackedOrder.side === "BUY") {
+            await this.#handleBuyFilled(symbol)
+          } else {
+            await this.#handleSellFilled(symbol)
+          }
+        } else if (TERMINAL_FAILURES.has(status)) {
+          this.#pause(
+            symbol,
+            `${trackedOrder.side} ${orderId} ended as ${status} during recovery`,
+          )
+          throw new Error(`Tracked order ${orderId} ended as ${status} during recovery`)
+        } else if (!isOpen) {
+          throw new Error(`Tracked order ${orderId} has unsupported status "${status}"`)
+        }
+      }
+    }
+  }
+
+  async #replayBufferedUserDataEvents({ generation }) {
+    while (this.#bufferedUserDataEvents.length > 0) {
+      if (!this.#isCurrentUserDataRecovery({ generation })) return
+
+      const events = this.#bufferedUserDataEvents.splice(0)
+      for (const payload of events) {
+        this.#eventHandling.onUserDataEvent({ payload })
+      }
+
+      await this.#queue.drain()
+    }
+  }
+
+  async #resumePairOrders() {
+    const tasks = [...this.#states.keys()].map((symbol) =>
+      this.#enqueue(symbol, async () => {
+        const state = this.#states.get(symbol)
+        if (!this.#isRunning || !this.#tradingReady || state.paused) return
+
+        if (compareDecimal({ left: state.activeQuantity, right: "0" }) > 0 &&
+            !state.buyOrder) {
+          if (state.sellOrder) {
+            await this.#replaceSell(symbol)
+          } else {
+            await this.#placeSell(symbol)
+          }
+        }
+
+        if (!state.buyOrder && state.referencePrice !== null) {
+          await this.#placeNextBuy(symbol)
+        }
+      }),
+    )
+
+    await Promise.all(tasks)
   }
 
   #publishTradingSummary({ symbol, reason }) {
