@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { EventBus } from "../../../event-bus/src/event-bus.js"
 import {
   subscribeTelegramNotifications,
   TELEGRAM_NOTIFICATION_EVENTS,
@@ -335,4 +336,119 @@ test("validates dependencies and does not let logger failures poison later sends
   } finally {
     process.emitWarning = originalEmitWarning
   }
+})
+
+
+test("exposes immutable delivery diagnostics for success, failure, overflow, and close", async () => {
+  const eventBus = createEventBus()
+  const gate = deferred()
+  const errors = []
+  const subscriber = subscribeTelegramNotifications({
+    eventBus,
+    maxPending: 1,
+    logger: { error(entry) { errors.push(entry) } },
+    notifier: {
+      async sendMessage() {
+        await gate.promise
+        throw new Error("Telegram unavailable")
+      },
+    },
+  })
+
+  const first = eventBus.handlers.get("bot.started")({
+    name: "bot.started",
+    data: {},
+  })
+  await Promise.resolve()
+  await eventBus.handlers.get("bot.stopped")({
+    name: "bot.stopped",
+    data: {},
+  })
+
+  const queued = subscriber.getDiagnostics()
+  assert.deepEqual(queued, {
+    acceptedCount: 1,
+    deliveredCount: 0,
+    failedCount: 0,
+    overflowCount: 1,
+    pendingCount: 1,
+    closed: false,
+  })
+  assert.equal(Object.isFrozen(queued), true)
+  assert.equal(errors.length, 1)
+
+  gate.resolve()
+  await first
+  const settled = subscriber.getDiagnostics()
+  assert.equal(settled.failedCount, 1)
+  assert.equal(settled.deliveredCount, 0)
+  assert.equal(settled.pendingCount, 0)
+
+  await subscriber.close()
+  assert.equal(subscriber.getDiagnostics().closed, true)
+})
+
+test("integrates with the real EventBus for allowlisting, ordering, flush, and close", async () => {
+  const eventBusErrors = []
+  const eventBus = new EventBus({
+    logger: { error(entry) { eventBusErrors.push(entry) } },
+  })
+  const sent = []
+  const subscriber = subscribeTelegramNotifications({
+    eventBus,
+    notifier: { async sendMessage(message) { sent.push(message) } },
+  })
+
+  assert.equal(eventBus.publish({
+    name: "bot.started",
+    source: "integration-test",
+  }).ok, true)
+  assert.equal(eventBus.publish({
+    name: "order.filled",
+    source: "integration-test",
+    data: { symbol: "BTCUSDT", side: "BUY", price: "100", quantity: "1" },
+  }).ok, true)
+  assert.equal(eventBus.publish({
+    name: "order.execution_report",
+    source: "integration-test",
+    data: { raw: "must not be sent" },
+  }).ok, true)
+
+  assert.equal((await eventBus.flush()).ok, true)
+  assert.equal(sent.length, 2)
+  assert.match(sent[0], /BOT STARTED/)
+  assert.match(sent[1], /ORDER FILLED/)
+  assert.deepEqual(eventBusErrors, [])
+  assert.equal(subscriber.getDiagnostics().deliveredCount, 2)
+
+  await subscriber.close()
+  assert.equal((await eventBus.close()).ok, true)
+  assert.equal(subscriber.getDiagnostics().closed, true)
+})
+
+test("lets the real EventBus observe delivery failures when no subscriber logger exists", async () => {
+  const reported = []
+  const eventBus = new EventBus({
+    onError: async ({ error, eventName }) => {
+      reported.push({ message: error.message, eventName })
+    },
+  })
+  const subscriber = subscribeTelegramNotifications({
+    eventBus,
+    notifier: { async sendMessage() { throw new Error("telegram offline") } },
+  })
+
+  assert.equal(eventBus.publish({
+    name: "bot.started",
+    source: "integration-test",
+  }).ok, true)
+  assert.equal((await eventBus.flush()).ok, true)
+  assert.deepEqual(reported, [{
+    message: "telegram offline",
+    eventName: "bot.started",
+  }])
+  assert.equal(subscriber.getDiagnostics().failedCount, 1)
+
+  await subscriber.close()
+  await eventBus.close()
 })

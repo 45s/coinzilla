@@ -85,6 +85,10 @@ export function subscribeTelegramNotifications({
 
   let deliveryTail = Promise.resolve()
   let pendingCount = 0
+  let acceptedCount = 0
+  let deliveredCount = 0
+  let failedCount = 0
+  let overflowCount = 0
   let isClosed = false
   let closePromise
   const subscriptions = []
@@ -99,6 +103,7 @@ export function subscribeTelegramNotifications({
           if (isClosed) return Promise.resolve()
 
           if (pendingCount >= maxPending) {
+            overflowCount += 1
             const error = new Error(
               `Telegram notification queue capacity exceeded (maxPending=${maxPending})`,
             )
@@ -109,13 +114,18 @@ export function subscribeTelegramNotifications({
           }
 
           pendingCount += 1
+          acceptedCount += 1
 
           const delivery = deliveryTail.then(async () => {
             const message = formatTelegramNotification(event)
-            if (message) await notifier.sendMessage(message)
+            if (message) {
+              await notifier.sendMessage(message)
+              deliveredCount += 1
+            }
           })
 
           const observedDelivery = delivery.catch((error) => {
+            failedCount += 1
             if (!reportDeliveryFailure(logger, eventName, error)) {
               throw error
             }
@@ -152,6 +162,17 @@ export function subscribeTelegramNotifications({
   }
 
   return {
+    /** Return a frozen snapshot of queue and delivery counters. */
+    getDiagnostics() {
+      return Object.freeze({
+        acceptedCount,
+        deliveredCount,
+        failedCount,
+        overflowCount,
+        pendingCount,
+        closed: isClosed,
+      })
+    },
     close() {
       if (closePromise) return closePromise
 
