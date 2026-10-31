@@ -143,15 +143,21 @@ A change is ready to merge only when:
 - Applying a design pattern or abstraction where the benefit is uncertain.
 - Enforcing purity or immutability where it conflicts with a clear, measured need.
 
-## PR branch freshness — required before merging to main
+## PR branch freshness — required for every target branch
 
-A pull request targeting main must include the latest main commit before it is merged. The contributor/AI agent is responsible for synchronizing the PR branch; the user must not be asked to update it manually.
+A PR must contain the latest commit from its actual target branch before merge. The contributor/AI agent owns synchronization; the user must never be asked to perform routine branch updates manually.
 
-Immediately before merge, fetch the latest remote main and PR head and verify that the current main tip is an ancestor of the PR head. If it is not, rebase the PR branch onto the latest main or merge main into the PR branch according to repository history policy, resolve conflicts, review the diff, and push the update. Do not force-push shared history unless explicitly authorized and safe.
+- For task PRs targeting `develop`, synchronize against the latest `develop`.
+- For the final release PR targeting `main`, synchronize against the latest `main`.
+- Fetch both target and PR refs immediately before merge. Verify the target tip is an ancestor of the PR head.
+- If stale, merge the latest target into the task branch (or use the repository's explicitly approved history policy), resolve conflicts on the task branch, inspect the complete diff, and push. Never force-push shared history.
+- Wait for required checks on the exact final PR head SHA. If either ref changes, repeat synchronization and validation.
+- Do not merge if checks are pending, failed, skipped unexpectedly, or missing from the required-check policy.
+- Task PRs may be merged by the responsible AI agent into `develop` after all required automated gates pass. No routine human approval is required for `develop`.
+- No AI agent may merge a task PR directly into `main`. The user approves the final milestone/release PR from `develop` to `main`.
+- If the agent cannot verify freshness, checks, or required permissions, stop and report the blocker. Never bypass branch protection or ask the user to update a branch.
 
-After any branch update, wait for required CI checks to pass on the exact final head SHA. Re-check branch freshness and CI immediately before merging; if main advances or the PR head changes, synchronize and validate again. Never merge a stale/unverified branch or bypass required checks. If tooling or permissions prevent synchronization or verification, stop and report the blocker rather than asking the user to perform a routine manual update.
-
-This applies to every PR targeting main, including documentation-only changes. Repository branch protection/rulesets should enforce this where GitHub supports it; written agent instructions alone are not a technical merge lock.
+Repository rulesets must enforce PR-only merges, target freshness, required status checks, no force pushes, and no deletion for both `develop` and `main`. Written instructions are not a technical substitute for branch protection.
 
 ## Exceptions
 
@@ -178,3 +184,8 @@ Before approving a pull request, ask:
 This document describes the intended standard; it does not automatically enforce every principle. Enforce objectively checkable rules with lint/type-check/test/build/security tools in CI. Start with rules that match the existing codebase, fix or explicitly baseline existing violations, then tighten the gate incrementally. Do not claim a principle is CI-enforced until an automated check actually verifies it.
 
 The repository's GitHub Actions workflows currently run package tests and test coverage. Configure repository rulesets or branch protection to require the desired status checks; a workflow running on a pull request does not by itself prevent merging.
+
+
+## AI-agent workflow authority
+
+The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
