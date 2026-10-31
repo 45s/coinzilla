@@ -82,7 +82,7 @@ Do not silently drop these merely because the current bot does not call them. Th
 
 ### User-data lifecycle and event identity (Phase 6)
 
-Binance wraps each user-data event with a `subscriptionId`. The broker forwards only events matching the active subscription. An `eventStreamTerminated` envelope is a subscription lifecycle signal, not an order/account update.
+Binance wraps each user-data event with a `subscriptionId`. The broker forwards only events matching the active subscription. An `eventStreamTerminated` envelope is a subscription lifecycle signal, not an order/account update; it is reported through `onStatus` and is still forwarded in the existing `onEvent({ event })` shape for compatibility.
 
 The optional `onStatus` callback currently reports:
 - `{ type: "terminated", subscriptionId, eventTime, recoveryRequired: true }`
