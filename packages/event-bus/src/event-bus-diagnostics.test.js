@@ -143,3 +143,32 @@ test("diagnostics remain accurate when fan-out is rejected atomically", async ()
 
   assert.equal((await bus.close()).ok, true)
 })
+
+test("close rejects nested publishes attempted by handlers during shutdown", async () => {
+  const bus = new EventBus({ logger: {} })
+  const started = deferred()
+  const release = deferred()
+  let nestedPublish
+
+  bus.subscribe({
+    name: "task.started",
+    handler: async () => {
+      started.resolve()
+      await release.promise
+      nestedPublish = bus.publish({
+        name: "task.nested",
+        source: "handler",
+      })
+    },
+  })
+
+  assert.equal(bus.publish({ name: "task.started", source: "test" }).ok, true)
+  await started.promise
+
+  const closing = bus.close()
+  assert.equal(bus.getDiagnostics().closed, true)
+  release.resolve()
+
+  assert.equal((await closing).ok, true)
+  assert.equal(nestedPublish.ok, false)
+})
