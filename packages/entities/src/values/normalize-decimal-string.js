@@ -13,7 +13,7 @@ export function normalizeDecimalString({
   }
 
   const input = value.trim()
-  const match = /^(-?)(\\d+)(?:\\.(\\d+))?$/.exec(input)
+  const match = /^(-?)(\d+)(?:\\.(\d+))?$/.exec(input)
 
   if (!match) {
     return toResult({ error: new Error(`${field} has an invalid decimal format`) })
@@ -28,7 +28,7 @@ export function normalizeDecimalString({
     return toResult({ error: new Error(`${field} exceeds supported precision`) })
   }
 
-  const whole = rawWhole.replace(/^0+(?=\\d)/, "")
+  const whole = rawWhole.replace(/^0+(?=\d)/, "")
   const fraction = rawFraction.replace(/0+$/, "")
   const isZero = whole === "0" && fraction.length === 0
 
