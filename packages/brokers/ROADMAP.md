@@ -400,7 +400,9 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 - [~] Add opt-in Binance testnet integration coverage for connection, public stream, signed RPC, safe order lifecycle where appropriate, and user-data events.
 
-  Offline safety regression: the native broker integration suite now creates its broker only inside the credential-gated setup hook, so missing credentials produce a clean skip instead of a module-load exception. The suite asserts both configured WebSocket endpoints are Binance TESTNET before connecting. A deterministic unit test launches the suite with credentials removed and verifies that it exits successfully as skipped. Live TESTNET protocol/order verification remains outstanding.
+  Offline safety regression: the native broker integration suite now creates its broker only inside the credential-gated setup hook, so missing credentials produce a clean skip instead of a module-load exception. The suite asserts both configured WebSocket endpoints are Binance TESTNET before connecting. A deterministic unit test launches the suite with credentials removed and verifies that it exits successfully as skipped.
+- [x] Require the explicit `BINANCE_TESTNET_INTEGRATION=1` opt-in in both native broker and user-data integration suites, in addition to non-placeholder credentials. The default unit suite proves both suites skip without network access even when dummy non-placeholder credentials are present.
+  The opt-in flag is documented in `.env.example` and defaults to `0`. Live TESTNET protocol/order verification remains outstanding.
 - [ ] Document supported Node versions, required API permissions, endpoints, reconnect semantics, rate limits, failure modes, uncertain order outcomes, and safe shutdown.
 - [ ] Verify broker package tests, full workspace tests, syntax checks, production dependency audit, and repository-required branch-protection checks.
 - [ ] Review logs for secret leakage.
