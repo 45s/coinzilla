@@ -203,16 +203,16 @@ test("rejects unknown cycle references, duplicate intents, and conflicting BUY s
 })
 
 test("rejects acknowledged intents that reuse a broker order ID", () => {
-  const first = createIntent({
-    intentId: "sell-intent-1",
+  const first = {
+    ...createIntent({ intentId: "sell-intent-1" }),
     status: "ACKNOWLEDGED",
     brokerOrderId: "broker-order-shared",
-  })
-  const second = createIntent({
-    intentId: "sell-intent-2",
+  }
+  const second = {
+    ...createIntent({ intentId: "sell-intent-2" }),
     status: "ACKNOWLEDGED",
     brokerOrderId: "broker-order-shared",
-  })
+  }
   const snapshot = serializeGridPairState({
     state: createState({ orderIntents: new Map([
       [first.clientOrderId, first],
