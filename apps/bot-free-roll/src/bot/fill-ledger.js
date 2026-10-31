@@ -1,3 +1,5 @@
+import { compareDecimal } from "./helpers/decimal.js"
+
 const LEDGER_FIELDS = Object.freeze([
   "id",
   "orderId",
@@ -38,6 +40,18 @@ export function createFillLedgerEntry({ fill } = {}) {
     return failure("Fill ledger entry requires stable trade and order IDs")
   }
 
+  const commissionAmount = nullableString(fill.commissionAmount)
+  let commissionAsset = nullableString(fill.commissionAsset)
+  if (commissionAmount !== null) {
+    try {
+      if (compareDecimal({ left: commissionAmount, right: "0" }) === 0) {
+        commissionAsset = null
+      }
+    } catch {
+      // Preserve malformed reported facts; the accounting transition fails closed.
+    }
+  }
+
   return {
     ok: true,
     entry: Object.freeze({
@@ -48,8 +62,8 @@ export function createFillLedgerEntry({ fill } = {}) {
       price: nullableString(fill.price),
       quantity: nullableString(fill.quantity),
       quoteQuantity: nullableString(fill.quoteQuantity),
-      commissionAmount: nullableString(fill.commissionAmount),
-      commissionAsset: nullableString(fill.commissionAsset),
+      commissionAmount,
+      commissionAsset,
       isMaker: typeof fill.isMaker === "boolean" ? fill.isMaker : null,
     }),
   }
