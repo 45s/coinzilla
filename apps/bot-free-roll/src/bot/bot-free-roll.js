@@ -10,13 +10,12 @@ import {
   subtractDecimal,
   getConfiguredSellFeeRateExact,
   getOrderType,
-  reconcileExecutionFill,
-  validateOrderFill,
   calculateSellPlanExact,
   getOrderId,
   roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
+import { reconcileExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
