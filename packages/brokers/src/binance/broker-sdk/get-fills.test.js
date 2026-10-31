@@ -158,3 +158,22 @@ describe("BinanceSdkBroker.getFills cursor validation", () => {
     assert.equal(result.ok, false)
   })
 })
+
+
+describe("BinanceSdkBroker.getFills page completeness", () => {
+  it("returns a full page as a page, never as a completeness claim", async () => {
+    const trades = Array.from({ length: 1000 }, (_, index) => ({ ...trade, id: index + 1 }))
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [marketInfo] }),
+      myTrades: (params) => {
+        assert.equal(params.limit, 1000)
+        return trades
+      },
+    })
+    const result = await broker.getFills({ symbol: "BTCUSDT" })
+    assert.equal(result.ok, true)
+    assert.equal(result.data.length, 1000)
+    assert.equal(result.data[999].tradeId, "1000")
+    assert.equal(result.data.complete, undefined)
+  })
+})
