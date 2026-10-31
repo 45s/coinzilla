@@ -319,6 +319,9 @@ describe("Binance user-data session recovery", () => {
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
 
+    assert.equal(clients[0].listenerCount, 0)
+    assert.equal(clients[0].errorListenerCount, 0)
+    assert.equal(clients[0].closeListenerCount, 0)
     assert.equal(broker.connected, false)
     assert.equal(broker.userDataUnavailable, true)
 
@@ -376,6 +379,9 @@ describe("Binance user-data session recovery", () => {
 
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    assert.equal(clients[0].listenerCount, 0)
+    assert.equal(clients[0].errorListenerCount, 0)
+    assert.equal(clients[0].closeListenerCount, 0)
     assert.equal(broker.connected, false)
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(scheduler.pendingCount, 1)

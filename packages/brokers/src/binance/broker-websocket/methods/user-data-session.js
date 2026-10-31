@@ -327,6 +327,7 @@ export class BinanceUserDataSession {
 
   #handleClose(event) {
     if (this.#stopped) return
+    this.#detachClientListeners()
     this.setConnected(false)
     if (this.#subscribers.size === 0) {
       this.setUnavailable(true)
