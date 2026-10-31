@@ -422,5 +422,5 @@ test("fails closed when supplied accounting contains malformed decimal values", 
 
   assert.equal(result.ok, false)
   assert.match(result.reason, /Market fill accounting is invalid/)
-  assert.match(result.reason, /Invalid decimal/)
+  assert.match(result.reason, /Decimal value has an invalid format/)
 })
