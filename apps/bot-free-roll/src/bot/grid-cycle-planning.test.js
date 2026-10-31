@@ -86,6 +86,7 @@ test("builds a cycle from actual multi-fill BUY accounting and fee facts", () =>
   assert.equal(result.data.acquiredQuantity, "99.99")
   assert.equal(result.data.recoveryCost, "10.01")
   assert.deepEqual(result.data.buyFillIds, ["trade-1", "trade-2"])
+  assert.equal(result.data.buyOrder.clientOrderId, "client-buy-1")
   assert.deepEqual(result.data.commissionTotals, { DOGE: "0.01", FDUSD: "0.01" })
 })
 
