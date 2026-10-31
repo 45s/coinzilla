@@ -311,6 +311,15 @@ export class BinanceSdkBroker extends CoreBroker {
         throw new TypeError("getFills limit must be an integer between 1 and 1000")
       }
 
+      const timeWindow = normalizeTimeWindow({ startTime, endTime }, "getFills")
+      const hasTimeWindow = timeWindow.startTime !== undefined || timeWindow.endTime !== undefined
+      if (hasTimeWindow && fromId !== undefined && fromId !== null) {
+        throw new TypeError("getFills fromId cannot be combined with startTime or endTime")
+      }
+      if (hasTimeWindow && orderId !== undefined && orderId !== null) {
+        throw new TypeError("getFills orderId cannot be combined with startTime or endTime")
+      }
+
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
       const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
         ? metadataResponse.data.symbols.filter((item) => item?.symbol === symbol)
@@ -336,15 +345,6 @@ export class BinanceSdkBroker extends CoreBroker {
         baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
         quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
       })
-
-      const timeWindow = normalizeTimeWindow({ startTime, endTime }, "getFills")
-      const hasTimeWindow = timeWindow.startTime !== undefined || timeWindow.endTime !== undefined
-      if (hasTimeWindow && fromId !== undefined && fromId !== null) {
-        throw new TypeError("getFills fromId cannot be combined with startTime or endTime")
-      }
-      if (hasTimeWindow && orderId !== undefined && orderId !== null) {
-        throw new TypeError("getFills orderId cannot be combined with startTime or endTime")
-      }
 
       const params = { symbol, limit, ...timeWindow }
       if (orderId !== undefined && orderId !== null) {
