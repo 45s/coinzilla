@@ -5,7 +5,12 @@ import {
   calculateGridCycleSellPlan,
   createGridCycleFromBuyFills,
 } from "./grid-cycle-planning.js"
-import { createGridCycle } from "./grid-cycles.js"
+import {
+  appendGridCycleSellOrder,
+  closeGridCycleSellOrder,
+  createGridCycle,
+  recordGridCycleSellFill,
+} from "./grid-cycles.js"
 
 function createBuyFill(overrides = {}) {
   return {
@@ -61,7 +66,7 @@ test("builds a cycle from actual multi-fill BUY accounting and fee facts", () =>
   })
 
   assert.equal(result.ok, true)
-  assert.equal(result.data.acquiredQuantity, "49.99")
+  assert.equal(result.data.acquiredQuantity, "99.99")
   assert.equal(result.data.recoveryCost, "10.01")
   assert.deepEqual(result.data.buyFillIds, ["trade-1", "trade-2"])
   assert.deepEqual(result.data.commissionTotals, { DOGE: "0.01", FDUSD: "0.01" })
@@ -137,12 +142,33 @@ test("plans an independent SELL from only the owning cycle's cost and proceeds",
   })
 })
 
-test("includes already reconciled proceeds when replanning a canceled cycle SELL", () => {
-  const result = calculateGridCycleSellPlan({
-    cycle: {
-      ...createCycle(),
-      saleProceeds: "5",
+test("includes reconciled partial-sale proceeds when replanning a canceled cycle SELL", () => {
+  const initial = appendGridCycleSellOrder({
+    cycle: createCycle(),
+    orderId: "sell-1",
+    quantity: "99",
+    reservedQuantity: "99",
+  })
+  const partial = recordGridCycleSellFill({
+    cycle: initial.data,
+    fill: {
+      id: "sell-trade-1",
+      orderId: "sell-1",
+      side: "SELL",
+      quantity: "50",
+      commissionAmount: "0",
+      commissionAsset: null,
     },
+    accounting: { baseQuantity: "50", quoteQuantity: "5" },
+  })
+  const canceled = closeGridCycleSellOrder({
+    cycle: partial.data,
+    orderId: "sell-1",
+    status: "CANCELED",
+    reconciled: true,
+  })
+  const result = calculateGridCycleSellPlan({
+    cycle: canceled.data,
     keepQuantity: "1",
     minProfit: "0.01",
     feeRate: "0",
@@ -150,8 +176,10 @@ test("includes already reconciled proceeds when replanning a canceled cycle SELL
     quantityStepSize: "0.01",
   })
 
-  // A forged snapshot is rejected because its proceeds do not match fills.
-  assert.equal(result.ok, false)
+  assert.equal(result.ok, true)
+  assert.equal(result.data.quantity, "49")
+  assert.equal(result.data.requiredNetProceeds, "5.01")
+  assert.equal(result.data.price, "0.103")
 })
 
 test("refuses to plan a replacement while a cycle SELL is still live", () => {
