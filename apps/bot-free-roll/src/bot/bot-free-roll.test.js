@@ -1373,6 +1373,12 @@ test("constructor rejects invalid global and per-pair configuration", () => {
     name: "AggregateError",
     message: "Invalid FreeRollBot config",
   })
+  assert.throws(() => new FreeRollBot({
+    broker: {},
+    tradingConfig: {
+      strategies: { "free-roll": { pairs: "DOGEUSDT" } },
+    },
+  }), /requires a broker when enabled and a pairs object/)
 
   const createConfiguredBot = (pair, settings = { minProfit: 0.01 }) =>
     new FreeRollBot({
@@ -2046,6 +2052,10 @@ test("invalid fill identity and maker classification fail closed", async (t) => 
     ["missing trade ID", (event) => { event.fill.id = "" }],
     ["missing maker classification", (event) => { delete event.fill.isMaker }],
     ["taker fill on LIMIT_MAKER", (event) => { event.fill.isMaker = false }],
+    ["unsupported fill side", (event) => {
+      event.fill.side = "HOLD"
+      event.executedOrder.side = "HOLD"
+    }],
   ]
 
   for (const [name, mutate] of cases) {
@@ -2453,6 +2463,7 @@ test("SELL cancellation rejects invalid remaining quantities", async () => {
   })
 
   try {
+    fixture.priceHandlers.get("DOGEUSDT")({ price: 100.1 })
     const nextBuy = fixture.createdOrders.find((order) => order.side === "BUY" && order.orderId !== "order-1")
     fixture.userDataHandler(createExecutionEvent({ order: nextBuy, tradeId: 1120 }))
     await waitForCondition(() => fixture.bot.getStats().DOGEUSDT.paused, "invalid remaining quantity did not pause pair")
@@ -2467,6 +2478,7 @@ test("SELL cancellation rejects invalid remaining quantities", async () => {
 
 test("SELL cancellation rejects malformed and foreign trade-history responses", async (t) => {
   const cases = [
+    ["broker without history support", null],
     ["non-array history", async () => ({ ok: true, data: null })],
     ["foreign order fill", async ({ symbol }) => ({
       ok: true,
@@ -2482,6 +2494,22 @@ test("SELL cancellation rejects malformed and foreign trade-history responses", 
         commissionAsset: null,
         isMaker: true,
         time: 1,
+      }],
+    })],
+    ["history fill with unsupported commission asset", async ({ symbol, orderId }) => ({
+      ok: true,
+      data: [{
+        id: "unsupported-history-trade",
+        orderId,
+        symbol,
+        side: "SELL",
+        price: "100",
+        quantity: "1",
+        quoteQuantity: "100",
+        commissionAmount: "0.01",
+        commissionAsset: "BNB",
+        isMaker: true,
+        time: 2,
       }],
     })],
   ]
@@ -2502,5 +2530,112 @@ test("SELL cancellation rejects malformed and foreign trade-history responses", 
         await fixture.bot.stop()
       }
     })
+  }
+})
+
+test("journal publish failure results are logged without interrupting order handling", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const logErrors = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async () => ({ ok: true, data: { disconnect() {} } }),
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "exchange-order-2" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "order.created") {
+          return { ok: false, errors: [new Error("journal write rejected")] }
+        }
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+  bot.logger = {
+    debug() {},
+    error(...args) { logErrors.push(args) },
+  }
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => bot.getStats().DOGEUSDT.buyOrderId === "exchange-order-2", "BUY state was not retained")
+
+    assert.equal(bot.getStats().DOGEUSDT.paused, false)
+    assert.equal(createdOrders.length, 1)
+    assert.ok(logErrors.some(([message]) => message === "Failed to publish journal event"))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("fully filled SELL discovered during cancellation is reconciled before replacement", async () => {
+  const fixture = await createActiveSellFixture({
+    cancelOrder: async ({ orderId }) => {
+      const order = fixture.createdOrders.find((item) => item.orderId === orderId)
+      return {
+        ok: true,
+        data: {
+          orderId,
+          originalQuantity: String(order.quantity),
+          executedQuantity: String(order.quantity),
+          quantity: "0",
+          status: "FILLED",
+        },
+      }
+    },
+    getMyTrades: async ({ symbol, orderId }) => {
+      const order = fixture.createdOrders.find((item) => item.orderId === orderId)
+      return {
+        ok: true,
+        data: [{
+          id: "sell-filled-during-cancel",
+          orderId,
+          symbol,
+          side: "SELL",
+          price: String(order.price),
+          quantity: String(order.quantity),
+          quoteQuantity: multiplyDecimal({
+            left: String(order.quantity),
+            right: String(order.price),
+          }),
+          commissionAmount: "0",
+          commissionAsset: null,
+          isMaker: true,
+          time: 3,
+        }],
+      }
+    },
+  })
+
+  try {
+    const nextBuy = fixture.createdOrders.find((order) =>
+      order.side === "BUY" && order.orderId !== "order-1")
+    fixture.userDataHandler(createExecutionEvent({ order: nextBuy, tradeId: 1140 }))
+
+    await waitForCondition(() => fixture.bot.getStats().DOGEUSDT.paused, "filled-during-cancel path did not pause")
+    assert.equal(fixture.bot.getStats().DOGEUSDT.sellFills, 1)
+    assert.equal(fixture.createdOrders.filter((order) => order.side === "SELL").length, 1)
+    assert.ok(fixture.events.some((event) =>
+      event.name === "bot.pair_paused" &&
+      event.data.reason === "Completed sale did not meet estimated profit target"))
+  } finally {
+    await fixture.bot.stop()
   }
 })
