@@ -402,7 +402,9 @@ export class BinanceStreamsClient {
       this.#clearAckTimeout(pending.timeout)
       if (code !== undefined) {
         pending.reject(new Error(`Binance Streams ${pending.method} failed (${code}): ${msg || "unknown error"}`))
-      } else if (result !== null) {
+      } else if (pending.method === "LIST_SUBSCRIPTIONS" && !Array.isArray(result)) {
+        pending.reject(new Error("Malformed Binance Streams LIST_SUBSCRIPTIONS acknowledgement"))
+      } else if (pending.method !== "LIST_SUBSCRIPTIONS" && result !== null) {
         pending.reject(new Error(`Malformed Binance Streams ${pending.method} acknowledgement`))
       } else {
         pending.resolve(result)
