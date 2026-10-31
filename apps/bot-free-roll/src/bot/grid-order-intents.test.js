@@ -81,8 +81,9 @@ test("rejects invalid order intent identity, time, side, type, and decimal value
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "0", price: "1", createdAtServerTime: 1 },
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "-1", createdAtServerTime: 1 },
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "1", createdAtServerTime: -1 },
-    { intentId: "i", symbol: "DOGEFDUSD", side: "SELL", type: "LIMIT", quantity: "1", price: "1", reservedQuantity: "0.9", createdAtServerTime: 1 },
+    { intentId: "i", symbol: "DOGEFDUSD", side: "SELL", type: "LIMIT", quantity: "1", price: "1", reservedQuantity: "0.9", createdAtServerTime: 1, cycleId: "cycle-1" },
     { intentId: "i", symbol: "DOGEFDUSD", side: "BUY", type: "LIMIT", quantity: "1", price: "1", reservedQuantity: "1", createdAtServerTime: 1 },
+    { intentId: "i", symbol: "DOGEFDUSD", side: "SELL", type: "LIMIT", quantity: "1", price: "1", createdAtServerTime: 1 },
   ]
 
   for (const input of invalid) assert.equal(createGridOrderIntent(input).ok, false)
