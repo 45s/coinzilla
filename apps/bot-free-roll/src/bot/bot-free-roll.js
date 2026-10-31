@@ -1270,10 +1270,87 @@ export class FreeRollBot {
     }
   }
 
+  async #handleGridBuyFilled({ symbol, state, order }) {
+    try {
+      await this.#reconcileGridFinalOrder({
+        symbol,
+        order,
+        expectedStatus: "FILLED",
+      })
+    } catch (error) {
+      this.#pause(symbol, `Grid BUY ${order.id} could not be fully reconciled`, error)
+      return
+    }
+
+    const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
+      this.#pause(
+        symbol,
+        `Grid BUY ${order.id} is FILLED but actual fills total ${filledQuantity}, expected ${order.quantity}`,
+      )
+      return
+    }
+
+    const buyFills = [...state.fills.values()].filter(
+      (fill) => String(fill.orderId) === String(order.id) && fill.side === "BUY",
+    )
+    const created = createGridCycleFromBuyFills({
+      symbol,
+      baseAsset: state.baseAsset,
+      quoteAsset: state.quoteAsset,
+      buyOrder: order,
+      buyFills,
+    })
+    if (!created.ok) {
+      this.#pause(symbol, `Could not create Grid recovery cycle for BUY ${order.id}`, created.errors[0])
+      return
+    }
+
+    state.buyOrder = null
+    state.trailingBuy = false
+    state.lastBuyPrice = String(order.price)
+    state.gridCycles.set(created.data.id, created.data)
+
+    const projection = projectGridPairAccounting({ state })
+    if (!projection.ok) {
+      this.#pause(symbol, "Grid cycle creation failed inventory reconciliation", projection.errors[0])
+      return
+    }
+    Object.assign(state, projection.data)
+
+    try {
+      await this.#persistGridState()
+    } catch (error) {
+      this.#pause(symbol, "Grid BUY was filled but its recovery cycle could not be persisted", error)
+      return
+    }
+
+    if (!(await this.#placeGridCycleSell({
+      symbol,
+      cycleId: created.data.id,
+    }))) {
+      this.#publishTradingSummary({ symbol, reason: "grid_buy_filled_sell_pending" })
+      return
+    }
+
+    this.#debug(`[${symbol}] Grid BUY converted into an independent recovery cycle`, {
+      cycleId: created.data.id,
+      buyOrderId: order.id,
+      acquiredQuantity: created.data.acquiredQuantity,
+      recoveryCost: created.data.recoveryCost,
+    })
+    await this.#placeNextBuy(symbol)
+    this.#publishTradingSummary({ symbol, reason: "grid_buy_filled" })
+  }
+
   async #handleBuyFilled(symbol) {
     const state = this.#states.get(symbol)
     const order = state.buyOrder
     if (!order || state.paused) return
+    if (state.mode === "grid") {
+      await this.#handleGridBuyFilled({ symbol, state, order })
+      return
+    }
 
     const filledQuantity = state.filledQuantityByOrder.get(order.id) ?? "0"
     if (compareDecimal({ left: filledQuantity, right: String(order.quantity) }) !== 0) {
