@@ -3,17 +3,19 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
 import { isValidEventName } from "./helpers/event-name.js"
 import { assertSupportedPayload, cloneAndFreezePayload } from "./helpers/payload.js"
 import { validateOptions } from "./helpers/options.js"
+import { canAcceptDeliveries } from "./helpers/delivery-capacity.js"
 
 const ALL_EVENTS = Symbol("all-events")
 export class EventBus {
   /**
-   * @param {{ logger?: { error?: (entry: object) => void }, onError?: (context: object) => void | Promise<void> }} options
+   * @param {{ logger?: { error?: (entry: object) => void }, onError?: (context: object) => void | Promise<void>, maxPending?: number }} options
    * @throws {TypeError} If options or a configured callback is invalid.
    */
   constructor(options = {}) {
-    const { logger, onError } = validateOptions(options, defaultLogger)
+    const { logger, onError, maxPending } = validateOptions(options, defaultLogger)
     this.logger = logger
     this.onError = onError
+    this.maxPending = maxPending
     // Use an explicit registry rather than EventEmitter: event names are
     // application data and must never trigger Node's special listener events.
     this.listeners = new Map()
@@ -57,6 +59,21 @@ export class EventBus {
       return toResult({ error })
     }
 
+    const listeners = [
+      ...(this.listeners.get(name) ?? []),
+      ...this.allListeners,
+    ]
+
+    if (!canAcceptDeliveries({
+      pendingCount: this.pending.size,
+      deliveryCount: listeners.length,
+      maxPending: this.maxPending,
+    })) {
+      return toResult({
+        error: new Error("EventBus pending delivery limit exceeded"),
+      })
+    }
+
     const event = Object.freeze({
       id: randomUUID(),
       timestamp: new Date().toISOString(),
@@ -65,12 +82,7 @@ export class EventBus {
       data: eventData,
     })
 
-    const namedListeners = this.listeners.get(name)
-    for (const listener of namedListeners ?? []) {
-      listener(event)
-    }
-
-    for (const listener of this.allListeners) {
+    for (const listener of listeners) {
       listener(event)
     }
 

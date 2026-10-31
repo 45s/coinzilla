@@ -15,12 +15,12 @@ export function validateOptions(options, defaultLogger) {
   }
 
   for (const key of Reflect.ownKeys(options)) {
-    if (key !== "logger" && key !== "onError") {
+    if (key !== "logger" && key !== "onError" && key !== "maxPending") {
       throw new TypeError(`Unknown EventBus option: ${String(key)}`)
     }
   }
 
-  const { logger = defaultLogger, onError } = options
+  const { logger = defaultLogger, onError, maxPending = 1000 } = options
   if (
     logger === null ||
     typeof logger !== "object" ||
@@ -33,6 +33,9 @@ export function validateOptions(options, defaultLogger) {
   if (onError !== undefined && typeof onError !== "function") {
     throw new TypeError("EventBus onError must be a function")
   }
+  if (!Number.isSafeInteger(maxPending) || maxPending < 1) {
+    throw new TypeError("EventBus maxPending must be a positive safe integer")
+  }
 
-  return { logger, onError }
+  return { logger, onError, maxPending }
 }

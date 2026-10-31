@@ -182,11 +182,12 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 ### Phase 2 — Bounded async delivery and lifecycle
 
 - [ ] Define per-subscriber/global concurrency semantics.
-- [ ] Add bounded pending work and an explicit overload policy.
+- [x] Add bounded pending work and an explicit overload policy (global pending-delivery cap; reject the whole publish before dispatch when its complete fan-out does not fit).
 - [ ] Add pending-work diagnostics.
 - [ ] Add shutdown timeout and clear timeout result semantics.
 - [ ] Consider cooperative cancellation via `AbortSignal`.
-- [ ] Test nested publishes, re-entrancy, slow/hung handlers, concurrent close, and overload.
+- [x] Test overload boundaries, atomic fan-out rejection, capacity recovery, and concurrent publish saturation.
+- [ ] Test nested publishes, re-entrancy, slow/hung handlers, and concurrent close.
 
 Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wait forever without a defined timeout result.
 

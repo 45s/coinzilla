@@ -690,3 +690,70 @@ test("close invalidates outstanding subscription handles", async () => {
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
 })
+
+test("rejects a publish atomically when its complete fan-out exceeds capacity", async () => {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const received = []
+  const bus = new EventBus({ maxPending: 2, logger: { error() {} } })
+
+  bus.subscribe({
+    name: "capacity.event",
+    handler: async () => { received.push("named"); await gate },
+  })
+  bus.subscribeAll({
+    handler: async () => { received.push("all"); await gate },
+  })
+
+  const accepted = bus.publish({ name: "capacity.event", source: "test" })
+  assert.equal(accepted.ok, true)
+  const rejected = bus.publish({ name: "capacity.event", source: "test" })
+  assert.equal(rejected.ok, false)
+  assert.match(rejected.errors[0].message, /pending delivery limit exceeded/)
+
+  release()
+  await bus.flush()
+  assert.deepEqual(received, ["named", "all"])
+  assert.equal(bus.publish({ name: "capacity.event", source: "test" }).ok, true)
+  await bus.close()
+})
+
+test("rejects fan-out before invoking any named or subscribeAll consumer", async () => {
+  const bus = new EventBus({ maxPending: 1, logger: { error() {} } })
+  let calls = 0
+  bus.subscribe({ name: "fanout.event", handler: () => { calls += 1 } })
+  bus.subscribeAll({ handler: () => { calls += 1 } })
+
+  const result = bus.publish({ name: "fanout.event", source: "test" })
+  assert.equal(result.ok, false)
+  await bus.flush()
+  assert.equal(calls, 0)
+  await bus.close()
+})
+
+test("accepts publishes without subscribers when no deliveries are scheduled", async () => {
+  const bus = new EventBus({ maxPending: 1, logger: { error() {} } })
+  assert.equal(bus.publish({ name: "unobserved.one", source: "test" }).ok, true)
+  assert.equal(bus.publish({ name: "unobserved.two", source: "test" }).ok, true)
+  await bus.close()
+})
+
+test("concurrent publishes cannot exceed the pending-delivery cap", async () => {
+  const bus = new EventBus({ maxPending: 2, logger: { error() {} } })
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let calls = 0
+  bus.subscribe({
+    name: "concurrent.event",
+    handler: async () => { calls += 1; await gate },
+  })
+
+  const results = [1, 2, 3].map(() =>
+    bus.publish({ name: "concurrent.event", source: "test" }),
+  )
+  assert.deepEqual(results.map(result => result.ok), [true, true, false])
+  release()
+  await bus.flush()
+  assert.equal(calls, 2)
+  await bus.close()
+})
