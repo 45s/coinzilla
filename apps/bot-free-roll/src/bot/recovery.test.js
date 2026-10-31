@@ -94,7 +94,7 @@ test("fails closed for unexpected, mismatched, and potentially truncated order h
   assert.equal(reconcileTrackedOrder({
     symbol: "BTCUSDT",
     order: trackedOrder,
-    openOrders: [{ id: "other", side: "BUY", originalQuantity: "2", executedQuantity: "2", status: "NEW" }],
+    openOrders: [{ id: "order-1", side: "SELL", originalQuantity: "2", executedQuantity: "2", status: "NEW" }],
     fills,
   }).ok, false)
 
