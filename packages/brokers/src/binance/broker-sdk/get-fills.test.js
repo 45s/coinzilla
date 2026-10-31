@@ -154,4 +154,33 @@ describe("BinanceSdkBroker.getFills", () => {
     })
     assert.equal(invalid.ok, false)
   })
+
+
+  it("continues canonical fill pages from the next trade ID without duplicates", async () => {
+    let page = 0
+    const firstPage = [
+      { ...trade, id: 42, time: 100 },
+      { ...trade, id: 43, time: 101 },
+    ]
+    const secondPage = [{ ...trade, id: 44, time: 102 }]
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [marketInfo] }),
+      myTrades(params) {
+        assert.equal(params.fromId, page === 0 ? 42 : 44)
+        return page++ === 0 ? firstPage : secondPage
+      },
+    })
+
+    const first = await broker.getFills({ symbol: "BTCUSDT", fromId: 42, limit: 2 })
+    const second = await broker.getFills({ symbol: "BTCUSDT", fromId: 44, limit: 2 })
+
+    assert.deepEqual(
+      [...first.data, ...second.data].map((fill) => fill.id),
+      [
+        "binance:BTCUSDT:42",
+        "binance:BTCUSDT:43",
+        "binance:BTCUSDT:44",
+      ],
+    )
+  })
 })
