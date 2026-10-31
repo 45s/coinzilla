@@ -164,3 +164,40 @@ test("history methods reject conflicting cursors and malformed response pages", 
 
   assert.equal(rpc.calls.length, 2)
 })
+
+
+test("history cursors advance from the last returned ID without repeating records", async () => {
+  let tradePage = 0
+  let orderPage = 0
+  const tradePages = [
+    [
+      { id: 10, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 10 },
+      { id: 11, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 11 },
+    ],
+    [
+      { id: 12, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 12 },
+    ],
+  ]
+  const orderPages = [
+    [{ symbol: "DOGEFDUSD", orderId: 10 }, { symbol: "DOGEFDUSD", orderId: 11 }],
+    [{ symbol: "DOGEFDUSD", orderId: 12 }],
+  ]
+  const { broker, rpc } = createBroker({
+    myTrades: () => tradePages[tradePage++],
+    allOrders: () => orderPages[orderPage++],
+  })
+
+  const firstTrades = await broker.getMyTrades({ symbol: "DOGEFDUSD", fromId: 10, limit: 2 })
+  const nextTradeId = Number(firstTrades.data.at(-1).id) + 1
+  const secondTrades = await broker.getMyTrades({ symbol: "DOGEFDUSD", fromId: nextTradeId, limit: 2 })
+
+  const firstOrders = await broker.getOrderHistory({ symbol: "DOGEFDUSD", orderId: 10, limit: 2 })
+  const nextOrderId = Number(firstOrders.data.at(-1).orderId) + 1
+  const secondOrders = await broker.getOrderHistory({ symbol: "DOGEFDUSD", orderId: nextOrderId, limit: 2 })
+
+  assert.deepEqual(firstTrades.data.map((trade) => trade.id), ["10", "11"])
+  assert.deepEqual(secondTrades.data.map((trade) => trade.id), ["12"])
+  assert.deepEqual(firstOrders.data.map((order) => order.orderId), [10, 11])
+  assert.deepEqual(secondOrders.data.map((order) => order.orderId), [12])
+  assert.deepEqual(rpc.calls.map((call) => call.params.fromId ?? call.params.orderId), [10, 12, 10, 12])
+})
