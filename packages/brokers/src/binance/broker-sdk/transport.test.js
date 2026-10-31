@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { createHash } from "node:crypto"
+import { createServer } from "node:http"
 
 import { NativeWebSocketTransport } from "./transport.js"
 import { isSafeUndiciVersion, assertNativeWebSocketRuntime } from "./runtime.js"
@@ -194,4 +196,109 @@ test("runtime gate requires the approved Node floor and patched Undici", () => {
     nodeVersion: "22.23.4",
     undiciVersion: "6.29.0",
   }), /patched Undici/)
+})
+
+
+test("the supported Node WebSocket client automatically answers server ping frames", {
+  skip: typeof globalThis.WebSocket !== "function",
+}, async () => {
+  const payload = Buffer.from("binance-ping")
+  let resolvePong
+  let rejectPong
+  const pongReceived = new Promise((resolve, reject) => {
+    resolvePong = resolve
+    rejectPong = reject
+  })
+  const server = createServer()
+
+  server.on("upgrade", (request, socket) => {
+    const key = request.headers["sec-websocket-key"]
+    const accept = createHash("sha1")
+      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .digest("base64")
+
+    socket.write([
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${accept}`,
+      "",
+      "",
+    ].join("\\r\\n"))
+
+    socket.write(Buffer.concat([
+      Buffer.from([0x89, payload.length]),
+      payload,
+    ]))
+
+    let received = Buffer.alloc(0)
+    socket.on("data", (chunk) => {
+      received = Buffer.concat([received, chunk])
+
+      while (received.length >= 2) {
+        const first = received[0]
+        const second = received[1]
+        const opcode = first & 0x0f
+        const masked = (second & 0x80) !== 0
+        let length = second & 0x7f
+        let offset = 2
+
+        if (length === 126) {
+          if (received.length < 4) return
+          length = received.readUInt16BE(2)
+          offset = 4
+        } else if (length === 127) {
+          if (received.length < 10) return
+          const largeLength = received.readBigUInt64BE(2)
+          if (largeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
+            rejectPong(new Error("Unexpected oversized WebSocket frame"))
+            return
+          }
+          length = Number(largeLength)
+          offset = 10
+        }
+
+        const maskLength = masked ? 4 : 0
+        if (received.length < offset + maskLength + length) return
+
+        let framePayload = received.subarray(offset + maskLength, offset + maskLength + length)
+        if (masked) {
+          const mask = received.subarray(offset, offset + 4)
+          framePayload = Buffer.from(framePayload)
+          for (let index = 0; index < framePayload.length; index += 1) {
+            framePayload[index] ^= mask[index % 4]
+          }
+        }
+
+        received = received.subarray(offset + maskLength + length)
+        if (opcode === 0x0a) resolvePong(framePayload)
+      }
+    })
+  })
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", resolve)
+  })
+
+  const address = server.address()
+  const transport = new NativeWebSocketTransport({
+    url: `ws://127.0.0.1:${address.port}/ws`,
+    connectTimeout: 2_000,
+    closeTimeout: 1_000,
+  })
+
+  try {
+    await transport.connect()
+    const pong = await Promise.race([
+      pongReceived,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Server did not receive the WebSocket pong")), 1_000)
+      }),
+    ])
+    assert.deepEqual(pong, payload)
+  } finally {
+    await transport.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
 })
