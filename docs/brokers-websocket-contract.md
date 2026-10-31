@@ -84,18 +84,26 @@ Do not silently drop these merely because the current bot does not call them. Th
 
 Binance wraps each user-data event with a `subscriptionId`. The broker forwards only events matching the active subscription. An `eventStreamTerminated` envelope is a subscription lifecycle signal, not an order/account update; it is reported through `onStatus` and is still forwarded in the existing `onEvent({ event })` shape for compatibility.
 
-The optional `onStatus` callback currently reports:
+The broker keeps one remote `userDataStream.subscribe.signature` subscription per account/API connection and fans events out to local handles. Concurrent local subscribe calls share the same remote subscribe request. Disconnecting one handle removes only that callback; the remote subscription is removed when the final local handle disconnects. Binance documents one subscription per account per WebSocket API connection; do not create one remote subscription per callback.
+
+The optional `onStatus` callback reports:
 - `{ type: "terminated", subscriptionId, eventTime, recoveryRequired: true }`
 - `{ type: "rpcError", error, recoveryRequired: false }`
 - `{ type: "connectionClosed", code, reason, recoveryRequired: true }`
+- `{ type: "recovering", attempt, error?, recoveryRequired: true }`
+- `{ type: "recovered", subscriptionId, reconciliationRequired: true, recoveryRequired: true }`
+- `{ type: "recoveryFailed", attempt, error?, recoveryRequired: true }`
+- `{ type: "reconciled", subscriptionId, recoveryRequired: false }`
 
-Intentional broker shutdown is not reported as an unexpected recovery gap. Unexpected API socket closure is logged even when no `onStatus` callback is supplied. After a subscription attempt fails, terminates, is explicitly disconnected, or loses its API socket, the broker fails closed for new `createOrder()` calls until a new user-data subscription succeeds. The callback is additive; the existing bot consumer does not currently pass it.
+An explicit stream termination triggers a new signature subscription on the still-open API connection. An unexpected socket close creates a fresh one-shot native RPC client, reconnects it, then subscribes again. Recovery uses a single-flight retry loop with exponential backoff capped at 30 seconds and a finite default budget of five attempts. It is canceled when the final local handle disconnects or the broker is intentionally shut down. A later explicit `broker.connect()` can resume retained subscribers after retry exhaustion.
 
-Execution reports can be deduplicated using the documented `symbol`, `orderId`, and `executionId` tuple. Other event types do not expose a universal unique event ID, so the current bounded fallback cache suppresses only exact repeated payloads. This is best-effort idempotency, not a claim that all semantic duplicates can be recognized.
+A successful resubscription is **not** proof that missed events have been recovered. After recovery, each active local handle must call its additive `acknowledgeRecovery()` method only after its consumer has reconciled the relevant account/order state. Trading mutations (`createOrder`, `cancelOrder`, and `cancelAllOpenOrders`) remain blocked until every active local handle acknowledges. The handle returns `true` only when all active handles have acknowledged; otherwise it returns `false`. Existing consumers that do not handle `onStatus` remain fail-closed after an interruption. No consumer code is changed as part of this broker migration.
 
-Do not treat `E` (event time), `T` (transaction time), or `u` (account update time) as a global monotonic sequence or replay cursor. A connection interruption means events may have been missed. Current snapshots from `account.status` and `openOrders.status`, plus symbol-scoped `myTrades` / `allOrders` queries, can reconcile present state and known order history but cannot reconstruct every missed intermediate balance delta.
+Intentional broker shutdown is not reported as an unexpected recovery gap. Unexpected API socket closure is logged even when no `onStatus` callback is supplied. Event and status callback exceptions are isolated so one local consumer cannot prevent delivery to other handles.
 
-Phase 6A adds lifecycle observability and bounded event deduplication. Automatic reconnect, remote resubscription, callback fan-out, and consumer reconciliation remain Phase 6B work; do not treat Phase 6 as complete until those exit criteria are met.
+Execution reports can be deduplicated using the documented `symbol`, `orderId`, and `executionId` tuple. Other event types do not expose a universal unique event ID, so the bounded fallback cache suppresses only exact repeated payloads. The identity cache is retained across reconnects so a repeated event under a new subscription ID can still be suppressed. This is best-effort idempotency, not a claim that all semantic duplicates can be recognized.
+
+Do not treat `E` (event time), `T` (transaction time), or `u` (account update time) as a global monotonic sequence or replay cursor. A connection interruption means events may have been missed. Current snapshots from `account.status` and `openOrders.status`, plus symbol-scoped `myTrades` / `allOrders` queries, can reconcile present state and available order/trade history but cannot reconstruct every missed intermediate balance delta. Never replay pending or uncertain state-changing RPC requests during recovery.
 
 ## 4. Binance WebSocket API method matrix
 
