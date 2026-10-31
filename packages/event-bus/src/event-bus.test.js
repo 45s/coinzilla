@@ -583,6 +583,6 @@ test("close invalidates outstanding subscription handles", async () => {
   assert.equal(result.ok, true)
   await bus.close()
 
-  assert.equal(result.subscription.unsubscribe().ok, true)
+  assert.equal(result.subscription.unsubscribe().unsubscribed, false)
   assert.equal(result.subscription.unsubscribe().unsubscribed, false)
 })
