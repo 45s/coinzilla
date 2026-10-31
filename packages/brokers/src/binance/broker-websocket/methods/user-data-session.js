@@ -356,7 +356,7 @@ export class BinanceUserDataSession {
     const wait = delay ?? Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
       this.#reconnectTimer = null
-      void this.#recover()
+      return this.#recover()
     }, wait)
   }
 
