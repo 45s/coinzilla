@@ -17,5 +17,8 @@
     "@binance/spot": "^34.0.3",
     "@coinzilla/entities": "workspace:*",
     "@coinzilla/utils": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.23.4"
   }
 }
