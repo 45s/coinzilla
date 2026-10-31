@@ -256,6 +256,7 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
 
   transports[0].receive({ e: "serverShutdown", E: 123 })
   assert.equal(transports[0].closeCalls.length, 1)
+  assert.equal(transports[0].closeCalls[0].code, 1000)
   clock.advanceBy(10)
   await flush()
   clock.advanceBy(290)
@@ -266,6 +267,7 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
 
   clock.advanceBy(1_000)
   assert.equal(transports[1].closeCalls.length, 1)
+  assert.equal(transports[1].closeCalls[0].code, 1000)
   clock.advanceBy(10)
   await flush()
   assert.equal(transports.length, 3)
