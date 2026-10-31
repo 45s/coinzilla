@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** `packages/notifiers/`  
-**Status:** Initial implementation in progress on `feature/notifiers`.  
+**Status:** Initial implementation validated on `feature/notifiers`; consumer integration is tracked separately.  
 **Purpose:** provide a small, transport-focused notification package for operational alerts from Coinzilla applications.
 
 Read [AGENTS.md](./AGENTS.md), [README.md](./README.md), and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md).
@@ -20,7 +20,7 @@ Read [AGENTS.md](./AGENTS.md), [README.md](./README.md), and the repository's ma
 - [x] Define public exports and package-local AI-agent instructions.
 - [x] Define initial Telegram-only transport scope and explicit event allowlist.
 - [x] Document setup, usage, security, and operational limitations.
-- [ ] Confirm package installation and workspace lockfile consistency in a local pnpm environment.
+- [x] Verify package installation and workspace lockfile consistency with `pnpm install --frozen-lockfile` in CI.
 
 Acceptance: package is discoverable in the workspace, documented, and does not add runtime dependencies.
 
@@ -52,9 +52,9 @@ Acceptance: subscribers can attach to an existing event bus without changing tra
 - [x] Add formatter tests for supported events, missing fields, unsupported event names, and raw payload exclusion.
 - [x] Add subscriber tests for allowlist registration, ordered delivery, drain-on-close, partial setup cleanup, and logger failures.
 - [x] Configure package-specific coverage thresholds (90% lines, 85% branches).
-- [ ] Execute package tests and coverage on Node.js 22.8+ and inspect uncovered branches.
-- [ ] Execute workspace tests, syntax check, and quality gate.
-- [ ] Review final diff and validate pnpm lockfile with the declared pnpm version.
+- [x] Execute package tests and coverage on Node.js 22.23.4; package-specific 90% line / 85% branch thresholds pass.
+- [x] Execute workspace tests, workspace coverage, and JavaScript syntax checks in CI.
+- [x] Review final diff and validate the lockfile with pnpm 12.11.2 using frozen installation.
 
 Acceptance: all required checks pass on the exact final branch head and CI verifies the package coverage gate.
 
