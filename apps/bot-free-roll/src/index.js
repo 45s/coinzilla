@@ -5,6 +5,7 @@ import tradingConfig from "../trading-config.json" with { type: "json" }
 
 import { prepareBroker } from "./prepare-broker.js"
 import { prepareJournal } from "./prepare-journal.js"
+import { prepareTelegramNotifications } from "./prepare-telegram-notifications.js"
 import { FreeRollBot } from "./bot/index.js"
 import { validateTradingConfig } from "./validate-config.js"
 
@@ -17,6 +18,19 @@ if (!validatedTradingConfig.ok) {
 }
 
 const eventBus = new EventBus({ logger })
+const telegramNotificationsResult = prepareTelegramNotifications({
+  eventBus,
+  logger,
+})
+
+if (!telegramNotificationsResult.ok) {
+  throw new Error("Failed to prepare Telegram notifications", {
+    cause: telegramNotificationsResult.errors,
+  })
+}
+
+const { data: telegramNotifications } = telegramNotificationsResult
+
 const journalResult = prepareJournal({
   eventBus,
   logger,
@@ -228,7 +242,25 @@ async function shutdown() {
       return result
     })
 
-    // Stage 5: flush pending event handlers and close the journal.
+    // Stage 5: flush every accepted event before closing notification subscribers.
+    await runStage("eventBus.flush()", async () => {
+      const result = await eventBus.flush()
+
+      if (!result?.ok) {
+        throw new Error(`eventBus.flush failed: ${JSON.stringify(result)}`)
+      }
+
+      return result
+    })
+
+    // Stage 6: unsubscribe and drain Telegram sends while the event bus is still open.
+    if (telegramNotifications) {
+      await runStage("telegramNotifications.close()", () =>
+        telegramNotifications.close(),
+      )
+    }
+
+    // Stage 7: close the journal after all event handlers have finished.
     await runStage("journal.close()", async () => {
       const result = await journal.close()
 
@@ -239,7 +271,7 @@ async function shutdown() {
       return result
     })
 
-    // Stage 6: close the event bus after the journal has flushed.
+    // Stage 8: close the event bus after notification and journal cleanup.
     await runStage("eventBus.close()", async () => {
       const result = await eventBus.close()
 

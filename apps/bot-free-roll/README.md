@@ -803,3 +803,21 @@ Do not change agreed strategy behavior without explicit discussion.
 - `v0.003` — Approved initial entry pricing: use the last traded price as the reference, apply the configured `priceStepPercent`, and round the BUY limit down to the broker's valid tick size; fail closed when required price/rule data is unavailable.
 - `v0.002` — Replaced the absolute `priceStep` setting with `priceStepPercent`; documented percentage semantics and the buy-threshold calculation.
 - `v0.001` — Initial Free-Roll specification covering broker-independent design, keyed JSON configuration, standing buy and sell orders, replacement behavior after new buys, net-profit accounting, commissions, free-coin accounting, statistics, safety rules, and unresolved design questions.
+
+
+## Optional Telegram notifications
+
+The Free-Roll app can send operational alerts through the reusable `@coinzilla/notifiers` package. Telegram is **disabled by default**.
+
+Set both variables in the app's `.env` file to enable it:
+
+```dotenv
+TELEGRAM_BOT_TOKEN=123456789:replace_with_your_bot_token
+TELEGRAM_CHAT_ID=-1001234567890
+```
+
+Create a bot with [@BotFather](https://t.me/BotFather), start a conversation with it (or add it to your group), and use the destination chat ID. Keep the token private; never commit a real token or chat identifier. Leave both variables unset to run without Telegram.
+
+The app sends alerts for completed orders, individual fills, paused trading pairs, failed/completed recovery, and bot start/stop. No raw exchange event payloads or credentials are sent. Notification network failures are isolated from trading behavior and reported through the event-bus subscriber's logger.
+
+On shutdown, the app stops trading, publishes its final lifecycle events, flushes accepted event-bus work, drains/unsubscribes the Telegram notifier, then closes the journal and event bus. Delivery is best-effort, not durable: a process crash can lose messages that were not yet delivered.
