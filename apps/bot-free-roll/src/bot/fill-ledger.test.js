@@ -95,9 +95,11 @@ test("preserves commission asset facts when the reported amount is malformed", (
 })
 
 test("rejects missing, primitive, array, and unstable fill identities", () => {
-  for (const fill of [undefined, null, "fill", [], createFill({ id: "" }),
-    createFill({ id: "-1" }), createFill({ id: "undefined" }),
-    createFill({ orderId: "" }), createFill({ orderId: "undefined" })]) {
+  for (const fill of [undefined, null, "fill", [], createFill({ id: undefined }),
+    createFill({ id: null }), createFill({ id: "" }), createFill({ id: "-1" }),
+    createFill({ id: "undefined" }), createFill({ orderId: undefined }),
+    createFill({ orderId: null }), createFill({ orderId: "" }),
+    createFill({ orderId: "undefined" })]) {
     assert.equal(createFillLedgerEntry({ fill }).ok, false)
   }
 })
