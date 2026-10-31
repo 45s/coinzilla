@@ -125,6 +125,7 @@ function validateCycle(cycle) {
   }
 
   const fillIds = new Set()
+  const sellCommissionTotals = new Map()
   let totalSoldBase = "0"
   let totalSaleProceeds = "0"
   for (const fill of cycle.sellFills) {
@@ -137,6 +138,9 @@ function validateCycle(cycle) {
     validateDecimal({ value: fill.baseQuantity, name: "SELL fill baseQuantity", allowZero: false })
     validateDecimal({ value: fill.quoteQuantity, name: "SELL fill quoteQuantity" })
     validateDecimal({ value: fill.commissionAmount, name: "SELL fill commissionAmount" })
+    if (compareDecimal({ left: fill.baseQuantity, right: fill.quantity }) < 0) {
+      throw new Error("SELL fill base debit cannot be smaller than gross quantity")
+    }
     if (compareDecimal({ left: fill.commissionAmount, right: "0" }) > 0 &&
         fill.commissionAsset !== cycle.baseAsset &&
         fill.commissionAsset !== cycle.quoteAsset) {
@@ -145,6 +149,15 @@ function validateCycle(cycle) {
     if (compareDecimal({ left: fill.commissionAmount, right: "0" }) === 0 &&
         fill.commissionAsset !== null) {
       throw new Error("zero-commission SELL fill must not specify a commission asset")
+    }
+    if (compareDecimal({ left: fill.commissionAmount, right: "0" }) > 0) {
+      sellCommissionTotals.set(
+        fill.commissionAsset,
+        addDecimal({
+          left: sellCommissionTotals.get(fill.commissionAsset) ?? "0",
+          right: fill.commissionAmount,
+        }),
+      )
     }
     fillIds.add(fill.id)
     filledQuantityByOrder.set(fill.orderId, addDecimal({
@@ -165,6 +178,14 @@ function validateCycle(cycle) {
   if (compareDecimal({ left: totalSoldBase, right: cycle.soldBaseQuantity }) !== 0 ||
       compareDecimal({ left: totalSaleProceeds, right: cycle.saleProceeds }) !== 0) {
     throw new Error("cycle accounting totals do not match its SELL fill history")
+  }
+  for (const [asset, amount] of sellCommissionTotals) {
+    if (compareDecimal({
+      left: cycle.commissionTotals[asset] ?? "0",
+      right: amount,
+    }) < 0) {
+      throw new Error("cycle commission totals do not include all SELL fill commissions")
+    }
   }
 
   if (cycle.status === "OPEN") {
