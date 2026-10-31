@@ -57,7 +57,7 @@ The migration is complete only when all of the following are true:
 
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
-- [ ] Phase 2 — native WebSocket transport (in progress; draft PR #260).
+- [ ] Phase 2 — native WebSocket transport (implementation and CI validation complete; awaiting review in draft PR #261).
 - [ ] Phase 3 — WebSocket API RPC client.
 - [ ] Phase 4 — public WebSocket Streams client.
 - [ ] Phase 5 — rebuild the broker on native clients.
@@ -67,10 +67,9 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Validate the exact head of draft PR #260; fix any failing or canceled checks with meaningful changes.
-2. Verify the local raw-WebSocket ping/pong integration test on Node.js 22.23.4 and confirm the pong payload is copied exactly.
-3. Recheck latest `main` before declaring Phase 2 complete; synchronize only if broker/API/consumer-contract changes require it.
-4. Review the complete diff, update this roadmap from verified evidence, and wait for explicit merge approval. Do not start Phase 3 early.
+1. Review draft PR #261; its exact head has passing Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit workflows.
+2. Wait for explicit merge approval. Do not merge automatically.
+3. After merge, recheck latest `main` and the integration branch before starting Phase 3; synchronize immediately if a significant broker/API/consumer-contract change has landed.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -237,7 +236,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 - [x] Inventory every `packages/brokers` export, repository consumer, and `@binance/spot` import.
 - [x] Map broker methods to Binance WebSocket API/Streams operations, including parameters, response shape, authentication, and error behavior.
-- [x] Decide supported Node runtime before choosing native WebSocket. Decision: Node.js >=22.4.0 for this package and consumers using native WebSocket.
+- [x] Decide supported Node runtime before choosing native WebSocket. Initial decision: Node.js >=22.4.0; superseded during Phase 2 by the security-reviewed Node.js >=22.23.4 floor and patched-Undici runtime guard.
 - [x] Review current official Binance Spot WebSocket API and Streams documentation for the mapped operations and lifecycle constraints.
 - [x] Confirm `userDataStream.subscribe.signature` is the intended compatibility method; existing HMAC API key/secret flow is sufficient, subject to exact signing test vectors.
 - [x] Record legacy REST implementation gaps and compatibility exports.
@@ -261,11 +260,11 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Implement a small Node-native WebSocket transport with injectable socket construction.
 - [x] Normalize open/message/error/close events, message data, close codes/reasons, and send failures behind one internal interface.
 - [x] Implement explicit connect/close state, connection timeout, idempotent shutdown, and listener cleanup.
-- [ ] Verify the local raw-WebSocket ping/pong integration test on Node >=22.23.4 and confirm the pong payload is copied exactly; do not call unsupported low-level methods.
+- [x] Verify the local raw-WebSocket ping/pong integration test on Node >=22.23.4; the server receives a pong with the exact ping payload.
 - [x] Add duplicate close/error, constructor-failure, close-during-connect, and listener-cleanup regression cases.
 - [x] Exercise the Phase 1 fake socket and fake clock in transport tests; avoid unused testing scaffolding.
 - [ ] Verify documented Binance connection lifetime, reconnect requirements, and connection/message limits relevant to the transport.
-- **Exit criteria:** transport tests pass on the supported Node runtime; ping/pong behavior is evidenced; no third-party WebSocket package is added.
+- **Exit criteria:** deterministic transport tests and the local ping/pong protocol test pass on Node.js 22.23.4; no third-party WebSocket package is added. CI evidence on PR #261 head `e4c442c61109807ee841485d40f5c0b64db8397e`.
 
 ### Phase 3 — WebSocket API RPC client
 
