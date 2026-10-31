@@ -149,6 +149,11 @@ test("rejects malformed supplied accounting and unsupported supplied commission 
     fill: createFill({ commissionAmount: "0.01", commissionAsset: "BNB" }),
     accounting,
   })
+  const malformedCommission = applyMarketInventoryFill({
+    ledger,
+    fill: createFill({ commissionAmount: "bad-fee" }),
+    accounting,
+  })
 
   assert.equal(malformedAccounting.ok, false)
   assert.match(malformedAccounting.reason, /accounting is invalid/)
@@ -156,6 +161,8 @@ test("rejects malformed supplied accounting and unsupported supplied commission 
   assert.match(negativeCommission.reason, /Negative commission/)
   assert.equal(thirdAsset.ok, false)
   assert.match(thirdAsset.reason, /Unsupported commission asset/)
+  assert.equal(malformedCommission.ok, false)
+  assert.match(malformedCommission.reason, /Invalid commission amount/)
 })
 
 test("applies base and quote commissions to their own asset totals", () => {
