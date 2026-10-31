@@ -40,7 +40,7 @@ function normalizeOpenOrder({ order, symbol }) {
 
   if (
     !id ||
-    !/^\\d+$/.test(id) ||
+    !/^\d+$/.test(id) ||
     !Number.isSafeInteger(Number(id)) ||
     orderSymbol !== symbol ||
     (side !== "BUY" && side !== "SELL") ||
