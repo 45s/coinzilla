@@ -14,7 +14,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 
 ## Roadmap
 
-- [ ] **FR-008 — Asset and Market identity.** Stable Asset identity and explicit Market base/quote assets; symbol remains opaque. Related audit: `apps/bot-free-roll/DOMAIN_ENTITY_AUDIT.md`. Existing implementation work is tracked in PR #295 and must be migrated into the new task-branch workflow before it is considered complete.
+- [~] **FR-008 — Asset and Market identity.** Migrated the entity implementation from legacy PR #295 onto the short-lived `feature/entities/fr-008-asset-market` branch based on `develop`. `Asset` separates stable canonical `id` from normalized uppercase `code`; `Market` carries explicit `Asset` references and treats the venue symbol as opaque metadata. Deterministic package tests cover validation, venue-scoped identity, snapshots, and immutability. Pending package/CI verification and merge into `develop`. The consumer-owned Free-Roll audit and roadmap updates from legacy PR #295 remain outside this entities-domain change and must be coordinated with the Free-Roll owner.
 - [ ] **FR-009 — Exact Money and Quantity.** Exact decimal values with explicit asset/unit semantics, validation, and safe serialization.
 - [ ] **FR-010 — Canonical Order lifecycle.** Intent/acknowledgement identity, original/executed/remaining quantities, normalized lifecycle, timestamps, and unknown outcomes.
 - [ ] **FR-011 — Fill.** Immutable, independently identifiable execution records with exact quantities/prices and stable deduplication identity.
