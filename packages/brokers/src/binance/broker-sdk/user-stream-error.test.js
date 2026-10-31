@@ -10,7 +10,9 @@ describe("BinanceSdkBroker user-data stream errors", () => {
       "userDataStream.subscribe.signature": () => ({ subscriptionId: 9 }),
       "userDataStream.unsubscribe": () => ({}),
     })
-    const broker = new BinanceSdkBroker({
+    rpc.state = "open"
+    rpc.state = "open"
+  const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
       logger: { error: (...args) => logs.push(args), info() {} },
