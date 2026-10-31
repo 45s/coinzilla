@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { BinanceSdkBroker } from "./broker.js"
-import { createFakeRpcClient, createFakeStreamsClient } from "./tests/unit/test-helpers/fake-broker-clients.js"
+import { createFakeRpcClient, createFakeStreamsClient } from "./test-helpers/fake-broker-clients.js"
 
 const logger = { debug() {}, error() {}, info() {}, warn() {} }
 const config = { apiKey: "test-key", apiSecret: "test-secret", logger }
