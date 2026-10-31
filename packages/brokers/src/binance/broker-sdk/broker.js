@@ -304,13 +304,27 @@ export class BinanceSdkBroker extends CoreBroker {
         {},
         { signed: true },
       )
+      const subscriptionId = response.data?.subscriptionId
+      if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
+        throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
+      }
 
+      let disconnected = false
       return toResult({
         data: {
-          subscriptionId: response.data?.subscriptionId ?? null,
-          disconnect: () => {
-            removeListener?.()
-            removeErrorListener?.()
+          subscriptionId,
+          disconnect: async () => {
+            if (disconnected) return
+            disconnected = true
+            try {
+              await this.tradingConnection.request(
+                "userDataStream.unsubscribe",
+                { subscriptionId },
+              )
+            } finally {
+              removeListener?.()
+              removeErrorListener?.()
+            }
           },
         },
       })
