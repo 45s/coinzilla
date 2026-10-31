@@ -364,10 +364,9 @@ export function recordGridCycleSellFill({ cycle, fill, accounting } = {}) {
     }
     const commissionAmount = String(fill.commissionAmount ?? "0")
     validateDecimal({ value: commissionAmount, name: "fill.commissionAmount" })
-    const commissionAsset = compareDecimal({ left: commissionAmount, right: "0" }) > 0
-      ? fill.commissionAsset
-      : null
-    if (commissionAmount !== "0" && !isNonEmptyString(commissionAsset)) {
+    const hasCommission = compareDecimal({ left: commissionAmount, right: "0" }) > 0
+    const commissionAsset = hasCommission ? fill.commissionAsset : null
+    if (hasCommission && !isNonEmptyString(commissionAsset)) {
       throw new Error("non-zero SELL commission requires an asset")
     }
     if (commissionAsset !== null &&
@@ -648,6 +647,7 @@ export function projectGridCycles({ cycles } = {}) {
       data: Object.freeze({
         ...(symbols.size === 1 ? { symbol: [...symbols][0] } : {}),
         ...totals,
+        commissionTotals: Object.freeze({ ...totals.commissionTotals }),
       }),
     })
   } catch (error) {
