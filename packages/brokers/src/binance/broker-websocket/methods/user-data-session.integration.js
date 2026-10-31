@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { afterEach, beforeEach, describe, it } from "node:test"
-import { BinanceSdkBroker } from "./broker.js"
+import { BinanceSdkBroker } from "../broker.js"
 
 if (process.env.NODE_ENV === "production") {
   throw new Error("Refusing to run Binance user-data integration tests in production")

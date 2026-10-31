@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { FakeClock } from "./test-helpers/fake-clock.js"
+import { FakeClock } from "../test-helpers/fake-clock.js"
 import { BinanceStreamsClient } from "./streams-client.js"
 
 class FakeTransport {

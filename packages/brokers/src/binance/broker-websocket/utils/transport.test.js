@@ -5,8 +5,8 @@ import { createServer } from "node:http"
 
 import { NativeWebSocketTransport } from "./transport.js"
 import { isSafeUndiciVersion, assertNativeWebSocketRuntime } from "./runtime.js"
-import { FakeClock } from "./test-helpers/fake-clock.js"
-import { FakeWebSocket } from "./test-helpers/fake-websocket.js"
+import { FakeClock } from "../test-helpers/fake-clock.js"
+import { FakeWebSocket } from "../test-helpers/fake-websocket.js"
 
 function createTransport(options = {}) {
   const clock = options.clock ?? new FakeClock()

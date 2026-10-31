@@ -3,8 +3,8 @@ import test from "node:test"
 
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { NativeWebSocketTransport } from "./transport.js"
-import { FakeClock } from "./test-helpers/fake-clock.js"
-import { FakeWebSocket } from "./test-helpers/fake-websocket.js"
+import { FakeClock } from "../test-helpers/fake-clock.js"
+import { FakeWebSocket } from "../test-helpers/fake-websocket.js"
 
 function createClient(options = {}) {
   const clock = new FakeClock()
