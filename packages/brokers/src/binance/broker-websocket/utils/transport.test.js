@@ -413,3 +413,51 @@ test("listener registration failure closes the socket and removes previously att
   assert.equal(socket.closeCalls.length, 1)
   assert.equal(clock.pendingCount, 0)
 })
+
+
+test("finalizes close and attempts every socket listener removal when one remover throws", async () => {
+  const clock = new FakeClock()
+  const removed = []
+  const errors = []
+  const closes = []
+  let socket
+
+  class BrokenRemovalSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    removeEventListener(type, listener, options) {
+      removed.push(type)
+      super.removeEventListener(type, listener, options)
+      if (type === "open") throw new Error("open listener removal failed")
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenRemovalSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+    connectTimeout: 100,
+    closeTimeout: 50,
+  })
+  transport.onError((error) => errors.push(error.message))
+  transport.onClose((event) => closes.push(event))
+
+  const connecting = transport.connect()
+  socket.open()
+  await connecting
+
+  const closing = transport.close()
+  socket.serverClose({ code: 1000, reason: "finished", wasClean: true })
+  await assert.doesNotReject(closing)
+
+  assert.deepEqual(removed, ["open", "message", "error", "close"])
+  assert.deepEqual(errors, ["open listener removal failed"])
+  assert.deepEqual(closes, [{ code: 1000, reason: "finished", wasClean: true }])
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(await transport.close(), undefined)
+})
