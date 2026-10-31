@@ -87,6 +87,21 @@ Its responsibility is to calculate valid orders, manage them safely, and avoid i
 
 **Recover capital and earn the minimum required net profit while accumulating free coins. Do not sacrifice profitability to force a sale.**
 
+### Central SELL profitability decision
+
+A planned SELL is only a candidate until a pure profitability decision approves it. The decision contract is `evaluateSellProfitability({ position, candidate, accounting, feeAssumptions, valuationData, tradingRules, minProfit })`.
+
+- `position`: base/quote asset codes, active base quantity, and quantity retained for the current recovery cycle.
+- `candidate`: exact base quantity and limit price proposed by the planner.
+- `accounting`: exact cycle cost basis and proceeds already allocated to recovery.
+- `feeAssumptions`: an array of asset/rate pairs; rates are decimal fractions. Base-asset fees reserve extra inventory and are valued using `valuationData.baseToQuoteRate`; quote-asset fees reduce quote proceeds. Positive third-asset fees are rejected.
+- `tradingRules`: exact minimum notional, price tick, and quantity step.
+- `minProfit`: required minimum net profit in the quote asset.
+
+The decision returns `approved`, stable `reasonCodes`, diagnostic details, and an exact calculation breakdown (gross/net proceeds, fee values, inventory required/available, required proceeds, and projected net profit). Invalid or unsupported inputs fail closed. The helper performs no I/O and does not mutate its inputs.
+
+This is the decision contract; enforcing it at every SELL submission is the separate FR-050 task.
+
 ---
 
 ## 3. Configuration
