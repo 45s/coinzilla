@@ -3,65 +3,77 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
 
 const ALL_EVENTS = Symbol("all-events")
 
+function assertSupportedPayload(value, seen = new WeakSet()) {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  ) {
+    return
+  }
+
+  if (typeof value !== "object") {
+    throw new TypeError("Event data contains an unsupported value")
+  }
+
+  if (seen.has(value)) {
+    return
+  }
+
+  seen.add(value)
+
+  const prototype = Object.getPrototypeOf(value)
+  const isArray = Array.isArray(value)
+
+  if (
+    isArray
+      ? prototype !== Array.prototype
+      : prototype !== Object.prototype && prototype !== null
+  ) {
+    throw new TypeError(
+      "Event data supports only plain objects, arrays, and primitive values",
+    )
+  }
+
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new TypeError("Event data cannot contain symbol properties")
+    }
+
+    if (isArray && key === "length") {
+      continue
+    }
+
+    if (
+      isArray &&
+      (!/^(0|[1-9]\\d*)$/.test(key) || Number(key) >= value.length)
+    ) {
+      throw new TypeError("Event arrays cannot contain custom properties")
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+
+    if (!descriptor || !("value" in descriptor)) {
+      throw new TypeError("Event data cannot contain accessor properties")
+    }
+
+    if (!descriptor.enumerable) {
+      throw new TypeError("Event data cannot contain non-enumerable properties")
+    }
+
+    assertSupportedPayload(descriptor.value, seen)
+  }
+}
+
 function deepFreeze(value, seen = new WeakSet()) {
   if (value === null || typeof value !== "object" || seen.has(value)) {
     return value
   }
 
   seen.add(value)
-
-  if (value instanceof Map) {
-    for (const [key, child] of value) {
-      deepFreeze(key, seen)
-      deepFreeze(child, seen)
-    }
-
-    Object.defineProperties(value, {
-      set: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      delete: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      clear: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-    })
-
-    return Object.freeze(value)
-  }
-
-  if (value instanceof Set) {
-    for (const child of value) {
-      deepFreeze(child, seen)
-    }
-
-    Object.defineProperties(value, {
-      add: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      delete: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      clear: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-    })
-
-    return Object.freeze(value)
-  }
 
   for (const child of Object.values(value)) {
     deepFreeze(child, seen)
@@ -111,6 +123,7 @@ export class EventBus {
     let eventData
 
     try {
+      assertSupportedPayload(data)
       eventData = deepFreeze(structuredClone(data))
     } catch (error) {
       return toResult({ error })
