@@ -71,6 +71,7 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
 
   const cycleIds = new Set(snapshot.cycles.map((cycle) => cycle.id))
   const intentIds = new Set()
+  const sellIntentCycleIds = new Set()
   let buyIntentCount = 0
   for (const intent of snapshot.orderIntents) {
     if (!isPlainObject(intent) ||
@@ -89,8 +90,14 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
       if (intent.cycleId !== null) {
         return failure("BUY order intent cannot belong to an existing cycle")
       }
-    } else if (!cycleIds.has(intent.cycleId)) {
-      return failure("SELL order intent references an unknown cycle")
+    } else {
+      if (!cycleIds.has(intent.cycleId)) {
+        return failure("SELL order intent references an unknown cycle")
+      }
+      if (sellIntentCycleIds.has(intent.cycleId)) {
+        return failure("Grid pair snapshot contains multiple pending SELL intents for one cycle")
+      }
+      sellIntentCycleIds.add(intent.cycleId)
     }
   }
   if (buyIntentCount > 1 || (snapshot.buyOrder && buyIntentCount > 0)) {
