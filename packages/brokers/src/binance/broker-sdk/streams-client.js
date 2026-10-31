@@ -255,9 +255,19 @@ export class BinanceStreamsClient {
       if (!Array.isArray(listedStreams) || !initialBatch.every((stream) => listedStreams.includes(stream))) {
         throw new Error("Binance combined-stream connection did not confirm its initial subscriptions")
       }
-      for (const stream of initialBatch) this.#activeStreams.add(stream)
 
-      const remainingStreams = connectionStreams.slice(MAX_STREAMS_PER_SUBSCRIBE)
+      const desiredStreams = new Set(this.#listeners.keys())
+      const obsoleteInitialStreams = initialBatch.filter((stream) => !desiredStreams.has(stream))
+      if (obsoleteInitialStreams.length > 0) {
+        await this.#request("UNSUBSCRIBE", obsoleteInitialStreams)
+      }
+      for (const stream of initialBatch) {
+        if (desiredStreams.has(stream)) this.#activeStreams.add(stream)
+      }
+
+      const remainingStreams = connectionStreams
+        .slice(MAX_STREAMS_PER_SUBSCRIBE)
+        .filter((stream) => desiredStreams.has(stream))
       for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
         await this.#request("SUBSCRIBE", batch)
         for (const stream of batch) this.#activeStreams.add(stream)
