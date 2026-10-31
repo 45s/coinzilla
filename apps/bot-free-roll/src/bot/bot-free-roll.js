@@ -90,11 +90,6 @@ export class FreeRollBot {
     this.broker = broker
     this.eventBus = eventBus
     this.#gridStateStore = gridStateStore
-    this.#gridOrderExecution = createGridOrderExecution({
-      broker: this.broker,
-      persistGridState: () => this.#persistGridState(),
-    })
-
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
       isRunning: () => this.#isRunning && !this.#isRecovering,
@@ -654,6 +649,16 @@ export class FreeRollBot {
     return fingerprints
   }
 
+  #getGridOrderExecution({} = {}) {
+    if (!this.#gridOrderExecution) {
+      this.#gridOrderExecution = createGridOrderExecution({
+        broker: this.broker,
+        persistGridState: () => this.#persistGridState(),
+      })
+    }
+    return this.#gridOrderExecution
+  }
+
   async #persistGridState({} = {}) {
     const gridStates = new Map(
       [...this.#states].filter(([, state]) => state.mode === "grid"),
@@ -1056,7 +1061,7 @@ export class FreeRollBot {
         return false
       }
 
-      const submitted = await this.#gridOrderExecution.submit({
+      const submitted = await this.#getGridOrderExecution().submit({
         state,
         intent: intent.data,
       })
@@ -1441,7 +1446,7 @@ export class FreeRollBot {
 
       state.nextIntentSequence += 1
       state.lastAdjustmentPrice = Number(price)
-      const submitted = await this.#gridOrderExecution.submit({
+      const submitted = await this.#getGridOrderExecution().submit({
         state,
         intent: intent.data,
       })
