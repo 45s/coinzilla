@@ -64,7 +64,7 @@ function fillSell(cycle, overrides = {}) {
 test("creates one immutable cycle from a fully reconciled BUY", () => {
   const cycle = createCycle()
 
-  assert.equal(cycle.id, "cycle-1")
+  assert.equal(cycle.id, "grid-cycle:10:DOGEFDUSD:5:buy-1")
   assert.equal(cycle.buyOrderId, "buy-1")
   assert.deepEqual(cycle.buyFillIds, ["buy-trade-1"])
   assert.equal(cycle.acquiredQuantity, "100")
@@ -351,7 +351,9 @@ test("does not complete cycles with live orders, insufficient profit, or insuffi
 
 test("projects pair totals from independent cycles without mutating them", () => {
   const first = completeGridCycle({
-    cycle: fillSell(addSell(createCycle())),
+    cycle: fillSell(addSell(createCycle({
+      buyCommissionTotals: { DOGE: "0.1" },
+    }))),
     keepQuantity: "1",
     minProfit: "0.01",
   }).data
@@ -378,7 +380,7 @@ test("projects pair totals from independent cycles without mutating them", () =>
     saleProceeds: "0",
     realizedProfit: "0.02",
     residualQuantity: "0",
-    commissionTotals: {},
+    commissionTotals: { DOGE: "0.1" },
     openCycles: 1,
     completedCycles: 1,
   })
