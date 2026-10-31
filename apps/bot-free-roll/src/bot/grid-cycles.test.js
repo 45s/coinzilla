@@ -149,6 +149,19 @@ test("rejects overlapping live SELL orders, duplicate IDs, and unsafe reservatio
   }
 })
 
+test("rejects persisted live SELL state whose reservation cannot cover remaining gross quantity", () => {
+  const cycle = addSell(createCycle())
+  const corrupted = {
+    ...cycle,
+    sellOrders: cycle.sellOrders.map((order) => ({
+      ...order,
+      reservedQuantity: "98",
+    })),
+  }
+
+  assert.equal(projectGridCycles({ cycles: [corrupted] }).ok, false)
+})
+
 test("records a partial SELL fill using actual base debit and net quote proceeds", () => {
   const cycle = addSell(createCycle(), { quantity: "99", reservedQuantity: "99.1" })
   const result = recordGridCycleSellFill({
