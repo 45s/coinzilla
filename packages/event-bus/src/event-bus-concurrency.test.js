@@ -144,3 +144,94 @@ test("flush waits for nested publishes made after an async handler resumes", asy
   assert.equal(nestedCompleted, true)
   assert.equal((await bus.close()).ok, true)
 })
+
+test("re-entrant publish at capacity rejects the complete nested fan-out", async () => {
+  const bus = new EventBus({ logger: {}, maxPending: 2 })
+  const release = deferred()
+  const started = deferred()
+  const nestedResults = []
+  let nestedHandlerCalls = 0
+
+  bus.subscribe({
+    name: "outer.event",
+    handler: async () => {
+      started.resolve()
+      await release.promise
+      nestedResults.push(bus.publish({
+        name: "nested.event",
+        source: "outer-handler",
+      }))
+    },
+  })
+  bus.subscribe({
+    name: "outer.event",
+    handler: async () => {
+      await release.promise
+      nestedResults.push(bus.publish({
+        name: "nested.event",
+        source: "second-outer-handler",
+      }))
+    },
+  })
+  bus.subscribe({
+    name: "nested.event",
+    handler: () => { nestedHandlerCalls += 1 },
+  })
+
+  assert.equal(bus.publish({ name: "outer.event", source: "test" }).ok, true)
+  await started.promise
+  assert.equal(bus.getDiagnostics().pendingCount, 2)
+
+  release.resolve()
+  assert.equal((await bus.flush()).ok, true)
+  assert.equal(nestedResults.length, 2)
+  assert.deepEqual(nestedResults.map(result => result.ok), [false, false])
+  assert.equal(nestedHandlerCalls, 0)
+  assert.equal(bus.getDiagnostics().pendingCount, 0)
+  assert.equal((await bus.close()).ok, true)
+})
+
+test("bounded stress workload drains every accepted delivery", async () => {
+  const workload = 80
+  const subscribers = 3
+  const maxPending = workload * subscribers
+  const bus = new EventBus({ logger: {}, maxPending })
+  const release = deferred()
+  const allStarted = deferred()
+  let started = 0
+  let completed = 0
+
+  for (let index = 0; index < subscribers; index += 1) {
+    bus.subscribe({
+      name: "stress.event",
+      handler: async () => {
+        started += 1
+        if (started === maxPending) allStarted.resolve()
+        await release.promise
+        completed += 1
+      },
+    })
+  }
+
+  for (let index = 0; index < workload; index += 1) {
+    assert.equal(bus.publish({
+      name: "stress.event",
+      source: "bounded-stress",
+      data: { index },
+    }).ok, true)
+  }
+
+  await allStarted.promise
+  assert.equal(started, maxPending)
+  assert.equal(bus.getDiagnostics().pendingCount, maxPending)
+  assert.equal(bus.publish({
+    name: "stress.event",
+    source: "bounded-stress",
+  }).ok, false)
+
+  release.resolve()
+  assert.equal((await bus.flush()).ok, true)
+  assert.equal(completed, maxPending)
+  assert.equal(bus.getDiagnostics().pendingCount, 0)
+  assert.equal((await bus.close()).ok, true)
+})

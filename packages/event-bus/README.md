@@ -93,4 +93,4 @@ pnpm --filter @coinzilla/event-bus test
 pnpm --filter @coinzilla/event-bus test:coverage
 ```
 
-The coverage command currently reports Node's test-runner coverage; package-specific line and branch thresholds are still roadmap work.
+The coverage command enforces package-specific minimums of 90% line coverage and 85% branch coverage using Node's built-in test runner. It requires Node.js 22.8 or newer (the repository CI runs Node.js 22). The package runtime itself remains compatible with Node.js 20 and newer.
