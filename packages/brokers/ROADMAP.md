@@ -548,10 +548,11 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed before Phase 5:** `49c5aba675e71490123181d757641376be35c78a`.
-- Compared the 10 commits since previously reviewed main SHA `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`. The changed files are confined to `apps/bot-free-roll` and its coverage baseline/tests, plus `.github/workflows/test-coverage.yml`; no broker package, broker export, Binance API, runtime, dependency/lockfile, or consumer-contract changes were found. Preserve these bot-team changes; do not merge app-only work into the integration branch.
-- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only bot changes are intentionally not synchronized because they do not meet the agreed broker/API contract trigger.
-- Recheck latest `main` before opening the Phase 5 PR and immediately after any significant broker/API/consumer-contract change.
+- **Main SHA reviewed during Phase 5:** `9aa0c0213548be9d849dcd6fae2f89ea1b856245`.
+- Compared the 5 new commits since the previous review at `49c5aba675e71490123181d757641376be35c78a`. They change only `apps/bot-free-roll/ROADMAP.md` and `apps/bot-free-roll/src/bot/helpers/price.test.js`; no broker package, broker export, Binance API, runtime, dependency/lockfile, or consumer-contract changes were found. Preserve these bot-team changes; do not merge app-only work into the integration branch.
+- Across all 15 commits since `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`, changes remain confined to `apps/bot-free-roll` and its coverage workflow/baseline. No broker/API/consumer-contract synchronization trigger has occurred.
+- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only bot changes are intentionally not synchronized.
+- Recheck latest `main` before Phase 5 merge and immediately after any significant broker/API/consumer-contract change.
 
 ---
 
