@@ -33,6 +33,16 @@ test("creates a frozen exact-decimal snapshot with stable source identifiers", (
   assert.equal(Object.isFrozen(fill), false)
 })
 
+test("preserves a non-zero commission asset as an actual execution fact", () => {
+  const result = createFillLedgerEntry({
+    fill: createFill({ commissionAmount: "0.01", commissionAsset: "BNB" }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.entry.commissionAmount, "0.01")
+  assert.equal(result.entry.commissionAsset, "BNB")
+})
+
 test("normalizes optional facts without inventing financial values", () => {
   const result = createFillLedgerEntry({
     fill: createFill({
@@ -136,6 +146,21 @@ test("freezes existing entries before returning a ledger snapshot", () => {
   assert.equal(Object.isFrozen(result.entries), true)
   assert.equal(Object.isFrozen(result.entries[0]), true)
   assert.equal(Object.isFrozen(mutableEntry), false)
+})
+
+test("preserves already-frozen entries when copying a mutable ledger array", () => {
+  const first = createFillLedgerEntry({ fill: createFill() })
+  const original = [first.entry]
+  const result = appendFillLedgerEntry({
+    entries: original,
+    fill: createFill({ id: "trade-2" }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.entries.length, 2)
+  assert.equal(result.entries[0], first.entry)
+  assert.equal(original.length, 1)
+  assert.equal(Object.isFrozen(result.entries), true)
 })
 
 test("rejects malformed pre-existing ledger entries", () => {
