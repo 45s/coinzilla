@@ -230,3 +230,21 @@ describe("BinanceSdkBroker history query filters", () => {
     assert.equal(result.ok, true)
   })
 })
+
+  it("does not label a full order-history page complete", async () => {
+    const orders = [
+      { symbol: "BTCUSDT", orderId: 10, time: 1_000, updateTime: 1_100, origQty: "1.00000001" },
+      { symbol: "BTCUSDT", orderId: 11, time: 1_200, updateTime: 1_300, origQty: "2.00000002" },
+    ]
+    const broker = createBroker({
+      allOrders: (params) => {
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 2 })
+        return orders
+      },
+    })
+    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 2 })
+    assert.equal(result.ok, true)
+    assert.equal(result.data.length, 2)
+    assert.equal(result.data[1].orderId, 11)
+    assert.equal(result.data.complete, undefined)
+  })
