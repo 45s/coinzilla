@@ -4,7 +4,10 @@ import { BinanceSdkBroker } from "./broker.js"
 import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
 
 function createBroker(handler) {
-  const rpc = createFakeRpcClient({ "userDataStream.subscribe.signature": handler })
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": handler,
+    "userDataStream.unsubscribe": () => ({}),
+  })
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
@@ -42,6 +45,13 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
         eventType: "balanceUpdate",
       },
     }])
+
+    await result.data.disconnect()
+    assert.deepEqual(rpc.calls[1], {
+      method: "userDataStream.unsubscribe",
+      params: { subscriptionId: 7 },
+      options: {},
+    })
   })
 
   it("removes its event listener when subscription setup fails", async () => {
@@ -58,7 +68,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     broker.connected = true
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
-    result.data.disconnect()
+    await result.data.disconnect()
     rpc.emitEvent({ e: "futureEvent", value: 1 })
     assert.deepEqual(received, [])
     assert.equal(rpc.listenerCount, 0)
