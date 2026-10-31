@@ -101,14 +101,13 @@ test("connects lazily and subscribes with a correlated acknowledgement", async (
   await flush()
 
   assert.equal(transports.length, 1)
-  assert.equal(transports[0].url, "wss://stream.binance.com:9443/ws")
+  assert.match(transports[0].url, /^wss:\/\/stream\.binance\.com:9443\/stream\?streams=btcusdt%40aggTrade$/)
   assert.deepEqual(transports[0].sent[0], {
-    method: "SUBSCRIBE",
-    params: ["btcusdt@aggTrade"],
+    method: "LIST_SUBSCRIPTIONS",
     id: 1,
   })
 
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
   transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "65000.00" })
 
@@ -127,7 +126,7 @@ test("deduplicates server subscriptions while allowing multiple local listeners"
 
   const firstSubscription = client.subscribe("btcusdt@aggTrade", first)
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await firstSubscription
 
   await client.subscribe("btcusdt@aggTrade", second)
@@ -162,8 +161,9 @@ test("supports multiple stream subscriptions in one request", async () => {
   )
   await flush()
 
-  assert.deepEqual(transports[0].sent[0].params, ["btcusdt@aggTrade", "ethusdt@trade"])
-  acknowledge(transports[0])
+  assert.equal(transports[0].sent[0].method, "LIST_SUBSCRIPTIONS")
+  assert.match(transports[0].url, /streams=btcusdt%40aggTrade%2Fethusdt%40trade/)
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade", "ethusdt@trade"] })
   await subscription
   await client.disconnect()
 })
@@ -174,7 +174,7 @@ test("dispatches combined-stream envelopes and all-market arrays", async () => {
   const allMarketEvents = []
   const combined = client.subscribe("btcusdt@aggTrade", (event) => combinedEvents.push(event))
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await combined
 
   const allMarket = client.subscribe("!miniTicker@arr", (event) => allMarketEvents.push(event))
@@ -216,7 +216,7 @@ test("rejects malformed stream events through the error observer without crashin
   const { client, transports, errors } = createClient()
   const subscription = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0])
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await subscription
 
   transports[0].receive("{")
@@ -239,9 +239,9 @@ test("reconnects after an unexpected close and restores desired subscriptions", 
   await flush()
 
   assert.equal(transports.length, 2)
-  assert.equal(transports[1].sent[0].method, "SUBSCRIBE")
-  assert.deepEqual(transports[1].sent[0].params, ["btcusdt@aggTrade"])
-  acknowledge(transports[1])
+  assert.equal(transports[1].sent[0].method, "LIST_SUBSCRIPTIONS")
+  assert.match(transports[1].url, /streams=btcusdt%40aggTrade/)
+  acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
   assert.equal(client.state, "open")
   await client.disconnect()
@@ -261,7 +261,7 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   clock.advanceBy(290)
   await flush()
   assert.equal(transports.length, 2)
-  acknowledge(transports[1])
+  acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
 
   clock.advanceBy(1_000)
@@ -269,6 +269,9 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   clock.advanceBy(10)
   await flush()
   assert.equal(transports.length, 3)
+  assert.equal(transports[2].sent[0].method, "LIST_SUBSCRIPTIONS")
+  acknowledge(transports[2], 0, { result: ["btcusdt@aggTrade"] })
+  await flush()
   await client.disconnect()
 })
 
@@ -276,8 +279,7 @@ test("enforces the 1024 stream connection limit before sending subscriptions", a
   const { client, transports } = createClient()
   const streams = Array.from({ length: 1_025 }, (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`)
   await assert.rejects(client.subscribe(streams, () => {}), /at most 1024 streams/)
-  assert.equal(transports.length, 1)
-  assert.equal(transports[0].sent.length, 0)
+  assert.equal(transports.length, 0)
   await client.disconnect()
 })
 
