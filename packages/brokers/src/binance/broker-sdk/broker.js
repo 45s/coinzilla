@@ -45,9 +45,11 @@ export class BinanceSdkBroker extends CoreBroker {
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)
     this.connected = false
+    this.disconnecting = false
   }
 
   async connect() {
+    this.disconnecting = false
     if (this.connected && this.tradingConnection.state === "open") return
 
     try {
@@ -65,6 +67,7 @@ export class BinanceSdkBroker extends CoreBroker {
   }
 
   async disconnect() {
+    this.disconnecting = true
     this.connected = false
     const results = await Promise.allSettled([
       Promise.resolve().then(() => this.tradingConnection?.disconnect()),
@@ -334,7 +337,7 @@ export class BinanceSdkBroker extends CoreBroker {
       })
 
       removeCloseListener = this.tradingConnection.onClose?.((event) => {
-        if (disconnected) return
+        if (disconnected || this.disconnecting) return
         reportStatus({
           type: "connectionClosed",
           code: event?.code ?? null,
