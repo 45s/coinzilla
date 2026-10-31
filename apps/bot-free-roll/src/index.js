@@ -9,6 +9,7 @@ import { prepareTelegramNotifications } from "./prepare-telegram-notifications.j
 import { FreeRollBot } from "./bot/index.js"
 import { validateTradingConfig } from "./validate-config.js"
 import { cleanupStartupResources } from "./cleanup-startup-resources.js"
+import { createGridStateStore } from "./bot/grid-state-store.js"
 
 const validatedTradingConfig = validateTradingConfig({ tradingConfig })
 
@@ -19,6 +20,9 @@ if (!validatedTradingConfig.ok) {
 }
 
 const eventBus = new EventBus({ logger })
+const gridStateStore = createGridStateStore({
+  directory: "../../../state_bot-free-roll",
+})
 let telegramNotifications = null
 let journal = null
 let broker = null
@@ -73,6 +77,7 @@ try {
     broker,
     eventBus,
     tradingConfig,
+    gridStateStore,
   })
 } catch (error) {
   const cleanupErrors = await cleanupStartupResources({
