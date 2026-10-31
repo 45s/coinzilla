@@ -87,12 +87,23 @@ export function reconcileTrackedOrder({
       const executedQuantity = remoteOrder.executedQuantity
       const status = String(remoteOrder.status ?? "").toUpperCase()
 
+      if (typeof originalQuantity !== "string" ||
+          typeof executedQuantity !== "string") {
+        return failure(`Open order ${orderId} is missing exact quantities`)
+      }
+
+      const executedComparison = compareDecimal({
+        left: executedQuantity,
+        right: originalQuantity,
+      })
+
       if (String(remoteOrder.side ?? "") !== order.side ||
-          typeof originalQuantity !== "string" ||
-          typeof executedQuantity !== "string" ||
           compareDecimal({ left: originalQuantity, right: order.quantity }) !== 0 ||
           !["NEW", "PARTIALLY_FILLED"].includes(status) ||
-          compareDecimal({ left: executedQuantity, right: historyQuantity }) !== 0) {
+          compareDecimal({ left: executedQuantity, right: historyQuantity }) !== 0 ||
+          (status === "NEW" && executedComparison !== 0) ||
+          (status === "PARTIALLY_FILLED" &&
+            (executedComparison <= 0 || executedComparison >= 0))) {
         return failure(`Open order ${orderId} does not match its complete trade history`)
       }
 
