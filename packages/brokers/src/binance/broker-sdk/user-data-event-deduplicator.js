@@ -26,11 +26,11 @@ export function getUserDataEventIdentity(message) {
 
   const executionIdentity = executionReportIdentity(unwrapped.event)
   if (executionIdentity) {
-    return `${unwrapped.subscriptionId ?? "unknown"}:${executionIdentity}`
+    return executionIdentity
   }
 
   try {
-    return `${unwrapped.subscriptionId ?? "unknown"}:payload:${JSON.stringify(unwrapped.event)}`
+    return `payload:${JSON.stringify(unwrapped.event)}`
   } catch {
     return null
   }
