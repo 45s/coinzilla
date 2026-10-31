@@ -181,3 +181,103 @@ test("does not call the broker when the bot is not running", async () => {
   assert.equal(sellResult, false)
   assert.equal(calls.created.length, 0)
 })
+
+
+test("reconciles a partially filled SELL before clearing it after cancellation", async () => {
+  const order = { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" }
+  const state = createState({ sellOrder: order })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async (request) => {
+        calls.canceled.push(request)
+        return {
+          ok: true,
+          data: {
+            originalQuantity: "10",
+            executedQuantity: "2",
+            quantity: "8",
+            status: "CANCELED",
+          },
+        }
+      },
+    },
+    reconcileOrderFills: async () => {
+      state.filledQuantityByOrder.set(order.id, "2")
+    },
+  })
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(state.sellOrder, null)
+  assert.equal(state.cancelingOrderIds.has(order.id), false)
+  assert.deepEqual(calls.reconciliations, [{ symbol: "DOGEUSDT", order }])
+  assert.ok(calls.events.some(({ name, data }) =>
+    name === "order.cancelled" &&
+    data.orderId === order.id &&
+    data.remainingQuantity === "8" &&
+    data.filledQuantity === "2"))
+  assert.equal(calls.pauses.length, 0)
+})
+
+test("handles a SELL that fully fills while cancellation is in flight", async () => {
+  const order = { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" }
+  const state = createState({ sellOrder: order })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async (request) => {
+        calls.canceled.push(request)
+        return {
+          ok: true,
+          data: {
+            originalQuantity: "10",
+            executedQuantity: "10",
+            quantity: "0",
+            status: "FILLED",
+          },
+        }
+      },
+    },
+    reconcileOrderFills: async () => {
+      state.filledQuantityByOrder.set(order.id, "10")
+    },
+  })
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, true)
+  assert.equal(calls.sellFilled, 1)
+  assert.equal(state.cancelingOrderIds.has(order.id), false)
+  assert.deepEqual(calls.reconciliations, [{ symbol: "DOGEUSDT", order }])
+  assert.ok(calls.events.some(({ name, data }) =>
+    name === "order.cancelled" &&
+    data.orderId === order.id &&
+    data.remainingQuantity === "0" &&
+    data.filledQuantity === "10"))
+  assert.equal(calls.pauses.length, 0)
+})
+
+test("keeps the SELL active and pauses when the broker cancellation fails", async () => {
+  const order = { id: "old-sell", side: "SELL", quantity: "10", price: "1.1" }
+  const state = createState({ sellOrder: order })
+  const { execution, calls } = createExecution({
+    broker: {
+      cancelOrder: async () => ({
+        ok: false,
+        errors: [new Error("exchange unavailable")],
+      }),
+    },
+  })
+
+  const result = await execution.cancelSell({ symbol: "DOGEUSDT", state })
+
+  assert.equal(result, false)
+  assert.equal(state.sellOrder, order)
+  assert.equal(state.cancelingOrderIds.has(order.id), true)
+  assert.equal(calls.reconciliations.length, 0)
+  assert.ok(calls.events.some(({ name, data }) =>
+    name === "order.cancel_failed" &&
+    data.orderId === order.id &&
+    data.error.includes("exchange unavailable")))
+  assert.equal(calls.pauses.length, 1)
+})
