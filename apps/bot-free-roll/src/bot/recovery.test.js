@@ -310,3 +310,23 @@ test("rejects invalid balance decimal values and incomplete order inputs", () =>
     fills: [],
   }).ok, false)
 })
+
+test("returns a structured failure for malformed tracked quantity or price", () => {
+  const malformedQuantity = validateTrackedOrderIdentity({
+    symbol: "DOGEUSDT",
+    order: { ...trackedIdentity, quantity: "not-a-quantity" },
+    canonicalOrder: createCanonicalTrackedOrder(),
+    expectedType: "LIMIT",
+  })
+  assert.equal(malformedQuantity.ok, false)
+  assert.match(malformedQuantity.reason, /invalid values/)
+
+  const malformedPrice = validateTrackedOrderIdentity({
+    symbol: "DOGEUSDT",
+    order: { ...trackedIdentity, price: "not-a-price" },
+    canonicalOrder: createCanonicalTrackedOrder(),
+    expectedType: "LIMIT",
+  })
+  assert.equal(malformedPrice.ok, false)
+  assert.match(malformedPrice.reason, /invalid values/)
+})
