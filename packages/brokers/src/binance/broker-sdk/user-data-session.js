@@ -65,14 +65,6 @@ export class BinanceUserDataSession {
     this.clearTimeout = clearTimeoutFn
   }
 
-  get subscriberCount() {
-    return this.#subscribers.size
-  }
-
-  get subscriptionId() {
-    return this.#subscriptionId
-  }
-
   start() {
     this.#clearReconnectTimer()
     this.#generation += 1
