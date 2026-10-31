@@ -2318,3 +2318,189 @@ test("terminal SELL order failure pauses the pair instead of continuing the stra
     await bot.stop()
   }
 })
+
+async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+      cancelOrder: cancelOrder ?? (async ({ orderId }) => {
+        const order = createdOrders.find((item) => item.orderId === orderId)
+        return {
+          ok: true,
+          data: {
+            orderId,
+            originalQuantity: String(order.quantity),
+            executedQuantity: "0",
+            quantity: String(order.quantity),
+            status: "CANCELED",
+          },
+        }
+      }),
+      ...(getMyTrades ? { getMyTrades } : {}),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+  priceHandlers.get("DOGEUSDT")({ price: 100 })
+  await waitForCondition(() => createdOrders.length === 1, "initial BUY was not created")
+  userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1100 }))
+  await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+  return { bot, userDataHandler, createdOrders, events }
+}
+
+test("SELL fill that consumes more base inventory than owned pauses without negative inventory", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+    userDataHandler(createExecutionEvent({ order: createdOrders[0], tradeId: 1110 }))
+    await waitForCondition(() => createdOrders.length === 3, "SELL and next BUY were not created")
+
+    const sell = createdOrders.find((order) => order.side === "SELL")
+    userDataHandler(createExecutionEvent({
+      order: sell,
+      tradeId: 1111,
+      commissionAmount: "2",
+      commissionAsset: "DOGE",
+    }))
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "oversell did not pause pair")
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "100")
+    assert.equal(bot.getStats().DOGEUSDT.sellFills, 0)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("SELL cancellation rejects invalid remaining quantities", async () => {
+  const fixture = await createActiveSellFixture({
+    cancelOrder: async ({ orderId }) => {
+      const order = fixture.createdOrders.find((item) => item.orderId === orderId)
+      return {
+        ok: true,
+        data: {
+          orderId,
+          originalQuantity: String(order.quantity),
+          executedQuantity: addDecimal({ left: String(order.quantity), right: "1" }),
+          quantity: "-1",
+          status: "CANCELED",
+        },
+      }
+    },
+  })
+
+  try {
+    const nextBuy = fixture.createdOrders.find((order) => order.side === "BUY" && order.orderId !== "order-1")
+    fixture.userDataHandler(createExecutionEvent({ order: nextBuy, tradeId: 1120 }))
+    await waitForCondition(() => fixture.bot.getStats().DOGEUSDT.paused, "invalid remaining quantity did not pause pair")
+
+    assert.ok(fixture.events.some((event) => event.name === "order.cancel_failed" &&
+      /valid remaining quantity/.test(event.data.error)))
+    assert.equal(fixture.createdOrders.filter((order) => order.side === "SELL").length, 1)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
+
+test("SELL cancellation rejects malformed and foreign trade-history responses", async (t) => {
+  const cases = [
+    ["non-array history", async () => ({ ok: true, data: null })],
+    ["foreign order fill", async ({ symbol }) => ({
+      ok: true,
+      data: [{
+        id: "foreign-trade",
+        orderId: "unrelated-order",
+        symbol,
+        side: "SELL",
+        price: "100",
+        quantity: "1",
+        quoteQuantity: "100",
+        commissionAmount: "0",
+        commissionAsset: null,
+        isMaker: true,
+        time: 1,
+      }],
+    })],
+  ]
+
+  for (const [name, getMyTrades] of cases) {
+    await t.test(name, async () => {
+      const fixture = await createActiveSellFixture({ getMyTrades })
+
+      try {
+        const nextBuy = fixture.createdOrders.find((order) =>
+          order.side === "BUY" && order.orderId !== "order-1")
+        fixture.userDataHandler(createExecutionEvent({ order: nextBuy, tradeId: 1130 }))
+        await waitForCondition(() => fixture.bot.getStats().DOGEUSDT.paused, "bad history did not pause pair")
+
+        assert.ok(fixture.events.some((event) => event.name === "order.cancel_failed"))
+        assert.equal(fixture.createdOrders.filter((order) => order.side === "SELL").length, 1)
+      } finally {
+        await fixture.bot.stop()
+      }
+    })
+  }
+})
