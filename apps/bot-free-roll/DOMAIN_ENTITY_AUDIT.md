@@ -109,6 +109,18 @@ This means the strategy currently has no direct compile-time dependency on the s
 
 No new domain class is prescribed by this audit beyond identifying these contract responsibilities. FR-008–FR-016 should first inspect existing exports and consumers, then make the smallest compatible shared-package changes. Do not implement all contracts in one PR.
 
+## FR-008 canonical identity contract
+
+Implemented in the shared `@coinzilla/entities` package:
+
+- `Asset.id` is the stable canonical identity; `Asset.code` is the normalized uppercase display/trading code. The code is not assumed globally unique, so equal codes with different canonical IDs remain distinct assets.
+- `Market` requires explicit base and quote `Asset` instances. It never derives either asset by splitting or otherwise parsing the venue symbol.
+- `Market.venue` is normalized to lowercase; `Market.symbol` is retained as an opaque, trimmed venue-provided identifier.
+- `Market.id` is the deterministic composite `venue:symbol`, distinguishing identical symbols listed on different venues.
+- Both entities expose independent `value` snapshots and immutable instances. Existing `Coin`, `Order`, and `ExecutedOrder` contracts remain unchanged.
+
+The venue symbol is adapter metadata carried by the market contract, not a strategy parsing format. A broker adapter is responsible for mapping its exchange symbol to the explicit base/quote Asset references.
+
 ## Explicit non-goals
 
 - No changes to runtime trading behavior.
