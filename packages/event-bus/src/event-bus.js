@@ -215,7 +215,7 @@ export class EventBus {
     })
   }
 
-  clearSubscriptions() {
+  #clearSubscriptions() {
     for (const record of this.subscriptions) {
       record.active = false
       record.registry.delete(record.listener)
@@ -274,11 +274,14 @@ export class EventBus {
         timeoutHandle = setTimeout(() => resolve(null), timeoutMs)
       })
 
-      result = await Promise.race([this.flush(), timeout])
-      clearTimeout(timeoutHandle)
+      try {
+        result = await Promise.race([this.flush(), timeout])
+      } finally {
+        clearTimeout(timeoutHandle)
+      }
 
       if (result === null) {
-        this.clearSubscriptions()
+        this.#clearSubscriptions()
         return toResult({
           error: new Error(`EventBus close timed out after ${timeoutMs}ms`),
           timedOut: true,
@@ -290,7 +293,7 @@ export class EventBus {
       return result
     }
 
-    this.clearSubscriptions()
+    this.#clearSubscriptions()
     return toResult({ closed: true })
   }
 }
