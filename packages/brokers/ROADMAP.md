@@ -67,10 +67,10 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `b3bdefe54d2e064caf8ecbeee59eb15776ef7eff` (PR #341).
+1. The source of truth is `develop`, currently at merge commit `f636707f1335662dc3011a4e896d59f9ddf4e69d` (PR #342).
 2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
 3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
-4. PR #341 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
+4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
 5. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A successful socket connection or subscription is never proof that missed events have been reconciled.
 6. Phase 6 remains in progress until reconnect/reconciliation liveness tests and opt-in Binance TESTNET verification are complete. Do not claim the broker can replay events missed during a disconnect.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
@@ -403,6 +403,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
   Offline safety regression: the native broker integration suite now creates its broker only inside the credential-gated setup hook, so missing credentials produce a clean skip instead of a module-load exception. The suite asserts both configured WebSocket endpoints are Binance TESTNET before connecting. A deterministic unit test launches both integration suites with dummy non-placeholder credentials but no opt-in flag and verifies that they exit successfully as skipped.
 - [x] Require the explicit `BINANCE_TESTNET_INTEGRATION=1` opt-in in both native broker and user-data integration suites, in addition to non-placeholder credentials. The default unit suite proves both suites skip without network access even when dummy non-placeholder credentials are present.
   The opt-in flag is documented in `.env.example` and defaults to `0`. Live TESTNET protocol/order verification remains outstanding.
+- [x] Remove fixed microtask-count polling from user-data recovery unit tests. The fake scheduler now awaits asynchronous timer callbacks, and race tests await the session's recovery promise instead of relying on twelve `Promise.resolve()` turns.
 - [ ] Document supported Node versions, required API permissions, endpoints, reconnect semantics, rate limits, failure modes, uncertain order outcomes, and safe shutdown.
 - [ ] Verify broker package tests, full workspace tests, syntax checks, production dependency audit, and repository-required branch-protection checks.
 - [ ] Review logs for secret leakage.
