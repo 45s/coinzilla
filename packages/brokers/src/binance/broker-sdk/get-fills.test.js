@@ -127,3 +127,34 @@ describe("BinanceSdkBroker.getFills history filters", () => {
     assert.equal(result.data[0].brokerOrderId, "7")
   })
 })
+
+
+describe("BinanceSdkBroker.getFills cursor validation", () => {
+  it("rejects time/cursor conflicts and unsafe IDs before trade lookup", async () => {
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [marketInfo] }),
+      myTrades: () => [],
+    })
+    for (const query of [
+      { symbol: "BTCUSDT", fromId: 41, startTime: 1_000 },
+      { symbol: "BTCUSDT", orderId: 7, endTime: 2_000 },
+      { symbol: "BTCUSDT", fromId: "9007199254740992" },
+      { symbol: "BTCUSDT", startTime: 0, endTime: 86_400_001 },
+    ]) {
+      assert.equal((await broker.getFills(query)).ok, false)
+    }
+    assert.deepEqual(
+      broker.tradingConnection.calls.filter((call) => call.method === "myTrades"),
+      [],
+    )
+  })
+
+  it("rejects unsafe trade IDs rather than rounding canonical Fill identity", async () => {
+    const broker = createBroker({
+      exchangeInfo: () => ({ symbols: [marketInfo] }),
+      myTrades: () => [{ ...trade, id: Number.MAX_SAFE_INTEGER + 1 }],
+    })
+    const result = await broker.getFills({ symbol: "BTCUSDT" })
+    assert.equal(result.ok, false)
+  })
+})
