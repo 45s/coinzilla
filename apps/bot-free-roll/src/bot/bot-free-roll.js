@@ -24,6 +24,7 @@ import {
   createGridCycleFromBuyFills,
 } from "./grid-cycle-planning.js"
 import {
+  closeGridCycleSellOrder,
   completeGridCycle,
   recordGridCycleSellFill,
 } from "./grid-cycles.js"
@@ -557,7 +558,7 @@ export class FreeRollBot {
         for (const fill of fillHistory.missingFills) {
           const execution = toExecutionFill({ fill })
           if (!execution.ok) throw new Error(execution.reason)
-          if (!this.#applyExecutionFill({ symbol, fill: execution.fill })) {
+          if (!(await this.#applyExecutionFill({ symbol, fill: execution.fill }))) {
             throw new Error(`Could not backfill recovered fill ${execution.fill?.id ?? "unknown"}`)
           }
         }
@@ -922,7 +923,7 @@ export class FreeRollBot {
         this.#pause(symbol, `TRADE fill identity does not match order ${id}`)
         return
       }
-      if (!this.#applyExecutionFill({ symbol, fill: event.fill })) return
+      if (!(await this.#applyExecutionFill({ symbol, fill: event.fill }))) return
     }
 
     if (status === "FILLED") {
@@ -1226,7 +1227,7 @@ export class FreeRollBot {
     this.#publishTradingSummary({ symbol, reason: "profitable_cycle_completed" })
   }
 
-  #applyExecutionFill({ symbol, fill }) {
+  async #applyExecutionFill({ symbol, fill }) {
     const state = this.#states.get(symbol)
     if (!state) return false
 
@@ -1243,6 +1244,61 @@ export class FreeRollBot {
     if (!result.ok) {
       this.#pause(symbol, result.reason, result.error)
       return false
+    }
+
+    if (state.mode === "grid") {
+      const orderIndex = buildGridOrderIndex({
+        cycles: [...state.gridCycles.values()],
+        pendingBuyOrder: state.buyOrder,
+      })
+      if (!orderIndex.ok) {
+        this.#pause(symbol, "Grid fill cannot be mapped to a unique strategy order", orderIndex.errors[0])
+        return false
+      }
+      const owner = resolveGridOrderOwner({
+        orderIndex: orderIndex.data,
+        orderId: String(fill.orderId),
+        symbol,
+        side: fill.side,
+        clientOrderId: fill.clientOrderId,
+      })
+      if (!owner.ok) {
+        this.#pause(symbol, "Grid fill has no unambiguous cycle owner", owner.errors[0])
+        return false
+      }
+
+      if (owner.data.owner.role === "BUY") {
+        if (owner.data.owner.cycleId !== null || state.buyOrder?.id !== String(fill.orderId)) {
+          this.#pause(symbol, "Unexpected new fill for a historical Grid BUY order")
+          return false
+        }
+      } else {
+        const cycle = state.gridCycles.get(owner.data.owner.cycleId)
+        const recorded = recordGridCycleSellFill({
+          cycle,
+          fill: result.recordedFill ?? fill,
+          accounting: result.accounting,
+        })
+        if (!recorded.ok) {
+          this.#pause(symbol, "Grid SELL fill could not be applied to its owning cycle", recorded.errors[0])
+          return false
+        }
+        state.gridCycles.set(cycle.id, recorded.data)
+      }
+
+      const projection = projectGridPairAccounting({ state })
+      if (!projection.ok) {
+        this.#pause(symbol, "Grid inventory projection failed after a fill", projection.errors[0])
+        return false
+      }
+      Object.assign(state, projection.data)
+
+      try {
+        await this.#persistGridState()
+      } catch (error) {
+        this.#pause(symbol, "Grid fill was accounted but could not be persisted; pair paused", error)
+        return false
+      }
     }
 
     this.#debug(`[${symbol}] Actual fill accounted`, {
@@ -1272,7 +1328,7 @@ export class FreeRollBot {
     for (const fill of fills) {
       const validation = validateOrderFill({ fill, symbol, order })
       if (!validation.ok) throw new Error(validation.reason)
-      if (!this.#applyExecutionFill({ symbol, fill })) {
+      if (!(await this.#applyExecutionFill({ symbol, fill }))) {
         throw new Error(`Could not account trade fill ${fill?.id ?? "unknown"}`)
       }
     }
