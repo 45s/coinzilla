@@ -17,7 +17,7 @@ if (result.status !== 0) {
   process.exitCode = result.status ?? 1
 } else {
   const match = result.stdout.match(
-    /bot-free-roll\\.js\\s+\\|\\s+([\\d.]+)\\s+\\|\\s+([\\d.]+)/,
+    /bot-free-roll\.js\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)/,
   )
 
   if (!match) {
