@@ -272,3 +272,51 @@ The additive `BinanceSdkBroker.getFills({ symbol, orderId?, fromId?, startTime?,
 - A positive commission is represented by a `Commission` with its explicit commission Asset. A confirmed zero commission is `COMPLETE` with an empty commission list. If a positive commission has no known denomination, its status is `UNKNOWN`; no fee Asset is fabricated.
 - Missing maker/taker metadata maps to `UNKNOWN`, and missing execution timestamps remain absent.
 - The legacy `getMyTrades()` API and its plain-object result shape are unchanged for compatibility. Consumer migration to `getFills()` is a separate task owned by the consumer domain.
+
+
+## 12. Current WebSocket broker source layout
+
+The Phase 0 inventory above is historical context. The active implementation is now the native WebSocket broker; its source is organized by responsibility:
+
+```text
+broker-websocket/
+  index.js
+  broker.js
+  broker.test.js
+  config/
+    binance-websocket-config.js
+  constants/
+    websocket-endpoints.js
+  helpers/
+    history-query-params.js
+    public-stream-adapters.js
+    user-data-event-deduplicator.js
+    adapters/
+      adapt-msg.js
+      adapt-trades.js
+      user.js
+  methods/
+    user-data-session.js
+  utils/
+    rpc-client.js
+    runtime.js
+    signature.js
+    streams-client.js
+    streams-protocol.js
+    transport.js
+  tests/
+    unit/
+      ...
+```
+
+- `broker.js` is the broker facade and lifecycle/orchestration layer.
+- `config/` owns validated runtime configuration. `BinanceWebSocketConfig` is Coinzilla-owned configuration; it is not a wrapper around or dependency on the removed Binance SDK.
+- `constants/` owns fixed Binance endpoint values.
+- `methods/` owns the user-data session/recovery coordinator, which is a cohesive stateful method service.
+- `helpers/` owns pure request-parameter validation, event adaptation, and bounded event deduplication.
+- `utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
+- `tests/unit/` contains the focused tests and test doubles; the broker contract suite remains visible as `broker.test.js` beside the facade.
+
+The legacy `websocket-stream/` transport and REST listen-key client remain removed. However, the pure event adapters were still required by the active WebSocket broker, so their data-mapping behavior is retained under `helpers/adapters/`; this does not restore the legacy transport or REST behavior.
+
+The package entry point exports only `BinanceWebSocketBroker` and `BinanceWebSocketConfig`. Keep compatibility aliases internal only while remaining tests/consumers require them; do not reintroduce the removed third-party SDK.

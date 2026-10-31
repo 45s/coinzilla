@@ -1,5 +1,5 @@
-import { createUserDataEventDeduplicator } from "./user-data-event-deduplicator.js"
-import { adaptMsg } from "../websocket-stream/index.js"
+import { createUserDataEventDeduplicator } from "../helpers/user-data-event-deduplicator.js"
+import { adaptMsg } from "../helpers/adapters/adapt-msg.js"
 
 function logSafely(logger, level, ...args) {
   try {

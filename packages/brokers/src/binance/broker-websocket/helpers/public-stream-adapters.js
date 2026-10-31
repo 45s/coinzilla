@@ -1,4 +1,4 @@
-import { adaptAggTrades } from "../websocket-stream/adapters/adapt-trades.js"
+import { adaptAggTrades } from "./adapters/adapt-trades.js"
 
 const publicAdapters = new Map([
   ["aggTrade", adaptAggTrades],

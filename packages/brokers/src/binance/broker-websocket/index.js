@@ -1,2 +1,2 @@
 export { BinanceWebSocketBroker } from "./broker.js"
-export { BinanceWebSocketConfig } from "./binance-websocket-config.js"
+export { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
