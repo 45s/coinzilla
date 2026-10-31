@@ -146,6 +146,21 @@ test("replays an identical SELL fill idempotently and rejects conflicting reuse"
   assert.equal(repeated.duplicate, true)
   assert.strictEqual(repeated.data, cycle)
   assert.equal(conflict.ok, false)
+
+  const completed = completeGridCycle({
+    cycle,
+    keepQuantity: "1",
+    minProfit: "0.01",
+  })
+  const replayAfterCompletion = recordGridCycleSellFill({
+    cycle: completed.data,
+    fill: { id: "sell-trade-1", orderId: "sell-1", side: "SELL", quantity: "99" },
+    accounting: { baseQuantity: "99", quoteQuantity: "10.02" },
+  })
+
+  assert.equal(replayAfterCompletion.ok, true)
+  assert.equal(replayAfterCompletion.duplicate, true)
+  assert.strictEqual(replayAfterCompletion.data, completed.data)
 })
 
 test("rejects fills for unknown orders, non-SELL fills, overfills, and excess base debits", () => {
