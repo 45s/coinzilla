@@ -322,6 +322,10 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
         !(order instanceof CanonicalOrder) ||
         order.market.symbol !== symbol ||
         order.status === "UNKNOWN" ||
+        !isTimestamp(order.createdAt) ||
+        !isTimestamp(order.updatedAt) ||
+        order.updatedAt < order.createdAt ||
+        (["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(order.status) && !isTimestamp(order.completedAt)) ||
         !trackedOrderIds.includes(order.brokerOrderId) ||
         orderIds.has(order.brokerOrderId)
       ) {
