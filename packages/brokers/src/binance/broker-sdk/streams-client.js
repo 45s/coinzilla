@@ -109,28 +109,49 @@ export class BinanceStreamsClient {
     return this.#enqueueOperation(async () => {
       await this.#connect(false)
       const newStreams = []
+      const addedListeners = []
 
-      for (const stream of streams) {
+      for (const stream of new Set(streams)) {
         let listeners = this.#listeners.get(stream)
         if (!listeners) {
           listeners = new Set()
           this.#listeners.set(stream, listeners)
         }
-        listeners.add(listener)
-        if (!this.#activeStreams.has(stream)) newStreams.push(stream)
+        if (!listeners.has(listener)) {
+          listeners.add(listener)
+          addedListeners.push(stream)
+        }
+        if (!this.#activeStreams.has(stream) && !newStreams.includes(stream)) newStreams.push(stream)
+      }
+
+      if (this.#activeStreams.size + newStreams.length > MAX_STREAMS_PER_CONNECTION) {
+        for (const stream of addedListeners) {
+          const listeners = this.#listeners.get(stream)
+          listeners?.delete(listener)
+          if (listeners?.size === 0) this.#listeners.delete(stream)
+        }
+        throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
       }
 
       if (newStreams.length > 0) {
+        const activated = []
         try {
           for (const batch of this.#chunk(newStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
             await this.#request("SUBSCRIBE", batch)
-            for (const stream of batch) this.#activeStreams.add(stream)
+            for (const stream of batch) {
+              this.#activeStreams.add(stream)
+              activated.push(stream)
+            }
           }
         } catch (error) {
-          for (const stream of streams) {
+          for (const stream of addedListeners) {
             const listeners = this.#listeners.get(stream)
             listeners?.delete(listener)
             if (listeners?.size === 0) this.#listeners.delete(stream)
+          }
+          if (activated.length > 0) {
+            this.#request("UNSUBSCRIBE", activated).catch((cleanupError) => this.#reportError(cleanupError))
+            for (const stream of activated) this.#activeStreams.delete(stream)
           }
           throw error
         }
@@ -226,10 +247,15 @@ export class BinanceStreamsClient {
         }
       }
       return this
-    }).catch((error) => {
+    }).catch(async (error) => {
       if (this.#transport === transport) {
         this.#transport = null
         this.#state = "closed"
+        try {
+          await transport.close()
+        } catch (closeError) {
+          this.#reportError(closeError)
+        }
       }
       if (!this.#manualDisconnect && isReconnect) this.#scheduleReconnect()
       throw error
@@ -328,6 +354,11 @@ export class BinanceStreamsClient {
 
     const messages = Array.isArray(parsed.data) ? parsed.data : [parsed.data]
     for (const message of messages) {
+      if (message.e === "serverShutdown") {
+        this.#reportError(new Error("Binance Streams server is shutting down"))
+        this.#transport?.close(1012, "Binance server shutdown").catch((error) => this.#reportError(error))
+        return
+      }
       for (const [stream, listeners] of this.#listeners) {
         const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
         if (!matches) continue
