@@ -224,7 +224,7 @@ test("the supported Node WebSocket client automatically answers server ping fram
       `Sec-WebSocket-Accept: ${accept}`,
       "",
       "",
-    ].join("\\r\\n"))
+    ].join("\r\n"))
 
     socket.write(Buffer.concat([
       Buffer.from([0x89, payload.length]),
