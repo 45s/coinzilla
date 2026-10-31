@@ -201,3 +201,52 @@ test("history cursors advance from the last returned ID without repeating record
   assert.deepEqual(secondOrders.data.map((order) => order.orderId), [12])
   assert.deepEqual(rpc.calls.map((call) => call.params.fromId ?? call.params.orderId), [10, 12, 10, 12])
 })
+
+
+test("trade history rejects unsafe response trade and order IDs instead of rounding", async () => {
+  for (const trade of [
+    {
+      id: Number.MAX_SAFE_INTEGER + 1,
+      symbol: "DOGEFDUSD",
+      orderId: 123,
+      qty: "1",
+      price: "1",
+      quoteQty: "1",
+      commission: "0",
+      isBuyer: true,
+      isMaker: true,
+    },
+    {
+      id: 456,
+      symbol: "DOGEFDUSD",
+      orderId: Number.MAX_SAFE_INTEGER + 1,
+      qty: "1",
+      price: "1",
+      quoteQty: "1",
+      commission: "0",
+      isBuyer: true,
+      isMaker: true,
+    },
+  ]) {
+    const { broker } = createBroker({ myTrades: () => [trade] })
+    const result = await broker.getMyTrades({ symbol: "DOGEFDUSD" })
+    assert.equal(result.ok, false)
+    assert.ok(result.errors?.length)
+  }
+})
+
+test("order history rejects unsafe response order IDs instead of exposing rounded cursors", async () => {
+  const { broker } = createBroker({
+    allOrders: () => [{
+      symbol: "DOGEFDUSD",
+      orderId: Number.MAX_SAFE_INTEGER + 1,
+      origQty: "1",
+      executedQty: "1",
+      time: 100,
+      updateTime: 200,
+    }],
+  })
+  const result = await broker.getOrderHistory({ symbol: "DOGEFDUSD" })
+  assert.equal(result.ok, false)
+  assert.ok(result.errors?.length)
+})

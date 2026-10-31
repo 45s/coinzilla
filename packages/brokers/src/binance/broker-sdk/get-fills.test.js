@@ -184,3 +184,21 @@ describe("BinanceSdkBroker.getFills", () => {
     )
   })
 })
+
+
+describe("canonical fill response ID precision", () => {
+  it("rejects unsafe response trade and order IDs", async () => {
+    for (const invalidTrade of [
+      { ...trade, id: Number.MAX_SAFE_INTEGER + 1 },
+      { ...trade, orderId: Number.MAX_SAFE_INTEGER + 1 },
+    ]) {
+      const broker = createBroker({
+        exchangeInfo: () => ({ symbols: [marketInfo] }),
+        myTrades: () => [invalidTrade],
+      })
+      const result = await broker.getFills({ symbol: "BTCUSDT" })
+      assert.equal(result.ok, false)
+      assert.ok(result.errors?.length)
+    }
+  })
+})
