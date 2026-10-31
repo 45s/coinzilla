@@ -319,6 +319,12 @@ export class BinanceSdkBroker extends CoreBroker {
       if (hasTimeWindow && orderId !== undefined && orderId !== null) {
         throw new TypeError("getFills orderId cannot be combined with startTime or endTime")
       }
+      const normalizedOrderId = orderId === undefined || orderId === null
+        ? undefined
+        : normalizeNonNegativeInteger(orderId, "getFills orderId")
+      const normalizedFromId = fromId === undefined || fromId === null
+        ? undefined
+        : normalizeNonNegativeInteger(fromId, "getFills fromId")
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
       const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
@@ -347,12 +353,8 @@ export class BinanceSdkBroker extends CoreBroker {
       })
 
       const params = { symbol, limit, ...timeWindow }
-      if (orderId !== undefined && orderId !== null) {
-        params.orderId = normalizeNonNegativeInteger(orderId, "getFills orderId")
-      }
-      if (fromId !== undefined && fromId !== null) {
-        params.fromId = normalizeNonNegativeInteger(fromId, "getFills fromId")
-      }
+      if (normalizedOrderId !== undefined) params.orderId = normalizedOrderId
+      if (normalizedFromId !== undefined) params.fromId = normalizedFromId
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
       if (!Array.isArray(tradesResponse.data)) {
         throw new TypeError("Binance myTrades response should be an array")
