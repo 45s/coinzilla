@@ -6,14 +6,16 @@ import {
   closeGridCycleSellOrder,
   completeGridCycle,
   createGridCycle,
+  createGridCycleId,
   projectGridCycles,
   recordGridCycleSellFill,
 } from "./grid-cycles.js"
 
 function createCycle(overrides = {}) {
   const result = createGridCycle({
-    cycleId: "cycle-1",
     symbol: "DOGEFDUSD",
+    baseAsset: "DOGE",
+    quoteAsset: "FDUSD",
     buyOrderId: "buy-1",
     buyFillIds: ["buy-trade-1"],
     acquiredQuantity: "100",
@@ -43,7 +45,10 @@ function fillSell(cycle, overrides = {}) {
       id: "sell-trade-1",
       orderId: "sell-1",
       side: "SELL",
+      symbol: "DOGEFDUSD",
       quantity: "99",
+      commissionAmount: "0",
+      commissionAsset: null,
       ...overrides.fill,
     },
     accounting: {
@@ -70,15 +75,28 @@ test("creates one immutable cycle from a fully reconciled BUY", () => {
   assert.equal(Object.isFrozen(cycle.buyFillIds), true)
 })
 
-test("rejects missing identity, empty fill history, duplicate fills, and invalid amounts", () => {
+test("derives a stable collision-resistant cycle ID from market and BUY order identity", () => {
+  const first = createGridCycleId({ symbol: "DOGEFDUSD", buyOrderId: "buy-1" })
+  const repeated = createGridCycleId({ symbol: "DOGEFDUSD", buyOrderId: "buy-1" })
+  const anotherOrder = createGridCycleId({ symbol: "DOGEFDUSD", buyOrderId: "buy-2" })
+
+  assert.equal(first.ok, true)
+  assert.deepEqual(first, repeated)
+  assert.notEqual(first.data.cycleId, anotherOrder.data.cycleId)
+  assert.equal(createGridCycleId({ symbol: "", buyOrderId: "buy-1" }).ok, false)
+})
+
+test("rejects missing identity, invalid assets, empty fill history, duplicate fills, and invalid amounts", () => {
   const invalid = [
-    { cycleId: "", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1" },
-    { cycleId: "c1", symbol: "", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1" },
-    { cycleId: "c1", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: [], acquiredQuantity: "1", recoveryCost: "1" },
-    { cycleId: "c1", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: ["t1", "t1"], acquiredQuantity: "1", recoveryCost: "1" },
-    { cycleId: "c1", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "0", recoveryCost: "1" },
-    { cycleId: "c1", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "-1" },
-    { cycleId: "c1", symbol: "DOGEFDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: 1, recoveryCost: "1" },
+    { symbol: "", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "DOGE", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: [], acquiredQuantity: "1", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1", "t1"], acquiredQuantity: "1", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "0", recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "-1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: 1, recoveryCost: "1" },
+    { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD", buyOrderId: "buy-1", buyFillIds: ["t1"], acquiredQuantity: "1", recoveryCost: "1", buyCommissionTotals: { BNB: "0.01" } },
   ]
 
   for (const input of invalid) assert.equal(createGridCycle(input).ok, false)
@@ -262,7 +280,6 @@ test("projects pair totals from independent cycles without mutating them", () =>
     minProfit: "0.01",
   }).data
   const second = createCycle({
-    cycleId: "cycle-2",
     buyOrderId: "buy-2",
     buyFillIds: ["buy-trade-2"],
     acquiredQuantity: "100",
@@ -285,6 +302,7 @@ test("projects pair totals from independent cycles without mutating them", () =>
     saleProceeds: "0",
     realizedProfit: "0.02",
     residualQuantity: "0",
+    commissionTotals: {},
     openCycles: 1,
     completedCycles: 1,
   })
@@ -311,7 +329,7 @@ test("rejects duplicate cycle IDs and mixed-symbol pair projections", () => {
 
   assert.equal(projectGridCycles({ cycles: [cycle, cycle] }).ok, false)
   assert.equal(projectGridCycles({
-    cycles: [cycle, createCycle({ cycleId: "cycle-2", symbol: "BTCUSDT" })],
+    cycles: [cycle, createCycle({ symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT", buyOrderId: "buy-2" })],
   }).ok, false)
   assert.equal(projectGridCycles({ cycles: null }).ok, false)
 })
