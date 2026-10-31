@@ -108,6 +108,10 @@ describe("Binance user-data session recovery", () => {
     const scheduler = createScheduler()
     const clients = []
     let resolveDelayedSubscribe
+    let markDelayedSubscribeStarted
+    const delayedSubscribeStarted = new Promise((resolve) => {
+      markDelayedSubscribeStarted = resolve
+    })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -141,6 +145,7 @@ describe("Binance user-data session recovery", () => {
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
     const recovery = scheduler.runNext()
+    await delayedSubscribeStarted
     assert.equal(typeof resolveDelayedSubscribe, "function")
 
     clients[1].state = "closed"
@@ -742,6 +747,10 @@ describe("Binance user-data session recovery", () => {
     const scheduler = createScheduler()
     const clients = []
     let finishReconnect
+    let markReconnectStarted
+    const reconnectStarted = new Promise((resolve) => {
+      markReconnectStarted = resolve
+    })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -760,6 +769,8 @@ describe("Binance user-data session recovery", () => {
               client.state = "open"
               resolve(client)
             }
+            markReconnectStarted()
+            markReconnectStarted()
           })
         }
         clients.push(client)
@@ -774,11 +785,12 @@ describe("Binance user-data session recovery", () => {
 
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
-    await scheduler.runNext()
+    const recovery = scheduler.runNext()
+    await reconnectStarted
 
     const explicitConnect = broker.connect()
     finishReconnect()
-    await explicitConnect
+    await Promise.all([explicitConnect, recovery])
 
     assert.equal(clients.length, 2)
     assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
@@ -795,6 +807,10 @@ describe("Binance user-data session recovery", () => {
     const scheduler = createScheduler()
     const clients = []
     let finishReconnect
+    let markReconnectStarted
+    const reconnectStarted = new Promise((resolve) => {
+      markReconnectStarted = resolve
+    })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -827,6 +843,7 @@ describe("Binance user-data session recovery", () => {
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
     const recovery = scheduler.runNext()
+    await reconnectStarted
     assert.equal(typeof finishReconnect, "function")
 
     await broker.disconnect()
