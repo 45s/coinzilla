@@ -16,12 +16,18 @@ const hasTestnetCredentials =
 
 const symbol = process.env.BINANCE_TESTNET_SYMBOL || "BTCUSDT"
 const eventTimeoutMs = Number(process.env.BINANCE_TESTNET_EVENT_TIMEOUT_MS || 60_000)
+if (!Number.isSafeInteger(eventTimeoutMs) || eventTimeoutMs < 1_000) {
+  throw new RangeError("BINANCE_TESTNET_EVENT_TIMEOUT_MS must be an integer of at least 1000")
+}
 
 async function waitForStatus(statuses, type, startIndex = 0, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const status = statuses.slice(startIndex).find((item) => item.type === type)
+    const recent = statuses.slice(startIndex)
+    const status = recent.find((item) => item.type === type)
     if (status) return status
+    const failure = recent.find((item) => item.type === "recoveryFailed")
+    if (failure) throw new Error("Binance user-data recovery exhausted its retry budget")
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`Timed out waiting for Binance user-data status: ${type}`)
@@ -71,9 +77,8 @@ describe(
 
     it("re-subscribes after socket loss and stays fail-closed until snapshots are reconciled", async () => {
       const statuses = []
-      const received = []
       const result = await broker.subscribeForUserData({
-        onEvent: (payload) => received.push(payload),
+        onEvent() {},
         onStatus: (status) => statuses.push(status),
       })
 
