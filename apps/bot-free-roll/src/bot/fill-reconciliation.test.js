@@ -608,4 +608,11 @@ test("replay validates entries, pair settings, and exact configured fee rate", (
   })
   assert.equal(invalidFee.ok, false)
   assert.match(invalidFee.reason, /invalid configured fee rate/)
+
+  const negativeFee = replayExecutionFills({
+    entries: [],
+    pairState: { ...replayPairState, configuredFeeRate: "-0.001" },
+  })
+  assert.equal(negativeFee.ok, false)
+  assert.match(negativeFee.reason, /must be non-negative/)
 })
