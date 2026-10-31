@@ -276,6 +276,13 @@ test("the supported Node WebSocket client automatically answers server ping fram
 
         received = received.subarray(offset + maskLength + length)
         if (opcode === 0x0a) resolvePong(framePayload)
+        if (opcode === 0x08) {
+          socket.write(Buffer.concat([
+            Buffer.from([0x88, framePayload.length]),
+            framePayload,
+          ]))
+          socket.end()
+        }
       }
     })
   })
