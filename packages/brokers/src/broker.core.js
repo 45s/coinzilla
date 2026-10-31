@@ -22,4 +22,7 @@ CoreBroker.prototype.subscribeForPrices = foo("subscribeForPrices")
 
 CoreBroker.prototype.getSymbolFilters = foo("getSymbolFilters")
 CoreBroker.prototype.getMyTrades = foo("getMyTrades")
+CoreBroker.prototype.getOrderHistory = foo("getOrderHistory")
 CoreBroker.prototype.getBalances = foo("getBalances")
+CoreBroker.prototype.getAccountSnapshot = foo("getAccountSnapshot")
+CoreBroker.prototype.getServerTime = foo("getServerTime")
