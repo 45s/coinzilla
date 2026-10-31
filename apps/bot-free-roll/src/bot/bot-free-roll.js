@@ -1039,6 +1039,78 @@ export class FreeRollBot {
     })
   }
 
+  async #placeGridBuy({ symbol, state, rawPrice }) {
+    if (!this.#isRunning || state.paused || state.buyOrder) return false
+    if ([...state.orderIntents.values()].some((intent) => intent.side === "BUY")) {
+      this.#pause(symbol, "A Grid BUY intent is already awaiting reconciliation")
+      return false
+    }
+
+    try {
+      const quantity = roundDecimalToIncrement({
+        value: String(state.settings.orderQuantity),
+        increment: String(state.quantityStepSize ?? 0),
+        direction: "down",
+      })
+      const price = roundDecimalToIncrement({
+        value: String(rawPrice),
+        increment: String(state.priceTickSize ?? 0),
+        direction: "down",
+      })
+      if (compareDecimal({ left: quantity, right: "0" }) <= 0 ||
+          compareDecimal({ left: price, right: "0" }) <= 0) {
+        this.#pause(symbol, "Grid BUY quantity and price must be positive after exchange rounding")
+        return false
+      }
+
+      const serverTime = unwrapResult(await this.broker.getServerTime()).serverTime
+      const intent = createGridOrderIntent({
+        intentId: `${symbol}:BUY:${state.nextIntentSequence}`,
+        symbol,
+        side: "BUY",
+        type: state.orderType,
+        quantity,
+        price,
+        createdAtServerTime: serverTime,
+      })
+      if (!intent.ok) {
+        this.#pause(symbol, "Could not create Grid BUY intent", intent.errors[0])
+        return false
+      }
+
+      state.nextIntentSequence += 1
+      state.lastAdjustmentPrice = Number(price)
+      const submitted = await this.#gridOrderExecution.submit({
+        state,
+        intent: intent.data,
+      })
+      if (!submitted.ok) {
+        this.#pause(symbol, "Grid BUY submission failed; reconciliation is required", submitted.errors[0])
+        return false
+      }
+
+      this.#publish("order.created", {
+        symbol,
+        side: "BUY",
+        orderId: submitted.data.order.id,
+        clientOrderId: submitted.data.order.clientOrderId,
+        price: submitted.data.order.price,
+        quantity: submitted.data.order.quantity,
+        mode: "grid",
+      })
+      this.#debug(`[${symbol}] Grid BUY order submitted`, {
+        orderId: submitted.data.order.id,
+        clientOrderId: submitted.data.order.clientOrderId,
+        price,
+        quantity,
+      })
+      return true
+    } catch (error) {
+      this.#pause(symbol, "Grid BUY preparation or persistence failed", error)
+      return false
+    }
+  }
+
   async #placeBuy(symbol, rawPrice) {
     return this.#orderExecution.placeBuy({
       symbol,
