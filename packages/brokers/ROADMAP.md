@@ -61,17 +61,20 @@ The migration is complete only when all of the following are true:
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-- [ ] Phase 6 — user-data session lifecycle and recovery.
+- [ ] Phase 6 — user-data session lifecycle and recovery (Phase 6A merged; Phase 6B in progress).
 - [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
 - [ ] Phase 8 — operational hardening and completion.
 
 ### Next action
 
 1. Phase 5 is merged (PR #271, merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-2. Main synchronization PR #279 is merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`; this is the current integration-branch base.
-3. Re-reviewed `main` at `9903365e724ffa5887d77aa297abf5d0077d8762`. The 28 later commits contain bot-only test/coverage work, `packages/event-bus` changes, and repository engineering-standard updates. No broker/API/consumer-contract/runtime/dependency change was found that requires another sync. Bot application files remain read-only.
-4. Phase 6 implementation branch: `migration/binance-phase-6-user-data-recovery`.
-5. Phase 6 must preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+2. Main synchronization PR #279 is merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`.
+3. Phase 6A is merged via PR #285 at `244508790402d0044f9e880799db3c0088822448`; its exact PR head `361e0184f1d6059c63e17544e738a1e8fd90faec` passed all five CI workflows.
+4. Re-reviewed `main` through `46ffd669d064e8e33f6ed59e31cc9d70d93150f5`. Six commits since `9903365e724ffa5887d77aa297abf5d0077d8762` affect bot documentation and `packages/event-bus` only; no broker/API/consumer-contract/runtime/dependency change requires synchronization. Do not import unrelated bot-only work into the broker branch.
+5. Phase 6B implementation branch: `migration/binance-phase-6b-user-data-reconnect`, based on integration commit `244508790402d0044f9e880799db3c0088822448`.
+6. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+7. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
+8. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -348,7 +351,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
 - [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Do not carry forward the legacy REST listen-key timer.
-#### Phase 6A — lifecycle observability and event idempotency (current PR)
+#### Phase 6A — lifecycle observability and event idempotency (merged PR #285)
 - [x] Expose RPC socket-close notifications without changing existing request/event behavior.
 - [x] Detect explicit `eventStreamTerminated` events and unexpected API socket closure.
 - [x] Add an optional `onStatus` callback that reports `terminated` and `connectionClosed` with `recoveryRequired: true`, plus `rpcError` diagnostics without claiming a recovery gap; keep the existing `onEvent({ event })` contract unchanged.
