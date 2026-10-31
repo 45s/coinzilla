@@ -186,6 +186,9 @@ importers:
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@coinzilla/notifiers':
+        specifier: workspace:*
+        version: link:../../packages/notifiers
 
   packages/brokers:
     dependencies:
