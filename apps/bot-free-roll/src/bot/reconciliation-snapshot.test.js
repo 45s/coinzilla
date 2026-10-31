@@ -177,7 +177,7 @@ test("preserves exact open-order remaining quantity and rejects unresolved fee d
       executedQuantity: "2.000",
       status: "PARTIALLY_FILLED",
     }],
-    fillsByCursor: { first: [createFill({ tradeId: "100" })] },
+    fillsByCursor: { first: [createFill({ tradeId: "100" }), createFill({ tradeId: "101" })] },
   })
 
   const result = await collectReconciliationSnapshot({
@@ -304,7 +304,10 @@ test("fails closed for unsafe or unordered trade cursors", async () => {
 })
 
 test("validator rejects missing symbols, invalid completeness, and decreasing timestamps", async () => {
-  const broker = createBroker({ trackedOrder: createCanonicalOrder(), fillsByCursor: {} })
+  const broker = createBroker({
+    trackedOrder: createCanonicalOrder({ status: "OPEN", executedQuantity: "0" }),
+    fillsByCursor: {},
+  })
   const result = await collectReconciliationSnapshot({
     broker,
     trackedOrdersBySymbol: { DOGEFDUSD: [{ id: "11" }] },
