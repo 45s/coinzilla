@@ -184,9 +184,15 @@ test("reports delivery failures once and continues processing later events", asy
 
 test("leaves failures observable to the event bus when no logger is configured", async () => {
   const eventBus = createEventBus()
+  let calls = 0
   const subscriber = subscribeTelegramNotifications({
     eventBus,
-    notifier: { async sendMessage() { throw new Error("no logger path") } },
+    notifier: {
+      async sendMessage() {
+        calls += 1
+        if (calls === 1) throw new Error("no logger path")
+      },
+    },
   })
 
   await assert.rejects(
@@ -194,6 +200,7 @@ test("leaves failures observable to the event bus when no logger is configured",
     /no logger path/,
   )
   await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped", data: {} })
+  assert.equal(calls, 2)
   await subscriber.close()
 })
 
