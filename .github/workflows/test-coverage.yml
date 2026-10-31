@@ -53,5 +53,8 @@ jobs:
 
           exit "$test_status"
 
+      - name: Enforce Event Bus package coverage thresholds
+        run: pnpm --filter @coinzilla/event-bus test:coverage
+
       - name: Enforce Free-Roll bot coverage thresholds
         run: pnpm --filter @coinzilla/bot-free-roll test:coverage
