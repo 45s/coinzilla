@@ -157,6 +157,7 @@ test("plans an independent SELL from only the owning cycle's cost and proceeds",
     quantity: "99",
     price: "0.102",
     requiredNetProceeds: "10.01",
+    reservedQuantity: "99",
   })
 })
 
@@ -200,7 +201,27 @@ test("includes reconciled partial-sale proceeds when replanning a canceled cycle
   assert.equal(result.ok, true)
   assert.equal(result.data.quantity, "49")
   assert.equal(result.data.requiredNetProceeds, "5.01")
+  assert.equal(result.data.reservedQuantity, "49")
   assert.equal(result.data.price, "0.103")
+})
+
+test("reserves additional base inventory for the configured SELL fee allowance", () => {
+  const result = calculateGridCycleSellPlan({
+    cycle: createCycle(),
+    keepQuantity: "1",
+    minProfit: "0.01",
+    feeRate: "0.001",
+    priceTickSize: "0.001",
+    quantityStepSize: "0.001",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.quantity, "98.901")
+  assert.equal(result.data.reservedQuantity, "98.999901")
+  assert.equal(compareDecimal({
+    left: result.data.reservedQuantity,
+    right: "99",
+  }) <= 0, true)
 })
 
 test("refuses to plan a replacement while a cycle SELL is still live", () => {
@@ -249,5 +270,6 @@ test("returns a successful no-sellable-quantity plan when only keep inventory re
 
   assert.equal(result.ok, true)
   assert.equal(result.data.quantity, "0")
+  assert.equal(result.data.reservedQuantity, "0")
   assert.equal(result.data.price, null)
 })
