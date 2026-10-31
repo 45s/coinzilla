@@ -24,6 +24,7 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
         order: pendingBuyOrder,
         role: "BUY",
         status: pendingBuyOrder.status ?? "OPEN",
+        symbol: pendingBuyOrder.symbol,
         cycleId: null,
       }]
     : []
@@ -34,29 +35,31 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
         order: cycle.buyOrder,
         role: "BUY",
         status: "FILLED",
+        symbol,
         cycleId: cycle.id,
       },
       ...cycle.sellOrders.map((order) => ({
         order,
         role: "SELL",
         status: order.status,
+        symbol: cycle.symbol,
         cycleId: cycle.id,
       })),
     )
   }
 
-  for (const { order, role, status, cycleId } of ordersToIndex) {
-      if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId)) {
+  for (const { order, role, status, symbol, cycleId } of ordersToIndex) {
+    if (!isNonEmptyString(order.id) || !isNonEmptyString(order.clientOrderId)) {
         return failure(`Grid ${role} order has incomplete canonical identity`)
       }
-      if (Object.hasOwn(byOrderId, order.id)) {
+    if (Object.hasOwn(byOrderId, order.id)) {
         return failure(`Grid broker order ID ${order.id} is assigned more than once`)
       }
-      if (Object.hasOwn(byClientOrderId, order.clientOrderId)) {
+    if (Object.hasOwn(byClientOrderId, order.clientOrderId)) {
         return failure(`Grid client order ID ${order.clientOrderId} is assigned more than once`)
       }
 
-      const entry = Object.freeze({
+    const entry = Object.freeze({
         orderId: order.id,
         clientOrderId: order.clientOrderId,
         symbol: cycle.symbol,
@@ -65,9 +68,9 @@ export function buildGridOrderIndex({ cycles, pendingBuyOrder = null } = {}) {
         status,
         cycleId,
       })
-      byOrderId[order.id] = entry
-      byClientOrderId[order.clientOrderId] = entry
-      entries.push(entry)
+    byOrderId[order.id] = entry
+    byClientOrderId[order.clientOrderId] = entry
+    entries.push(entry)
   }
 
   return toResult({
