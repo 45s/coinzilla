@@ -1,4 +1,4 @@
-import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal } from "./decimal.js"
+import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal, assertDecimalString } from "./decimal.js"
 import { roundPriceUp, roundQuantityDown } from "./price.js"
 
 export function calculateSellPlan({
