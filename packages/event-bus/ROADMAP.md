@@ -141,7 +141,7 @@ The initial static audit found a solid small foundation:
 
 The audit also identified these risks:
 
-1. **Incomplete immutability:** `Object.freeze()` does not make `Date`, `Map`, `Set`, and all typed/binary values immutable. Map/Set instance-method overrides can be bypassed through prototype methods.
+1. **Incomplete immutability (addressed in this change):** payloads now accept only plain objects, arrays, and primitive values. Mutable built-ins, class instances, accessors, symbol keys, and unsupported object properties are rejected before cloning; accepted object graphs are cloned and frozen. Cycles and shared references remain supported.
 2. **Host event-name semantics:** using Node's `EventEmitter` exposes special names such as `newListener` and `removeListener`, which can violate the event-envelope contract.
 3. **Unbounded pending work:** every delivery creates a promise and enters an unbounded pending set; no backpressure or overload policy exists.
 4. **Shutdown can hang:** a handler that never settles can block `flush()` and `close()` forever.
@@ -158,7 +158,7 @@ These are audit observations to verify against the current implementation before
 ### Phase 0 — Contract and baseline
 
 - [ ] Document publish, delivery, ordering, error, unsubscribe, flush, and close semantics.
-- [ ] Decide supported payload types and immutability guarantees.
+- [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and primitive values only; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
 - [ ] Inspect all in-repository consumers for compatibility constraints.
 - [ ] Capture baseline test results and package coverage.
 
@@ -167,11 +167,11 @@ Acceptance: public behavior is documented and tests encode the intended contract
 ### Phase 1 — Correctness
 
 - [x] Remove Node EventEmitter special-name behavior from event dispatch.
-- [ ] Define and enforce truly safe payload immutability.
+- [x] Define and enforce truly safe payload immutability (reject mutable built-ins, accessors, symbol keys, and unsupported object shapes; clone and freeze supported data graphs).
 - [x] Align structured logging with the repository logger contract (single structured argument).
 - [ ] Validate constructor options and normalize/reject malformed event names.
 - [x] Make subscription state consistent after close.
-- [ ] Add regression tests for every corrected defect.
+- [x] Add regression tests for corrected payload immutability defects.
 
 Acceptance: all accepted events have consistent envelopes; event names cannot trigger host runtime behavior; payload guarantees are accurate and tested.
 
@@ -220,7 +220,7 @@ At minimum, maintain tests for:
 - Sync throw, async rejection, and error-reporter throw/rejection.
 - One consumer failure does not block other consumers.
 - Snapshot isolation from caller mutation.
-- Immutability of every supported nested payload type.
+- Immutability of every supported nested payload type; rejection of Date, Map, Set, typed arrays, ArrayBuffer, DataView, class instances, accessors, symbol keys, and functions.
 - Cycles/shared references if supported.
 - Unsubscribe before dispatch, during pending delivery, after close, and repeated unsubscribe.
 - Nested publish and flush waiting for transitively published events.
