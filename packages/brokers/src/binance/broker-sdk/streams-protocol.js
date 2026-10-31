@@ -28,7 +28,11 @@ export function validateStreamName(stream) {
 
 export function createStreamName(type, options = {}) {
   const { symbol, interval, windowSize, levels, speed } = options
-  const normalizedSymbol = symbol === undefined || symbol === null ? null : assertSymbol(symbol)
+  const normalizedSymbol = symbol === undefined || symbol === null ||
+    typeof symbol === "string" && symbol.trim() === ""
+    ? null
+    : assertSymbol(symbol)
+  const normalizedWindowSize = typeof windowSize === "string" ? windowSize.toLowerCase() : windowSize
 
   switch (type) {
     case "trade":
@@ -46,10 +50,10 @@ export function createStreamName(type, options = {}) {
       if (!INTERVALS.has(interval)) throw new TypeError("interval is not a supported Binance kline interval")
       return validateStreamName(`${normalizedSymbol}@kline_${interval}`)
     case "rollingWindowTicker":
-      if (!ROLLING_WINDOWS.has(windowSize)) throw new TypeError("windowSize must be 1h, 4h, or 1d")
+      if (!ROLLING_WINDOWS.has(normalizedWindowSize)) throw new TypeError("windowSize must be 1h or 4h")
       return validateStreamName(normalizedSymbol
-        ? `${normalizedSymbol}@ticker_${windowSize}`
-        : `!ticker_${windowSize}@arr`)
+        ? `${normalizedSymbol}@ticker_${normalizedWindowSize}`
+        : `!ticker_${normalizedWindowSize}@arr`)
     case "partialBookDepth":
       if (!normalizedSymbol) throw new TypeError("symbol is required for partialBookDepth")
       if (!DEPTH_LEVELS.has(Number(levels))) throw new TypeError("levels must be 5, 10, or 20")
