@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.013`
+**Document version:** `v0.014`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -330,6 +330,12 @@ If any order is partially filled, the strategy waits until that order is fully f
 Each accepted fill is captured as an immutable record containing its trade ID, broker order ID, market, side, exact price/quantity/quote values, and reported commission facts. Repeated identical fills are idempotent; reusing a trade ID with changed execution facts is treated as an accounting discrepancy and pauses the pair.
 
 The current replay projection reconstructs execution-derived accounting for one recovery window. It is not durable storage and does not yet reconstruct completed-cycle, free, reserved, or external inventory events. Those remain separate roadmap work under FR-038–FR-046 and FR-062/FR-063.
+
+### Per-market inventory accounting
+
+Each market now maintains its own strategy-owned base quantity, signed quote cash flow, and commission totals by asset. A fill whose symbol does not match that market ledger is rejected; base and quote values are never mixed across pairs.
+
+Explicitly attributed deposits, withdrawals, or other unmanaged movements are recorded in a separate bucket using stable source IDs. They do not change strategy-owned quantities or cash flow. That bucket remains marked `unreconciled` until account-balance reconciliation can establish the complete external position; the bot does not assume that an exchange balance belongs to the strategy.
 
 ### Cancellation and replacement safety
 
