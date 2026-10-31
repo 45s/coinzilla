@@ -145,9 +145,9 @@ The audit also identified these risks:
 2. **Host event-name semantics (addressed):** the explicit registry avoids Node EventEmitter special-name behavior; special-looking names are ordinary application names.
 3. **Unbounded pending work (partially addressed):** a global pending-delivery cap, atomic fan-out rejection, and immutable pending/capacity/lifecycle diagnostics now exist; additional adversarial lifecycle tests remain outstanding.
 4. **Shutdown can hang (open):** a handler that never settles can block `flush()` indefinitely and can block `close()` indefinitely when no timeout is supplied; `close({ timeoutMs })` now offers a bounded wait without cancelling accepted handlers.
-5. **Ordering (documented; tests outstanding):** handlers are scheduled asynchronously without per-subscriber serialization; completion order is not guaranteed.
+5. **Ordering (documented and tested):** handlers are scheduled asynchronously without per-subscriber serialization; completion order is not guaranteed.
 6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
-7. **Subscription lifecycle ambiguity:** close removes listeners without synchronizing subscription-handle state.
+7. **Subscription lifecycle ambiguity (addressed):** close invalidates subscription handles and clears registries; repeated unsubscribe reports an inactive handle.
 8. **Validation gaps (addressed in this change):** constructor options now reject malformed option objects, unknown keys, invalid logger hooks, and invalid error handlers. Event names are validated against a bounded, documented character set and preserved exactly; Node-special names remain ordinary application names.
 9. **Coverage gap (open):** the package coverage script exists, but package-specific thresholds are not enforced and adversarial tests remain incomplete.
 
@@ -182,7 +182,7 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 ### Phase 2 — Bounded async delivery and lifecycle
 
 - [x] Define per-subscriber/global concurrency semantics: deliveries are scheduled asynchronously; there is no per-subscriber serialization; accepted deliveries can overlap; invocation is scheduled in fan-out order, but asynchronous completion order is not guaranteed.
-- [ ] Add deterministic tests that lock down the documented concurrency contract (multiple subscribers, multiple publishes, and out-of-order completion).
+- [x] Add deterministic tests that lock down the documented concurrency contract (multiple subscribers, multiple publishes, and out-of-order completion).
 - [ ] Decide whether a future opt-in sequential mode is needed only after a real consumer demonstrates the requirement; do not add it as part of the default contract.
 - [x] Add bounded pending work and an explicit overload policy (global pending-delivery cap; reject the whole publish before dispatch when its complete fan-out does not fit).
 - [x] Specify the minimal diagnostics surface: pending delivery count, configured capacity, and closed/open lifecycle state; omit subscriber counts because they do not add necessary value to the first diagnostics surface.
@@ -196,10 +196,10 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 - [ ] Do not add cancellation to handler arguments unless its lifecycle and compatibility contract are specified and covered by tests.
 - [x] Test overload boundaries, atomic fan-out rejection, capacity recovery, and concurrent publish saturation.
 - [ ] Replace arbitrary sleep-based lifecycle tests with deferred-promise/barrier synchronization.
-- [ ] Test nested publishes from sync and async handlers; prove `flush()` waits transitively for accepted nested work.
+- [x] Test nested publishes from sync and async handlers; prove `flush()` waits transitively for accepted nested work.
 - [ ] Test re-entrant publish at capacity and verify overload is atomic (no partial fan-out).
 - [ ] Test slow and never-settling handlers, including the documented flush/close behavior and later capacity recovery.
-- [ ] Test concurrent publish, publish-vs-close, repeated close, and concurrent close callers; assert no delivery starts after close has been requested.
+- [x] Test publish-vs-close, repeated close, and concurrent close callers; assert nested publishes attempted after close begins are rejected.
 - [ ] Add a bounded stress test with a fixed workload and explicit upper bounds; assert the pending count returns to zero and no test-owned work is left behind.
 
 Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wait forever without a defined timeout result.
@@ -216,7 +216,7 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 - [ ] Confirm Node's built-in coverage output and the package test script work in CI; the script exists today, but it currently has no threshold enforcement.
 - [ ] Add package-specific line and branch thresholds (initial target: >=90% lines and >=85% branches) to a CI-enforced command; verify thresholds fail when intentionally unmet and pass on the full suite.
 - [ ] Ensure the gate runs on every pull request that changes the package; do not mistake aggregate workspace coverage for the package-specific gate.
-- [x] Document examples, limitations, and current operational behavior in `README.md` (including in-process scope, no durability, fan-out admission, errors, unsubscribe, flush, and current no-timeout shutdown behavior).
+- [x] Document examples, limitations, and current operational behavior in `README.md` (including in-process scope, no durability, fan-out admission, errors, unsubscribe, flush, and diagnostics and bounded shutdown behavior).
 
 Initial coverage target: at least 90% lines and 85% branches, with all critical error/lifecycle branches tested. Revisit thresholds based on meaningful branch coverage; do not add tests solely to inflate percentages.
 
