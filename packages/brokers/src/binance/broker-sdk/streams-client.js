@@ -17,7 +17,7 @@ function matchesRawStream(stream, message) {
   if (stream.startsWith("!")) {
     if (stream === "!miniTicker@arr") return message.e === "24hrMiniTicker"
     if (stream === "!ticker@arr") return message.e === "24hrTicker"
-    const window = stream.match(/^!ticker_(1h|4h|1d)@arr$/)?.[1]
+    const window = stream.match(/^!ticker_(1h|4h)@arr$/)?.[1]
     return Boolean(window && message.e === `${window}Ticker`)
   }
 
