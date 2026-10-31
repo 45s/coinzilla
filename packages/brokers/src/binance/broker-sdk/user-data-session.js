@@ -178,7 +178,10 @@ export class BinanceUserDataSession {
       }
 
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
-        throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
+        subscriptionId = await this.#findExistingSubscription(
+          client,
+          new Error("Binance user-data subscription response did not include a valid subscriptionId"),
+        )
       }
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || client.state !== "open") {
