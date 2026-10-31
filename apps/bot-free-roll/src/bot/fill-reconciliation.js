@@ -11,7 +11,10 @@ import {
   maxDecimal,
   subtractDecimal,
 } from "./helpers/decimal.js"
-import { calculateCommissionRateExact } from "./helpers/accounting.js"
+import {
+  calculateCommissionRateExact,
+  calculateFillAccountingExact,
+} from "./helpers/accounting.js"
 
 function failure({ reason, updates, recordedFill, error }) {
   return {
@@ -163,38 +166,18 @@ export function reconcileExecutionFill({ fill, state }) {
     })
   }
 
-  const marketLedger = state.marketInventory
-    ? { ok: true, ledger: state.marketInventory }
-    : createMarketInventoryLedger({
-        market: {
-          symbol: recordedFill.symbol,
-          baseAsset: state.baseAsset,
-          quoteAsset: state.quoteAsset,
-        },
-      })
-  if (!marketLedger.ok) {
-    return failure({
-      reason: marketLedger.reason,
-      updates,
-      recordedFill,
-    })
-  }
-
-  const marketFill = applyMarketInventoryFill({
-    ledger: marketLedger.ledger,
-    fill: recordedFill,
-  })
-  if (!marketFill.ok) {
-    return failure({
-      reason: `Unsupported or incomplete commission/fill data for trade ${fillId}: ${marketFill.reason}`,
-      updates,
-      recordedFill,
-    })
-  }
-
-  const accounting = marketFill.accounting
+  let accounting
   let actualCommissionRate
   try {
+    accounting = calculateFillAccountingExact({
+      side: fill.side,
+      quantity: String(fill.quantity ?? ""),
+      quoteQuantity: String(fill.quoteQuantity ?? ""),
+      commissionAmount,
+      commissionAsset,
+      baseAsset: state.baseAsset,
+      quoteAsset: state.quoteAsset,
+    })
     actualCommissionRate = calculateCommissionRateExact({
       price: String(fill.price ?? ""),
       quoteQuantity: String(fill.quoteQuantity ?? ""),
@@ -218,6 +201,36 @@ export function reconcileExecutionFill({ fill, state }) {
   ) {
     return failure({
       reason: `SELL fill ${fillId} consumes more base inventory than the strategy owns`,
+      updates,
+      recordedFill,
+    })
+  }
+
+  const marketLedger = state.marketInventory
+    ? { ok: true, ledger: state.marketInventory }
+    : createMarketInventoryLedger({
+        market: {
+          symbol: recordedFill.symbol,
+          baseAsset: state.baseAsset,
+          quoteAsset: state.quoteAsset,
+        },
+      })
+  if (!marketLedger.ok) {
+    return failure({
+      reason: marketLedger.reason,
+      updates,
+      recordedFill,
+    })
+  }
+
+  const marketFill = applyMarketInventoryFill({
+    ledger: marketLedger.ledger,
+    fill: recordedFill,
+    accounting,
+  })
+  if (!marketFill.ok) {
+    return failure({
+      reason: `Market inventory ledger rejected trade ${fillId}: ${marketFill.reason}`,
       updates,
       recordedFill,
     })
