@@ -1305,8 +1305,9 @@ test("SELL cancellation history mismatch pauses instead of placing a replacement
     assert.equal(cancelRequested, true)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
     assert.ok(events.some((event) => event.name === "order.cancel_failed"))
-    assert.ok(events.some((event) => event.name === "bot.pair_paused" &&
-      /history mismatch/.test(event.data.reason)))
+    const pausedEvent = events.find((event) => event.name === "bot.pair_paused")
+    assert.ok(pausedEvent)
+    assert.match(pausedEvent.data.error.message, /history mismatch/)
   } finally {
     await bot.stop()
   }
