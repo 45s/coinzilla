@@ -15,7 +15,9 @@ export class BinanceUserDataSession {
   #reconnectPromise = null
   #reconnectTimer = null
   #reconnectAttempts = 0
-  #removeClientListeners = []
+  #removeEventListener = null
+  #removeErrorListener = null
+  #removeCloseListener = null
   #stopped = false
   #recoveryRequired = false
   #deduplicator = createUserDataEventDeduplicator()
@@ -187,17 +189,15 @@ export class BinanceUserDataSession {
 
   #bindClient(client) {
     this.#detachClientListeners()
-    this.#removeClientListeners = [
-      client.onEvent((message) => {
-        if (this.getClient() === client) this.#handleEvent(message)
-      }),
-      client.onError?.((error) => {
-        if (this.getClient() === client) this.#handleError(error)
-      }),
-      client.onClose?.((event) => {
-        if (this.getClient() === client) this.#handleClose(event)
-      }),
-    ].filter((remove) => typeof remove === "function")
+    this.#removeEventListener = client.onEvent((message) => {
+      if (this.getClient() === client) this.#handleEvent(message)
+    })
+    this.#removeErrorListener = client.onError?.((error) => {
+      if (this.getClient() === client) this.#handleError(error)
+    }) ?? null
+    this.#removeCloseListener = client.onClose?.((event) => {
+      if (this.getClient() === client) this.#handleClose(event)
+    }) ?? null
   }
 
   #handleEvent(message) {
@@ -390,13 +390,22 @@ export class BinanceUserDataSession {
         await client.request("userDataStream.unsubscribe", { subscriptionId })
       }
     } finally {
+      this.#detachUserDataListeners()
       this.#deduplicator.clear()
     }
   }
 
+  #detachUserDataListeners() {
+    this.#removeEventListener?.()
+    this.#removeErrorListener?.()
+    this.#removeEventListener = null
+    this.#removeErrorListener = null
+  }
+
   #detachClientListeners() {
-    for (const remove of this.#removeClientListeners) remove?.()
-    this.#removeClientListeners = []
+    this.#detachUserDataListeners()
+    this.#removeCloseListener?.()
+    this.#removeCloseListener = null
   }
 
   #clearReconnectTimer() {
