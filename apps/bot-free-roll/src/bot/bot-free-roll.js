@@ -415,7 +415,7 @@ export class FreeRollBot {
     this.#recoveryBufferOverflow = false
 
     for (const [symbol, state] of this.#states) {
-      if (!state.paused && !state.sellOrder &&
+      if (!state.paused && !state.buyOrder && !state.sellOrder &&
           compareDecimal({ left: state.activeQuantity, right: "0" }) > 0) {
         await this.#replaceSell(symbol)
       }
