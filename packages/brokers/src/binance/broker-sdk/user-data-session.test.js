@@ -712,6 +712,60 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+
+  it("coalesces an explicit connect call with an in-flight automatic reconnect", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    let finishReconnect
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: index * 100 + 10 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        if (index > 0) {
+          client.connect = () => new Promise((resolve) => {
+            finishReconnect = () => {
+              client.state = "open"
+              resolve(client)
+            }
+          })
+        }
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+
+    const explicitConnect = broker.connect()
+    finishReconnect()
+    await explicitConnect
+
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+    assert.equal(subscription.data.subscriptionId, 110)
+    assert.equal(broker.connected, true)
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("does not complete a reconnect after intentional shutdown invalidates the attempt", async () => {
     const scheduler = createScheduler()
     const clients = []
