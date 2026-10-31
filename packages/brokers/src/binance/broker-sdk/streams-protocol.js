@@ -16,7 +16,7 @@ export function validateStreamName(stream) {
     throw new TypeError("stream name must be a non-empty string without surrounding whitespace")
   }
 
-  const symbolStream = /^([a-z0-9]{1,20})@(aggTrade|trade|miniTicker|ticker|bookTicker|kline_(1s|1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w|1M)|ticker_(1h|4h|1d)|depth(?:5|10|20)?(?:@(100ms|1000ms))?)$/
+  const symbolStream = /^([a-z0-9]{1,20})@(aggTrade|trade|miniTicker|ticker|bookTicker|kline_(1s|1m|3m|5m|15m|30m|1h|2h|4h|6h|8h|12h|1d|3d|1w|1M)|ticker_(1h|4h)|depth(?:5|10|20)?(?:@(100ms|1000ms))?)$/
   const allMarketStream = /^!(miniTicker|ticker|ticker_(1h|4h|1d))@arr$/
 
   if (!symbolStream.test(stream) && !allMarketStream.test(stream)) {
