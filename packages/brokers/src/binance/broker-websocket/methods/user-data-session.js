@@ -23,6 +23,8 @@ export class BinanceUserDataSession {
   #reconnectPromise = null
   #reconnectTimer = null
   #reconnectAttempts = 0
+  #acknowledgementTimer = null
+  #acknowledgementAttempts = 0
   #removeEventListener = null
   #removeErrorListener = null
   #removeCloseListener = null
@@ -39,7 +41,7 @@ export class BinanceUserDataSession {
     setUnavailable,
     logger = {},
     reconnectDelay = 5000,
-    maxReconnectAttempts = 5,
+    recoveryWarningThreshold = 5,
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
   }) {
@@ -49,7 +51,7 @@ export class BinanceUserDataSession {
       throw new TypeError("User-data session requires client and state callbacks")
     }
     if (!Number.isInteger(reconnectDelay) || reconnectDelay < 0 ||
-        !Number.isInteger(maxReconnectAttempts) || maxReconnectAttempts < 1) {
+        !Number.isInteger(recoveryWarningThreshold) || recoveryWarningThreshold < 1) {
       throw new RangeError("Invalid user-data reconnect policy")
     }
 
@@ -60,7 +62,7 @@ export class BinanceUserDataSession {
     this.setUnavailable = setUnavailable
     this.logger = logger
     this.reconnectDelay = reconnectDelay
-    this.maxReconnectAttempts = maxReconnectAttempts
+    this.recoveryWarningThreshold = recoveryWarningThreshold
     this.setTimeout = setTimeoutFn
     this.clearTimeout = clearTimeoutFn
   }
@@ -130,14 +132,8 @@ export class BinanceUserDataSession {
       throw error
     }
 
-    if (this.#recoveryRequired && this.#subscriptionId !== null &&
-        !subscriber.recoveryNotified) {
-      this.#notifySubscriber(subscriber, {
-        type: "recovered",
-        subscriptionId: this.#subscriptionId,
-        reconciliationRequired: true,
-        recoveryRequired: true,
-      })
+    if (this.#recoveryRequired && this.#subscriptionId !== null) {
+      this.#notifyRecoveryReady()
     }
 
     const data = {
@@ -155,6 +151,7 @@ export class BinanceUserDataSession {
     this.#generation += 1
     this.#stopped = true
     this.#clearReconnectTimer()
+    this.#clearAcknowledgementTimer()
     this.#subscribers.clear()
     this.#subscriptionId = null
     this.#recoveryRequired = false
@@ -213,14 +210,7 @@ export class BinanceUserDataSession {
       this.#clearReconnectTimer()
       this.#reconnectAttempts = 0
       this.setUnavailable(this.#recoveryRequired)
-      if (this.#recoveryRequired) {
-        this.#notify({
-          type: "recovered",
-          subscriptionId,
-          reconciliationRequired: true,
-          recoveryRequired: true,
-        })
-      }
+      if (this.#recoveryRequired) this.#notifyRecoveryReady()
       return subscriptionId
     })().finally(() => {
       this.#subscribePromise = null
@@ -336,6 +326,8 @@ export class BinanceUserDataSession {
   }
 
   #markRecoveryRequired() {
+    this.#clearAcknowledgementTimer()
+    this.#acknowledgementAttempts = 0
     this.#recoveryRequired = true
     this.setUnavailable(true)
     for (const subscriber of this.#subscribers.values()) {
@@ -363,7 +355,8 @@ export class BinanceUserDataSession {
   #scheduleRecovery(delay) {
     if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
         this.#reconnectTimer !== null || this.#reconnectPromise) return
-    const wait = delay ?? Math.min(this.reconnectDelay * (2 ** this.#reconnectAttempts), 30_000)
+    const exponent = Math.min(this.#reconnectAttempts, 10)
+    const wait = delay ?? Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
       this.#reconnectTimer = null
       void this.#recover()
@@ -377,15 +370,6 @@ export class BinanceUserDataSession {
     const generation = this.#generation
     let retryDelay = null
     this.#reconnectPromise = (async () => {
-      if (this.#reconnectAttempts >= this.maxReconnectAttempts) {
-        this.#notify({
-          type: "recoveryFailed",
-          attempt: this.#reconnectAttempts,
-          recoveryRequired: true,
-        })
-        return
-      }
-
       const attempt = ++this.#reconnectAttempts
       try {
         let client = this.getClient()
@@ -408,16 +392,16 @@ export class BinanceUserDataSession {
         this.setUnavailable(true)
         logSafely(this.logger, "error", "Binance user-data recovery attempt failed", { attempt, error })
         this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
-        if (attempt >= this.maxReconnectAttempts) {
+        if (attempt === this.recoveryWarningThreshold) {
           this.#notify({
             type: "recoveryFailed",
             attempt,
             error,
             recoveryRequired: true,
           })
-        } else {
-          retryDelay = Math.min(this.reconnectDelay * (2 ** (attempt - 1)), 30_000)
         }
+        const exponent = Math.min(attempt - 1, 10)
+        retryDelay = Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
       }
     })()
 
@@ -431,10 +415,36 @@ export class BinanceUserDataSession {
     if (retryDelay !== null) {
       this.#scheduleRecovery(retryDelay)
     } else if (this.#subscriptionId === null && this.#recoveryRequired &&
-               !this.#stopped && this.#subscribers.size > 0 &&
-               this.#reconnectAttempts < this.maxReconnectAttempts) {
+               !this.#stopped && this.#subscribers.size > 0) {
       this.#scheduleRecovery()
     }
+  }
+
+  #notifyRecoveryReady() {
+    const status = {
+      type: "recovered",
+      subscriptionId: this.#subscriptionId,
+      reconciliationRequired: true,
+      recoveryRequired: true,
+    }
+    for (const subscriber of [...this.#subscribers.values()]) {
+      if (!subscriber.recoveryAcknowledged) this.#notifySubscriber(subscriber, status)
+    }
+    this.#scheduleAcknowledgementReminder()
+  }
+
+  #scheduleAcknowledgementReminder() {
+    if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null ||
+        this.#acknowledgementTimer !== null || this.#subscribers.size === 0) return
+
+    const exponent = Math.min(this.#acknowledgementAttempts, 10)
+    const delay = Math.min(Math.max(1, this.reconnectDelay) * (2 ** exponent), 30_000)
+    this.#acknowledgementTimer = this.setTimeout(() => {
+      this.#acknowledgementTimer = null
+      if (this.#stopped || !this.#recoveryRequired || this.#subscriptionId === null) return
+      this.#acknowledgementAttempts += 1
+      this.#notifyRecoveryReady()
+    }, delay)
   }
 
   #acknowledgeRecovery(id) {
@@ -451,6 +461,8 @@ export class BinanceUserDataSession {
       .every((subscriber) => subscriber.recoveryAcknowledged)
     if (!allAcknowledged) return false
 
+    this.#clearAcknowledgementTimer()
+    this.#acknowledgementAttempts = 0
     this.#recoveryRequired = false
     this.setUnavailable(false)
     this.#notify({
@@ -472,6 +484,7 @@ export class BinanceUserDataSession {
       return
     }
     this.#clearReconnectTimer()
+    this.#clearAcknowledgementTimer()
     const subscriptionId = this.#subscriptionId
     this.#subscriptionId = null
     this.#recoveryRequired = false
@@ -505,6 +518,13 @@ export class BinanceUserDataSession {
     if (this.#reconnectTimer !== null) {
       this.clearTimeout(this.#reconnectTimer)
       this.#reconnectTimer = null
+    }
+  }
+
+  #clearAcknowledgementTimer() {
+    if (this.#acknowledgementTimer !== null) {
+      this.clearTimeout(this.#acknowledgementTimer)
+      this.#acknowledgementTimer = null
     }
   }
 }

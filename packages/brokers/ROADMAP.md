@@ -46,7 +46,7 @@ The migration is complete only when all of the following are true:
 6. Deterministic unit tests cover transport, RPC, stream lifecycle, broker adaptation, and failure/recovery paths. Opt-in testnet tests provide a separate live-protocol verification layer.
 7. Supported Node.js runtime requirements are declared and tested.
 8. No bot application files were changed by this migration.
-9. All required CI checks pass on the exact final PR head, and `develop` is synchronized with current `main` before release.
+9. All required CI checks pass on the exact final PR head, and the shared `develop` branch remains the integration source of truth for ongoing work.
 10. This roadmap and the contract audit describe the implementation that actually shipped.
 
 ---
@@ -61,22 +61,20 @@ The migration is complete only when all of the following are true:
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-- [~] Phase 6 — user-data session lifecycle and recovery (Phase 6A and 6B.1 integrated into `develop`; 6B.2 reconciliation/testnet verification in progress).
-- [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
-- [ ] Phase 8 — operational hardening and completion.
+- [~] Phase 6 — user-data session lifecycle and recovery; reconnect retry liveness and repeated reconciliation acknowledgement are being hardened after the WebSocket-only migration.
+- [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
+- [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
 
 ### Next action
 
-1. Phase 5 is merged (PR #271, merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-2. Main synchronization PR #279 is merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`.
-3. Phase 6A and 6B.1 are integrated into `develop` by PR #298 at `d2c247bbd641cdabfd5393e36de271cae4c35321`. PR #285's exact head `361e0184f1d6059c63e17544e738a1e8fd90faec` passed all five workflows; PR #288's exact head `ce602729d51ec16d5fe4c41ca45da4d024fbc375` passed the six listed repository workflows before its implementation was consolidated.
-4. Current `main` is `ad43543bb7c58c407f04ffdc092bbcda187723a6`; `develop` at `e837a2f405fa8dd59f7fdb81274a8519181b02f6` contains that `main` tip as an ancestor. The later main changes add the mandatory AI-agent/domain ownership workflow and package instructions. They do not change broker runtime or Binance API behavior. Do not import unrelated bot-only changes into this broker task.
-5. Phase 6B.1 is complete through consolidated PR #298. The original PR #288 was superseded, not merged separately.
-6. Phase 6B.2 branch: `feature/brokers/user-data-reconciliation`. Created from `develop` at `e837a2f405fa8dd59f7fdb81274a8519181b02f6`, then synchronized with the latest `develop` tip `1a7cd4a592462c95539d00a6a6958b9f38bd911c` in merge commit `2d167ac9188242679711f4b2de2c97fbd8a12775` (develop is first parent; original task head is second parent).
-7. Preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
-8. Binance permits one subscription per account per WebSocket API connection. Keep one remote subscription and fan out locally; reconnect creates a new connection and subscription ID.
-9. A re-established stream does not replay missed events. Keep order placement fail-closed until a consumer explicitly acknowledges reconciliation; successful resubscription is not proof that missed account/order history was reconstructed.
-10. Bot consumer adoption for issue #304 is implemented by PR #314, with follow-up lifecycle hardening in PR #315. The broker task remains responsible only for the broker contract; do not modify bot application code here. Opt-in TESTNET verification with read-only-capable credentials remains outstanding.
+1. The source of truth is `develop`, currently at the merge commit for PR #333: `878f316d65e59b3c09bdceffbe052f2b31587944`.
+2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
+3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
+4. The post-migration audit found that user-data reconnect attempts stopped after the configured warning threshold and that a recovered subscription did not repeat its recovery-ready notification when a consumer had not acknowledged reconciliation. The current recovery-hardening PR removes the retry ceiling, keeps capped exponential backoff, and repeats the recovery-ready notification until all consumers acknowledge.
+5. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A successful socket connection or subscription is never proof that missed events have been reconciled.
+6. Phase 6 remains in progress until reconnect/reconciliation liveness tests and opt-in Binance TESTNET verification are complete. Do not claim the broker can replay events missed during a disconnect.
+7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
+8. Bot strategy implementation remains owned by `apps/bot-free-roll`; broker changes must preserve the callback/recovery acknowledgement contract and must not edit bot runtime code without an explicit cross-domain task.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -390,15 +388,13 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
-- [ ] Confirm all repository consumers use the supported WebSocket broker contract.
-- [ ] Mark old custom REST broker and REST-specific exports deprecated before removal, with a clear migration note.
-- [ ] Remove `@binance/spot` from `packages/brokers/package.json`.
-- [ ] Regenerate `pnpm-lock.yaml` using the repository's package manager and supported version.
-- [ ] Remove dead REST transport/signing/adaptation code only after confirming no supported consumer imports it.
-- [ ] Remove or replace obsolete tests/examples while retaining useful compatibility tests.
-- [ ] Search the full repository for remaining `@binance/spot` imports and obsolete REST broker references.
-- [ ] Inspect production dependency tree and audit results.
-- **Exit criteria:** no `@binance/spot` reference remains in runtime manifests/source; lockfile and production dependency audit confirm no third-party runtime dependency is required by `@coinzilla/brokers`; supported imports remain valid.
+- [x] Confirm repository consumers use the supported WebSocket broker contract.
+- [x] Remove `@binance/spot` from `packages/brokers/package.json` and regenerate `pnpm-lock.yaml`.
+- [x] Remove the legacy custom REST broker, REST signing/query helpers, listen-key transport, and obsolete REST-only examples/tests.
+- [x] Reorganize the active implementation under `broker-websocket/` and retain the `BinanceSdkBroker` compatibility alias while exposing the WebSocket-native name.
+- [x] Search the full repository for remaining `@binance/spot` imports and obsolete REST broker references.
+- [x] Verify the production dependency audit and exact-head CI for PR #333.
+- **Exit criteria:** met by PR #333; the active broker uses native WebSocket API/Streams clients and has no third-party runtime dependency.
 
 ### Phase 8 — Operational hardening and completion
 
@@ -409,7 +405,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Verify timers, sockets, pending requests, and listeners are cleaned up on shutdown and failure.
 - [ ] Re-audit all consumers and public exports.
 - [ ] Confirm no bot application files were changed by this migration.
-- **Exit criteria:** all required checks pass on the exact final PR head; opt-in integration results are recorded; integration branch is current with `main`; all definition-of-done items in Section 1 are evidenced.
+- **Exit criteria:** all required checks pass on the exact final PR head; opt-in integration results are recorded against the supported TESTNET environment; `develop` contains the verified implementation; all definition-of-done items in Section 1 are evidenced.
 
 ---
 

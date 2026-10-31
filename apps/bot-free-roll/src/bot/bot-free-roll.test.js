@@ -2891,6 +2891,7 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
 
 test("keeps trading gated and does not acknowledge recovery when a missing order has partial history", async () => {
   const createdOrders = []
+  const calls = []
   let onPrice
   let onStatus
   let acknowledgeCalls = 0
@@ -2901,6 +2902,7 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
       ...createRecoverySnapshotPorts({
         createdOrders,
+        calls,
         getExecution: ({ orderId }) => ({
           status: "PARTIALLY_FILLED",
           executedQuantity: "50",
@@ -2967,6 +2969,13 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
       "incomplete recovery was not reported",
     )
 
+    onStatus({ type: "recovered", recoveryRequired: true })
+    await waitForCondition(
+      () => recoveryFailures.length === 2,
+      "a repeated recovery-ready notification did not retry reconciliation",
+    )
+
+    assert.equal(calls.filter((call) => call === "getAccountSnapshot").length, 2)
     assert.equal(acknowledgeCalls, 0)
     assert.equal(bot.getSummary().recovering, true)
     assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "50")

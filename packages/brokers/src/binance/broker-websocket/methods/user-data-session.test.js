@@ -58,7 +58,7 @@ function createRpcFactory() {
   return { clients, factory }
 }
 
-function createBroker({ maxAttempts = 3 } = {}) {
+function createBroker({ warningThreshold = 3 } = {}) {
   const scheduler = createScheduler()
   const rpc = createRpcFactory()
   const broker = new BinanceSdkBroker({
@@ -71,7 +71,7 @@ function createBroker({ maxAttempts = 3 } = {}) {
     marketClientFactory: () => createFakeStreamsClient(),
     setTimeoutFn: scheduler.setTimeout,
     clearTimeoutFn: scheduler.clearTimeout,
-    maxUserDataReconnectAttempts: maxAttempts,
+    userDataRecoveryWarningThreshold: warningThreshold,
   })
   return { broker, scheduler, clients: rpc.clients }
 }
@@ -370,6 +370,12 @@ describe("Binance user-data session recovery", () => {
     assert.equal(broker.connected, true)
     assert.equal(broker.userDataUnavailable, true)
     assert.ok(statuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+    assert.equal(scheduler.pendingCount, 1)
+
+    await scheduler.runNext()
+    assert.equal(statuses.filter((status) => status.type === "recovered").length, 4)
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(scheduler.pendingCount, 1)
 
     assert.equal(first.data.acknowledgeRecovery(), false)
     const blocked = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
@@ -656,9 +662,10 @@ describe("Binance user-data session recovery", () => {
   })
 
 
-  it("retries failed remote resubscriptions without replaying trading requests", async () => {
+  it("keeps retrying failed remote resubscriptions until one succeeds", async () => {
     const scheduler = createScheduler()
     const clients = []
+    let resubscribeAttempts = 0
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -668,9 +675,12 @@ describe("Binance user-data session recovery", () => {
       apiClientFactory: () => {
         const index = clients.length
         const client = createFakeRpcClient({
-          "userDataStream.subscribe.signature": index === 0
-            ? () => ({ subscriptionId: 10 })
-            : async () => { throw new Error("resubscribe rejected") },
+          "userDataStream.subscribe.signature": () => {
+            if (index === 0) return { subscriptionId: 10 }
+            resubscribeAttempts += 1
+            if (resubscribeAttempts <= 2) throw new Error("resubscribe rejected")
+            return { subscriptionId: 11 }
+          },
           "session.subscriptions": () => [],
           "userDataStream.unsubscribe": () => ({}),
         })
@@ -680,7 +690,7 @@ describe("Binance user-data session recovery", () => {
       marketClientFactory: () => createFakeStreamsClient(),
       setTimeoutFn: scheduler.setTimeout,
       clearTimeoutFn: scheduler.clearTimeout,
-      maxUserDataReconnectAttempts: 2,
+      userDataRecoveryWarningThreshold: 2,
     })
     await broker.connect()
     const statuses = []
@@ -696,17 +706,19 @@ describe("Binance user-data session recovery", () => {
     await scheduler.runNext()
 
     assert.equal(clients.length, 2)
-    assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 2)
-    assert.equal(clients[1].calls.filter((call) => call.method === "session.subscriptions").length, 2)
+    assert.equal(resubscribeAttempts, 2)
     assert.ok(statuses.some((status) => status.type === "recoveryFailed"))
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), false)
+    assert.equal(scheduler.pendingCount, 1)
 
-    clients[1].state = "closed"
-    clients[1].emitClose({ code: 1006, reason: "socket closed after retry exhaustion", wasClean: false })
     await scheduler.runNext()
+    assert.equal(resubscribeAttempts, 3)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+    assert.equal(broker.userDataUnavailable, false)
     assert.equal(scheduler.pendingCount, 0)
-    assert.equal(clients.length, 2)
 
     await subscription.data.disconnect()
     await broker.disconnect()
@@ -828,10 +840,10 @@ describe("Binance user-data session recovery", () => {
     assert.equal(clients.length, 1)
   })
 
-  it("stops after the configured retry budget and reports recovery failure", async () => {
+  it("continues reconnecting after the warning threshold until the socket recovers", async () => {
     const scheduler = createScheduler()
     const clients = []
-    let attempt = 0
+    let connectionAttempts = 0
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -845,8 +857,10 @@ describe("Binance user-data session recovery", () => {
         })
         const originalConnect = client.connect
         client.connect = async function connect() {
-          attempt += 1
-          if (attempt > 1) throw new Error("reconnect refused")
+          connectionAttempts += 1
+          if (connectionAttempts === 2 || connectionAttempts === 3) {
+            throw new Error("reconnect refused")
+          }
           return originalConnect.call(this)
         }
         clients.push(client)
@@ -855,7 +869,7 @@ describe("Binance user-data session recovery", () => {
       marketClientFactory: () => createFakeStreamsClient(),
       setTimeoutFn: scheduler.setTimeout,
       clearTimeoutFn: scheduler.clearTimeout,
-      maxUserDataReconnectAttempts: 2,
+      userDataRecoveryWarningThreshold: 2,
     })
     await broker.connect()
     const statuses = []
@@ -870,14 +884,24 @@ describe("Binance user-data session recovery", () => {
     assert.equal(scheduler.pendingCount, 1)
     await scheduler.runNext()
 
-    assert.equal(scheduler.pendingCount, 0)
     assert.ok(statuses.some((status) => status.type === "recoveryFailed"))
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(broker.connected, false)
+    assert.equal(scheduler.pendingCount, 1)
+
+    await scheduler.runNext()
+    assert.equal(connectionAttempts, 4)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+    assert.equal(broker.connected, true)
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(subscription.data.acknowledgeRecovery(), true)
+    assert.equal(broker.userDataUnavailable, false)
+    assert.equal(scheduler.pendingCount, 0)
 
     await subscription.data.disconnect()
     await broker.disconnect()
   })
+
 
   it("does not deliver stale events from the previous subscription after reconnect", async () => {
     const { broker, scheduler, clients } = createBroker()
