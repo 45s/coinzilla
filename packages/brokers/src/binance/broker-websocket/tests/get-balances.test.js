@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import { Balance } from "@coinzilla/entities"
-import { BinanceSdkBroker } from "./broker.js"
-import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
+import { BinanceSdkBroker } from "../broker.js"
+import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 const createBroker = (handlers) => {
   const broker = new BinanceSdkBroker({
