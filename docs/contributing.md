@@ -52,3 +52,17 @@ For tests that need environment configuration, copy `packages/brokers/.env.examp
 GitHub Actions currently includes the Quality Gate, Unit Tests, Utils Unit Tests, Test Coverage, and Dependency Audit workflows. Their triggers and scopes are defined in `.github/workflows/`.
 
 A successful workflow run is evidence for that run and commit only. Whether GitHub blocks merging on required checks depends on the repository's branch-protection or ruleset configuration.
+
+
+## Branch and pull-request workflow
+
+Follow [the mandatory AI-agent workflow](../AI_AGENT_WORKFLOW.md) for branch naming, domain ownership, cross-domain requests, synchronization, merging, and releases.
+
+In brief:
+
+- Start task branches from the latest `develop`; use short-lived branches such as `feature/entities/fr-008-asset-market` or `fix/brokers/order-reconciliation`.
+- Target task PRs at `develop`, not `main`.
+- Task PRs may be merged by the responsible agent after required checks pass. Routine human approval is intentionally not required.
+- Synchronize against the latest PR target before merging; the agent owns this work.
+- Only milestone/release PRs from `develop` to `main` require the user's final review and approval.
+- Do not use permanent per-domain branches. Domain ownership is defined by repository paths and local instructions, not branch lifetime.
