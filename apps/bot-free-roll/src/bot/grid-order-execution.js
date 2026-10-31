@@ -2,6 +2,7 @@ import { toResult } from "@coinzilla/utils"
 import { appendGridCycleSellOrder } from "./grid-cycles.js"
 import {
   acknowledgeGridOrderIntent,
+  createGridOrderIntent,
   resolveGridOrderIntent,
 } from "./grid-order-intents.js"
 
@@ -41,7 +42,33 @@ export function normalizeGridBrokerOrder({ order } = {}) {
   return toResult({ data: Object.freeze(normalized) })
 }
 
+function validateIntentSnapshot({ intent }) {
+  if (!intent || !["PREPARED", "ACKNOWLEDGED"].includes(intent.status)) {
+    return failure("Grid order intent has an invalid lifecycle status")
+  }
+  const canonical = createGridOrderIntent({
+    intentId: intent.intentId,
+    symbol: intent.symbol,
+    side: intent.side,
+    type: intent.type,
+    quantity: intent.quantity,
+    price: intent.price,
+    reservedQuantity: intent.reservedQuantity,
+    createdAtServerTime: intent.createdAtServerTime,
+    cycleId: intent.cycleId,
+  })
+  if (!canonical.ok) return canonical
+  if (canonical.data.clientOrderId !== intent.clientOrderId ||
+      (intent.status === "PREPARED" && intent.brokerOrderId !== null) ||
+      (intent.status === "ACKNOWLEDGED" && !isNonEmptyString(intent.brokerOrderId))) {
+    return failure("Grid order intent does not match its deterministic identity")
+  }
+  return toResult({ ok: true })
+}
+
 function validateSubmissionContext({ state, intent }) {
+  const intentValidation = validateIntentSnapshot({ intent })
+  if (!intentValidation.ok) return intentValidation
   if (!state || state.mode !== "grid" || state.symbol !== intent?.symbol ||
       !(state.gridCycles instanceof Map) ||
       !(state.orderIntents instanceof Map) ||
