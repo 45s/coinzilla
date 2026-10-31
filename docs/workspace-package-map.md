@@ -73,3 +73,17 @@ Broker integration tests may require network access and test-environment credent
 ## Keep this map accurate
 
 When a package is added, removed, renamed, or its public responsibility changes, update this page in the same pull request. Verify names, scripts, dependencies, and entry points against its `package.json`; do not treat this overview as a replacement for those contracts.
+
+
+## Domain ownership and AI-agent boundaries
+
+The paths above are ownership boundaries for independent AI workstreams. Each domain's local `AGENTS.md` and `ROADMAP.md` are authoritative for its backlog and local conventions:
+
+- `apps/bot-free-roll/` — Free-Roll application and strategy.
+- `packages/entities/` — shared domain entities and value contracts.
+- `packages/brokers/` — broker abstractions, exchange adapters, and broker-facing contracts.
+- `packages/utils/` — domain-neutral shared utilities.
+- `packages/event-bus/` — event delivery and event-bus contracts.
+- `packages/journal/` — journal persistence and journal-facing behavior.
+
+A consumer that needs a capability from another domain creates a cross-domain request as described in [the AI-agent workflow](../AI_AGENT_WORKFLOW.md). The owning domain implements and tests its own package changes. Do not quietly expand a task into another domain.
