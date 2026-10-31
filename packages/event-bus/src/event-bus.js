@@ -1,8 +1,72 @@
 import { randomUUID } from "node:crypto"
-import { EventEmitter } from "node:events"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 
 const ALL_EVENTS = Symbol("all-events")
+
+function assertSupportedPayload(value, seen = new WeakSet()) {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  ) {
+    return
+  }
+
+  if (typeof value !== "object") {
+    throw new TypeError("Event data contains an unsupported value")
+  }
+
+  if (seen.has(value)) {
+    return
+  }
+
+  seen.add(value)
+
+  const prototype = Object.getPrototypeOf(value)
+  const isArray = Array.isArray(value)
+
+  if (
+    isArray
+      ? prototype !== Array.prototype
+      : prototype !== Object.prototype && prototype !== null
+  ) {
+    throw new TypeError(
+      "Event data supports only plain objects, arrays, and primitive values",
+    )
+  }
+
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new TypeError("Event data cannot contain symbol properties")
+    }
+
+    if (isArray && key === "length") {
+      continue
+    }
+
+    if (
+      isArray &&
+      (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length)
+    ) {
+      throw new TypeError("Event arrays cannot contain custom properties")
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+
+    if (!descriptor || !("value" in descriptor)) {
+      throw new TypeError("Event data cannot contain accessor properties")
+    }
+
+    if (!descriptor.enumerable) {
+      throw new TypeError("Event data cannot contain non-enumerable properties")
+    }
+
+    assertSupportedPayload(descriptor.value, seen)
+  }
+}
 
 function deepFreeze(value, seen = new WeakSet()) {
   if (value === null || typeof value !== "object" || seen.has(value)) {
@@ -10,59 +74,6 @@ function deepFreeze(value, seen = new WeakSet()) {
   }
 
   seen.add(value)
-
-  if (value instanceof Map) {
-    for (const [key, child] of value) {
-      deepFreeze(key, seen)
-      deepFreeze(child, seen)
-    }
-
-    Object.defineProperties(value, {
-      set: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      delete: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      clear: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-    })
-
-    return Object.freeze(value)
-  }
-
-  if (value instanceof Set) {
-    for (const child of value) {
-      deepFreeze(child, seen)
-    }
-
-    Object.defineProperties(value, {
-      add: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      delete: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-      clear: {
-        value() {
-          throw new TypeError("Cannot mutate frozen event data")
-        },
-      },
-    })
-
-    return Object.freeze(value)
-  }
 
   for (const child of Object.values(value)) {
     deepFreeze(child, seen)
@@ -75,11 +86,11 @@ export class EventBus {
   constructor({ logger = defaultLogger, onError } = {}) {
     this.logger = logger
     this.onError = onError
-    this.emitter = new EventEmitter()
-    // Node treats an unhandled "error" event as an exception. The event bus
-    // accepts arbitrary event names, so keep publishing "error" safe even
-    // when no consumer subscribes to it.
-    this.emitter.on("error", () => {})
+    // Use an explicit registry rather than EventEmitter: event names are
+    // application data and must never trigger Node's special listener events.
+    this.listeners = new Map()
+    this.allListeners = new Set()
+    this.subscriptions = new Set()
     this.pending = new Set()
     this.closed = false
   }
@@ -112,6 +123,7 @@ export class EventBus {
     let eventData
 
     try {
+      assertSupportedPayload(data)
       eventData = deepFreeze(structuredClone(data))
     } catch (error) {
       return toResult({ error })
@@ -125,8 +137,14 @@ export class EventBus {
       data: eventData,
     })
 
-    this.emitter.emit(name, event)
-    this.emitter.emit(ALL_EVENTS, event)
+    const namedListeners = this.listeners.get(name)
+    for (const listener of namedListeners ?? []) {
+      listener(event)
+    }
+
+    for (const listener of this.allListeners) {
+      listener(event)
+    }
 
     return toResult({ event })
   }
@@ -175,7 +193,8 @@ export class EventBus {
                 eventName: event.name,
               })
             } else {
-              this.logger.error?.("Event consumer failed", {
+              this.logger.error?.({
+                message: "Event consumer failed",
                 error,
                 eventId: event.id,
                 eventName: event.name,
@@ -195,24 +214,45 @@ export class EventBus {
       this.pending.add(task)
     }
 
-    this.emitter.on(name, listener)
+    const registry = name === ALL_EVENTS
+      ? this.allListeners
+      : this.getListeners(name)
 
-    let subscribed = true
+    registry.add(listener)
+
+    const record = { registry, listener, active: true }
+    this.subscriptions.add(record)
 
     const subscription = {
       unsubscribe: () => {
-        if (!subscribed) {
+        if (!record.active) {
           return toResult({ unsubscribed: false })
         }
 
-        subscribed = false
-        this.emitter.off(name, listener)
+        record.active = false
+        record.registry.delete(record.listener)
+        this.subscriptions.delete(record)
+
+        if (name !== ALL_EVENTS && record.registry.size === 0) {
+          this.listeners.delete(name)
+        }
 
         return toResult({ unsubscribed: true })
       },
     }
 
     return toResult({ subscription })
+  }
+
+  getListeners(name) {
+    let listeners = this.listeners.get(name)
+
+    if (!listeners) {
+      listeners = new Set()
+      this.listeners.set(name, listeners)
+    }
+
+    return listeners
   }
 
   async flush({} = {}) {
@@ -239,7 +279,14 @@ export class EventBus {
       return result
     }
 
-    this.emitter.removeAllListeners()
+    for (const record of this.subscriptions) {
+      record.active = false
+      record.registry.delete(record.listener)
+    }
+
+    this.subscriptions.clear()
+    this.listeners.clear()
+    this.allListeners.clear()
 
     return toResult({ closed: true })
   }

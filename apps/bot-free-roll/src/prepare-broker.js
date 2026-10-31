@@ -1,5 +1,5 @@
 import { BinanceSdkBroker, BinanceSdkConfig } from "@coinzilla/brokers"
-import { handleErr, toResult } from "@coinzilla/utils"
+import { defaultLogger, handleErr, toResult } from "@coinzilla/utils"
 
 const { BINANCE_API_KEY, BINANCE_API_SECRET_KEY } = process.env
 
@@ -11,6 +11,7 @@ export async function prepareBroker({
         apiSecret: BINANCE_API_SECRET_KEY,
       }),
     ),
+  logger = defaultLogger,
 } = {}) {
   let broker
 
@@ -21,7 +22,7 @@ export async function prepareBroker({
     return toResult({ data: broker })
   } catch (error) {
     try {
-      handleErr({ error, where: "prepareBroker()" })
+      handleErr({ error, logger, where: "prepareBroker()" })
     } catch {
       // Logging must not hide the original setup error.
     }
@@ -33,6 +34,7 @@ export async function prepareBroker({
         try {
           handleErr({
             error: cleanupError,
+            logger,
             where: "prepareBroker() cleanup",
           })
         } catch {

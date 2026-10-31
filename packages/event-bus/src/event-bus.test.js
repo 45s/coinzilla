@@ -8,8 +8,8 @@ function createTestBus({ onError } = {}) {
 
   const bus = new EventBus({
     logger: {
-      error: (message, context) => {
-        logs.push({ message, context })
+      error: (entry) => {
+        logs.push(entry)
       },
     },
     onError,
@@ -173,7 +173,10 @@ test("consumer failure is logged without blocking other consumers", async () => 
   assert.equal(secondConsumerCalled, true)
   assert.equal(logs.length, 1)
   assert.equal(logs[0].message, "Event consumer failed")
-  assert.equal(logs[0].context.eventName, "order.filled")
+  assert.equal(logs[0].eventName, "order.filled")
+  assert.equal(logs[0].source, "binance")
+  assert.ok(logs[0].error instanceof Error)
+  assert.match(logs[0].eventId, /^[0-9a-f-]{36}$/i)
 
   await bus.close()
 })
@@ -353,50 +356,97 @@ test("snapshots nested event data before asynchronous consumers run", async () =
   await bus.close()
 })
 
-test("deep-freezes Map and Set values in event data", async () => {
+test("rejects mutable built-ins and non-plain payload objects", async () => {
   const { bus } = createTestBus()
-  const original = {
-    metadata: new Map([["order", { quantity: 1 }]]),
-    tags: new Set(["initial"]),
+  class CustomPayload {
+    constructor() {
+      this.value = 1
+    }
   }
 
-  const result = bus.publish({
-    name: "test.immutable-collections",
-    source: "unit-test",
-    data: original,
-  })
+  const unsupported = [
+    new Date(),
+    new Map([["key", "value"]]),
+    new Set(["value"]),
+    new Uint8Array([1, 2]),
+    new ArrayBuffer(4),
+    new DataView(new ArrayBuffer(4)),
+    new CustomPayload(),
+  ]
 
-  assert.equal(result.ok, true)
-  assert.equal(Object.isFrozen(result.event.data.metadata), true)
-  assert.equal(Object.isFrozen(result.event.data.metadata.get("order")), true)
-  assert.equal(Object.isFrozen(result.event.data.tags), true)
+  for (const value of unsupported) {
+    const result = bus.publish({
+      name: "test.unsupported-payload",
+      source: "unit-test",
+      data: { value },
+    })
 
-  assert.throws(
-    () => result.event.data.metadata.set("new", true),
-    { name: "TypeError", message: "Cannot mutate frozen event data" },
-  )
-  assert.throws(
-    () => result.event.data.metadata.get("order").quantity = 2,
-    TypeError,
-  )
-  assert.throws(
-    () => result.event.data.tags.add("new"),
-    { name: "TypeError", message: "Cannot mutate frozen event data" },
-  )
-  assert.throws(
-    () => result.event.data.tags.delete("initial"),
-    { name: "TypeError", message: "Cannot mutate frozen event data" },
-  )
-
-  original.metadata.get("order").quantity = 99
-  original.tags.add("changed")
-  assert.equal(result.event.data.metadata.get("order").quantity, 1)
-  assert.deepEqual([...result.event.data.tags], ["initial"])
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /plain objects, arrays, and primitive values/)
+  }
 
   await bus.close()
 })
 
-test("returns a failure result when event data cannot be cloned", async () => {
+test("rejects accessors without invoking them and rejects symbol properties", async () => {
+  const { bus } = createTestBus()
+  let getterCalls = 0
+  const accessorPayload = {}
+
+  Object.defineProperty(accessorPayload, "value", {
+    enumerable: true,
+    get() {
+      getterCalls += 1
+      return "unsafe"
+    },
+  })
+
+  const accessorResult = bus.publish({
+    name: "test.accessor-payload",
+    source: "unit-test",
+    data: accessorPayload,
+  })
+
+  assert.equal(accessorResult.ok, false)
+  assert.match(accessorResult.errors[0].message, /accessor properties/)
+  assert.equal(getterCalls, 0)
+
+  const symbolPayload = { value: true }
+  symbolPayload[Symbol("hidden")] = "not cloned"
+
+  const symbolResult = bus.publish({
+    name: "test.symbol-payload",
+    source: "unit-test",
+    data: symbolPayload,
+  })
+
+  assert.equal(symbolResult.ok, false)
+  assert.match(symbolResult.errors[0].message, /symbol properties/)
+
+  await bus.close()
+})
+
+test("preserves shared references while freezing supported payloads", async () => {
+  const { bus } = createTestBus()
+  const shared = { quantity: 1 }
+  const result = bus.publish({
+    name: "test.shared-reference",
+    source: "unit-test",
+    data: { first: shared, second: shared },
+  })
+
+  assert.equal(result.ok, true)
+  assert.notEqual(result.event.data.first, shared)
+  assert.equal(result.event.data.first, result.event.data.second)
+  assert.equal(Object.isFrozen(result.event.data.first), true)
+  assert.throws(() => {
+    result.event.data.first.quantity = 2
+  }, TypeError)
+
+  await bus.close()
+})
+
+test("returns a failure result for functions in event data", async () => {
   const { bus } = createTestBus()
   const result = bus.publish({
     name: "test.event",
@@ -405,7 +455,7 @@ test("returns a failure result when event data cannot be cloned", async () => {
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /clone/i)
+  assert.match(result.errors[0].message, /unsupported value/i)
 
   await bus.close()
 })
@@ -535,4 +585,54 @@ test("snapshots and freezes cyclic event data without recursion errors", async (
   }, TypeError)
 
   await bus.close()
+})
+
+
+test("treats Node-special event names as ordinary application event names", async () => {
+  const { bus } = createTestBus()
+  const received = []
+
+  for (const name of ["error", "newListener", "removeListener", "__proto__"]) {
+    const subscribed = bus.subscribe({
+      name,
+      handler: (event) => received.push(event),
+    })
+    assert.equal(subscribed.ok, true)
+
+    const published = bus.publish({
+      name,
+      source: "test",
+      data: { expectedName: name },
+    })
+    assert.equal(published.ok, true)
+  }
+
+  await bus.flush()
+
+  assert.deepEqual(received.map((event) => event.name), [
+    "error",
+    "newListener",
+    "removeListener",
+    "__proto__",
+  ])
+  assert.deepEqual(
+    received.map((event) => event.data.expectedName),
+    ["error", "newListener", "removeListener", "__proto__"],
+  )
+
+  await bus.close()
+})
+
+test("close invalidates outstanding subscription handles", async () => {
+  const { bus } = createTestBus()
+  const result = bus.subscribe({
+    name: "test.close-subscription",
+    handler: () => {},
+  })
+
+  assert.equal(result.ok, true)
+  await bus.close()
+
+  assert.equal(result.subscription.unsubscribe().unsubscribed, false)
+  assert.equal(result.subscription.unsubscribe().unsubscribed, false)
 })
