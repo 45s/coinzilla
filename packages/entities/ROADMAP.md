@@ -22,7 +22,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [~] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
 - [~] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit supported, unsupported, dynamic, and unknown constraint states.
 - [~] **FR-015 — Broker capability contracts.** Shared capability vocabulary with explicit supported, unsupported, and unknown states; no exchange-specific assumptions.
-- [ ] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
+- [~] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
 
 ### FR-009 contract boundary
 
@@ -90,6 +90,16 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Each reported capability has an explicit `SUPPORTED`, `UNSUPPORTED`, or `UNKNOWN` status. An omitted capability is `UNKNOWN`, never assumed unsupported or supported.
 - Capability types are unique within a snapshot. The status lookup validates the requested vocabulary and returns `UNKNOWN` for unreported capabilities.
 - Capability discovery is descriptive only; it does not imply that an operation is currently authorized, healthy, or safe to execute. Runtime permission and recovery state remain separate concerns.
+
+### FR-016 contract boundary
+
+- `BrokerResult` is a venue-neutral result envelope with `SUCCESS`, `FAILURE`, `INCOMPLETE`, and `UNKNOWN` statuses.
+- `SUCCESS` contains no errors and may optionally carry data, including successful operations with no payload.
+- `FAILURE` is a definitive unsuccessful result: it requires one or more errors and carries no data.
+- `INCOMPLETE` carries partial data and one or more errors describing what is missing or incomplete.
+- `UNKNOWN` represents an unresolved operation outcome, requires one or more errors, and carries no data. It must not be treated as a definitive failure or blindly retried, especially for state-changing operations.
+- `ok` is true only for `SUCCESS`; incomplete and unknown outcomes are not successes.
+- The result envelope and error collection are immutable. The generic data payload is opaque and remains owned by the caller; its own immutability is defined by its payload contract.
 
 ## Completion policy
 

@@ -10,3 +10,4 @@ export { Fill, fillErrMsgs, FILL_LIQUIDITY_ROLES, COMMISSION_STATUSES } from "./
 export { Balance, balanceErrMsgs } from "./balances/index.js"
 export { TradingRules, tradingRulesErrMsgs, TRADING_RULE_CONSTRAINT_TYPES, TRADING_RULE_STATUSES } from "./trading-rules/index.js"
 export { BrokerCapabilities, brokerCapabilitiesErrMsgs, BROKER_CAPABILITY_TYPES, BROKER_CAPABILITY_STATUSES } from "./broker-capabilities/index.js"
+export { BrokerResult, brokerResultErrMsgs, BROKER_RESULT_STATUSES } from "./broker-results/index.js"
