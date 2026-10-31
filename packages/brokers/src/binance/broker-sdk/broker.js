@@ -75,6 +75,7 @@ export class BinanceSdkBroker extends CoreBroker {
       }
       await this.tradingConnection.connect()
       this.connected = true
+      await this.userDataSession.resume()
       this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
       this.connected = false
@@ -186,9 +187,6 @@ export class BinanceSdkBroker extends CoreBroker {
     try {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
-      }
-      if (this.userDataUnavailable) {
-        throw new Error("Cannot place a new Binance order while the user-data stream is unavailable")
       }
 
       const { clientOrderId, ...orderInput } = input
