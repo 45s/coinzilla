@@ -157,17 +157,24 @@ export class FreeRollBot {
   #publish(name, data = {}) {
     if (!this.eventBus || typeof this.eventBus.publish !== "function") return
 
-    const result = this.eventBus.publish({
-      name,
-      source: "free-roll-bot",
-      data,
-    })
+    try {
+      const result = this.eventBus.publish({
+        name,
+        source: "free-roll-bot",
+        data,
+      })
 
-    if (!result?.ok) {
-      try {
+      if (!result?.ok) {
         this.logger.error?.("Failed to publish journal event", {
           name,
           errors: result?.errors,
+        })
+      }
+    } catch (error) {
+      try {
+        this.logger.error?.("Failed to publish journal event", {
+          name,
+          error,
         })
       } catch {
         // Logging must not interrupt bot event handling.
@@ -333,8 +340,12 @@ export class FreeRollBot {
       const locked = String(balance.locked)
 
       try {
-        compareDecimal({ left: free, right: "0" })
-        compareDecimal({ left: locked, right: "0" })
+        if (
+          compareDecimal({ left: free, right: "0" }) < 0 ||
+          compareDecimal({ left: locked, right: "0" }) < 0
+        ) {
+          continue
+        }
       } catch {
         continue
       }
@@ -1084,6 +1095,11 @@ export class FreeRollBot {
       )
     }
 
+    if (fill.side !== "BUY" && fill.side !== "SELL") {
+      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
+      return false
+    }
+
     if (typeof fill.isMaker !== "boolean") {
       this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
       return false
@@ -1149,9 +1165,6 @@ export class FreeRollBot {
         left: state.saleProceeds,
         right: accounting.quoteQuantity,
       })
-    } else {
-      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
-      return false
     }
 
     state.filledQuantityByOrder.set(
