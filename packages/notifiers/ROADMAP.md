@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport and Free-Roll consumer integration are merged into develop; transport-folder refactor and reliability hardening are in progress on this task branch.  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, and Free-Roll consumer integration are merged into develop (PRs #346 and #348).  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -59,7 +59,7 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [x] Keep src/index.js limited to stable public re-exports.
 - [x] Add src/telegram/index.js as the provider-local export surface.
 - [x] Preserve the original formatNotification export as a compatibility alias.
-- [ ] Add an implemented provider folder only when its transport is delivered; do not add empty email/ or discord/ folders.
+- [x] Keep email/ and discord/ absent until those transports are actually implemented.
 
 **Acceptance:** adding a provider does not scatter provider-specific code across the package root.
 
@@ -75,8 +75,8 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [x] Redact Telegram credentials from transport and API error messages.
 - [x] Reject malformed successful Telegram API responses instead of reporting false success.
 - [x] Add deterministic regression tests for shutdown races, partial cleanup, queue overflow, malformed responses, secret redaction, and error recovery.
-- [ ] Pass package tests and the enforced 90% line / 85% branch coverage gate on the final merged commit.
-- [ ] Pass workspace tests, syntax, dependency audit, and all required CI checks on the final merged commit.
+- [x] Pass package tests and the enforced 90% line / 85% branch coverage gate on the final merged commit.
+- [x] Pass workspace tests, syntax, dependency audit, and all required CI checks on the final merged commit.
 
 **Acceptance:** all resource cleanup paths are attempted, local pending work is bounded, failures remain observable, and no test requires real Telegram credentials or network access.
 
@@ -110,3 +110,16 @@ Each provider owns its transport client, provider-specific formatter, event inte
 ## Completion policy
 
 A roadmap item is complete only after its task PR is merged into develop and required CI checks pass. Never mark a task complete merely because code has been committed or a PR has been opened.
+
+
+## Validation record
+
+The refactor was merged to develop in PR #348. All required post-merge checks passed on commit 620818cb3ff3624c9869ab1d13fa181784dbbcbb:
+
+- Unit tests: passed.
+- Workspace test coverage: passed, including the notifiers 90% line / 85% branch gate.
+- JavaScript syntax and actionlint: passed.
+- Production dependency audit: passed.
+- Utilities unit tests: passed.
+
+CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703343), [Test Coverage](https://github.com/45s/coinzilla/actions/runs/41240703334), [JavaScript Syntax](https://github.com/45s/coinzilla/actions/runs/41240703427), [Dependency Audit](https://github.com/45s/coinzilla/actions/runs/41240703340), [Utils Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703355).
