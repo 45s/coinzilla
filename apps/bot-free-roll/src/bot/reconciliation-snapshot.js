@@ -202,7 +202,7 @@ function validateOpenOrders({ items, symbol, window }) {
     if (
       !order ||
       typeof order.id !== "string" ||
-      !/^\\d+$/.test(order.id) ||
+      !/^\d+$/.test(order.id) ||
       !Number.isSafeInteger(Number(order.id)) ||
       order.symbol !== symbol ||
       (order.side !== "BUY" && order.side !== "SELL") ||
@@ -307,7 +307,7 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
     if (
       !Array.isArray(trackedOrderIds) ||
       new Set(trackedOrderIds).size !== trackedOrderIds.length ||
-      trackedOrderIds.some((id) => typeof id !== "string" || !/^\\d+$/.test(id) || !Number.isSafeInteger(Number(id))) ||
+      trackedOrderIds.some((id) => typeof id !== "string" || !/^\d+$/.test(id) || !Number.isSafeInteger(Number(id))) ||
       !Array.isArray(section.orderHistory.items) ||
       section.orderHistory.items.length !== trackedOrderIds.length ||
       !Number.isSafeInteger(section.orderHistory.pagesFetched) ||
