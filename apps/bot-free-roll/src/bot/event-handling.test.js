@@ -132,7 +132,7 @@ describe("createEventHandling", () => {
 })
 
 
-test("ignores and reports malformed user-data event envelopes", () => {
+it("ignores and reports malformed user-data event envelopes", () => {
   const { calls, handling } = createFixture()
 
   handling.onUserDataEvent({ payload: null })
