@@ -409,3 +409,18 @@ test("rejects malformed unmanaged movement inputs and ledgers", () => {
   assert.equal(appendUnmanagedMovement({ ledger: createLedger(), movement: null }).ok, false)
   assert.equal(appendUnmanagedMovement({ ledger: createLedger(), movement: [] }).ok, false)
 })
+
+test("fails closed when supplied accounting contains malformed decimal values", () => {
+  const result = applyMarketInventoryFill({
+    ledger: createLedger(),
+    fill: createFill(),
+    accounting: {
+      baseQuantity: "not-a-decimal",
+      quoteQuantity: "20",
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /Market fill accounting is invalid/)
+  assert.match(result.reason, /Invalid decimal/)
+})
