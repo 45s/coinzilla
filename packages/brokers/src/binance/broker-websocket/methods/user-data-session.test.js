@@ -968,3 +968,76 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 })
+
+
+describe("Binance user-data listener setup cleanup", () => {
+  it("rolls back listeners when a later listener registration throws", async () => {
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 77 }),
+        })
+        client.onError = () => {
+          throw new Error("error listener registration failed")
+        }
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+
+    await broker.connect()
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /error listener registration failed/)
+    assert.equal(client.listenerCount, 0)
+    assert.equal(client.errorListenerCount, 0)
+    assert.equal(client.closeListenerCount, 0)
+    assert.equal(client.calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
+
+    await broker.disconnect()
+  })
+
+  it("rolls back event and error listeners when close-listener registration throws", async () => {
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 78 }),
+        })
+        const registerCloseListener = client.onClose.bind(client)
+        let closeRegistrationAttempts = 0
+        client.onClose = (listener) => {
+          closeRegistrationAttempts += 1
+          if (closeRegistrationAttempts === 2) {
+            throw new Error("close listener registration failed")
+          }
+          return registerCloseListener(listener)
+        }
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+
+    await broker.connect()
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /close listener registration failed/)
+    assert.equal(client.listenerCount, 0)
+    assert.equal(client.errorListenerCount, 0)
+    assert.equal(client.closeListenerCount, 0)
+    assert.equal(client.calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
+
+    await broker.disconnect()
+  })
+})
