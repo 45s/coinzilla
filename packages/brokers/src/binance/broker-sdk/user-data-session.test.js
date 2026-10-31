@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { BinanceSdkBroker } from "./broker.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "./test-helpers/fake-broker-clients.js"
+import { BinanceUserDataSession } from "./user-data-session.js"
 
 function createScheduler() {
   let nextId = 0
@@ -77,6 +78,73 @@ function createBroker({ maxAttempts = 3 } = {}) {
 
 describe("Binance user-data session recovery", () => {
 
+
+
+  it("validates required dependencies and retry policy", () => {
+    assert.throws(() => new BinanceUserDataSession({}), TypeError)
+    assert.throws(() => new BinanceUserDataSession({
+      getClient() {},
+      createClient() {},
+      setClient() {},
+      setConnected() {},
+      setUnavailable() {},
+      reconnectDelay: -1,
+    }), RangeError)
+  })
+
+  it("retries when a subscribe response arrives after its socket has closed", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    let resolveDelayedSubscribe
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": index === 0
+            ? () => ({ subscriptionId: 10 })
+            : index === 1
+              ? () => new Promise((resolve) => { resolveDelayedSubscribe = resolve })
+              : () => ({ subscriptionId: index * 100 + 10 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const statuses = []
+    const subscription = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+    assert.equal(typeof resolveDelayedSubscribe, "function")
+
+    clients[1].state = "closed"
+    clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
+    resolveDelayedSubscribe({ subscriptionId: 110 })
+    for (let index = 0; index < 12; index += 1) await Promise.resolve()
+
+    assert.equal(scheduler.pendingCount, 1)
+    await scheduler.runNext()
+    assert.equal(clients.length, 3)
+    assert.equal(subscription.data.subscriptionId, 210)
+    assert.ok(statuses.some((status) => status.type === "recovered"))
+
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
 
   it("resolves an uncertain subscribe response through session.subscriptions", async () => {
     const rpc = createFakeRpcClient({
