@@ -573,3 +573,14 @@ Re-check these official sources during implementation because Binance protocol d
 - [Binance Spot WebSocket API — protocol, responses, HMAC signing](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md) — request IDs are echoed, responses use `status` plus `result` or `error`, and HMAC-SHA-256 signs alphabetically sorted UTF-8 `key=value` parameters.
 
 The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the sources reviewed and the findings at that audit date. Official docs remain authoritative if they change.
+
+
+## 12. Cross-domain contract adoption
+
+### Exact account balances (request #310)
+
+- [~] Additive `getBalances()` API returns canonical Entities `Balance` values with exact free/locked `Quantity` amounts and a derived total.
+- Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
+- Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
+- Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
+- Consumer: Free-Roll recovery request #304. Close this work only after the exact snapshot API is integrated and verified by the consumer.
