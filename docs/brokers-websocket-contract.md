@@ -2,7 +2,7 @@
 
 ## Source layout
 
-The broker package is organized by exchange and responsibility. Tests live beside the source modules they exercise; shared test doubles are kept in a dedicated folder.
+The broker package is organized by exchange and responsibility. Broker-operation contract tests are grouped under `broker-websocket/tests/`; focused unit tests for configuration, helpers, methods, and protocol utilities remain beside the modules they exercise. Shared test doubles live in a dedicated folder.
 
 ```text
 packages/brokers/
@@ -38,8 +38,9 @@ packages/brokers/
         broker.js
         broker.test.js
         broker.*.test.js
-        *.test.js
         broker.integration.js
+        tests/
+          *.test.js
         config/
           binance-websocket-config.js
           binance-websocket-config.test.js
@@ -89,8 +90,9 @@ packages/brokers/
 - `methods/` owns cohesive stateful broker services, such as user-data session recovery.
 - `helpers/` owns focused data adaptation, request parameter construction, and event deduplication.
 - `utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
-- Tests are colocated with their implementation: use `<module>.test.js` for unit/contract tests and `<module>.integration.js` for environment-dependent integration tests.
-- `test-helpers/` contains test-only fakes shared by colocated tests. It is not part of the package's public API.
+- `tests/` groups broker-operation contract tests so the broker root remains focused on its implementation and lifecycle tests.
+- Focused module tests remain colocated with their implementation; use `<module>.test.js` for unit/contract tests and `<module>.integration.js` for environment-dependent integration tests.
+- `test-helpers/` contains test-only fakes shared by broker tests. It is not part of the package's public API.
 
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
