@@ -401,6 +401,16 @@ test("cycle projections are independent of input ordering", () => {
   )
 })
 
+test("rejects one broker SELL order being assigned to multiple cycles", () => {
+  const first = addSell(createCycle())
+  const second = addSell(createCycle({
+    buyOrderId: "buy-2",
+    buyFillIds: ["buy-trade-2"],
+  }))
+
+  assert.equal(projectGridCycles({ cycles: [first, second] }).ok, false)
+})
+
 test("rejects duplicate cycle IDs and mixed-symbol pair projections", () => {
   const cycle = createCycle()
 
