@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { appendGridCycleSellOrder, createGridCycle } from "./grid-cycles.js"
-import { buildGridOrderIndex, resolveGridOrderOwner } from "./grid-order-mapping.js"
+import { buildGridOrderIndex, reconcileGridOpenOrders, resolveGridOrderOwner } from "./grid-order-mapping.js"
 
 function createCycle({ buyOrderId = "buy-1", symbol = "DOGEFDUSD" } = {}) {
   const result = createGridCycle({
@@ -141,4 +141,108 @@ test("rejects unknown, conflicting, or mismatched order identities", () => {
 test("rejects invalid cycle collections before building an order index", () => {
   assert.equal(buildGridOrderIndex({ cycles: null }).ok, false)
   assert.equal(buildGridOrderIndex({ cycles: [createCycle(), createCycle()] }).ok, false)
+})
+
+
+test("reconciles multiple independent live SELL orders against exchange open orders", () => {
+  const first = addSell(createCycle())
+  const second = addSell(createCycle({ buyOrderId: "buy-2" }), {
+    orderId: "sell-2",
+  })
+  const orderIndex = buildGridOrderIndex({ cycles: [first, second] }).data
+  const result = reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [
+      {
+        id: "sell-1",
+        clientOrderId: "client-sell-1",
+        symbol: "DOGEFDUSD",
+        side: "SELL",
+        status: "NEW",
+      },
+      {
+        id: "sell-2",
+        clientOrderId: "client-sell-2",
+        symbol: "DOGEFDUSD",
+        side: "SELL",
+        status: "PARTIALLY_FILLED",
+      },
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.complete, true)
+  assert.equal(result.data.matchedOrders.length, 2)
+  assert.equal(result.data.missingOrders.length, 0)
+})
+
+test("returns missing persisted live orders for final history lookup without authorizing replacement", () => {
+  const first = addSell(createCycle())
+  const second = addSell(createCycle({ buyOrderId: "buy-2" }), {
+    orderId: "sell-2",
+  })
+  const orderIndex = buildGridOrderIndex({ cycles: [first, second] }).data
+  const result = reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [{
+      id: "sell-1",
+      clientOrderId: "client-sell-1",
+      symbol: "DOGEFDUSD",
+      side: "SELL",
+      status: "NEW",
+    }],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.complete, false)
+  assert.deepEqual(result.data.missingOrders.map((order) => order.orderId), ["sell-2"])
+  assert.equal(result.data.missingOrders[0].cycleId, second.id)
+})
+
+test("fails closed on orphan, mismatched, or duplicate exchange open orders", () => {
+  const cycle = addSell(createCycle())
+  const orderIndex = buildGridOrderIndex({ cycles: [cycle] }).data
+  const validOrder = {
+    id: "sell-1",
+    clientOrderId: "client-sell-1",
+    symbol: "DOGEFDUSD",
+    side: "SELL",
+    status: "NEW",
+  }
+
+  assert.equal(reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [{ ...validOrder, id: "orphan-order", clientOrderId: "orphan-client" }],
+  }).ok, false)
+  assert.equal(reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [{ ...validOrder, side: "BUY" }],
+  }).ok, false)
+  assert.equal(reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [validOrder, validOrder],
+  }).ok, false)
+  assert.equal(reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [{ ...validOrder, status: "CANCELED" }],
+  }).ok, false)
+})
+
+test("reports all persisted live orders missing when the exchange open-order list is empty", () => {
+  const first = addSell(createCycle())
+  const second = addSell(createCycle({ buyOrderId: "buy-2" }), {
+    orderId: "sell-2",
+  })
+  const orderIndex = buildGridOrderIndex({ cycles: [first, second] }).data
+  const result = reconcileGridOpenOrders({
+    orderIndex,
+    exchangeOpenOrders: [],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.complete, false)
+  assert.deepEqual(
+    result.data.missingOrders.map((order) => order.orderId),
+    ["sell-1", "sell-2"],
+  )
 })
