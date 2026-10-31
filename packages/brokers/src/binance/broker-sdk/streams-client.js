@@ -179,6 +179,7 @@ export class BinanceStreamsClient {
           this.#activeStreams.delete(stream)
         }
       }
+      if (this.#listeners.size === 0) this.#clearReconnectTimer()
 
       return streams
     })
@@ -208,6 +209,7 @@ export class BinanceStreamsClient {
   }
 
   async #connect(isReconnect, initialStreams = []) {
+    if (isReconnect && this.#listeners.size === 0) return this
     if (this.#state === "open") return this
     if (this.#state === "connecting") return this.#connectPromise
     if (this.#manualDisconnect) throw new Error("Binance Streams client has been disconnected")
@@ -301,6 +303,7 @@ export class BinanceStreamsClient {
       listeners?.delete(listener)
       if (listeners?.size === 0) this.#listeners.delete(stream)
     }
+    if (this.#listeners.size === 0) this.#clearReconnectTimer()
   }
 
   #request(method, streams) {
