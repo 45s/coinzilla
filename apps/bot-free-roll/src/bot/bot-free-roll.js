@@ -677,6 +677,7 @@ export class FreeRollBot {
           }
         }
 
+        if (state.paused) return
         if (!state.buyOrder && state.referencePrice !== null) {
           await this.#placeNextBuy(symbol)
         }
