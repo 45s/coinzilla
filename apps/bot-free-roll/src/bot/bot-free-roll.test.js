@@ -2844,3 +2844,114 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
     await bot.stop()
   }
 })
+
+
+test("buffers user-data events during reconciliation and replays them before acknowledgement", async () => {
+  let onEvent
+  let onStatus
+  let onPrice
+  let releaseBalances
+  let acknowledged = false
+  let bot
+  const createdOrders = []
+  const balanceSnapshot = new Promise((resolve) => {
+    releaseBalances = resolve
+  })
+
+  bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      getBalances: async () => balanceSnapshot,
+      getOpenOrders: async () => ({
+        ok: true,
+        data: [{
+          id: "BUY-1",
+          side: "BUY",
+          originalQuantity: "100",
+          executedQuantity: "0",
+          status: "NEW",
+        }],
+      }),
+      getMyTrades: async () => ({ ok: true, data: [] }),
+      subscribeForUserData: async (callbacks) => {
+        onEvent = callbacks.onEvent
+        onStatus = callbacks.onStatus
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledged = true
+              assert.equal(bot.getStats().DOGEUSDT.fillCount, 1)
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `${order.side}-1` } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => typeof releaseBalances === "function",
+      "balance reconciliation did not start",
+    )
+
+    onEvent({
+      event: createExecutionEvent({
+        order: { orderId: "BUY-1", side: "BUY", quantity: "100", price: "100" },
+        tradeId: 99,
+        fillQuantity: "50",
+        status: "PARTIALLY_FILLED",
+      }),
+    })
+
+    releaseBalances({
+      ok: true,
+      data: [{
+        asset: { code: "USDT" },
+        free: { amount: "10000" },
+        locked: { amount: "0" },
+        total: { amount: "10000" },
+      }],
+    })
+
+    await waitForCondition(
+      () => acknowledged,
+      "buffered event was not replayed before recovery acknowledgement",
+    )
+
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 1)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "50")
+    assert.equal(createdOrders.some((order) => order.side === "SELL"), false)
+  } finally {
+    await bot.stop()
+  }
+})
