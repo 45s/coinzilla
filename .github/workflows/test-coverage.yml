@@ -52,3 +52,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           exit "$test_status"
+
+      - name: Enforce Free-Roll bot coverage thresholds
+        run: pnpm --filter @coinzilla/bot-free-roll test:coverage
