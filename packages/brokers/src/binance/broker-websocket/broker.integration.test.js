@@ -8,11 +8,14 @@ const integrationTestPath = fileURLToPath(
 )
 
 test("native broker integration suite skips cleanly without credentials", () => {
+  const childEnvironment = { ...process.env }
+  delete childEnvironment.NODE_TEST_CONTEXT
+
   const result = spawnSync(process.execPath, ["--test", integrationTestPath], {
     encoding: "utf8",
     timeout: 10_000,
     env: {
-      ...process.env,
+      ...childEnvironment,
       NODE_ENV: "test",
       BINANCE_API_KEY: "",
       BINANCE_API_SECRET_KEY: "",
