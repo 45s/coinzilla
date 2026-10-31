@@ -53,6 +53,7 @@ export class BinanceStreamsClient {
   #reconnectTimer = null
   #rotationTimer = null
   #reconnectAttempts = 0
+  #transportCleanup = null
 
   constructor({
     url = DEFAULT_URL,
@@ -212,6 +213,7 @@ export class BinanceStreamsClient {
     this.#transport = null
     this.#state = "closed"
     this.#ready = false
+    this.#detachTransportListeners()
     if (transport) await transport.close()
   }
 
@@ -250,11 +252,23 @@ export class BinanceStreamsClient {
     }
 
     this.#transport = transport
-    transport.onMessage((message) => this.#handleMessage(message))
-    transport.onError((error) => this.#reportError(error))
-    transport.onClose((event) => this.#handleClose(event))
+    const removers = []
+    this.#transportCleanup = () => {
+      for (const remove of removers.splice(0).reverse()) {
+        try {
+          remove?.()
+        } catch (error) {
+          this.#reportError(error)
+        }
+      }
+    }
 
-    this.#connectPromise = transport.connect().then(async () => {
+    this.#connectPromise = Promise.resolve().then(() => {
+      removers.push(transport.onMessage((message) => this.#handleMessage(message)))
+      removers.push(transport.onError((error) => this.#reportError(error)))
+      removers.push(transport.onClose((event) => this.#handleClose(event)))
+      return transport.connect()
+    }).then(async () => {
       if (this.#transport !== transport || this.#manualDisconnect) {
         await transport.close()
         throw new Error("Binance Streams connection was superseded")
@@ -295,6 +309,7 @@ export class BinanceStreamsClient {
       if (this.#transport === transport) {
         this.#transport = null
         this.#state = "closed"
+        this.#detachTransportListeners()
         try {
           await transport.close()
         } catch (closeError) {
@@ -440,6 +455,7 @@ export class BinanceStreamsClient {
   }
 
   #handleClose(event) {
+    this.#detachTransportListeners()
     const wasReady = this.#ready
     this.#ready = false
     this.#state = "closed"
@@ -472,6 +488,12 @@ export class BinanceStreamsClient {
       this.#transport?.close(1000, "Scheduled Binance Streams rotation")
         .catch((error) => this.#reportError(error))
     }, this.rotationDelay)
+  }
+
+  #detachTransportListeners() {
+    const cleanup = this.#transportCleanup
+    this.#transportCleanup = null
+    cleanup?.()
   }
 
   #rejectPending(error) {
