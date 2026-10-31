@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  createGridConfigFingerprint,
   restoreGridPairState,
   serializeGridPairState,
   validateGridPairStateSnapshot,
@@ -70,6 +71,37 @@ function createState(overrides = {}) {
 }
 
 const fingerprint = "grid-config-v1"
+
+test("creates stable configuration fingerprints independent of object key order", () => {
+  const first = createGridConfigFingerprint({
+    symbol: "DOGEFDUSD",
+    settings: {
+      orderQuantity: 100,
+      keepQuantity: 1,
+      fees: { maker: 0, taker: 0.075 },
+    },
+    minProfit: 0.01,
+  })
+  const reordered = createGridConfigFingerprint({
+    symbol: "DOGEFDUSD",
+    settings: {
+      fees: { taker: 0.075, maker: 0 },
+      keepQuantity: 1,
+      orderQuantity: 100,
+    },
+    minProfit: "0.01",
+  })
+  const changed = createGridConfigFingerprint({
+    symbol: "DOGEFDUSD",
+    settings: { orderQuantity: 200, keepQuantity: 1 },
+    minProfit: "0.01",
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(first.data, reordered.data)
+  assert.notEqual(first.data, changed.data)
+  assert.equal(createGridConfigFingerprint({ symbol: "DOGEFDUSD" }).ok, false)
+})
 
 test("serializes durable Grid fields without duplicating derived accounting maps", () => {
   const state = createState()
