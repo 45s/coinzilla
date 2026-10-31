@@ -171,10 +171,10 @@ test("closed transports cannot be reopened", async () => {
 })
 
 test("Undici version gate accepts patched releases and rejects affected releases", () => {
-  for (const version of ["6.29.1", "6.30.0", "7.30.1", "7.31.0", "8.12.2", "9.0.0"]) {
+  for (const version of ["6.29.1", "6.30.0", "7.30.1", "7.31.0", "8.12.2"]) {
     assert.equal(isSafeUndiciVersion(version), true, version)
   }
-  for (const version of ["5.99.0", "6.29.0", "7.30.0", "8.12.1", "invalid", undefined]) {
+  for (const version of ["5.99.0", "6.29.0", "7.30.0", "8.12.1", "9.0.0", "6.29.1-rc.1", "invalid", undefined]) {
     assert.equal(isSafeUndiciVersion(version), false, String(version))
   }
 })
