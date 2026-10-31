@@ -146,6 +146,29 @@ test("permits retry only after complete order history proves the client ID is ab
   assert.equal(result.data.safeToRetry, true)
 })
 
+test("does not retry an acknowledged order that is absent from complete history", () => {
+  const intent = createIntent()
+  const acknowledged = acknowledgeGridOrderIntent({
+    intent,
+    order: createOrder(intent, { id: "12345" }),
+  })
+  const missing = resolveGridOrderIntent({
+    intent: acknowledged.data,
+    matchingOrders: [],
+    historyComplete: true,
+  })
+  const wrongOrder = resolveGridOrderIntent({
+    intent: acknowledged.data,
+    matchingOrders: [createOrder(intent, { id: "67890" })],
+    historyComplete: true,
+  })
+
+  assert.equal(missing.ok, false)
+  assert.match(missing.errors[0], /acknowledged broker order is missing/)
+  assert.equal(wrongOrder.ok, false)
+  assert.match(wrongOrder.errors[0], /does not match the acknowledged intent/)
+})
+
 test("fails closed on mismatched or multiple broker orders for one client ID", () => {
   const intent = createIntent()
   const mismatch = resolveGridOrderIntent({
