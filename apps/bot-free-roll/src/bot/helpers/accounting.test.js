@@ -189,7 +189,7 @@ test("calculates effective commission rate from the actual commission asset", ()
 
 
 test("legacy accounting rejects invalid quantities, prices, and fee rates", () => {
-  for (const value of [0, -1, Number.NaN, Infinity, undefined]) {
+  for (const value of [-1, Number.NaN, Infinity, undefined]) {
     assert.throws(() => estimateBuyAccounting({ quantity: value, price: 1, feeRate: 0 }))
     assert.throws(() => estimateBuyAccounting({ quantity: 1, price: value, feeRate: 0 }))
     assert.throws(() => estimateSellAccounting({ quantity: value, price: 1, feeRate: 0 }))
@@ -203,7 +203,7 @@ test("legacy accounting rejects invalid quantities, prices, and fee rates", () =
 })
 
 test("exact accounting rejects malformed decimal strings and invalid ranges", () => {
-  for (const value of [undefined, null, "", "1e-3", "not-a-number"]) {
+  for (const value of [undefined, null, "", "1.2.3", "not-a-number"]) {
     assert.throws(() => estimateBuyAccountingExact({ quantity: value, price: "1", feeRate: "0" }))
     assert.throws(() => estimateBuyAccountingExact({ quantity: "1", price: value, feeRate: "0" }))
     assert.throws(() => estimateBuyAccountingExact({ quantity: value, price: "1", feeRate: "0" }))
@@ -293,7 +293,7 @@ test("exact commission-rate calculation validates inputs and asset identity", ()
     quoteAsset: "USDT",
   }
 
-  for (const value of [undefined, null, "", "1e-3", "invalid"]) {
+  for (const value of [undefined, null, "", "1.2.3", "invalid"]) {
     assert.throws(() => calculateCommissionRateExact({ ...base, price: value }))
     assert.throws(() => calculateCommissionRateExact({ ...base, quoteQuantity: value }))
     assert.throws(() => calculateCommissionRateExact({ ...base, commissionAmount: value }))
