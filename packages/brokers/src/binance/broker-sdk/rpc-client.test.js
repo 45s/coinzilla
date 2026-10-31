@@ -290,7 +290,7 @@ test("request validation rejects invalid methods and parameter shapes", async ()
   await connectClient(context)
 
   assert.throws(() => context.client.request("", {}), /method/)
-  await assert.rejects(context.client.request("ticker.price", []), /params must be an object/)
+  assert.throws(() => context.client.request("ticker.price", []), /params must be an object/)
   assert.equal(context.sockets[0].sent.length, 0)
 })
 
