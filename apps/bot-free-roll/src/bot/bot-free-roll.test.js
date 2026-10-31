@@ -3092,15 +3092,17 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => {
-        balanceRequestStarted = true
-        return balances
-      },
-      getOpenOrders: async () => {
-        openOrderRequests += 1
-        return { ok: true, data: [] }
-      },
-      getMyTrades: async () => ({ ok: true, data: [] }),
+      ...createRecoverySnapshotPorts({
+        createdOrders: [],
+        accountSnapshotFactory: () => {
+          balanceRequestStarted = true
+          return balances
+        },
+        openOrdersForSymbol: () => {
+          openOrderRequests += 1
+          return []
+        },
+      }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -3141,7 +3143,7 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
   )
 
   await bot.stop()
-  releaseBalances({ ok: true, data: [] })
+  releaseBalances({ ok: true, data: { balances: [], sourceTime: 1010 } })
 
   await waitForCondition(
     () => recoveryFailures.length === 1,
