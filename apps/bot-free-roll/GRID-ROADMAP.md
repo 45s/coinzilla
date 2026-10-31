@@ -371,7 +371,7 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 
 ### Stage G1 — Characterize and protect existing behavior
 
-- [ ] **GRID-010 — Add legacy lifecycle characterization tests.** Lock down current one-BUY/one-aggregate-SELL behavior, including two/three BUY aggregation, cancel/fill races, sell-first ordering, partial fills, and free allocation. No production behavior change.
+- [~] **GRID-010 — Add legacy lifecycle characterization tests.** In progress on `feature/bot-grid`: strengthened the existing partial-SELL/cancel/replacement integration test to assert that the original aggregate SELL is canceled, the replacement SELL is exactly 189 units after a 10-unit partial fill and a second 100-unit BUY, and the legacy pair still has one active SELL with zero free allocation. Remaining: add explicit full-fill aggregation and cancellation-race assertions if not already covered by the existing suite; run the complete app test and coverage commands. No production behavior change.
 - [ ] **GRID-011 — Capture current test and coverage baseline.** Run app tests, workspace tests, syntax checks, and relevant coverage; record exact Node/pnpm versions and results. Do not claim unrun checks.
 - [ ] **GRID-012 — Add explicit legacy-mode config compatibility tests.** Prove missing Grid config keeps current aggregated mode and current configuration loads unchanged.
 
