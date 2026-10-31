@@ -70,6 +70,10 @@ function createState({ cycle, buyOrder = null } = {}) {
     configuredFeeRate: "0",
     buyOrder,
     gridCycles: new Map(cycle ? [[cycle.id, cycle]] : []),
+    orderIntents: new Map(),
+    nextIntentSequence: 0,
+    trailingBuy: false,
+    paused: false,
     ledgerEntries: Object.freeze([]),
     processedTradeIds: new Set(),
     fills: new Map(),
@@ -128,6 +132,8 @@ test("replays canonical BUY and SELL fills into derived accounting maps", () => 
 
   assert.equal(replayed.ok, true)
   assert.equal(replayed.data.activeQuantity, "0")
+  assert.equal(replayed.data.freeQuantity, "1")
+  assert.equal(replayed.data.cycleCost, "0")
   assert.equal(replayed.data.marketInventory.strategy.baseQuantity, "1")
   assert.equal(replayed.data.fills.size, 2)
   assert.equal(replayed.data.filledQuantityByOrder.get("buy-1"), "100")
