@@ -2639,3 +2639,208 @@ test("fully filled SELL discovered during cancellation is reconciled before repl
     await fixture.bot.stop()
   }
 })
+
+
+test("reconciles balances and tracked fills before acknowledging user-data recovery", async () => {
+  const calls = []
+  const createdOrders = []
+  let onPrice
+  let onStatus
+  let acknowledgeRecovery = false
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      getBalances: async () => {
+        calls.push("getBalances")
+        return {
+          ok: true,
+          data: [{
+            asset: { code: "USDT" },
+            free: { amount: "10000" },
+            locked: { amount: "0" },
+            total: { amount: "10000" },
+          }],
+        }
+      },
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        return { ok: true, data: [] }
+      },
+      getMyTrades: async ({ orderId }) => {
+        calls.push("getMyTrades")
+        return {
+          ok: true,
+          data: [{
+            id: "trade-1",
+            orderId,
+            symbol: "DOGEUSDT",
+            side: "BUY",
+            price: "100",
+            quantity: "100",
+            quoteQuantity: "10000",
+            commissionAmount: "0",
+            commissionAsset: null,
+            isMaker: true,
+          }],
+        }
+      },
+      subscribeForUserData: async ({ onEvent: _onEvent, onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              calls.push("acknowledgeRecovery")
+              acknowledgeRecovery = true
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => acknowledgeRecovery && createdOrders.some((order) => order.side === "SELL"),
+      "recovery did not reconcile and resume the SELL plan",
+    )
+
+    assert.ok(calls.indexOf("getBalances") < calls.indexOf("getOpenOrders"))
+    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getMyTrades"))
+    assert.ok(calls.indexOf("getMyTrades") < calls.indexOf("acknowledgeRecovery"))
+    assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "100")
+    assert.equal(bot.getSummary().recovering, false)
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("keeps trading gated and does not acknowledge recovery when a missing order has partial history", async () => {
+  const createdOrders = []
+  let onPrice
+  let onStatus
+  let acknowledgeCalls = 0
+  const recoveryFailures = []
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      getBalances: async () => ({
+        ok: true,
+        data: [{
+          asset: { code: "USDT" },
+          free: { amount: "10000" },
+          locked: { amount: "0" },
+          total: { amount: "10000" },
+        }],
+      }),
+      getOpenOrders: async () => ({ ok: true, data: [] }),
+      getMyTrades: async ({ orderId }) => ({
+        ok: true,
+        data: [{
+          id: "partial-trade",
+          orderId,
+          symbol: "DOGEUSDT",
+          side: "BUY",
+          price: "100",
+          quantity: "50",
+          quoteQuantity: "5000",
+          commissionAmount: "0",
+          commissionAsset: null,
+          isMaker: true,
+        }],
+      }),
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgeCalls += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "bot.recovery_failed") recoveryFailures.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => recoveryFailures.length === 1,
+      "incomplete recovery was not reported",
+    )
+
+    assert.equal(acknowledgeCalls, 0)
+    assert.equal(bot.getSummary().recovering, true)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "50")
+    assert.equal(createdOrders.some((order) => order.side === "SELL"), false)
+  } finally {
+    await bot.stop()
+  }
+})
