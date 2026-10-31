@@ -1,11 +1,11 @@
 import { describe, it, before, after } from "node:test"
 import assert from "node:assert/strict"
-import { BinanceSdkBroker } from "./broker.js"
-import { BinanceSdkConfig } from "./binance-websocket-config.js"
+import { BinanceWebSocketBroker } from "./broker.js"
+import { BinanceWebSocketConfig } from "./binance-websocket-config.js"
 
 if (process.env.NODE_ENV === "production") {
   throw new Error(
-    "Refusing to run Binance SDK integration tests with NODE_ENV=production",
+    "Refusing to run Binance WebSocket integration tests with NODE_ENV=production",
   )
 }
 
@@ -19,15 +19,15 @@ const symbol = "DOGEFDUSD"
 const price = 0.05
 const quantity = 1_000
 
-const broker = new BinanceSdkBroker(
-  new BinanceSdkConfig({
+const broker = new BinanceWebSocketBroker(
+  new BinanceWebSocketConfig({
     apiKey: process.env.BINANCE_API_KEY,
     apiSecret: process.env.BINANCE_API_SECRET_KEY,
   }),
 )
 
 describe(
-  "BinanceSdkBroker native WebSocket integration (TESTNET)",
+  "BinanceWebSocketBroker native WebSocket integration (TESTNET)",
   { skip: !hasTestnetCredentials && "Set Binance TESTNET credentials to run these tests" },
   () => {
     before(async () => {
