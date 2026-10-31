@@ -1095,6 +1095,11 @@ export class FreeRollBot {
       )
     }
 
+    if (fill.side !== "BUY" && fill.side !== "SELL") {
+      this.#pause(symbol, `Unsupported fill side for trade ${fillId}`)
+      return false
+    }
+
     if (typeof fill.isMaker !== "boolean") {
       this.#pause(symbol, `Execution fill ${fillId} is missing its maker/taker classification`)
       return false
