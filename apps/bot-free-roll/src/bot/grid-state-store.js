@@ -76,6 +76,8 @@ export function createGridStateStore({
     throw new TypeError("Grid state directory is required")
   }
   if (typeof fileName !== "string" || !fileName.trim() ||
+      fileName === "." || fileName === ".." ||
+      fileName.includes("/") || fileName.includes("\\\\") ||
       path.basename(fileName) !== fileName) {
     throw new TypeError("Grid state fileName must be a file name without a directory")
   }
