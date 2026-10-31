@@ -3,7 +3,8 @@
 **Application:** `apps/bot-free-roll`  
 **Status:** Active engineering plan — implementation not yet production-ready  
 **Principles:** SOLID · stable · simple · exchange-agnostic · test-first  
-**Last reviewed:** 2026-10-31
+**Last reviewed:** 2026-10-31  
+**Optional Grid migration:** [GRID-ROADMAP.md](./GRID-ROADMAP.md) and [GRID-README.md](./GRID-README.md) define a separate opt-in BUY-cycle Grid initiative. The current aggregated strategy remains the default and authoritative behavior until Grid implementation and validation are complete.
 
 > This roadmap is the long-term development contract for the Free-Roll application. Read it before planning, implementing, reviewing, or asking an AI agent to change this application. The roadmap is intentionally sequenced as small, independently reviewable PRs. It is a direction and acceptance plan, not a promise that every item must be implemented exactly as written: update it when repository evidence or an explicitly approved strategy decision requires a change.
 
