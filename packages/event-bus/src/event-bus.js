@@ -256,10 +256,10 @@ export class EventBus {
     const { timeoutMs } = options
     if (
       timeoutMs !== undefined &&
-      (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)
+      (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647)
     ) {
       return toResult({
-        error: new TypeError("EventBus close timeoutMs must be a positive safe integer"),
+        error: new TypeError("EventBus close timeoutMs must be an integer between 1 and 2147483647"),
       })
     }
 
