@@ -231,6 +231,7 @@ describe("BinanceSdkBroker history query filters", () => {
   })
 })
 
+describe("BinanceSdkBroker order-history page boundaries", () => {
   it("does not label a full order-history page complete", async () => {
     const orders = [
       { symbol: "BTCUSDT", orderId: 10, time: 1_000, updateTime: 1_100, origQty: "1.00000001" },
@@ -248,3 +249,4 @@ describe("BinanceSdkBroker history query filters", () => {
     assert.equal(result.data[1].orderId, 11)
     assert.equal(result.data.complete, undefined)
   })
+})
