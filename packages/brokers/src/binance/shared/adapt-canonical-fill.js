@@ -1,4 +1,5 @@
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { normalizeBinanceId } from "./normalize-binance-id.js"
 
 function createAsset(code) {
   if (typeof code !== "string" || !code.trim()) {
@@ -57,8 +58,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
     : "UNKNOWN"
 
   return new Fill({
-    tradeId: String(trade.id),
-    brokerOrderId: String(trade.orderId),
+    tradeId: normalizeBinanceId(trade.id, "trade ID"),
+    brokerOrderId: normalizeBinanceId(trade.orderId, "order ID"),
     market,
     side: trade.isBuyer ? "BUY" : "SELL",
     price: new Money({ amount: trade.price, asset: market.quoteAsset }),
