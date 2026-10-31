@@ -64,6 +64,9 @@ export class BinanceSdkBroker extends CoreBroker {
   }
 
   async connect() {
+    if (this.userDataSession.isRecovering) {
+      await this.userDataSession.waitForRecovery()
+    }
     if (this.connected && this.tradingConnection.state === "open") {
       await this.userDataSession.resume()
       return
