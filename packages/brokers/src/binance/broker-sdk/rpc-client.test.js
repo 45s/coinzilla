@@ -311,3 +311,19 @@ test("RPC client marks HTTP 409 partial mutation responses as uncertain", async 
     return true
   })
 })
+
+test("notifies close observers when the transport closes unexpectedly", async () => {
+  const context = createClient()
+  await connectClient(context)
+  const closes = []
+  context.client.onClose((event) => closes.push(event))
+
+  context.sockets[0].serverClose({ code: 1006, reason: "network lost", wasClean: false })
+
+  assert.deepEqual(closes, [{
+    code: 1006,
+    reason: "network lost",
+    wasClean: false,
+  }])
+  assert.equal(context.client.state, "closed")
+})

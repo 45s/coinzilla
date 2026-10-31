@@ -68,10 +68,10 @@ The migration is complete only when all of the following are true:
 ### Next action
 
 1. Phase 5 is merged (PR #271, merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-2. Synchronize the integration branch with latest `main` via PR #279; preserve main's bot-team changes and do not edit bot application files independently.
-3. After the sync PR is merged and its exact-head CI is green, re-audit consumers and begin Phase 6.
-4. Phase 6: implement user-data session termination detection, reconnect/resubscription without duplicate callbacks, event ordering/deduplication, gap handling, and reconciliation.
-5. Keep HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
+2. Main synchronization PR #279 is merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`; this is the current integration-branch base.
+3. Re-reviewed `main` at `9903365e724ffa5887d77aa297abf5d0077d8762`. The 28 later commits contain bot-only test/coverage work, `packages/event-bus` changes, and repository engineering-standard updates. No broker/API/consumer-contract/runtime/dependency change was found that requires another sync. Bot application files remain read-only.
+4. Phase 6 implementation branch: `migration/binance-phase-6-user-data-recovery`.
+5. Phase 6 must preserve HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -348,11 +348,27 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
 - [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Do not carry forward the legacy REST listen-key timer.
-- [ ] Handle subscription failure, session expiration, disconnect, reconnect, and resubscription explicitly (including recovery after a remote unsubscribe failure).
-- [ ] Define event ordering/deduplication expectations; ensure reconnect does not register duplicate callbacks.
-- [ ] Test execution reports, account updates, duplicate events, gaps, and recovery.
-- [ ] Document which state cannot be recovered from the stream alone and which WebSocket API queries support reconciliation.
-- [ ] Add an opt-in testnet integration test for subscription and user-data events.
+#### Phase 6A — lifecycle observability and event idempotency (current PR)
+- [x] Expose RPC socket-close notifications without changing existing request/event behavior.
+- [x] Detect explicit `eventStreamTerminated` events and unexpected API socket closure.
+- [x] Add an optional `onStatus` callback that reports `terminated` and `connectionClosed` with `recoveryRequired: true`, plus `rpcError` diagnostics without claiming a recovery gap; keep the existing `onEvent({ event })` contract unchanged.
+- [x] Ignore events whose `subscriptionId` does not match the active subscription.
+- [x] Deduplicate execution reports using `symbol`, `orderId`, and `executionId`; use a bounded exact-payload cache for event types without a stable unique ID.
+- [x] Avoid reporting intentional broker shutdown as an unexpected recovery gap.
+- [x] Log unexpected API socket closure even when no optional status callback is supplied.
+- [x] Fail closed for new `createOrder()` calls after user-data subscription failure, termination, explicit unsubscribe, or API socket loss; restore order placement only after a new subscription succeeds.
+- [x] Document that event timestamps are not a global replay cursor and that recovery requires state reconciliation.
+- [ ] Phase 6A follow-up: deterministic account-update duplicate tests and callback/error isolation review.
+
+#### Phase 6B — reconnect, resubscribe, and reconciliation (not started)
+- [ ] Handle subscription failure, explicit termination, unexpected socket close, reconnect, resubscription, and remote unsubscribe failure explicitly.
+- [ ] Keep one remote signature subscription per broker/account connection and fan out to local callbacks; never attach duplicate callbacks after recovery.
+- [ ] Recreate one-shot native RPC transport/client safely after unexpected close; preserve intentional shutdown semantics and bounded backoff.
+- [ ] Re-subscribe only after the replacement socket is open; never replay state-changing RPC requests.
+- [ ] Emit explicit recovery lifecycle status so consumers know when to reconcile before treating live events as healthy.
+- [ ] Add deterministic tests for reconnect races, failed reconnects, resubscribe failures, duplicate callback prevention, account updates, execution reports, and shutdown during recovery.
+- [ ] Add opt-in Binance testnet coverage for signature subscription and user-data event receipt.
+- [ ] Document reconciliation boundaries: use `account.status` and `openOrders.status` for current snapshots; use symbol-scoped `myTrades` / `allOrders` for trade/order history. A current snapshot cannot reconstruct every missed intermediate balance delta or prove every event was observed.
 - **Exit criteria:** deterministic lifecycle/recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe.
 
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
@@ -497,6 +513,9 @@ When a new discovery changes an implementation decision:
 | 2026-10-31 | Preserve `userDataStream.subscribe.signature` with existing HMAC `apiKey` + `apiSecret`; do not require Ed25519 or `session.logon`. | Current SDK behavior and official Binance documentation reviewed in Phase 0. Exact signing payload still requires test vectors. | Phase 3 signing and Phase 6 lifecycle. |
 | 2026-10-31 | Never blindly replay state-changing requests after uncertain disconnects. | Order placement/cancellation may have succeeded remotely even if response was lost. | RPC design, broker result contract, recovery tests. |
 | 2026-10-31 | Do not edit bot application files during this migration. | Other teams are actively developing bot behavior; avoid conflicts and preserve ownership. | All phases; consumer source is read-only audit evidence. |
+| 2026-10-31 | Treat `eventStreamTerminated` as an explicit subscription lifecycle signal, not an order/account event. | Binance Spot User Data Streams documentation defines the event and its termination causes. | Phase 6 lifecycle state machine and tests. |
+| 2026-10-31 | Treat a socket interruption as an unrecoverable event-history gap; do not use event timestamps as a global sequence cursor. | Binance user-data event schemas expose event/transaction timestamps and execution IDs, but no universal replay cursor. | Phase 6 status signaling, idempotency, and reconciliation. |
+| 2026-10-31 | Reconcile current account/order state from WebSocket API snapshots after recovery; do not claim snapshots reconstruct missed intermediate events. | `account.status`, `openOrders.status`, `myTrades`, and `allOrders` provide current or queryable state, not a replay log for every event. | Phase 6 recovery contract. |
 
 ---
 
@@ -548,11 +567,11 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed after Phase 5:** `da0d3f434741d3e3b5892666c4906cbc4bcb8a28` (2026-10-31).
-- Since the previous recorded review at `c6f9020eedf335dfd7c039da5cb749f532b2caea`, 29 commits landed on `main`. The significant consumer-contract change is `apps/bot-free-roll/src/prepare-broker.js`: `prepareBroker()` now accepts optional `logger` injection, with corresponding tests. The broker's public constructor/lifecycle contract remains compatible; this sync preserves that consumer change unchanged.
-- The same main update includes bot-team implementation/tests/coverage work and `packages/event-bus` changes. They are brought in intact by the synchronization merge; no independent bot application edits are made by the broker migration.
-- Synchronization PR: #279, `sync/main-20261031-post-phase5` into `migration/binance-native-ws`. Merge commit has both latest `main` and the Phase 5 integration tip as parents; conflicts were resolved by retaining the main tree and overlaying the integration-only broker roadmap, contract audit, broker package, and root roadmap/workflow changes.
-- After PR #279 is merged, recheck latest `main` before Phase 6 implementation and update this record if it advanced.
+- **Main SHA synchronized by PR #279:** `da0d3f434741d3e3b5892666c4906cbc4bcb8a28` (2026-10-31).
+- **Latest main SHA re-reviewed before Phase 6:** `9903365e724ffa5887d77aa297abf5d0077d8762` (2026-10-31); 28 commits after the PR #279 sync snapshot.
+- The later commits include bot-free-roll event/fill/order-cancellation test coverage, `packages/event-bus` validation/refactoring, and updated root `AGENTS.md` / `ENGINEERING_STANDARDS.md`. The current broker source, package manifest, public API, and read-only bot consumer contract were re-audited. No broker/API/consumer-contract/runtime/dependency change requires synchronization at this checkpoint.
+- PR #279 merged at `f7566726b3f42b28db6bdc7556cf4a3dcae866fe`, preserving main and integration as merge parents. The integration branch is identical to this merge commit at Phase 6 kickoff.
+- Recheck latest `main` before opening the Phase 6 PR and before declaring Phase 6 complete; sync immediately if a significant broker/API/consumer-contract change lands.
 
 ---
 

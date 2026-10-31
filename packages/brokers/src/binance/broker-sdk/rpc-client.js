@@ -87,6 +87,7 @@ export class BinanceWebSocketApiClient {
   #pending = new Map()
   #eventListeners = new Set()
   #errorListeners = new Set()
+  #closeListeners = new Set()
   #removeMessageListener
   #removeErrorListener
   #removeCloseListener
@@ -131,6 +132,13 @@ export class BinanceWebSocketApiClient {
       this.#rejectPending(new BinanceRpcConnectionError(
         `Binance WebSocket API connection closed (code ${event?.code ?? "unknown"}): ${event?.reason ?? ""}`,
       ))
+      for (const listener of this.#closeListeners) {
+        try {
+          listener(event)
+        } catch (error) {
+          this.#emitError(error)
+        }
+      }
       this.#removeListeners()
     })
   }
@@ -260,6 +268,10 @@ export class BinanceWebSocketApiClient {
 
   onError(listener) {
     return this.#subscribe(this.#errorListeners, listener, "error")
+  }
+
+  onClose(listener) {
+    return this.#subscribe(this.#closeListeners, listener, "close")
   }
 
   async disconnect() {
@@ -395,5 +407,6 @@ export class BinanceWebSocketApiClient {
     this.#removeCloseListener?.()
     this.#eventListeners.clear()
     this.#errorListeners.clear()
+    this.#closeListeners.clear()
   }
 }

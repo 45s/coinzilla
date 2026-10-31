@@ -56,6 +56,149 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.equal(rpc.calls.length, 2)
   })
 
+
+  it("filters stale subscriptions and deduplicates repeated execution reports", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 21 }))
+    broker.connected = true
+    const received = []
+    const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
+
+    const report = {
+      e: "executionReport",
+      s: "BTCUSDT",
+      i: 100,
+      I: 200,
+      x: "TRADE",
+      X: "FILLED",
+      c: "client-100",
+      S: "BUY",
+      o: "LIMIT",
+      q: "1.000",
+      p: "100",
+      z: "1.000",
+      l: "1.000",
+      L: "100",
+      n: "0",
+      N: null,
+      T: 300,
+      t: 400,
+      E: 301,
+    }
+
+    rpc.emitEvent({ subscriptionId: 20, event: report })
+    rpc.emitEvent({ subscriptionId: 21, event: report })
+    rpc.emitEvent({ subscriptionId: 21, event: structuredClone(report) })
+    rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
+
+    assert.equal(received.length, 2)
+    await result.data.disconnect()
+  })
+
+  it("reports explicit stream termination as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 22 }))
+    broker.connected = true
+    const received = []
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: (event) => received.push(event),
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: 22,
+      event: { e: "eventStreamTerminated", E: 123456 },
+    })
+
+    assert.deepEqual(statuses, [{
+      type: "terminated",
+      subscriptionId: 22,
+      eventTime: 123456,
+      recoveryRequired: true,
+    }])
+    assert.deepEqual(received, [{
+      event: { e: "eventStreamTerminated", E: 123456 },
+    }])
+    await result.data.disconnect()
+  })
+
+
+  it("reports an unexpected API socket close as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 23 }))
+    broker.connected = true
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: () => {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+    assert.deepEqual(statuses, [{
+      type: "connectionClosed",
+      code: 1006,
+      reason: "network lost",
+      recoveryRequired: true,
+    }])
+    assert.equal(broker.connected, false)
+    await result.data.disconnect()
+  })
+
+  it("does not report intentional broker shutdown as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 24 }))
+    broker.connected = true
+    const statuses = []
+    await broker.subscribeForUserData({
+      onEvent: () => {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    await broker.disconnect()
+    assert.deepEqual(statuses, [])
+    assert.equal(rpc.state, "closed")
+  })
+
+
+  it("blocks new orders after the user-data stream terminates", async () => {
+    const { broker, rpc } = createBroker(() => ({ subscriptionId: 25 }))
+    broker.connected = true
+    const subscription = await broker.subscribeForUserData({ onEvent: () => {} })
+
+    rpc.emitEvent({
+      subscriptionId: 25,
+      event: { e: "eventStreamTerminated", E: 123457 },
+    })
+
+    const order = await broker.createOrder({
+      symbol: "BTCUSDT",
+      quantity: "0.01",
+      price: "50000",
+    })
+
+    assert.equal(order.ok, false)
+    assert.match(order.errors[0].message, /user-data stream is unavailable/)
+    assert.equal(rpc.calls.some((call) => call.method === "order.place"), false)
+    await subscription.data.disconnect()
+  })
+
+  it("blocks new orders when user-data subscription setup fails", async () => {
+    const { broker, rpc } = createBroker(async () => {
+      throw new Error("subscription rejected")
+    })
+    broker.connected = true
+
+    const subscription = await broker.subscribeForUserData({ onEvent: () => {} })
+    const order = await broker.createOrder({
+      symbol: "BTCUSDT",
+      quantity: "0.01",
+      price: "50000",
+    })
+
+    assert.equal(subscription.ok, false)
+    assert.equal(order.ok, false)
+    assert.match(order.errors[0].message, /user-data stream is unavailable/)
+    assert.equal(rpc.calls.some((call) => call.method === "order.place"), false)
+  })
+
   it("removes its event listener when subscription setup fails", async () => {
     const { broker, rpc } = createBroker(async () => { throw new Error("user stream unavailable") })
     broker.connected = true

@@ -59,7 +59,7 @@ The current bot consumer invokes these broker operations:
 | Consumer operation | When/why used | Required compatibility |
 |---|---|---|
 | `connect()` / `disconnect()` | Broker startup and shutdown | Promise lifecycle; safe cleanup on partial startup failure. |
-| `subscribeForUserData({ onEvent })` | Account/order execution events | Resolve to the existing result shape; invoke callback with `{ event: adaptedEvent }`. |
+| `subscribeForUserData({ onEvent, onStatus? })` | Account/order execution events and lifecycle signals | Preserve the existing `{ event: adaptedEvent }` callback. Optional `onStatus` reports explicit stream termination, RPC errors, and unexpected socket closure with `recoveryRequired: true`; existing consumers may omit it. |
 | `subscribeForPrices({ symbol, onPrice })` | Per-symbol aggregate trade prices | Lowercase stream symbol; callback receives the existing adapted aggregate-trade shape. |
 | `getSymbolFilters({ symbol })` | Load symbol metadata before trading | Preserve `symbol`, `baseAsset`, `quoteAsset`, string `tickSize`, string `stepSize`, and `supportedOrderTypes`. |
 | `createOrder(input)` | Submit bot orders | Preserve accepted input fields, `clientOrderId` mapping, defaults, and adapted order result. |
@@ -78,6 +78,24 @@ Other SDK broker methods are public compatibility candidates even though the cur
 - `getPrices({ symbol })`
 
 Do not silently drop these merely because the current bot does not call them. Their public export and existing tests mean they remain in the broker contract until the project deliberately narrows that contract.
+
+
+### User-data lifecycle and event identity (Phase 6)
+
+Binance wraps each user-data event with a `subscriptionId`. The broker forwards only events matching the active subscription. An `eventStreamTerminated` envelope is a subscription lifecycle signal, not an order/account update; it is reported through `onStatus` and is still forwarded in the existing `onEvent({ event })` shape for compatibility.
+
+The optional `onStatus` callback currently reports:
+- `{ type: "terminated", subscriptionId, eventTime, recoveryRequired: true }`
+- `{ type: "rpcError", error, recoveryRequired: false }`
+- `{ type: "connectionClosed", code, reason, recoveryRequired: true }`
+
+Intentional broker shutdown is not reported as an unexpected recovery gap. Unexpected API socket closure is logged even when no `onStatus` callback is supplied. After a subscription attempt fails, terminates, is explicitly disconnected, or loses its API socket, the broker fails closed for new `createOrder()` calls until a new user-data subscription succeeds. The callback is additive; the existing bot consumer does not currently pass it.
+
+Execution reports can be deduplicated using the documented `symbol`, `orderId`, and `executionId` tuple. Other event types do not expose a universal unique event ID, so the current bounded fallback cache suppresses only exact repeated payloads. This is best-effort idempotency, not a claim that all semantic duplicates can be recognized.
+
+Do not treat `E` (event time), `T` (transaction time), or `u` (account update time) as a global monotonic sequence or replay cursor. A connection interruption means events may have been missed. Current snapshots from `account.status` and `openOrders.status`, plus symbol-scoped `myTrades` / `allOrders` queries, can reconcile present state and known order history but cannot reconstruct every missed intermediate balance delta.
+
+Phase 6A adds lifecycle observability and bounded event deduplication. Automatic reconnect, remote resubscription, callback fan-out, and consumer reconciliation remain Phase 6B work; do not treat Phase 6 as complete until those exit criteria are met.
 
 ## 4. Binance WebSocket API method matrix
 
