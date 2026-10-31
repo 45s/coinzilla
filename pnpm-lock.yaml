@@ -171,6 +171,9 @@ importers:
 
   apps/bot-free-roll:
     dependencies:
+      '@coinzilla/entities':
+        specifier: workspace:*
+        version: link:../../packages/entities
       '@coinzilla/brokers':
         specifier: workspace:*
         version: link:../../packages/brokers
@@ -186,9 +189,6 @@ importers:
 
   packages/brokers:
     dependencies:
-      '@binance/spot':
-        specifier: ^34.0.3
-        version: 34.0.3(debug@4.4.3)
       '@coinzilla/entities':
         specifier: workspace:*
         version: link:../entities
@@ -220,12 +220,6 @@ importers:
   packages/utils: {}
 
 packages:
-
-  '@binance/common@2.5.1':
-    resolution: {integrity: sha512-oF7hk1fgss04U4udzn/csXD9J048iIHve86hwAl5XBZSSvCV03pUXiW5n+557ijJJYdPyRvg8V+mIMGl3VdmvQ==}
-
-  '@binance/spot@34.0.3':
-    resolution: {integrity: sha512-5+PIG7d/ymHEumHTdrPZ3FVLxqETZ35iDGnEmAng5bdzEV1bHQU1VLgvAs4thls+iY2wKd5l9Lql+8otUPOIOw==}
 
   '@types/node@26.6.5':
     resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
@@ -366,30 +360,6 @@ packages:
         optional: true
 
 snapshots:
-
-  '@binance/common@2.5.1(debug@4.4.3)':
-    dependencies:
-      '@types/ws': 8.18.2
-      axios: 1.20.0(debug@4.4.3)
-      json-with-bigint: 3.5.12
-      ws: 8.22.0
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
-
-  '@binance/spot@34.0.3(debug@4.4.3)':
-    dependencies:
-      '@binance/common': 2.5.1(debug@4.4.3)
-      '@types/ws': 8.18.2
-      axios: 1.20.0(debug@4.4.3)
-      ws: 8.22.0
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
 
   '@types/node@26.6.5':
     dependencies:

@@ -1,3 +1,5 @@
+import { normalizeBinanceId } from "./normalize-binance-id.js"
+
 export function adaptTrade(trade) {
   if (!trade || typeof trade !== "object") {
     throw new Error("Binance trade must be an object")
@@ -15,8 +17,8 @@ export function adaptTrade(trade) {
   }
 
   return {
-    id: String(trade.id),
-    orderId: String(trade.orderId),
+    id: normalizeBinanceId(trade.id, "trade ID"),
+    orderId: normalizeBinanceId(trade.orderId, "order ID"),
     symbol: trade.symbol,
     side: trade.isBuyer ? "BUY" : "SELL",
     price: String(trade.price),

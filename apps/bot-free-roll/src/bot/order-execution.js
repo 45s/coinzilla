@@ -57,7 +57,14 @@ export function createOrderExecution({
       if (!id) throw new Error(`${symbol}: BUY response missing order ID`)
 
       state.trackedOrderIds.add(id)
-      state.buyOrder = { id, side: "BUY", quantity, price: String(price) }
+      state.buyOrder = {
+        id,
+        ...(order.clientOrderId ? { clientOrderId: order.clientOrderId } : {}),
+        side: "BUY",
+        type: state.orderType,
+        quantity,
+        price: String(price),
+      }
       state.lastAdjustmentPrice = Number(
         (price / (1 - state.settings.priceStepPercent / 100)).toFixed(
           state.settings.pricePrecision,
@@ -287,7 +294,9 @@ export function createOrderExecution({
       state.trackedOrderIds.add(id)
       state.sellOrder = {
         id,
+        ...(order.clientOrderId ? { clientOrderId: order.clientOrderId } : {}),
         side: "SELL",
+        type: state.orderType,
         quantity: plan.quantity,
         price: plan.price,
       }

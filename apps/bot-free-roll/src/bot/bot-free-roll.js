@@ -5,7 +5,6 @@ import {
   validateConfig,
   calculateBuyThresholdExact,
   addDecimal,
-  maxDecimal,
   compareDecimal,
   subtractDecimal,
   getConfiguredSellFeeRateExact,
@@ -14,9 +13,12 @@ import {
   roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
-import { reconcileExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
+import { reconcileExecutionFill, reconcileFillHistory, toExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
+import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
+import { collectReconciliationSnapshot } from "./reconciliation-snapshot.js"
+import { allocateFreeInventory } from "./inventory-allocation.js"
 
 const TERMINAL_FAILURES = new Set([
   "CANCELED",
@@ -32,6 +34,10 @@ export class FreeRollBot {
   #isEnabled = true
   #subscriptions = new Map()
   #userDataSubscription = null
+  #isRecovering = false
+  #recoveryPromise = null
+  #bufferedUserDataEvents = []
+  #recoveryBufferOverflow = false
   #states = new Map()
   #queue
   #startedAt = null
@@ -59,7 +65,7 @@ export class FreeRollBot {
     this.eventBus = eventBus
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
-      isRunning: () => this.#isRunning,
+      isRunning: () => this.#isRunning && !this.#isRecovering,
       minProfit: () => this.settings.minProfit,
       publish: (name, data) => this.#publish(name, data),
       debug: (message, data) => this.#debug(message, data),
@@ -131,7 +137,9 @@ export class FreeRollBot {
         actualCommissionRate: "0",
         baseAsset: null,
         quoteAsset: null,
+        marketInventory: null,
         trackedOrderIds: new Set(),
+        ledgerEntries: Object.freeze([]),
         processedTradeIds: new Set(),
         fills: new Map(),
         fillsByOrder: new Map(),
@@ -229,8 +237,18 @@ export class FreeRollBot {
 
       const userData = unwrapResult(
         await this.broker.subscribeForUserData({
-          onEvent: (payload) =>
-            this.#eventHandling.onUserDataEvent({ payload }),
+          onEvent: (payload) => {
+            if (this.#isRecovering) {
+              if (this.#bufferedUserDataEvents.length >= 10_000) {
+                this.#recoveryBufferOverflow = true
+                return
+              }
+              this.#bufferedUserDataEvents.push(payload)
+              return
+            }
+            this.#eventHandling.onUserDataEvent({ payload })
+          },
+          onStatus: (status) => this.#handleUserDataStatus(status),
         }),
         "subscribeForUserData",
       )
@@ -264,6 +282,8 @@ export class FreeRollBot {
   async stop() {
     this.#debug("Stopping bot")
     this.#isRunning = false
+    this.#isRecovering = false
+    this.#bufferedUserDataEvents = []
     await this.#disconnectSubscriptions()
     await this.#queue.drain()
 
@@ -307,6 +327,7 @@ export class FreeRollBot {
     return {
       runtimeMs: this.#startedAt === null ? 0 : Date.now() - this.#startedAt,
       running: this.#isRunning,
+      recovering: this.#isRecovering,
       configuredFeeRates: Object.fromEntries(
         [...this.#states].map(([symbol, state]) => [symbol, state.configuredFeeRate]),
       ),
@@ -322,6 +343,208 @@ export class FreeRollBot {
       minProfit: this.settings.minProfit,
       confirmedBalances: Object.fromEntries(this.#confirmedBalances),
       pairs: this.getStats(),
+    }
+  }
+
+  #handleUserDataStatus(status) {
+    if (!status?.recoveryRequired) return
+
+    if ([
+      "connectionClosed",
+      "terminated",
+      "recovering",
+      "recovered",
+      "recoveryFailed",
+    ].includes(status.type)) {
+      this.#isRecovering = true
+    }
+
+    if (status.type === "recovered") {
+      this.#startUserDataRecovery()
+    }
+  }
+
+  #startUserDataRecovery() {
+    if (this.#recoveryPromise || !this.#isRunning) return
+
+    this.#recoveryPromise = this.#runUserDataRecovery()
+      .catch((error) => {
+        try {
+          this.logger.error?.("Free-Roll user-data recovery failed; trading remains gated", {
+            error,
+          })
+        } catch {
+          // Recovery must remain fail-closed even when logging fails.
+        }
+        this.#publish("bot.recovery_failed", {
+          reason: error?.message ?? String(error),
+        })
+      })
+      .finally(() => {
+        this.#recoveryPromise = null
+      })
+  }
+
+  async #runUserDataRecovery() {
+    if (this.#recoveryBufferOverflow) {
+      throw new Error("User-data recovery event buffer capacity was exceeded")
+    }
+
+    await this.#queue.drain()
+    await this.#reconcileUserDataState()
+
+    while (this.#bufferedUserDataEvents.length > 0) {
+      if (!this.#isRunning || this.#recoveryBufferOverflow) {
+        throw new Error("User-data recovery was interrupted before event replay completed")
+      }
+
+      const pendingEvents = this.#bufferedUserDataEvents.splice(0)
+      for (const payload of pendingEvents) {
+        this.#eventHandling.onUserDataEvent({ payload })
+      }
+      await this.#queue.drain()
+    }
+
+    if (!this.#isRunning || this.#recoveryBufferOverflow) {
+      throw new Error("User-data recovery was interrupted before acknowledgement")
+    }
+
+    const acknowledgeRecovery = this.#userDataSubscription?.acknowledgeRecovery
+    if (typeof acknowledgeRecovery !== "function" || acknowledgeRecovery() !== true) {
+      throw new Error("Broker did not accept the user-data recovery acknowledgement")
+    }
+
+    this.#isRecovering = false
+    this.#recoveryBufferOverflow = false
+
+    for (const [symbol, state] of this.#states) {
+      if (!state.paused && !state.buyOrder && !state.sellOrder &&
+          compareDecimal({ left: state.activeQuantity, right: "0" }) > 0) {
+        await this.#replaceSell(symbol)
+      }
+    }
+
+    this.#publish("bot.recovery_completed", {
+      summary: this.getSummary(),
+    })
+  }
+
+  async #reconcileUserDataState() {
+    const trackedOrdersBySymbol = Object.fromEntries(
+      [...this.#states].map(([symbol, state]) => [
+        symbol,
+        [state.buyOrder, state.sellOrder].filter(Boolean),
+      ]),
+    )
+    const snapshotResult = await collectReconciliationSnapshot({
+      broker: this.broker,
+      trackedOrdersBySymbol,
+      isActive: () => this.#isRunning,
+    })
+    if (!snapshotResult.ok) {
+      throw new Error(snapshotResult.reason)
+    }
+    if (!this.#isRunning) {
+      throw new Error("Bot stopped during user-data snapshot reconciliation")
+    }
+
+    const snapshot = snapshotResult.snapshot
+    const balanceResult = validateRecoveryBalances({
+      balances: snapshot.account.balances,
+    })
+    if (!balanceResult.ok) throw new Error(balanceResult.reason)
+
+    this.#confirmedBalances.clear()
+    for (const [asset, amounts] of balanceResult.balances) {
+      this.#confirmedBalances.set(asset, {
+        free: amounts.free,
+        locked: amounts.locked,
+      })
+    }
+
+    for (const [symbol, state] of this.#states) {
+      const symbolSnapshot = snapshot.symbols[symbol]
+      const openOrders = symbolSnapshot.openOrders.items
+      const trackedOrders = [state.buyOrder, state.sellOrder].filter(Boolean)
+      const trackedIds = new Set(trackedOrders.map((order) => getOrderId(order)))
+      const unexpectedOrder = openOrders.find(
+        (order) => !trackedIds.has(getOrderId(order)),
+      )
+      if (unexpectedOrder) {
+        throw new Error(
+          `Unexpected open order ${getOrderId(unexpectedOrder) ?? "unknown"} found for ${symbol}`,
+        )
+      }
+
+      for (const order of trackedOrders) {
+        const orderId = getOrderId(order)
+        const canonicalOrder = symbolSnapshot.orderHistory.items.find(
+          (item) => item.brokerOrderId === orderId,
+        )
+        if (!canonicalOrder) {
+          throw new Error(`Canonical order history is missing tracked order ${orderId}`)
+        }
+        const identityValidation = validateTrackedOrderIdentity({
+          symbol,
+          order,
+          canonicalOrder,
+          expectedType: state.orderType,
+        })
+        if (!identityValidation.ok) throw new Error(identityValidation.reason)
+
+        const canonicalFills = symbolSnapshot.fills.items.filter(
+          (fill) => fill.brokerOrderId === orderId,
+        )
+        const fillHistory = reconcileFillHistory({
+          localFills: [...state.fills.values()].filter(
+            (fill) => String(fill.orderId) === orderId,
+          ),
+          canonicalFills,
+          symbol,
+          order,
+        })
+        if (!fillHistory.ok) throw new Error(fillHistory.reason)
+
+        const fills = canonicalFills.map((fill) => {
+          const execution = toExecutionFill({ fill })
+          if (!execution.ok) throw new Error(execution.reason)
+          return execution.fill
+        })
+
+        for (const fill of fillHistory.missingFills) {
+          const execution = toExecutionFill({ fill })
+          if (!execution.ok) throw new Error(execution.reason)
+          if (!this.#applyExecutionFill({ symbol, fill: execution.fill })) {
+            throw new Error(`Could not backfill recovered fill ${execution.fill?.id ?? "unknown"}`)
+          }
+        }
+
+        const reconciliation = reconcileTrackedOrder({
+          symbol,
+          order,
+          openOrders,
+          fills,
+        })
+        if (!reconciliation.ok) throw new Error(reconciliation.reason)
+        if (canonicalOrder.executedQuantity.amount !== reconciliation.historyQuantity) {
+          throw new Error(`Canonical execution quantity does not match recovered fills for order ${orderId}`)
+        }
+        if (
+          (reconciliation.status === "FILLED" && canonicalOrder.status !== "FILLED") ||
+          (reconciliation.status === "OPEN" &&
+            !["OPEN", "PARTIALLY_FILLED"].includes(canonicalOrder.status))
+        ) {
+          throw new Error(`Canonical lifecycle status does not match recovered order ${orderId}`)
+        }
+
+        if (reconciliation.status === "FILLED") {
+          if (order.side === "BUY") {
+            await this.#handleBuyFilled(symbol)
+          } else {
+            await this.#handleSellFilled(symbol)
+          }
+        }
+      }
     }
   }
 
@@ -447,7 +670,7 @@ export class FreeRollBot {
       state.lastPriceLogKey = priceLogKey
     }
 
-    if (!this.#isRunning || state.paused) return
+    if (!this.#isRunning || this.#isRecovering || state.paused) return
 
     if (state.buyOrder) {
       // Only the initial BUY trails. Once it fills, subsequent BUYs stay fixed.
@@ -531,7 +754,19 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id || !state.trackedOrderIds.has(id)) return
+    if (!state) return
+    if (!id) {
+      if (event.executionType === "TRADE" || event.fill) {
+        this.#pause(symbol, "Received a fill event without a broker order ID")
+      }
+      return
+    }
+    if (!state.trackedOrderIds.has(id)) {
+      if (event.executionType === "TRADE" || event.fill) {
+        this.#pause(symbol, `Received a fill for untracked order ${id}`)
+      }
+      return
+    }
 
     if (event.executionType === "TRADE") {
       if (!event.fill) {
@@ -754,11 +989,13 @@ export class FreeRollBot {
         right: state.cycleCost,
       }),
     })
-    state.freeQuantity = addDecimal({
-      left: state.freeQuantity,
-      right: maxDecimal({ left: "0", right: state.activeQuantity }),
+    const allocation = allocateFreeInventory({
+      activeQuantity: state.activeQuantity,
+      freeQuantity: state.freeQuantity,
+      keepQuantity: String(state.settings.keepQuantity),
     })
-    state.activeQuantity = "0"
+    state.freeQuantity = allocation.freeQuantity
+    state.activeQuantity = allocation.activeQuantity
     state.cycleCost = "0"
     state.saleProceeds = "0"
     state.actualCommissionRate = "0"
@@ -766,7 +1003,9 @@ export class FreeRollBot {
     state.trailingBuy = true
 
     this.#debug(`[${symbol}] Recovery cycle completed`, {
+      allocatedFreeQuantity: allocation.allocatedQuantity,
       freeQuantity: state.freeQuantity,
+      remainingActiveQuantity: state.activeQuantity,
     })
 
     this.#publishTradingSummary({ symbol, reason: "profitable_cycle_completed" })

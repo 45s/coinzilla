@@ -1,6 +1,6 @@
 # Coinzilla — Free-Roll Strategy
 
-**Document version:** `v0.011`
+**Document version:** `v0.014`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
@@ -325,6 +325,18 @@ If the outstanding buy order subsequently fills, the new purchase starts or exte
 
 If any order is partially filled, the strategy waits until that order is fully filled before proceeding to the next strategy step. A partial fill does not trigger position recalculation for the purpose of advancing the strategy, a replacement order, or another buy/sell decision. The order remains in progress; the strategy must continue observing and reconciling its status and executions. Fill-level records still need to be captured accurately, including while the order is partially filled.
 
+### Immutable execution records
+
+Each accepted fill is captured as an immutable record containing its trade ID, broker order ID, market, side, exact price/quantity/quote values, and reported commission facts. Repeated identical fills are idempotent; reusing a trade ID with changed execution facts is treated as an accounting discrepancy and pauses the pair.
+
+The current replay projection reconstructs execution-derived accounting for one recovery window. It is not durable storage and does not yet reconstruct completed-cycle, free, reserved, or external inventory events. Those remain separate roadmap work under FR-038–FR-046 and FR-062/FR-063.
+
+### Per-market inventory accounting
+
+Each market now maintains its own strategy-owned base quantity, signed quote cash flow, and commission totals by asset. A fill whose symbol does not match that market ledger is rejected; base and quote values are never mixed across pairs.
+
+Explicitly attributed deposits, withdrawals, or other unmanaged movements are recorded in a separate bucket using stable source IDs. They do not change strategy-owned quantities or cash flow. That bucket remains marked `unreconciled` until account-balance reconciliation can establish the complete external position; the bot does not assume that an exchange balance belongs to the strategy.
+
 ### Cancellation and replacement safety
 
 A cancellation request does not guarantee that an order had zero fills.
@@ -365,7 +377,7 @@ Example for ZRO:
 - `orderQuantity`: 5 ZRO
 - `keepQuantity`: 0.01 ZRO
 
-A completed recovery cycle involving 5 ZRO should retain 0.01 ZRO and sell 4.99 ZRO, assuming all quantities and exchange rules permit this.
+A completed recovery cycle involving 5 ZRO allocates exactly 0.01 ZRO to free inventory. The planned SELL may be smaller than 4.99 ZRO when a conservative base-fee allowance or exchange quantity-step rounding is required. Any additional unsold ZRO remains active strategy inventory; it is not silently added to free inventory.
 
 ### Important distinction
 
@@ -383,7 +395,11 @@ For example:
 
 The free-coin amount shown in this table assumes the corresponding recovery sale subsequently completes and the required accounting conditions are satisfied.
 
-Free coins are allocated only after the recovery SELL is fully filled and the actual net profit meets `minProfit`. If the SELL is canceled after a partial fill, allocate no free coins: reconcile the actual execution, and keep the remaining position active. A partial fill or order status alone never creates free inventory.
+Free coins are allocated only after the recovery SELL is fully filled and the actual net profit meets `minProfit`. At that point, transfer **exactly `keepQuantity`** from the remaining active inventory to the free-inventory bucket. Do not transfer the entire residual position.
+
+If the residual position is larger than `keepQuantity` because of conservative fee allowance, actual fee treatment, or quantity-step rounding, allocate only `keepQuantity`; leave the excess in active strategy inventory for the next recovery cycle. The completed cycle's recovered cost and sale proceeds are reset, so this carry-forward residual has no unrecovered cycle cost. It remains eligible for future strategy SELL planning, while the free-inventory bucket remains permanently excluded.
+
+If the residual position is smaller than `keepQuantity`, pause the pair and allocate nothing. If the SELL is canceled after a partial fill, allocate no free coins: reconcile the actual execution, and keep the remaining position active. A partial fill or order status alone never creates free inventory.
 
 ### Separate accounting buckets
 

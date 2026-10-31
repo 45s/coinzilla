@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 
 import { FreeRollBot } from "./bot-free-roll.js"
 import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/index.js"
@@ -46,6 +47,104 @@ function createMarketFilters() {
     quoteAsset: "USDT",
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }
+}
+
+
+const dogeAsset = new Asset({ id: "doge", code: "DOGE" })
+const usdtAsset = new Asset({ id: "usdt", code: "USDT" })
+const dogeUsdtMarket = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset: dogeAsset,
+  quoteAsset: usdtAsset,
+})
+
+function createRecoveryBalance({ free = "10000", locked = "0" } = {}) {
+  return new Balance({
+    free: new Quantity({ amount: free, asset: usdtAsset }),
+    locked: new Quantity({ amount: locked, asset: usdtAsset }),
+  })
+}
+
+function createRecoverySnapshotPorts({
+  createdOrders = [],
+  calls = [],
+  getExecution = () => ({ status: "OPEN", executedQuantity: "0", fills: [] }),
+  openOrdersForSymbol = () => [],
+  accountSnapshotFactory,
+} = {}) {
+  let serverTime = 1000
+
+  return {
+    async getServerTime() {
+      calls.push("getServerTime")
+      serverTime += 10
+      return { ok: true, data: { serverTime } }
+    },
+    async getAccountSnapshot() {
+      calls.push("getAccountSnapshot")
+      if (accountSnapshotFactory) return accountSnapshotFactory({ serverTime })
+      return {
+        ok: true,
+        data: {
+          balances: [createRecoveryBalance()],
+          sourceTime: serverTime,
+        },
+      }
+    },
+    async getOpenOrders({ symbol }) {
+      calls.push("getOpenOrders")
+      return { ok: true, data: openOrdersForSymbol({ symbol, createdOrders }) }
+    },
+    async getCanonicalOrderHistory({ symbol, orderId }) {
+      calls.push("getCanonicalOrderHistory")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      if (!order) return { ok: true, data: [] }
+      const execution = getExecution({ order, orderId })
+      const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(execution.status)
+      return {
+        ok: true,
+        data: [new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: orderId,
+          market: dogeUsdtMarket,
+          side: order.side,
+          type: order.type ?? "LIMIT",
+          limitPrice: new Money({ amount: String(order.price), asset: usdtAsset }),
+          originalQuantity: new Quantity({ amount: String(order.quantity), asset: dogeAsset }),
+          executedQuantity: new Quantity({ amount: execution.executedQuantity, asset: dogeAsset }),
+          status: execution.status,
+          createdAt: 1000,
+          updatedAt: 1010,
+          ...(terminal ? { completedAt: 1010 } : {}),
+        })],
+      }
+    },
+    async getFills({ symbol, orderId }) {
+      calls.push("getFills")
+      const order = createdOrders.find((item) => String(item.orderId) === orderId)
+      return { ok: true, data: order ? getExecution({ order, orderId }).fills : [] }
+    },
+  }
+}
+
+function createRecoveryFill({ tradeId, orderId, side = "BUY", quantity, price = "100" }) {
+  return new Fill({
+    tradeId: String(tradeId),
+    brokerOrderId: String(orderId),
+    market: dogeUsdtMarket,
+    side,
+    price: new Money({ amount: price, asset: usdtAsset }),
+    quantity: new Quantity({ amount: quantity, asset: dogeAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: quantity, right: price }),
+      asset: usdtAsset,
+    }),
+    liquidityRole: "MAKER",
+    executedAt: 1010,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
 }
 
 function createExecutionEvent({
@@ -378,6 +477,8 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     assert.equal(stats.profitableCycles, 1)
     assert.equal(stats.cycleCost, "0")
     assert.equal(stats.saleProceeds, "0")
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0")
     assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
     assert.ok(createdOrders.every((order) => order.type === "LIMIT_MAKER"))
@@ -489,6 +590,8 @@ test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recover
     assert.equal(stats.buyFills, 1)
     assert.equal(stats.sellFills, 1)
     assert.equal(stats.profitableCycles, 1)
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0.925")
     assert.ok(compareDecimal({
       left: stats.estimatedRealizedProfit,
       right: "0.01",
@@ -2329,7 +2432,7 @@ test("terminal SELL order failure pauses the pair instead of continuing the stra
   }
 })
 
-async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
+async function createActiveSellFixture({ cancelOrder, getMyTrades, pair = createPair() } = {}) {
   const priceHandlers = new Map()
   const createdOrders = []
   const events = []
@@ -2375,7 +2478,7 @@ async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
       strategies: {
         "free-roll": {
           settings: { minProfit: 0.01 },
-          pairs: { DOGEUSDT: createPair() },
+          pairs: { DOGEUSDT: pair },
         },
       },
     },
@@ -2389,6 +2492,63 @@ async function createActiveSellFixture({ cancelOrder, getMyTrades } = {}) {
 
   return { bot, userDataHandler, createdOrders, events, priceHandlers }
 }
+
+test("successful base-asset SELL commission allocates only keepQuantity", async () => {
+  const fixture = await createActiveSellFixture({
+    pair: createPair({ makerPercent: 0.075, takerPercent: 0.075 }),
+  })
+
+  try {
+    const sell = fixture.createdOrders.find((order) => order.side === "SELL")
+    fixture.userDataHandler(createExecutionEvent({
+      order: sell,
+      tradeId: 1105,
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    }))
+
+    await waitForCondition(
+      () => fixture.bot.getStats().DOGEUSDT.profitableCycles === 1,
+      "base-commission recovery did not complete",
+    )
+
+    const firstStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(firstStats.commissionTotals.DOGE, "0.01")
+    assert.equal(firstStats.freeQuantity, "1")
+    assert.equal(firstStats.activeQuantity, "0.99")
+    assert.equal(firstStats.paused, false)
+
+    const nextBuy = fixture.createdOrders.filter((order) => order.side === "BUY")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextBuy,
+      tradeId: 1106,
+    }))
+    await waitForCondition(
+      () => fixture.createdOrders.filter((order) => order.side === "SELL").length === 2,
+      "next recovery SELL was not created with carry-forward inventory",
+    )
+
+    const nextSell = fixture.createdOrders.filter((order) => order.side === "SELL")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextSell,
+      tradeId: 1107,
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    }))
+    await waitForCondition(
+      () => fixture.bot.getStats().DOGEUSDT.profitableCycles === 2,
+      "second base-commission recovery did not complete",
+    )
+
+    const secondStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(secondStats.commissionTotals.DOGE, "0.02")
+    assert.equal(secondStats.freeQuantity, "2")
+    assert.equal(secondStats.activeQuantity, "0.98")
+    assert.equal(secondStats.paused, false)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
 
 test("SELL fill that consumes more base inventory than owned pauses without negative inventory", async () => {
   const priceHandlers = new Map()
@@ -2637,5 +2797,575 @@ test("fully filled SELL discovered during cancellation is reconciled before repl
       event.data.reason === "Completed sale did not meet estimated profit target"))
   } finally {
     await fixture.bot.stop()
+  }
+})
+
+
+test("reconciles balances and tracked fills before acknowledging user-data recovery", async () => {
+  const calls = []
+  const createdOrders = []
+  let onPrice
+  let onStatus
+  let acknowledgeRecovery = false
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        calls,
+        getExecution: ({ orderId }) => ({
+          status: "FILLED",
+          executedQuantity: "100",
+          fills: [createRecoveryFill({
+            tradeId: "101",
+            orderId,
+            quantity: "100",
+          })],
+        }),
+      }),
+      subscribeForUserData: async ({ onEvent: _onEvent, onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              calls.push("acknowledgeRecovery")
+              acknowledgeRecovery = true
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const orderId = String(createdOrders.length + 1)
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => acknowledgeRecovery && createdOrders.some((order) => order.side === "SELL"),
+      "recovery did not reconcile and resume the SELL plan",
+    )
+
+    assert.ok(calls.indexOf("getAccountSnapshot") < calls.indexOf("getOpenOrders"))
+    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getCanonicalOrderHistory"))
+    assert.ok(calls.indexOf("getCanonicalOrderHistory") < calls.indexOf("getFills"))
+    assert.ok(calls.indexOf("getFills") < calls.indexOf("acknowledgeRecovery"))
+    assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "100")
+    assert.equal(bot.getSummary().recovering, false)
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("keeps trading gated and does not acknowledge recovery when a missing order has partial history", async () => {
+  const createdOrders = []
+  const calls = []
+  let onPrice
+  let onStatus
+  let acknowledgeCalls = 0
+  const recoveryFailures = []
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        calls,
+        getExecution: ({ orderId }) => ({
+          status: "PARTIALLY_FILLED",
+          executedQuantity: "50",
+          fills: [createRecoveryFill({
+            tradeId: "102",
+            orderId,
+            quantity: "50",
+          })],
+        }),
+      }),
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgeCalls += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const orderId = String(createdOrders.length + 1)
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "bot.recovery_failed") recoveryFailures.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => recoveryFailures.length === 1,
+      "incomplete recovery was not reported",
+    )
+
+    onStatus({ type: "recovered", recoveryRequired: true })
+    await waitForCondition(
+      () => recoveryFailures.length === 2,
+      "a repeated recovery-ready notification did not retry reconciliation",
+    )
+
+    assert.equal(calls.filter((call) => call === "getAccountSnapshot").length, 2)
+    assert.equal(acknowledgeCalls, 0)
+    assert.equal(bot.getSummary().recovering, true)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "50")
+    assert.equal(createdOrders.some((order) => order.side === "SELL"), false)
+  } finally {
+    await bot.stop()
+  }
+})
+
+
+test("buffers user-data events during reconciliation and replays them before acknowledgement", async () => {
+  let onEvent
+  let onStatus
+  let onPrice
+  let releaseBalances
+  let acknowledged = false
+  let bot
+  const createdOrders = []
+  const balanceSnapshot = new Promise((resolve) => {
+    releaseBalances = resolve
+  })
+
+  bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        accountSnapshotFactory: () => balanceSnapshot,
+        openOrdersForSymbol: ({ createdOrders: orders }) => [{
+          id: orders[0]?.orderId,
+          symbol: "DOGEUSDT",
+          side: "BUY",
+          originalQuantity: "100",
+          executedQuantity: "0",
+          status: "NEW",
+        }],
+      }),
+      subscribeForUserData: async (callbacks) => {
+        onEvent = callbacks.onEvent
+        onStatus = callbacks.onStatus
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledged = true
+              assert.equal(bot.getStats().DOGEUSDT.fillCount, 1)
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async ({ onPrice: priceHandler }) => {
+        onPrice = priceHandler
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const orderId = String(createdOrders.length + 1)
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    onPrice({ price: 100 })
+    await waitForCondition(
+      () => createdOrders.some((order) => order.side === "BUY"),
+      "initial BUY was not created",
+    )
+
+    onStatus({ type: "connectionClosed", recoveryRequired: true })
+    onStatus({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => typeof releaseBalances === "function",
+      "balance reconciliation did not start",
+    )
+
+    const bufferedFillEvent = {
+      event: createExecutionEvent({
+        order: { orderId: "1", side: "BUY", quantity: "100", price: "100" },
+        tradeId: 99,
+        fillQuantity: "50",
+        status: "PARTIALLY_FILLED",
+      }),
+    }
+    onEvent(bufferedFillEvent)
+    onEvent(bufferedFillEvent)
+
+    releaseBalances({
+      ok: true,
+      data: {
+        balances: [createRecoveryBalance()],
+        sourceTime: 1010,
+      },
+    })
+
+    await waitForCondition(
+      () => acknowledged,
+      "buffered event was not replayed before recovery acknowledgement",
+    )
+
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 1)
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "50")
+    assert.equal(createdOrders.some((order) => order.side === "SELL"), false)
+  } finally {
+    await bot.stop()
+  }
+})
+
+
+test("reconciles repeated user-data interruptions without requiring a bot restart", async () => {
+  let onStatus
+  let acknowledgements = 0
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      ...createRecoverySnapshotPorts({ createdOrders: [] }),
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgements += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async () => ({ ok: true, data: { disconnect() {} } }),
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      onStatus({ type: "connectionClosed", recoveryRequired: true })
+      onStatus({ type: "recovered", recoveryRequired: true })
+      await waitForCondition(
+        () => acknowledgements === attempt && bot.getSummary().recovering === false,
+        `recovery attempt ${attempt} did not complete`,
+      )
+    }
+
+    assert.equal(acknowledgements, 2)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("does not acknowledge or continue reconciliation when shutdown begins during recovery", async () => {
+  let onStatus
+  let releaseBalances
+  let balanceRequestStarted = false
+  let acknowledgements = 0
+  let openOrderRequests = 0
+  const recoveryFailures = []
+  const balances = new Promise((resolve) => {
+    releaseBalances = resolve
+  })
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      ...createRecoverySnapshotPorts({
+        createdOrders: [],
+        accountSnapshotFactory: () => {
+          balanceRequestStarted = true
+          return balances
+        },
+        openOrdersForSymbol: () => {
+          openOrderRequests += 1
+          return []
+        },
+      }),
+      subscribeForUserData: async ({ onStatus: statusHandler }) => {
+        onStatus = statusHandler
+        return {
+          ok: true,
+          data: {
+            acknowledgeRecovery() {
+              acknowledgements += 1
+              return true
+            },
+            disconnect() {},
+          },
+        }
+      },
+      subscribeForPrices: async () => ({ ok: true, data: { disconnect() {} } }),
+    },
+    eventBus: {
+      publish(event) {
+        if (event.name === "bot.recovery_failed") recoveryFailures.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+  onStatus({ type: "connectionClosed", recoveryRequired: true })
+  onStatus({ type: "recovered", recoveryRequired: true })
+  await waitForCondition(
+    () => balanceRequestStarted,
+    "balance reconciliation did not start",
+  )
+
+  await bot.stop()
+  releaseBalances({ ok: true, data: { balances: [], sourceTime: 1010 } })
+
+  await waitForCondition(
+    () => recoveryFailures.length === 1,
+    "shutdown during recovery was not handled",
+  )
+
+  assert.equal(acknowledgements, 0)
+  assert.equal(openOrderRequests, 0)
+  assert.equal(bot.getSummary().running, false)
+})
+
+test("pauses when a live fill belongs to an order the strategy does not track", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler(createExecutionEvent({
+      order: { ...createdOrders[0], orderId: "manual-order", side: "BUY" },
+      tradeId: 999,
+    }))
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.paused,
+      "untracked fill did not pause the pair",
+    )
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 0)
+    assert.ok(events.some((event) =>
+      event.name === "bot.pair_paused" &&
+      /fill for untracked order manual-order/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("pauses when a live fill event is missing its broker order ID", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler({
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        status: "FILLED",
+        side: "BUY",
+        price: String(createdOrders[0].price),
+        quantity: String(createdOrders[0].quantity),
+      },
+      fill: {
+        id: "missing-order-id-trade",
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        price: String(createdOrders[0].price),
+        quantity: String(createdOrders[0].quantity),
+        quoteQuantity: multiplyDecimal({
+          left: String(createdOrders[0].price),
+          right: String(createdOrders[0].quantity),
+        }),
+        commissionAmount: "0",
+        commissionAsset: null,
+        isMaker: true,
+      },
+    })
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.paused,
+      "missing broker order ID did not pause the pair",
+    )
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.ok(events.some((event) =>
+      event.name === "bot.pair_paused" &&
+      /without a broker order ID/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
   }
 })

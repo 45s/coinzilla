@@ -11,15 +11,16 @@ This is a source-file baseline for `apps/bot-free-roll`, captured after the help
 
 | Source file | Lines | Branches | Current gate |
 |---|---:|---:|---:|
-| `bot-free-roll.js` | 97.45% | 87.78% | 95% / 75% |
+| `bot-free-roll.js` | 95.44% | 82.65% | 95% / 75% |
 | `event-handling.js` | 100.00% | 96.15% | 90% / 90% |
-| `fill-reconciliation.js` | 100.00% | 83.33% | 95% / 75% |
+| `fill-ledger.js` | 100.00% | 100.00% | 100% / 100% |
+| `fill-reconciliation.js` | 100.00% | 92.25% | 95% / 75% |
 | `helpers/accounting.js` | 100.00% | 100.00% | 90% / 85% |
 | `helpers/decimal.js` | 98.55% | 95.96% | 95% / 90% |
 | `helpers/order-planning.js` | 100.00% | 100.00% | 90% / 60% |
 | `helpers/price.js` | 96.90% | 95.83% | 80% / 65% |
 | `helpers/trading-rules.js` | 95.06% | 93.94% | 90% / 90% |
-| `order-execution.js` | 100.00% | 81.94% | 95% / 75% |
+| `order-execution.js` | 100.00% | 83.54% | 95% / 75% |
 | `prepare-broker.js` | 89.58% | 100.00% | 80% / 70% |
 | `validate-config.js` | 94.52% | 92.86% | 90% / 90% |
 
@@ -46,3 +47,23 @@ The workspace coverage workflow runs package tests separately. The Free-Roll app
 - Do not add tests solely to execute lines. Tests must assert observable behavior and safety invariants.
 - Raise thresholds only after the next relevant tests are merged and the new baseline is measured.
 - Review this baseline after substantial module extraction or changes to the Node test runner.
+
+## Follow-up: exact free-inventory allocation (PR #330)
+
+PR #330 adds `src/bot/inventory-allocation.js` as a dedicated pure source module. The Test Coverage workflow for PR #330 passed the newly added strict **100% line / 100% branch** gate for this module:
+
+- Source: `inventory-allocation.js`
+- Verified coverage: **100.00% lines / 100.00% branches**
+- Workflow: [Test Coverage run #41222339144](https://github.com/45s/coinzilla/actions/runs/41222339144)
+- Regression coverage includes exact allocation, retained residual inventory, repeated cycles, zero keep quantity, invalid amounts, insufficient inventory, deterministic output, and input immutability.
+
+
+## Follow-up: immutable execution fill ledger (PR #334)
+
+The final PR #334 Test Coverage workflow measured the new `src/bot/fill-ledger.js` module at **100.00% lines / 100.00% branches**. A strict 100% / 100% threshold is now enforced by `scripts/check-bot-coverage.js`.
+
+- Source: `fill-ledger.js`
+- Verified coverage: **100.00% lines / 100.00% branches**
+- Workflow: [Test Coverage run #41225135651](https://github.com/45s/coinzilla/actions/runs/41225135651)
+- The same run measured `fill-reconciliation.js` at 100.00% lines / 92.25% branches and `order-execution.js` at 100.00% lines / 83.54% branches.
+- Tests cover immutable snapshots, duplicate delivery, equivalent decimal formatting, zero-fee asset metadata, conflicting trade facts, invalid identifiers, malformed entries, partial-fill replay, mixed-asset commissions, and fail-closed replay.
