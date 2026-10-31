@@ -74,7 +74,7 @@ export function createMarketInventoryLedger({ market } = {}) {
 // Apply one already-identified market fill. The strategy projection and the
 // unmanaged movement bucket remain separate; account activity is never
 // silently counted as strategy inventory.
-export function applyMarketInventoryFill({ ledger, fill, accounting: suppliedAccounting } = {}) {
+export function applyMarketInventoryFill({ ledger, fill } = {}) {
   if (!isMarketInventoryLedger(ledger)) {
     return failure("Market inventory ledger is missing or invalid")
   }
@@ -104,21 +104,19 @@ export function applyMarketInventoryFill({ ledger, fill, accounting: suppliedAcc
     return failure(`Unsupported market fill side for trade ${fillId}`)
   }
 
-  let accounting = suppliedAccounting
-  if (!accounting) {
-    try {
-      accounting = calculateFillAccountingExact({
-        side: fill.side,
-        quantity: String(fill.quantity ?? ""),
-        quoteQuantity: String(fill.quoteQuantity ?? ""),
-        commissionAmount: String(fill.commissionAmount ?? ""),
-        commissionAsset: fill.commissionAsset ?? null,
-        baseAsset: ledger.market.baseAsset,
-        quoteAsset: ledger.market.quoteAsset,
-      })
-    } catch (error) {
-      return failure(`Invalid market fill accounting for trade ${fillId}: ${error.message}`)
-    }
+  let accounting
+  try {
+    accounting = calculateFillAccountingExact({
+      side: fill.side,
+      quantity: String(fill.quantity ?? ""),
+      quoteQuantity: String(fill.quoteQuantity ?? ""),
+      commissionAmount: String(fill.commissionAmount ?? ""),
+      commissionAsset: fill.commissionAsset ?? null,
+      baseAsset: ledger.market.baseAsset,
+      quoteAsset: ledger.market.quoteAsset,
+    })
+  } catch (error) {
+    return failure(`Invalid market fill accounting for trade ${fillId}: ${error.message}`)
   }
 
   try {
