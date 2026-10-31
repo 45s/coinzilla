@@ -278,7 +278,7 @@ test("exact fill accounting rejects invalid trade facts and commissions exceedin
   assert.throws(() => calculateFillAccountingExact({
     ...base,
     side: "SELL",
-    commissionAmount: "20",
+    commissionAmount: "20.01",
     commissionAsset: "USDT",
   }), /Commission exceeds/)
 })
