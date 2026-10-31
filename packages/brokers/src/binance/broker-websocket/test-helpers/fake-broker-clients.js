@@ -62,6 +62,14 @@ export function createFakeRpcClient(handlers = {}) {
     get listenerCount() {
       return listeners.size
     },
+
+    get errorListenerCount() {
+      return errorListeners.size
+    },
+
+    get closeListenerCount() {
+      return closeListeners.size
+    },
   }
 }
 
