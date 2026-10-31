@@ -9,7 +9,7 @@ import {
   TradingRules,
   tradingRulesErrMsgs,
   TRADING_RULE_STATUSES,
-} from "./trading-rules.js"
+} from "./market-trading-rules.js"
 
 describe(TradingRules.name, () => {
   const btc = new Asset({ id: "bitcoin", code: "BTC" })
