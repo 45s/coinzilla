@@ -272,6 +272,30 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+
+  it("releases the recovery gate when an unacknowledged local consumer disconnects", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    const statuses = []
+    const first = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+    const second = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    await second.data.disconnect()
+    assert.equal(broker.userDataUnavailable, false)
+    assert.ok(statuses.some((status) => status.type === "reconciled"))
+
+    await first.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("does not reconnect after the final subscriber disconnects", async () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
