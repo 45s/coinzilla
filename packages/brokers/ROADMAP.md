@@ -348,12 +348,24 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Implement the documented `userDataStream.subscribe.signature` flow on the WebSocket API connection using existing HMAC `apiKey` + `apiSecret` credentials.
 - [ ] Do not require Ed25519 keys or `session.logon`; do not switch to the Ed25519-session `userDataStream.subscribe` method.
 - [ ] Do not carry forward the legacy REST listen-key timer.
-- [ ] Handle subscription failure, explicit `eventStreamTerminated`, unexpected socket close, reconnect, resubscription, and remote unsubscribe failure explicitly.
+#### Phase 6A — lifecycle observability and event idempotency (current PR)
+- [x] Expose RPC socket-close notifications without changing existing request/event behavior.
+- [x] Detect explicit `eventStreamTerminated` events and unexpected API socket closure.
+- [x] Add an optional `onStatus` callback that reports `terminated`, `connectionError`, and `connectionClosed` with `recoveryRequired: true`; keep the existing `onEvent({ event })` contract unchanged.
+- [x] Ignore events whose `subscriptionId` does not match the active subscription.
+- [x] Deduplicate execution reports using `symbol`, `orderId`, and `executionId`; use a bounded exact-payload cache for event types without a stable unique ID.
+- [x] Avoid reporting intentional broker shutdown as an unexpected recovery gap.
+- [x] Document that event timestamps are not a global replay cursor and that recovery requires state reconciliation.
+- [ ] Phase 6A follow-up: deterministic account-update duplicate tests and callback/error isolation review.
+
+#### Phase 6B — reconnect, resubscribe, and reconciliation (not started)
+- [ ] Handle subscription failure, explicit termination, unexpected socket close, reconnect, resubscription, and remote unsubscribe failure explicitly.
 - [ ] Keep one remote signature subscription per broker/account connection and fan out to local callbacks; never attach duplicate callbacks after recovery.
-- [ ] Filter events by the active `subscriptionId`; ignore stale events from superseded subscriptions.
-- [ ] Deduplicate execution reports using the documented execution identity (`symbol`, `orderId`, `executionId`) and use a bounded exact-payload cache only for event types without a stable unique ID.
-- [ ] Do not infer a global event sequence from event timestamps. On any connection interruption, report a recovery gap because Binance does not provide a universal replay cursor for this event stream.
-- [ ] Test execution reports, account updates, duplicate events, explicit termination, socket loss, reconnect, resubscription, and shutdown races.
+- [ ] Recreate one-shot native RPC transport/client safely after unexpected close; preserve intentional shutdown semantics and bounded backoff.
+- [ ] Re-subscribe only after the replacement socket is open; never replay state-changing RPC requests.
+- [ ] Emit explicit recovery lifecycle status so consumers know when to reconcile before treating live events as healthy.
+- [ ] Add deterministic tests for reconnect races, failed reconnects, resubscribe failures, duplicate callback prevention, account updates, execution reports, and shutdown during recovery.
+- [ ] Add opt-in Binance testnet coverage for signature subscription and user-data event receipt.
 - [ ] Document reconciliation boundaries: use `account.status` and `openOrders.status` for current snapshots; use symbol-scoped `myTrades` / `allOrders` for trade/order history. A current snapshot cannot reconstruct every missed intermediate balance delta or prove every event was observed.
 - [ ] Add an opt-in testnet integration test for subscription and user-data events.
 - **Exit criteria:** deterministic lifecycle/recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe.
