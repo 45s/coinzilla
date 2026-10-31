@@ -16,6 +16,7 @@ function createBroker(handler) {
 describe("BinanceSdkBroker.subscribeForUserData", () => {
   it("uses the signature subscription method and forwards adapted events", async () => {
     const { broker, rpc } = createBroker(() => ({ subscriptionId: 7 }))
+    broker.connected = true
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
 
@@ -45,6 +46,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
   it("removes its event listener when subscription setup fails", async () => {
     const { broker, rpc } = createBroker(async () => { throw new Error("user stream unavailable") })
+    broker.connected = true
     const result = await broker.subscribeForUserData({ onEvent: () => {} })
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].message, "user stream unavailable")
@@ -53,6 +55,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
   it("returns a local unsubscribe function and stops forwarding after cleanup", async () => {
     const { broker, rpc } = createBroker(() => ({ subscriptionId: 8 }))
+    broker.connected = true
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
     result.data.unsubscribeLocal()
