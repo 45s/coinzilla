@@ -143,10 +143,7 @@ describe("BinanceSdkBroker.getFills cursor validation", () => {
     ]) {
       assert.equal((await broker.getFills(query)).ok, false)
     }
-    assert.deepEqual(
-      broker.tradingConnection.calls.filter((call) => call.method === "myTrades"),
-      [],
-    )
+    assert.deepEqual(broker.tradingConnection.calls, [])
   })
 
   it("rejects unsafe trade IDs rather than rounding canonical Fill identity", async () => {
