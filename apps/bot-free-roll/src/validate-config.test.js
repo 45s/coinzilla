@@ -48,6 +48,39 @@ test("valid config returns success and original config", () => {
   assert.equal("errors" in result, false)
 })
 
+test("accepts explicit aggregated mode and preserves the legacy default", () => {
+  const implicit = createValidConfig()
+  const explicit = createValidConfig()
+  explicit.strategies["free-roll"].pairs.DOGEFDUSD.mode = "aggregated"
+
+  assert.equal(validateTradingConfig({ tradingConfig: implicit }).ok, true)
+  assert.equal(validateTradingConfig({ tradingConfig: explicit }).ok, true)
+})
+
+test("rejects Grid mode until runtime execution and recovery are integrated", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD.mode = "grid"
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes(
+    'pairs.DOGEFDUSD.mode "grid" is not available until Grid execution and recovery are integrated',
+  ))
+})
+
+test("rejects unknown pair strategy modes", () => {
+  const tradingConfig = createValidConfig()
+  tradingConfig.strategies["free-roll"].pairs.DOGEFDUSD.mode = "ladder"
+
+  const result = validateTradingConfig({ tradingConfig })
+
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes(
+    'pairs.DOGEFDUSD.mode must be "aggregated" or "grid"',
+  ))
+})
+
 test("validation is deterministic and does not mutate the config", () => {
   const tradingConfig = createValidConfig()
   const originalConfig = structuredClone(tradingConfig)
