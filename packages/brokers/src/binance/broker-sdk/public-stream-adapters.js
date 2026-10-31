@@ -1,8 +1,8 @@
 import { adaptAggTrades } from "../websocket-stream/adapters/adapt-trades.js"
 
-const publicAdapters = {
-  aggTrade: adaptAggTrades,
-}
+const publicAdapters = new Map([
+  ["aggTrade", adaptAggTrades],
+])
 
 const userDataEventTypes = new Set([
   "executionReport",
@@ -25,6 +25,6 @@ export function adaptPublicStreamMessage(message) {
     throw new TypeError("Authenticated user-data events are not public market-data events")
   }
 
-  const adapter = publicAdapters[message.e]
+  const adapter = publicAdapters.get(message.e)
   return adapter ? adapter(message) : message
 }
