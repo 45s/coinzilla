@@ -35,6 +35,16 @@
           "quantityPrecision": 1,
           "makerPercent": 0.075,
           "takerPercent": 0.075
+        },
+        "ZROFDUSD": {
+          "enabled": true,
+          "orderQuantity": 5,
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.5,
+          "pricePrecision": 3,
+          "quantityPrecision": 1,
+          "makerPercent": 0,
+          "takerPercent": 0.075
         }
       }
     }
