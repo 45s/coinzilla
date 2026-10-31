@@ -1,7 +1,7 @@
 import { Asset, Market } from "@coinzilla/entities"
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptCanonicalFill, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade } from "../shared/index.js"
+import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
 import { BinanceSdkConfig } from "./binance-sdk-config.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
@@ -216,6 +216,38 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getCanonicalOrderHistory(input = {}) {
+    try {
+      const params = createOrderHistoryParams(input)
+      const response = await this.tradingConnection.request("allOrders", params, { signed: true })
+      if (!Array.isArray(response.data)) {
+        throw new TypeError("Binance allOrders response should be an array")
+      }
+      if (response.data.length === 0) {
+        return toResult({ data: [] })
+      }
+
+      const metadataResponse = await this.tradingConnection.request(
+        "exchangeInfo",
+        { symbol: params.symbol },
+      )
+      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
+        ? metadataResponse.data.symbols.filter((item) => item?.symbol === params.symbol)
+        : []
+      if (symbolMatches.length !== 1) {
+        throw new Error(`Binance market metadata is missing or ambiguous for ${params.symbol}`)
+      }
+
+      const market = createCanonicalMarket({ symbolInfo: symbolMatches[0] })
+      return toResult({
+        data: response.data.map((order) => adaptCanonicalOrder({ order, market })),
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getCanonicalOrderHistory()", error })
       return toResult({ errors: [error] })
     }
   }
