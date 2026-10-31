@@ -19,9 +19,16 @@ export function createOrderExecution({
   pause,
   reconcileOrderFills,
   handleSellFilled,
+  placeGridBuy,
 }) {
   async function placeBuy({ symbol, state, rawPrice }) {
     if (!isRunning() || state.paused || state.buyOrder) return
+    if (state.mode === "grid") {
+      if (typeof placeGridBuy !== "function") {
+        throw new Error("Grid BUY execution is not configured")
+      }
+      return placeGridBuy({ symbol, state, rawPrice })
+    }
 
     const price = roundDecimalToIncrement({
       value: String(rawPrice),
