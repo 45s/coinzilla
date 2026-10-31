@@ -86,7 +86,7 @@ Binance wraps each user-data event with a `subscriptionId`. The broker forwards 
 
 The optional `onStatus` callback currently reports:
 - `{ type: "terminated", subscriptionId, eventTime, recoveryRequired: true }`
-- `{ type: "connectionError", error, recoveryRequired: true }`
+- `{ type: "rpcError", error, recoveryRequired: false }`
 - `{ type: "connectionClosed", code, reason, recoveryRequired: true }`
 
 Intentional broker shutdown is not reported as an unexpected recovery gap. The callback is additive; the existing bot consumer does not currently pass it.
