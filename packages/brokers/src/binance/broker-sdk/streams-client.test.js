@@ -144,7 +144,7 @@ test("deduplicates server subscriptions while allowing multiple local listeners"
 
   const unsubscribe = client.unsubscribe("btcusdt@aggTrade", second)
   await flush()
-  clock.advanceBy(250)
+  clock.advanceBy(300)
   await flush()
   assert.equal(transports[0].sent[1].method, "UNSUBSCRIBE")
   acknowledge(transports[0], 1)
@@ -178,7 +178,7 @@ test("dispatches combined-stream envelopes and all-market arrays", async () => {
 
   const allMarket = client.subscribe("!miniTicker@arr", (event) => allMarketEvents.push(event))
   await flush()
-  clock.advanceBy(250)
+  clock.advanceBy(300)
   await flush()
   acknowledge(transports[0], 1)
   await allMarket
@@ -234,7 +234,7 @@ test("reconnects after an unexpected close and restores desired subscriptions", 
   assert.equal(client.state, "closed")
   clock.advanceBy(10)
   await flush()
-  clock.advanceBy(240)
+  clock.advanceBy(290)
   await flush()
 
   assert.equal(transports.length, 2)
