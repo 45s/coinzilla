@@ -75,11 +75,13 @@ export class NativeWebSocketTransport {
     }
 
     this.#connectPromise = new Promise((resolve, reject) => {
+      this.#rejectConnect = reject
       this.#handlers = {
         open: () => {
           if (this.#state !== "connecting") return
           this.#clearConnectTimer()
           this.#state = "open"
+          this.#rejectConnect = null
           resolve(this)
         },
         message: (event) => this.#emit("message", event.data),
@@ -90,6 +92,7 @@ export class NativeWebSocketTransport {
           this.#emit("error", error)
           if (this.#state === "connecting") {
             reject(error)
+            this.#rejectConnect = null
             this.#beginClosing()
           }
         },
@@ -107,6 +110,7 @@ export class NativeWebSocketTransport {
       this.#connectTimer = this.setTimeout(() => {
         if (this.#state !== "connecting") return
         reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
+        this.#rejectConnect = null
         this.#beginClosing()
       }, this.connectTimeout)
     })
@@ -149,6 +153,7 @@ export class NativeWebSocketTransport {
 
     if (this.#state === "connecting") {
       this.#rejectConnect?.(new Error("WebSocket connection closed before opening"))
+      this.#rejectConnect = null
     }
 
     this.#beginClosing(code, reason)
@@ -216,6 +221,7 @@ export class NativeWebSocketTransport {
 
     if (wasConnecting) {
       this.#rejectConnect?.(new Error("WebSocket closed before opening"))
+      this.#rejectConnect = null
     }
 
     if (this.#handlers && this.#socket) {
