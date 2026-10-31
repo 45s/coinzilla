@@ -484,7 +484,7 @@ export class FreeRollBot {
         }
         if (
           canonicalOrder.side !== order.side ||
-          canonicalOrder.originalQuantity.amount !== (order.originalQuantity ?? order.quantity)
+          compareDecimal({ left: canonicalOrder.originalQuantity.amount, right: order.originalQuantity ?? order.quantity }) !== 0
         ) {
           throw new Error(`Canonical order history does not match tracked order ${orderId}`)
         }
