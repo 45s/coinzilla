@@ -1189,6 +1189,7 @@ describe("Binance user-data unsubscribe outcome", () => {
   })
 
   it("does not retry unsubscribe when remote state cannot be verified", async () => {
+    let activeSubscriptionId = 81
     let unsubscribeAttempts = 0
     const failure = new Error("unsubscribe response timed out")
     const setup = createUnsubscribeBroker({
