@@ -58,7 +58,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     broker.connected = true
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
-    result.data.unsubscribeLocal()
+    result.data.disconnect()
     rpc.emitEvent({ e: "futureEvent", value: 1 })
     assert.deepEqual(received, [])
     assert.equal(rpc.listenerCount, 0)
