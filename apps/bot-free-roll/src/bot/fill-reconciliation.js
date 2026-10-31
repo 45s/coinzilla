@@ -2,7 +2,6 @@ import { Fill } from "@coinzilla/entities"
 import { appendFillLedgerEntry } from "./fill-ledger.js"
 import {
   addDecimal,
-  assertDecimalString,
   compareDecimal,
   maxDecimal,
   subtractDecimal,
@@ -402,7 +401,12 @@ export function replayExecutionFills({ entries, pairState } = {}) {
   }
 
   try {
-    assertDecimalString(pairState.configuredFeeRate, "configuredFeeRate")
+    if (compareDecimal({ left: pairState.configuredFeeRate, right: "0" }) < 0) {
+      return {
+        ok: false,
+        reason: "Execution fill replay configured fee rate must be non-negative",
+      }
+    }
   } catch (error) {
     return {
       ok: false,
