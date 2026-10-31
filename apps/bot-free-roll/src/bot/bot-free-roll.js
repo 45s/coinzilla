@@ -400,7 +400,11 @@ export class FreeRollBot {
     if (!this.#isRunning || !status || typeof status.type !== "string") return
 
     const { type } = status
-    if (type === "connectionClosed" || type === "terminated") {
+    if (
+      type === "connectionClosed" ||
+      type === "terminated" ||
+      type === "recoveryFailed"
+    ) {
       this.#recoveryGeneration += 1
       this.#recoveryRestartRequested = false
     }
@@ -614,12 +618,20 @@ export class FreeRollBot {
           if (status !== "NEW" && status !== "PARTIALLY_FILLED") {
             throw new Error(`Open order ${orderId} has unsupported status "${status}"`)
           }
-          if (compareDecimal({
-            left: reconciledQuantity,
-            right: String(currentOrder.executedQuantity),
-          }) !== 0) {
+          const executedQuantity = String(currentOrder.executedQuantity)
+          const executedComparison = compareDecimal({
+            left: executedQuantity,
+            right: originalQuantity,
+          })
+          if (
+            compareDecimal({ left: reconciledQuantity, right: executedQuantity }) !== 0 ||
+            (status === "NEW" && executedQuantity !== "0") ||
+            (status === "PARTIALLY_FILLED" &&
+              (compareDecimal({ left: executedQuantity, right: "0" }) <= 0 ||
+                executedComparison >= 0))
+          ) {
             throw new Error(
-              `Tracked order ${orderId} fill history totals ${reconciledQuantity}, expected ${currentOrder.executedQuantity}`,
+              `Tracked order ${orderId} fill history or status disagrees with executed quantity ${executedQuantity}`,
             )
           }
           continue
