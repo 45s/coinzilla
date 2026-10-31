@@ -2924,3 +2924,83 @@ test("shutdown during user-data recovery never acknowledges the interrupted snap
   assert.equal(fixture.acknowledgeCalls, 0)
   assert.equal(fixture.createdOrders.length, 1)
 })
+
+
+test("user-data recovery preserves a partially filled tracked order from open-order and trade snapshots", async () => {
+  let trackedOrder
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: async () => ({ ok: true, data: [createBalance()] }),
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [{
+        id: trackedOrder.orderId,
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        status: "PARTIALLY_FILLED",
+        originalQuantity: String(trackedOrder.quantity),
+        executedQuantity: "10",
+      }],
+    }),
+    getMyTrades: async ({ orderId }) => ({
+      ok: true,
+      data: orderId === trackedOrder.orderId
+        ? [createRecoveryTrade({
+            order: trackedOrder,
+            tradeId: 2004,
+            quantity: "10",
+          })]
+        : [],
+    }),
+  })
+  trackedOrder = fixture.createdOrders[0]
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => fixture.acknowledgeCalls === 1,
+      "partially filled order was not reconciled",
+    )
+
+    assert.equal(fixture.bot.getStats().DOGEUSDT.buyFills, 0)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.activeQuantity, "10")
+    assert.equal(fixture.bot.getStats().DOGEUSDT.buyOrderId, trackedOrder.orderId)
+    assert.equal(fixture.createdOrders.length, 1)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
+
+test("unexpected open orders for a managed pair prevent recovery acknowledgement", async () => {
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: async () => ({ ok: true, data: [createBalance()] }),
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [{
+        id: "external-order",
+        symbol: "DOGEUSDT",
+        side: "SELL",
+        status: "NEW",
+        originalQuantity: "1",
+        executedQuantity: "0",
+      }],
+    }),
+  })
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => fixture.events.some((event) => event.name === "bot.user_data_recovery_failed"),
+      "unexpected open order did not block recovery",
+    )
+
+    assert.equal(fixture.acknowledgeCalls, 0)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.paused, true)
+    assert.equal(fixture.createdOrders.length, 1)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
