@@ -72,7 +72,14 @@ export function parseStreamMessage(rawMessage) {
     throw new TypeError("Binance stream message is not valid JSON")
   }
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (Array.isArray(parsed)) {
+    if (!parsed.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
+      throw new TypeError("Binance all-market stream payload must contain objects")
+    }
+    return { stream: null, data: parsed }
+  }
+
+  if (!parsed || typeof parsed !== "object") {
     throw new TypeError("Binance stream message must be an object")
   }
 
