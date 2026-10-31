@@ -1189,7 +1189,6 @@ describe("Binance user-data unsubscribe outcome", () => {
   })
 
   it("does not retry unsubscribe when remote state cannot be verified", async () => {
-    let activeSubscriptionId = 81
     let unsubscribeAttempts = 0
     const failure = new Error("unsubscribe response timed out")
     const setup = createUnsubscribeBroker({
@@ -1209,5 +1208,46 @@ describe("Binance user-data unsubscribe outcome", () => {
     assert.equal(setup.client.listenerCount, 0)
     assert.equal(setup.client.errorListenerCount, 0)
     await setup.broker.disconnect()
+  })
+})
+
+
+describe("Binance user-data unsubscribe retry failure", () => {
+  it("preserves both errors when the verified unsubscribe retry also fails", async () => {
+    let unsubscribeAttempts = 0
+    const originalError = new Error("first unsubscribe response timed out")
+    const retryError = new Error("second unsubscribe request failed")
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: 82 }),
+          "userDataStream.unsubscribe": () => {
+            unsubscribeAttempts += 1
+            throw unsubscribeAttempts === 1 ? originalError : retryError
+          },
+          "session.subscriptions": () => [{ subscriptionId: 82 }],
+        })
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+    await assert.rejects(subscription.data.disconnect(), (error) => {
+      assert.ok(error instanceof AggregateError)
+      assert.deepEqual(error.errors, [originalError, retryError])
+      return true
+    })
+
+    assert.equal(unsubscribeAttempts, 2)
+    assert.equal(client.listenerCount, 0)
+    assert.equal(client.errorListenerCount, 0)
+    await broker.disconnect()
   })
 })
