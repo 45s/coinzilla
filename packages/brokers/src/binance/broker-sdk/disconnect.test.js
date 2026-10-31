@@ -31,7 +31,7 @@ describe("BinanceSdkBroker.disconnect", () => {
   it("attempts both disconnects and logs failures without masking shutdown", async () => {
     const { broker, rpc } = createBroker()
     let marketDisconnected = false
-    broker.marketConnection.disconnect = async () => {
+    broker.marketConnection.disconnect = () => {
       marketDisconnected = true
       throw new Error("market close failed")
     }
