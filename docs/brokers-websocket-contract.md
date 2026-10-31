@@ -252,3 +252,13 @@ Before implementation proceeds, preserve these decisions:
 6. Keep all bot application files read-only throughout this migration.
 
 **Phase 0 status:** complete. Inventory, consumer contract, protocol mapping, the Node.js >=22.4.0 runtime decision, and user-data credential compatibility are documented. HMAC-SHA-256 signing payload canonicalization still requires known test vectors in Phase 3, and native ping/pong behavior remains an implementation gate in Phase 2; neither is a reason to guess.
+
+## 11. Canonical fill API
+
+The additive `BinanceSdkBroker.getFills({ symbol, orderId?, limit? })` API returns shared Entities `Fill` instances. It requests exact market metadata for the requested Binance symbol through WebSocket API `exchangeInfo`, constructs a canonical `Market` from the returned base/quote asset codes, then requests signed `myTrades` and adapts each execution.
+
+- Trade IDs are scoped by canonical Market identity; Binance symbols are opaque and are never split to infer assets.
+- Price and quote quantity are exact quote-asset `Money`; base quantity is exact base-asset `Quantity`. No financial value passes through JavaScript `Number`.
+- A positive commission is represented by a `Commission` with its explicit commission Asset. A confirmed zero commission is `COMPLETE` with an empty commission list. If a positive commission has no known denomination, its status is `UNKNOWN`; no fee Asset is fabricated.
+- Missing maker/taker metadata maps to `UNKNOWN`, and missing execution timestamps remain absent.
+- The legacy `getMyTrades()` API and its plain-object result shape are unchanged for compatibility. Consumer migration to `getFills()` is a separate task owned by the consumer domain.
