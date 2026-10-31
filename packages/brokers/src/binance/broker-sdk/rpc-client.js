@@ -131,6 +131,7 @@ export class BinanceWebSocketApiClient {
       this.#rejectPending(new BinanceRpcConnectionError(
         `Binance WebSocket API connection closed (code ${event?.code ?? "unknown"}): ${event?.reason ?? ""}`,
       ))
+      this.#removeListeners()
     })
   }
 
@@ -338,7 +339,7 @@ export class BinanceWebSocketApiClient {
       requestId: pending.id,
       method: pending.method,
       details: payload.error,
-      outcomeUnknown: pending.stateChanging && payload.status >= 500,
+      outcomeUnknown: pending.stateChanging && (payload.status === 409 || payload.status >= 500),
     })))
   }
 
