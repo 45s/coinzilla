@@ -1300,3 +1300,90 @@ describe("Binance user-data failed reconnect cleanup", () => {
     await broker.disconnect()
   })
 })
+
+
+describe("Binance stale user-data subscription cleanup", () => {
+  function createDelayedSubscriptionBroker({ unsubscribe, subscriptions }) {
+    let resolveSubscribe
+    let markSubscribeStarted
+    const subscribeStarted = new Promise((resolve) => {
+      markSubscribeStarted = resolve
+    })
+    let client
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => new Promise((resolve) => {
+            resolveSubscribe = resolve
+            markSubscribeStarted()
+          }),
+          "userDataStream.unsubscribe": unsubscribe,
+          "session.subscriptions": subscriptions,
+        })
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    return {
+      broker,
+      client: () => client,
+      subscribeStarted,
+      resolveSubscribe: (value) => resolveSubscribe(value),
+    }
+  }
+
+  it("does not retry stale-subscription cleanup when lookup confirms the first unsubscribe succeeded", async () => {
+    let activeSubscriptionId = null
+    let unsubscribeAttempts = 0
+    const setup = createDelayedSubscriptionBroker({
+      unsubscribe: () => {
+        unsubscribeAttempts += 1
+        activeSubscriptionId = null
+        throw new Error("unsubscribe response timed out")
+      },
+      subscriptions: () => activeSubscriptionId === null ? [] : [{ subscriptionId: activeSubscriptionId }],
+    })
+
+    await setup.broker.connect()
+    const pendingSubscription = setup.broker.subscribeForUserData({ onEvent() {} })
+    await setup.subscribeStarted
+    await setup.broker.disconnect()
+    activeSubscriptionId = 91
+    setup.resolveSubscribe({ subscriptionId: 91 })
+
+    const result = await pendingSubscription
+    assert.equal(result.ok, false)
+    assert.equal(unsubscribeAttempts, 1)
+    assert.equal(setup.client().calls.filter((call) => call.method === "session.subscriptions").length, 1)
+  })
+
+  it("retries stale-subscription cleanup once when lookup confirms it remains active", async () => {
+    let activeSubscriptionId = null
+    let unsubscribeAttempts = 0
+    const setup = createDelayedSubscriptionBroker({
+      unsubscribe: () => {
+        unsubscribeAttempts += 1
+        if (unsubscribeAttempts === 1) throw new Error("unsubscribe response timed out")
+        activeSubscriptionId = null
+        return {}
+      },
+      subscriptions: () => activeSubscriptionId === null ? [] : [{ subscriptionId: activeSubscriptionId }],
+    })
+
+    await setup.broker.connect()
+    const pendingSubscription = setup.broker.subscribeForUserData({ onEvent() {} })
+    await setup.subscribeStarted
+    await setup.broker.disconnect()
+    activeSubscriptionId = 91
+    setup.resolveSubscribe({ subscriptionId: 91 })
+
+    const result = await pendingSubscription
+    assert.equal(result.ok, false)
+    assert.equal(unsubscribeAttempts, 2)
+    assert.equal(setup.client().calls.filter((call) => call.method === "session.subscriptions").length, 1)
+  })
+})
