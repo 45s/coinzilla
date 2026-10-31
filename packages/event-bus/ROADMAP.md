@@ -195,7 +195,7 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 - [ ] Evaluate cooperative cancellation via `AbortSignal` only after timeout semantics are settled; document whether the signal is per close or per delivery and whether handlers are merely notified (not forcibly cancelled).
 - [ ] Do not add cancellation to handler arguments unless its lifecycle and compatibility contract are specified and covered by tests.
 - [x] Test overload boundaries, atomic fan-out rejection, capacity recovery, and concurrent publish saturation.
-- [ ] Replace arbitrary sleep-based lifecycle tests with deferred-promise/barrier synchronization.
+- [x] Replace arbitrary sleep-based lifecycle tests with deferred-promise/barrier synchronization.
 - [x] Test nested publishes from sync and async handlers; prove `flush()` waits transitively for accepted nested work.
 - [ ] Test re-entrant publish at capacity and verify overload is atomic (no partial fan-out).
 - [ ] Test slow and never-settling handlers, including the documented flush/close behavior and later capacity recovery.
@@ -209,7 +209,7 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 - [x] Use structured error context consistently (message, error, event ID, event name, and source).
 - [x] Implement the Phase 2 diagnostics API; expose only stable scalar snapshots and never the internal pending Set, listener Maps, or subscription records.
 - [ ] Define counter meanings precisely (accepted/rejected publishes, scheduled/completed/failed deliveries, current pending and high-water mark) before adding any counters beyond the minimal gauges; avoid ambiguous or expensive instrumentation.
-- [ ] Use deferred promises/barriers rather than wall-clock sleeps for all concurrency and lifecycle assertions.
+- [x] Use deferred promises/barriers rather than wall-clock sleeps for concurrency and lifecycle assertions.
 - [ ] Cover the documented concurrency model, fan-out admission atomicity, nested publish/flush, reporter failures, publish/close races, and simultaneous close callers.
 - [ ] Add bounded stress tests with deterministic workload sizes and assert zero pending work after drain.
 - [ ] Record a real baseline from `pnpm --filter @coinzilla/event-bus test` and `pnpm --filter @coinzilla/event-bus test:coverage`; attach command output/CI run to the implementation PR.
