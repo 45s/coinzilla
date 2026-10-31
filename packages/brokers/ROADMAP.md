@@ -56,7 +56,7 @@ The migration is complete only when all of the following are true:
 ### Overall status
 
 - [x] Phase 0 — contract and dependency inventory.
-- [x] Phase 1 — characterization tests and reusable deterministic test seams have been prepared in PR #256. The PR is **open and not merged** as of this roadmap revision; do not treat its changes as present on the integration branch until it is merged.
+- [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 was merged into `migration/binance-native-ws`.
 - [ ] Phase 2 — native WebSocket transport.
 - [ ] Phase 3 — WebSocket API RPC client.
 - [ ] Phase 4 — public WebSocket Streams client.
@@ -194,7 +194,7 @@ The current SDK uses `userDataStream.subscribe.signature` on the WebSocket API c
 
 ### Node.js runtime floor
 
-**Accepted decision (2026-10-31): `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.4.0.**
+**Updated approved decision (2026-10-31): `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.23.4, and the runtime guard verifies the bundled Undici version is patched.**
 
 - Use Node's built-in WHATWG `WebSocket` and `node:crypto` where their documented behavior meets the requirements.
 - Add the matching `engines` metadata to the broker package and document the runtime requirement as implementation proceeds.
@@ -244,7 +244,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 1 — Characterization tests and test seams
 
-**Status: Prepared in open PR #256; not merged.**
+**Status: Complete. PR #256 was merged into `migration/binance-native-ws` on 2026-10-31.**
 
 - [x] Characterize the public broker methods and their existing normalized result shapes.
 - [x] Add a reusable WHATWG-style fake WebSocket with deterministic lifecycle and message delivery.
@@ -253,7 +253,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Add RPC-specific regression cases for concurrent requests, malformed messages, unknown request IDs, duplicate/late responses, and disconnects with pending requests.
   - These cases must run against the native RPC client introduced in Phase 3. The current SDK owns its socket/correlation internals, so do not write misleading tests against a nonexistent native RPC implementation.
 - **Exit criteria:** existing broker compatibility behavior and reusable test seams are tested without live credentials or network access. RPC correlation/failure tests remain Phase 3 gates.
-- **PR:** [#256 — test(brokers): characterize Binance broker contract](https://github.com/45s/coinzilla/pull/256). Open, not merged at the time this roadmap was authored. Verify the current PR and branch before relying on its files.
+- **PR:** [#256 — test(brokers): characterize Binance broker contract](https://github.com/45s/coinzilla/pull/256). Merged into the migration integration branch; no bot application files or runtime dependencies were added.
 
 ### Phase 2 — Native WebSocket transport
 
@@ -451,7 +451,7 @@ When a new discovery changes an implementation decision:
 
 | Date | Decision | Reason / evidence | Impact |
 |---|---|---|---|
-| 2026-10-31 | Require Node.js >=22.4.0 for this package's native WebSocket implementation and its consumers. | Node built-in WHATWG WebSocket stability/runtime behavior; user-approved compatibility floor. | Phase 2 transport, package `engines`, consumer/runtime documentation. |
+| 2026-10-31 | Raise the native WebSocket runtime floor from Node.js >=22.4.0 to >=22.23.4 and guard the bundled Undici version. | User approval after discovery of CVE-2026-109932; Node.js 22.23.4 bundles fixed Undici 6.29.1. Runtime guard also rejects affected Undici 6.29.0, 7.30.0, and 8.12.1 or older affected releases. | Package `engines`, Phase 2 transport, and CI runtime pin. |
 | 2026-10-31 | Use WebSocket API connection for RPC and signature-based user-data subscription/events; use separate public Streams connection for market data. | Phase 0 SDK/source and official Binance protocol audit. | Phases 2–6; do not mix user-data events into public Streams. |
 | 2026-10-31 | Preserve `userDataStream.subscribe.signature` with existing HMAC `apiKey` + `apiSecret`; do not require Ed25519 or `session.logon`. | Current SDK behavior and official Binance documentation reviewed in Phase 0. Exact signing payload still requires test vectors. | Phase 3 signing and Phase 6 lifecycle. |
 | 2026-10-31 | Never blindly replay state-changing requests after uncertain disconnects. | Order placement/cancellation may have succeeded remotely even if response was lost. | RPC design, broker result contract, recovery tests. |
@@ -523,6 +523,6 @@ Re-check these official sources during implementation because Binance protocol d
 - [Binance Spot WebSocket API — Market](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/market)
 - [Binance Spot WebSocket API — User Data Stream](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-api/user-data-stream)
 - [Binance Spot WebSocket Streams — General](https://developers.binance.com/en/docs/products/spot/web-socket-streams)
-- [Node.js v22 Global WebSocket documentation](https://nodejs.org/download/release/v22.23.3/docs/api/globals.html#class-websocket)
+- [Node.js v22 Global WebSocket documentation](https://nodejs.org/download/release/v22.23.4/docs/api/globals.html#class-websocket)\n- [Node.js v22.23.4 release notes](https://nodejs.org/en/blog/release/v22.23.4) — includes Undici 6.29.1.
 
 The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) records the sources reviewed and the findings at that audit date. Official docs remain authoritative if they change.
