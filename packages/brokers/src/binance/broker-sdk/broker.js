@@ -306,7 +306,7 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({
         data: {
           subscriptionId: response.data?.subscriptionId ?? null,
-          unsubscribeLocal: () => {
+          disconnect: () => {
             removeListener?.()
             removeErrorListener?.()
           },
