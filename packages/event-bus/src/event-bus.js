@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 
 const ALL_EVENTS = Symbol("all-events")
+const EVENT_NAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._:-]{0,127}$/
+
+function isValidEventName(name) {
+  return typeof name === "string" && EVENT_NAME_PATTERN.test(name)
+}
 
 function assertSupportedPayload(value, seen = new WeakSet()) {
   if (
@@ -83,7 +88,38 @@ function deepFreeze(value, seen = new WeakSet()) {
 }
 
 export class EventBus {
-  constructor({ logger = defaultLogger, onError } = {}) {
+  /**
+   * @param {{ logger?: { error?: (entry: object) => void }, onError?: (context: object) => void | Promise<void> }} options
+   * @throws {TypeError} If options or a configured callback is invalid.
+   */
+  constructor(options = {}) {
+    if (
+      options === null ||
+      typeof options !== "object" ||
+      Array.isArray(options) ||
+      (Object.getPrototypeOf(options) !== Object.prototype &&
+        Object.getPrototypeOf(options) !== null)
+    ) {
+      throw new TypeError("EventBus options must be a plain object")
+    }
+
+    for (const key of Reflect.ownKeys(options)) {
+      if (key !== "logger" && key !== "onError") {
+        throw new TypeError(`Unknown EventBus option: ${String(key)}`)
+      }
+    }
+
+    const { logger = defaultLogger, onError } = options
+
+    if (logger === null || typeof logger !== "object" ||
+        (logger.error !== undefined && typeof logger.error !== "function")) {
+      throw new TypeError("EventBus logger must be an object with an optional error function")
+    }
+
+    if (onError !== undefined && typeof onError !== "function") {
+      throw new TypeError("EventBus onError must be a function")
+    }
+
     this.logger = logger
     this.onError = onError
     // Use an explicit registry rather than EventEmitter: event names are
@@ -102,9 +138,9 @@ export class EventBus {
       })
     }
 
-    if (typeof name !== "string" || name.trim() === "") {
+    if (!isValidEventName(name)) {
       return toResult({
-        error: new TypeError("Event name must be a non-empty string"),
+        error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
       })
     }
 
@@ -150,9 +186,9 @@ export class EventBus {
   }
 
   subscribe({ name, handler } = {}) {
-    if (typeof name !== "string" || name.trim() === "") {
+    if (!isValidEventName(name)) {
       return toResult({
-        error: new TypeError("Event name must be a non-empty string"),
+        error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
       })
     }
 
