@@ -293,3 +293,21 @@ test("request validation rejects invalid methods and parameter shapes", async ()
   await assert.rejects(context.client.request("ticker.price", []), /params must be an object/)
   assert.equal(context.sockets[0].sent.length, 0)
 })
+
+test("RPC client marks HTTP 409 partial mutation responses as uncertain", async () => {
+  const context = createClient()
+  await connectClient(context)
+
+  const pending = context.client.request("order.cancel", {}, { stateChanging: true })
+  context.sockets[0].receive(JSON.stringify({
+    id: "request-1",
+    status: 409,
+    error: { code: -2022, msg: "Cancel-replace partially failed" },
+  }))
+
+  await assert.rejects(pending, (error) => {
+    assert.equal(error.status, 409)
+    assert.equal(error.outcomeUnknown, true)
+    return true
+  })
+})
