@@ -134,12 +134,19 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
     rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
 
-    assert.deepEqual(statuses, [{
-      type: "connectionClosed",
-      code: 1006,
-      reason: "network lost",
-      recoveryRequired: true,
-    }])
+    assert.deepEqual(statuses, [
+      {
+        type: "connectionClosed",
+        code: 1006,
+        reason: "network lost",
+        recoveryRequired: true,
+      },
+      {
+        type: "recovering",
+        attempt: 0,
+        recoveryRequired: true,
+      },
+    ])
     assert.equal(broker.connected, false)
     await result.data.disconnect()
   })
@@ -226,6 +233,7 @@ it("removes local observers when remote unsubscribe fails and does not replay it
     "userDataStream.subscribe.signature": () => ({ subscriptionId: 12 }),
     "userDataStream.unsubscribe": async () => { throw new Error("unsubscribe unavailable") },
   })
+  rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
