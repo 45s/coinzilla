@@ -1367,3 +1367,436 @@ test("account balance updates retain only valid non-negative decimal balances", 
     await bot.stop()
   }
 })
+
+test("constructor rejects invalid global and per-pair configuration", () => {
+  assert.throws(() => new FreeRollBot({}), {
+    name: "AggregateError",
+    message: "Invalid FreeRollBot config",
+  })
+
+  const createConfiguredBot = (pair, settings = { minProfit: 0.01 }) =>
+    new FreeRollBot({
+      broker: {},
+      tradingConfig: {
+        strategies: {
+          "free-roll": {
+            settings,
+            pairs: { DOGEUSDT: pair },
+          },
+        },
+      },
+    })
+
+  assert.throws(
+    () => createConfiguredBot(createPair(), { minProfit: 0 }),
+    /Invalid minProfit setting/,
+  )
+  assert.throws(
+    () => createConfiguredBot(createPair({ orderQuantity: 0 })),
+    /DOGEUSDT: invalid pair settings/,
+  )
+})
+
+test("disabled pairs are not subscribed and all-disabled pairs fail startup safely", async () => {
+  const subscribed = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async ({ symbol }) => {
+        subscribed.push(`filters:${symbol}`)
+        return { ok: true, data: createMarketFilters() }
+      },
+      subscribeForUserData: async () => ({
+        ok: true,
+        data: { disconnect() {} },
+      }),
+      subscribeForPrices: async ({ symbol }) => {
+        subscribed.push(`prices:${symbol}`)
+        return { ok: true, data: { disconnect() {} } }
+      },
+    },
+    eventBus: { publish: () => ({ ok: true }) },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: {
+            DOGEUSDT: createPair({ enabled: false }),
+            SOLUSDT: createPair(),
+          },
+        },
+      },
+    },
+  })
+
+  await bot.run()
+  assert.deepEqual(bot.getStats() && Object.keys(bot.getStats()), ["SOLUSDT"])
+  assert.deepEqual(subscribed, ["filters:SOLUSDT", "prices:SOLUSDT"])
+  await bot.stop()
+
+  const emptyBot = new FreeRollBot({
+    broker: {},
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          pairs: { DOGEUSDT: createPair({ enabled: false }) },
+        },
+      },
+    },
+  })
+  await assert.rejects(emptyBot.run(), /No enabled pairs configured/)
+  assert.equal(emptyBot.getSummary().running, false)
+})
+
+test("startup rejects malformed exchange market metadata before subscribing", async (t) => {
+  const cases = [
+    ["zero tick size", { tickSize: "0" }, /Invalid tickSize/],
+    ["zero quantity step", { stepSize: "0" }, /Invalid stepSize/],
+    ["missing base asset", { baseAsset: "" }, /Incomplete market metadata/],
+    ["missing supported order types", { supportedOrderTypes: null }, /Incomplete market metadata/],
+  ]
+
+  for (const [name, overrides, expected] of cases) {
+    await t.test(name, async () => {
+      let subscriptions = 0
+      const bot = new FreeRollBot({
+        broker: {
+          getSymbolFilters: async () => ({
+            ok: true,
+            data: { ...createMarketFilters(), ...overrides },
+          }),
+          subscribeForUserData: async () => {
+            subscriptions += 1
+            return { ok: true, data: { disconnect() {} } }
+          },
+        },
+        tradingConfig: {
+          strategies: {
+            "free-roll": {
+              settings: { minProfit: 0.01 },
+              pairs: { DOGEUSDT: createPair() },
+            },
+          },
+        },
+      })
+
+      await assert.rejects(bot.run(), expected)
+      assert.equal(subscriptions, 0)
+      assert.equal(bot.getSummary().running, false)
+    })
+  }
+})
+
+test("trailing BUY replacement occurs only after a confirmed zero-fill cancellation", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async () => ({ ok: true, data: { disconnect() {} } }),
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const created = { ...order, orderId: `order-${createdOrders.length + 1}` }
+        createdOrders.push(created)
+        return { ok: true, data: { orderId: created.orderId } }
+      },
+      cancelOrder: async ({ orderId }) => {
+        const order = createdOrders.find((item) => item.orderId === orderId)
+        return {
+          ok: true,
+          data: {
+            orderId,
+            originalQuantity: String(order.quantity),
+            executedQuantity: "0",
+            quantity: String(order.quantity),
+            status: "CANCELED",
+          },
+        }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "initial BUY was not created")
+
+    priceHandlers.get("DOGEUSDT")({ price: 100.2 })
+    await waitForCondition(() => createdOrders.length === 2, "replacement BUY was not created")
+
+    assert.equal(createdOrders[1].side, "BUY")
+    assert.equal(createdOrders[1].type, "LIMIT_MAKER")
+    assert.equal(createdOrders[1].price, "100.1499")
+    assert.ok(events.some((event) =>
+      event.name === "order.cancelled" && event.data.reason === "trailing_replacement"))
+    assert.equal(bot.getStats().DOGEUSDT.paused, false)
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("trailing BUY cancellation failure pauses without creating a replacement", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async () => ({ ok: true, data: { disconnect() {} } }),
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: `order-${createdOrders.length}` } }
+      },
+      cancelOrder: async () => ({
+        ok: false,
+        errors: [new Error("cancel rejected by exchange")],
+      }),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "initial BUY was not created")
+    priceHandlers.get("DOGEUSDT")({ price: 100.2 })
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "cancel failure did not pause pair")
+
+    assert.equal(createdOrders.length, 1)
+    assert.ok(events.some((event) => event.name === "order.cancel_failed"))
+    assert.ok(events.some((event) => event.name === "bot.pair_paused"))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("TRADE execution reports without fill details pause before changing inventory", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler({
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        orderId: "tracked-buy",
+        status: "PARTIALLY_FILLED",
+        side: "BUY",
+        price: "99.95",
+        quantity: "100",
+      },
+    })
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "missing fill did not pause pair")
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.equal(createdOrders.length, 1)
+    assert.ok(events.some((event) => event.name === "bot.pair_paused" &&
+      /missing its fill details/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("terminal BUY order failures pause the pair instead of retrying automatically", async (t) => {
+  for (const status of ["CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"]) {
+    await t.test(status, async () => {
+      const priceHandlers = new Map()
+      const createdOrders = []
+      const events = []
+      let userDataHandler
+      const bot = new FreeRollBot({
+        broker: {
+          getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+          subscribeForUserData: async ({ onEvent }) => {
+            userDataHandler = onEvent
+            return { ok: true, data: { disconnect() {} } }
+          },
+          subscribeForPrices: async ({ symbol, onPrice }) => {
+            priceHandlers.set(symbol, onPrice)
+            return { ok: true, data: { disconnect() {} } }
+          },
+          createOrder: async (order) => {
+            createdOrders.push(order)
+            return { ok: true, data: { orderId: "tracked-buy" } }
+          },
+        },
+        eventBus: {
+          publish(event) {
+            events.push(event)
+            return { ok: true }
+          },
+        },
+        tradingConfig: {
+          strategies: {
+            "free-roll": {
+              settings: { minProfit: 0.01 },
+              pairs: { DOGEUSDT: createPair() },
+            },
+          },
+        },
+      })
+
+      try {
+        await bot.run()
+        priceHandlers.get("DOGEUSDT")({ price: 100 })
+        await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+        userDataHandler({
+          eventType: "executionReport",
+          executionType: status,
+          executedOrder: {
+            symbol: "DOGEUSDT",
+            orderId: "tracked-buy",
+            status,
+            side: "BUY",
+            price: "99.95",
+            quantity: "100",
+          },
+        })
+
+        await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "terminal failure did not pause pair")
+        priceHandlers.get("DOGEUSDT")({ price: 90 })
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+        assert.equal(createdOrders.length, 1)
+        assert.ok(events.some((event) => event.name === "bot.pair_paused" &&
+          event.data.reason.includes(`BUY tracked-buy ended as ${status}`)))
+      } finally {
+        await bot.stop()
+      }
+    })
+  }
+})
+
+test("SELL submission failures pause the pair and never leave an untracked recovery order", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        if (order.side === "SELL") {
+          return { ok: false, errors: [new Error("SELL rejected by exchange")] }
+        }
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler(createExecutionEvent({
+      order: { ...createdOrders[0], orderId: "tracked-buy" },
+      tradeId: 901,
+    }))
+
+    await waitForCondition(() => bot.getStats().DOGEUSDT.paused, "SELL failure did not pause pair")
+    assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
+    assert.equal(bot.getStats().DOGEUSDT.sellOrderId, null)
+    assert.ok(events.some((event) => event.name === "order.create_failed" &&
+      event.data.side === "SELL"))
+    assert.ok(events.some((event) => event.name === "bot.pair_paused"))
+  } finally {
+    await bot.stop()
+  }
+})
