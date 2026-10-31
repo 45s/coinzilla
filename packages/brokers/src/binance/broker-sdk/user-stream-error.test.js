@@ -6,7 +6,10 @@ import { createFakeRpcClient } from "./test-helpers/fake-broker-clients.js"
 describe("BinanceSdkBroker user-data stream errors", () => {
   it("logs RPC connection errors without invoking the event callback", async () => {
     const logs = []
-    const rpc = createFakeRpcClient({ "userDataStream.subscribe.signature": () => ({ subscriptionId: 9 }) })
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: 9 }),
+      "userDataStream.unsubscribe": () => ({}),
+    })
     const broker = new BinanceSdkBroker({
       apiKey: "test-key",
       apiSecret: "test-secret",
@@ -24,7 +27,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     assert.equal(logs.length, 1)
     assert.equal(logs[0][0], "Binance user data stream error")
     assert.equal(logs[0][1], error)
-    result.data.disconnect()
+    await result.data.disconnect()
     assert.equal(rpc.listenerCount, 0)
   })
 })
