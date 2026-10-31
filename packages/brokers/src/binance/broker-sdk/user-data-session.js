@@ -66,6 +66,11 @@ export class BinanceUserDataSession {
     this.#stopped = false
   }
 
+  async resume() {
+    if (this.#stopped || this.#subscribers.size === 0) return
+    await this.#ensureRemoteSubscription()
+  }
+
   async subscribe({ onEvent, onStatus }) {
     validateCallback(onEvent, "onEvent")
     if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
@@ -121,12 +126,17 @@ export class BinanceUserDataSession {
       "userDataStream.subscribe.signature",
       {},
       { signed: true },
-    ).then((response) => {
+    ).then(async (response) => {
       const subscriptionId = response.data?.subscriptionId
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
         throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
       }
       if (this.#stopped || this.#subscribers.size === 0) {
+        try {
+          await client.request("userDataStream.unsubscribe", { subscriptionId })
+        } catch (error) {
+          this.logger.warn?.("Unable to clean up an unused Binance user-data subscription", error)
+        }
         return subscriptionId
       }
       this.#subscriptionId = subscriptionId
@@ -269,6 +279,7 @@ export class BinanceUserDataSession {
       } catch (error) {
         this.setUnavailable(true)
         this.logger.error?.("Binance user-data recovery attempt failed", { attempt, error })
+        this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
         if (attempt >= this.maxReconnectAttempts) {
           this.#notify({
             type: "recoveryFailed",
