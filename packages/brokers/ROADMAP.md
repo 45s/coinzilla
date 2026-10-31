@@ -589,9 +589,19 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ### Canonical fills and commissions
 
-- [~] Additive `getFills({ symbol, orderId?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values.
+- [x] Additive `getFills({ symbol, orderId?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values; merged in [PR #318](https://github.com/45s/coinzilla/pull/318).
 - Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
 - Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
 - Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
-- **Task branch:** `feature/brokers/canonical-fills`; PR targets `develop`.
+- Consumer migration remains a separate task owned by the consumer domain.
+
+## 13. Reconciliation snapshot broker ports (FR-057 / request #316)
+
+- [~] Add `getServerTime()` using the WebSocket API `time` method; expose only the validated exchange `serverTime` (never local clock time).
+- [~] Add `getAccountSnapshot()` using signed `account.status`; return canonical `Balance[]` and the exchange's `updateTime` as neutral `sourceTime`. Preserve `getBalances()` unchanged.
+- [~] Extend `getMyTrades()` with `fromId`, `startTime`, and `endTime`; permit `orderId + fromId`, reject time filters combined with either cursor filter, and enforce the 24-hour time-window limit.
+- [~] Extend `getOrderHistory()` with `startTime` and `endTime`; when either time filter is present, omit `orderId` because Binance ignores it. Enforce the 24-hour maximum and preserve exact source order fields including `time` and `updateTime`.
+- Do not add a misleading `complete` flag. A returned page whose length equals the requested limit may be truncated; the consumer must request the next page using the last trade/order ID plus one, or advance the time window.
+- Keep existing array result shapes and bot consumers unchanged. Consumer-side snapshot assembly and validation remain owned by `apps/bot-free-roll`.
+- **Cross-domain request:** [#316](https://github.com/45s/coinzilla/issues/316). **Task branch:** `feature/brokers/reconciliation-history-ports`.
