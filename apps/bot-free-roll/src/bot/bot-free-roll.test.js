@@ -2512,11 +2512,39 @@ test("successful base-asset SELL commission allocates only keepQuantity", async 
       "base-commission recovery did not complete",
     )
 
-    const stats = fixture.bot.getStats().DOGEUSDT
-    assert.equal(stats.commissionTotals.DOGE, "0.01")
-    assert.equal(stats.freeQuantity, "1")
-    assert.equal(stats.activeQuantity, "0.99")
-    assert.equal(stats.paused, false)
+    const firstStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(firstStats.commissionTotals.DOGE, "0.01")
+    assert.equal(firstStats.freeQuantity, "1")
+    assert.equal(firstStats.activeQuantity, "0.99")
+    assert.equal(firstStats.paused, false)
+
+    const nextBuy = fixture.createdOrders.filter((order) => order.side === "BUY")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextBuy,
+      tradeId: 1106,
+    }))
+    await waitForCondition(
+      () => fixture.createdOrders.filter((order) => order.side === "SELL").length === 2,
+      "next recovery SELL was not created with carry-forward inventory",
+    )
+
+    const nextSell = fixture.createdOrders.filter((order) => order.side === "SELL")[1]
+    fixture.userDataHandler(createExecutionEvent({
+      order: nextSell,
+      tradeId: 1107,
+      commissionAmount: "0.01",
+      commissionAsset: "DOGE",
+    }))
+    await waitForCondition(
+      () => fixture.bot.getStats().DOGEUSDT.profitableCycles === 2,
+      "second base-commission recovery did not complete",
+    )
+
+    const secondStats = fixture.bot.getStats().DOGEUSDT
+    assert.equal(secondStats.commissionTotals.DOGE, "0.02")
+    assert.equal(secondStats.freeQuantity, "2")
+    assert.equal(secondStats.activeQuantity, "0.98")
+    assert.equal(secondStats.paused, false)
   } finally {
     await fixture.bot.stop()
   }
