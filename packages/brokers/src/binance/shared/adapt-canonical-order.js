@@ -16,7 +16,7 @@ const TERMINAL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 function normalizeId({ value, name }) {
   if (
     (typeof value !== "string" && typeof value !== "number") ||
-    !/^\\d+$/.test(String(value)) ||
+    !/^\d+$/.test(String(value)) ||
     (typeof value === "number" && !Number.isSafeInteger(value)) ||
     !Number.isSafeInteger(Number(value))
   ) {
