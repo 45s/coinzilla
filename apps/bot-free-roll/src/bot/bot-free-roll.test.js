@@ -2750,40 +2750,19 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => {
-        calls.push("getBalances")
-        return {
-          ok: true,
-          data: [{
-            asset: { code: "USDT" },
-            free: { amount: "10000" },
-            locked: { amount: "0" },
-            total: { amount: "10000" },
-          }],
-        }
-      },
-      getOpenOrders: async () => {
-        calls.push("getOpenOrders")
-        return { ok: true, data: [] }
-      },
-      getMyTrades: async ({ orderId }) => {
-        calls.push("getMyTrades")
-        return {
-          ok: true,
-          data: [{
-            id: "trade-1",
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        calls,
+        getExecution: ({ orderId }) => ({
+          status: "FILLED",
+          executedQuantity: "100",
+          fills: [createRecoveryFill({
+            tradeId: "101",
             orderId,
-            symbol: "DOGEUSDT",
-            side: "BUY",
-            price: "100",
             quantity: "100",
-            quoteQuantity: "10000",
-            commissionAmount: "0",
-            commissionAsset: null,
-            isMaker: true,
-          }],
-        }
-      },
+          })],
+        }),
+      }),
       subscribeForUserData: async ({ onEvent: _onEvent, onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
@@ -2803,8 +2782,9 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-${createdOrders.length}` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -2834,9 +2814,10 @@ test("reconciles balances and tracked fills before acknowledging user-data recov
       "recovery did not reconcile and resume the SELL plan",
     )
 
-    assert.ok(calls.indexOf("getBalances") < calls.indexOf("getOpenOrders"))
-    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getMyTrades"))
-    assert.ok(calls.indexOf("getMyTrades") < calls.indexOf("acknowledgeRecovery"))
+    assert.ok(calls.indexOf("getAccountSnapshot") < calls.indexOf("getOpenOrders"))
+    assert.ok(calls.indexOf("getOpenOrders") < calls.indexOf("getCanonicalOrderHistory"))
+    assert.ok(calls.indexOf("getCanonicalOrderHistory") < calls.indexOf("getFills"))
+    assert.ok(calls.indexOf("getFills") < calls.indexOf("acknowledgeRecovery"))
     assert.equal(bot.getStats().DOGEUSDT.buyFills, 1)
     assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "100")
     assert.equal(bot.getSummary().recovering, false)
