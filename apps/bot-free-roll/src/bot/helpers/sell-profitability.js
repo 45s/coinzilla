@@ -55,14 +55,12 @@ export function evaluateSellProfitability({
     }
 
     const {
-      baseAsset,
-      quoteAsset,
       activeQuantity,
       keepQuantity,
     } = position
-    if (typeof baseAsset !== "string" || !baseAsset.trim() ||
-        typeof quoteAsset !== "string" || !quoteAsset.trim() ||
-        baseAsset === quoteAsset) {
+    const baseAsset = typeof position.baseAsset === "string" ? position.baseAsset.trim() : ""
+    const quoteAsset = typeof position.quoteAsset === "string" ? position.quoteAsset.trim() : ""
+    if (!baseAsset || !quoteAsset || baseAsset === quoteAsset) {
       throw new TypeError("position must include distinct baseAsset and quoteAsset codes")
     }
 
@@ -100,7 +98,8 @@ export function evaluateSellProfitability({
     const unsupportedFeeAssets = []
 
     for (const [index, assumption] of feeAssumptions.entries()) {
-      if (!assumption || typeof assumption.asset !== "string" || !assumption.asset.trim()) {
+      const feeAsset = typeof assumption?.asset === "string" ? assumption.asset.trim() : ""
+      if (!feeAsset) {
         throw new TypeError(`feeAssumptions[${index}].asset must be a non-empty string`)
       }
       assertDecimalString(assumption.rate, `feeAssumptions[${index}].rate`)
@@ -110,7 +109,7 @@ export function evaluateSellProfitability({
       }
       if (compareDecimal({ left: assumption.rate, right: "0" }) === 0) continue
 
-      if (assumption.asset === baseAsset) {
+      if (feeAsset === baseAsset) {
         baseFeeQuantity = addDecimal({
           left: baseFeeQuantity,
           right: multiplyDecimal({
@@ -118,7 +117,7 @@ export function evaluateSellProfitability({
             right: assumption.rate,
           }),
         })
-      } else if (assumption.asset === quoteAsset) {
+      } else if (feeAsset === quoteAsset) {
         quoteFeeAmount = addDecimal({
           left: quoteFeeAmount,
           right: multiplyDecimal({
@@ -130,7 +129,7 @@ export function evaluateSellProfitability({
           }),
         })
       } else {
-        unsupportedFeeAssets.push(assumption.asset)
+        unsupportedFeeAssets.push(feeAsset)
       }
     }
 
