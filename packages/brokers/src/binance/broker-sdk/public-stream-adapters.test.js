@@ -43,6 +43,7 @@ test("passes through other public market-data events unchanged", () => {
     { e: "bookTicker", s: "BTCUSDT", b: "1.00" },
     { e: "depthUpdate", s: "BTCUSDT", b: [], a: [] },
     { e: "unknownPublicEvent", value: 1 },
+    { e: "toString", value: 2 },
   ]) {
     assert.equal(adaptPublicStreamMessage(event), event)
   }
