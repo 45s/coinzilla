@@ -146,6 +146,35 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+
+  it("verifies a malformed subscribe response against the active session", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: "malformed" }),
+      "session.subscriptions": () => [{ subscriptionId: 59 }],
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.data.subscriptionId, 59)
+    assert.deepEqual(rpc.calls.map((call) => call.method), [
+      "userDataStream.subscribe.signature",
+      "session.subscriptions",
+    ])
+    await result.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("resolves an uncertain subscribe response through session.subscriptions", async () => {
     const rpc = createFakeRpcClient({
       "userDataStream.subscribe.signature": async () => {
