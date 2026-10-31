@@ -5,15 +5,15 @@ import { validateOptions } from "./options.js"
 
 const defaultLogger = { error() {} }
 
-test("uses the default logger when options are omitted or logger is absent", () => {
-  assert.deepEqual(validateOptions({}, defaultLogger), {
-    logger: defaultLogger,
-    onError: undefined,
-  })
-  assert.deepEqual(validateOptions({ onError() {} }, defaultLogger), {
-    logger: defaultLogger,
-    onError: validateOptions({ onError() {} }, defaultLogger).onError,
-  })
+test("uses the default logger when options are empty or omit logger", () => {
+  const emptyOptions = validateOptions({}, defaultLogger)
+  assert.equal(emptyOptions.logger, defaultLogger)
+  assert.equal(emptyOptions.onError, undefined)
+
+  const onError = () => {}
+  const optionsWithReporter = validateOptions({ onError }, defaultLogger)
+  assert.equal(optionsWithReporter.logger, defaultLogger)
+  assert.equal(optionsWithReporter.onError, onError)
 })
 
 test("accepts supported options and preserves supplied references", () => {
@@ -29,10 +29,9 @@ test("accepts a null-prototype plain options object", () => {
   const options = Object.create(null)
   options.logger = defaultLogger
 
-  assert.deepEqual(validateOptions(options, defaultLogger), {
-    logger: defaultLogger,
-    onError: undefined,
-  })
+  const result = validateOptions(options, defaultLogger)
+  assert.equal(result.logger, defaultLogger)
+  assert.equal(result.onError, undefined)
 })
 
 test("rejects non-plain constructor options", () => {
@@ -67,8 +66,7 @@ test("rejects unknown string and symbol option keys", () => {
 })
 
 test("rejects invalid logger values and error methods", () => {
-  for (const logger of [null, undefined, "logger", 1, () => {}]) {
-    if (logger === undefined) continue // Undefined selects the documented default.
+  for (const logger of [null, "logger", 1, () => {}]) {
     assert.throws(() => validateOptions({ logger }, defaultLogger), /logger must be an object/)
   }
 
@@ -79,10 +77,8 @@ test("rejects invalid logger values and error methods", () => {
     )
   }
 
-  assert.deepEqual(validateOptions({ logger: {} }, defaultLogger), {
-    logger: {},
-    onError: undefined,
-  })
+  const loggerWithoutError = {}
+  assert.equal(validateOptions({ logger: loggerWithoutError }, defaultLogger).logger, loggerWithoutError)
 })
 
 test("rejects non-function error reporters", () => {
