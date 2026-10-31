@@ -104,8 +104,8 @@ This is an important architectural distinction:
 
 - The SDK broker's `subscribeForUserData()` calls `tradingConnection.userDataStreamSubscribeSignature()`.
 - It does **not** subscribe to user data on the market-data Streams connection.
-- Binance documents `userDataStream.subscribe.signature` as the signed USER_STREAM subscription method. Events are pushed on the subscribed WebSocket API connection.
-- Binance also documents `userDataStream.subscribe`, which requires an authenticated WebSocket API session using Ed25519 keys. Do not substitute this method without deliberately changing supported key requirements and validating compatibility.
+- Binance documents `userDataStream.subscribe.signature` as the signed USER_STREAM subscription method. It does not require `session.logon` or Ed25519 authentication, and Binance's changelog explicitly states it works with any API key type. Events are pushed on the subscribed WebSocket API connection.
+- Binance also documents `userDataStream.subscribe`, which requires an authenticated WebSocket API session using Ed25519 keys. This is a separate alternative, not a prerequisite for `userDataStream.subscribe.signature`; do not substitute it.
 - The old custom `BinanceStreamClient.userData()` is a different legacy path: it creates/renews a REST listen key and opens a classic Streams connection. It is incomplete and must not be mistaken for the SDK broker's current user-data behavior.
 
 Therefore the target architecture has **two transport roles**, not “market streams plus user data on the same Streams socket”:
@@ -113,7 +113,7 @@ Therefore the target architecture has **two transport roles**, not “market str
 1. WebSocket API connection: RPC requests/responses **and** the authenticated user-data subscription/events delivered on that API connection.
 2. WebSocket Streams connection: public market-data streams such as `<symbol>@aggTrade`.
 
-The user-data signature scheme and exact supported API-key algorithms for `userDataStream.subscribe.signature` must be pinned down from Binance's current endpoint-security documentation and testnet verification before implementation. The regular `userDataStream.subscribe` Ed25519 session flow is not interchangeable by assumption.
+**Credential compatibility decision:** preserve the current bot's existing HMAC API-key configuration. The existing `apiKey` and `apiSecret` are sufficient: include the API key in the signed request and compute the signature with HMAC-SHA-256 using the API secret. Binance's official changelog confirms that `userDataStream.subscribe.signature` works with any API key type and does not require an Ed25519 API key. The alternative `userDataStream.subscribe` method does require an Ed25519-authenticated session, but it is not the method used by the current SDK and must not be substituted. Phase 3 must still verify exact WebSocket signing-payload canonicalization with known test vectors and testnet; that is an implementation correctness gate, not a requirement for additional credentials.
 
 ## 6. Binance WebSocket Streams inventory
 
@@ -166,7 +166,7 @@ This is not a substitute for the SDK broker contract. It does not currently prov
 - Repository CI currently sets up **Node.js 22**.
 - Root `package.json` and `packages/brokers/package.json` do not declare a Node `engines` range. The current `@coinzilla/event-bus` and `@coinzilla/journal` manifests declare `node >=20`; the `@coinzilla/bot-free-roll` manifest does not declare a Node range. Repository CI currently tests Node 22.
 - Node's official v22 documentation records global WHATWG `WebSocket` as available without the experimental flag from Node 22.0.0 and no longer experimental from Node **22.4.0**. Node 20.10 introduced it behind an experimental flag. Therefore, the built-in client is a stable no-extra-flag choice only from Node 22.4.0.
-- **Runtime support is not yet resolved.** If Coinzilla intends to preserve the existing workspace `node >=20` compatibility, Node's global WebSocket cannot be assumed to be available as a stable, flag-free API across that range. If the project accepts a Node 22.4.0+ minimum for `@coinzilla/brokers` and its consumers, the native WebSocket path is viable subject to the ping/pong proof below. This decision must be made before Phase 2; do not silently raise the runtime floor.
+- **Decision (accepted 2026-10-31): `@coinzilla/brokers` and every consumer using its native WebSocket implementation require Node.js >=22.4.0.** This intentionally raises the effective runtime floor for those consumers above the `node >=20` range declared by `@coinzilla/event-bus` and `@coinzilla/journal`. Add the matching `engines` metadata and update runtime documentation as part of implementation; do not imply that all unrelated workspace packages independently require Node 22.4.0.
 - The WHATWG API is EventTarget-style and does not expose `ws`-style `.ping()` or `.pong()` methods. Binance Spot Streams requires timely control-frame ping/pong handling. The implementation must prove that the Node built-in client automatically handles server ping frames correctly; if that cannot be demonstrated on the supported Node runtime, stop and revisit the transport decision rather than introducing a third-party runtime dependency by default.
 - The native WebSocket constructor and lifecycle behavior must be tested on the exact Node versions used by CI and production. Node 22 as a major version alone is not a sufficiently precise minimum-version contract.
 
@@ -194,4 +194,4 @@ Before implementation proceeds, preserve these decisions:
 5. Use Node's native WebSocket only after proving server ping/pong compliance and production runtime support.
 6. Keep all bot application files read-only throughout this migration.
 
-**Phase 0 status:** inventory, consumer contract, and protocol mapping are documented. Phase 0 is not complete until the project decides whether `@coinzilla/brokers` may require Node 22.4.0+ or must preserve Node 20 compatibility. Signing/key-algorithm details and native ping/pong behavior remain implementation gates for Phases 2, 3, and 6—not reasons to guess.
+**Phase 0 status:** complete. Inventory, consumer contract, protocol mapping, the Node.js >=22.4.0 runtime decision, and user-data credential compatibility are documented. HMAC-SHA-256 signing payload canonicalization still requires known test vectors in Phase 3, and native ping/pong behavior remains an implementation gate in Phase 2; neither is a reason to guess.
