@@ -67,14 +67,15 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `bd37ee4e84ae3c12690a3150ce7cc9926b1cc076` (PR #345).
+1. The source of truth is `develop`, currently at merge commit `f5e80dbb2b78859a613b319edc69f7163767bf26` (PR #347).
 2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
 3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
 4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
 5. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A successful socket connection or subscription is never proof that missed events have been reconciled.
 6. Phase 6 remains in progress until reconnect/reconciliation liveness tests and opt-in Binance TESTNET verification are complete. PR #343 removed fixed microtask-count polling from recovery race tests; the fake scheduler awaits async timer callbacks and tests use explicit recovery synchronization. Do not claim the broker can replay events missed during a disconnect.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
-8. Bot strategy implementation remains owned by `apps/bot-free-roll`; broker changes must preserve the callback/recovery acknowledgement contract and must not edit bot runtime code without an explicit cross-domain task.
+8. PR #347 is merged: RPC connection-startup rejection now detaches all registered RPC transport listeners. The next lifecycle audit found that native transport listener registration itself can throw after partially attaching handlers; the current task adds rollback and socket shutdown for that partial-startup failure.
+9. Bot strategy implementation remains owned by `apps/bot-free-roll`; broker changes must preserve the callback/recovery acknowledgement contract and must not edit bot runtime code without an explicit cross-domain task.
 
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -408,7 +409,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [ ] Verify broker package tests, full workspace tests, syntax checks, production dependency audit, and repository-required branch-protection checks.
 - [ ] Run opt-in TESTNET verification with explicitly configured credentials and record the exact runtime/environment/results; do not treat default CI as live protocol verification.
 - [ ] Review logs for secret leakage.
-- [~] Audit lifecycle cleanup. RPC client connection-startup rejection previously marked the client closed without detaching its transport listeners; this PR adds cleanup and a deterministic regression test. Continue auditing the remaining transport/Streams/user-data failure paths before marking the lifecycle item complete.
+- [~] Audit lifecycle cleanup. PR #347 fixed RPC client listener cleanup after transport connection rejection. The current transport audit found a separate partial-registration failure: if adding a socket event listener throws, previously attached handlers and the newly created socket must be cleaned up. Continue auditing Streams and user-data failure paths before marking the lifecycle item complete.
 - [ ] Verify timers, sockets, pending requests, and listeners are cleaned up on shutdown and failure.
 - [ ] Re-audit all consumers and public exports.
 - [ ] Confirm no bot application files were changed by this migration.
