@@ -67,7 +67,7 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Validate draft PR #262 on its exact head; all RPC and signing tests must pass on Node.js 22.23.4.
+1. Validate draft PR #263 on its exact head; all RPC and signing tests must pass on Node.js 22.23.4.
 2. Review the full diff and fix failures with meaningful changes; do not rerun CI using empty commits.
 3. Do not wire the RPC client into `BinanceSdkBroker` or add order-method retry behavior in this phase.
 4. Before declaring Phase 3 complete, recheck latest `main` and synchronize only if broker/API/consumer-contract changes require it.
