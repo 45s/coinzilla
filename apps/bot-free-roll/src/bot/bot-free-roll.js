@@ -110,6 +110,11 @@ export class FreeRollBot {
         continue
       }
 
+      const mode = pair.mode ?? "aggregated"
+      if (mode !== "aggregated") {
+        throw new Error(`${symbol}: strategy mode "${mode}" is not executable in this build`)
+      }
+
       if (
         !Number.isFinite(pair.priceStepPercent) ||
         pair.priceStepPercent <= 0 ||
@@ -130,6 +135,7 @@ export class FreeRollBot {
       })
 
       this.#states.set(symbol, {
+        mode,
         settings: pair,
         orderType,
         configuredFeeRate,
