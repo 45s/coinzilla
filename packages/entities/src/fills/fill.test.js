@@ -126,6 +126,10 @@ describe(Fill.name, () => {
       { message: fillErrMsgs.commissions },
     )
     assert.throws(
+      () => createFill({ commissions: new Array(1) }),
+      { message: fillErrMsgs.commissions },
+    )
+    assert.throws(
       () => createFill({ commissionStatus: "INCOMPLETE" }),
       { message: fillErrMsgs.commissionStatus },
     )
