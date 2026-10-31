@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, compareDecimal } from "./helpers/decimal.js"
+import { compareDecimal } from "./helpers/decimal.js"
 import { getOrderId, unwrapResult } from "./helpers/exchange.js"
 import { validateRecoveryBalances } from "./recovery.js"
 
@@ -44,7 +44,7 @@ function normalizeOpenOrder({ order, symbol }) {
     (side !== "BUY" && side !== "SELL") ||
     typeof originalQuantity !== "string" ||
     typeof executedQuantity !== "string" ||
-    !status
+    !["NEW", "PARTIALLY_FILLED"].includes(status)
   ) {
     throw new TypeError(`Open order snapshot contains an invalid order for ${symbol}`)
   }
@@ -65,7 +65,7 @@ function normalizeTrackedOrderIds({ orders }) {
 
   for (const order of orders) {
     const id = getOrderId(order)
-    if (!id || seen.has(id)) {
+    if (!id || !/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || seen.has(id)) {
       throw new TypeError("Tracked orders contain a missing or duplicate broker order ID")
     }
     seen.add(id)
@@ -138,7 +138,7 @@ async function collectOrderFills({
         fill.market.symbol !== symbol ||
         fill.brokerOrderId !== orderId ||
         typeof fill.tradeId !== "string" ||
-        !/^\\d+$/.test(fill.tradeId)
+        !/^\d+$/.test(fill.tradeId)
       ) {
         throw new TypeError(`Fill history for order ${orderId} contains an invalid fill`)
       }
@@ -321,6 +321,8 @@ export function validateReconciliationSnapshot({ snapshot, symbols } = {}) {
         !(fill instanceof Fill) ||
         fill.market.symbol !== symbol ||
         !trackedOrderIds.includes(fill.brokerOrderId) ||
+        !/^\d+$/.test(fill.tradeId) ||
+        !Number.isSafeInteger(Number(fill.tradeId)) ||
         tradeIds.has(fill.tradeId)
       ) {
         return failure(`Reconciliation snapshot contains invalid tracked fills for ${symbol}`)
