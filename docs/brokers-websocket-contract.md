@@ -128,7 +128,9 @@ The current bot consumer audit is tracked separately in [issue #304](https://git
 
 ### Opt-in TESTNET verification
 
-Run `pnpm --filter @coinzilla/brokers test:integration` with read-only-capable Binance TESTNET API credentials in `.env.development` (`BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`). The test explicitly asserts the TESTNET WebSocket API hostname and performs no order placement.
+Run the focused user-data test with `pnpm --filter @coinzilla/brokers test:user-data-integration` and read-only-capable Binance TESTNET API credentials in `.env.development` (`BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`). The test explicitly asserts the TESTNET WebSocket API hostname and performs no order placement or cancellation.
+
+The broader `pnpm --filter @coinzilla/brokers test:integration` command also runs the existing `broker.integration.js` suite, which creates and cancels a TESTNET order. Use the focused command above when validating user-data recovery without order placement.
 
 The user-data recovery integration test verifies signature subscription, active subscription lookup, socket disconnect, automatic reconnect/resubscription, account/open-order snapshots, symbol-scoped order/trade history, and the explicit acknowledgement gate. It is skipped by default when credentials are absent.
 
