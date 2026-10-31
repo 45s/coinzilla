@@ -168,6 +168,36 @@ test("supports multiple stream subscriptions in one request", async () => {
   await client.disconnect()
 })
 
+test("batches subscriptions above 200 streams and paces control messages", async () => {
+  const { client, clock, transports } = createClient()
+  const streams = Array.from({ length: 201 }, (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`)
+  const subscription = client.subscribe(streams, () => {})
+  await flush()
+
+  const initialBatch = streams.slice(0, 200)
+  assert.equal(transports[0].sent[0].method, "LIST_SUBSCRIPTIONS")
+  acknowledge(transports[0], 0, { result: initialBatch })
+
+  await flush()
+  assert.equal(transports[0].sent.length, 1)
+  clock.advanceBy(299)
+  await flush()
+  assert.equal(transports[0].sent.length, 1)
+
+  clock.advanceBy(1)
+  await flush()
+  assert.deepEqual(transports[0].sent[1], {
+    method: "SUBSCRIBE",
+    params: [streams[200]],
+    id: 2,
+  })
+  acknowledge(transports[0], 1)
+  await subscription
+
+  assert.equal(client.subscriptions.length, 201)
+  await client.disconnect()
+})
+
 test("dispatches combined-stream envelopes and all-market arrays", async () => {
   const { client, clock, transports } = createClient()
   const combinedEvents = []
