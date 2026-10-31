@@ -84,7 +84,7 @@ function createClient(options = {}) {
 }
 
 async function flush() {
-  for (let index = 0; index < 8; index += 1) await Promise.resolve()
+  for (let index = 0; index < 32; index += 1) await Promise.resolve()
 }
 
 function acknowledge(transport, index = 0, response = { result: null }) {
