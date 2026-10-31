@@ -242,6 +242,24 @@ test("preserves exact open-order remaining quantity and rejects unresolved fee d
   }).ok, false)
 })
 
+test("fails closed when tracked fill totals do not match canonical order execution", async () => {
+  const broker = createBroker({
+    trackedOrder: createCanonicalOrder(),
+    fillsByCursor: {
+      first: [createFill({ tradeId: "100" }), createFill({ tradeId: "101" })],
+    },
+  })
+
+  const result = await collectReconciliationSnapshot({
+    broker,
+    trackedOrdersBySymbol: { DOGEFDUSD: [{ id: "11" }] },
+    pageLimit: 3,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /fill quantity does not match/)
+})
+
 test("fails closed when a full page cannot be exhausted within the configured page limit", async () => {
   const broker = createBroker({
     fillsByCursor: {
