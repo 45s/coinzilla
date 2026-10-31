@@ -101,7 +101,8 @@ export function reconcileTrackedOrder({
           compareDecimal({ left: originalQuantity, right: order.quantity }) !== 0 ||
           !["NEW", "PARTIALLY_FILLED"].includes(status) ||
           compareDecimal({ left: executedQuantity, right: historyQuantity }) !== 0 ||
-          (status === "NEW" && executedComparison !== 0) ||
+          (status === "NEW" &&
+            compareDecimal({ left: executedQuantity, right: "0" }) !== 0) ||
           (status === "PARTIALLY_FILLED" &&
             (compareDecimal({ left: executedQuantity, right: "0" }) <= 0 ||
               executedComparison >= 0))) {
