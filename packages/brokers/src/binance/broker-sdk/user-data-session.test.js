@@ -77,6 +77,37 @@ function createBroker({ maxAttempts = 3 } = {}) {
 
 describe("Binance user-data session recovery", () => {
 
+
+  it("resolves an uncertain subscribe response through session.subscriptions", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": async () => {
+        throw new Error("subscription response timed out")
+      },
+      "session.subscriptions": () => [{ subscriptionId: 42 }],
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.data.subscriptionId, 42)
+    assert.deepEqual(rpc.calls.map((call) => call.method), [
+      "userDataStream.subscribe.signature",
+      "session.subscriptions",
+    ])
+    await result.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("tracks API socket loss even when no user-data handle is active", async () => {
     const { broker, clients } = createBroker()
     await broker.connect()
