@@ -149,6 +149,7 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 | `getOrder({ symbol, orderId })` | `orderStatus(params)` | `order.status` | USER_DATA, signed | Preserve order adapter and ID representation. |
 | `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Preserves raw response fields and timestamps. Time filters take precedence over `orderId`; the time window cannot exceed 24 hours. |
 | `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Adapts trades and preserves exact IDs/decimal strings. `orderId + fromId` is supported; time filters cannot combine with either. Time window max 24 hours. |
+| `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Returns canonical `Fill[]` and applies the same validated cursor/time filters as `getMyTrades()`. |
 | `createOrder(input)` | `orderPlace(params)` | `order.place` | TRADE, signed | State-changing request. Never automatically replay after uncertain disconnect. Preserve client order ID mapping and LIMIT/LIMIT_MAKER defaults. |
 | `cancelOrder({ symbol, orderId })` | `orderCancel(params)` | `order.cancel` | TRADE, signed | State-changing request; uncertain outcome must be reconciled. |
 | `cancelAllOpenOrders({ symbol })` | `openOrdersCancelAll(params)` | `openOrders.cancelAll` | TRADE, signed | State-changing request; response can contain order and order-list reports. |
@@ -271,8 +272,9 @@ The broker exposes exchange-owned source times and bounded history queries for t
 
 - `getServerTime()` returns `{ serverTime }` under the normal broker result wrapper. The value is validated as a non-negative safe integer from Binance, not sampled from the local process clock.
 - `getAccountSnapshot()` returns `{ balances: Balance[], sourceTime }`; `sourceTime` is the exact account `updateTime`. It requests `omitZeroBalances: false` and leaves `getBalances()` untouched for compatibility.
-- `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` supports the documented cursor/time filters. `orderId + fromId` is allowed; `fromId` or `orderId` combined with either time filter is rejected. A two-sided time range must be ordered and no longer than 24 hours.
+- `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` and canonical `getFills(...)` share the documented cursor/time filters. `orderId + fromId` is allowed; `fromId` or `orderId` combined with either time filter is rejected. A two-sided time range must be ordered and no longer than 24 hours.
 - `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })` supports ID and time pagination. When a time filter is supplied, the adapter omits `orderId`, matching Binance's documented precedence (time filters cause `orderId` to be ignored). A two-sided time range is limited to 24 hours.
+- Trade and fill IDs outside JavaScript's safe-integer range fail closed instead of being rounded. Order-history response IDs are checked the same way before being exposed.
 - Existing array result shapes are preserved. The adapter does not claim a page is complete: if the returned count equals the requested limit, the caller must continue with the last returned trade/order ID plus one, or advance its bounded time window. It must not interpret a full page as an exhausted history.
 
 The consumer-owned reconciliation snapshot and pagination rules are specified in [`RECONCILIATION_SNAPSHOT_CONTRACT.md`](./engineering/RECONCILIATION_SNAPSHOT_CONTRACT.md); the cross-domain request is [#316](https://github.com/45s/coinzilla/issues/316).
