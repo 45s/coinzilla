@@ -201,3 +201,29 @@ test("slow handlers retain capacity until settlement and capacity recovers after
   assert.equal(calls, 2)
   assert.equal((await bus.close()).ok, true)
 })
+
+test("error reporter rejection becomes a process warning, not an unhandled rejection", async () => {
+  const bus = new EventBus({
+    logger: {},
+    onError: async () => {
+      throw new Error("reporter rejected")
+    },
+  })
+  const warning = new Promise((resolve) => {
+    process.once("warning", resolve)
+  })
+
+  bus.subscribe({
+    name: "handler.failed",
+    handler: () => {
+      throw new Error("handler failed")
+    },
+  })
+
+  assert.equal(bus.publish({ name: "handler.failed", source: "test" }).ok, true)
+  assert.equal((await bus.flush()).ok, true)
+
+  const emittedWarning = await warning
+  assert.match(emittedWarning.message, /EventBus error reporting failed: reporter rejected/)
+  assert.equal((await bus.close()).ok, true)
+})
