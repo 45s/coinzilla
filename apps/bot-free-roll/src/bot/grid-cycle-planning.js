@@ -1,7 +1,7 @@
 import { toResult } from "@coinzilla/utils"
 import { calculateFillAccountingExact } from "./helpers/accounting.js"
 import { calculateSellPlanExact } from "./helpers/order-planning.js"
-import { addDecimal, compareDecimal } from "./helpers/decimal.js"
+import { addDecimal, compareDecimal, multiplyDecimal } from "./helpers/decimal.js"
 import { createGridCycle, projectGridCycles } from "./grid-cycles.js"
 
 function failure(reason) {
@@ -111,7 +111,11 @@ export function calculateGridCycleSellPlan({
       priceTickSize,
       quantityStepSize,
     })
-    return toResult({ data: plan })
+    const reservedQuantity = multiplyDecimal({
+      left: plan.quantity,
+      right: addDecimal({ left: "1", right: feeRate }),
+    })
+    return toResult({ data: { ...plan, reservedQuantity } })
   } catch (error) {
     return failure(error.message)
   }
