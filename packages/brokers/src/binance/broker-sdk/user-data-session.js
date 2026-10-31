@@ -394,18 +394,24 @@ export class BinanceUserDataSession {
     const subscriber = this.#subscribers.get(id)
     if (!subscriber || !this.#recoveryRequired || this.#subscriptionId === null) return false
     subscriber.recoveryAcknowledged = true
+    return this.#completeRecoveryIfAcknowledged()
+  }
+
+  #completeRecoveryIfAcknowledged() {
+    if (!this.#recoveryRequired || this.#subscriptionId === null ||
+        this.#subscribers.size === 0) return false
     const allAcknowledged = [...this.#subscribers.values()]
-      .every((item) => item.recoveryAcknowledged)
-    if (allAcknowledged) {
-      this.#recoveryRequired = false
-      this.setUnavailable(false)
-      this.#notify({
-        type: "reconciled",
-        subscriptionId: this.#subscriptionId,
-        recoveryRequired: false,
-      })
-    }
-    return allAcknowledged
+      .every((subscriber) => subscriber.recoveryAcknowledged)
+    if (!allAcknowledged) return false
+
+    this.#recoveryRequired = false
+    this.setUnavailable(false)
+    this.#notify({
+      type: "reconciled",
+      subscriptionId: this.#subscriptionId,
+      recoveryRequired: false,
+    })
+    return true
   }
 
   async #removeSubscriber(id) {
@@ -414,7 +420,10 @@ export class BinanceUserDataSession {
     subscriber.active = false
     this.#subscribers.delete(id)
 
-    if (this.#subscribers.size > 0) return
+    if (this.#subscribers.size > 0) {
+      this.#completeRecoveryIfAcknowledged()
+      return
+    }
     this.#clearReconnectTimer()
     const subscriptionId = this.#subscriptionId
     this.#subscriptionId = null
