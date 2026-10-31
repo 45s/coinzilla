@@ -92,7 +92,7 @@ test("close timeout leaves the bus closed and allows a later drain", async () =>
 test("close validates timeout options without closing the bus", async () => {
   const bus = new EventBus({ logger: {} })
 
-  for (const options of [null, [], { timeoutMs: 0 }, { timeoutMs: -1 }, { timeoutMs: 1.5 }, { timeoutMs: Number.MAX_SAFE_INTEGER + 1 }, { unknown: true }]) {
+  for (const options of [null, [], { timeoutMs: 0 }, { timeoutMs: -1 }, { timeoutMs: 1.5 }, { timeoutMs: 2_147_483_648 }, { unknown: true }]) {
     const result = await bus.close(options)
     assert.equal(result.ok, false)
   }
