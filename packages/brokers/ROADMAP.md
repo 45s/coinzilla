@@ -302,6 +302,22 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
 - [x] Audit/reuse the existing public aggregate-trade adapter through `adaptPublicStreamMessage`; other public market-data events pass through unchanged, while authenticated user-data events are rejected at this boundary.
 - **Core-client CI evidence:** PR #265 exact head `a9c7070042bf01b2ab9bf590526313c146d04eb7` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. Public adapter files and the latest roadmap edits were added after that head; fresh CI on the current PR head is mandatory.
+**Legacy method-to-stream compatibility matrix** (the old exported methods remain untouched until Phase 5):
+
+| Legacy method | Required parameters | Native stream mapping |
+|---|---|---|
+| `trade({ tickets })` | First ticket/symbol | `{symbol}@trade` |
+| `kline({ tickets, interval })` | First ticket/symbol, interval | `{symbol}@kline_{interval}` |
+| `miniTicker({ symbol? })` | Optional symbol | `{symbol}@miniTicker` or `!miniTicker@arr` |
+| `ticker({ symbol? })` | Optional symbol | `{symbol}@ticker` or `!ticker@arr` |
+| `rollingWindowTicker({ windowSize, symbol? })` | Window `1h` or `4h`; optional symbol | `{symbol}@ticker_{windowSize}` or `!ticker_{windowSize}@arr` |
+| `bookTicker({ symbol })` | Symbol | `{symbol}@bookTicker` |
+| `partialBookDepth({ symbol, levels, speed })` | Symbol, levels `5/10/20`, speed `100ms/1000ms` | `{symbol}@depth{levels}@{speed}` |
+| `diffBookDepth({ symbol, speed })` | Symbol, speed `100ms/1000ms` | `{symbol}@depth@{speed}` |
+| `aggTrade({ tickets })` | First ticket/symbol | `{symbol}@aggTrade` |
+
+`userData()` is intentionally excluded: its current REST listen-key lifecycle is legacy behavior and the replacement belongs to Phase 6 on the authenticated WebSocket API connection.
+
 - **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. Adapter-boundary tests and exact-head CI must pass before Phase 4 is complete. No live credentials/network calls in unit tests.
 
 ### Phase 5 — Rebuild the broker on native clients
