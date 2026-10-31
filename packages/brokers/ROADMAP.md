@@ -588,7 +588,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 ### Timestamped reconciliation snapshot ports (request #316)
 - [x] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
 - [x] Add validated `fromId` pagination to `getMyTrades()` and canonical `getFills()`, plus time-window filters to `getOrderHistory()` while preserving existing result shapes.
-- [~] Validate response-side trade, fill, and order cursor IDs before exposing them; reject values outside JavaScript's safe-integer range.
+- [x] Validate response-side trade, fill, and order cursor IDs before exposing them; reject values outside JavaScript's safe-integer range ([PR #322](https://github.com/45s/coinzilla/pull/322)).
 - [x] Keep full pages potentially incomplete by returning unchanged array results without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
 - Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
 
