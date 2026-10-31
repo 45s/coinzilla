@@ -119,38 +119,8 @@ export function applyMarketInventoryFill({ ledger, fill } = {}) {
     return failure(`Invalid market fill accounting for trade ${fillId}: ${error.message}`)
   }
 
-  try {
-    if (
-      !accounting ||
-      typeof accounting.baseQuantity !== "string" ||
-      typeof accounting.quoteQuantity !== "string" ||
-      compareDecimal({ left: accounting.baseQuantity, right: "0" }) <= 0 ||
-      compareDecimal({ left: accounting.quoteQuantity, right: "0" }) <= 0
-    ) {
-      return failure(`Market fill accounting is invalid for trade ${fillId}`)
-    }
-  } catch (error) {
-    return failure(`Market fill accounting is invalid for trade ${fillId}: ${error.message}`)
-  }
-
   const commissionAmount = String(fill.commissionAmount ?? "")
   const commissionAsset = fill.commissionAsset ?? null
-  let commissionSign
-  try {
-    commissionSign = compareDecimal({ left: commissionAmount, right: "0" })
-  } catch (error) {
-    return failure(`Invalid commission amount for trade ${fillId}: ${error.message}`)
-  }
-  if (commissionSign < 0) {
-    return failure(`Negative commission is unsupported for trade ${fillId}`)
-  }
-  if (
-    commissionSign > 0 &&
-    commissionAsset !== ledger.market.baseAsset &&
-    commissionAsset !== ledger.market.quoteAsset
-  ) {
-    return failure(`Unsupported commission asset for trade ${fillId}`)
-  }
 
   const baseQuantity = fill.side === "BUY"
     ? addDecimal({
