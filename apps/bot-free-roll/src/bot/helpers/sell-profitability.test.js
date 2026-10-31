@@ -38,6 +38,8 @@ test("approves a profitable sell and returns an exact calculation breakdown", ()
   assert.equal(decision.approved, true)
   assert.deepEqual(decision.reasonCodes, [])
   assert.deepEqual(decision.breakdown, {
+    candidateQuantity: "99",
+    candidatePrice: "0.11",
     grossProceeds: "10.89",
     baseFeeQuantity: "0",
     quoteFeeAmount: "0",
@@ -45,9 +47,15 @@ test("approves a profitable sell and returns an exact calculation breakdown", ()
     netProceeds: "10.89",
     inventoryRequired: "99",
     availableForSell: "99",
+    cycleCost: "10",
+    saleProceeds: "0",
     requiredNetProceeds: "10.01",
     projectedNetProfit: "0.89",
     minProfit: "0.01",
+    minNotional: "5",
+    priceTickSize: "0.01",
+    quantityStepSize: "1",
+    baseToQuoteRate: "0.11",
     notional: "10.89",
   })
 })
@@ -89,6 +97,9 @@ test("rejects unsupported third-asset fee assumptions", () => {
     SELL_PROFITABILITY_REASONS.UNSUPPORTED_FEE_ASSET,
   ])
   assert.deepEqual(decision.details.unsupportedFeeAssets, ["BNB"])
+  assert.equal(decision.breakdown.feeValueInQuote, null)
+  assert.equal(decision.breakdown.netProceeds, null)
+  assert.equal(decision.breakdown.projectedNetProfit, null)
 })
 
 test("rejects a candidate that consumes retained inventory or base-fee reserve", () => {
