@@ -64,19 +64,19 @@ The current bot consumer invokes these broker operations:
 | `getSymbolFilters({ symbol })` | Load symbol metadata before trading | Preserve `symbol`, `baseAsset`, `quoteAsset`, string `tickSize`, string `stepSize`, and `supportedOrderTypes`. |
 | `createOrder(input)` | Submit bot orders | Preserve accepted input fields, `clientOrderId` mapping, defaults, and adapted order result. |
 | `cancelOrder({ symbol, orderId })` | Cancel bot orders | Preserve adapted order result and structured errors. |
-| `getBalances()` | Legacy canonical balance read | Preserve the existing `Balance[]` result for consumers that need balances without source metadata. |
-| `getAccountSnapshot()` | Account reconciliation snapshot | Return canonical `Balance[]` and the account response `updateTime` without changing `getBalances()`. |
-| `getServerTime()` | Bound reconciliation snapshot collection to exchange time | Return exact server milliseconds from the public `time` RPC method. |
+| `getBalances()` | Canonical account balance reconciliation after user-data recovery | Preserve the existing `Balance[]` result, including zero balances. |
 | `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | Reconcile fills after cancellation/races and page trade history | Preserve normalized fill fields, exact quantity/price/commission strings, commission asset, stable trade IDs, and source `time`. A full page is potentially incomplete; advance with `fromId` until a shorter page is observed. |
 
-The bot source also has explicit capability checks for `getSymbolFilters()` and `getMyTrades()`; absence of either is a startup/runtime contract failure. This migration must not edit `apps/bot-free-roll`; consumer source is read-only audit evidence.
+The bot source also has explicit capability checks for `getSymbolFilters()`, `getBalances()`, `getOpenOrders()`, and `getMyTrades()`; absence of a required recovery capability is a fail-closed runtime contract failure. This migration must not edit `apps/bot-free-roll`; consumer source is read-only audit evidence.
 
 Other SDK broker methods are public compatibility candidates even though the current bot source does not call them directly:
 
 - `getAssets()`
 - `getOpenOrders({ symbol? })`
 - `getOrder({ symbol, orderId })`
-- `getOrderHistory({ symbol, orderId?, limit? })`
+- `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })`
+- `getAccountSnapshot()` — additive timestamped account snapshot for FR-057.
+- `getServerTime()` — exchange server time for FR-057.
 - `cancelAllOpenOrders({ symbol })`
 - `getPrices({ symbol })`
 
@@ -145,7 +145,8 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 
 | Broker method | Current SDK method | Binance Spot WebSocket API method | Security class | Notes |
 |---|---|---|---|---|
-| `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns account balances; preserve current asset adapter behavior. |
+| `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns legacy asset summaries; preserve current adapter behavior. |
+| `getBalances()` | `accountStatus({ omitZeroBalances: false })` | `account.status` | USER_DATA, signed | Returns canonical `Balance[]` including zero balances. |
 | `getOpenOrders({ symbol? })` | `openOrdersStatus(params)` | `openOrders.status` | USER_DATA, signed | Symbol is optional; omitted means all open orders. |
 | `getOrder({ symbol, orderId })` | `orderStatus(params)` | `order.status` | USER_DATA, signed | Preserve order adapter and ID representation. |
 | `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Returns raw order history; `orderId` is an inclusive lower-bound cursor. Time filters cannot be combined with `orderId`; maximum time window is 24 hours. |
