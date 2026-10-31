@@ -81,3 +81,29 @@ test("unsubscribe does not cancel an already accepted delivery", async () => {
   assert.equal(calls, 1)
   assert.equal((await bus.close()).ok, true)
 })
+
+test("matching subscribers start independently for one accepted event", async () => {
+  const bus = new EventBus({ logger: {} })
+  const release = deferred()
+  const bothStarted = deferred()
+  const started = []
+
+  for (const subscriber of ["first", "second"]) {
+    bus.subscribe({
+      name: "work.started",
+      handler: async () => {
+        started.push(subscriber)
+        if (started.length === 2) bothStarted.resolve()
+        await release.promise
+      },
+    })
+  }
+
+  assert.equal(bus.publish({ name: "work.started", source: "test" }).ok, true)
+  await bothStarted.promise
+  assert.deepEqual(started, ["first", "second"])
+
+  release.resolve()
+  assert.equal((await bus.flush()).ok, true)
+  assert.equal((await bus.close()).ok, true)
+})
