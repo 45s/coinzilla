@@ -548,10 +548,10 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed during Phase 5:** `9aa0c0213548be9d849dcd6fae2f89ea1b856245`.
-- Compared the 5 new commits since the previous review at `49c5aba675e71490123181d757641376be35c78a`. They change only `apps/bot-free-roll/ROADMAP.md` and `apps/bot-free-roll/src/bot/helpers/price.test.js`; no broker package, broker export, Binance API, runtime, dependency/lockfile, or consumer-contract changes were found. Preserve these bot-team changes; do not merge app-only work into the integration branch.
-- Across all 15 commits since `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`, changes remain confined to `apps/bot-free-roll` and its coverage workflow/baseline. No broker/API/consumer-contract synchronization trigger has occurred.
-- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only bot changes are intentionally not synchronized.
+- **Main SHA reviewed during Phase 5:** `c6f9020eedf335dfd7c039da5cb749f532b2caea`.
+- Compared the 6 new commits since `9aa0c0213548be9d849dcd6fae2f89ea1b856245`. They modify only `packages/event-bus` and a `packages/journal` test; no broker package, Binance API, broker exports, runtime, broker dependency/lockfile, or broker consumer-contract changes were found. These event-bus/journal changes are outside this broker migration; leave them on `main`.
+- Across the 21 commits since `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`, the other changes remain confined to `apps/bot-free-roll` and its coverage work. No broker/API/consumer-contract synchronization trigger has occurred.
+- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only unrelated work is intentionally not synchronized.
 - Recheck latest `main` before Phase 5 merge and immediately after any significant broker/API/consumer-contract change.
 
 ---
