@@ -135,3 +135,84 @@ export function resolveGridOrderOwner({
 
   return toResult({ data: { owner } })
 }
+
+
+// Compare the persisted live-order set with the exchange open-orders snapshot.
+// Missing persisted orders are returned for final status/history lookup; they
+// are never treated as absent or safe to replace at this stage.
+export function reconcileGridOpenOrders({
+  orderIndex,
+  exchangeOpenOrders,
+} = {}) {
+  if (!orderIndex || !Array.isArray(orderIndex.orders) ||
+      !orderIndex.byOrderId || !orderIndex.byClientOrderId ||
+      !Array.isArray(exchangeOpenOrders)) {
+    return failure("Grid open-order reconciliation requires a validated order index and exchange order array")
+  }
+
+  const exchangeOrderIds = new Set()
+  const exchangeClientOrderIds = new Set()
+  const matchedOrderIds = new Set()
+  const matchedOrders = []
+
+  for (const order of exchangeOpenOrders) {
+    if (!order || typeof order !== "object" || Array.isArray(order) ||
+        !isNonEmptyString(order.id) ||
+        !isNonEmptyString(order.clientOrderId) ||
+        !isNonEmptyString(order.symbol) ||
+        !["BUY", "SELL"].includes(order.side) ||
+        !["NEW", "PARTIALLY_FILLED"].includes(order.status)) {
+      return failure("Exchange open-orders snapshot contains an invalid or non-open order")
+    }
+    if (exchangeOrderIds.has(order.id) ||
+        exchangeClientOrderIds.has(order.clientOrderId)) {
+      return failure("Exchange open-orders snapshot contains duplicate order identities")
+    }
+    exchangeOrderIds.add(order.id)
+    exchangeClientOrderIds.add(order.clientOrderId)
+
+    const resolved = resolveGridOrderOwner({
+      orderIndex,
+      orderId: order.id,
+      clientOrderId: order.clientOrderId,
+      symbol: order.symbol,
+      side: order.side,
+    })
+    if (!resolved.ok) return resolved
+
+    const { owner } = resolved.data
+    if (!["OPEN", "NEW", "PARTIALLY_FILLED"].includes(owner.status)) {
+      return failure(`Exchange reports terminal Grid order ${order.id} as open`)
+    }
+    matchedOrderIds.add(owner.orderId)
+    matchedOrders.push(Object.freeze({
+      orderId: owner.orderId,
+      clientOrderId: owner.clientOrderId,
+      cycleId: owner.cycleId,
+      role: owner.role,
+      exchangeStatus: order.status,
+    }))
+  }
+
+  const missingOrders = orderIndex.orders
+    .filter((entry) =>
+      ["OPEN", "NEW", "PARTIALLY_FILLED"].includes(entry.status) &&
+      !matchedOrderIds.has(entry.orderId),
+    )
+    .map((entry) => Object.freeze({
+      orderId: entry.orderId,
+      clientOrderId: entry.clientOrderId,
+      symbol: entry.symbol,
+      side: entry.side,
+      cycleId: entry.cycleId,
+      role: entry.role,
+    }))
+
+  return toResult({
+    data: Object.freeze({
+      complete: missingOrders.length === 0,
+      matchedOrders: Object.freeze(matchedOrders),
+      missingOrders: Object.freeze(missingOrders),
+    }),
+  })
+}
