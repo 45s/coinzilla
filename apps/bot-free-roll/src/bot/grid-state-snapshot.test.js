@@ -202,6 +202,29 @@ test("rejects unknown cycle references, duplicate intents, and conflicting BUY s
   }).ok, false)
 })
 
+test("rejects acknowledged intents that reuse a broker order ID", () => {
+  const first = {
+    ...createIntent({ intentId: "sell-intent-1" }),
+    status: "ACKNOWLEDGED",
+    brokerOrderId: "broker-order-shared",
+  }
+  const second = {
+    ...createIntent({ intentId: "sell-intent-2" }),
+    status: "ACKNOWLEDGED",
+    brokerOrderId: "broker-order-shared",
+  }
+  const snapshot = serializeGridPairState({
+    state: createState({ orderIntents: new Map([
+      [first.clientOrderId, first],
+      [second.clientOrderId, second],
+    ]) }),
+    configFingerprint: fingerprint,
+  })
+
+  assert.equal(snapshot.ok, false)
+  assert.match(snapshot.errors[0], /malformed or mismatched order intent/)
+})
+
 test("rejects malformed ledger entries and cross-symbol orders", () => {
   const snapshot = serializeGridPairState({
     state: createState(),
