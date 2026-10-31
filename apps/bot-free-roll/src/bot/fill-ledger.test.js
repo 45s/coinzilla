@@ -148,6 +148,39 @@ test("rejects malformed pre-existing ledger entries", () => {
   assert.match(result.reason, /invalid entry/)
 })
 
+test("treats equivalent decimal formatting as the same execution facts", () => {
+  const first = appendFillLedgerEntry({
+    entries: Object.freeze([]),
+    fill: createFill({ price: "2.0", quantity: "10.0", quoteQuantity: "20.00" }),
+  })
+  const repeated = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ price: "2.00", quantity: "10.000", quoteQuantity: "20" }),
+  })
+
+  assert.equal(repeated.ok, true)
+  assert.equal(repeated.duplicate, true)
+})
+
+test("deduplicates identical malformed decimal facts without hiding changed values", () => {
+  const first = appendFillLedgerEntry({
+    entries: Object.freeze([]),
+    fill: createFill({ quantity: "bad-quantity" }),
+  })
+  const repeated = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ quantity: "bad-quantity" }),
+  })
+  const changed = appendFillLedgerEntry({
+    entries: first.entries,
+    fill: createFill({ quantity: "different-invalid-quantity" }),
+  })
+
+  assert.equal(repeated.ok, true)
+  assert.equal(repeated.duplicate, true)
+  assert.equal(changed.ok, false)
+})
+
 test("rejects reuse of a trade ID when any recorded execution fact changes", () => {
   const first = appendFillLedgerEntry({
     entries: Object.freeze([]),
