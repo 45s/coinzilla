@@ -3004,3 +3004,57 @@ test("unexpected open orders for a managed pair prevent recovery acknowledgement
     await fixture.bot.stop()
   }
 })
+
+
+test("untracked order events received during recovery keep the broker gate closed", async () => {
+  const deferredBalances = createDeferred()
+  let trackedOrder
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: () => deferredBalances.promise,
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [{
+        id: trackedOrder.orderId,
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        status: "NEW",
+        originalQuantity: String(trackedOrder.quantity),
+        executedQuantity: "0",
+      }],
+    }),
+    getMyTrades: async () => ({ ok: true, data: [] }),
+  })
+  trackedOrder = fixture.createdOrders[0]
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+    await waitForCondition(() => fixture.balanceCalls === 1, "recovery did not start")
+
+    fixture.userDataHandler({
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        orderId: "external-order",
+        status: "NEW",
+        side: "SELL",
+        price: "100",
+        quantity: "1",
+      },
+    })
+
+    deferredBalances.resolve({ ok: true, data: [createBalance()] })
+
+    await waitForCondition(
+      () => fixture.events.some((event) => event.name === "bot.user_data_recovery_failed"),
+      "untracked order event did not fail recovery",
+    )
+
+    assert.equal(fixture.acknowledgeCalls, 0)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.paused, true)
+    assert.equal(fixture.createdOrders.length, 1)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
