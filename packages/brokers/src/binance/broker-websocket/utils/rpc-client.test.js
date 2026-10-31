@@ -356,3 +356,101 @@ test("RPC client detaches every transport listener when connection setup rejects
   await client.disconnect()
   assert.deepEqual(removed.sort(), ["close", "error", "message"])
 })
+
+
+test("RPC client attempts every transport listener removal when cleanup callbacks throw", async () => {
+  const removed = []
+  const reported = []
+  const transport = {
+    async connect() {},
+    async close() {},
+    send() {},
+    onMessage() {
+      return () => {
+        removed.push("message")
+        throw new Error("message removal failed")
+      }
+    },
+    onError() {
+      return () => {
+        removed.push("error")
+        throw new Error("error removal failed")
+      }
+    },
+    onClose() {
+      return () => {
+        removed.push("close")
+        throw new Error("close removal failed")
+      }
+    },
+  }
+  const client = new BinanceWebSocketApiClient({
+    transport,
+    requestTimeout: 50,
+    now: () => 123456,
+    idFactory: () => "request-1",
+  })
+  client.onError((error) => reported.push(error.message))
+
+  await client.connect()
+  await assert.doesNotReject(client.disconnect())
+
+  assert.deepEqual(removed, ["message", "error", "close"])
+  assert.deepEqual(reported, [
+    "message removal failed",
+    "error removal failed",
+    "close removal failed",
+  ])
+  assert.equal(client.state, "closed")
+
+  await client.disconnect()
+  assert.deepEqual(removed, ["message", "error", "close"])
+})
+
+test("RPC connection failure preserves its original error when listener cleanup also throws", async () => {
+  const removed = []
+  const reported = []
+  const failure = new Error("transport startup failed")
+  const transport = {
+    async connect() {
+      throw failure
+    },
+    async close() {},
+    send() {},
+    onMessage() {
+      return () => {
+        removed.push("message")
+        throw new Error("message removal failed")
+      }
+    },
+    onError() {
+      return () => {
+        removed.push("error")
+        throw new Error("error removal failed")
+      }
+    },
+    onClose() {
+      return () => {
+        removed.push("close")
+        throw new Error("close removal failed")
+      }
+    },
+  }
+  const client = new BinanceWebSocketApiClient({
+    transport,
+    requestTimeout: 50,
+    now: () => 123456,
+    idFactory: () => "request-1",
+  })
+  client.onError((error) => reported.push(error.message))
+
+  await assert.rejects(client.connect(), (error) => error === failure)
+
+  assert.deepEqual(removed, ["message", "error", "close"])
+  assert.deepEqual(reported, [
+    "message removal failed",
+    "error removal failed",
+    "close removal failed",
+  ])
+  assert.equal(client.state, "closed")
+})
