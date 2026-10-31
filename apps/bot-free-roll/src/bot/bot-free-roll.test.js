@@ -3033,9 +3033,7 @@ test("reconciles repeated user-data interruptions without requiring a bot restar
   const bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => ({ ok: true, data: [] }),
-      getOpenOrders: async () => ({ ok: true, data: [] }),
-      getMyTrades: async () => ({ ok: true, data: [] }),
+      ...createRecoverySnapshotPorts({ createdOrders: [] }),
       subscribeForUserData: async ({ onStatus: statusHandler }) => {
         onStatus = statusHandler
         return {
