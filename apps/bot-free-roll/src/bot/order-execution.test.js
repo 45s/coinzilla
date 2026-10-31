@@ -278,6 +278,6 @@ test("keeps the SELL active and pauses when the broker cancellation fails", asyn
   assert.ok(calls.events.some(({ name, data }) =>
     name === "order.cancel_failed" &&
     data.orderId === order.id &&
-    data.error.includes("exchange unavailable")))
+    data.error.includes("cancel SELL DOGEUSDT old-sell failed")))
   assert.equal(calls.pauses.length, 1)
 })
