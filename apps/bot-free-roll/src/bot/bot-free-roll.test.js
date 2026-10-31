@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
+import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { FreeRollBot } from "./bot-free-roll.js"
 import { addDecimal, multiplyDecimal, compareDecimal, subtractDecimal } from "./helpers/index.js"
 
@@ -85,6 +86,136 @@ function createExecutionEvent({
       isMaker,
       time: tradeId,
     },
+  }
+}
+
+function createDeferred() {
+  let resolve
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
+function createBalance({ asset = "DOGE", free = "100", locked = "0" } = {}) {
+  const canonicalAsset = new Asset({
+    id: asset.toLowerCase(),
+    code: asset,
+  })
+  return new Balance({
+    free: new Quantity({ amount: free, asset: canonicalAsset }),
+    locked: new Quantity({ amount: locked, asset: canonicalAsset }),
+  })
+}
+
+function createRecoveryTrade({ order, tradeId, quantity }) {
+  return {
+    id: String(tradeId),
+    orderId: String(order.orderId),
+    symbol: order.symbol,
+    side: order.side,
+    price: String(order.price),
+    quantity: String(quantity),
+    quoteQuantity: multiplyDecimal({
+      left: String(quantity),
+      right: String(order.price),
+    }),
+    commissionAmount: "0",
+    commissionAsset: null,
+    isMaker: true,
+    time: tradeId,
+  }
+}
+
+async function createUserDataRecoveryFixture({
+  getBalances,
+  getOpenOrders = async () => [],
+  getMyTrades = async () => [],
+  acknowledgeRecovery = () => true,
+} = {}) {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  let statusHandler
+  let acknowledgeCalls = 0
+  let cancelCalls = 0
+  let balanceCalls = 0
+
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent, onStatus }) => {
+        userDataHandler = onEvent
+        statusHandler = onStatus
+        return {
+          ok: true,
+          data: {
+            disconnect() {},
+            acknowledgeRecovery() {
+              acknowledgeCalls += 1
+              return acknowledgeRecovery()
+            },
+          },
+        }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        const orderId = `recovery-order-${createdOrders.length + 1}`
+        const createdOrder = { ...order, orderId }
+        createdOrders.push(createdOrder)
+        return { ok: true, data: { orderId } }
+      },
+      cancelOrder: async ({ orderId }) => {
+        cancelCalls += 1
+        return { ok: true, data: { orderId } }
+      },
+      getBalances: async () => {
+        balanceCalls += 1
+        return getBalances
+          ? getBalances({ calls: balanceCalls })
+          : { ok: true, data: [createBalance()] }
+      },
+      getOpenOrders: async (...args) => getOpenOrders(...args),
+      getMyTrades: async (...args) => getMyTrades(...args),
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+  bot.logger = { debug() {}, error() {} }
+
+  await bot.run()
+  priceHandlers.get("DOGEUSDT")({ price: 100 })
+  await waitForCondition(
+    () => createdOrders.length === 1,
+    "initial BUY was not created before recovery",
+  )
+
+  return {
+    bot,
+    priceHandlers,
+    createdOrders,
+    events,
+    userDataHandler: (payload) => userDataHandler(payload),
+    statusHandler: (status) => statusHandler(status),
+    get acknowledgeCalls() { return acknowledgeCalls },
+    get cancelCalls() { return cancelCalls },
+    get balanceCalls() { return balanceCalls },
   }
 }
 
@@ -1355,13 +1486,13 @@ test("account balance updates retain only valid non-negative decimal balances", 
     })
 
     assert.deepEqual(bot.getSummary().confirmedBalances, {
-      DOGE: { free: "12.5", locked: "0.5" },
+      DOGE: { free: "12.5", locked: "0.5", total: "13" },
     })
     const summaryEvent = events.find((event) =>
       event.name === "trading.summary" && event.data.reason === "exchange_balance_update")
     assert.ok(summaryEvent)
     assert.deepEqual(summaryEvent.data.summary.confirmedBalances, {
-      DOGE: { free: "12.5", locked: "0.5" },
+      DOGE: { free: "12.5", locked: "0.5", total: "13" },
     })
   } finally {
     await bot.stop()
@@ -2638,4 +2769,152 @@ test("fully filled SELL discovered during cancellation is reconciled before repl
   } finally {
     await fixture.bot.stop()
   }
+})
+
+
+test("user-data recovery reconciles exact balances and fills, replays buffered events, then acknowledges", async () => {
+  const deferredBalances = createDeferred()
+  let historyTrades = []
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: () => deferredBalances.promise,
+    getOpenOrders: async () => [],
+    getMyTrades: async ({ orderId }) => historyTrades.filter((fill) => fill.orderId === orderId),
+  })
+  const buyOrder = fixture.createdOrders[0]
+  const trade = createRecoveryTrade({
+    order: buyOrder,
+    tradeId: 2001,
+    quantity: String(buyOrder.quantity),
+  })
+  historyTrades = [trade]
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovering", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+    await waitForCondition(() => fixture.balanceCalls === 1, "balance reconciliation did not start")
+
+    // This event is buffered while the authoritative snapshot is in flight.
+    fixture.userDataHandler(createExecutionEvent({
+      order: buyOrder,
+      tradeId: 2001,
+      fillQuantity: String(buyOrder.quantity),
+    }))
+
+    assert.equal(fixture.createdOrders.length, 1)
+    assert.equal(fixture.acknowledgeCalls, 0)
+
+    deferredBalances.resolve({
+      ok: true,
+      data: [createBalance({ asset: "DOGE", free: "100", locked: "0" })],
+    })
+
+    await waitForCondition(
+      () => fixture.acknowledgeCalls === 1 && fixture.createdOrders.length === 3,
+      "recovery did not acknowledge and restore missing orders",
+    )
+
+    assert.equal(fixture.bot.getStats().DOGEUSDT.buyFills, 1)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.activeQuantity, "100")
+    assert.deepEqual(fixture.bot.getSummary().confirmedBalances, {
+      DOGE: { free: "100", locked: "0", total: "100" },
+    })
+    assert.equal(fixture.createdOrders.filter(({ side }) => side === "SELL").length, 1)
+    assert.equal(fixture.createdOrders.filter(({ side }) => side === "BUY").length, 2)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
+
+test("failed fill-history reconciliation leaves trading gated and does not acknowledge", async () => {
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: async () => ({ ok: true, data: [createBalance()] }),
+    getOpenOrders: async () => [],
+    getMyTrades: async () => ({
+      ok: false,
+      errors: [new Error("trade history is temporarily unavailable")],
+    }),
+  })
+  const buyOrder = fixture.createdOrders[0]
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+
+    await waitForCondition(
+      () => fixture.events.some((event) => event.name === "bot.user_data_recovery_failed"),
+      "failed history reconciliation was not reported",
+    )
+
+    fixture.userDataHandler(createExecutionEvent({
+      order: buyOrder,
+      tradeId: 2002,
+      fillQuantity: String(buyOrder.quantity),
+    }))
+
+    assert.equal(fixture.acknowledgeCalls, 0)
+    assert.equal(fixture.createdOrders.length, 1)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.buyFills, 0)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
+
+test("repeated user-data interruptions invalidate stale recovery and retry the latest generation", async () => {
+  const firstBalances = createDeferred()
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: ({ calls }) => calls === 1
+      ? firstBalances.promise
+      : Promise.resolve({ ok: true, data: [createBalance()] }),
+    getOpenOrders: async () => [],
+    getMyTrades: async ({ orderId }) => orderId === fixture.createdOrders[0]?.orderId
+      ? [createRecoveryTrade({
+          order: fixture.createdOrders[0],
+          tradeId: 2003,
+          quantity: String(fixture.createdOrders[0].quantity),
+        })]
+      : [],
+  })
+  const buyOrder = fixture.createdOrders[0]
+
+  try {
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+    await waitForCondition(() => fixture.balanceCalls === 1, "first recovery did not start")
+
+    fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovering", recoveryRequired: true })
+    fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+
+    firstBalances.resolve({ ok: true, data: [createBalance()] })
+
+    await waitForCondition(
+      () => fixture.acknowledgeCalls === 1,
+      "latest recovery generation was not completed",
+    )
+
+    assert.equal(fixture.balanceCalls, 2)
+    assert.equal(fixture.bot.getStats().DOGEUSDT.buyFills, 1)
+    assert.equal(fixture.createdOrders.filter(({ side }) => side === "SELL").length, 1)
+  } finally {
+    await fixture.bot.stop()
+  }
+})
+
+test("shutdown during user-data recovery never acknowledges the interrupted snapshot", async () => {
+  const deferredBalances = createDeferred()
+  const fixture = await createUserDataRecoveryFixture({
+    getBalances: () => deferredBalances.promise,
+  })
+
+  fixture.statusHandler({ type: "connectionClosed", recoveryRequired: true })
+  fixture.statusHandler({ type: "recovered", recoveryRequired: true })
+  await waitForCondition(() => fixture.balanceCalls === 1, "recovery did not start")
+
+  const stopping = fixture.bot.stop()
+  deferredBalances.resolve({ ok: true, data: [createBalance()] })
+  await stopping
+
+  assert.equal(fixture.acknowledgeCalls, 0)
+  assert.equal(fixture.createdOrders.length, 1)
 })
