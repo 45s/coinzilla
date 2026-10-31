@@ -60,17 +60,17 @@ The migration is complete only when all of the following are true:
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
-- [ ] Phase 5 — rebuild the broker on native clients (active on `migration/binance-phase-5-broker`).
+- [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
 - [ ] Phase 6 — user-data session lifecycle and recovery.
 - [ ] Phase 7 — remove the SDK and retire legacy REST implementation.
 - [ ] Phase 8 — operational hardening and completion.
 
 ### Next action
 
-1. Wait for explicit merge approval for PR #271; do not merge automatically.
-2. After merge, record the merge SHA and mark Phase 5 complete.
-3. Recheck latest `main` before Phase 6; sync only if broker/API/consumer-contract/runtime/dependency changes have landed. Preserve bot-only app changes.
-4. Begin Phase 6: implement user-data session termination detection, reconnect/resubscription without duplicate callbacks, event ordering/deduplication, gap handling, and reconciliation.
+1. Phase 5 is merged (PR #271, merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
+2. Synchronize the integration branch with latest `main` via PR #279; preserve main's bot-team changes and do not edit bot application files independently.
+3. After the sync PR is merged and its exact-head CI is green, re-audit consumers and begin Phase 6.
+4. Phase 6: implement user-data session termination detection, reconnect/resubscription without duplicate callbacks, event ordering/deduplication, gap handling, and reconciliation.
 5. Keep HMAC `userDataStream.subscribe.signature`; do not introduce Ed25519 credentials or the Ed25519-only `userDataStream.subscribe` flow.
 
 
@@ -548,11 +548,11 @@ Use a dedicated synchronization PR from `main` into `migration/binance-native-ws
 
 ### Last recorded main review
 
-- **Main SHA reviewed during Phase 5:** `c6f9020eedf335dfd7c039da5cb749f532b2caea`.
-- Compared the 6 new commits since `9aa0c0213548be9d849dcd6fae2f89ea1b856245`. They modify only `packages/event-bus` and a `packages/journal` test; no broker package, Binance API, broker exports, runtime, broker dependency/lockfile, or broker consumer-contract changes were found. These event-bus/journal changes are outside this broker migration; leave them on `main`.
-- Across the 21 commits since `ad4b325aae453a6ba98589d3c8781e6c1dc4a424`, the other changes remain confined to `apps/bot-free-roll` and its coverage work. No broker/API/consumer-contract synchronization trigger has occurred.
-- Integration branch was at Phase 4 merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39` when Phase 5 work began. Main-only unrelated work is intentionally not synchronized.
-- Recheck latest `main` before Phase 5 merge and immediately after any significant broker/API/consumer-contract change.
+- **Main SHA reviewed after Phase 5:** `da0d3f434741d3e3b5892666c4906cbc4bcb8a28` (2026-10-31).
+- Since the previous recorded review at `c6f9020eedf335dfd7c039da5cb749f532b2caea`, 29 commits landed on `main`. The significant consumer-contract change is `apps/bot-free-roll/src/prepare-broker.js`: `prepareBroker()` now accepts optional `logger` injection, with corresponding tests. The broker's public constructor/lifecycle contract remains compatible; this sync preserves that consumer change unchanged.
+- The same main update includes bot-team implementation/tests/coverage work and `packages/event-bus` changes. They are brought in intact by the synchronization merge; no independent bot application edits are made by the broker migration.
+- Synchronization PR: #279, `sync/main-20261031-post-phase5` into `migration/binance-native-ws`. Merge commit has both latest `main` and the Phase 5 integration tip as parents; conflicts were resolved by retaining the main tree and overlaying the integration-only broker roadmap, contract audit, broker package, and root roadmap/workflow changes.
+- After PR #279 is merged, recheck latest `main` before Phase 6 implementation and update this record if it advanced.
 
 ---
 
