@@ -470,11 +470,12 @@ describe("Binance user-data session recovery", () => {
 
     await broker.connect()
 
-    assert.equal(scheduler.pendingCount, 0)
+    assert.equal(scheduler.pendingCount, 1)
     assert.equal(subscription.data.subscriptionId, previousId + 1)
     assert.ok(statuses.some((status) => status.type === "recovered"))
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(subscription.data.acknowledgeRecovery(), true)
+    assert.equal(scheduler.pendingCount, 0)
 
     await subscription.data.disconnect()
     await broker.disconnect()
