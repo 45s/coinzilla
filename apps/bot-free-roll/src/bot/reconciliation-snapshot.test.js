@@ -162,6 +162,86 @@ test("collects an empty tracked-order history without claiming account-wide hist
   assert.equal(broker.calls.some((call) => call.method === "getCanonicalOrderHistory"), false)
 })
 
+test("preserves exact open-order remaining quantity and rejects unresolved fee data", async () => {
+  const broker = createBroker({
+    trackedOrder: createCanonicalOrder({
+      status: "PARTIALLY_FILLED",
+      originalQuantity: "3",
+      executedQuantity: "2",
+    }),
+    openOrders: [{
+      id: "11",
+      symbol: "DOGEFDUSD",
+      side: "BUY",
+      originalQuantity: "3.000",
+      executedQuantity: "2.000",
+      status: "PARTIALLY_FILLED",
+    }],
+    fillsByCursor: { first: [createFill({ tradeId: "100" })] },
+  })
+
+  const result = await collectReconciliationSnapshot({
+    broker,
+    trackedOrdersBySymbol: { DOGEFDUSD: [{ id: "11" }] },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.snapshot.symbols.DOGEFDUSD.openOrders.items[0].remainingQuantity, "1")
+
+  const invalidOpenOrderSnapshot = {
+    ...result.snapshot,
+    symbols: {
+      ...result.snapshot.symbols,
+      DOGEFDUSD: {
+        ...result.snapshot.symbols.DOGEFDUSD,
+        openOrders: {
+          ...result.snapshot.symbols.DOGEFDUSD.openOrders,
+          items: [{
+            ...result.snapshot.symbols.DOGEFDUSD.openOrders.items[0],
+            remainingQuantity: "0",
+          }],
+        },
+      },
+    },
+  }
+  assert.equal(validateReconciliationSnapshot({
+    snapshot: invalidOpenOrderSnapshot,
+    symbols: ["DOGEFDUSD"],
+  }).ok, false)
+
+  const unresolvedFeeFill = new Fill({
+    tradeId: "101",
+    brokerOrderId: "11",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "0.05", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "0.05", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 1100,
+    commissions: [],
+    commissionStatus: "UNKNOWN",
+  })
+  const invalidFeeSnapshot = {
+    ...result.snapshot,
+    symbols: {
+      ...result.snapshot.symbols,
+      DOGEFDUSD: {
+        ...result.snapshot.symbols.DOGEFDUSD,
+        fills: {
+          ...result.snapshot.symbols.DOGEFDUSD.fills,
+          items: [unresolvedFeeFill],
+          firstTradeId: "101",
+        },
+      },
+    },
+  }
+  assert.equal(validateReconciliationSnapshot({
+    snapshot: invalidFeeSnapshot,
+    symbols: ["DOGEFDUSD"],
+  }).ok, false)
+})
+
 test("fails closed when a full page cannot be exhausted within the configured page limit", async () => {
   const broker = createBroker({
     fillsByCursor: {
