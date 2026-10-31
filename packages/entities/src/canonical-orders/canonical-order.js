@@ -48,14 +48,6 @@ export const canonicalOrderErrMsgs = {
   timestamp: "CanonicalOrder timestamps should be non-negative safe integers",
 }
 
-const isNonEmptyString = (value) =>
-  typeof value === "string" && Boolean(value.trim())
-
-function validateTimestamp({ value }) {
-  return value === undefined ||
-    (Number.isSafeInteger(value) && value >= 0)
-}
-
 export class CanonicalOrder {
   #clientOrderId
   #brokerOrderId
@@ -165,7 +157,10 @@ export class CanonicalOrder {
       asset: market.baseAsset,
     })
 
-    if (brokerAcknowledgedStatuses.includes(status) && !isNonEmptyString(brokerOrderId)) {
+    if (
+      brokerAcknowledgedStatuses.includes(status) &&
+      (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
+    ) {
       throw new Error(canonicalOrderErrMsgs.brokerAcknowledgement)
     }
     if (status === "PENDING" && brokerOrderId != null) {
