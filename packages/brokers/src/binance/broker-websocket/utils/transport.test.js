@@ -461,3 +461,49 @@ test("finalizes close and attempts every socket listener removal when one remove
   assert.equal(clock.pendingCount, 0)
   assert.equal(await transport.close(), undefined)
 })
+
+
+test("socket close exceptions still finalize transport shutdown and resolve close", async () => {
+  const clock = new FakeClock()
+  const errors = []
+  const closes = []
+  let socket
+
+  class BrokenCloseSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    close() {
+      throw new Error("socket close failed")
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenCloseSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+    connectTimeout: 100,
+    closeTimeout: 50,
+  })
+  transport.onError((error) => errors.push(error.message))
+  transport.onClose((event) => closes.push(event))
+
+  const connecting = transport.connect()
+  socket.open()
+  await connecting
+
+  await assert.doesNotReject(transport.close())
+
+  assert.deepEqual(errors, ["socket close failed"])
+  assert.deepEqual(closes, [{
+    code: 1006,
+    reason: "WebSocket close failed",
+    wasClean: false,
+  }])
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(await transport.close(), undefined)
+})
