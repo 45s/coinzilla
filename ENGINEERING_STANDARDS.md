@@ -10,6 +10,7 @@ A change is ready to merge only when:
 - [ ] Relevant unit tests are added or updated; bug fixes include a regression test where practical.
 - [ ] Tests are deterministic and do not depend on production services, credentials, or live exchange access.
 - [ ] The full applicable test suite passes locally and in CI.
+- [ ] Before merging into `main`, the PR branch contains the latest `main` commit and all required checks pass for the exact final PR head SHA.
 - [ ] Error handling, validation, security, logging, and resource cleanup are appropriate to the change.
 - [ ] Names and structure make intent clear; unnecessary complexity and duplication are avoided.
 - [ ] Public APIs, configuration, and documentation are updated when behavior changes.
@@ -124,6 +125,16 @@ Prefer composition and simple functions when they fit the domain better than cla
 - Applying a design pattern or abstraction where the benefit is uncertain.
 - Enforcing purity or immutability where it conflicts with a clear, measured need.
 
+## PR branch freshness — required before merging to main
+
+A pull request targeting `main` must include the latest `main` commit before it is merged. The contributor/AI agent is responsible for synchronizing the PR branch; the user must not be asked to update it manually.
+
+Immediately before merge, fetch the latest remote `main` and PR head and verify that the current `main` tip is an ancestor of the PR head. If it is not, rebase the PR branch onto the latest `main` or merge `main` into the PR branch according to repository history policy, resolve conflicts, review the diff, and push the update. Do not force-push shared history unless explicitly authorized and safe.
+
+After any branch update, wait for required CI checks to pass on the exact final head SHA. Re-check branch freshness and CI immediately before merging; if `main` advances or the PR head changes, synchronize and validate again. Never merge a stale/unverified branch or bypass required checks. If tooling or permissions prevent synchronization or verification, stop and report the blocker rather than asking the user to perform a routine manual update.
+
+This applies to every PR targeting `main`, including documentation-only changes. Repository branch protection/rulesets should enforce this where GitHub supports it; written agent instructions alone are not a technical merge lock.
+
 ## Exceptions
 
 A rule may be waived when following it would make the code less correct, less secure, less clear, or materially less efficient. Explain the trade-off in the pull request and, where useful, create a follow-up issue. Do not disable checks globally to get one change through.
@@ -139,7 +150,8 @@ Before approving a pull request, ask:
 5. Are module responsibilities and dependencies cohesive?
 6. Do tests cover behavior, boundaries, and failure paths?
 7. Could the change expose secrets, weaken security, or break compatibility?
-8. Do all required automated checks pass?
+8. Does the PR branch contain the latest `main` commit, verified immediately before merge?
+9. Do all required automated checks pass for the exact final PR head SHA?
 
 ## Rollout policy
 
