@@ -19,6 +19,7 @@ export class BinanceUserDataSession {
   #stopped = false
   #recoveryRequired = false
   #deduplicator = createUserDataEventDeduplicator()
+  #generation = 0
 
   constructor({
     getClient,
@@ -63,6 +64,7 @@ export class BinanceUserDataSession {
   }
 
   start() {
+    this.#generation += 1
     this.#stopped = false
   }
 
@@ -107,6 +109,7 @@ export class BinanceUserDataSession {
   }
 
   async stop() {
+    this.#generation += 1
     this.#stopped = true
     this.#clearReconnectTimer()
     this.#subscribers.clear()
@@ -122,6 +125,7 @@ export class BinanceUserDataSession {
     if (this.#subscriptionId !== null) return this.#subscriptionId
     if (this.#subscribePromise) return this.#subscribePromise
 
+    const generation = this.#generation
     const client = this.getClient()
     if (!client || client.state !== "open") {
       throw new Error("Binance WebSocket API must be open before subscribing to user data")
@@ -138,7 +142,8 @@ export class BinanceUserDataSession {
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
         throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
       }
-      if (this.#stopped || this.#subscribers.size === 0) {
+      if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
+          this.getClient() !== client) {
         try {
           await client.request("userDataStream.unsubscribe", { subscriptionId })
         } catch (error) {
@@ -168,9 +173,15 @@ export class BinanceUserDataSession {
   #bindClient(client) {
     this.#detachClientListeners()
     this.#removeClientListeners = [
-      client.onEvent((message) => this.#handleEvent(message)),
-      client.onError?.((error) => this.#handleError(error)),
-      client.onClose?.((event) => this.#handleClose(event)),
+      client.onEvent((message) => {
+        if (this.getClient() === client) this.#handleEvent(message)
+      }),
+      client.onError?.((error) => {
+        if (this.getClient() === client) this.#handleError(error)
+      }),
+      client.onClose?.((event) => {
+        if (this.getClient() === client) this.#handleClose(event)
+      }),
     ].filter((remove) => typeof remove === "function")
   }
 
@@ -257,6 +268,7 @@ export class BinanceUserDataSession {
   async #recover() {
     if (this.#stopped || this.#subscribers.size === 0 || this.#reconnectPromise) return
 
+    const generation = this.#generation
     let retryDelay = null
     this.#reconnectPromise = (async () => {
       if (this.#reconnectAttempts >= this.maxReconnectAttempts) {
@@ -276,14 +288,17 @@ export class BinanceUserDataSession {
           this.setClient(client)
           this.#bindClient(client)
           await client.connect()
-          if (this.#stopped || this.#subscribers.size === 0) {
+          if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
+              this.getClient() !== client) {
             await client.disconnect()
             return
           }
           this.setConnected(true)
         }
+        if (this.#stopped || generation !== this.#generation) return
         await this.#ensureRemoteSubscription()
       } catch (error) {
+        if (this.#stopped || generation !== this.#generation) return
         this.setUnavailable(true)
         this.logger.error?.("Binance user-data recovery attempt failed", { attempt, error })
         this.#notify({ type: "recovering", attempt, error, recoveryRequired: true })
