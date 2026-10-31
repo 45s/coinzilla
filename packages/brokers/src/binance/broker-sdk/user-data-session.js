@@ -66,6 +66,7 @@ export class BinanceUserDataSession {
   }
 
   start() {
+    this.#clearReconnectTimer()
     this.#generation += 1
     this.#stopped = false
   }
@@ -293,7 +294,8 @@ export class BinanceUserDataSession {
   }
 
   async #recover() {
-    if (this.#stopped || this.#subscribers.size === 0 || this.#reconnectPromise) return
+    if (this.#stopped || this.#subscribers.size === 0 || this.#subscriptionId !== null ||
+        this.#reconnectPromise) return
 
     const generation = this.#generation
     let retryDelay = null
