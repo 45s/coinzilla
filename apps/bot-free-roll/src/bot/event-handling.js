@@ -1,4 +1,4 @@
-import { getOrderId } from "./helpers/index.js"
+import { getOrderId } from "./helpers/exchange.js"
 
 // Broker adapters own exchange-specific payload interpretation. This boundary
 // only unwraps the broker's event envelope and identifies the event destination.
