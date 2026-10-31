@@ -537,6 +537,62 @@ describe("Binance user-data session recovery", () => {
   })
 
 
+
+  it("notifies a new local handle that joins an already recovered session", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    const firstStatuses = []
+    const first = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => firstStatuses.push(status),
+    })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+
+    const secondStatuses = []
+    const second = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => secondStatuses.push(status),
+    })
+
+    assert.ok(secondStatuses.some((status) => status.type === "recovered"))
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    assert.equal(second.data.acknowledgeRecovery(), true)
+    assert.equal(broker.userDataUnavailable, false)
+
+    await first.data.disconnect()
+    await second.data.disconnect()
+    await broker.disconnect()
+  })
+
+  it("requires fresh acknowledgements after every subsequent interruption", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+    const first = await broker.subscribeForUserData({ onEvent() {} })
+    const second = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "first outage", wasClean: false })
+    await scheduler.runNext()
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    assert.equal(second.data.acknowledgeRecovery(), true)
+
+    clients[1].state = "closed"
+    clients[1].emitClose({ code: 1006, reason: "second outage", wasClean: false })
+    await scheduler.runNext()
+
+    assert.equal(broker.userDataUnavailable, true)
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    assert.equal(second.data.acknowledgeRecovery(), true)
+    assert.equal(broker.userDataUnavailable, false)
+
+    await first.data.disconnect()
+    await second.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("releases the recovery gate when an unacknowledged local consumer disconnects", async () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
