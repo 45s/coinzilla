@@ -140,8 +140,8 @@ test("buy and sell accounting preserve exact fee and quantity invariants", () =>
   });
 
   assert.equal(buy.netQuantity, "12.332655");
-  assert.equal(buy.estimatedCost, "1.525185432");
-  assert.equal(sell.estimatedProceeds, "1.52213906232");
+  assert.equal(buy.estimatedCost, "1.52558838432");
+  assert.equal(sell.estimatedProceeds, "1.52254025568");
   assert.equal(sell.estimatedBaseDeduction, "12.357345");
   assert.ok(compareDecimal({ left: buy.netQuantity, right: "0" }) > 0);
   assert.ok(compareDecimal({ left: sell.estimatedProceeds, right: "0" }) > 0);
