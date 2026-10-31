@@ -99,13 +99,14 @@ function validateCycle(cycle) {
   }
 
   const ordersById = new Map()
+  const clientOrderIds = new Set([buyOrder.clientOrderId])
   const liveOrders = []
   const filledQuantityByOrder = new Map()
   for (const order of cycle.sellOrders) {
     if (!order || typeof order !== "object" || !isNonEmptyString(order.id) ||
-        !isNonEmptyString(order.clientOrderId) || order.symbol !== cycle.symbol ||
-        order.side !== "SELL" || !["LIMIT", "LIMIT_MAKER"].includes(order.type) ||
-        ordersById.has(order.id) ||
+        !isNonEmptyString(order.clientOrderId) || clientOrderIds.has(order.clientOrderId) ||
+        order.symbol !== cycle.symbol || order.side !== "SELL" ||
+        !["LIMIT", "LIMIT_MAKER"].includes(order.type) || ordersById.has(order.id) ||
         !["OPEN", "PARTIALLY_FILLED", "FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"].includes(order.status)) {
       throw new Error("cycle contains an invalid or duplicate SELL order")
     }
@@ -131,6 +132,7 @@ function validateCycle(cycle) {
         compareDecimal({ left: order.filledQuantity, right: order.quantity }) !== 0) {
       throw new Error("FILLED SELL order must have its full quantity reconciled")
     }
+    clientOrderIds.add(order.clientOrderId)
     ordersById.set(order.id, order)
     filledQuantityByOrder.set(order.id, "0")
   }
@@ -631,6 +633,7 @@ export function projectGridCycles({ cycles } = {}) {
     if (!Array.isArray(cycles)) throw new Error("cycles must be an array")
     const ids = new Set()
     const orderIds = new Set()
+    const clientOrderIds = new Set()
     const symbols = new Set()
     const totals = {
       activeQuantity: "0",
@@ -650,6 +653,10 @@ export function projectGridCycles({ cycles } = {}) {
       if (ids.has(cycle.id)) throw new Error(`duplicate cycle ID ${cycle.id}`)
       ids.add(cycle.id)
       symbols.add(cycle.symbol)
+      if (clientOrderIds.has(cycle.buyOrder.clientOrderId)) {
+        throw new Error("BUY client order ID is assigned to multiple cycles")
+      }
+      clientOrderIds.add(cycle.buyOrder.clientOrderId)
 
       totals.freeQuantity = addDecimal({
         left: totals.freeQuantity,
@@ -696,6 +703,10 @@ export function projectGridCycles({ cycles } = {}) {
           throw new Error(`SELL order ${order.id} is assigned to multiple cycles`)
         }
         orderIds.add(order.id)
+        if (clientOrderIds.has(order.clientOrderId)) {
+          throw new Error(`client order ID ${order.clientOrderId} is assigned to multiple Grid orders`)
+        }
+        clientOrderIds.add(order.clientOrderId)
         if (LIVE_SELL_STATUSES.has(order.status)) {
           validateDecimal({ value: order.reservedQuantity, name: "SELL reservedQuantity" })
           totals.reservedQuantity = addDecimal({
