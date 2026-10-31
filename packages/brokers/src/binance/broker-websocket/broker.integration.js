@@ -1,7 +1,7 @@
 import { describe, it, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { BinanceSdkBroker } from "./broker.js"
-import { BinanceSdkConfig } from "./binance-sdk-config.js"
+import { BinanceSdkConfig } from "./binance-websocket-config.js"
 
 if (process.env.NODE_ENV === "production") {
   throw new Error(

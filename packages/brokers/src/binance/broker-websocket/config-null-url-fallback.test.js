@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { isProdMode } from "@coinzilla/utils"
-import { BinanceSdkConfig, BINANCE_WEBSOCKET_ENDPOINTS } from "./binance-sdk-config.js"
+import { BinanceWebSocketConfig, BINANCE_WEBSOCKET_ENDPOINTS } from "./binance-websocket-config.js"
 
-describe("BinanceSdkConfig URL fallback", () => {
+describe("BinanceWebSocketConfig URL fallback", () => {
   it("uses native WebSocket defaults when custom URLs are null", () => {
-    const config = new BinanceSdkConfig({
+    const config = new BinanceWebSocketConfig({
       apiKey: "test-key",
       apiSecret: "test-secret",
       websocketApiUrl: null,

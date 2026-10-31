@@ -2,7 +2,7 @@ import { Asset, Market } from "@coinzilla/entities"
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
-import { BinanceSdkConfig } from "./binance-sdk-config.js"
+import { BinanceWebSocketConfig } from "./binance-websocket-config.js"
 import { BinanceWebSocketApiClient } from "./rpc-client.js"
 import { adaptPublicStreamMessage } from "./public-stream-adapters.js"
 import { createStreamName } from "./streams-protocol.js"
@@ -36,7 +36,7 @@ function validateCallback(callback, name) {
   }
 }
 
-export class BinanceSdkBroker extends CoreBroker {
+export class BinanceWebSocketBroker extends CoreBroker {
   constructor(input = {}, {
     apiClientFactory = createApiClient,
     marketClientFactory = createMarketClient,
@@ -46,7 +46,7 @@ export class BinanceSdkBroker extends CoreBroker {
   } = {}) {
     super(input)
 
-    this.config = new BinanceSdkConfig(input)
+    this.config = new BinanceWebSocketConfig(input)
     this.apiClientFactory = apiClientFactory
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)
@@ -90,7 +90,7 @@ export class BinanceSdkBroker extends CoreBroker {
       await Promise.allSettled([
         Promise.resolve().then(() => this.tradingConnection.disconnect()),
       ])
-      handleErr({ where: "BinanceSdkBroker.connect()", error })
+      handleErr({ where: "BinanceWebSocketBroker.connect()", error })
       throw error
     }
   }
@@ -107,7 +107,7 @@ export class BinanceSdkBroker extends CoreBroker {
 
     for (const result of results) {
       if (result.status === "rejected") {
-        handleErr({ where: "BinanceSdkBroker.disconnect()", error: result.reason })
+        handleErr({ where: "BinanceWebSocketBroker.disconnect()", error: result.reason })
       }
     }
   }
@@ -121,7 +121,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: adaptSpotAsset(response.data.balances) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getAssets()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getAssets()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -135,7 +135,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: adaptSpotBalance(response.data?.balances) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getBalances()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getBalances()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -159,7 +159,7 @@ export class BinanceSdkBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getAccountSnapshot()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getAccountSnapshot()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -174,7 +174,7 @@ export class BinanceSdkBroker extends CoreBroker {
 
       return toResult({ data: { serverTime } })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getServerTime()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getServerTime()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -188,7 +188,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getOpenOrders()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOpenOrders()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -202,7 +202,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOrder()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -222,7 +222,7 @@ export class BinanceSdkBroker extends CoreBroker {
       }
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getOrderHistory()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -254,7 +254,7 @@ export class BinanceSdkBroker extends CoreBroker {
         data: response.data.map((order) => adaptCanonicalOrder({ order, market })),
       })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getCanonicalOrderHistory()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -268,7 +268,7 @@ export class BinanceSdkBroker extends CoreBroker {
       }
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getMyTrades()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -313,7 +313,7 @@ export class BinanceSdkBroker extends CoreBroker {
         data: tradesResponse.data.map((trade) => adaptCanonicalFill({ trade, market })),
       })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getFills()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getFills()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -345,7 +345,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.createOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.createOrder()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -362,7 +362,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.cancelOrder()", error })
+      handleErr({ where: "BinanceWebSocketBroker.cancelOrder()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -379,7 +379,7 @@ export class BinanceSdkBroker extends CoreBroker {
       )
       return toResult({ data: response.data.map(adaptOrder) })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.cancelAllOpenOrders()", error })
+      handleErr({ where: "BinanceWebSocketBroker.cancelAllOpenOrders()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -389,7 +389,7 @@ export class BinanceSdkBroker extends CoreBroker {
       const response = await this.tradingConnection.request("ticker.price", { symbol })
       return toResult({ data: response.data })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getPrices()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getPrices()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -429,7 +429,7 @@ export class BinanceSdkBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.getSymbolFilters()", error })
+      handleErr({ where: "BinanceWebSocketBroker.getSymbolFilters()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -450,7 +450,7 @@ export class BinanceSdkBroker extends CoreBroker {
         },
       })
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.subscribeForPrices()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -461,8 +461,10 @@ export class BinanceSdkBroker extends CoreBroker {
       const result = await this.userDataSession.subscribe({ onEvent, onStatus })
       return toResult(result)
     } catch (error) {
-      handleErr({ where: "BinanceSdkBroker.subscribeForUserData()", error })
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()", error })
       return toResult({ errors: [error] })
     }
   }
 }
+
+export { BinanceWebSocketBroker as BinanceSdkBroker }

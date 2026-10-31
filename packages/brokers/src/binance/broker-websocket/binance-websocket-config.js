@@ -11,7 +11,7 @@ export const BINANCE_WEBSOCKET_ENDPOINTS = Object.freeze({
   },
 })
 
-export class BinanceSdkConfig {
+export class BinanceWebSocketConfig {
   constructor(input = {}) {
     const {
       apiKey,
@@ -41,3 +41,5 @@ export class BinanceSdkConfig {
     this.reconnectDelay = reconnectDelay
   }
 }
+
+export { BinanceWebSocketConfig as BinanceSdkConfig }
