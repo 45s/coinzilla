@@ -161,7 +161,12 @@ export function applyMarketInventoryFill({ ledger, fill, accounting: suppliedAcc
         right: accounting.quoteQuantity,
       })
 
-  const commissionSign = compareDecimal({ left: commissionAmount, right: "0" })
+  let commissionSign
+  try {
+    commissionSign = compareDecimal({ left: commissionAmount, right: "0" })
+  } catch (error) {
+    return failure(`Invalid commission amount for trade ${fillId}: ${error.message}`)
+  }
   if (commissionSign < 0) {
     return failure(`Negative commission is unsupported for trade ${fillId}`)
   }
