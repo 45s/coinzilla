@@ -1,5 +1,16 @@
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 
+function normalizeTradeId(value, name) {
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    if (!Number.isSafeInteger(Number(value))) {
+      throw new TypeError(`Binance ${name} exceeds the safe integer range`)
+    }
+    return value
+  }
+  if (Number.isSafeInteger(value) && value >= 0) return String(value)
+  throw new TypeError(`Binance ${name} must be an exact non-negative integer`)
+}
+
 function createAsset(code) {
   if (typeof code !== "string" || !code.trim()) {
     throw new TypeError("Binance fill asset code should be a non-empty string")
@@ -24,12 +35,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
   if (!(market instanceof Market)) {
     throw new TypeError("Binance fill requires a canonical Market")
   }
-  if (trade.id === undefined || trade.id === null || String(trade.id).trim() === "") {
-    throw new TypeError("Binance fill is missing trade id")
-  }
-  if (trade.orderId === undefined || trade.orderId === null || String(trade.orderId).trim() === "") {
-    throw new TypeError("Binance fill is missing order id")
-  }
+  const tradeId = normalizeTradeId(trade.id, "trade id")
+  const brokerOrderId = normalizeTradeId(trade.orderId, "order id")
   if (typeof trade.isBuyer !== "boolean") {
     throw new TypeError("Binance fill is missing buyer side")
   }
@@ -57,8 +64,8 @@ export function adaptCanonicalFill({ trade, market } = {}) {
     : "UNKNOWN"
 
   return new Fill({
-    tradeId: String(trade.id),
-    brokerOrderId: String(trade.orderId),
+    tradeId,
+    brokerOrderId,
     market,
     side: trade.isBuyer ? "BUY" : "SELL",
     price: new Money({ amount: trade.price, asset: market.quoteAsset }),
