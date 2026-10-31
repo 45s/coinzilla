@@ -131,3 +131,15 @@ test("concurrent close callers both observe a completed drain", async () => {
     closed: true,
   })
 })
+
+test("diagnostics remain accurate when fan-out is rejected atomically", async () => {
+  const bus = new EventBus({ logger: {}, maxPending: 1 })
+  bus.subscribe({ name: "task.started", handler: () => {} })
+  bus.subscribe({ name: "task.started", handler: () => {} })
+
+  const rejected = bus.publish({ name: "task.started", source: "test" })
+  assert.equal(rejected.ok, false)
+  assert.equal(bus.getDiagnostics().pendingCount, 0)
+
+  assert.equal((await bus.close()).ok, true)
+})
