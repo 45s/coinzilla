@@ -74,7 +74,7 @@ export function createMarketInventoryLedger({ market } = {}) {
 // Apply one already-identified market fill. The strategy projection and the
 // unmanaged movement bucket remain separate; account activity is never
 // silently counted as strategy inventory.
-export function applyMarketInventoryFill({ ledger, fill } = {}) {
+export function applyMarketInventoryFill({ ledger, fill, accounting: suppliedAccounting } = {}) {
   if (!isMarketInventoryLedger(ledger)) {
     return failure("Market inventory ledger is missing or invalid")
   }
@@ -104,19 +104,35 @@ export function applyMarketInventoryFill({ ledger, fill } = {}) {
     return failure(`Unsupported market fill side for trade ${fillId}`)
   }
 
-  let accounting
+  let accounting = suppliedAccounting
+  if (!accounting) {
+    try {
+      accounting = calculateFillAccountingExact({
+        side: fill.side,
+        quantity: String(fill.quantity ?? ""),
+        quoteQuantity: String(fill.quoteQuantity ?? ""),
+        commissionAmount: String(fill.commissionAmount ?? ""),
+        commissionAsset: fill.commissionAsset ?? null,
+        baseAsset: ledger.market.baseAsset,
+        quoteAsset: ledger.market.quoteAsset,
+      })
+    } catch (error) {
+      return failure(`Invalid market fill accounting for trade ${fillId}: ${error.message}`)
+    }
+  }
+
   try {
-    accounting = calculateFillAccountingExact({
-      side: fill.side,
-      quantity: String(fill.quantity ?? ""),
-      quoteQuantity: String(fill.quoteQuantity ?? ""),
-      commissionAmount: String(fill.commissionAmount ?? ""),
-      commissionAsset: fill.commissionAsset ?? null,
-      baseAsset: ledger.market.baseAsset,
-      quoteAsset: ledger.market.quoteAsset,
-    })
+    if (
+      !accounting ||
+      typeof accounting.baseQuantity !== "string" ||
+      typeof accounting.quoteQuantity !== "string" ||
+      compareDecimal({ left: accounting.baseQuantity, right: "0" }) <= 0 ||
+      compareDecimal({ left: accounting.quoteQuantity, right: "0" }) <= 0
+    ) {
+      return failure(`Market fill accounting is invalid for trade ${fillId}`)
+    }
   } catch (error) {
-    return failure(`Invalid market fill accounting for trade ${fillId}: ${error.message}`)
+    return failure(`Market fill accounting is invalid for trade ${fillId}: ${error.message}`)
   }
 
   const commissionAmount = String(fill.commissionAmount ?? "")
