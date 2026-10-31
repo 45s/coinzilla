@@ -69,8 +69,36 @@ export function createFillLedgerEntry({ fill } = {}) {
   }
 }
 
+const IDENTITY_FIELDS = Object.freeze([
+  "id",
+  "orderId",
+  "symbol",
+  "side",
+  "commissionAsset",
+  "isMaker",
+])
+const DECIMAL_FIELDS = Object.freeze([
+  "price",
+  "quantity",
+  "quoteQuantity",
+  "commissionAmount",
+])
+
+function hasSameDecimalFact(left, right) {
+  if (left === right) return true
+  if (left === null || right === null) return false
+
+  try {
+    return compareDecimal({ left, right }) === 0
+  } catch {
+    return false
+  }
+}
+
 function hasSameFillFacts(left, right) {
-  return LEDGER_FIELDS.every((field) => left?.[field] === right[field])
+  const identityMatches = IDENTITY_FIELDS.every((field) => left?.[field] === right[field])
+  return identityMatches &&
+    DECIMAL_FIELDS.every((field) => hasSameDecimalFact(left[field], right[field]))
 }
 
 // Append without mutating prior entries. Repeated identical trade IDs are
