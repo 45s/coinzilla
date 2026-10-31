@@ -536,3 +536,53 @@ test("snapshots and freezes cyclic event data without recursion errors", async (
 
   await bus.close()
 })
+
+
+test("treats Node-special event names as ordinary application event names", async () => {
+  const { bus } = createTestBus()
+  const received = []
+
+  for (const name of ["error", "newListener", "removeListener", "__proto__"]) {
+    const subscribed = bus.subscribe({
+      name,
+      handler: (event) => received.push(event),
+    })
+    assert.equal(subscribed.ok, true)
+
+    const published = bus.publish({
+      name,
+      source: "test",
+      data: { expectedName: name },
+    })
+    assert.equal(published.ok, true)
+  }
+
+  await bus.flush()
+
+  assert.deepEqual(received.map((event) => event.name), [
+    "error",
+    "newListener",
+    "removeListener",
+    "__proto__",
+  ])
+  assert.deepEqual(
+    received.map((event) => event.data.expectedName),
+    ["error", "newListener", "removeListener", "__proto__"],
+  )
+
+  await bus.close()
+})
+
+test("close invalidates outstanding subscription handles", async () => {
+  const { bus } = createTestBus()
+  const result = bus.subscribe({
+    name: "test.close-subscription",
+    handler: () => {},
+  })
+
+  assert.equal(result.ok, true)
+  await bus.close()
+
+  assert.equal(result.subscription.unsubscribe().ok, true)
+  assert.equal(result.subscription.unsubscribe().unsubscribed, false)
+})
