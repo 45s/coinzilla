@@ -216,10 +216,13 @@ test("dispatches combined-stream envelopes and all-market arrays", async () => {
 
   const trade = { e: "aggTrade", s: "BTCUSDT", p: "2" }
   transports[0].receive({ stream: "btcusdt@aggTrade", data: trade })
-  transports[0].receive([
-    { e: "24hrMiniTicker", s: "BTCUSDT", c: "3" },
-    { e: "24hrMiniTicker", s: "ETHUSDT", c: "4" },
-  ])
+  transports[0].receive({
+    stream: "!miniTicker@arr",
+    data: [
+      { e: "24hrMiniTicker", s: "BTCUSDT", c: "3" },
+      { e: "24hrMiniTicker", s: "ETHUSDT", c: "4" },
+    ],
+  })
 
   assert.deepEqual(combinedEvents, [trade])
   assert.equal(allMarketEvents.length, 2)
