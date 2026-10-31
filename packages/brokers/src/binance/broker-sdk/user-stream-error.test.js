@@ -24,7 +24,7 @@ describe("BinanceSdkBroker user-data stream errors", () => {
     assert.equal(logs.length, 1)
     assert.equal(logs[0][0], "Binance user data stream error")
     assert.equal(logs[0][1], error)
-    result.data.unsubscribeLocal()
+    result.data.disconnect()
     assert.equal(rpc.listenerCount, 0)
   })
 })
