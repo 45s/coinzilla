@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { calculateBuyThreshold, roundPriceDown, roundPriceUp, roundQuantityDown } from "./price.js"
+import {\n  calculateBuyThreshold,\n  calculateBuyThresholdExact,\n  calculatePercentageDropExact,\n  roundPriceDown,\n  roundPriceUp,\n  roundQuantityDown,\n} from "./price.js"
 
 test("calculateBuyThreshold applies a percentage drop to the initial reference price", () => {
   const threshold = calculateBuyThreshold({
@@ -87,11 +87,6 @@ test("tick and step rounding uses exact decimal increments", () => {
   assert.equal(roundQuantityDown(0.29999999999999993, 0.1), 0.2);
 });
 
-
-import {
-  calculateBuyThresholdExact,
-  calculatePercentageDropExact,
-} from "./price.js"
 
 test("exact percentage drop uses decimal arithmetic and preserves small values", () => {
   assert.equal(
