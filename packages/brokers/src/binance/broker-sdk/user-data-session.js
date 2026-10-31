@@ -155,12 +155,19 @@ export class BinanceUserDataSession {
 
     this.setUnavailable(true)
     this.#bindClient(client)
-    this.#subscribePromise = client.request(
-      "userDataStream.subscribe.signature",
-      {},
-      { signed: true },
-    ).then(async (response) => {
-      const subscriptionId = response.data?.subscriptionId
+    this.#subscribePromise = (async () => {
+      let subscriptionId
+      try {
+        const response = await client.request(
+          "userDataStream.subscribe.signature",
+          {},
+          { signed: true },
+        )
+        subscriptionId = response.data?.subscriptionId
+      } catch (error) {
+        subscriptionId = await this.#findExistingSubscription(client, error)
+      }
+
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
         throw new Error("Binance user-data subscription response did not include a valid subscriptionId")
       }
@@ -173,6 +180,7 @@ export class BinanceUserDataSession {
         }
         return subscriptionId
       }
+
       this.#subscriptionId = subscriptionId
       this.#reconnectAttempts = 0
       this.setUnavailable(this.#recoveryRequired)
@@ -185,11 +193,31 @@ export class BinanceUserDataSession {
         })
       }
       return subscriptionId
-    }).finally(() => {
+    })().finally(() => {
       this.#subscribePromise = null
     })
 
     return this.#subscribePromise
+  }
+
+  async #findExistingSubscription(client, originalError) {
+    try {
+      const response = await client.request("session.subscriptions")
+      const subscriptions = Array.isArray(response.data) ? response.data : []
+      const ids = subscriptions
+        .map((item) => item?.subscriptionId)
+        .filter((id) => Number.isSafeInteger(id) && id >= 0)
+
+      if (ids.length === 1) return ids[0]
+      if (ids.length > 1) {
+        throw new Error("Cannot safely identify the user-data subscription: multiple active subscriptions exist")
+      }
+    } catch (lookupError) {
+      if (lookupError.message?.includes("multiple active subscriptions")) throw lookupError
+      this.logger.warn?.("Unable to verify Binance user-data subscription after an uncertain response", lookupError)
+    }
+
+    throw originalError
   }
 
   #bindClient(client) {
