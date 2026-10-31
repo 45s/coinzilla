@@ -176,7 +176,7 @@ Before approving a pull request, ask:
 7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
 8. Is logic duplicated, or has an abstraction been introduced too early?
 9. Could the change expose secrets, weaken security, or break compatibility?
-10. Does the PR branch contain the latest main commit, verified immediately before merge?
+10. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
 11. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
 
 ## Rollout policy
