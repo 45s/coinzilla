@@ -262,6 +262,8 @@ describe("Binance user-data session recovery", () => {
     await broker.connect()
     const received = []
     const subscription = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
+    const duplicate = { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 }
+    clients[0].emitEvent({ subscriptionId: subscription.data.subscriptionId, event: duplicate })
 
     clients[0].state = "closed"
     clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
@@ -269,15 +271,20 @@ describe("Binance user-data session recovery", () => {
 
     clients[1].emitEvent({
       subscriptionId: subscription.data.subscriptionId - 1,
-      event: { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 },
+      event: { ...duplicate, d: "stale" },
     })
     clients[1].emitEvent({
       subscriptionId: subscription.data.subscriptionId,
-      event: { e: "balanceUpdate", a: "USDT", d: "2", T: 12, E: 13 },
+      event: structuredClone(duplicate),
+    })
+    clients[1].emitEvent({
+      subscriptionId: subscription.data.subscriptionId,
+      event: { ...duplicate, d: "2", T: 12, E: 13 },
     })
 
-    assert.equal(received.length, 1)
-    assert.equal(received[0].event.balanceDelta, "2")
+    assert.equal(received.length, 2)
+    assert.equal(received[0].event.balanceDelta, "1")
+    assert.equal(received[1].event.balanceDelta, "2")
     await subscription.data.disconnect()
     await broker.disconnect()
   })
