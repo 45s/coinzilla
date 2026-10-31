@@ -34,6 +34,37 @@ function validateCallback(callback, name) {
   }
 }
 
+const MAX_HISTORY_WINDOW_MS = 24 * 60 * 60 * 1000
+
+function normalizeNonNegativeInteger(value, name) {
+  const normalized = typeof value === "string" && /^\\d+$/.test(value)
+    ? Number(value)
+    : value
+  if (!Number.isSafeInteger(normalized) || normalized < 0) {
+    throw new TypeError(`${name} must be a non-negative safe integer`)
+  }
+  return normalized
+}
+
+function normalizeTimeWindow({ startTime, endTime }, methodName) {
+  const window = {}
+  if (startTime !== undefined && startTime !== null) {
+    window.startTime = normalizeNonNegativeInteger(startTime, `${methodName} startTime`)
+  }
+  if (endTime !== undefined && endTime !== null) {
+    window.endTime = normalizeNonNegativeInteger(endTime, `${methodName} endTime`)
+  }
+  if (window.startTime !== undefined && window.endTime !== undefined) {
+    if (window.endTime < window.startTime) {
+      throw new TypeError(`${methodName} endTime must be greater than or equal to startTime`)
+    }
+    if (window.endTime - window.startTime > MAX_HISTORY_WINDOW_MS) {
+      throw new TypeError(`${methodName} time window must not exceed 24 hours`)
+    }
+  }
+  return window
+}
+
 export class BinanceSdkBroker extends CoreBroker {
   constructor(input = {}, {
     apiClientFactory = createApiClient,
@@ -110,6 +141,20 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
+  async getServerTime() {
+    try {
+      const response = await this.tradingConnection.request("time")
+      const serverTime = response.data?.serverTime
+      if (!Number.isSafeInteger(serverTime) || serverTime < 0) {
+        throw new TypeError("Binance time response is missing a valid serverTime")
+      }
+      return toResult({ data: { serverTime } })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getServerTime()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
   async getAssets() {
     try {
       const response = await this.tradingConnection.request(
@@ -120,6 +165,25 @@ export class BinanceSdkBroker extends CoreBroker {
       return toResult({ data: adaptSpotAsset(response.data.balances) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getAssets()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getAccountSnapshot() {
+    try {
+      const response = await this.tradingConnection.request(
+        "account.status",
+        { omitZeroBalances: false },
+        { signed: true },
+      )
+      const sourceTime = response.data?.updateTime
+      if (!Number.isSafeInteger(sourceTime) || sourceTime < 0) {
+        throw new TypeError("Binance account.status response is missing a valid updateTime")
+      }
+      const balances = adaptSpotBalance(response.data?.balances)
+      return toResult({ data: { balances, sourceTime } })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getAccountSnapshot()", error })
       return toResult({ errors: [error] })
     }
   }
@@ -166,17 +230,28 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getOrderHistory({ symbol, orderId, limit = 100 } = {}) {
+  async getOrderHistory({ symbol, orderId, startTime, endTime, limit = 100 } = {}) {
     try {
-      if (!symbol) throw new Error("getOrderHistory requires symbol")
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("getOrderHistory requires a symbol")
+      }
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-        throw new Error("getOrderHistory limit must be an integer between 1 and 1000")
+        throw new TypeError("getOrderHistory limit must be an integer between 1 and 1000")
       }
 
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+      const timeWindow = normalizeTimeWindow({ startTime, endTime }, "getOrderHistory")
+      const params = { symbol, limit, ...timeWindow }
+
+      // Binance ignores orderId whenever either time filter is supplied.
+      if (timeWindow.startTime === undefined && timeWindow.endTime === undefined &&
+          orderId !== undefined && orderId !== null) {
+        params.orderId = normalizeNonNegativeInteger(orderId, "getOrderHistory orderId")
+      }
 
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
+      if (!Array.isArray(response.data)) {
+        throw new TypeError("Binance allOrders response should be an array")
+      }
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
@@ -184,17 +259,36 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getMyTrades({ symbol, orderId, limit = 1000 } = {}) {
+  async getMyTrades({ symbol, orderId, fromId, startTime, endTime, limit = 1000 } = {}) {
     try {
-      if (!symbol) throw new Error("getMyTrades requires symbol")
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("getMyTrades requires a symbol")
+      }
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-        throw new Error("getMyTrades limit must be an integer between 1 and 1000")
+        throw new TypeError("getMyTrades limit must be an integer between 1 and 1000")
       }
 
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
+      const timeWindow = normalizeTimeWindow({ startTime, endTime }, "getMyTrades")
+      const hasTimeWindow = timeWindow.startTime !== undefined || timeWindow.endTime !== undefined
+      if (hasTimeWindow && fromId !== undefined && fromId !== null) {
+        throw new TypeError("getMyTrades fromId cannot be combined with startTime or endTime")
+      }
+      if (hasTimeWindow && orderId !== undefined && orderId !== null) {
+        throw new TypeError("getMyTrades orderId cannot be combined with startTime or endTime")
+      }
+
+      const params = { symbol, limit, ...timeWindow }
+      if (orderId !== undefined && orderId !== null) {
+        params.orderId = normalizeNonNegativeInteger(orderId, "getMyTrades orderId")
+      }
+      if (fromId !== undefined && fromId !== null) {
+        params.fromId = normalizeNonNegativeInteger(fromId, "getMyTrades fromId")
+      }
 
       const response = await this.tradingConnection.request("myTrades", params, { signed: true })
+      if (!Array.isArray(response.data)) {
+        throw new TypeError("Binance myTrades response should be an array")
+      }
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
