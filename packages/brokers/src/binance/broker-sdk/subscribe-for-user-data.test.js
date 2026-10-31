@@ -8,6 +8,7 @@ function createBroker(handler) {
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
   })
+  rpc.state = "open"
   const broker = new BinanceSdkBroker({
     apiKey: "test-key",
     apiSecret: "test-secret",
