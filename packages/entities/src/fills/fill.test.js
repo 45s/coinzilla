@@ -79,7 +79,11 @@ describe(Fill.name, () => {
       baseAsset,
       quoteAsset: otherQuoteAsset,
     })
-    const otherFill = createFill({ market: otherMarket })
+    const otherFill = createFill({
+      market: otherMarket,
+      price: new Money({ amount: "0.1", asset: otherQuoteAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: otherQuoteAsset }),
+    })
 
     assert.notEqual(otherFill.id, createFill().id)
     assert.equal(otherFill.tradeId, createFill().tradeId)
