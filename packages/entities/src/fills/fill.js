@@ -122,7 +122,7 @@ export class Fill {
     ) {
       throw new Error(fillErrMsgs.executedAt)
     }
-    if (!Array.isArray(commissions) || commissions.some((commission) => !(commission instanceof Commission))) {
+    if (!Array.isArray(commissions) || Array.from(commissions).some((commission) => !(commission instanceof Commission))) {
       throw new Error(fillErrMsgs.commissions)
     }
     if (!COMMISSION_STATUSES.includes(commissionStatus)) {
