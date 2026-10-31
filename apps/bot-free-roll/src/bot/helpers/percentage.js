@@ -1,11 +1,5 @@
 import { addDecimal, divideDecimal, multiplyDecimal, subtractDecimal, validateScale, MAX_DECIMAL_SCALE, assertDecimalString } from "./decimal.js"
 
-function assertDecimalString(value, name) {
-  if (typeof value !== "string") {
-    throw new Error(`${name} must be a decimal string`);
-  }
-}
-
 export function percentageToRate({ percent }) {
   assertDecimalString(percent, "percent");
   return multiplyDecimal({ left: percent, right: "0.01" });
