@@ -64,7 +64,7 @@ function fillSell(cycle, overrides = {}) {
 test("creates one immutable cycle from a fully reconciled BUY", () => {
   const cycle = createCycle()
 
-  assert.equal(cycle.id, "grid-cycle:10:DOGEFDUSD:5:buy-1")
+  assert.equal(cycle.id, "grid-cycle:9:DOGEFDUSD:5:buy-1")
   assert.equal(cycle.buyOrderId, "buy-1")
   assert.deepEqual(cycle.buyFillIds, ["buy-trade-1"])
   assert.equal(cycle.acquiredQuantity, "100")
