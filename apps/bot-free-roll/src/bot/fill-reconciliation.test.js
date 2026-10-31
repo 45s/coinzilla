@@ -170,3 +170,29 @@ test("validates history fills against the requested order, symbol, and side", ()
     false,
   )
 })
+
+
+test("rejects missing state and non-object fills without throwing or recording data", () => {
+  const state = createState()
+  const expected = {
+    ok: false,
+    duplicate: false,
+    reason: "Execution fill or pair state is missing",
+  }
+
+  assert.deepEqual(
+    reconcileExecutionFill({ fill: createFill(), state: null }),
+    expected,
+  )
+  assert.deepEqual(
+    reconcileExecutionFill({ fill: null, state }),
+    expected,
+  )
+  assert.deepEqual(
+    reconcileExecutionFill({ fill: "not-a-fill", state }),
+    expected,
+  )
+
+  assert.equal(state.processedTradeIds.size, 0)
+  assert.equal(state.fills.size, 0)
+})
