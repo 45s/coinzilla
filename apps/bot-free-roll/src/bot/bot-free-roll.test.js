@@ -1513,6 +1513,14 @@ test("constructor rejects invalid global and per-pair configuration", () => {
     () => createConfiguredBot(createPair({ orderQuantity: 0 })),
     /DOGEUSDT: invalid pair settings/,
   )
+  assert.throws(
+    () => createConfiguredBot(createPair({ mode: "grid" })),
+    /DOGEUSDT: strategy mode "grid" is not executable in this build/,
+  )
+  assert.throws(
+    () => createConfiguredBot(createPair({ mode: "ladder" })),
+    /DOGEUSDT: strategy mode "ladder" is not executable in this build/,
+  )
 })
 
 test("disabled pairs are not subscribed and all-disabled pairs fail startup safely", async () => {
