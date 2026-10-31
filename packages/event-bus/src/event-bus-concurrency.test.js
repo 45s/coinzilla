@@ -107,3 +107,40 @@ test("matching subscribers start independently for one accepted event", async ()
   assert.equal((await bus.flush()).ok, true)
   assert.equal((await bus.close()).ok, true)
 })
+
+test("flush waits for nested publishes made after an async handler resumes", async () => {
+  const bus = new EventBus({ logger: {} })
+  const started = deferred()
+  const continueHandler = deferred()
+  let nestedPublish
+  let nestedCompleted = false
+
+  bus.subscribe({
+    name: "workflow.started",
+    handler: async () => {
+      started.resolve()
+      await continueHandler.promise
+      nestedPublish = bus.publish({
+        name: "workflow.completed",
+        source: "event-handler",
+      })
+    },
+  })
+  bus.subscribe({
+    name: "workflow.completed",
+    handler: async () => {
+      await Promise.resolve()
+      nestedCompleted = true
+    },
+  })
+
+  assert.equal(bus.publish({ name: "workflow.started", source: "test" }).ok, true)
+  await started.promise
+
+  const flushing = bus.flush()
+  continueHandler.resolve()
+  assert.equal((await flushing).ok, true)
+  assert.equal(nestedPublish.ok, true)
+  assert.equal(nestedCompleted, true)
+  assert.equal((await bus.close()).ok, true)
+})
