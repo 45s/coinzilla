@@ -7,8 +7,8 @@ import { projectGridCycles } from "./grid-cycles.js"
 import {
   restoreGridPairState,
   serializeGridPairState,
-  validateGridStateSnapshot,
 } from "./grid-state-snapshot.js"
+import { validateGridStateSnapshot } from "./grid-state-store.js"
 
 function failure(reason) {
   return toResult({ errors: [reason] })
