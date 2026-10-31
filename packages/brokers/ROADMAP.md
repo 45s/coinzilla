@@ -232,7 +232,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 0 — Contract and dependency inventory
 
-<badge>Complete</badge>
+**Status: Complete.**
 
 - [x] Inventory every `packages/brokers` export, repository consumer, and `@binance/spot` import.
 - [x] Map broker methods to Binance WebSocket API/Streams operations, including parameters, response shape, authentication, and error behavior.
@@ -244,7 +244,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 1 — Characterization tests and test seams
 
-<badge>Prepared in open PR #256</badge>
+**Status: Prepared in open PR #256; not merged.**
 
 - [x] Characterize the public broker methods and their existing normalized result shapes.
 - [x] Add a reusable WHATWG-style fake WebSocket with deterministic lifecycle and message delivery.
