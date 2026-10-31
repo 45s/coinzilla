@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { EventBus } from "@coinzilla/event-bus"
 import { prepareTelegramNotifications } from "./prepare-telegram-notifications.js"
 
 function createEventBus({ failAt } = {}) {
@@ -117,4 +118,38 @@ test("returns setup errors when the event bus or notifier contract is invalid", 
   })
   assert.equal(invalidNotifier.ok, false)
   assert.match(invalidNotifier.errors[0].message, /sendMessage/)
+})
+
+
+test("connects the app configuration to the real EventBus and drains on close", async () => {
+  const eventBusErrors = []
+  const eventBus = new EventBus({
+    logger: { error(entry) { eventBusErrors.push(entry) } },
+  })
+  const sent = []
+  const result = prepareTelegramNotifications({
+    eventBus,
+    env: { TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_CHAT_ID: "-100123" },
+    createNotifier: () => ({
+      async sendMessage(message) { sent.push(message) },
+    }),
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(eventBus.publish({
+    name: "bot.started",
+    source: "free-roll-integration-test",
+  }).ok, true)
+  assert.equal(eventBus.publish({
+    name: "order.execution_report",
+    source: "free-roll-integration-test",
+    data: { raw: "not forwarded" },
+  }).ok, true)
+
+  assert.equal((await eventBus.flush()).ok, true)
+  assert.deepEqual(sent, ["🟢 BOT STARTED"])
+  assert.deepEqual(eventBusErrors, [])
+
+  await result.data.close()
+  assert.equal((await eventBus.close()).ok, true)
 })
