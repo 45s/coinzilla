@@ -1,5 +1,6 @@
 export function createFakeRpcClient(handlers = {}) {
   const listeners = new Set()
+  const errorListeners = new Set()
   const calls = []
 
   return {
@@ -14,6 +15,7 @@ export function createFakeRpcClient(handlers = {}) {
     async disconnect() {
       this.state = "closed"
       listeners.clear()
+      errorListeners.clear()
     },
 
     async request(method, params = {}, options = {}) {
@@ -30,8 +32,17 @@ export function createFakeRpcClient(handlers = {}) {
       return () => listeners.delete(listener)
     },
 
+    onError(listener) {
+      errorListeners.add(listener)
+      return () => errorListeners.delete(listener)
+    },
+
     emitEvent(event) {
       for (const listener of listeners) listener(event)
+    },
+
+    emitError(error) {
+      for (const listener of errorListeners) listener(error)
     },
 
     get listenerCount() {
