@@ -158,6 +158,9 @@ export function validateGridPairStateSnapshot({ snapshot, symbol, configFingerpr
           (!isNonEmptyString(intent.brokerOrderId) || trackedBrokerOrderIds.has(intent.brokerOrderId)))) {
       return failure("Grid pair snapshot contains a malformed or mismatched order intent")
     }
+    if (intent.status === "ACKNOWLEDGED") {
+      trackedBrokerOrderIds.add(intent.brokerOrderId)
+    }
     intentIds.add(intent.clientOrderId)
     intentNames.add(intent.intentId)
     if (intent.side === "BUY") {
