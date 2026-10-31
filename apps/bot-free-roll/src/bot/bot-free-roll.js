@@ -998,6 +998,278 @@ export class FreeRollBot {
     }
   }
 
+  async #placeGridCycleSell({ symbol, cycleId }) {
+    const state = this.#states.get(symbol)
+    const cycle = state?.gridCycles.get(cycleId)
+    if (!state || !cycle || state.paused || !this.#isRunning) return false
+    if (cycle.currentSellOrderId) return true
+    if ([...state.orderIntents.values()].some((intent) =>
+      intent.side === "SELL" && intent.cycleId === cycleId,
+    )) {
+      this.#pause(symbol, `Grid cycle ${cycleId} already has a pending SELL intent`)
+      return false
+    }
+
+    const plan = calculateGridCycleSellPlan({
+      cycle,
+      keepQuantity: String(state.settings.keepQuantity),
+      minProfit: String(this.settings.minProfit),
+      feeRate: String(state.feeRate),
+      priceTickSize: String(state.priceTickSize ?? 0),
+      quantityStepSize: String(state.quantityStepSize ?? 0),
+    })
+    if (!plan.ok) {
+      this.#pause(symbol, `Could not plan recovery SELL for Grid cycle ${cycleId}`, plan.errors[0])
+      return false
+    }
+    if (compareDecimal({ left: plan.data.quantity, right: "0" }) <= 0) {
+      this.#pause(symbol, `Grid cycle ${cycleId} has no sellable quantity after fee and step reservations`)
+      return false
+    }
+
+    try {
+      const serverTime = unwrapResult(await this.broker.getServerTime()).serverTime
+      const intent = createGridOrderIntent({
+        intentId: `${cycle.id}:SELL:${cycle.sellOrders.length + 1}`,
+        symbol,
+        side: "SELL",
+        type: state.orderType,
+        quantity: plan.data.quantity,
+        price: plan.data.price,
+        reservedQuantity: plan.data.reservedQuantity,
+        createdAtServerTime: serverTime,
+        cycleId,
+      })
+      if (!intent.ok) {
+        this.#pause(symbol, `Could not create recovery SELL intent for Grid cycle ${cycleId}`, intent.errors[0])
+        return false
+      }
+
+      const submitted = await this.#gridOrderExecution.submit({
+        state,
+        intent: intent.data,
+      })
+      if (!submitted.ok) {
+        this.#pause(symbol, `Grid SELL submission failed for cycle ${cycleId}; reconciliation is required`, submitted.errors[0])
+        return false
+      }
+
+      this.#publish("order.created", {
+        symbol,
+        side: "SELL",
+        orderId: submitted.data.order.id,
+        clientOrderId: submitted.data.order.clientOrderId,
+        price: submitted.data.order.price,
+        quantity: submitted.data.order.quantity,
+        reservedQuantity: plan.data.reservedQuantity,
+        cycleId,
+        mode: "grid",
+      })
+      this.#debug(`[${symbol}] Grid cycle SELL submitted`, {
+        cycleId,
+        orderId: submitted.data.order.id,
+        clientOrderId: submitted.data.order.clientOrderId,
+        price: submitted.data.order.price,
+        quantity: submitted.data.order.quantity,
+        reservedQuantity: plan.data.reservedQuantity,
+      })
+      return true
+    } catch (error) {
+      this.#pause(symbol, `Grid SELL preparation failed for cycle ${cycleId}`, error)
+      return false
+    }
+  }
+
+  async #reconcileGridFinalOrder({ symbol, order, expectedStatus }) {
+    await this.#reconcileOrderFills({ symbol, order })
+    const canonicalOrders = unwrapResult(
+      await this.broker.getCanonicalOrderHistory({
+        symbol,
+        orderId: order.id,
+        limit: 1,
+      }),
+      `getCanonicalOrderHistory(${symbol}, ${order.id})`,
+    )
+    if (!Array.isArray(canonicalOrders) || canonicalOrders.length !== 1) {
+      throw new Error(`Canonical order history is missing or ambiguous for Grid order ${order.id}`)
+    }
+
+    const canonicalOrder = canonicalOrders[0]
+    const identity = validateTrackedOrderIdentity({
+      symbol,
+      order,
+      canonicalOrder,
+      expectedType: this.#states.get(symbol).orderType,
+    })
+    if (!identity.ok) throw new Error(identity.reason)
+    if (canonicalOrder.status !== expectedStatus) {
+      throw new Error(`Grid order ${order.id} status is ${canonicalOrder.status}, expected ${expectedStatus}`)
+    }
+
+    const localQuantity = this.#states.get(symbol).filledQuantityByOrder.get(String(order.id)) ?? "0"
+    if (compareDecimal({
+      left: localQuantity,
+      right: canonicalOrder.executedQuantity.amount,
+    }) !== 0) {
+      throw new Error(`Grid order ${order.id} canonical execution quantity does not match local fills`)
+    }
+    return canonicalOrder
+  }
+
+  async #handleGridSellFilled({ symbol, cycleId, orderId }) {
+    const state = this.#states.get(symbol)
+    const cycle = state?.gridCycles.get(cycleId)
+    const order = cycle?.sellOrders.find((entry) => entry.id === orderId)
+    if (!state || !cycle || !order || state.paused) return
+
+    try {
+      await this.#reconcileGridFinalOrder({
+        symbol,
+        order,
+        expectedStatus: "FILLED",
+      })
+    } catch (error) {
+      this.#pause(symbol, `Grid SELL ${orderId} could not be fully reconciled`, error)
+      return
+    }
+
+    const latestCycle = state.gridCycles.get(cycleId)
+    const filledQuantity = state.filledQuantityByOrder.get(orderId) ?? "0"
+    if (compareDecimal({ left: filledQuantity, right: order.quantity }) !== 0) {
+      this.#pause(symbol, `Grid SELL ${orderId} is FILLED but actual quantity is incomplete`)
+      return
+    }
+
+    const completed = completeGridCycle({
+      cycle: latestCycle,
+      keepQuantity: String(state.settings.keepQuantity),
+      minProfit: String(this.settings.minProfit),
+    })
+    if (!completed.ok) {
+      this.#pause(symbol, `Grid cycle ${cycleId} failed its completion checks`, completed.errors[0])
+      return
+    }
+    state.gridCycles.set(cycleId, completed.data)
+
+    const projection = projectGridPairAccounting({ state })
+    if (!projection.ok) {
+      this.#pause(symbol, `Grid cycle ${cycleId} completion broke inventory reconciliation`, projection.errors[0])
+      return
+    }
+    Object.assign(state, projection.data)
+    state.trailingBuy = true
+
+    try {
+      await this.#persistGridState()
+    } catch (error) {
+      this.#pause(symbol, `Grid cycle ${cycleId} completed but state persistence failed`, error)
+      return
+    }
+
+    this.#debug(`[${symbol}] Grid cycle completed`, {
+      cycleId,
+      orderId,
+      freeQuantity: completed.data.freeQuantityAllocated,
+      totalFreeQuantity: state.freeQuantity,
+      realizedProfit: completed.data.realizedProfit,
+    })
+    this.#publishTradingSummary({ symbol, reason: "grid_cycle_completed" })
+
+    if (!state.buyOrder) await this.#placeNextBuy(symbol)
+  }
+
+  async #handleGridSellTerminated({ symbol, cycleId, orderId, status }) {
+    const state = this.#states.get(symbol)
+    const cycle = state?.gridCycles.get(cycleId)
+    const order = cycle?.sellOrders.find((entry) => entry.id === orderId)
+    if (!state || !cycle || !order || state.paused) return
+
+    try {
+      await this.#reconcileGridFinalOrder({
+        symbol,
+        order,
+        expectedStatus: status,
+      })
+    } catch (error) {
+      this.#pause(symbol, `Grid SELL ${orderId} terminal state could not be reconciled`, error)
+      return
+    }
+
+    const latestCycle = state.gridCycles.get(cycleId)
+    const closed = closeGridCycleSellOrder({
+      cycle: latestCycle,
+      orderId,
+      status,
+      reconciled: true,
+    })
+    if (!closed.ok) {
+      this.#pause(symbol, `Grid SELL ${orderId} could not be closed safely`, closed.errors[0])
+      return
+    }
+    state.gridCycles.set(cycleId, closed.data)
+
+    const projection = projectGridPairAccounting({ state })
+    if (!projection.ok) {
+      this.#pause(symbol, `Grid cycle ${cycleId} inventory projection failed after SELL cancellation`, projection.errors[0])
+      return
+    }
+    Object.assign(state, projection.data)
+    try {
+      await this.#persistGridState()
+    } catch (error) {
+      this.#pause(symbol, `Grid SELL ${orderId} was reconciled but its state could not be persisted`, error)
+      return
+    }
+
+    if (status === "REJECTED") {
+      this.#pause(symbol, `Grid SELL ${orderId} was rejected; operator review is required`)
+      return
+    }
+
+    await this.#placeGridCycleSell({ symbol, cycleId })
+  }
+
+  async #handleGridOrderStatus({ symbol, state, order, orderId, status }) {
+    const orderIndex = buildGridOrderIndex({
+      cycles: [...state.gridCycles.values()],
+      pendingBuyOrder: state.buyOrder,
+    })
+    if (!orderIndex.ok) {
+      this.#pause(symbol, "Grid order status cannot be mapped to a unique cycle", orderIndex.errors[0])
+      return
+    }
+    const owner = resolveGridOrderOwner({
+      orderIndex: orderIndex.data,
+      orderId,
+      clientOrderId: order?.clientOrderId,
+      symbol,
+      side: order?.side,
+    })
+    if (!owner.ok) {
+      this.#pause(symbol, `Grid order ${orderId} has no unambiguous owner`, owner.errors[0])
+      return
+    }
+
+    const { role, cycleId } = owner.data.owner
+    if (role === "BUY") {
+      if (cycleId !== null || state.buyOrder?.id !== orderId) return
+      if (status === "FILLED") {
+        await this.#handleBuyFilled(symbol)
+      } else if (TERMINAL_FAILURES.has(status)) {
+        this.#pause(symbol, `Grid BUY ${orderId} ended as ${status}; reconcile before continuing`)
+      }
+      return
+    }
+
+    const cycle = state.gridCycles.get(cycleId)
+    if (!cycle || cycle.currentSellOrderId !== orderId) return
+    if (status === "FILLED") {
+      await this.#handleGridSellFilled({ symbol, cycleId, orderId })
+    } else if (TERMINAL_FAILURES.has(status)) {
+      await this.#handleGridSellTerminated({ symbol, cycleId, orderId, status })
+    }
+  }
+
   async #handleBuyFilled(symbol) {
     const state = this.#states.get(symbol)
     const order = state.buyOrder
