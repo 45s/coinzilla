@@ -53,8 +53,8 @@ test("getAccountSnapshot returns canonical balances and account source updateTim
   assert.equal(result.data.sourceTime, 1_700_000_000_123)
   assert.equal(result.data.balances.length, 2)
   assert.equal(result.data.balances[0].asset.code, "USDT")
-  assert.equal(result.data.balances[0].free.amount, "10.25000000")
-  assert.equal(result.data.balances[0].locked.amount, "1.75000000")
+  assert.equal(result.data.balances[0].free.amount, "10.25")
+  assert.equal(result.data.balances[0].locked.amount, "1.75")
   assert.equal(result.data.balances[0].total.amount, "12")
   assert.deepEqual(rpc.calls, [{
     method: "account.status",
