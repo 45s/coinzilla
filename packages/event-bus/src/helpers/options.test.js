@@ -89,3 +89,22 @@ test("rejects non-function error reporters", () => {
     )
   }
 })
+
+test("uses the default pending-delivery limit", () => {
+  assert.equal(validateOptions({}, defaultLogger).maxPending, 1000)
+})
+
+test("accepts a positive safe-integer pending-delivery limit", () => {
+  for (const maxPending of [1, 2, Number.MAX_SAFE_INTEGER]) {
+    assert.equal(validateOptions({ maxPending }, defaultLogger).maxPending, maxPending)
+  }
+})
+
+test("rejects invalid pending-delivery limits", () => {
+  for (const maxPending of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "10", null]) {
+    assert.throws(
+      () => validateOptions({ maxPending }, defaultLogger),
+      /maxPending must be a positive safe integer/,
+    )
+  }
+})
