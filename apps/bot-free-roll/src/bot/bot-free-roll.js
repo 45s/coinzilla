@@ -44,10 +44,12 @@ export class FreeRollBot {
   #confirmedBalances = new Map()
   #orderExecution
   #eventHandling
+  #gridStateStore
+  #gridStateRevision = null
 
   constructor(input) {
     const validation = validateConfig(input)
-    const { broker, eventBus, tradingConfig } = input
+    const { broker, eventBus, tradingConfig, gridStateStore = null } = input
 
     if (!validation.ok) {
       throw new AggregateError(validation.errors, "Invalid FreeRollBot config")
@@ -63,6 +65,7 @@ export class FreeRollBot {
 
     this.broker = broker
     this.eventBus = eventBus
+    this.#gridStateStore = gridStateStore
     this.#orderExecution = createOrderExecution({
       broker: this.broker,
       isRunning: () => this.#isRunning && !this.#isRecovering,
@@ -135,8 +138,12 @@ export class FreeRollBot {
       })
 
       this.#states.set(symbol, {
+        symbol,
         mode,
         settings: pair,
+        gridCycles: new Map(),
+        orderIntents: new Map(),
+        nextIntentSequence: 0,
         orderType,
         configuredFeeRate,
         feeRate: configuredFeeRate,
