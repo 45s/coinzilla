@@ -653,6 +653,10 @@ export function projectGridCycles({ cycles } = {}) {
       if (ids.has(cycle.id)) throw new Error(`duplicate cycle ID ${cycle.id}`)
       ids.add(cycle.id)
       symbols.add(cycle.symbol)
+      if (orderIds.has(cycle.buyOrder.id)) {
+        throw new Error("BUY broker order ID is assigned to multiple Grid orders")
+      }
+      orderIds.add(cycle.buyOrder.id)
       if (clientOrderIds.has(cycle.buyOrder.clientOrderId)) {
         throw new Error("BUY client order ID is assigned to multiple cycles")
       }
