@@ -172,3 +172,58 @@ test("close rejects nested publishes attempted by handlers during shutdown", asy
   assert.equal((await closing).ok, true)
   assert.equal(nestedPublish.ok, false)
 })
+
+test("slow handlers retain capacity until settlement and capacity recovers afterward", async () => {
+  const bus = new EventBus({ logger: {}, maxPending: 1 })
+  const started = deferred()
+  const release = deferred()
+  let calls = 0
+
+  bus.subscribe({
+    name: "slow.event",
+    handler: async () => {
+      calls += 1
+      started.resolve()
+      await release.promise
+    },
+  })
+
+  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, true)
+  await started.promise
+  assert.equal(bus.getDiagnostics().pendingCount, 1)
+  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, false)
+
+  release.resolve()
+  assert.equal((await bus.flush()).ok, true)
+  assert.equal(bus.getDiagnostics().pendingCount, 0)
+  assert.equal(bus.publish({ name: "slow.event", source: "test" }).ok, true)
+  assert.equal((await bus.flush()).ok, true)
+  assert.equal(calls, 2)
+  assert.equal((await bus.close()).ok, true)
+})
+
+test("error reporter rejection becomes a process warning, not an unhandled rejection", async () => {
+  const bus = new EventBus({
+    logger: {},
+    onError: async () => {
+      throw new Error("reporter rejected")
+    },
+  })
+  const warning = new Promise((resolve) => {
+    process.once("warning", resolve)
+  })
+
+  bus.subscribe({
+    name: "handler.failed",
+    handler: () => {
+      throw new Error("handler failed")
+    },
+  })
+
+  assert.equal(bus.publish({ name: "handler.failed", source: "test" }).ok, true)
+  assert.equal((await bus.flush()).ok, true)
+
+  const emittedWarning = await warning
+  assert.match(emittedWarning.message, /EventBus error reporting failed: reporter rejected/)
+  assert.equal((await bus.close()).ok, true)
+})

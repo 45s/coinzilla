@@ -143,13 +143,13 @@ The audit also identified these risks:
 
 1. **Incomplete immutability (addressed):** payloads now accept only plain objects, arrays, and primitive values. Mutable built-ins, class instances, accessors, symbol keys, and unsupported object properties are rejected before cloning; accepted object graphs are cloned and frozen. Cycles and shared references remain supported.
 2. **Host event-name semantics (addressed):** the explicit registry avoids Node EventEmitter special-name behavior; special-looking names are ordinary application names.
-3. **Unbounded pending work (partially addressed):** a global pending-delivery cap, atomic fan-out rejection, and immutable pending/capacity/lifecycle diagnostics now exist; additional adversarial lifecycle tests remain outstanding.
+3. **Unbounded pending work (bounded and tested):** a global pending-delivery cap, atomic fan-out rejection, immutable pending/capacity/lifecycle diagnostics, re-entrant overload tests, slow-handler recovery, and bounded stress coverage now exist.
 4. **Shutdown can hang (open):** a handler that never settles can block `flush()` indefinitely and can block `close()` indefinitely when no timeout is supplied; `close({ timeoutMs })` now offers a bounded wait without cancelling accepted handlers.
 5. **Ordering (documented and tested):** handlers are scheduled asynchronously without per-subscriber serialization; completion order is not guaranteed.
 6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
 7. **Subscription lifecycle ambiguity (addressed):** close invalidates subscription handles and clears registries; repeated unsubscribe reports an inactive handle.
 8. **Validation gaps (addressed in this change):** constructor options now reject malformed option objects, unknown keys, invalid logger hooks, and invalid error handlers. Event names are validated against a bounded, documented character set and preserved exactly; Node-special names remain ordinary application names.
-9. **Coverage gap (open):** the package coverage script exists, but package-specific thresholds are not enforced and adversarial tests remain incomplete.
+9. **Coverage gap (partially addressed):** package-specific line/branch thresholds are enforced in PR CI and the baseline is recorded; a negative self-check for threshold failure remains open.
 
 These are audit observations to verify against the current implementation before each fix; do not blindly apply stale line numbers or assumptions.
 
@@ -160,7 +160,7 @@ These are audit observations to verify against the current implementation before
 - [x] Document publish, delivery, ordering, error, unsubscribe, flush, and close semantics in `README.md`; keep this contract synchronized with tests and implementation.
 - [x] Decide supported payload types and immutability guarantees: plain objects (including null-prototype objects), arrays, and primitive values only; cycles and shared references are preserved; mutable built-ins and non-data properties are rejected.
 - [x] Inspect all in-repository consumers for compatibility constraints.
-- [ ] Capture baseline test results and package coverage.
+- [x] Capture baseline test results and package coverage. CI on PR #294: 77 package tests passed; source coverage was 99.54% lines and 98.63% branches (Node.js 22; [Unit Tests run](https://github.com/45s/coinzilla/actions/runs/41194370503), [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41194370511)).
 
 Acceptance: public behavior is documented and tests encode the intended contract.
 
@@ -197,10 +197,10 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 - [x] Test overload boundaries, atomic fan-out rejection, capacity recovery, and concurrent publish saturation.
 - [x] Replace arbitrary sleep-based lifecycle tests with deferred-promise/barrier synchronization.
 - [x] Test nested publishes from sync and async handlers; prove `flush()` waits transitively for accepted nested work.
-- [ ] Test re-entrant publish at capacity and verify overload is atomic (no partial fan-out).
-- [ ] Test slow and never-settling handlers, including the documented flush/close behavior and later capacity recovery.
+- [x] Test re-entrant publish at capacity and verify overload is atomic (no partial fan-out).
+- [x] Test slow and never-settling handlers, including the documented flush/close behavior and later capacity recovery.
 - [x] Test publish-vs-close, repeated close, and concurrent close callers; assert nested publishes attempted after close begins are rejected.
-- [ ] Add a bounded stress test with a fixed workload and explicit upper bounds; assert the pending count returns to zero and no test-owned work is left behind.
+- [x] Add a bounded stress test with a fixed workload and explicit upper bounds; assert the pending count returns to zero and no test-owned work is left behind (80 publishes × 3 subscribers).
 
 Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wait forever without a defined timeout result.
 
@@ -210,12 +210,13 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 - [x] Implement the Phase 2 diagnostics API; expose only stable scalar snapshots and never the internal pending Set, listener Maps, or subscription records.
 - [ ] Define counter meanings precisely (accepted/rejected publishes, scheduled/completed/failed deliveries, current pending and high-water mark) before adding any counters beyond the minimal gauges; avoid ambiguous or expensive instrumentation.
 - [x] Use deferred promises/barriers rather than wall-clock sleeps for concurrency and lifecycle assertions.
-- [ ] Cover the documented concurrency model, fan-out admission atomicity, nested publish/flush, reporter failures, publish/close races, and simultaneous close callers.
-- [ ] Add bounded stress tests with deterministic workload sizes and assert zero pending work after drain.
-- [ ] Record a real baseline from `pnpm --filter @coinzilla/event-bus test` and `pnpm --filter @coinzilla/event-bus test:coverage`; attach command output/CI run to the implementation PR.
-- [ ] Confirm Node's built-in coverage output and the package test script work in CI; the script exists today, but it currently has no threshold enforcement.
-- [ ] Add package-specific line and branch thresholds (initial target: >=90% lines and >=85% branches) to a CI-enforced command; verify thresholds fail when intentionally unmet and pass on the full suite.
-- [ ] Ensure the gate runs on every pull request that changes the package; do not mistake aggregate workspace coverage for the package-specific gate.
+- [x] Cover the documented concurrency model, fan-out admission atomicity, nested publish/flush, reporter failures, publish/close races, and simultaneous close callers.
+- [x] Add bounded stress tests with deterministic workload sizes and assert zero pending work after drain.
+- [x] Record a real baseline from `pnpm --filter @coinzilla/event-bus test` and `pnpm --filter @coinzilla/event-bus test:coverage`; attach command output/CI run to the implementation PR (77 tests passed; 99.54% lines / 98.63% branches; see Phase 0 CI links).
+- [x] Confirm Node's built-in coverage output and the package test script work in CI; the package-specific command runs on Node.js 22 and excludes test files from the measured source set.
+- [x] Add package-specific line and branch thresholds (>=90% lines and >=85% branches) to a CI-enforced command; the full suite passes the gate.
+- [x] Add a negative CI self-check proving the package coverage command fails when a deliberately insufficient 100% line or branch threshold is configured.
+- [x] Ensure the gate runs on every pull request that changes the package; the package-specific command is an explicit step in the Test Coverage workflow.
 - [x] Document examples, limitations, and current operational behavior in `README.md` (including in-process scope, no durability, fan-out admission, errors, unsubscribe, flush, and diagnostics and bounded shutdown behavior).
 
 Initial coverage target: at least 90% lines and 85% branches, with all critical error/lifecycle branches tested. Revisit thresholds based on meaningful branch coverage; do not add tests solely to inflate percentages.
@@ -276,3 +277,10 @@ CI should run package tests on every pull request. Coverage thresholds should be
 - Correctness and bug resistance take precedence over feature count and micro-optimizations.
 - Do not create GitHub issues as a substitute for this roadmap; track progress here and in focused pull requests.
 - Update this file whenever a guarantee, phase, or acceptance criterion changes.
+
+
+## AI-agent ownership and workflow
+
+This roadmap is owned by `packages/event-bus/`. Read [the local agent instructions](./AGENTS.md) and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md) before changing this package.
+
+Use short-lived task branches from `develop`; do not create permanent per-domain branches. Keep event-bus implementation, tests, and roadmap changes within this domain. Route consumer requests and cross-package contract needs through [the cross-domain request process](../../docs/engineering/CROSS_DOMAIN_REQUESTS.md). Mark roadmap items complete only after the focused PR is merged into `develop` and required checks pass.

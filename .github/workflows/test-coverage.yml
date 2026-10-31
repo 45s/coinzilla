@@ -53,5 +53,29 @@ jobs:
 
           exit "$test_status"
 
+      - name: Enforce Event Bus package coverage thresholds
+        run: pnpm --filter @coinzilla/event-bus test:coverage
+
+      - name: Verify Event Bus coverage thresholds reject insufficient coverage
+        shell: bash
+        run: |
+          verify_threshold() {
+            local threshold_flag="$1"
+            set +e
+            local output
+            output="$(pnpm --filter @coinzilla/event-bus exec node --test --experimental-test-coverage "$threshold_flag" --test-coverage-include=src/event-bus.js --test-coverage-include=src/index.js --test-coverage-include=src/helpers/*.js --test-coverage-exclude=src/**/*.test.js 2>&1)"
+            local test_status=$?
+            set -e
+
+            if [[ "$test_status" -eq 0 ]] || ! grep -Fq "does not meet threshold of 100%" <<< "$output"; then
+              printf '%s\n' "$output"
+              echo "::error::Expected Event Bus coverage to fail with $threshold_flag."
+              exit 1
+            fi
+          }
+
+          verify_threshold "--test-coverage-lines=100"
+          verify_threshold "--test-coverage-branches=100"
+
       - name: Enforce Free-Roll bot coverage thresholds
         run: pnpm --filter @coinzilla/bot-free-roll test:coverage

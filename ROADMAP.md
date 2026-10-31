@@ -50,3 +50,18 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 - Run the narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
 - Check mergeability and all relevant CI results after pushing. Never claim checks are green while they are pending or failed.
 - Update this roadmap when a task is actually verified complete; distinguish repository configuration from checks that are merely present.
+
+
+## 6. AI-agent workflow and low-overhead integration
+
+- [ ] Establish `develop` as the shared integration branch, with protected PR-only merges and required automated checks.
+- [ ] Keep `main` as the stable release branch; only milestone/release PRs from `develop` to `main` require the user's final approval.
+- [ ] Require every AI agent to follow `AI_AGENT_WORKFLOW.md`, root `AGENTS.md`, and the owning domain's local instructions.
+- [ ] Give each application/package its own roadmap and local agent instructions; keep domain ownership independent of Git branch lifetime.
+- [ ] Use short-lived task branches based on `develop`; do not maintain permanent per-domain feature branches.
+- [ ] Allow task PRs to merge into `develop` after required CI, freshness, and ownership checks pass; no routine human approval.
+- [ ] Define cross-domain requests so consumer agents report needs and owning-domain agents implement shared package changes.
+- [ ] Configure GitHub rulesets for `develop` and `main`; verify the exact required check names and auto-merge/agent merge permissions.
+- [ ] Retire or migrate legacy long-lived feature branches and open PRs only after their work is safely preserved.
+
+The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection for the new `develop` branch is a one-time repository configuration task; documentation alone does not enforce it.
