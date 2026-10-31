@@ -54,7 +54,7 @@ function createFill({ tradeId, brokerOrderId = "11" }) {
     quantity: new Quantity({ amount: "1", asset: baseAsset }),
     quoteQuantity: new Money({ amount: "0.05", asset: quoteAsset }),
     liquidityRole: "MAKER",
-    executedAt: 1000 + Number(tradeId),
+    executedAt: 1000,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
