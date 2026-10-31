@@ -1014,8 +1014,14 @@ describe("Binance user-data listener setup cleanup", () => {
         client = createFakeRpcClient({
           "userDataStream.subscribe.signature": () => ({ subscriptionId: 78 }),
         })
-        client.onClose = () => {
-          throw new Error("close listener registration failed")
+        const registerCloseListener = client.onClose.bind(client)
+        let closeRegistrationAttempts = 0
+        client.onClose = (listener) => {
+          closeRegistrationAttempts += 1
+          if (closeRegistrationAttempts === 2) {
+            throw new Error("close listener registration failed")
+          }
+          return registerCloseListener(listener)
         }
         return client
       },
