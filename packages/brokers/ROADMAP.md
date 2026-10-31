@@ -67,11 +67,11 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Implement the native public Streams client on `migration/binance-phase-4-streams`, using the Phase 2 transport and Phase 1 deterministic test seams.
-2. Keep it separate from the WebSocket API RPC client; do not wire it into `BinanceSdkBroker` in this phase.
-3. Cover stream validation, subscribe/unsubscribe acknowledgements, raw/combined envelopes, callback lifecycle, connection limits, reconnect/resubscribe, server shutdown, and explicit disconnect.
-4. Preserve existing exported stream adapters and method compatibility; do not promote the legacy `WS.js` transport or its REST listen-key user-data path.
-5. Recheck `main` before opening the PR; sync only if broker/API/consumer-contract changes require it. Run all required CI on the exact PR head.
+1. Complete the compatibility audit against the legacy `stream-client.js`: map each public stream method and parameter contract to `createStreamName`; keep the old exported class and methods intact until Phase 5.
+2. Review the existing `adaptMsg` / user-data adapters. Reuse only public market-data adapters that have valid input contracts; do not move REST listen-key or authenticated user-data behavior into this public Streams client.
+3. Add deterministic tests for the adapter boundary and method mapping. Keep parsing/normalization pure and preserve callback behavior.
+4. Do not wire this client into `BinanceSdkBroker` in Phase 4; broker wiring belongs to Phase 5.
+5. Recheck `main` before merge and immediately after any broker/API/consumer-contract change. Sync only when that trigger is met.
 6. Wait for explicit merge approval. Do not merge automatically.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
@@ -286,22 +286,23 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 4 — Public WebSocket Streams client
 
-**Status: In progress on `migration/binance-phase-4-streams`.**
+**Status: Core client implemented; compatibility adapter audit remains. PR #265 is open from `migration/binance-phase-4-streams`.**
 
-- [ ] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
-- [ ] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
-- [ ] Preserve existing stream methods: `trade`, `kline`, `miniTicker`, `ticker`, `rollingWindowTicker`, `bookTicker`, `partialBookDepth`, `diffBookDepth`, and `aggTrade`; retain the old exported class until a later compatibility migration.
-- [ ] Use Binance's combined `/stream?streams=...` endpoint so each event retains its exact stream name; verify URL-provided initial subscriptions with `LIST_SUBSCRIPTIONS`, then use acknowledged SUBSCRIBE/UNSUBSCRIBE commands for dynamic changes. Keep raw-envelope parsing as a defensive protocol path.
-- [ ] Validate stream names and method parameters (symbol, interval, rolling window, depth levels, update speed) before sending.
-- [ ] Correlate SUBSCRIBE/UNSUBSCRIBE acknowledgements by request ID; normalize API errors and reject pending operations on timeout, socket failure, or disconnect.
-- [ ] Track desired subscriptions separately from active subscriptions. Multiple callers subscribing to the same stream must not create duplicate server subscriptions; unsubscribe only when the final local listener is removed.
-- [ ] Bound control-message sends to stay below Binance's 5 incoming messages/second limit; keep a conservative budget for automatic protocol pong frames.
-- [ ] Enforce the 1024-stream-per-connection limit and surface actionable errors.
-- [ ] Reconnect with bounded backoff, create a fresh one-lifecycle transport, and restore desired subscriptions exactly once; never replay unrelated RPC/order operations.
-- [ ] Handle `serverShutdown` and the 24-hour connection lifetime with controlled connection rotation.
-- [ ] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
-- [ ] Reuse existing event adapters only after validating their input boundaries; keep parsing/normalization pure and unknown events non-fatal.
-- **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. No live credentials/network calls in unit tests.
+- [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
+- [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
+- [x] Keep the existing exported `BinanceStreamClient` and its stream methods untouched during this phase; implement method wrappers during Phase 5, not by promoting the legacy socket/REST listen-key path.
+- [x] Use Binance's combined `/stream?streams=...` endpoint so each event retains its exact stream name; verify URL-provided initial subscriptions with `LIST_SUBSCRIPTIONS`, then use acknowledged SUBSCRIBE/UNSUBSCRIBE commands for dynamic changes. Keep raw-envelope parsing as a defensive protocol path.
+- [x] Validate stream names and method parameters (symbol, interval, rolling window, depth levels, update speed) before sending; rolling-window streams are limited to Binance's supported 1h and 4h windows.
+- [x] Correlate SUBSCRIBE/UNSUBSCRIBE acknowledgements by request ID; validate LIST_SUBSCRIPTIONS results; normalize API errors and reject pending operations on timeout, socket failure, or disconnect.
+- [x] Track desired subscriptions separately from active subscriptions. Multiple callers subscribing to the same stream must not create duplicate server subscriptions; unsubscribe only when the final local listener is removed.
+- [x] Bound control-message sends to 4 messages/second to leave headroom for automatic protocol pong frames.
+- [x] Enforce the 1024-stream-per-connection limit and batch subscription setup.
+- [x] Reconnect with bounded backoff, create a fresh one-lifecycle transport, and restore desired subscriptions exactly once; never replay unrelated RPC/order operations.
+- [x] Handle `serverShutdown` and rotate before the 24-hour connection lifetime.
+- [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
+- [ ] Audit/reuse existing public market-data event adapters only after validating their input boundaries; keep parsing/normalization pure and unknown events non-fatal.
+- **Core-client CI evidence:** PR #265 exact head `a9c7070042bf01b2ab9bf590526313c146d04eb7` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. Later commits may require fresh CI; do not treat this evidence as validation of a newer head.
+- **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. Adapter-boundary tests and exact-head CI must pass before Phase 4 is complete. No live credentials/network calls in unit tests.
 
 ### Phase 5 — Rebuild the broker on native clients
 
