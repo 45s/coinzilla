@@ -355,6 +355,8 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Ignore events whose `subscriptionId` does not match the active subscription.
 - [x] Deduplicate execution reports using `symbol`, `orderId`, and `executionId`; use a bounded exact-payload cache for event types without a stable unique ID.
 - [x] Avoid reporting intentional broker shutdown as an unexpected recovery gap.
+- [x] Log unexpected API socket closure even when no optional status callback is supplied.
+- [x] Fail closed for new `createOrder()` calls after user-data subscription failure, termination, explicit unsubscribe, or API socket loss; restore order placement only after a new subscription succeeds.
 - [x] Document that event timestamps are not a global replay cursor and that recovery requires state reconciliation.
 - [ ] Phase 6A follow-up: deterministic account-update duplicate tests and callback/error isolation review.
 
