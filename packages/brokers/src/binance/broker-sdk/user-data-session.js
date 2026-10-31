@@ -238,55 +238,57 @@ export class BinanceUserDataSession {
   }
 
   async #recover() {
-    if (this.#stopped || this.#subscribers.size === 0) return
-    if (this.#reconnectPromise) return this.#reconnectPromise
+    if (this.#stopped || this.#subscribers.size === 0 || this.#reconnectPromise) return
 
+    let retryDelay = null
     this.#reconnectPromise = (async () => {
-      while (!this.#stopped && this.#subscribers.size > 0 &&
-             this.#subscriptionId === null &&
-             this.#reconnectAttempts < this.maxReconnectAttempts) {
-        this.#reconnectAttempts += 1
-        const attempt = this.#reconnectAttempts
-        try {
-          let client = this.getClient()
-          if (!client || client.state !== "open") {
-            client = this.createClient()
-            this.setClient(client)
-            this.#bindClient(client)
-            await client.connect()
-            if (this.#stopped || this.#subscribers.size === 0) {
-              await client.disconnect()
-              return
-            }
-            this.setConnected(true)
-          }
-          await this.#ensureRemoteSubscription()
-          return
-        } catch (error) {
-          this.setUnavailable(true)
-          this.logger.error?.("Binance user-data recovery attempt failed", { attempt, error })
-          if (attempt >= this.maxReconnectAttempts) {
-            this.#notify({
-              type: "recoveryFailed",
-              attempt,
-              error,
-              recoveryRequired: true,
-            })
+      if (this.#reconnectAttempts >= this.maxReconnectAttempts) {
+        this.#notify({
+          type: "recoveryFailed",
+          attempt: this.#reconnectAttempts,
+          recoveryRequired: true,
+        })
+        return
+      }
+
+      const attempt = ++this.#reconnectAttempts
+      try {
+        let client = this.getClient()
+        if (!client || client.state !== "open") {
+          client = this.createClient()
+          this.setClient(client)
+          this.#bindClient(client)
+          await client.connect()
+          if (this.#stopped || this.#subscribers.size === 0) {
+            await client.disconnect()
             return
           }
-          await new Promise((resolve) => {
-            this.#reconnectTimer = this.setTimeout(() => {
-              this.#reconnectTimer = null
-              resolve()
-            }, Math.min(this.reconnectDelay * (2 ** (attempt - 1)), 30_000))
+          this.setConnected(true)
+        }
+        await this.#ensureRemoteSubscription()
+      } catch (error) {
+        this.setUnavailable(true)
+        this.logger.error?.("Binance user-data recovery attempt failed", { attempt, error })
+        if (attempt >= this.maxReconnectAttempts) {
+          this.#notify({
+            type: "recoveryFailed",
+            attempt,
+            error,
+            recoveryRequired: true,
           })
+        } else {
+          retryDelay = Math.min(this.reconnectDelay * (2 ** (attempt - 1)), 30_000)
         }
       }
-    })().finally(() => {
-      this.#reconnectPromise = null
-    })
+    })()
 
-    return this.#reconnectPromise
+    try {
+      await this.#reconnectPromise
+    } finally {
+      this.#reconnectPromise = null
+    }
+
+    if (retryDelay !== null) this.#scheduleRecovery(retryDelay)
   }
 
   #acknowledgeRecovery(id) {
@@ -315,14 +317,15 @@ export class BinanceUserDataSession {
 
     if (this.#subscribers.size > 0) return
     this.#clearReconnectTimer()
+    const subscriptionId = this.#subscriptionId
     this.#subscriptionId = null
     this.#recoveryRequired = false
     this.setUnavailable(true)
 
     const client = this.getClient()
     try {
-      if (client?.state === "open") {
-        await client.request("userDataStream.unsubscribe", {})
+      if (subscriptionId !== null && client?.state === "open") {
+        await client.request("userDataStream.unsubscribe", { subscriptionId })
       }
     } finally {
       this.#detachClientListeners()
