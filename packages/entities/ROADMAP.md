@@ -21,7 +21,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [~] **FR-012 — Commission.** Implement an immutable commission value with an exact non-negative `Money` amount and explicit asset identity. Add zero, one, or multiple commission entries to Fill, with explicit `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics. Unknown or incomplete fees must never be interpreted as zero.
 - [~] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
 - [~] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit supported, unsupported, dynamic, and unknown constraint states.
-- [ ] **FR-015 — Broker capability contracts.** Shared capability vocabulary without exchange-specific assumptions.
+- [~] **FR-015 — Broker capability contracts.** Shared capability vocabulary with explicit supported, unsupported, and unknown states; no exchange-specific assumptions.
 - [ ] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
 
 ### FR-009 contract boundary
@@ -82,6 +82,14 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Supported constraints require a value. Unsupported, dynamic, and unknown constraints must not carry a fabricated static value.
 - Increment constraints must be greater than zero; all supported values must be non-negative. When both minimum and maximum bounds are supported, minimum cannot exceed maximum.
 - Constraint types are unique within a snapshot. Constraint arrays and records are immutable; value snapshots are independent.
+
+### FR-015 contract boundary
+
+- `BrokerCapabilities` is an immutable snapshot of exchange-neutral broker operations; it contains no venue-specific method names or payload fields.
+- The shared vocabulary covers account/market reads, order and trade reads, limit/market placement, cancellation, market-price subscriptions, user-data subscriptions, and trading-rule reads.
+- Each reported capability has an explicit `SUPPORTED`, `UNSUPPORTED`, or `UNKNOWN` status. An omitted capability is `UNKNOWN`, never assumed unsupported or supported.
+- Capability types are unique within a snapshot. The status lookup validates the requested vocabulary and returns `UNKNOWN` for unreported capabilities.
+- Capability discovery is descriptive only; it does not imply that an operation is currently authorized, healthy, or safe to execute. Runtime permission and recovery state remain separate concerns.
 
 ## Completion policy
 
