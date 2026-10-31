@@ -2929,18 +2929,18 @@ test("buffers user-data events during reconciliation and replays them before ack
   bot = new FreeRollBot({
     broker: {
       getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
-      getBalances: async () => balanceSnapshot,
-      getOpenOrders: async () => ({
-        ok: true,
-        data: [{
-          id: "BUY-1",
+      ...createRecoverySnapshotPorts({
+        createdOrders,
+        accountSnapshotFactory: () => balanceSnapshot,
+        openOrdersForSymbol: ({ createdOrders: orders }) => [{
+          id: orders[0]?.orderId,
+          symbol: "DOGEUSDT",
           side: "BUY",
           originalQuantity: "100",
           executedQuantity: "0",
           status: "NEW",
         }],
       }),
-      getMyTrades: async () => ({ ok: true, data: [] }),
       subscribeForUserData: async (callbacks) => {
         onEvent = callbacks.onEvent
         onStatus = callbacks.onStatus
@@ -2961,8 +2961,9 @@ test("buffers user-data events during reconciliation and replays them before ack
         return { ok: true, data: { disconnect() {} } }
       },
       createOrder: async (order) => {
-        createdOrders.push(order)
-        return { ok: true, data: { orderId: `${order.side}-1` } }
+        const orderId = String(createdOrders.length + 1)
+        createdOrders.push({ ...order, orderId })
+        return { ok: true, data: { orderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
@@ -2994,7 +2995,7 @@ test("buffers user-data events during reconciliation and replays them before ack
 
     const bufferedFillEvent = {
       event: createExecutionEvent({
-        order: { orderId: "BUY-1", side: "BUY", quantity: "100", price: "100" },
+        order: { orderId: "1", side: "BUY", quantity: "100", price: "100" },
         tradeId: 99,
         fillQuantity: "50",
         status: "PARTIALLY_FILLED",
@@ -3005,12 +3006,10 @@ test("buffers user-data events during reconciliation and replays them before ack
 
     releaseBalances({
       ok: true,
-      data: [{
-        asset: { code: "USDT" },
-        free: { amount: "10000" },
-        locked: { amount: "0" },
-        total: { amount: "10000" },
-      }],
+      data: {
+        balances: [createRecoveryBalance()],
+        sourceTime: 1010,
+      },
     })
 
     await waitForCondition(
