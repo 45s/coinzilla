@@ -68,7 +68,14 @@ export class BinanceUserDataSession {
 
   async resume() {
     if (this.#stopped || this.#subscribers.size === 0) return
-    await this.#ensureRemoteSubscription()
+    try {
+      await this.#ensureRemoteSubscription()
+    } catch (error) {
+      this.setUnavailable(true)
+      this.#reconnectAttempts = 0
+      this.#notify({ type: "recovering", attempt: 0, error, recoveryRequired: true })
+      this.#scheduleRecovery()
+    }
   }
 
   async subscribe({ onEvent, onStatus }) {
