@@ -41,6 +41,22 @@ export function normalizeGridBrokerOrder({ order } = {}) {
   return toResult({ data: Object.freeze(normalized) })
 }
 
+function validateSubmissionContext({ state, intent }) {
+  if (!state || state.mode !== "grid" || state.symbol !== intent?.symbol ||
+      !(state.gridCycles instanceof Map) ||
+      !(state.orderIntents instanceof Map) ||
+      !(state.trackedOrderIds instanceof Set)) {
+    return failure("Grid order intent does not match an initialized Grid pair state")
+  }
+  if (intent.side === "BUY" && intent.cycleId !== null) {
+    return failure("Grid BUY order intent cannot reference a recovery cycle")
+  }
+  if (intent.side === "SELL" && !isNonEmptyString(intent.cycleId)) {
+    return failure("Grid SELL order intent must reference its owning cycle")
+  }
+  return toResult({ ok: true })
+}
+
 function attachAcknowledgedOrder({ state, intent, order }) {
   if (intent.side === "BUY") {
     if (state.buyOrder) {
@@ -99,11 +115,8 @@ export function createGridOrderExecution({
   }
 
   async function submitPreparedIntent({ state, intent }) {
-    if (!(state.orderIntents instanceof Map) ||
-        !(state.trackedOrderIds instanceof Set) ||
-        !(state.gridCycles instanceof Map)) {
-      return failure("Grid pair state is missing order intent collections")
-    }
+    const context = validateSubmissionContext({ state, intent })
+    if (!context.ok) return context
     const existingIntent = state.orderIntents.get(intent.clientOrderId)
     if (existingIntent && JSON.stringify(existingIntent) !== JSON.stringify(intent)) {
       return failure("Conflicting Grid order intent already exists")
@@ -174,6 +187,8 @@ export function createGridOrderExecution({
   }
 
   async function resolve({ state, intent, matchingOrders, historyComplete }) {
+    const context = validateSubmissionContext({ state, intent })
+    if (!context.ok) return context
     const candidates = []
     for (const order of matchingOrders ?? []) {
       if (order?.clientOrderId !== intent?.clientOrderId) continue
