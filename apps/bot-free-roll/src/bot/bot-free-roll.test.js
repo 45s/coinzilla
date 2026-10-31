@@ -3218,3 +3218,145 @@ test("does not acknowledge or continue reconciliation when shutdown begins durin
   assert.equal(openOrderRequests, 0)
   assert.equal(bot.getSummary().running, false)
 })
+
+test("pauses when a live fill belongs to an order the strategy does not track", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler(createExecutionEvent({
+      order: { ...createdOrders[0], orderId: "manual-order", side: "BUY" },
+      tradeId: 999,
+    }))
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.paused,
+      "untracked fill did not pause the pair",
+    )
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.equal(bot.getStats().DOGEUSDT.fillCount, 0)
+    assert.ok(events.some((event) =>
+      event.name === "bot.pair_paused" &&
+      /fill for untracked order manual-order/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
+
+test("pauses when a live fill event is missing its broker order ID", async () => {
+  const priceHandlers = new Map()
+  const createdOrders = []
+  const events = []
+  let userDataHandler
+  const bot = new FreeRollBot({
+    broker: {
+      getSymbolFilters: async () => ({ ok: true, data: createMarketFilters() }),
+      subscribeForUserData: async ({ onEvent }) => {
+        userDataHandler = onEvent
+        return { ok: true, data: { disconnect() {} } }
+      },
+      subscribeForPrices: async ({ symbol, onPrice }) => {
+        priceHandlers.set(symbol, onPrice)
+        return { ok: true, data: { disconnect() {} } }
+      },
+      createOrder: async (order) => {
+        createdOrders.push(order)
+        return { ok: true, data: { orderId: "tracked-buy" } }
+      },
+    },
+    eventBus: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    tradingConfig: {
+      strategies: {
+        "free-roll": {
+          settings: { minProfit: 0.01 },
+          pairs: { DOGEUSDT: createPair() },
+        },
+      },
+    },
+  })
+
+  try {
+    await bot.run()
+    priceHandlers.get("DOGEUSDT")({ price: 100 })
+    await waitForCondition(() => createdOrders.length === 1, "BUY was not created")
+
+    userDataHandler({
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: {
+        symbol: "DOGEUSDT",
+        status: "FILLED",
+        side: "BUY",
+        price: String(createdOrders[0].price),
+        quantity: String(createdOrders[0].quantity),
+      },
+      fill: {
+        id: "missing-order-id-trade",
+        symbol: "DOGEUSDT",
+        side: "BUY",
+        price: String(createdOrders[0].price),
+        quantity: String(createdOrders[0].quantity),
+        quoteQuantity: multiplyDecimal({
+          left: String(createdOrders[0].price),
+          right: String(createdOrders[0].quantity),
+        }),
+        commissionAmount: "0",
+        commissionAsset: null,
+        isMaker: true,
+      },
+    })
+
+    await waitForCondition(
+      () => bot.getStats().DOGEUSDT.paused,
+      "missing broker order ID did not pause the pair",
+    )
+    assert.equal(bot.getStats().DOGEUSDT.activeQuantity, "0")
+    assert.ok(events.some((event) =>
+      event.name === "bot.pair_paused" &&
+      /without a broker order ID/.test(event.data.reason)))
+  } finally {
+    await bot.stop()
+  }
+})
