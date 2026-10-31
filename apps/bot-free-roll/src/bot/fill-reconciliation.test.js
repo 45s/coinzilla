@@ -6,6 +6,7 @@ import {
   reconcileExecutionFill,
   toExecutionFill,
   validateOrderFill,
+  reconcileFillHistory,
 } from "./fill-reconciliation.js"
 
 
@@ -19,18 +20,24 @@ const market = new Market({
 })
 
 function createCanonicalFill({
+  tradeId = "101",
+  brokerOrderId = "11",
+  side = "BUY",
+  price = "0.05",
+  quantity = "10",
+  quoteQuantity = "0.5",
   commissions = [],
   commissionStatus = "COMPLETE",
   liquidityRole = "MAKER",
 } = {}) {
   return new Fill({
-    tradeId: "101",
-    brokerOrderId: "11",
+    tradeId: String(tradeId),
+    brokerOrderId: String(brokerOrderId),
     market,
-    side: "BUY",
-    price: new Money({ amount: "0.05", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "10", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "0.5", asset: quoteAsset }),
+    side,
+    price: new Money({ amount: price, asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
     liquidityRole,
     executedAt: 1000,
     commissions,
@@ -281,4 +288,128 @@ test("rejects missing state and non-object fills without throwing or recording d
 
   assert.equal(state.processedTradeIds.size, 0)
   assert.equal(state.fills.size, 0)
+})
+
+function createLocalExecutionFill(overrides = {}) {
+  return {
+    id: "101",
+    orderId: "11",
+    symbol: "DOGEFDUSD",
+    side: "BUY",
+    price: "0.05",
+    quantity: "10",
+    quoteQuantity: "0.5",
+    commissionAmount: "0",
+    commissionAsset: null,
+    isMaker: true,
+    ...overrides,
+  }
+}
+
+test("backfills exchange-only fills while preserving matching local fills", () => {
+  const knownFill = createCanonicalFill({ tradeId: "100" })
+  const missingFill = createCanonicalFill({ tradeId: "101" })
+  const result = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ id: "100" })],
+    canonicalFills: [knownFill, missingFill],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.missingFills, [missingFill])
+  assert.ok(Object.isFrozen(result.missingFills))
+})
+
+test("rejects local fills missing from exchange history and changed fill facts", () => {
+  const localFill = createLocalExecutionFill()
+  const missing = reconcileFillHistory({
+    localFills: [localFill],
+    canonicalFills: [],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(missing.ok, false)
+  assert.match(missing.reason, /missing from exchange history/)
+
+  const changed = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ quantity: "9" })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(changed.ok, false)
+  assert.match(changed.reason, /quantity differs/)
+})
+
+test("rejects duplicate and unsupported exchange fills", () => {
+  const fill = createCanonicalFill()
+  const duplicate = reconcileFillHistory({
+    localFills: [],
+    canonicalFills: [fill, fill],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(duplicate.ok, false)
+  assert.match(duplicate.reason, /duplicate fill/)
+
+  const unresolved = reconcileFillHistory({
+    localFills: [],
+    canonicalFills: [createCanonicalFill({ commissionStatus: "UNKNOWN" })],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(unresolved.ok, false)
+  assert.match(unresolved.reason, /Commission data is unknown/)
+})
+
+test("treats zero-fee asset metadata as economically irrelevant", () => {
+  const result = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ commissionAsset: "BNB" })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+
+  assert.deepEqual(result, { ok: true, missingFills: [] })
+})
+
+test("rejects invalid inputs and local fill identity mismatches", () => {
+  assert.equal(reconcileFillHistory({}).ok, false)
+  assert.equal(toExecutionFill({ fill: {} }).ok, false)
+
+  const identityMismatch = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ isMaker: false })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(identityMismatch.ok, false)
+  assert.match(identityMismatch.reason, /identity differs/)
+})
+
+test("rejects changed commission assets and malformed exact fill values", () => {
+  const commission = new Commission({
+    amount: new Money({ amount: "0.01", asset: quoteAsset }),
+  })
+  const commissionMismatch = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({
+      commissionAmount: "0.01",
+      commissionAsset: "BNB",
+    })],
+    canonicalFills: [createCanonicalFill({ commissions: [commission] })],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(commissionMismatch.ok, false)
+  assert.match(commissionMismatch.reason, /commission asset differs/)
+
+  const malformed = reconcileFillHistory({
+    localFills: [createLocalExecutionFill({ quantity: "not-a-quantity" })],
+    canonicalFills: [createCanonicalFill()],
+    symbol: "DOGEFDUSD",
+    order: { id: "11", side: "BUY" },
+  })
+  assert.equal(malformed.ok, false)
+  assert.match(malformed.reason, /invalid exact values/)
 })

@@ -13,7 +13,7 @@ import {
   roundDecimalToIncrement,
   unwrapResult,
 } from "./helpers/index.js"
-import { reconcileExecutionFill, toExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
+import { reconcileExecutionFill, reconcileFillHistory, toExecutionFill, validateOrderFill } from "./fill-reconciliation.js"
 import { createOrderExecution } from "./order-execution.js"
 import { createEventHandling } from "./event-handling.js"
 import { reconcileTrackedOrder, validateRecoveryBalances, validateTrackedOrderIdentity } from "./recovery.js"
@@ -493,17 +493,27 @@ export class FreeRollBot {
         const canonicalFills = symbolSnapshot.fills.items.filter(
           (fill) => fill.brokerOrderId === orderId,
         )
+        const fillHistory = reconcileFillHistory({
+          localFills: [...state.fills.values()].filter(
+            (fill) => String(fill.orderId) === orderId,
+          ),
+          canonicalFills,
+          symbol,
+          order,
+        })
+        if (!fillHistory.ok) throw new Error(fillHistory.reason)
+
         const fills = canonicalFills.map((fill) => {
           const execution = toExecutionFill({ fill })
           if (!execution.ok) throw new Error(execution.reason)
           return execution.fill
         })
 
-        for (const fill of fills) {
-          const validation = validateOrderFill({ fill, symbol, order })
-          if (!validation.ok) throw new Error(validation.reason)
-          if (!this.#applyExecutionFill({ symbol, fill })) {
-            throw new Error(`Could not account recovered fill ${fill?.id ?? "unknown"}`)
+        for (const fill of fillHistory.missingFills) {
+          const execution = toExecutionFill({ fill })
+          if (!execution.ok) throw new Error(execution.reason)
+          if (!this.#applyExecutionFill({ symbol, fill: execution.fill })) {
+            throw new Error(`Could not backfill recovered fill ${execution.fill?.id ?? "unknown"}`)
           }
         }
 
@@ -742,7 +752,19 @@ export class FreeRollBot {
     const id = getOrderId(order)
     const status = String(order?.status ?? "").toUpperCase()
 
-    if (!state || !id || !state.trackedOrderIds.has(id)) return
+    if (!state) return
+    if (!id) {
+      if (event.executionType === "TRADE" || event.fill) {
+        this.#pause(symbol, "Received a fill event without a broker order ID")
+      }
+      return
+    }
+    if (!state.trackedOrderIds.has(id)) {
+      if (event.executionType === "TRADE" || event.fill) {
+        this.#pause(symbol, `Received a fill for untracked order ${id}`)
+      }
+      return
+    }
 
     if (event.executionType === "TRADE") {
       if (!event.fill) {
