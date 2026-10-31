@@ -146,12 +146,12 @@ describe("BinanceSdkBroker history query filters", () => {
 
   it("returns a full trade page without claiming completeness", async () => {
     const broker = createBroker({
-      myTrades: () => [trade, { ...trade, id: 12 }],
+      myTrades: () => Array.from({ length: 1000 }, (_, index) => ({ ...trade, id: index + 1 })),
     })
-    const result = await broker.getMyTrades({ symbol: "BTCUSDT", limit: 2 })
+    const result = await broker.getMyTrades({ symbol: "BTCUSDT" })
     assert.equal(result.ok, true)
-    assert.equal(result.data.length, 2)
-    assert.equal(result.data[1].id, "12")
+    assert.equal(result.data.length, 1000)
+    assert.equal(result.data[999].id, "1000")
     assert.equal(result.data.complete, undefined)
   })
 
@@ -233,20 +233,23 @@ describe("BinanceSdkBroker history query filters", () => {
 
 describe("BinanceSdkBroker order-history page boundaries", () => {
   it("does not label a full order-history page complete", async () => {
-    const orders = [
-      { symbol: "BTCUSDT", orderId: 10, time: 1_000, updateTime: 1_100, origQty: "1.00000001" },
-      { symbol: "BTCUSDT", orderId: 11, time: 1_200, updateTime: 1_300, origQty: "2.00000002" },
-    ]
+    const orders = Array.from({ length: 1000 }, (_, index) => ({
+      symbol: "BTCUSDT",
+      orderId: index + 1,
+      time: 1_000 + index,
+      updateTime: 1_100 + index,
+      origQty: "1.00000001",
+    }))
     const broker = createBroker({
       allOrders: (params) => {
-        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 2 })
+        assert.deepEqual(params, { symbol: "BTCUSDT", limit: 100 })
         return orders
       },
     })
-    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 2 })
+    const result = await broker.getOrderHistory({ symbol: "BTCUSDT", limit: 100 })
     assert.equal(result.ok, true)
-    assert.equal(result.data.length, 2)
-    assert.equal(result.data[1].orderId, 11)
+    assert.equal(result.data.length, 1000)
+    assert.equal(result.data[999].orderId, 1000)
     assert.equal(result.data.complete, undefined)
   })
 })
