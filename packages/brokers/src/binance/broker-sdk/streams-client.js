@@ -107,7 +107,7 @@ export class BinanceStreamsClient {
 
   async subscribe(streamNames, listener) {
     if (typeof listener !== "function") throw new TypeError("A stream listener function is required")
-    const streams = (Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName)
+    const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) throw new TypeError("At least one stream is required")
 
     return this.#enqueueOperation(async () => {
@@ -312,8 +312,8 @@ export class BinanceStreamsClient {
 
   #buildCombinedUrl(streams) {
     const url = new URL(this.url)
-    if (url.pathname.endsWith("/ws")) {
-      url.pathname = `${url.pathname.slice(0, -3)}/stream`
+    if (/\/ws\/?$/.test(url.pathname)) {
+      url.pathname = url.pathname.replace(/\/ws\/?$/, "/stream")
     } else if (!url.pathname.endsWith("/stream")) {
       url.pathname = `${url.pathname.replace(/\/$/, "")}/stream`
     }
