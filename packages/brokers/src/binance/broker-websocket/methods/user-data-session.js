@@ -523,16 +523,28 @@ export class BinanceUserDataSession {
   }
 
   #detachUserDataListeners() {
-    this.#removeEventListener?.()
-    this.#removeErrorListener?.()
+    const removers = [this.#removeEventListener, this.#removeErrorListener]
     this.#removeEventListener = null
     this.#removeErrorListener = null
+
+    for (const remove of removers) {
+      try {
+        remove?.()
+      } catch (error) {
+        logSafely(this.logger, "warn", "Unable to detach Binance user-data listener", error)
+      }
+    }
   }
 
   #detachClientListeners() {
     this.#detachUserDataListeners()
-    this.#removeCloseListener?.()
+    const removeCloseListener = this.#removeCloseListener
     this.#removeCloseListener = null
+    try {
+      removeCloseListener?.()
+    } catch (error) {
+      logSafely(this.logger, "warn", "Unable to detach Binance user-data close listener", error)
+    }
   }
 
   #clearReconnectTimer() {
