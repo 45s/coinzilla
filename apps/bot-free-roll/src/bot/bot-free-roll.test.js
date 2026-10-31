@@ -477,6 +477,8 @@ test("duplicate BUY FILLED events are accounted only once", async () => {
     assert.equal(stats.profitableCycles, 1)
     assert.equal(stats.cycleCost, "0")
     assert.equal(stats.saleProceeds, "0")
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0")
     assert.ok(Number(stats.estimatedRealizedProfit) >= 0.01)
     assert.equal(createdOrders.filter((order) => order.side === "SELL").length, 1)
     assert.ok(createdOrders.every((order) => order.type === "LIMIT_MAKER"))
@@ -588,6 +590,8 @@ test("fee-bearing pairs use LIMIT and actual BUY/SELL commissions in the recover
     assert.equal(stats.buyFills, 1)
     assert.equal(stats.sellFills, 1)
     assert.equal(stats.profitableCycles, 1)
+    assert.equal(stats.freeQuantity, "1")
+    assert.equal(stats.activeQuantity, "0.925")
     assert.ok(compareDecimal({
       left: stats.estimatedRealizedProfit,
       right: "0.01",
