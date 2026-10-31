@@ -546,11 +546,12 @@ Historical references to `migration/binance-native-ws` and its phase PRs above d
 4. Re-run relevant broker tests, workspace checks, syntax checks, and dependency audit.
 5. Verify required CI on the exact final PR head and confirm that the PR is up to date with `develop`.
 
-### Main and release synchronization
+### Shared develop branch policy
 
-- `develop` is the shared integration branch; task agents must not independently synchronize task branches directly from `main`.
-- When a hotfix or other exceptional change lands directly on `main`, synchronize that change into `develop` through a reviewed integration change before continuing dependent work.
-- Before the final release PR, ensure `develop` contains the latest `main` and that all relevant broker, consumer, runtime, dependency, and test contracts remain compatible.
+- `develop` is the only shared integration branch for ongoing implementation work in this repository.
+- Create every task branch from the latest `develop`, keep it synchronized with `develop`, and target every implementation PR at `develop`.
+- Do not independently update, synchronize against, or open task PRs targeting another branch.
+- Release planning is a separate user-directed activity and is outside this package roadmap.
 - Do not claim continuous background monitoring. Recheck branch state at task start, before opening a PR, and before reporting completion.
 
 ## 11. Official protocol and runtime references
