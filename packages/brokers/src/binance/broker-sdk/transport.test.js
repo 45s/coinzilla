@@ -302,3 +302,53 @@ test("the supported Node WebSocket client automatically answers server ping fram
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+
+test("WebSocket constructor failures reject connect without leaking timers", async () => {
+  class BrokenSocket {
+    constructor() {
+      throw new Error("socket construction failed")
+    }
+  }
+
+  const clock = new FakeClock()
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+  })
+
+  await assert.rejects(transport.connect(), /socket construction failed/)
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+})
+
+test("errors after opening are surfaced without silently replaying or reconnecting", async () => {
+  const { transport, sockets } = createTransport()
+  const errors = []
+  transport.onError((error) => errors.push(error.message))
+  const connected = transport.connect()
+  sockets[0].open()
+  await connected
+
+  sockets[0].fail(new Error("socket interrupted"))
+  sockets[0].fail(new Error("duplicate socket error"))
+
+  assert.deepEqual(errors, ["socket interrupted", "duplicate socket error"])
+  assert.equal(transport.state, "open")
+  assert.equal(sockets.length, 1)
+})
+
+test("socket close before opening rejects the connection and cleans listeners", async () => {
+  const { transport, sockets, clock } = createTransport()
+  const connected = transport.connect()
+  const rejection = assert.rejects(connected, /closed before opening/)
+
+  sockets[0].serverClose({ code: 1006, reason: "handshake failed", wasClean: false })
+  await rejection
+
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(await transport.close(), undefined)
+})
