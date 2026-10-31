@@ -118,7 +118,7 @@ test("connects lazily and subscribes with a correlated acknowledgement", async (
 })
 
 test("deduplicates server subscriptions while allowing multiple local listeners", async () => {
-  const { client, transports } = createClient()
+  const { client, clock, transports } = createClient()
   const firstEvents = []
   const secondEvents = []
   const first = (event) => firstEvents.push(event)
@@ -144,6 +144,8 @@ test("deduplicates server subscriptions while allowing multiple local listeners"
 
   const unsubscribe = client.unsubscribe("btcusdt@aggTrade", second)
   await flush()
+  clock.advanceBy(250)
+  await flush()
   assert.equal(transports[0].sent[1].method, "UNSUBSCRIBE")
   acknowledge(transports[0], 1)
   await unsubscribe
@@ -166,7 +168,7 @@ test("supports multiple stream subscriptions in one request", async () => {
 })
 
 test("dispatches combined-stream envelopes and all-market arrays", async () => {
-  const { client, transports } = createClient()
+  const { client, clock, transports } = createClient()
   const combinedEvents = []
   const allMarketEvents = []
   const combined = client.subscribe("btcusdt@aggTrade", (event) => combinedEvents.push(event))
@@ -175,6 +177,8 @@ test("dispatches combined-stream envelopes and all-market arrays", async () => {
   await combined
 
   const allMarket = client.subscribe("!miniTicker@arr", (event) => allMarketEvents.push(event))
+  await flush()
+  clock.advanceBy(250)
   await flush()
   acknowledge(transports[0], 1)
   await allMarket
@@ -230,6 +234,8 @@ test("reconnects after an unexpected close and restores desired subscriptions", 
   assert.equal(client.state, "closed")
   clock.advanceBy(10)
   await flush()
+  clock.advanceBy(240)
+  await flush()
 
   assert.equal(transports.length, 2)
   assert.equal(transports[1].sent[0].method, "SUBSCRIBE")
@@ -250,6 +256,8 @@ test("handles serverShutdown and rotates connections before the 24-hour limit", 
   transports[0].receive({ e: "serverShutdown", E: 123 })
   assert.equal(transports[0].closeCalls.length, 1)
   clock.advanceBy(10)
+  await flush()
+  clock.advanceBy(240)
   await flush()
   assert.equal(transports.length, 2)
   acknowledge(transports[1])
