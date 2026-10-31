@@ -108,6 +108,94 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+
+  it("does not guess when session.subscriptions reports multiple active subscriptions", async () => {
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": async () => {
+        throw new Error("subscription response timed out")
+      },
+      "session.subscriptions": () => [
+        { subscriptionId: 41 },
+        { subscriptionId: 42 },
+      ],
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+
+    const result = await broker.subscribeForUserData({ onEvent() {} })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /multiple active subscriptions/)
+    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+    await broker.disconnect()
+  })
+
+  it("cleans up a remote subscription that resolves after intentional shutdown", async () => {
+    let resolveSubscribe
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => new Promise((resolve) => {
+        resolveSubscribe = resolve
+      }),
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+
+    const pendingSubscription = broker.subscribeForUserData({ onEvent() {} })
+    await Promise.resolve()
+    assert.equal(typeof resolveSubscribe, "function")
+
+    await broker.disconnect()
+    resolveSubscribe({ subscriptionId: 55 })
+    const result = await pendingSubscription
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /canceled during setup/)
+    assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+  })
+
+  it("isolates throwing status callbacks and reports the diagnostic", async () => {
+    const logs = []
+    const rpc = createFakeRpcClient({
+      "userDataStream.subscribe.signature": () => ({ subscriptionId: 56 }),
+      "userDataStream.unsubscribe": () => ({}),
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      logger: { error: (...args) => logs.push(args), info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => rpc,
+      marketClientFactory: () => createFakeStreamsClient(),
+    })
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus() { throw new Error("status consumer failed") },
+    })
+
+    rpc.state = "closed"
+    rpc.emitClose({ code: 1006, reason: "network lost", wasClean: false })
+
+    assert.ok(logs.some(([message]) => message === "Binance user-data status callback failed"))
+    await subscription.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("tracks API socket loss even when no user-data handle is active", async () => {
     const { broker, clients } = createBroker()
     await broker.connect()
