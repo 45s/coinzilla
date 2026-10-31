@@ -65,8 +65,9 @@ test("creates an immutable market-scoped ledger with separate unreconciled activ
 
 test("rejects invalid market definitions", () => {
   for (const market of [undefined, null, [], {}, createMarket({ symbol: "" }),
-    createMarket({ baseAsset: "" }), createMarket({ quoteAsset: "" }),
-    createMarket({ baseAsset: "USDT" })]) {
+    createMarket({ symbol: 1 }), createMarket({ baseAsset: "" }),
+    createMarket({ baseAsset: 1 }), createMarket({ quoteAsset: "" }),
+    createMarket({ quoteAsset: 1 }), createMarket({ baseAsset: "USDT" })]) {
     assert.equal(createMarketInventoryLedger({ market }).ok, false)
   }
 })
@@ -144,10 +145,35 @@ test("rejects duplicate fills and unstable fill identifiers", () => {
   assert.match(invalid.reason, /stable trade and order IDs/)
 })
 
-test("rejects invalid ledgers and fill payloads", () => {
-  assert.equal(applyMarketInventoryFill({ ledger: null, fill: createFill() }).ok, false)
-  assert.equal(applyMarketInventoryFill({ ledger: createLedger(), fill: null }).ok, false)
-  assert.equal(applyMarketInventoryFill({ ledger: createLedger(), fill: [] }).ok, false)
+test("rejects invalid ledger shapes and fill payloads", () => {
+  const ledger = createLedger()
+  const invalidLedgers = [
+    null,
+    [],
+    { ...ledger, market: null },
+    { ...ledger, market: { ...ledger.market, symbol: 1 } },
+    { ...ledger, market: { ...ledger.market, baseAsset: 1 } },
+    { ...ledger, market: { ...ledger.market, quoteAsset: 1 } },
+    { ...ledger, strategy: null },
+    { ...ledger, strategy: { ...ledger.strategy, baseQuantity: 1 } },
+    { ...ledger, strategy: { ...ledger.strategy, quoteCashFlow: 1 } },
+    { ...ledger, strategy: { ...ledger.strategy, commissionsByAsset: null } },
+    { ...ledger, processedTradeIds: null },
+    { ...ledger, unmanaged: null },
+    { ...ledger, unmanaged: { ...ledger.unmanaged, byAsset: null } },
+    { ...ledger, unmanaged: { ...ledger.unmanaged, movements: null } },
+    { ...ledger, fillCount: -1 },
+    { ...ledger, fillCount: "0" },
+  ]
+  for (const invalidLedger of invalidLedgers) {
+    assert.equal(applyMarketInventoryFill({ ledger: invalidLedger, fill: createFill() }).ok, false)
+  }
+
+  for (const fill of [null, [], createFill({ id: "" }), createFill({ id: "-1" }),
+    createFill({ id: "undefined" }), createFill({ orderId: "" }),
+    createFill({ orderId: "undefined" }), createFill({ side: "HOLD" })]) {
+    assert.equal(applyMarketInventoryFill({ ledger, fill }).ok, false)
+  }
 })
 
 test("rejects unsupported commissions and malformed execution quantities", () => {
@@ -188,22 +214,30 @@ test("records explicit unmanaged movements without changing strategy inventory",
     ledger: first.ledger,
     movement: createMovement({
       id: "movement-2",
+      source: "withdrawal",
+      amount: "-0.5",
+    }),
+  })
+  const third = appendUnmanagedMovement({
+    ledger: second.ledger,
+    movement: createMovement({
+      id: "movement-3",
       asset: "USDT",
       source: "withdrawal",
       amount: "-5",
     }),
   })
 
-  assert.equal(second.ok, true)
-  assert.equal(second.ledger.strategy.baseQuantity, "0")
-  assert.equal(second.ledger.strategy.quoteCashFlow, "0")
-  assert.deepEqual(second.ledger.unmanaged.byAsset, [
-    { asset: "DOGE", amount: "2" },
+  assert.equal(third.ok, true)
+  assert.equal(third.ledger.strategy.baseQuantity, "0")
+  assert.equal(third.ledger.strategy.quoteCashFlow, "0")
+  assert.deepEqual(third.ledger.unmanaged.byAsset, [
+    { asset: "DOGE", amount: "1.5" },
     { asset: "USDT", amount: "-5" },
   ])
   assert.equal(second.ledger.unmanaged.status, "unreconciled")
   assert.equal(ledger.unmanaged.movements.length, 0)
-  assert.equal(Object.isFrozen(second.ledger.unmanaged.movements), true)
+  assert.equal(Object.isFrozen(third.ledger.unmanaged.movements), true)
 })
 
 test("deduplicates identical unmanaged movements and rejects changed source facts", () => {
@@ -225,6 +259,49 @@ test("deduplicates identical unmanaged movements and rejects changed source fact
   assert.equal(duplicate.ledger, first.ledger)
   assert.equal(conflict.ok, false)
   assert.match(conflict.reason, /Conflicting unmanaged movement facts/)
+})
+
+test("rejects unmanaged movement IDs that are not stable", () => {
+  const ledger = createLedger()
+  for (const movement of [
+    createMovement({ id: "" }),
+    createMovement({ id: "-1" }),
+    createMovement({ id: "undefined" }),
+  ]) {
+    assert.equal(appendUnmanagedMovement({ ledger, movement }).ok, false)
+  }
+})
+
+test("rejects conflicting unmanaged source, asset, and stored market facts", () => {
+  const first = appendUnmanagedMovement({
+    ledger: createLedger(),
+    movement: createMovement(),
+  })
+  const sourceConflict = appendUnmanagedMovement({
+    ledger: first.ledger,
+    movement: createMovement({ source: "manual" }),
+  })
+  const assetConflict = appendUnmanagedMovement({
+    ledger: first.ledger,
+    movement: createMovement({ asset: "USDT" }),
+  })
+  const corruptedLedger = {
+    ...first.ledger,
+    unmanaged: {
+      ...first.ledger.unmanaged,
+      movements: [
+        Object.freeze({ ...first.ledger.unmanaged.movements[0], symbol: "OTHER" }),
+      ],
+    },
+  }
+  const marketConflict = appendUnmanagedMovement({
+    ledger: corruptedLedger,
+    movement: createMovement(),
+  })
+
+  assert.equal(sourceConflict.ok, false)
+  assert.equal(assetConflict.ok, false)
+  assert.equal(marketConflict.ok, false)
 })
 
 test("rejects unmanaged movements with unknown markets, assets, or invalid amounts", () => {
