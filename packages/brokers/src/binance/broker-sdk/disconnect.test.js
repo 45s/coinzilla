@@ -28,18 +28,21 @@ describe("BinanceSdkBroker.disconnect", () => {
     assert.equal(streams.listenerCount, 0)
   })
 
-  it("attempts to disconnect both clients if one close fails", async () => {
-    const { broker, rpc, streams } = createBroker()
+  it("attempts both disconnects and logs failures without masking shutdown", async () => {
+    const { broker, rpc } = createBroker()
     let marketDisconnected = false
+    const logs = []
+    broker.logger = { error: (...args) => logs.push(args), info() {} }
     broker.marketConnection.disconnect = async () => {
       marketDisconnected = true
       throw new Error("market close failed")
     }
     await broker.connect()
-    await assert.rejects(() => broker.disconnect(), /market close failed/)
+    await assert.doesNotReject(() => broker.disconnect())
     assert.equal(rpc.state, "closed")
     assert.equal(marketDisconnected, true)
-    assert.equal(streams.listenerCount, 0)
+    assert.equal(logs.length, 1)
+    assert.equal(logs[0][1].message, "market close failed")
   })
 
   it("is safe to call before connect", async () => {
