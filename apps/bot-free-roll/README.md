@@ -5,7 +5,7 @@
 **Status:** Initial strategy specification
 **Principles:** SOLID, stable, simple.
 
-**Engineering roadmap:** [ROADMAP.md](./ROADMAP.md) — long-term architecture, safety invariants, AI contributor instructions, and sequenced PR backlog. Read it together with this strategy specification and the repository-root `ENGINEERING_STANDARDS.md` before implementing changes.
+**Engineering roadmap:** [ROADMAP.md](./ROADMAP.md) — long-term architecture, safety invariants, AI contributor instructions, and sequenced PR backlog. Read it together with this strategy specification and the repository-root `ENGINEERING_STANDARDS.md` before implementing changes.\n\n**Optional Grid strategy:** [GRID-README.md](./GRID-README.md) and [GRID-ROADMAP.md](./GRID-ROADMAP.md) define the proposed BUY-cycle Grid mode and its staged migration. These documents do not change the current aggregated strategy or enable Grid behavior; the existing mode remains the default.
 
 > **AI AGENT INSTRUCTIONS**
 >
