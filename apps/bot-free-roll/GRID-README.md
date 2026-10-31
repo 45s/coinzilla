@@ -209,6 +209,15 @@ Existing commission policy remains in force:
 
 For `makerPercent: 0`, use the existing `LIMIT_MAKER` policy. Do not assume actual commission is zero without checking fills.
 
+### 8.4 SELL quantity and base-fee reservation
+
+Before placing a cycle SELL, Grid reserves the configured worst-case base-fee allowance:
+
+\[\text{sellQuantity}=\operatorname{floorStep}\left(\frac{\text{remainingQuantity}-\text{keepQuantity}}{1+\text{feeRate}}\right)\]
+\[\text{reservedQuantity}=\text{sellQuantity}\times(1+\text{feeRate})\]
+
+The reservation must never exceed that cycle's sellable inventory. Quantity-step dust remains active cycle inventory; it is not automatically free. Actual fill debits and commissions remain authoritative. If an actual base-asset commission exceeds the reserved allowance, the fill cannot be safely applied and the pair must pause for reconciliation. The configured fee rate is a conservative planning allowance, not a substitute for actual commission facts.
+
 ## 9. Free inventory
 
 `keepQuantity` is retained **per successfully completed Grid cycle**, not once for the aggregate pair position.
