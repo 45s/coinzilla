@@ -14,15 +14,15 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 
 ## Roadmap
 
-- [x] **FR-008 — Asset and Market identity.** Stable Asset identity and explicit Market base/quote assets; symbol remains opaque. Implemented in `@coinzilla/entities` and integrated into `develop` via PR #295. Follow-up: PR for this correction restores delimiter-containing venue symbols as opaque metadata (the symbol must not be parsed or constrained by the composite Market ID format).
+- [x] **FR-008 — Asset and Market identity.** Stable Asset identity and explicit Market base/quote assets; symbol remains opaque. Implemented in `@coinzilla/entities` and integrated into `develop` via PR #295; delimiter-containing venue symbols are preserved as opaque metadata (PR #303).
 - [x] **FR-009 — Exact Money and Quantity.** Implemented immutable `Money` and `Quantity` values using validated, canonical decimal strings and explicit `Asset` identity. Money supports signed values; Quantity is non-negative. Numeric JavaScript inputs and scientific notation are rejected. Integrated into `develop` via PR #299.
 - [x] **FR-010 — Canonical Order lifecycle.** Implemented immutable `CanonicalOrder` with client/broker identity, canonical Market, exact limit price and quantities, derived remaining quantity, normalized lifecycle including `UNKNOWN`, and optional timestamps. Integrated into `develop` via PR #300.
 - [x] **FR-011 — Fill.** Implemented immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Integrated into `develop` via PR #301.
-- [~] **FR-012 — Commission.** Implement an immutable commission value with an exact non-negative `Money` amount and explicit asset identity. Add zero, one, or multiple commission entries to Fill, with explicit `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics. Unknown or incomplete fees must never be interpreted as zero.
-- [~] **FR-013 — Balance.** Exact free, locked, and total quantities with canonical asset identity.
-- [~] **FR-014 — TradingRules.** Exchange-neutral price/quantity/notional increments and bounds, with explicit supported, unsupported, dynamic, and unknown constraint states.
-- [~] **FR-015 — Broker capability contracts.** Shared capability vocabulary with explicit supported, unsupported, and unknown states; no exchange-specific assumptions.
-- [~] **FR-016 — Broker result contracts.** Normalized success, failure, incomplete, and unknown-outcome semantics.
+- [x] **FR-012 — Commission.** Implemented immutable Commission values backed by exact non-negative `Money`, with explicit fee asset identity and zero/one/multiple fee entries on Fill. `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics prevent unknown or incomplete fees from being interpreted as zero. Integrated into `develop` via PR #302.
+- [x] **FR-013 — Balance.** Implemented immutable Balance values with exact free and locked quantities, canonical asset identity, and total derived using decimal-string arithmetic. Integrated into `develop` via PR #306.
+- [x] **FR-014 — TradingRules.** Implemented immutable, exchange-neutral Market-scoped price/quantity/notional constraints with explicit supported, unsupported, dynamic, and unknown states. Integrated into `develop` via PR #307.
+- [x] **FR-015 — Broker capability contracts.** Implemented immutable capability snapshots with explicit supported, unsupported, and unknown states, without exchange-specific assumptions. Integrated into `develop` via PR #308.
+- [x] **FR-016 — Broker result contracts.** Implemented immutable normalized success, failure, incomplete, and unknown-outcome envelopes. Integrated into `develop` via PR #309.
 
 ### FR-009 contract boundary
 
