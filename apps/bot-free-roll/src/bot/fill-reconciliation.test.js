@@ -10,6 +10,7 @@ import {
   reconcileFillHistory,
 } from "./fill-reconciliation.js"
 import { appendFillLedgerEntry } from "./fill-ledger.js"
+import { createMarketInventoryLedger } from "./market-inventory-ledger.js"
 
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -48,6 +49,18 @@ function createCanonicalFill({
 }
 
 function createState(overrides = {}) {
+  const activeQuantity = overrides.activeQuantity ?? "0"
+  const defaultMarketInventory = createMarketInventoryLedger({
+    market: { symbol: "DOGEUSDT", baseAsset: "DOGE", quoteAsset: "USDT" },
+  }).ledger
+  const marketInventory = overrides.marketInventory ?? Object.freeze({
+    ...defaultMarketInventory,
+    strategy: Object.freeze({
+      ...defaultMarketInventory.strategy,
+      baseQuantity: activeQuantity,
+    }),
+  })
+
   return {
     orderType: "LIMIT",
     baseAsset: "DOGE",
@@ -55,10 +68,11 @@ function createState(overrides = {}) {
     configuredFeeRate: "0.001",
     feeRate: "0.001",
     actualCommissionRate: "0",
-    activeQuantity: "0",
+    activeQuantity,
     cycleCost: "0",
     saleProceeds: "0",
     ledgerEntries: Object.freeze([]),
+    marketInventory,
     processedTradeIds: new Set(),
     fills: new Map(),
     fillsByOrder: new Map(),
@@ -437,6 +451,18 @@ test("records each accepted execution as an immutable ledger entry", () => {
   assert.equal(state.ledgerEntries.length, 0)
 })
 
+test("fails closed when a fill belongs to a different market ledger", () => {
+  const otherMarket = createMarketInventoryLedger({
+    market: { symbol: "DOGEFDUSD", baseAsset: "DOGE", quoteAsset: "FDUSD" },
+  })
+  const state = createState({ marketInventory: otherMarket.ledger })
+  const result = reconcileExecutionFill({ fill: createFill(), state })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /does not match DOGEFDUSD/)
+  assert.equal(result.updates.marketInventory, undefined)
+})
+
 test("fails closed when a processed trade is missing from the immutable ledger", () => {
   const state = createState({
     processedTradeIds: new Set(["trade-1"]),
@@ -477,6 +503,7 @@ test("fails closed when a duplicate trade ID carries changed execution facts", (
 })
 
 const replayPairState = Object.freeze({
+  symbol: "DOGEUSDT",
   orderType: "LIMIT",
   baseAsset: "DOGE",
   quoteAsset: "USDT",
@@ -493,6 +520,7 @@ function getReplayProjection(state) {
     filledQuantityByOrder: [...state.filledQuantityByOrder],
     commissionTotals: [...state.commissionTotals],
     ledgerEntries: state.ledgerEntries,
+    marketInventory: state.marketInventory,
   }
 }
 
@@ -539,6 +567,14 @@ test("replays multiple partial fills with exact mixed-asset commissions determin
   assert.equal(first.state.fillsByOrder.get("buy-order"), 2)
   assert.equal(first.state.commissionTotals.get("DOGE"), "0.1")
   assert.equal(first.state.commissionTotals.get("USDT"), "0.06")
+  assert.equal(first.state.marketInventory.strategy.baseQuantity, "10.9")
+  assert.equal(first.state.marketInventory.strategy.quoteCashFlow, "-19.06")
+  assert.deepEqual(first.state.marketInventory.strategy.commissionsByAsset, [
+    { asset: "DOGE", amount: "0.1" },
+    { asset: "USDT", amount: "0.06" },
+  ])
+  assert.equal(first.state.marketInventory.unmanaged.status, "unreconciled")
+  assert.equal(first.state.marketInventory.unmanaged.baseQuantity, undefined)
   assert.equal(Object.isFrozen(first.state.ledgerEntries), true)
   assert.deepEqual(getReplayProjection(first.state), getReplayProjection(second.state))
   assert.deepEqual(entries, original)
@@ -615,4 +651,67 @@ test("replay validates entries, pair settings, and exact configured fee rate", (
   })
   assert.equal(negativeFee.ok, false)
   assert.match(negativeFee.reason, /must be non-negative/)
+})
+
+
+test("replay keeps explicitly attributed unmanaged movements separate from strategy inventory", () => {
+  const result = replayExecutionFills({
+    entries: [createFill()],
+    pairState: replayPairState,
+    unmanagedMovements: [
+      {
+        id: "deposit-1",
+        symbol: "DOGEUSDT",
+        asset: "DOGE",
+        source: "deposit",
+        amount: "2",
+      },
+      {
+        id: "withdrawal-1",
+        symbol: "DOGEUSDT",
+        asset: "USDT",
+        source: "withdrawal",
+        amount: "-5",
+      },
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.state.marketInventory.strategy.baseQuantity, "10")
+  assert.equal(result.state.marketInventory.strategy.quoteCashFlow, "-20")
+  assert.deepEqual(result.state.marketInventory.unmanaged.byAsset, [
+    { asset: "DOGE", amount: "2" },
+    { asset: "USDT", amount: "-5" },
+  ])
+  assert.equal(result.state.marketInventory.unmanaged.status, "unreconciled")
+})
+
+test("replay rejects a non-array unmanaged movement history", () => {
+  const result = replayExecutionFills({
+    entries: [],
+    pairState: replayPairState,
+    unmanagedMovements: null,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /Unmanaged movement ledger entries must be an array/)
+})
+
+test("replay stops on an unmanaged movement assigned to another market", () => {
+  const result = replayExecutionFills({
+    entries: [createFill()],
+    pairState: replayPairState,
+    unmanagedMovements: [{
+      id: "wrong-market",
+      symbol: "DOGEFDUSD",
+      asset: "DOGE",
+      source: "deposit",
+      amount: "1",
+    }],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.reason, /does not match DOGEUSDT/)
+  assert.equal(result.failedMovementId, "wrong-market")
+  assert.equal(result.state.marketInventory.strategy.baseQuantity, "10")
 })

@@ -137,6 +137,7 @@ export class FreeRollBot {
         actualCommissionRate: "0",
         baseAsset: null,
         quoteAsset: null,
+        marketInventory: null,
         trackedOrderIds: new Set(),
         ledgerEntries: Object.freeze([]),
         processedTradeIds: new Set(),
