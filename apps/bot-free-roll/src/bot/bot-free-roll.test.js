@@ -788,7 +788,16 @@ test("reconciles partial SELL history and deduplicates a later stream replay", a
     )
 
     const statsAfterReconcile = bot.getStats().DOGEUSDT
+    const sellOrdersAfterReconcile = createdOrders.filter((order) => order.side === "SELL")
+    const replacementSell = sellOrdersAfterReconcile[1]
+
+    // Legacy aggregated mode must cancel/reconcile the old SELL and replace it
+    // with one SELL covering the pooled remaining position.
     assert.equal(historyCalls, 1)
+    assert.equal(cancelledOrder.orderId, firstSell.orderId)
+    assert.equal(sellOrdersAfterReconcile.length, 2)
+    assert.equal(replacementSell.quantity, "189")
+    assert.equal(statsAfterReconcile.sellOrderId, replacementSell.orderId)
     assert.equal(statsAfterReconcile.activeQuantity, "190")
     assert.equal(statsAfterReconcile.freeQuantity, "0")
     assert.ok(compareDecimal({ left: statsAfterReconcile.saleProceeds, right: "0" }) > 0)
