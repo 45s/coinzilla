@@ -67,11 +67,11 @@ function createRecoveryBalance({ free = "10000", locked = "0" } = {}) {
 }
 
 function createRecoverySnapshotPorts({
-  createdOrders,
+  createdOrders = [],
   calls = [],
   getExecution = () => ({ status: "OPEN", executedQuantity: "0", fills: [] }),
-  getOpenOrders = () => [],
-  getAccountSnapshot,
+  openOrdersForSymbol = () => [],
+  accountSnapshotFactory,
 } = {}) {
   let serverTime = 1000
 
@@ -83,7 +83,7 @@ function createRecoverySnapshotPorts({
     },
     async getAccountSnapshot() {
       calls.push("getAccountSnapshot")
-      if (getAccountSnapshot) return getAccountSnapshot({ serverTime })
+      if (accountSnapshotFactory) return accountSnapshotFactory({ serverTime })
       return {
         ok: true,
         data: {
@@ -94,7 +94,7 @@ function createRecoverySnapshotPorts({
     },
     async getOpenOrders({ symbol }) {
       calls.push("getOpenOrders")
-      return { ok: true, data: getOpenOrders({ symbol, createdOrders }) }
+      return { ok: true, data: openOrdersForSymbol({ symbol, createdOrders }) }
     },
     async getCanonicalOrderHistory({ symbol, orderId }) {
       calls.push("getCanonicalOrderHistory")
