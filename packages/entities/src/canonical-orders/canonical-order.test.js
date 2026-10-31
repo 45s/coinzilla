@@ -134,6 +134,17 @@ describe(CanonicalOrder.name, () => {
     )
   })
 
+  it("rejects zero and negative limit prices", () => {
+    for (const amount of ["0", "-0.01"]) {
+      assert.throws(
+        () => createOrder({
+          limitPrice: new Money({ amount, asset: quoteAsset }),
+        }),
+        { message: canonicalOrderErrMsgs.limitPricePositive },
+      )
+    }
+  })
+
   it("rejects mismatched markets and quantity assets", () => {
     assert.throws(
       () => createOrder({ market: {} }),
