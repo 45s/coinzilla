@@ -7,6 +7,8 @@
 
 **Engineering roadmap:** [ROADMAP.md](./ROADMAP.md) — long-term architecture, safety invariants, AI contributor instructions, and sequenced PR backlog. Read it together with this strategy specification and the repository-root `ENGINEERING_STANDARDS.md` before implementing changes.
 
+**Optional Grid strategy:** [GRID-README.md](./GRID-README.md) and [GRID-ROADMAP.md](./GRID-ROADMAP.md) define the proposed opt-in BUY-cycle Grid mode and its isolated migration plan. They do not change the current aggregated strategy or enable Grid execution.
+
 > **AI AGENT INSTRUCTIONS**
 >
 > This document is the source of truth for the current Free-Roll strategy.
