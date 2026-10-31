@@ -12,11 +12,23 @@ import {
 } from "./grid-cycles.js"
 
 function createCycle(overrides = {}) {
+  const symbol = overrides.symbol ?? "DOGEFDUSD"
+  const buyOrderId = overrides.buyOrderId ?? "buy-1"
+  const buyOrder = overrides.buyOrder ?? {
+    id: buyOrderId,
+    clientOrderId: `client-${buyOrderId}`,
+    symbol,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    quantity: "100",
+    price: "0.1",
+  }
   const result = createGridCycle({
-    symbol: "DOGEFDUSD",
+    symbol,
     baseAsset: "DOGE",
     quoteAsset: "FDUSD",
-    buyOrderId: "buy-1",
+    buyOrderId,
+    buyOrder,
     buyFillIds: ["buy-trade-1"],
     acquiredQuantity: "100",
     recoveryCost: "10",
@@ -27,9 +39,13 @@ function createCycle(overrides = {}) {
 }
 
 function addSell(cycle, overrides = {}) {
+  const orderId = overrides.orderId ?? "sell-1"
   const result = appendGridCycleSellOrder({
     cycle,
-    orderId: "sell-1",
+    orderId,
+    clientOrderId: overrides.clientOrderId ?? `client-${orderId}`,
+    type: overrides.type ?? "LIMIT_MAKER",
+    price: overrides.price ?? "0.102",
     quantity: "99",
     reservedQuantity: "99",
     ...overrides,
