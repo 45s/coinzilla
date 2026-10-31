@@ -1,81 +1,125 @@
 # Notifiers roadmap
 
-**Owner:** `packages/notifiers/`  
-**Status:** Initial implementation validated on `feature/notifiers`; consumer integration is tracked separately.  
-**Purpose:** provide a small, transport-focused notification package for operational alerts from Coinzilla applications.
+**Owner:** packages/notifiers/  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, and Free-Roll consumer integration are merged into develop (PRs #346 and #348).  
+**Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
-Read [AGENTS.md](./AGENTS.md), [README.md](./README.md), and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md).
+Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
 
 ## Product goals
 
-1. Deliver high-signal operational events to an operator without coupling notification I/O to trading execution.
-2. Keep the package dependency-free by preferring Node.js built-ins and explicit injected boundaries.
-3. Make outbound content safe by using event allowlists and curated formatters rather than forwarding arbitrary event payloads.
-4. Make delivery, ordering, failure, timeout, and shutdown behavior explicit and testable.
-5. Keep transport adapters replaceable without inventing a speculative plugin framework.
+1. Deliver high-signal operational events without coupling notification I/O to trading execution.
+2. Keep the package dependency-free by preferring Node.js built-ins and injected side-effect boundaries.
+3. Keep each transport isolated under its own folder, with a thin package entry point.
+4. Make outbound content safe through explicit event allowlists and curated formatters.
+5. Make delivery ordering, admission limits, failure handling, timeouts, and shutdown behavior explicit and testable.
+6. Add transports only when a concrete consumer needs them; avoid speculative frameworks and empty provider scaffolding.
 
-## Phase 0 — Contract and package foundation
+## Target architecture
 
-- [x] Create a private pnpm workspace package named `@coinzilla/notifiers`.
-- [x] Define public exports and package-local AI-agent instructions.
-- [x] Define initial Telegram-only transport scope and explicit event allowlist.
+    packages/notifiers/
+      src/
+        index.js                 # stable package exports only
+        telegram/                # implemented
+          index.js
+          telegram-notifier.js
+          telegram-event-subscriber.js
+          format-telegram-notification.js
+          *.test.js
+        email/                    # future; create when implemented
+        discord/                  # future; create when implemented
+
+Each provider owns its transport client, provider-specific formatter, event integration where applicable, and tests. Keep cross-provider abstractions out until at least two implemented providers demonstrate a real shared contract.
+
+## Phase 0 — Package foundation
+
+- [x] Create the private pnpm workspace package @coinzilla/notifiers.
+- [x] Define a thin public entry point and package-local AI-agent instructions.
+- [x] Keep the initial scope Telegram-only and dependency-free.
 - [x] Document setup, usage, security, and operational limitations.
-- [x] Verify package installation and workspace lockfile consistency with `pnpm install --frozen-lockfile` in CI.
+- [x] Verify frozen lockfile installation in CI.
 
-Acceptance: package is discoverable in the workspace, documented, and does not add runtime dependencies.
+**Acceptance:** package is discoverable in the workspace and adds no runtime dependencies.
 
-## Phase 1 — Telegram transport
+## Phase 1 — Telegram transport and event integration
 
-- [x] Implement Bot API `sendMessage` with native `fetch()`.
-- [x] Validate token, chat ID, injected fetch, timeout, and message length.
-- [x] Apply bounded request timeout using `AbortSignal.timeout()`.
-- [x] Validate HTTP response shape and Telegram's JSON `ok` contract.
-- [x] Ensure errors never include the bot token.
-- [ ] Decide and test retry policy only after delivery idempotency and duplicate-send semantics are specified.
+- [x] Implement Telegram Bot API sendMessage using native fetch().
+- [x] Validate token, chat ID, injected fetch, timeout, message length, HTTP response, and Telegram API response.
+- [x] Format an explicit allowlist of lifecycle, recovery, pair-pause, order-fill, and execution-fill events.
+- [x] Exclude raw exchange payloads and high-volume execution reports.
+- [x] Serialize sends and expose explicit subscriber cleanup.
+- [x] Integrate optional Telegram notifications into apps/bot-free-roll (consumer PR #346, merged).
+- [x] Keep notifications disabled when both credentials are absent; reject partial configuration.
 
-Acceptance: success and all transport/API failure paths are covered without live network calls.
+**Acceptance:** Telegram is optional, isolated from trading behavior, and usable without adding a runtime dependency.
 
-## Phase 2 — Event-bus integration and formatting
+## Phase 2 — Provider-oriented source layout
 
-- [x] Format a curated set of bot lifecycle, recovery, pair-pause, order-fill, and execution-fill events.
-- [x] Exclude noisy raw execution reports and never forward arbitrary/raw exchange payloads.
-- [x] Subscribe only to named, whitelisted events.
-- [x] Serialize notification sends and expose an explicit close/drain handle.
-- [x] Isolate transport errors from the trading publisher while preserving event-bus error reporting.
-- [ ] Integrate the package into `apps/bot-free-roll` in a separate consumer-owned task/PR after this package contract is merged.
+- [x] Move all Telegram-specific code and tests under src/telegram/.
+- [x] Keep src/index.js limited to stable public re-exports.
+- [x] Add src/telegram/index.js as the provider-local export surface.
+- [x] Preserve the original formatNotification export as a compatibility alias.
+- [x] Keep email/ and discord/ absent until those transports are actually implemented.
 
-Acceptance: subscribers can attach to an existing event bus without changing trading logic; notification errors are observable and do not change trading outcomes.
+**Acceptance:** adding a provider does not scatter provider-specific code across the package root.
 
-## Phase 3 — Quality and coverage
+## Phase 3 — Reliability hardening and regression coverage
 
-- [x] Add deterministic tests for transport validation, HTTP/API errors, malformed responses, and transport rejection.
-- [x] Add formatter tests for supported events, missing fields, unsupported event names, and raw payload exclusion.
-- [x] Add subscriber tests for allowlist registration, ordered delivery, drain-on-close, partial setup cleanup, and logger failures.
-- [x] Configure package-specific coverage thresholds (90% lines, 85% branches).
-- [x] Execute package tests and coverage on Node.js 22.23.4; package-specific 90% line / 85% branch thresholds pass.
-- [x] Execute workspace tests, workspace coverage, and JavaScript syntax checks in CI.
-- [x] Review final diff and validate the lockfile with pnpm 12.11.2 using frozen installation.
+- [x] Ignore callbacks that begin after subscriber shutdown starts.
+- [x] Make subscriber close idempotent and attempt every unsubscription even if one fails.
+- [x] Attempt cleanup of all successful subscriptions when partial setup fails; preserve the original setup failure.
+- [x] Add a configurable maxPending limit to bound the subscriber's local queue.
+- [x] Recover the internal send queue after transport or logger failures.
+- [x] Avoid duplicate delivery-error logging when a subscriber logger is configured; preserve event-bus reporting when it is not.
+- [x] Normalize and bound untrusted event fields before formatting.
+- [x] Redact Telegram credentials from transport and API error messages.
+- [x] Reject malformed successful Telegram API responses instead of reporting false success.
+- [x] Add deterministic regression tests for shutdown races, partial cleanup, queue overflow, malformed responses, secret redaction, and error recovery.
+- [x] Pass package tests and the enforced 90% line / 85% branch coverage gate on the final merged commit.
+- [x] Pass workspace tests, syntax, dependency audit, and all required CI checks on the final merged commit.
 
-Acceptance: all required checks pass on the exact final branch head and CI verifies the package coverage gate.
+**Acceptance:** all resource cleanup paths are attempted, local pending work is bounded, failures remain observable, and no test requires real Telegram credentials or network access.
 
-## Phase 4 — Future capabilities (only with a concrete consumer requirement)
+## Phase 4 — Future transports (demand-driven)
 
-- [ ] Additional transports (Discord, Slack, email, webhooks) with separate adapters and tests.
-- [ ] Durable outbox or persistent retry support if an application requires crash-safe delivery.
-- [ ] Bounded retry/backoff after defining duplicate-send behavior and Telegram rate-limit handling.
-- [ ] Message templates/configurable event routing when multiple real consumers demonstrate the need.
-- [ ] Delivery diagnostics/metrics if operational usage justifies a stable public contract.
+- [ ] **Email:** choose a provider/transport only after a consumer defines delivery, authentication, templates, and retry requirements. Keep implementation under src/email/.
+- [ ] **Discord:** implement a webhook or bot adapter only after a consumer defines channel routing, payload format, and rate-limit requirements. Keep implementation under src/discord/.
+- [ ] Define a shared provider contract only after at least two implemented transports demonstrate common behavior worth standardizing.
+- [ ] Add transport-specific tests and coverage gates for every new provider.
+
+**Acceptance:** each provider is independently testable, has clear operational guarantees, and does not introduce unnecessary dependencies into other transports.
+
+## Phase 5 — Delivery guarantees (only when required)
+
+- [ ] Define idempotency and duplicate-send semantics before implementing automatic retries.
+- [ ] Add bounded retry/backoff and rate-limit handling if a consumer requires it.
+- [ ] Add a persistent outbox only when crash-safe delivery is a product requirement and an appropriate storage owner exists.
+- [ ] Add metrics/diagnostics only when their public contract is justified by production usage.
 
 ## Decision log
 
-- Telegram is the first adapter because it directly satisfies the initial operator-alert use case.
-- No Telegram SDK: Node.js built-in `fetch()` is sufficient for the Bot API method used.
-- No Redis, queue package, worker, or database: event-bus delivery is already asynchronous and bounded; the subscriber serializes sends.
-- No automatic retries: ambiguous network outcomes can produce duplicate alerts; reliability guarantees must be designed with idempotency/outbox support.
-- No `subscribeAll()`: explicit event allowlists reduce noise and prevent accidental sensitive-data disclosure.
-- The package does not read environment variables; applications own configuration and secret loading.
-- This package does not promise durable or exactly-once delivery.
+- Telegram is the first adapter because it satisfies the initial operator-alert use case.
+- Node.js built-in fetch() is sufficient for Telegram's sendMessage; no SDK is needed.
+- No Redis, worker, database, or external queue is included. The subscriber applies a local admission limit and serializes requests.
+- No automatic retries: ambiguous network outcomes can produce duplicate messages.
+- No subscribeAll(): explicit event allowlists reduce noise and prevent accidental sensitive-data disclosure.
+- The package does not read environment variables; consuming applications own configuration and secret loading.
+- The package does not promise durable or exactly-once delivery.
+- Future provider folders remain absent until implementation begins.
 
 ## Completion policy
 
-A roadmap item is complete only after its task PR is merged into `develop` and required CI checks pass. Never mark a task complete merely because code has been committed or a PR has been opened.
+A roadmap item is complete only after its task PR is merged into develop and required CI checks pass. Never mark a task complete merely because code has been committed or a PR has been opened.
+
+
+## Validation record
+
+The refactor was merged to develop in PR #348. All required post-merge checks passed on commit 620818cb3ff3624c9869ab1d13fa181784dbbcbb:
+
+- Unit tests: passed.
+- Workspace test coverage: passed, including the notifiers 90% line / 85% branch gate.
+- JavaScript syntax and actionlint: passed.
+- Production dependency audit: passed.
+- Utilities unit tests: passed.
+
+CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703343), [Test Coverage](https://github.com/45s/coinzilla/actions/runs/41240703334), [JavaScript Syntax](https://github.com/45s/coinzilla/actions/runs/41240703427), [Dependency Audit](https://github.com/45s/coinzilla/actions/runs/41240703340), [Utils Unit Tests](https://github.com/45s/coinzilla/actions/runs/41240703355).

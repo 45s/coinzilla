@@ -1,3 +1,8 @@
-export { TelegramNotifier } from "./telegram-notifier.js"
-export { subscribeTelegramNotifications, TELEGRAM_NOTIFICATION_EVENTS } from "./telegram-event-subscriber.js"
-export { formatNotification } from "./format-notification.js"
+export {
+  TelegramNotifier,
+  subscribeTelegramNotifications,
+  TELEGRAM_NOTIFICATION_EVENTS,
+  formatTelegramNotification,
+  // Backwards-compatible alias for consumers of the original Telegram-only API.
+  formatNotification,
+} from "./telegram/index.js"
