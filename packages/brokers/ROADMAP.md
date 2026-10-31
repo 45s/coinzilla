@@ -67,9 +67,9 @@ The migration is complete only when all of the following are true:
 
 ### Next action
 
-1. Complete the compatibility audit against the legacy `stream-client.js`: map each public stream method and parameter contract to `createStreamName`; keep the old exported class and methods intact until Phase 5.
-2. Review the existing `adaptMsg` / user-data adapters. Reuse only public market-data adapters that have valid input contracts; do not move REST listen-key or authenticated user-data behavior into this public Streams client.
-3. Add deterministic tests for the adapter boundary and method mapping. Keep parsing/normalization pure and preserve callback behavior.
+1. Finish the compatibility matrix between legacy `stream-client.js` methods and `createStreamName`, including parameter defaults/validation; preserve the old exported class until Phase 5.
+2. Keep the new `adaptPublicStreamMessage` boundary limited to public events: adapt `aggTrade`, pass other public market events through unchanged, and reject authenticated user-data event types.
+3. Add/finish deterministic tests for the full method-to-stream mapping and adapter callback behavior.
 4. Do not wire this client into `BinanceSdkBroker` in Phase 4; broker wiring belongs to Phase 5.
 5. Recheck `main` before merge and immediately after any broker/API/consumer-contract change. Sync only when that trigger is met.
 6. Wait for explicit merge approval. Do not merge automatically.
@@ -286,7 +286,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 
 ### Phase 4 — Public WebSocket Streams client
 
-**Status: Core client implemented; compatibility adapter audit remains. PR #265 is open from `migration/binance-phase-4-streams`.**
+**Status: Native Streams core and public adapter boundary implemented; final method-compatibility matrix and exact-head CI remain. PR #265 is open from `migration/binance-phase-4-streams`.**
 
 - [x] Implement a new native public Streams client on `NativeWebSocketTransport`; do not extend the broken legacy `WS.js` class.
 - [x] Keep public market-data Streams separate from WebSocket API RPC and authenticated user-data events.
@@ -300,8 +300,8 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Reconnect with bounded backoff, create a fresh one-lifecycle transport, and restore desired subscriptions exactly once; never replay unrelated RPC/order operations.
 - [x] Handle `serverShutdown` and rotate before the 24-hour connection lifetime.
 - [x] Make disconnect idempotent; clear timers, listeners, pending acknowledgements, and reconnect attempts.
-- [ ] Audit/reuse existing public market-data event adapters only after validating their input boundaries; keep parsing/normalization pure and unknown events non-fatal.
-- **Core-client CI evidence:** PR #265 exact head `a9c7070042bf01b2ab9bf590526313c146d04eb7` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. Later commits may require fresh CI; do not treat this evidence as validation of a newer head.
+- [x] Audit/reuse the existing public aggregate-trade adapter through `adaptPublicStreamMessage`; other public market-data events pass through unchanged, while authenticated user-data events are rejected at this boundary.
+- **Core-client CI evidence:** PR #265 exact head `a9c7070042bf01b2ab9bf590526313c146d04eb7` passed Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit. Public adapter files and the latest roadmap edits were added after that head; fresh CI on the current PR head is mandatory.
 - **Exit criteria:** deterministic tests cover stream-name validation, subscribe/unsubscribe acknowledgement correlation, duplicate local subscriptions, raw/combined envelopes, malformed messages, API errors/timeouts, rate/stream limits, reconnect/resubscribe, server shutdown, 24-hour rotation, and complete cleanup. Adapter-boundary tests and exact-head CI must pass before Phase 4 is complete. No live credentials/network calls in unit tests.
 
 ### Phase 5 — Rebuild the broker on native clients
