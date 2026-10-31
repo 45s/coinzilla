@@ -64,16 +64,20 @@ The current bot consumer invokes these broker operations:
 | `getSymbolFilters({ symbol })` | Load symbol metadata before trading | Preserve `symbol`, `baseAsset`, `quoteAsset`, string `tickSize`, string `stepSize`, and `supportedOrderTypes`. |
 | `createOrder(input)` | Submit bot orders | Preserve accepted input fields, `clientOrderId` mapping, defaults, and adapted order result. |
 | `cancelOrder({ symbol, orderId })` | Cancel bot orders | Preserve adapted order result and structured errors. |
-| `getMyTrades({ symbol, orderId, limit })` | Reconcile fills after cancellation/races | Preserve normalized fill fields, including exact quantity/price/commission strings and commission asset. |
+| `getBalances()` | Canonical account balance reconciliation after user-data recovery | Preserve the existing `Balance[]` result, including zero balances. |
+| `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | Reconcile fills after cancellation/races | Preserve normalized fill fields, exact quantity/price/commission strings, commission asset, stable trade IDs, and source `time`. |
 
-The bot source also has explicit capability checks for `getSymbolFilters()` and `getMyTrades()`; absence of either is a startup/runtime contract failure. This migration must not edit `apps/bot-free-roll`; consumer source is read-only audit evidence.
+The bot source also has explicit capability checks for `getSymbolFilters()`, `getBalances()`, `getOpenOrders()`, and `getMyTrades()`; absence of a required recovery capability is a fail-closed runtime contract failure. Broker migration changes remain isolated from bot application code; consumer adoption was completed separately in [PR #314](https://github.com/45s/coinzilla/pull/314) and [PR #315](https://github.com/45s/coinzilla/pull/315).
 
 Other SDK broker methods are public compatibility candidates even though the current bot source does not call them directly:
 
 - `getAssets()`
 - `getOpenOrders({ symbol? })`
 - `getOrder({ symbol, orderId })`
-- `getOrderHistory({ symbol, orderId?, limit? })`
+- `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })`
+- `getAccountSnapshot()` — timestamped canonical balances for FR-057.
+- `getServerTime()` — exchange server time for FR-057.
+- `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` — canonical Entities `Fill[]`.
 - `cancelAllOpenOrders({ symbol })`
 - `getPrices({ symbol })`
 
@@ -145,8 +149,11 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 | `getAssets()` | `accountStatus({ omitZeroBalances: true })` | `account.status` | USER_DATA, signed | Returns account balances; preserve current asset adapter behavior. |
 | `getOpenOrders({ symbol? })` | `openOrdersStatus(params)` | `openOrders.status` | USER_DATA, signed | Symbol is optional; omitted means all open orders. |
 | `getOrder({ symbol, orderId })` | `orderStatus(params)` | `order.status` | USER_DATA, signed | Preserve order adapter and ID representation. |
-| `getOrderHistory({ symbol, orderId?, limit })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Current implementation returns raw Binance order history data; do not accidentally change this result shape in a transport rewrite. |
-| `getMyTrades({ symbol, orderId?, limit })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Current implementation adapts trades; preserve exact decimal strings and commission metadata. |
+| `getOrderHistory({ symbol, orderId?, startTime?, endTime?, limit? })` | `allOrders(params)` | `allOrders` | USER_DATA, signed | Returns raw order history; `orderId` is an inclusive lower-bound cursor. Time filters cannot be combined with `orderId`; maximum time window is 24 hours. |
+| `getMyTrades({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | `myTrades(params)` | `myTrades` | USER_DATA, signed | Adapts trades; `fromId` is an inclusive trade-ID cursor. Cursor and time filters are mutually exclusive; `orderId` cannot be combined with time filters. |
+| `getAccountSnapshot()` | `accountStatus({ omitZeroBalances: false })` | `account.status` | USER_DATA, signed | Returns canonical `Balance[]` plus exact account `updateTime`; additive to `getBalances()`. |
+| `getServerTime()` | `time()` | `time` | NONE, public | Returns exact exchange `serverTime` milliseconds for snapshot observation windows. |
+| `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` | `myTrades(params)` + `exchangeInfo` | `myTrades` + `exchangeInfo` | USER_DATA + NONE | Returns canonical Entities `Fill[]`; uses the same validated inclusive cursor/time filters and preserves exact commission metadata. |
 | `createOrder(input)` | `orderPlace(params)` | `order.place` | TRADE, signed | State-changing request. Never automatically replay after uncertain disconnect. Preserve client order ID mapping and LIMIT/LIMIT_MAKER defaults. |
 | `cancelOrder({ symbol, orderId })` | `orderCancel(params)` | `order.cancel` | TRADE, signed | State-changing request; uncertain outcome must be reconciled. |
 | `cancelAllOpenOrders({ symbol })` | `openOrdersCancelAll(params)` | `openOrders.cancelAll` | TRADE, signed | State-changing request; response can contain order and order-list reports. |
@@ -154,6 +161,8 @@ The current `BinanceSdkBroker` maps its request/response operations as follows. 
 | `getSymbolFilters({ symbol })` | Direct global `fetch()` to REST `/api/v3/exchangeInfo` | `exchangeInfo` | NONE, public | The WebSocket API exposes this method; move metadata retrieval there. Preserve the validated filter output contract. |
 
 The official Spot WebSocket API uses a request envelope containing a client-generated `id`, a `method`, and optional `params`; responses correlate by `id` and carry a status/result or error. The RPC implementation must support out-of-order responses and concurrent requests rather than relying on request/response arrival order.
+
+**Cursor precision:** Binance order/trade IDs are int64 values. The current JSON RPC boundary accepts numeric strings only when they fit JavaScript's safe-integer range, then sends them as JSON integers. Values outside that range are rejected rather than rounded; a future transport-level int64 representation is required before supporting larger IDs safely.
 
 ## 5. User-data subscription is part of the WebSocket API connection
 
@@ -255,7 +264,7 @@ Before implementation proceeds, preserve these decisions:
 
 ## 11. Canonical fill API
 
-The additive `BinanceSdkBroker.getFills({ symbol, orderId?, limit? })` API returns shared Entities `Fill` instances. It requests exact market metadata for the requested Binance symbol through WebSocket API `exchangeInfo`, constructs a canonical `Market` from the returned base/quote asset codes, then requests signed `myTrades` and adapts each execution.
+The additive `BinanceSdkBroker.getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` API returns shared Entities `Fill` instances. It requests exact market metadata for the requested Binance symbol through WebSocket API `exchangeInfo`, constructs a canonical `Market` from the returned base/quote asset codes, then requests signed `myTrades` with the same validated cursor/time filters as the compatibility history API and adapts each execution.
 
 - Trade IDs are scoped by canonical Market identity; Binance symbols are opaque and are never split to infer assets.
 - Price and quote quantity are exact quote-asset `Money`; base quantity is exact base-asset `Quantity`. No financial value passes through JavaScript `Number`.

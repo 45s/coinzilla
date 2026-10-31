@@ -9,6 +9,7 @@ import { createStreamName } from "./streams-protocol.js"
 import { BinanceStreamsClient } from "./streams-client.js"
 import { NativeWebSocketTransport } from "./transport.js"
 import { BinanceUserDataSession } from "./user-data-session.js"
+import { createMyTradesParams, createOrderHistoryParams } from "./history-query-params.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -138,6 +139,45 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
+  async getAccountSnapshot() {
+    try {
+      const response = await this.tradingConnection.request(
+        "account.status",
+        { omitZeroBalances: false },
+        { signed: true },
+      )
+      const sourceTime = response.data?.updateTime
+      if (!Number.isSafeInteger(sourceTime) || sourceTime < 0) {
+        throw new TypeError("Binance account snapshot is missing a valid source updateTime")
+      }
+
+      return toResult({
+        data: {
+          balances: adaptSpotBalance(response.data?.balances),
+          sourceTime,
+        },
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getAccountSnapshot()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async getServerTime() {
+    try {
+      const response = await this.tradingConnection.request("time")
+      const serverTime = response.data?.serverTime
+      if (!Number.isSafeInteger(serverTime) || serverTime < 0) {
+        throw new TypeError("Binance time response is missing a valid serverTime")
+      }
+
+      return toResult({ data: { serverTime } })
+    } catch (error) {
+      handleErr({ where: "BinanceSdkBroker.getServerTime()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
   async getOpenOrders({ symbol } = {}) {
     try {
       const response = await this.tradingConnection.request(
@@ -166,17 +206,13 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getOrderHistory({ symbol, orderId, limit = 100 } = {}) {
+  async getOrderHistory(input = {}) {
     try {
-      if (!symbol) throw new Error("getOrderHistory requires symbol")
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-        throw new Error("getOrderHistory limit must be an integer between 1 and 1000")
-      }
-
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
-
+      const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
+      if (!Array.isArray(response.data)) {
+        throw new TypeError("Binance allOrders response should be an array")
+      }
       return toResult({ data: response.data })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getOrderHistory()", error })
@@ -184,17 +220,13 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getMyTrades({ symbol, orderId, limit = 1000 } = {}) {
+  async getMyTrades(input = {}) {
     try {
-      if (!symbol) throw new Error("getMyTrades requires symbol")
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-        throw new Error("getMyTrades limit must be an integer between 1 and 1000")
-      }
-
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
-
+      const params = createMyTradesParams(input)
       const response = await this.tradingConnection.request("myTrades", params, { signed: true })
+      if (!Array.isArray(response.data)) {
+        throw new TypeError("Binance myTrades response should be an array")
+      }
       return toResult({ data: response.data.map(adaptTrade) })
     } catch (error) {
       handleErr({ where: "BinanceSdkBroker.getMyTrades()", error })
@@ -202,14 +234,10 @@ export class BinanceSdkBroker extends CoreBroker {
     }
   }
 
-  async getFills({ symbol, orderId, limit = 1000 } = {}) {
+  async getFills(input = {}) {
     try {
-      if (typeof symbol !== "string" || !symbol.trim()) {
-        throw new TypeError("getFills requires a symbol")
-      }
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
-        throw new TypeError("getFills limit must be an integer between 1 and 1000")
-      }
+      const params = createMyTradesParams(input)
+      const { symbol } = params
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
       const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
@@ -237,8 +265,6 @@ export class BinanceSdkBroker extends CoreBroker {
         quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
       })
 
-      const params = { symbol, limit }
-      if (orderId !== undefined && orderId !== null) params.orderId = orderId
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
       if (!Array.isArray(tradesResponse.data)) {
         throw new TypeError("Binance myTrades response should be an array")
