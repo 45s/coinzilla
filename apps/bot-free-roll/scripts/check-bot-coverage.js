@@ -1,5 +1,10 @@
 import { spawnSync } from "node:child_process"
 
+import {
+  evaluateCoverageThresholds,
+  parseCoverageRow,
+} from "./coverage-report.js"
+
 const result = spawnSync(
   process.execPath,
   ["--test", "--experimental-test-coverage"],
@@ -16,27 +21,51 @@ if (result.error) {
 if (result.status !== 0) {
   process.exitCode = result.status ?? 1
 } else {
-  const match = result.stdout.match(
-    /bot-free-roll\.js\s+\|\s+([\d.]+)\s+\|\s+([\d.]+)/,
-  )
+  const output = `${result.stdout}\n${result.stderr}`
+  const coverageGates = [
+    {
+      name: "Free-Roll application",
+      fileName: "all files",
+      thresholds: { statements: 80, branches: 90, functions: 85 },
+    },
+    {
+      name: "FreeRollBot orchestrator",
+      fileName: "bot-free-roll.js",
+      thresholds: { statements: 95, branches: 75 },
+    },
+  ]
 
-  if (!match) {
-    throw new Error("Could not find bot-free-roll.js in the Node.js coverage report")
-  }
+  for (const gate of coverageGates) {
+    const parsed = parseCoverageRow({ output, fileName: gate.fileName })
 
-  const lineCoverage = Number(match[1])
-  const branchCoverage = Number(match[2])
-  const minimumLineCoverage = 95
-  const minimumBranchCoverage = 75
+    if (!parsed.ok) {
+      console.error(parsed.error)
+      process.exitCode = 1
+      continue
+    }
 
-  console.log(
-    `FreeRollBot coverage: ${lineCoverage}% lines, ${branchCoverage}% branches (minimum ${minimumLineCoverage}% / ${minimumBranchCoverage}%)`,
-  )
+    const evaluation = evaluateCoverageThresholds({
+      coverage: parsed.coverage,
+      thresholds: gate.thresholds,
+    })
 
-  if (
-    lineCoverage < minimumLineCoverage ||
-    branchCoverage < minimumBranchCoverage
-  ) {
-    process.exitCode = 1
+    const actual = Object.entries(parsed.coverage)
+      .map(([metric, value]) => `${metric}: ${value}%`)
+      .join(", ")
+    const minimum = Object.entries(gate.thresholds)
+      .map(([metric, value]) => `${metric}: ${value}%`)
+      .join(", ")
+
+    console.log(`${gate.name} coverage — ${actual} (minimum ${minimum})`)
+
+    if (!evaluation.passed) {
+      for (const violation of evaluation.violations) {
+        console.error(
+          `Coverage threshold failed for ${gate.name}: ${violation.metric} is ${violation.actual}%, minimum is ${violation.minimum}%`,
+        )
+      }
+
+      process.exitCode = 1
+    }
   }
 }
