@@ -2869,8 +2869,9 @@ test("keeps trading gated and does not acknowledge recovery when a missing order
       },
       createOrder: async (order) => {
         const orderId = String(createdOrders.length + 1)
-        createdOrders.push({ ...order, orderId })
-        return { ok: true, data: { orderId } }
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
       },
     },
     eventBus: {
@@ -2963,8 +2964,9 @@ test("buffers user-data events during reconciliation and replays them before ack
       },
       createOrder: async (order) => {
         const orderId = String(createdOrders.length + 1)
-        createdOrders.push({ ...order, orderId })
-        return { ok: true, data: { orderId } }
+        const clientOrderId = `client-${orderId}`
+        createdOrders.push({ ...order, orderId, clientOrderId })
+        return { ok: true, data: { orderId, clientOrderId } }
       },
     },
     eventBus: { publish: () => ({ ok: true }) },
