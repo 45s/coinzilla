@@ -1,13 +1,18 @@
-import {
-  SPOT_WS_API_PROD_URL,
-  SPOT_WS_API_TESTNET_URL,
-  SPOT_WS_STREAMS_PROD_URL,
-  SPOT_WS_STREAMS_TESTNET_URL,
-} from "@binance/spot"
 import { isProdMode } from "@coinzilla/utils"
 
+export const BINANCE_WEBSOCKET_ENDPOINTS = Object.freeze({
+  production: {
+    api: "wss://ws-api.binance.com/ws-api/v3",
+    streams: "wss://stream.binance.com:9443/ws",
+  },
+  testnet: {
+    api: "wss://ws-api.testnet.binance.vision/ws-api/v3",
+    streams: "wss://stream.testnet.binance.vision/ws",
+  },
+})
+
 export class BinanceSdkConfig {
-  constructor(input) {
+  constructor(input = {}) {
     const {
       apiKey,
       apiSecret,
@@ -16,7 +21,8 @@ export class BinanceSdkConfig {
       reconnectDelay = 5000,
     } = input
 
-    if (!apiKey || !apiSecret) {
+    if (typeof apiKey !== "string" || apiKey.length === 0 ||
+        typeof apiSecret !== "string" || apiSecret.length === 0) {
       throw new Error("Binance API credentials are required")
     }
 
@@ -24,14 +30,14 @@ export class BinanceSdkConfig {
       throw new Error("reconnectDelay must be a non-negative integer")
     }
 
+    const endpoints = isProdMode
+      ? BINANCE_WEBSOCKET_ENDPOINTS.production
+      : BINANCE_WEBSOCKET_ENDPOINTS.testnet
+
     this.apiKey = apiKey
     this.apiSecret = apiSecret
-    this.websocketApiUrl =
-      websocketApiUrl ??
-      (isProdMode ? SPOT_WS_API_PROD_URL : SPOT_WS_API_TESTNET_URL)
-    this.websocketStreamsUrl =
-      websocketStreamsUrl ??
-      (isProdMode ? SPOT_WS_STREAMS_PROD_URL : SPOT_WS_STREAMS_TESTNET_URL)
+    this.websocketApiUrl = websocketApiUrl ?? endpoints.api
+    this.websocketStreamsUrl = websocketStreamsUrl ?? endpoints.streams
     this.reconnectDelay = reconnectDelay
   }
 }

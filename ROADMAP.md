@@ -65,3 +65,8 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 - [ ] Retire or migrate legacy long-lived feature branches and open PRs only after their work is safely preserved.
 
 The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection for the new `develop` branch is a one-time repository configuration task; documentation alone does not enforce it.
+
+
+### Active package roadmaps
+
+- [Broker package roadmap](packages/brokers/ROADMAP.md) — native Binance WebSocket migration, compatibility contract, lifecycle/recovery phases, and broker-specific acceptance criteria.
