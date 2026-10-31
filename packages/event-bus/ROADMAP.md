@@ -185,13 +185,13 @@ Acceptance: all accepted events have consistent envelopes; event names cannot tr
 - [ ] Add deterministic tests that lock down the documented concurrency contract (multiple subscribers, multiple publishes, and out-of-order completion).
 - [ ] Decide whether a future opt-in sequential mode is needed only after a real consumer demonstrates the requirement; do not add it as part of the default contract.
 - [x] Add bounded pending work and an explicit overload policy (global pending-delivery cap; reject the whole publish before dispatch when its complete fan-out does not fit).
-- [ ] Specify the minimal diagnostics surface before coding: pending delivery count, configured capacity, and closed/open lifecycle state; decide whether subscriber counts add operational value.
-- [ ] Implement diagnostics as a snapshot (fresh object, no mutable Set/Map references); define whether the API is a method or read-only getter and document stability/compatibility.
-- [ ] Test diagnostics at idle, after accepted fan-out, after completion, after overload rejection, and after close; verify callers cannot mutate internal state.
-- [ ] Define a backward-compatible `close({ timeoutMs })` contract: accepted values and validation, whether timeout applies to drain only, the exact timeout result/error shape, and whether pending handlers continue after timeout.
-- [ ] Define concurrent-close behavior: all callers observe a consistent result; cleanup and subscription invalidation happen exactly once; a timeout must not falsely report a successful drain.
-- [ ] Implement bounded shutdown waiting without abandoning pending-promise rejection handling or leaking timers; preserve current no-argument behavior unless the roadmap decision explicitly changes it.
-- [ ] Test timeout boundary, already-drained close, never-settling handler, eventual settlement after timeout, repeated close, and concurrent close callers.
+- [x] Specify the minimal diagnostics surface: pending delivery count, configured capacity, and closed/open lifecycle state; omit subscriber counts because they do not add necessary value to the first diagnostics surface.
+- [x] Implement `getDiagnostics()` as a frozen scalar snapshot with no mutable Set/Map references.
+- [x] Test diagnostics at idle, after accepted fan-out, after completion, after overload rejection, and after close; verify callers cannot mutate internal state.
+- [x] Define backward-compatible `close({ timeoutMs })` semantics: timeout is an integer from 1 through 2,147,483,647 ms and bounds only the wait for drain; timeout returns `{ ok: false, timedOut: true, errors: [Error] }`; pending handlers continue, and a later `close()` may await their completion.
+- [x] Define concurrent-close behavior: each caller observes its own timeout (if supplied); subscription cleanup is idempotent; timeout never reports a successful drain.
+- [x] Implement bounded shutdown waiting without abandoning pending-promise rejection handling or leaking timers; no-argument behavior still waits for the full drain.
+- [x] Test invalid timeout options, a never-settling handler, eventual settlement after timeout, repeated close, and concurrent close callers.
 - [ ] Evaluate cooperative cancellation via `AbortSignal` only after timeout semantics are settled; document whether the signal is per close or per delivery and whether handlers are merely notified (not forcibly cancelled).
 - [ ] Do not add cancellation to handler arguments unless its lifecycle and compatibility contract are specified and covered by tests.
 - [x] Test overload boundaries, atomic fan-out rejection, capacity recovery, and concurrent publish saturation.
@@ -207,7 +207,7 @@ Acceptance: resource use is bounded or explicitly controlled; shutdown cannot wa
 ### Phase 3 — Observability and test quality
 
 - [x] Use structured error context consistently (message, error, event ID, event name, and source).
-- [ ] Implement the diagnostics API specified in Phase 2; expose only stable scalar snapshots and never the internal pending Set, listener Maps, or subscription records.
+- [x] Implement the Phase 2 diagnostics API; expose only stable scalar snapshots and never the internal pending Set, listener Maps, or subscription records.
 - [ ] Define counter meanings precisely (accepted/rejected publishes, scheduled/completed/failed deliveries, current pending and high-water mark) before adding any counters beyond the minimal gauges; avoid ambiguous or expensive instrumentation.
 - [ ] Use deferred promises/barriers rather than wall-clock sleeps for all concurrency and lifecycle assertions.
 - [ ] Cover the documented concurrency model, fan-out admission atomicity, nested publish/flush, reporter failures, publish/close races, and simultaneous close callers.
