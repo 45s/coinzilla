@@ -3,9 +3,9 @@ import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
 import { subtractDecimalStrings } from "../values/subtract-decimal-strings.js"
 
-const supportedSides = ["BUY", "SELL"]
-const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
-const supportedStatuses = [
+export const CANONICAL_ORDER_SIDES = Object.freeze(["BUY", "SELL"])
+export const CANONICAL_ORDER_TYPES = Object.freeze(["LIMIT", "LIMIT_MAKER", "MARKET"])
+export const CANONICAL_ORDER_STATUSES = Object.freeze([
   "PENDING",
   "OPEN",
   "PARTIALLY_FILLED",
@@ -14,7 +14,7 @@ const supportedStatuses = [
   "REJECTED",
   "EXPIRED",
   "UNKNOWN",
-]
+])
 const brokerAcknowledgedStatuses = [
   "OPEN",
   "PARTIALLY_FILLED",
@@ -33,6 +33,7 @@ export const canonicalOrderErrMsgs = {
   limitPrice: "CanonicalOrder.limitPrice should be Money for limit orders",
   marketPrice: "CanonicalOrder.limitPrice is not allowed for market orders",
   priceAsset: "CanonicalOrder.limitPrice should use the market quote Asset",
+  limitPricePositive: "CanonicalOrder.limitPrice should be greater than zero",
   originalQuantity: "CanonicalOrder.originalQuantity should be a Quantity",
   executedQuantity: "CanonicalOrder.executedQuantity should be a Quantity",
   quantityAsset: "CanonicalOrder quantities should use the market base Asset",
@@ -86,26 +87,26 @@ export class CanonicalOrder {
     updatedAt,
     completedAt,
   } = {}) {
-    if (!isNonEmptyString(clientOrderId)) {
+    if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
       throw new Error(canonicalOrderErrMsgs.clientOrderId)
     }
     if (
       brokerOrderId !== undefined &&
       brokerOrderId !== null &&
-      !isNonEmptyString(brokerOrderId)
+      (typeof brokerOrderId !== "string" || !brokerOrderId.trim())
     ) {
       throw new Error(canonicalOrderErrMsgs.brokerOrderId)
     }
     if (!(market instanceof Market)) {
       throw new Error(canonicalOrderErrMsgs.market)
     }
-    if (!supportedSides.includes(side)) {
+    if (!CANONICAL_ORDER_SIDES.includes(side)) {
       throw new Error(canonicalOrderErrMsgs.side)
     }
-    if (!supportedTypes.includes(type)) {
+    if (!CANONICAL_ORDER_TYPES.includes(type)) {
       throw new Error(canonicalOrderErrMsgs.type)
     }
-    if (!supportedStatuses.includes(status)) {
+    if (!CANONICAL_ORDER_STATUSES.includes(status)) {
       throw new Error(canonicalOrderErrMsgs.status)
     }
 
@@ -124,6 +125,12 @@ export class CanonicalOrder {
       normalizedLimitPrice.asset.id !== market.quoteAsset.id
     ) {
       throw new Error(canonicalOrderErrMsgs.priceAsset)
+    }
+    if (
+      normalizedLimitPrice &&
+      (normalizedLimitPrice.amount === "0" || normalizedLimitPrice.amount.startsWith("-"))
+    ) {
+      throw new Error(canonicalOrderErrMsgs.limitPricePositive)
     }
 
     if (!(originalQuantity instanceof Quantity)) {
@@ -181,7 +188,7 @@ export class CanonicalOrder {
     }
 
     for (const timestamp of [createdAt, acknowledgedAt, updatedAt, completedAt]) {
-      if (!validateTimestamp({ value: timestamp })) {
+      if (timestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
         throw new Error(canonicalOrderErrMsgs.timestamp)
       }
     }
