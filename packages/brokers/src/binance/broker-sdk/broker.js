@@ -48,7 +48,6 @@ export class BinanceSdkBroker extends CoreBroker {
     this.tradingConnection = apiClientFactory(this.config)
     this.marketConnection = marketClientFactory(this.config, this.logger)
     this.connected = false
-    this.disconnecting = false
     this.userDataUnavailable = false
     this.userDataSession = new BinanceUserDataSession({
       getClient: () => this.tradingConnection,
@@ -65,7 +64,6 @@ export class BinanceSdkBroker extends CoreBroker {
   }
 
   async connect() {
-    this.disconnecting = false
     this.userDataSession.start()
     if (this.connected && this.tradingConnection.state === "open") return
 
@@ -89,7 +87,6 @@ export class BinanceSdkBroker extends CoreBroker {
   }
 
   async disconnect() {
-    this.disconnecting = true
     this.connected = false
     this.userDataUnavailable = true
     await this.userDataSession.stop()
