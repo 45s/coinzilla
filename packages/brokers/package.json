@@ -11,11 +11,10 @@
     "test": "node --test",
     "test:watch": "node --test --watch",
     "test:integration": "node --env-file-if-exists=.env.development --test \"src/**/*.integration.js\"",
-    "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/binance/broker-sdk/user-data-session.integration.js",
-    "test:sdk": "node --env-file-if-exists=.env.development --test ./src/binance/broker-sdk/broker.integration.js"
+    "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/binance/broker-websocket/methods/user-data-session.integration.js",
+    "test:websocket": "node --env-file-if-exists=.env.development --test ./src/binance/broker-websocket/broker.integration.js"
   },
   "dependencies": {
-    "@binance/spot": "^34.0.3",
     "@coinzilla/entities": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   },
