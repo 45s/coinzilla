@@ -297,7 +297,7 @@ export class BinanceUserDataSession {
   }
 
   #forwardEvent(event) {
-    for (const subscriber of this.#subscribers.values()) {
+    for (const subscriber of [...this.#subscribers.values()]) {
       if (!subscriber.active) continue
       try {
         subscriber.onEvent({ event })
@@ -355,7 +355,7 @@ export class BinanceUserDataSession {
   }
 
   #notify(status) {
-    for (const subscriber of this.#subscribers.values()) {
+    for (const subscriber of [...this.#subscribers.values()]) {
       this.#notifySubscriber(subscriber, status)
     }
   }
