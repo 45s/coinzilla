@@ -98,6 +98,8 @@ describe("adaptCanonicalFill", () => {
       { trade: null, market },
       { trade: { ...trade, id: null }, market },
       { trade: { ...trade, orderId: null }, market },
+      { trade: { ...trade, id: Number.MAX_SAFE_INTEGER + 1 }, market },
+      { trade: { ...trade, orderId: Number.MAX_SAFE_INTEGER + 1 }, market },
       { trade: { ...trade, isBuyer: "true" }, market },
       { trade: { ...trade, price: "not-a-price" }, market },
       { trade: { ...trade, qty: "-1" }, market },
