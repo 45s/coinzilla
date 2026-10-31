@@ -161,3 +161,24 @@ After creating `develop`, configure its ruleset and verify the exact status-chec
 ## 11. Exceptions
 
 If the workflow cannot be followed because a branch, rule, permission, check, or domain owner is missing, do not invent a bypass. Report the blocker and the smallest safe action needed. A task prompt, deadline, or convenience is not authorization to violate ownership, test, or release rules.
+
+
+## 12. Mandatory task-branch deletion after merge
+
+Task branches are disposable working references, not permanent history. **After a task PR is merged into `develop`, its work is closed, and no other open PR or active task depends on the branch, the responsible agent MUST delete that source branch.**
+
+Required closeout sequence:
+1. Confirm the PR is merged into `develop` (not merely closed without merge).
+2. Confirm the task is complete and no other open PR or active task uses the branch.
+3. Delete the source/head branch immediately after merge.
+4. Verify the branch no longer exists on the remote.
+5. Include branch deletion in the PR closeout summary.
+
+Safety rules:
+- Never delete `main`, `develop`, release branches, or a branch still used by another open PR or active task.
+- Do not delete a branch when the PR was closed without merging; inspect the reason and preserve the work until its disposition is clear.
+- Merged commits and PR history remain available in `develop` and GitHub after the source branch is deleted. Do not retain merged task branches merely as backups.
+- Prefer GitHub's automatic head-branch deletion. If repository auto-delete is disabled or GitHub does not remove the branch, the agent MUST delete it manually and verify the result.
+- If permissions prevent deletion, report the exact blocker; do not silently leave cleanup unreported.
+
+This rule applies to every AI agent, coding assistant, human contributor, and automated workflow. It is part of task completion, not optional cleanup.

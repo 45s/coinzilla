@@ -67,3 +67,13 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
 - Broker integration tests must remain separate from default unit tests. Tests that place orders must use TESTNET only.
 - Do not claim a check passed unless it was actually run and passed.
 - Do not bypass or weaken CI checks to make a change pass. Explain any justified exception to the engineering standards.
+
+
+## Task branch cleanup (mandatory)
+
+- Every task branch is short-lived and exists only while its PR/work is active.
+- Immediately after a task PR is successfully merged into `develop`, the task is closed, and no other open PR or active task depends on that branch, delete the source branch.
+- Do not keep merged task branches as archives. The merged commits remain part of `develop`; deleting the branch does not delete the commits or PR history.
+- Never delete `main`, `develop`, a release branch, or any branch with an open PR or active work depending on it.
+- If GitHub's automatic head-branch deletion is enabled, verify that GitHub deleted the branch. If it is disabled or deletion fails, the responsible agent must delete the merged source branch manually and verify the branch is gone.
+- Branch cleanup is part of completing the task PR, not optional housekeeping. Report any branch that could not safely be deleted and why.
