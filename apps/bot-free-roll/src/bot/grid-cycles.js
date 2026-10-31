@@ -515,7 +515,7 @@ export function closeGridCycleSellOrder({
       throw new Error("SELL order cannot close before final fill reconciliation")
     }
     if (!TERMINAL_SELL_STATUSES.has(status) || status === "FILLED") {
-      throw new Error("status must be CANCELED, REJECTED, or EXPIRED")
+      throw new Error("status must be CANCELED, REJECTED, EXPIRED, or EXPIRED_IN_MATCH")
     }
     if (cycle.currentSellOrderId !== orderId) {
       throw new Error("only the current cycle SELL order can be closed")
@@ -595,6 +595,7 @@ export function projectGridCycles({ cycles } = {}) {
   try {
     if (!Array.isArray(cycles)) throw new Error("cycles must be an array")
     const ids = new Set()
+    const orderIds = new Set()
     const symbols = new Set()
     const totals = {
       activeQuantity: "0",
@@ -656,6 +657,10 @@ export function projectGridCycles({ cycles } = {}) {
       }
 
       for (const order of cycle.sellOrders) {
+        if (orderIds.has(order.id)) {
+          throw new Error(`SELL order ${order.id} is assigned to multiple cycles`)
+        }
+        orderIds.add(order.id)
         if (LIVE_SELL_STATUSES.has(order.status)) {
           validateDecimal({ value: order.reservedQuantity, name: "SELL reservedQuantity" })
           totals.reservedQuantity = addDecimal({
