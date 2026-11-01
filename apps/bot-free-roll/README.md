@@ -39,6 +39,7 @@ The purpose of this application is to implement the Free-Roll trading strategy.
 - Configuration: JSON.
 - Dependencies: minimal; prefer native Node.js functionality where practical.
 - Architecture: trading strategy separated from broker-specific implementation.
+- Application structure: use the layered target layout documented in [ROADMAP.md](./ROADMAP.md#application-module-layout); introduce it incrementally without changing strategy behavior.
 - Trading scope: spot trading.
 - Initial testing should use a safe test environment before live trading.
 - Keep the implementation SOLID, stable, and simple.
