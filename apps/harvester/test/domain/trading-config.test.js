@@ -40,7 +40,7 @@ test('rejects missing strategy settings', () => {
 
   assert.throws(
     () => validateTradingConfig(config),
-    /strategies\\.free-roll\\.settings.*expected an object/,
+    /strategies\.free-roll\.settings.*expected an object/,
   );
 });
 
