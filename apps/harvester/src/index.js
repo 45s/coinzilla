@@ -10,8 +10,29 @@ export async function main({
   logger = console,
 } = {}) {
   try {
-    await start();
-    logger.info('Harvester configuration validated; no processing workflow is configured yet.');
+    const runtime = await start();
+    logger.info(
+      runtime.connected
+        ? 'Harvester configuration validated and Binance broker connected; trading remains disabled.'
+        : 'Harvester configuration validated; broker connection and trading are disabled.',
+    );
+
+    if (runtime.connected && typeof runtime.stop === 'function') {
+      let shuttingDown = false;
+      const shutdown = async () => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        try {
+          await runtime.stop();
+          logger.info('Harvester broker disconnected.');
+        } catch (error) {
+          logger.error('Harvester shutdown failed.', error);
+          process.exitCode = 1;
+        }
+      };
+      process.once('SIGINT', shutdown);
+      process.once('SIGTERM', shutdown);
+    }
   } catch (error) {
     logger.error('Harvester startup failed.', error);
     process.exitCode = 1;
