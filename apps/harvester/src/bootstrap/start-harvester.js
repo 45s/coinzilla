@@ -7,9 +7,11 @@ import { waitStrategy } from "../domain/strategies/wait-strategy.js"
 
 async function cleanupBroker({ broker, subscriptions }) {
   const unsubscribeResults = await Promise.allSettled(
-    subscriptions.map(({ unsubscribe }) => unsubscribe()),
+    subscriptions.map(({ unsubscribe }) => Promise.resolve().then(() => unsubscribe())),
   )
-  const disconnectResult = await Promise.allSettled([broker.disconnect()])
+  const disconnectResult = await Promise.allSettled([
+    Promise.resolve().then(() => broker.disconnect()),
+  ])
   return [
     ...unsubscribeResults,
     ...disconnectResult,
@@ -82,6 +84,13 @@ export async function startHarvester({
   const placeOrder = makePlaceOrder({ broker })
   const processMarketPrice = makeProcessMarketPrice({ strategy })
   const subscriptions = []
+  const reportPriceError = (details) => {
+    try {
+      onMarketPriceError(details)
+    } catch (error) {
+      logger.error?.("Harvester market price error handler failed", { error })
+    }
+  }
 
   try {
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
@@ -89,18 +98,20 @@ export async function startHarvester({
 
       const result = await broker.subscribeForPrices({
         symbol,
-        onPrice: (priceEvent) => {
-          void processMarketPrice({
-            symbol,
-            priceEvent,
-            pairConfig,
-            settings: tradingConfig.settings,
-          }).then((processed) => {
-            if (!processed.ok) {
-              onMarketPriceError({ symbol, errors: processed.errors })
-            }
-          }).catch((error) => onMarketPriceError({ symbol, error }))
-        },
+        onPrice: (priceEvent) => processMarketPrice({
+          symbol,
+          priceEvent,
+          pairConfig,
+          settings: tradingConfig.settings,
+        }).then((processed) => {
+          if (!processed.ok) {
+            reportPriceError({ symbol, errors: processed.errors })
+          }
+          return processed
+        }).catch((error) => {
+          reportPriceError({ symbol, error })
+          return { ok: false, errors: [error] }
+        }),
       })
 
       if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
