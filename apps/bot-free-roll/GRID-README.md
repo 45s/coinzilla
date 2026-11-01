@@ -4,6 +4,7 @@
 **Application:** `coinzilla/apps/bot-free-roll`  
 **Status:** Proposed strategy variant; implementation not yet enabled.  
 **Companion roadmap:** [GRID-ROADMAP.md](./GRID-ROADMAP.md)  
+**AI-agent workflow and approval gates:** [GRID-AGENT-INSTRUCTIONS.md](./GRID-AGENT-INSTRUCTIONS.md)  
 **Legacy strategy:** [README.md](./README.md)
 
 
