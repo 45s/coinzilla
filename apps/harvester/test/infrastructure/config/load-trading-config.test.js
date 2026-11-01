@@ -8,13 +8,13 @@ import { loadTradingConfig } from '../../../src/infrastructure/config/load-tradi
 test('loads and validates the default trading config', async () => {
   const config = await loadTradingConfig();
 
-  assert.equal(config.strategies['free-roll'].pairs.ZROUSDT.enabled, true);
+  assert.equal(config.pairs.ZROUSDT.enabled, true);
 });
 
 test('loads a config from a supplied path', async () => {
   const config = await loadTradingConfig(new URL('../../../trading-config.json', import.meta.url));
 
-  assert.ok(config.strategies['free-roll']);
+  assert.ok(config.pairs.ZROUSDT);
 });
 
 test('reports the source path when JSON is malformed', async (t) => {
@@ -42,7 +42,7 @@ test('rejects structurally invalid JSON after parsing', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'harvester-config-'));
   const path = join(directory, 'invalid-shape.json');
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path, JSON.stringify({ strategies: {} }));
+  await writeFile(path, JSON.stringify({ settings: { minProfit: 0.01 }, pairs: {} }));
 
-  await assert.rejects(loadTradingConfig(path), /at least one strategy/);
+  await assert.rejects(loadTradingConfig(path), /at least one pair/);
 });
