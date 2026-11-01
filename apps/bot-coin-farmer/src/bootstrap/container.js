@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url"
 import { createEventBusAdapter } from "../infrastructure/event-bus/event-bus-adapter.js"
 import { createJournalAdapter } from "../infrastructure/journal/journal-adapter.js"
 import { createLoggerAdapter } from "../infrastructure/logging/logger-adapter.js"
+import { assertEventBusPort } from "../ports/event-bus.js"
+import { assertJournalPort } from "../ports/journal.js"
 
 const PACKAGE_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -41,6 +43,9 @@ export function createContainer({
     directory: journalDirectory,
     logger: loggerAdapter,
   })
+
+  assertEventBusPort(runtimeEventBus)
+  assertJournalPort(runtimeJournal)
 
   return {
     config,
