@@ -204,6 +204,15 @@ importers:
 
   apps/harvester: {}
 
+  apps/market-simulator:
+    dependencies:
+      '@coinzilla/brokers':
+        specifier: workspace:*
+        version: link:../../packages/brokers
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+
   packages/brokers:
     dependencies:
       '@coinzilla/entities':
