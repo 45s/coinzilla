@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { dirname, resolve } from "node:path"
+import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_CONFIG_PATH = fileURLToPath(
@@ -38,6 +38,3 @@ export async function loadConfig({ configPath = DEFAULT_CONFIG_PATH } = {}) {
   }
 }
 
-export function getDefaultConfigDirectory() {
-  return dirname(DEFAULT_CONFIG_PATH)
-}
