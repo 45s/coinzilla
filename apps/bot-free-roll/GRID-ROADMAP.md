@@ -182,15 +182,14 @@ For each cycle:
 - Per-cycle cost, proceeds, fees, remaining quantity, and profitability approval.
 - Pair-level aggregation of active, reserved, and free inventory without losing cycle ownership.
 - Reconciliation of multiple tracked SELL orders.
-- Restart recovery of cycle identity, status, fill history, and reservations.
 - Optional per-pair configuration with legacy behavior as the default.
 - Cycle-aware statistics, journal events, diagnostics, and documentation.
-- Deterministic tests for out-of-order fills, races, failures, and recovery.
+- Deterministic tests for out-of-order fills, races, and failures.
 
 ### Explicitly out of scope for the first Grid release
 
-- Multiple simultaneous BUY orders at different price levels.
-- Martingale sizing, dynamic order quantities, or automatic averaging rules beyond the existing one-BUY flow.
+- Persisted Grid-state restoration and restart recovery.
+- Martingale sizing, dynamic order quantities, or automatic averaging rules not explicitly approved.
 - A new broker/exchange-specific implementation in strategy code.
 - FIFO/LIFO redesign of the existing strategy's cost-basis policy outside the cycle accounting required by Grid.
 - Automatic adoption of manual/external wallet inventory.
@@ -237,8 +236,8 @@ These are foundations, not proof that Grid behavior is already supported. The ne
 
 | Area | Current develop assumption | Required Grid evolution |
 |---|---|---|
-| Pair state in `bot-free-roll.js` | `buyOrder` and one `sellOrder`; aggregate `activeQuantity`, `cycleCost`, `saleProceeds`, `freeQuantity` | Keep one `buyOrder`; introduce a cycle collection as the owner of SELL references and per-cycle accounting; keep pair totals as derived/reconciled projections |
-| BUY fill handler | `#handleBuyFilled` updates aggregate position, calls `#replaceSell`, then places next BUY | Create one cycle from the fully reconciled BUY; place its SELL without touching existing cycle SELLs; continue next BUY only after safe state update |
+| Pair state in `bot-free-roll.js` | `buyOrder` and one `sellOrder`; aggregate `activeQuantity`, `cycleCost`, `saleProceeds`, `freeQuantity` | Introduce managed BUY-order tracking plus a cycle collection; each BUY maps to its own cycle and each cycle owns its SELL; keep pair totals as derived projections |
+| BUY fill handler | `#handleBuyFilled` updates aggregate position, calls `#replaceSell`, then places next BUY | Resolve the specific BUY order, create its cycle after full fill, and place its SELL without touching other cycles; manage multiple BUY orders independently |
 | SELL fill handler | `#handleSellFilled` reads the single `state.sellOrder`, updates aggregate totals, and performs aggregate completion/allocation | Resolve the exact cycle by order identity; update and complete only that cycle |
 | Order execution | `order-execution.js` reads/writes `state.sellOrder`; `replaceSell` cancels the existing SELL before placing an aggregate replacement | Accept an explicit cycle/order context; place/cancel/replace one cycle's SELL without iterating or replacing other cycles |
 | Tracked orders | Reconciliation currently constructs tracked orders from `[buyOrder, sellOrder]` | Include the BUY and every cycle's current SELL; preserve terminal historical order IDs for fill/history reconciliation where needed |
@@ -441,15 +440,15 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 - [ ] **GRID-031 — Extend reconciliation snapshot for multiple tracked orders.** Accept BUY plus N cycle SELLs; retain strict validation of unknown broker orders and malformed records.
 - [ ] **GRID-032 — Extend fill reconciliation to cycle projections.** Rebuild per-cycle fill accounting from canonical fills; preserve trade-ID idempotency and actual commission facts.
 - [ ] **GRID-033 — Add cycle-aware recovery mapping.** Recover each live/terminal SELL attempt to exactly one cycle and refuse ambiguous or incomplete state.
-- [ ] **GRID-034 — Add multi-SELL fake-broker fixtures.** Deterministically simulate concurrent open SELLs, out-of-order fills, partial fills, cancellation races, duplicate events, missing history, and restart.
+- [ ] **GRID-034 — Add multi-order fake-broker fixtures.** Deterministically simulate multiple concurrent BUYs and SELLs, out-of-order fills, partial fills, cancellation races, duplicate events, and trading errors. Restart scenarios belong to the later restoration phase.
 
 ### Stage G4 — Configuration and observability (still disabled)
 
 - [~] **GRID-040 — Add explicit per-pair mode validation.** In progress: absent mode remains the legacy aggregated default; explicit `aggregated` is accepted; unknown modes are rejected; explicit `grid` is deliberately rejected by both trading-config validation and the bot constructor until execution, persistence, reconciliation, and recovery are integrated. Remaining: enable `grid` only after the full runtime and safety gates are complete.
 - [ ] **GRID-041 — Add cycle-aware journal events.** Stable cycle ID, order ID, event type, quantities, and accounting completeness; no raw broker payloads or secrets.
 - [ ] **GRID-042 — Add optional cycle statistics/debug snapshots.** Expose open/completed/paused cycle counts, per-cycle SELL state, reserved quantity, free inventory, and realized profit as derived values.
-- [ ] **GRID-043 — Add migration diagnostics.** Report why a pair is not eligible to switch from aggregated to Grid (open order, incomplete fill history, unreconciled balance, ambiguous legacy position).\n- [~] **GRID-044 — Add versioned atomic Grid state snapshots.** In progress: `grid-state-store.js` provides schema-version validation, JSON-safe snapshot validation, monotonic revisions, serialized writes, file sync, and same-directory atomic rename; tests cover missing/corrupt state, path safety, round-trip, and concurrent revision ordering. `grid-state-snapshot.js` now serializes/restores cycle maps, order intents, current BUY, fill ledger, trailing state, and configuration fingerprint while deliberately rebuilding derived accounting maps from the ledger. Remaining: wire persistence before/after state-changing operations and add restart/crash-window recovery tests. The store is not yet used by `FreeRollBot`.
-- [~] **GRID-045 — Add deterministic order intents and uncertain-submit resolution.** In progress: `grid-order-intents.js` creates stable 36-character Binance-compatible client IDs, immutable PREPARED intents, acknowledgement checks against returned broker order identity, and FOUND/ABSENT/UNKNOWN recovery decisions. `grid-order-execution.js` persists PREPARED intents before `createOrder`, submits using the deterministic client ID, attaches acknowledged BUY/SELL orders to state, and resolves found/absent/unknown outcomes without blind retries. Retry is permitted only for a PREPARED intent after the caller proves order-history completeness; an ACKNOWLEDGED intent missing from complete history fails closed. Remaining: wire the execution boundary to `FreeRollBot`, persist/recover pending intents at startup, normalize complete open/history windows, and add crash-window integration tests.
+- [ ] **GRID-043 — Add migration diagnostics.** Report why a pair is not eligible to switch from aggregated to Grid (open order, incomplete fill history, unreconciled balance, ambiguous legacy position).\n- [~] **GRID-044 — [Later phase] Add versioned atomic Grid state snapshots.** In progress: `grid-state-store.js` provides schema-version validation, JSON-safe snapshot validation, monotonic revisions, serialized writes, file sync, and same-directory atomic rename; tests cover missing/corrupt state, path safety, round-trip, and concurrent revision ordering. `grid-state-snapshot.js` now serializes/restores cycle maps, order intents, current BUY, fill ledger, trailing state, and configuration fingerprint while deliberately rebuilding derived accounting maps from the ledger. Remaining: wire persistence before/after state-changing operations and add restart/crash-window recovery tests. The store is not yet used by `FreeRollBot`.
+- [~] **GRID-045 — [Later phase] Add deterministic persisted order intents and uncertain-submit restoration.** In progress: `grid-order-intents.js` creates stable 36-character Binance-compatible client IDs, immutable PREPARED intents, acknowledgement checks against returned broker order identity, and FOUND/ABSENT/UNKNOWN recovery decisions. `grid-order-execution.js` persists PREPARED intents before `createOrder`, submits using the deterministic client ID, attaches acknowledged BUY/SELL orders to state, and resolves found/absent/unknown outcomes without blind retries. Retry is permitted only for a PREPARED intent after the caller proves order-history completeness; an ACKNOWLEDGED intent missing from complete history fails closed. Remaining: wire the execution boundary to `FreeRollBot`, persist/recover pending intents at startup, normalize complete open/history windows, and add crash-window integration tests.
 
 ### Stage G5 — Grid execution behind opt-in mode
 
@@ -458,10 +457,12 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 - [ ] **GRID-052 — Place independent SELL for each new cycle.** Use the cycle's own profitability plan and reservation; never cancel or resize other cycles' SELLs.
 - [ ] **GRID-053 — Handle cycle SELL fills and completion.** Resolve by order ID, apply actual fills, validate per-cycle net profit, and allocate exactly one `keepQuantity` per completed cycle.
 - [ ] **GRID-054 — Replace a SELL within its owning cycle only.** Preserve cycle accounting across canceled/partial attempts; prove old order terminal and fills reconciled before replacement.
-- [ ] **GRID-055 — Preserve one-BUY replenishment behavior.** After a BUY cycle is safely committed and its SELL placement/recovery state is known, maintain the next BUY under the existing trigger/readiness/funding rules. Do not create multiple BUY levels.
+- [ ] **GRID-055 — Implement multiple independent BUY orders.** Track and manage multiple BUY orders per pair without combining different BUYs into one cycle. The initial BUY follows the approved rule: immediate post-only `LIMIT_MAKER` when `makerPercent = 0`; existing price-trigger behavior when `makerPercent > 0`. Further BUY placement/replenishment scheduling requires an explicit follow-up decision; do not invent it.
 - [ ] **GRID-056 — Add Grid safety limits and exposure policy.** Before enabling repeated cycle creation, define a bounded maximum exposure/open-cycle policy. A cap must account for an already-live BUY that may fill; simply checking cycle count after a fill is insufficient. Fail closed when the next BUY could exceed the approved cap.
 
-### Stage G6 — Reconciliation, recovery, and migration hardening
+### Stage G6 — Later phase: persistence, restoration, and migration hardening
+
+**Deferred beyond the first working Grid milestone.** Do not block the initial in-process Grid implementation on persisted state restoration or restart recovery.
 
 - [ ] **GRID-060 — Integrate all-cycle startup reconciliation.** Reconstruct every cycle, BUY/SELL order, fill, commission, reservation, and free allocation before the pair can become ACTIVE.
 - [ ] **GRID-061 — Integrate reconnect and stream-gap recovery.** Reconcile all tracked SELLs and cycle states; no order creation while RECONCILING.
