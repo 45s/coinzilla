@@ -41,6 +41,7 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | Domain | Owned paths | Local instructions / roadmap |
 | --- | --- | --- |
 | Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
+| Market Simulator application | `apps/market-simulator/**` | `apps/market-simulator/AGENTS.md`, `apps/market-simulator/ROADMAP.md` |
 | Coin Farmer application | `apps/bot-coin-farmer/**` | `apps/bot-coin-farmer/AGENTS.md`, `apps/bot-coin-farmer/ROADMAP.md` |
 | Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
 | Brokers | `packages/brokers/**` | `packages/brokers/AGENTS.md`, `packages/brokers/ROADMAP.md` |
