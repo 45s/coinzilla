@@ -10,23 +10,75 @@
 **Existing strategy specification:** [README.md](./README.md)  
 **Existing engineering roadmap:** [ROADMAP.md](./ROADMAP.md)
 
+
+## Agreed foundational decisions (2026-11-01)
+
+This section records the decisions confirmed during the Grid design discussion. It overrides older conflicting assumptions in this roadmap.
+
+### Mode behavior
+
+| Configured mode | Order management |
+|---|---|
+| `aggregated` | One managed BUY and one managed SELL per pair |
+| `grid` | Multiple managed BUY orders and multiple independent SELL orders per pair |
+
+- Grid is selected explicitly in pair configuration.
+- Any pair may use Grid, regardless of `makerPercent`.
+- Maker fees/commissions affect execution economics and profitability checks only; they do not decide Grid eligibility.
+- Never automatically switch modes or silently fall back to aggregated behavior.
+- Grid BUY and SELL orders are independently managed. Do not cancel or resize an unrelated cycle's SELL when another BUY fills.
+
+### Initial BUY behavior
+
+- `makerPercent = 0`: use post-only `LIMIT_MAKER` and place the initial BUY immediately.
+- `makerPercent > 0`: use the existing price-trigger behavior for the initial BUY.
+- Do not add other startup conditions unless explicitly approved.
+
+### First working milestone
+
+- The immediate goal is a working in-process Grid trading lifecycle.
+- Persisted Grid-state restoration and restart recovery are explicitly deferred to a later phase.
+- Do not block the first working milestone on restore functionality or claim restart safety before it exists.
+- Multiple simultaneous BUYs are in scope. Do not reintroduce the earlier one-working-BUY restriction.
+- Exact BUY placement/replenishment scheduling beyond the initial-entry rule remains to be discussed; do not invent it.
+
+### Global trading fail-closed rule
+
+Any trading error pauses the affected pair or the entire bot according to its scope. Never silently swallow a trading error, continue with assumed state, or switch strategy. A pair-specific failure should not stop unrelated pairs that remain safe. Resume only after the cause is resolved and the affected state is verified safe. This rule applies to both aggregated and Grid modes.
+
+```mermaid
+flowchart TD
+    A[Pair configuration] --> B{Mode}
+    B -->|aggregated| C[One BUY + one SELL]
+    B -->|grid| D[Multiple BUYs + multiple SELLs]
+    C --> E[Shared trading safety]
+    D --> E
+    E --> F{Trading error?}
+    F -->|No| G[Continue]
+    F -->|Pair-specific| H[Pause pair]
+    F -->|Bot-wide| I[Pause bot]
+    H --> J[Resolve and verify]
+    I --> J
+    J --> K[Resume only when safe]
+```
+
 ---
 
 ## 1. Mission
 
 Introduce an optional **BUY-cycle Grid mode** to Free-Roll while preserving the existing aggregated recovery behavior as the default and as a supported mode.
 
-The first Grid release is deliberately narrow:
+The first working Grid release supports multiple managed BUY orders and multiple independent SELL orders per pair:
 
-- One standing BUY order per pair, as today.
 - Every fully filled BUY order creates one independent recovery cycle.
 - Every cycle owns its own recovery SELL order and accounting.
-- A later BUY fill must not cancel, resize, or replace an earlier cycle's SELL.
+- A later BUY fill must not cancel, resize, or replace an unrelated cycle's SELL.
 - Each successfully completed cycle retains its own `keepQuantity` as free inventory.
 - Different cycles may complete in any order.
-- All order, fill, commission, inventory, reconciliation, and recovery safety rules remain mandatory.
+- All order, fill, commission, inventory, and trading-safety rules remain mandatory.
+- Persisted state restoration and restart recovery are deferred; the first milestone focuses on a working in-process lifecycle.
 
-This is **not** a multi-level price-grid implementation. Multiple simultaneous BUY levels are explicitly out of scope.
+The exact BUY placement/replenishment schedule beyond the initial-entry rule is not yet specified. Do not impose a one-working-BUY restriction or invent additional scheduling rules.
 
 The migration must be incremental, test-first, feature-flagged, and reversible until Grid mode is explicitly enabled for a pair.
 
@@ -38,7 +90,7 @@ Grid mode changes the unit of recovery accounting:
 
 | Concern | Existing aggregated mode | BUY-cycle Grid mode |
 |---|---|---|
-| BUY orders | One working BUY per pair | One working BUY per pair |
+| BUY orders | One managed BUY per pair | Multiple managed BUY orders per pair |
 | Recovery unit | One pooled active recovery position | One independently tracked BUY cycle |
 | SELL orders | At most one aggregate SELL per pair | One independent SELL per open cycle |
 | New BUY fills | Reconcile/cancel/replace aggregate SELL | Create a new cycle; leave existing cycle SELLs untouched |
@@ -93,7 +145,7 @@ If cycles A and B each have an open 99 DOGE SELL and BUY C fills for 100 DOGE:
 - Do not cancel or resize SELL A.
 - Do not cancel or resize SELL B.
 - Create cycle C and its independent SELL C.
-- Preserve the one-working-BUY policy unless a separate future decision explicitly changes it.
+- Multiple BUY orders are supported in Grid; exact placement scheduling remains a separate decision.
 
 ### 3.4 SELL partially fills or is canceled
 
@@ -109,7 +161,7 @@ The existing wait-for-full-order-fill policy remains in force for strategy advan
 
 ### 3.5 Fees and quantity constraints
 
-The configured `makerPercent: 0` selects the existing post-only `LIMIT_MAKER` execution policy; it does not authorize assuming actual commissions are always zero. Actual commission amount and asset on every fill remain authoritative.
+The configured `makerPercent: 0` selects post-only `LIMIT_MAKER` and makes the initial BUY immediate; nonzero `makerPercent` uses the existing initial price-trigger behavior. This does not authorize assuming actual commissions are always zero. Maker-fee configuration never determines Grid eligibility. Actual commission amount and asset on every fill remain authoritative.
 
 For each cycle:
 
