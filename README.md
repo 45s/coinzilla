@@ -8,6 +8,8 @@ AI agents and contributors must follow [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.
 
 See [the contributing guide](docs/contributing.md), [domain ownership map](docs/workspace-package-map.md), and [engineering standards](ENGINEERING_STANDARDS.md).
 
+See the [architecture blueprint](docs/architecture/README.md) for system boundaries and recorded architecture decisions.
+
 ## Requirements
 
 - Node.js 22
