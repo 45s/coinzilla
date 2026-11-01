@@ -18,7 +18,7 @@ The `.mmd` files are editable Mermaid source. The application README embeds the 
 - [Component architecture](./diagrams/component-architecture.mmd)
 - [Per-market lifecycle](./diagrams/market-lifecycle.mmd)
 - [Standing BUY flow](./diagrams/buy-order-flow.mmd)
-- [Recovery SELL flow](./diagrams/sell-recovery-sequence.mmd)
+- [Recovery SELL flow](./diagrams/sell-recovery-flow.mmd)
 - [Execution accounting](./diagrams/execution-accounting-flow.mmd)
 - [Reconnect/restart recovery](./diagrams/recovery-sequence.mmd)
 - [Telegram notifications](./diagrams/notification-flow.mmd)
