@@ -119,10 +119,12 @@ BINANCE_API_KEY=...
 BINANCE_API_SECRET_KEY=...
 ```
 
-Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and disconnects on SIGINT/SIGTERM. A failed connection causes startup to fail; cleanup is attempted.
+Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown unsubscribes market data before disconnecting.
 
-**Order placement and strategy execution remain disabled.** The adapter exposes broker capabilities to application code, but Harvester does not yet subscribe to user-data events or place orders. User-data subscription must wait until durable reconciliation is implemented; the broker intentionally blocks state-changing operations while its recovery gate is closed.
+Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. The CLI currently uses a safe `WAIT` strategy policy: it receives prices but never creates orders. The strategy can be injected into `startHarvester({ strategy })` for tests or future strategy composition.
+
+Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. User-data subscription, order placement, and fill processing remain disabled until their workflows and recovery requirements are implemented. The broker intentionally blocks state-changing operations while its user-data recovery gate is closed.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, dependency injection, opt-in connection, graceful disconnect, and offline adapter/bootstrap tests. Not yet implemented: Trading Engine, fill-driven Portfolio, order lifecycle, durable recovery/reconciliation, Conservative strategy, and Aggressive strategy. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated trading-config loading, enabled-pair market-price subscriptions, domain market-price validation, application strategy handoff, safe WAIT policy, graceful unsubscribe/disconnect, and offline tests. Not yet implemented: full Trading Engine/order execution, fill-driven Portfolio, user-data recovery/reconciliation, Conservative strategy, and Aggressive strategy. See [ROADMAP.md](./ROADMAP.md).

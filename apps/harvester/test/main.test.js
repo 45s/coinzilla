@@ -13,7 +13,7 @@ test('reports successful configuration startup without claiming a workflow ran',
 
   assert.deepEqual(messages, [[
     'info',
-    'Harvester configuration validated; broker connection and trading are disabled.',
+    'Harvester configuration validated; broker connection and market data are disabled.',
   ]]);
 });
 

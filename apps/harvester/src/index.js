@@ -13,8 +13,8 @@ export async function main({
     const runtime = await start();
     logger.info(
       runtime.connected
-        ? 'Harvester configuration validated and Binance broker connected; trading remains disabled.'
-        : 'Harvester configuration validated; broker connection and trading are disabled.',
+        ? `Harvester configuration validated; Binance connected and subscribed to ${runtime.subscriptions.length} enabled market(s). Trading remains disabled.`
+        : 'Harvester configuration validated; broker connection and market data are disabled.',
     );
 
     if (runtime.connected && typeof runtime.stop === 'function') {
