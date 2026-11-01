@@ -19,6 +19,15 @@ These are strategy modes, not separate trading engines. Shared capabilities (mar
 Run from the repository root:
 
 ```sh
+cp apps/harvester/.env.example apps/harvester/.env.development
+pnpm --filter @coinzilla/harvester dev
+```
+
+Edit `.env.development` with your local credentials if needed. Keep this file local; do not commit it. The development script loads it using Node's native `--env-file` option, matching the Free-Roll app.
+
+Tests:
+
+```sh
 pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
