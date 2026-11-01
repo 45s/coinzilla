@@ -4,6 +4,7 @@ import { isValidEventName } from "./helpers/event-name.js"
 import { assertSupportedPayload, cloneAndFreezePayload } from "./helpers/payload.js"
 import { validateOptions } from "./helpers/options.js"
 import { canAcceptDeliveries } from "./helpers/delivery-capacity.js"
+import { assertObjectInput } from "./helpers/object-input.js"
 
 const ALL_EVENTS = Symbol("all-events")
 export class EventBus {
@@ -25,7 +26,18 @@ export class EventBus {
     this.closed = false
   }
 
-  publish({ name, source, data = {} } = {}) {
+  publish(input = {}) {
+    let name
+    let source
+    let data
+
+    try {
+      assertObjectInput(input, "Event publish")
+      ;({ name, source, data = {} } = input)
+    } catch (error) {
+      return toResult({ error })
+    }
+
     if (this.closed) {
       return toResult({
         error: new Error("EventBus is closed"),
@@ -89,7 +101,17 @@ export class EventBus {
     return toResult({ event })
   }
 
-  subscribe({ name, handler } = {}) {
+  subscribe(input = {}) {
+    let name
+    let handler
+
+    try {
+      assertObjectInput(input, "Event subscription")
+      ;({ name, handler } = input)
+    } catch (error) {
+      return toResult({ error })
+    }
+
     if (!isValidEventName(name)) {
       return toResult({
         error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
@@ -99,14 +121,33 @@ export class EventBus {
     return this.addSubscription({ name, handler })
   }
 
-  subscribeAll({ handler } = {}) {
+  subscribeAll(input = {}) {
+    let handler
+
+    try {
+      assertObjectInput(input, "Event subscribeAll")
+      ;({ handler } = input)
+    } catch (error) {
+      return toResult({ error })
+    }
+
     return this.addSubscription({
       name: ALL_EVENTS,
       handler,
     })
   }
 
-  addSubscription({ name, handler } = {}) {
+  addSubscription(input = {}) {
+    let name
+    let handler
+
+    try {
+      assertObjectInput(input, "Event subscription")
+      ;({ name, handler } = input)
+    } catch (error) {
+      return toResult({ error })
+    }
+
     if (this.closed) {
       return toResult({
         error: new Error("EventBus is closed"),
