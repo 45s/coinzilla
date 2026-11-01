@@ -41,10 +41,13 @@ The following are candidates for shared engine capabilities, subject to contract
 - Broker abstraction and exchange rule/precision handling.
 - BUY/SELL order submission, cancellation, and status tracking.
 - Fill ingestion and deduplication.
+- A fill-driven Portfolio containing spot positions, updated through `src/use-cases/update-portfolio.js`.
 - Actual commission accounting.
 - Balance and position visibility.
 - Order/fill journal and operational logging.
 - Trading readiness, pause, and unsafe-state handling.
+
+The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. See [Portfolio Domain](./domain/portfolio.md) for the proposed domain contract and open decisions.
 
 The engine owns reliable execution mechanics. A strategy owns decisions such as when, where, and how much to buy or sell. Avoid duplicating broker/order lifecycle code in each strategy.
 
@@ -68,5 +71,6 @@ Discuss and record these before implementing strategy behavior:
 6. How partial fills and concurrent fill/cancel events affect the order plan.
 7. What risk limits apply per pair and across the process.
 8. Whether both modes can run on the same pair/account simultaneously, or selection is exclusive.
+9. How the shared Portfolio represents overlapping assets, strategy allocations, commission assets, and duplicate executions; see the [Portfolio Domain](./domain/portfolio.md).
 
 Until these decisions are made, keep Aggressive mode as a documented target only. Do not invent defaults in code or configuration.
