@@ -30,11 +30,13 @@ test("fills a limit buy when candle low touches its price and accounts for quote
     setTimeoutFn: timers.setTimeoutFn, clearTimeoutFn: timers.clearTimeoutFn,
   })
   await broker.connect()
+  await broker.subscribeForPrices({ symbol: "DOGEUSDT", onPrice() {} })
   const order = await broker.createOrder({ symbol: "DOGEUSDT", side: "BUY", type: "LIMIT", quantity: "10", price: "0.85" })
   assert.equal(order.ok, true)
   assert.equal(order.data.status, "NEW")
   assert.equal((await broker.getBalances()).data.find((x) => x.asset === "USDT").locked, "8.585")
   const timer = [...timers.timers.values()][0]
+  assert.ok(timer)
   timers.timers.clear()
   timer.callback()
   const filled = (await broker.getOrderHistory()).data[0]
