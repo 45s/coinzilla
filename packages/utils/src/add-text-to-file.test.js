@@ -29,7 +29,7 @@ describe('addTextToFile', () => {
     for (const options of [null, [], 'invalid']) {
       await assert.rejects(addTextToFile(options), (error) => {
         assert.equal(error.message, 'Error appending data to file')
-        assert.equal(error.cause.message, 'Invalid \\"options\\" parameter')
+        assert.equal(error.cause.message, 'Invalid "options" parameter')
         return true
       })
     }
