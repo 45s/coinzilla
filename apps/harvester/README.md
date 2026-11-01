@@ -68,6 +68,12 @@ Do not add strategy parameters until their meaning and behavior have been agreed
 - Keep live exchange integration tests explicitly opt-in; the default test suite must not require credentials or place orders.
 - Do not claim restart recovery, exactly-once processing, or other guarantees until implemented and tested.
 
+## Startup entry point
+
+Run `pnpm --filter @coinzilla/harvester start` from the repository root. The `src/index.js` CLI entry point calls `src/bootstrap/start-harvester.js`, which loads and validates the trading configuration before returning the startup context. A read, parse, or validation error is reported once and sets a non-zero process exit code.
+
+The current startup context contains the validated configuration only. It intentionally does not start the trading engine or either strategy mode; their contracts and workflows remain under design. The command exits successfully after configuration validation and clearly reports that no processing workflow is configured yet.
+
 ## Current status
 
 The app foundation and initial config loading/validation exist. Trading-engine behavior, portfolio implementation, and both strategy modes are still in the design phase. See [ROADMAP.md](./ROADMAP.md).

@@ -5,7 +5,8 @@
   "description": "Harvester application workspace",
   "scripts": {
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage"
+    "test:coverage": "node --test --experimental-test-coverage",
+    "start": "node src/index.js"
   },
   "engines": {
     "node": ">=22.23.4"

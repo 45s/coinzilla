@@ -36,6 +36,7 @@
 
 - [x] Initialize the app as a private Node.js ESM workspace package.
 - [x] Add initial trading-config loading and pure structural validation.
+- [x] Add fail-fast startup bootstrap and CLI entry point; startup validates configuration but does not launch an unimplemented trading workflow.
 - [ ] Replace the copied Free-Roll config baseline with an agreed Harvester configuration schema.
 - [ ] Keep dependencies minimal and follow repository engineering standards.
 - [ ] Update this roadmap as decisions are closed and functionality is verified.
