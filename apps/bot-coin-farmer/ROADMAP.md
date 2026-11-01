@@ -85,7 +85,7 @@ The dependency direction is inward. Infrastructure implements the contracts in `
 
 **Acceptance:** app starts in no-trading mode with valid config; invalid config fails before broker order capability is exposed; partial startup cleans already-created resources; shutdown drains event/journal work; default tests require no network or credentials.
 
-**Current implementation note:** The package manifest, workspace importer, no-trading entry point, bootstrap lifecycle, JSON config loader/validator, EventBus/Journal/logger adapters and deterministic tests are now scaffolded. Broker connections, strategy workflows, market state and order placement are intentionally absent. CF-002/003/004 remain open; CF-015 still needs the supported Node/pnpm checks and CI integration before this phase can be accepted.
+**Current implementation note:** The package manifest, workspace importer, no-trading entry point, bootstrap lifecycle, JSON config loader/validator, EventBus/Journal/logger adapters and deterministic tests are now scaffolded. Broker connections, strategy workflows, market state and order placement are intentionally absent. CI has passed package tests on Node 22.23.4 and Node 24, workspace coverage, JavaScript syntax and dependency audit for the current PR head. CF-002/003/004 remain open; Phase 1 stays in progress until this work is merged and the remaining acceptance review is complete.
 
 ### Phase 2 — Canonical domain contracts and pure strategy kernel
 
