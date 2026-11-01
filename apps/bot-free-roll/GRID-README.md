@@ -402,14 +402,14 @@ Journal events should carry stable cycle and order identities. Do not log raw br
 
 ## 15. Acceptance gates
 
-Grid mode is not ready to enable until all of the following are true:
+Grid's first working in-process milestone is acceptable when all of the following are true:
 
 - All GRID roadmap stages required for the release are complete and merged into `develop`.
 - Existing aggregated behavior passes its full regression suite unchanged.
 - Cycle accounting is exact, deterministic, and based on actual fills/fees.
 - Multiple SELL reservations are proven non-overlapping.
 - Out-of-order SELL completion and cancel/fill races are covered.
-- Startup, reconnect, and restart reconstruct every cycle.
+- The first in-process milestone does not claim restart recovery; persistence and restart reconstruction are a later release gate.
 - Unknown orders and incomplete accounting fail closed.
 - Grid exposure limits include outstanding BUY exposure.
 - Fake-broker end-to-end tests pass.
@@ -418,7 +418,7 @@ Grid mode is not ready to enable until all of the following are true:
 - CI is green on a branch up to date with `develop`.
 - Grid enablement for a pair receives explicit approval.
 
-Passing unit tests alone is not production certification. This document does not authorize live trading.
+Passing unit tests alone is not production certification. Persistence/restart recovery, reconnect hardening, and production rollout remain later gates. This document does not authorize live trading.
 
 ## 16. Related documents and ownership
 
