@@ -202,6 +202,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/notifiers
 
+  apps/harvester: {}
+
   packages/brokers:
     dependencies:
       '@coinzilla/entities':
