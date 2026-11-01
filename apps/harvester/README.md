@@ -35,6 +35,14 @@ Use a ports-and-adapters architecture:
 
 The engine must not contain Conservative- or Aggressive-specific policy. Strategies must not depend on exchange SDKs. Broker responses and market data must be validated at infrastructure boundaries.
 
+See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters.
+
+### Portfolio domain
+
+A Portfolio is a collection of spot positions. Positions are updated from normalized, actual fills through the application use case `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings.
+
+See [Portfolio Domain](./docs/domain/portfolio.md) for the domain boundary, fill accounting flow, responsibilities, reliability requirements, and unresolved design decisions.
+
 ## Strategy documentation
 
 See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and unresolved design decisions.
@@ -62,4 +70,4 @@ Do not add strategy parameters until their meaning and behavior have been agreed
 
 ## Current status
 
-The app foundation and initial config loading/validation exist. Trading-engine behavior and both strategy modes are still in the design phase. See [ROADMAP.md](./ROADMAP.md).
+The app foundation and initial config loading/validation exist. Trading-engine behavior, portfolio implementation, and both strategy modes are still in the design phase. See [ROADMAP.md](./ROADMAP.md).
