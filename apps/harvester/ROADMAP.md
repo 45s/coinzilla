@@ -21,6 +21,7 @@
 - [ ] Define domain contracts for markets, orders, fills, balances, positions, and strategy decisions.
 - [x] Define the Harvester-owned broker port and implement the Binance infrastructure adapter around `@coinzilla/brokers`.
 - [x] Wire opt-in broker connection and graceful shutdown through bootstrap; add offline port, adapter, and lifecycle tests.
+- [x] Implement and compose the broker-backed `place-order` application use case; preserve unknown transport outcomes.
 - [ ] Implement market-data validation, user-data event handling, and recovery-gated trading workflows.
 - [ ] Implement validated market data and exchange trading-rule handling.
 - [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.

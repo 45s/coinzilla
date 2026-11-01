@@ -93,21 +93,33 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
 
-## Application use case boundary
+## Implemented application use case
+
+The application workflow is implemented in `src/use-cases/place-order.js`. It receives an order request and calls only the Harvester broker port. It does not construct a broker, apply strategy policy, or convert a thrown state-changing transport error into a definite failure result.
 
 ```js
 import { toResult } from "@coinzilla/utils"
 
-export const makePlaceOrder = ({ broker }) => {
-  return async function placeOrder({ order }) {
-    const result = await broker.placeOrder({ order })
-    if (!result.ok) return result
-    return toResult({ data: result.data })
+export function makePlaceOrder({ broker } = {}) {
+  if (broker === null || typeof broker?.placeOrder !== "function") {
+    throw new TypeError("makePlaceOrder requires a broker port with placeOrder()")
+  }
+
+  return async function placeOrder({ order } = {}) {
+    if (order === null || typeof order !== "object" || Array.isArray(order)) {
+      return toResult({
+        error: new TypeError("placeOrder requires an order object"),
+      })
+    }
+
+    return broker.placeOrder({ order })
   }
 }
 ```
 
-This remains an example of the intended use-case boundary; a production order use case is not yet enabled. Add domain validation and shared safety checks only through agreed canonical contracts. The strategy returns a decision; the Trading Engine/application invokes the use case; the use case executes through the port. The strategy never submits orders directly.
+The use case is composed by bootstrap and returned as `runtime.placeOrder` when the Binance broker is explicitly enabled. The broker result is preserved. A thrown timeout/disconnect error propagates because a state-changing request may have an unknown exchange outcome; callers must reconcile before retrying.
+
+This is the execution boundary only. The strategy/engine must still construct and approve a valid order request after applying domain rules and safety checks. The CLI does not automatically submit orders.
 
 ## Example: bootstrap composition
 
