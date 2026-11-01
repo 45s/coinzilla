@@ -25,6 +25,7 @@ test("rejects malformed symbols, non-positive prices, and invalid timestamps", (
   for (const priceEvent of [
     { ...valid, symbol: "btcusdt" },
     { ...valid, price: "0" },
+    { ...valid, price: "0.000" },
     { ...valid, price: "-1" },
     { ...valid, price: 1.25 },
     { ...valid, timestamp: -1 },
@@ -32,6 +33,18 @@ test("rejects malformed symbols, non-positive prices, and invalid timestamps", (
   ]) {
     assert.throws(() => createMarketPrice({ priceEvent }))
   }
+})
+
+test("accepts very small positive decimal strings without numeric conversion", () => {
+  const marketPrice = createMarketPrice({
+    priceEvent: {
+      symbol: "BTCUSDT",
+      price: "0.0000000000000000000000000000000000001",
+      timestamp: 123,
+    },
+  })
+
+  assert.equal(marketPrice.price, "0.0000000000000000000000000000000000001")
 })
 
 test("rejects missing price event", () => {
