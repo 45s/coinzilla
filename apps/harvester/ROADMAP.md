@@ -21,8 +21,9 @@
 - [x] Define the Harvester-owned broker port and implement the Binance infrastructure adapter around `@coinzilla/brokers`.
 - [x] Wire opt-in broker connection and graceful shutdown through bootstrap; add offline port, adapter, and lifecycle tests.
 - [x] Implement and compose the broker-backed `place-order` application use case; preserve unknown transport outcomes.
-- [ ] Implement market-data validation, user-data event handling, and recovery-gated trading workflows.
-- [ ] Implement validated market data and exchange trading-rule handling.
+- [~] Implement market-data validation, enabled-pair price subscriptions, and strategy handoff through the application use case (this task; complete after merge).
+- [ ] Implement user-data event handling and recovery-gated trading workflows.
+- [ ] Implement exchange trading-rule loading and validation (tick size, lot size, minimum notional).
 - [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.
 - [ ] Implement fill normalization, deduplication, and accounting from actual commissions.
 - [ ] Implement `src/domain/portfolio/` and `src/use-cases/update-portfolio.js` with deterministic tests.
@@ -40,7 +41,7 @@
 
 - [x] Initialize the app as a private Node.js ESM workspace package.
 - [x] Add initial trading-config loading and pure structural validation.
-- [x] Add fail-fast startup bootstrap and CLI entry point; startup validates configuration but does not launch an unimplemented trading workflow.
+- [~] Extend startup bootstrap to load config, subscribe enabled pairs, validate incoming market prices, and pass them to the safe default strategy (this task; complete after merge).
 - [x] Replace the copied Free-Roll config baseline with the agreed flat Harvester configuration schema: process-wide settings and per-pair capital allocation and trading parameters.
 - [ ] Keep dependencies minimal and follow repository engineering standards.
 - [ ] Update this roadmap as decisions are closed and functionality is verified.
