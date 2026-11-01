@@ -21,7 +21,7 @@ This catalog defines the proposed source tree and the responsibility of each mod
 | `domain/strategy/plan-buy.js` | Decide whether a BUY intent is valid for current market state, funds and existing reservations | Canonical market facts + state -> intent/refusal | Submit orders or reserve external funds itself |
 | `domain/strategy/approve-sell.js` | Single pure SELL profitability gate; return exact breakdown and refusal codes | Candidate qty/price, cost/recovery facts, fees/reserves, minProfit, rules -> approval/denial | Submit/cancel orders or fetch missing prices |
 | `domain/strategy/market-state.js` | Define state values and validate state shape | State data -> validated immutable state | I/O |
-| `domain/strategy/order-transition.js` | Purely decide allowed order/market transitions from canonical facts | Current state + event/facts -> next state/effects plan | Broker calls, notifications |
+
 | `domain/accounting/calculate-fill-accounting.js` | Interpret one canonical fill and its actual commissions into exact base/quote deltas | Fill + market assets -> accounting facts or incomplete result | Estimate actual commission from configured rates |
 | `domain/accounting/fill-ledger.js` | Immutable fill facts, stable identity, duplicate/conflict detection and deterministic projection | Existing ledger + Fill -> updated ledger / duplicate / discrepancy | Persist directly |
 | `domain/accounting/inventory-ledger.js` | Track strategy-owned active/free/reserved/executed-awaiting-reconciliation/external buckets | Ledger + order/fill/balance facts -> new ledger | Read total wallet balance and assume ownership |
