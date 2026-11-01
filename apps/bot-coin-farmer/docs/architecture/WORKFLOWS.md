@@ -1,8 +1,8 @@
-# Coin Farmer — Runtime and Trading Workflows
+# Coin Farmer — Application and Trading Workflows
 
 This document describes the intended end-to-end behavior of CF. All sequences are target workflows, not implemented functionality.
 
-## 1. Process startup
+## 1. Bootstrap and process startup
 
 1. Load JSON strategy configuration and environment secrets separately.
 2. Validate all configured markets, decimal strings, strategy limits and adapter settings.
