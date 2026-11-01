@@ -1,100 +1,126 @@
-# V1-to-successor Behavior Plan
+# Free-Roll V1 → Coin Farmer Behavior Map
 
-**Source application:** `apps/bot-free-roll`  
-**Successor application:** `apps/bot-coin-farmer`  
-**Status:** Initial mapping policy; detailed inventory pending
+**Reference:** `apps/bot-free-roll`  
+**Successor:** `apps/bot-coin-farmer`  
+**Purpose:** preserve approved strategy intent while independently designing and implementing CF.
 
-## 1. Purpose
+## 1. What V1 tells us about the strategy
 
-This document defines how to learn from V1 without coupling the successor to V1 implementation details.
+V1 is not a conventional grid bot. Its documented behavior is a coordinated accumulation/recovery cycle per market:
 
-V1 is the reference for current documented strategy intent, existing scenarios, and operational lessons. It is not automatically the specification for every implementation detail: source code may contain defects, incomplete work, or behavior that conflicts with the approved strategy documents.
+- Initial and ongoing market reference is last traded price.
+- A next BUY limit is calculated from the initial reference or last qualifying BUY price using `priceStepPercent`.
+- The bot normally maintains a standing BUY and a recovery SELL simultaneously when safe.
+- A qualifying new BUY changes the active position and requires the old recovery SELL to be canceled and reconciled before a replacement is calculated.
+- The recovery SELL must cover invested/recovery amount, all applicable fees and configured minimum net profit.
+- `keepQuantity` is retained as free inventory per completed recovery cycle, not per BUY.
+- Free inventory is permanently excluded from later strategy quantities.
+- Actual fills and reported commissions are the source of accounting truth; order acknowledgement and configured fee rates are not actual execution facts.
+- The current approved V1 policy waits for full order completion before advancing the strategy step, while still recording individual partial fills.
+- The strategy does not guarantee a profitable fill or a completed sale; it must refuse unsafe/under-profitable actions.
 
-Coin Farmer must own its behavior specification and tests.
+Read the complete [V1 strategy specification](../../../bot-free-roll/README.md), not just this summary.
 
 ## 2. Source-of-truth order
 
-For understanding V1:
+For behavior discovery:
+1. V1 `README.md`: approved strategy behavior and explicit open decisions.
+2. V1 `ROADMAP.md`: safety invariants and engineering backlog.
+3. V1 `CURRENT_STATE.md`: dated source audit; verify every finding against the current source.
+4. V1 source/tests: evidence of implementation and regression scenarios, not automatic approval of every implementation behavior.
+5. Repository `ENGINEERING_STANDARDS.md` and `AI_AGENT_WORKFLOW.md`: mandatory for CF.
 
-1. `apps/bot-free-roll/README.md` — documented strategy behavior and explicit rules.
-2. `apps/bot-free-roll/ROADMAP.md` — engineering invariants, safety requirements, and backlog.
-3. `apps/bot-free-roll/CURRENT_STATE.md` — dated source audit; findings must be rechecked against the audited ref.
-4. V1 source and tests — evidence of current implementation and regression scenarios, not automatic approval of every behavior.
-5. Repository engineering standards and AI-agent workflow — mandatory across both apps.
+If documents conflict, record the conflict and ask a focused question. Do not silently copy code behavior over a documented strategy rule.
 
-If these sources conflict, record the conflict and ask for a focused decision. Do not resolve it by copying whichever implementation is easiest.
+## 3. Strategy rule mapping
 
-## 3. Classification for every discovered behavior
+| Area | V1 documented behavior / evidence | CF target | Status |
+|---|---|---|---|
+| Product strategy | Free-Roll accumulates free coins while recovering capital and covering fees | Describe as fill-driven accumulation/recovery, not grid trading | Carry forward as initial strategy scope |
+| Market scope | Spot trading; market configured by trading symbol | Canonical Market with explicit base/quote assets; venue symbol mapping stays in adapter | Design target |
+| Initial price | Last traded price is initial reference | Canonical last-trade observation with timestamp/quality | Preserve; freshness policy needs decision |
+| BUY step | `referencePrice * (1 - priceStepPercent / 100)`; next reference is last qualifying BUY | Pure exact-decimal buy-price policy | Preserve |
+| Standing orders | Maintain next BUY and profitable SELL together whenever state allows | Coordinator prevents duplicate orders/reservations and tracks each order independently | Preserve intended outcome; redesign workflow |
+| BUY quantity | Configured `orderQuantity` | Exact Quantity and TradingRules validation | Preserve; decimal-string config |
+| SELL price | Must meet cumulative recovery, actual fees and `minProfit` | One pure SELL approval function with exact breakdown/refusal codes | Preserve safety; audit detailed formula before coding |
+| Free inventory | `keepQuantity` once per completed profitable recovery cycle | Separate permanently retained inventory bucket | Preserve |
+| Partial fills | Record actual fills; do not advance strategy step until order fully filled | Fill ledger updates immediately; workflow waits for terminal/full order condition | Preserve |
+| BUY fill before SELL | Cancel old SELL, reconcile final state/fills, recalculate and replace | Explicit cancel/reconcile/replace workflow | Preserve safety |
+| SELL fill before next BUY | Verify actual net result; allocate free quantity only after full profitable recovery | Recovery-cycle completion transition | Preserve |
+| Fees | Actual per-fill fee asset/amount; quote/base supported; third asset rejected/pauses if unexpected | Exact Commission entries with COMPLETE/PARTIAL/UNKNOWN semantics | Preserve safety |
+| Market data | Last trade, not bid/ask substitute | Market-data port includes source time, stream health and stale/gap state | Preserve source; define quality thresholds |
+| Manual wallet activity | Deposits/transfers/manual trades remain external; unexplained withdrawal/delta pauses market | External/unmanaged inventory bucket; never silently adopt | Preserve |
+| Readiness | Six target states INITIALIZING, READY, ACTIVE, RECONCILING, PAUSED_UNSAFE, STOPPED | Explicit per-market state machine | Preserve state contract |
+| Restart | Must reconcile; persistence still incomplete in V1 | Durable repository + broker reconciliation before live resume | Improve in successor; database TBD |
+| Notifications | Optional Telegram for fill/pause/recovery/lifecycle events | Telegram adapter over canonical application events | Reuse existing package |
 
-Each V1 behavior or rule must be classified before it is implemented in Coin Farmer:
+## 4. V1 implementation inventory to study
 
-| Classification | Meaning | Successor treatment |
+| V1 module | What it currently contains | CF learning target |
 |---|---|---|
-| Preserve | Explicitly documented and still approved | Reimplement independently and add successor tests |
-| Preserve with a new implementation | Required outcome is approved, but V1 mechanism is unsuitable | Design a new contract/workflow that preserves the outcome |
-| Correct after approval | Evidence shows a defect or unsafe behavior | Document defect, proposed correction, and approval before changing semantics |
-| Review | Ambiguous, contradictory, or dependent on unresolved accounting/product policy | Do not implement until resolved |
-| Do not carry forward | Accidental behavior, obsolete mechanism, or known unsafe shortcut | Exclude and record why |
+| `src/bot/bot-free-roll.js` | Large coordinator: lifecycle, per-market state, queues, stream handling, recovery, order orchestration | Identify use cases; do not copy as a single CF class |
+| `src/bot/order-execution.js` | Order create/cancel/replace effects | Trading workflow and port boundaries |
+| `src/bot/event-handling.js` | Price/user-data event intake and routing | Adapter mapping and application dispatch |
+| `src/bot/fill-ledger.js` | Immutable fill facts, duplicate/conflict checks | Exact idempotent fill-ledger contract |
+| `src/bot/fill-reconciliation.js` | Canonical fill acceptance and exact projection transition | Fill application workflow/domain accounting |
+| `src/bot/market-inventory-ledger.js` | Per-market strategy and unmanaged inventory projections | Inventory ownership and conservation |
+| `src/bot/inventory-allocation.js` | Free quantity allocation | Recovery-cycle domain rule |
+| `src/bot/reconciliation-snapshot.js`, `recovery.js` | Snapshot validation, tracked-order/fill recovery | Recovery workflow and completeness contract |
+| `src/bot/helpers/decimal.js`, `accounting.js`, `order-planning.js`, `trading-rules.js` | Exact arithmetic and strategy planning helpers | Reuse shared exact primitives; independently test policy |
+| `src/index.js` | Resource composition, startup rollback, signal/shutdown ordering | Runtime lifecycle |
+| `src/prepare-broker.js` | Binance WebSocket broker setup | Binance adapter implementation |
+| `src/prepare-telegram-notifications.js` | Optional Telegram setup/event subscription | Telegram adapter |
+| `src/prepare-journal.js` | Event journal setup | Journal adapter |
 
-A defect fix must not be disguised as a harmless refactor. A strategy change must not be hidden inside an architecture task.
+## 5. Reuse decisions
 
-## 4. Initial behavior areas to inventory
+### Reuse shared public contracts
 
-The detailed rows below are discovery work, not an exhaustive final specification.
+Current `@coinzilla/entities` exports include `Asset`, `Market`, `Money`, `Quantity`, `CanonicalOrder`, `Commission`, `Fill`, `Balance`, `TradingRules`, `BrokerCapabilities`, and `BrokerResult`. Review their current constructors/tests and use them where semantics fit. Do not duplicate them inside CF.
 
-| Area | V1 evidence to inspect | Coin Farmer design output |
-|---|---|---|
-| Configuration | Strategy settings, pair settings, validation, startup checks | Approved config schema, exact units, validation and migration policy |
-| Market data | Price source, subscription lifecycle, freshness and gaps | Canonical market observation contract and stale-data policy |
-| BUY workflow | Initial entry, standing buy order, buy-step calculation, order type | Explicit buy decision rules and order lifecycle |
-| SELL workflow | Recovery threshold, fee coverage, minimum net profit, retained free quantity | Pure profitability policy and refusal reasons |
-| Executions | Order acknowledgements, partial/full fills, trade IDs, duplicate events | Canonical fill identity and idempotent application |
-| Commissions | Quote/base fees, zero fees, multiple fees, third-asset behavior | Per-fill fee facts and supported-fee policy |
-| Inventory | Active, free, reserved, external, locked balances | Inventory ledger and reservation invariants |
-| Pair lifecycle | Start, active, paused, reconciling, stop and resume behavior | Explicit pair state machine and allowed transitions |
-| Recovery | Disconnect, reconnect, ambiguous requests, restart | Reconciliation contract and operator resume rules |
-| Notifications | User-facing status, failure and recovery messages | Stable diagnostic and notification events |
-| Persistence | What state is stored, when and how it is restored | Versioned state model and durability/replay contract |
+Current `@coinzilla/brokers` exports Binance WebSocket broker/config and `CoreBroker`. The latter is a base class, not automatically the final app port contract. CF's initial adapter should map the concrete broker into narrow CEX-neutral ports. A later shared broker-port proposal may be appropriate if multiple consumers need the same contract.
 
-## 5. Reuse policy
+Current `@coinzilla/notifiers` exports Telegram notifier and subscription helpers. Use it behind CF's notification adapter.
 
-### Reuse by shared public contract
+Current `@coinzilla/event-bus` and `@coinzilla/journal` already serve V1. Use public APIs through adapters; do not treat the journal as durable strategy persistence.
 
-Prefer existing Coinzilla packages when their public API already expresses the needed stable contract and satisfies successor requirements. Audit the contract first; package names alone do not prove suitability.
+### Reimplement app-owned behavior
 
-### Reimplement application-owned behavior
+Strategy decisions, application workflows, per-market state orchestration, and CF-specific state ownership belong to CF. They may be informed by V1 source/tests, but CF must not import V1 source at runtime.
 
-Strategy policy, application workflows, and app-specific orchestration belong to Coin Farmer. They may be informed by V1 algorithms and tests but must not import V1 modules.
+### Do not copy known defects
 
-### Request shared-package changes through the owner
+V1's dated current-state audit reports gaps and regressions around financial Number conversion, fill/commission completeness, inventory ownership, cancellation races, and restart recovery at its audited ref. Recheck source before relying on each finding. CF should meet the exactness and fail-closed requirements directly, not reproduce known shortcuts for parity.
 
-If a reusable entity or broker capability is missing or inadequate, describe the consumer need and ask the owning package to design and implement its contract. Do not change another domain's source or duplicate its model locally as a shortcut.
+## 6. Behavior classification before implementation
 
-### Do not copy defects
+Every discovered rule must be marked:
 
-The current-state audit identifies incomplete exact-decimal integration, Number-based financial paths, and missing fill/commission reconciliation capabilities at its audited ref. Recheck the source before relying on a finding. Do not reproduce a known unsafe shortcut simply to match V1 runtime behavior.
+- **PRESERVE** — explicit, approved strategy rule; reimplement independently.
+- **PRESERVE_OUTCOME_REDESIGN_MECHANISM** — preserve result but change architecture/mechanism.
+- **FIX_AFTER_APPROVAL** — confirmed defect or unsafe behavior; document correction and obtain approval if semantics change.
+- **REVIEW** — ambiguous or contradictory; no implementation until resolved.
+- **DO_NOT_CARRY_FORWARD** — accidental/obsolete/unsafe implementation behavior; record reason.
 
-## 6. Required behavior mapping artifact
+Required mapping record fields:
+- Rule ID.
+- V1 document/module/test reference.
+- Documented expected outcome.
+- Observed current implementation outcome.
+- Classification.
+- CF module/workflow owner.
+- Acceptance test(s).
+- Decision/ADR reference if changed.
 
-Before the first Coin Farmer trading workflow is implemented, maintain a table with at least:
+## 7. Open strategy decisions to resolve before dependent code
 
-- Behavior ID.
-- V1 source document/module/test reference.
-- Current documented rule.
-- Actual observed V1 implementation behavior.
-- Classification from section 3.
-- Coin Farmer requirement and owner.
-- Acceptance tests.
-- Open question / decision reference.
+The V1 README/roadmap explicitly leaves some questions open. CF must not silently decide them:
+- Market-data freshness thresholds, stale observation policy and stream-gap behavior.
+- Sell-order replacement/repricing when no new BUY fills.
+- Available capital and insufficient-funds behavior for the next standing BUY.
+- Exact restart/reconciliation policy and required durable state.
+- Cost-basis allocation details where V1 says not to redesign without discussion.
+- Any change to the current full-fill-before-next-strategy-step rule.
+- Any expansion beyond the initial accumulation/recovery strategy.
 
-A behavior is not considered mapped merely because a source file has been read. The outcome and testable acceptance condition must be explicit.
-
-## 7. Acceptance principles
-
-- Coin Farmer has independent tests for every preserved strategy rule.
-- Safety invariants are tested at domain and workflow boundaries.
-- Financial calculations use exact values and boundary-focused tests.
-- Fill and commission accounting is tested with partial fills, duplicate/late events, explicit zero fees, and supported fee assets.
-- Recovery is tested with incomplete history, unknown mutation outcomes, reconnects, and restart replay.
-- No V1 import is required to run, test, build, or start Coin Farmer.
-- No live-trading cutover occurs until the user explicitly approves the acceptance evidence and release plan.
+Resolve each only when it blocks a specific roadmap phase. Keep the question focused; do not bundle unrelated strategy redesign into architecture implementation.
