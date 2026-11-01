@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 
+const testLogger = { info() {}, error() {} };
+
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = { settings: { minProfit: 0.01 }, pairs: { ZROUSDT: { enabled: true } } };
   const configSource = '/etc/harvester/trading-config.json';
@@ -9,6 +11,7 @@ test('loads configuration before returning the startup context', async () => {
 
   const context = await startHarvester({
     configSource,
+    logger: testLogger,
     loadConfig: async (source) => {
       calls.push(source);
       return tradingConfig;
@@ -25,6 +28,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 
   await assert.rejects(
     startHarvester({
+      logger: testLogger,
       loadConfig: async () => {
         throw startupError;
       },
@@ -34,7 +38,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 });
 
 test('loads the default validated trading configuration', async () => {
-  const context = await startHarvester();
+  const context = await startHarvester({ logger: testLogger });
 
   assert.ok(context.tradingConfig.pairs.ZROUSDT);
 });

@@ -6,8 +6,8 @@
   "scripts": {
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
-    "start": "node src/index.js",
-    "dev": "node --env-file=.env.development src/index.js"
+    "start": "node start.js",
+    "dev": "node --env-file=.env.development start.js"
   },
   "engines": {
     "node": ">=22.23.4"
@@ -15,7 +15,6 @@
   "type": "module",
   "dependencies": {
     "@coinzilla/brokers": "workspace:*",
-    "@coinzilla/entities": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   }
 }

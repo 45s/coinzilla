@@ -2,18 +2,28 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { main } from '../src/index.js';
 
-test('reports successful configuration startup without claiming a workflow ran', async () => {
+test('injects the logger into startup and reports successful configuration', async () => {
   const messages = [];
   const logger = {
-    info: (message) => messages.push(['info', message]),
-    error: (...args) => messages.push(['error', ...args]),
+    info: (record) => messages.push(['info', record]),
+    error: (record) => messages.push(['error', record]),
   };
+  let startupOptions;
 
-  await main({ start: async () => ({}), logger });
+  await main({
+    start: async (options) => {
+      startupOptions = options;
+      return {};
+    },
+    logger,
+  });
 
+  assert.equal(startupOptions.logger, logger);
   assert.deepEqual(messages, [[
     'info',
-    'Harvester configuration validated; broker connection and market data are disabled.',
+    {
+      message: 'Harvester configuration validated; broker connection and market data are disabled.',
+    },
   ]]);
 });
 
@@ -22,8 +32,8 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   const startupError = new Error('Invalid trading config');
   const messages = [];
   const logger = {
-    info: (message) => messages.push(['info', message]),
-    error: (...args) => messages.push(['error', ...args]),
+    info: (record) => messages.push(['info', record]),
+    error: (record) => messages.push(['error', record]),
   };
 
   t.after(() => {
@@ -39,5 +49,15 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  assert.deepEqual(messages, [['error', 'Harvester startup failed.', startupError]]);
+  assert.deepEqual(messages, [[
+    'error',
+    {
+      message: 'Harvester startup failed.',
+      error: {
+        name: startupError.name,
+        message: startupError.message,
+        stack: startupError.stack,
+      },
+    },
+  ]]);
 });
