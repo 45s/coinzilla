@@ -8,17 +8,14 @@ export function formatLogContent(data) {
   }
 
   try {
-    const serialized = JSON.stringify(data, null, 2)
-    if (serialized !== undefined) {
-      return serialized
+    // Preserve JSON.stringify's existing undefined result for unsupported
+    // top-level values such as undefined and symbols.
+    return JSON.stringify(data, null, 2)
+  } catch {
+    try {
+      return String(data)
+    } catch {
+      return '[Unserializable log data]'
     }
-  } catch {
-    // Fall back to a safe string representation below.
-  }
-
-  try {
-    return String(data)
-  } catch {
-    return '[Unserializable log data]'
   }
 }
