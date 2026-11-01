@@ -58,9 +58,9 @@ The maximum price drop is measured from the average price of actually filled BUY
 
 - A BUY fill makes the actually executed quantity available in the Aggressive strategy's shared inventory.
 - SELL creation depends on the **cumulative filled percentage of each individual BUY order**:
-  - If that BUY order is **more than 50% filled**, the strategy may create a SELL for newly filled, unreserved quantity once its notional value is **strictly greater than $5 USD equivalent**.
+  - If that BUY order is **more than 50% filled**, create a separate SELL for newly filled, unreserved quantity when that sellable quantity has a notional value **strictly greater than $5 USD equivalent**.
   - If that BUY order is **50% filled or less**, do not create a SELL from that partial fill; wait until the BUY order is fully filled.
-  - The $5 threshold is a minimum for creating the SELL, not a target order size. If eligible filled quantity is not yet worth more than $5, wait until enough eligible quantity accumulates or the BUY order completes.
+  - The $5 threshold is a minimum for creating the SELL, not a target order size. If eligible filled quantity is not yet worth more than $5, keep it available in the shared inventory and wait until enough unreserved quantity accumulates to meet the threshold.
 - When eligible quantity is ready to sell, create a **separate SELL order**. Do not increase or amend an existing SELL order to absorb this BUY fill.
 - Multiple SELL orders may remain active simultaneously.
 - SELL orders use the shared inventory pool; they do not own separate, exclusive coin lots tied permanently to individual BUY orders.
@@ -168,12 +168,12 @@ The following questions remain open and must be answered before implementation w
 1. What exact percentage-step calculation and market-price observation should be used when determining crossed grid levels? BUY tick rounding down and SELL tick rounding up are agreed.
 2. What is the exact maximum-price-drop calculation, using the average price of actually filled BUY orders as its baseline?
 3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
-5. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
-6. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
-7. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
-8. Can both strategy modes run on the same pair/account simultaneously, or is strategy selection exclusive per market?
-9. How are shared quote assets and inventory allocated across different markets and strategy modes?
-10. How are third-asset commissions represented and valued?
-11. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
+4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
+5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
+6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
+7. Can both strategy modes run on the same pair/account simultaneously, or is strategy selection exclusive per market?
+8. How are shared quote assets and inventory allocated across different markets and strategy modes?
+9. How are third-asset commissions represented and valued?
+10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
