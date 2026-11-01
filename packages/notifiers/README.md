@@ -12,6 +12,8 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
         telegram/
           index.js
           telegram-notifier.js
+          telegram-validation.js
+          safe-error-message.js
           telegram-event-subscriber.js
           format-telegram-notification.js
           *.test.js
@@ -107,7 +109,8 @@ High-volume events such as order.execution_report are intentionally excluded. Th
 - **Transport isolation:** Telegram is an event-bus side effect. It must never control trading state, order placement, reconciliation, or strategy decisions.
 - **No secret leakage:** tokens are not included in thrown transport errors. Raw exchange events, stack traces, API keys, and arbitrary event fields are not formatted into messages.
 - **Bounded input:** event fields are normalized, control characters are removed, and each dynamic field is length-limited before formatting.
-- **Response validation:** HTTP response shape, Telegram's ok flag, and the returned message_id are validated. Malformed success responses are failures, not false positives.
+- **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Array-shaped or otherwise malformed success responses are failures, not false positives.
+- **Validation isolation:** configuration validation, message validation, and bounded credential-redacting error sanitization are pure functions in focused modules, independently testable without network access.
 - **Timeout:** requests use AbortSignal.timeout(); the default is 10 seconds. The timeout is configurable and validated.
 - **Serialized sends:** at most one Telegram HTTP request is in flight per subscriber. maxPending defaults to 1,000 and limits queued plus active deliveries. Overflow is reported and rejected/dropped according to the configured logger/event-bus error path; it does not create an unbounded local queue.
 - **Failure handling:** when a logger is supplied, delivery failures are reported once through that logger. Without one, the rejected handler promise is left for the event bus's error reporter. A logging failure does not poison the delivery queue.

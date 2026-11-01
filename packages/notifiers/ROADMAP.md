@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). The only outstanding validation is one manually initiated message to a dedicated Telegram test chat.  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). A follow-up validation-hardening audit is in progress; the live Telegram smoke test remains an operator-only action.  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -95,6 +95,17 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [ ] Add bounded retry/backoff and rate-limit handling if a consumer requires it.
 - [ ] Add a persistent outbox only when crash-safe delivery is a product requirement and an appropriate storage owner exists.
 - [ ] Add metrics/diagnostics only when their public contract is justified by production usage.
+
+## Phase 7 — Validation modularity and malformed-boundary hardening
+
+- [~] Extract Telegram configuration validation, message validation, and credential-safe error sanitization from the transport class into focused pure modules.
+- [~] Reject array-shaped HTTP responses, Bot API payloads, and success result objects rather than accepting structurally invalid objects.
+- [~] Add direct unit coverage for pure validation and error-sanitization helpers, including hostile coercion and encoded-token redaction.
+- [ ] Extend the package coverage gate to include the extracted modules and pass the package coverage threshold.
+- [ ] Verify package, workspace, syntax, and required GitHub Actions checks on the final PR head before merge.
+- [ ] Review final public documentation and update this roadmap with verified CI evidence after merge.
+
+**Acceptance:** the transport class coordinates network I/O only; all pure input/error transformations are independently testable; malformed provider responses fail closed; existing public exports and delivery behavior remain compatible.
 
 ## Decision log
 
