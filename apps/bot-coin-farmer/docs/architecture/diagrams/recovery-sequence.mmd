@@ -1,21 +1,21 @@
 sequenceDiagram
   participant Runtime
-  participant WF as Recovery workflow
-  participant Broker as Broker adapter
-  participant Store as Coin Farmer persistence
+  participant Workflow as Recovery workflow
+  participant Repository as StateRepository
+  participant Broker as CEX-neutral broker ports
   participant Domain as Domain invariants
 
-  Runtime->>WF: Startup / reconnect / uncertain outcome
-  WF->>Domain: Mark pair not trade-ready
-  WF->>Store: Load versioned local snapshot
-  WF->>Broker: Fetch balances, open orders, order history, fills, rules
-  Broker-->>WF: Canonical facts + completeness metadata
-  WF->>Domain: Validate identities, fees, reservations, balances
-  WF->>Domain: Replay missing fills idempotently
-  Domain-->>WF: Reconciled / mismatch / incomplete
-  alt Complete and consistent
-    WF->>Store: Persist reconciled checkpoint
-    WF-->>Runtime: Ready only after explicit readiness checks
-  else Unknown or inconsistent
-    WF-->>Runtime: Remain paused; expose actionable reason
+  Runtime->>Workflow: Restart / reconnect / stream gap / unknown mutation
+  Workflow->>Domain: Set market to RECONCILING; block order mutations
+  Workflow->>Repository: Load durable snapshot if available
+  Workflow->>Broker: Fetch balances, open orders, order history, fills and rules
+  Broker-->>Workflow: Canonical facts + completeness metadata
+  Workflow->>Domain: Validate identity, fees, reservations and inventory ownership
+  Workflow->>Domain: Replay missing fills idempotently
+  Domain-->>Workflow: Consistent / incomplete / mismatch
+  alt All required evidence complete
+    Workflow->>Repository: Persist reconciled checkpoint
+    Workflow-->>Runtime: READY or ACTIVE from reconstructed state
+  else Unknown or inconsistent evidence
+    Workflow-->>Runtime: PAUSED_UNSAFE; actionable reason; no order mutations
   end

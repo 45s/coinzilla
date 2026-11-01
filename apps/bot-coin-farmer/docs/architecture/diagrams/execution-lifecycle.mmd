@@ -1,24 +1,17 @@
 sequenceDiagram
-  participant CEX as Exchange
-  participant BA as Broker adapter
-  participant WF as Application workflow
-  participant DP as Domain policy
-  participant Ledger as Inventory / accounting
-  participant Store as Persistence port
+  participant Market as Market-data adapter
+  participant App as Application workflow
+  participant Policy as Strategy domain
+  participant Broker as Trading port
+  participant Ledger as Fill / inventory ledger
 
-  CEX->>BA: Market observation
-  BA->>WF: Canonical observation
-  WF->>DP: Evaluate current state and market facts
-  DP-->>WF: Decision or refusal reason
-  WF->>Ledger: Validate and reserve resources
-  WF->>BA: Submit canonical order request via port
-  BA->>CEX: Exchange-specific order request
-  CEX-->>BA: Order acknowledgement / rejection
-  BA-->>WF: Normalized order outcome
-  Note over WF,Ledger: Acknowledgement is not an execution
-  CEX->>BA: Actual fill event(s)
-  BA->>WF: Canonical fill(s) with exact fee facts
-  WF->>Ledger: Apply idempotently by stable fill identity
-  Ledger->>Store: Persist state / ledger checkpoint
-  WF->>DP: Re-evaluate only from reconciled facts
-  DP-->>WF: Next decision or safe refusal
+  Market->>App: Canonical last-trade observation
+  App->>Policy: Evaluate market state and BUY/SELL policy
+  Policy-->>App: Order intent or refusal
+  App->>Broker: Submit/cancel only after safety gates
+  Broker-->>App: Acknowledgement / rejection / unknown outcome
+  Note over App,Ledger: Acknowledgement never creates economic accounting
+  Broker-->>App: Canonical order update and actual fills
+  App->>Ledger: Apply immutable fills idempotently
+  Ledger-->>App: Updated state or discrepancy
+  App->>Policy: Re-evaluate only after required order reconciliation
