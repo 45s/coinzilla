@@ -41,13 +41,18 @@ The exchange's post-only and price/quantity constraints still apply. The Trading
 - The first BUY level follows the cycle-start rule above: with `makerPercent = 0`, request a post-only BUY at the current market price; with nonzero `makerPercent`, place the first BUY below market using `priceStep`.
 - Further BUY levels are calculated as a fixed grid from the first level. For example, with a 1% step and a first level at 100, the grid levels are 100, 99, 98, 97, and so on.
 - While the market moves down or remains within the current grid's upward-repricing threshold, existing BUY orders remain at their original prices. The grid does not trail the market downward.
-- If the market rises by at least one `priceStep` from the grid's current reference price, cancel the unfilled BUY orders and rebuild the entire BUY grid around the updated market price.
+- If the market rises by at least one `priceStep` from the grid's current reference price, rebuild the grid by shifting its reference upward by the full number of crossed `priceStep` levels. For example, a grid referenced at 100 with a 1% step that is repriced after the market reaches 103 is rebuilt around 103.
+- Every lower BUY level is calculated directly from the grid's first/reference BUY price, not compounded from the previous level. For example, a 1% grid referenced at 100 has levels 100, 99, 98, 97, and so on.
+- A grid rebuild preserves the configured grid depth only if the investment limit allows it; otherwise, determine the maximum number of levels the limit would permit. The agreed behavior is to place **no replacement grid** unless the entire configured grid fits.
+- There is exactly **one BUY grid per market**. It may contain a mixture of partially filled and unfilled BUY orders. Repricing replaces that grid; it never creates a second, overlapping grid.
+- Before replacing the current grid, check whether the complete replacement grid fits within the investment limit. If it does not fit, leave the current grid unchanged. If it fits, cancel/replace the current grid as one logical grid-replacement operation, accounting for fills that arrive during cancellation.
+- For the investment-limit check, count already invested quote plus the remaining unfilled quote commitment of the proposed single grid. Existing unfilled orders belong to the current grid and are replaced, not counted as an additional second grid.
 - Existing SELL orders are **not** cancelled or recreated during a BUY-grid rebuild; they remain unchanged.
-- Multiple BUY orders may be active simultaneously for the same market. There is no configured maximum number of active BUY orders in the agreed design.
+- Multiple BUY orders may be active simultaneously as levels within this one grid. There is no configured maximum number of active BUY orders in the agreed design.
 - New BUY orders and rebuilt grids are bounded by the configured maximum total invested quote amount.
 - A configured maximum price-drop limit is also a risk boundary. Reaching either the investment limit or the price-drop limit triggers the Conservative fallback described below.
 
-The exact maximum price-drop calculation and reference baseline remain open. The precise grid anchoring/rounding rules must respect exchange tick size and are still to be specified.
+The exact maximum price-drop calculation and reference baseline remain open. The exact exchange tick-size rounding rules are still to be specified. The grid reference moves upward by the full number of crossed steps; lower levels are calculated from that reference.
 
 #### 3. BUY fills and SELL orders
 
