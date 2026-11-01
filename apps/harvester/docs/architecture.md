@@ -130,6 +130,7 @@ Do not assume Aggressive is a particular grid algorithm, that each BUY fill auto
 - [Portfolio Domain](./domain/portfolio.md)
 - [Trading Strategies](./trading-strategies.md)
 - [Harvester Roadmap](../ROADMAP.md)
+- [Harvester Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md)
 
 
 ## Implementation pattern for use cases
@@ -190,7 +191,7 @@ const makePlaceOrder = ({ broker, validateOrderRequest }) => {
 
 The example deliberately shows dependency injection and orchestration only. Do not add a new `validateOrderRequest`, `broker.placeOrder`, or result shape if equivalent contracts already exist. Preserve actionable errors and follow the app's established error/result semantics; never catch an error only to disguise it as success.
 
-The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker.
+The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements.
 
 ### Example: applying an actual fill to Portfolio
 
