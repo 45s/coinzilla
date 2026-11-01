@@ -13,6 +13,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@coinzilla/brokers": "workspace:*"
+    "@coinzilla/brokers": "workspace:*",
+    "@coinzilla/utils": "workspace:*"
   }
 }
