@@ -6,6 +6,59 @@
 **Companion roadmap:** [GRID-ROADMAP.md](./GRID-ROADMAP.md)  
 **Legacy strategy:** [README.md](./README.md)
 
+
+## Agreed foundational decisions (2026-11-01)
+
+These decisions were confirmed during the Grid design discussion and take precedence over any older conflicting proposal in this document.
+
+### Strategy modes
+
+- Pair configuration explicitly selects `aggregated` or `grid`.
+- `aggregated` manages one BUY and one SELL order per pair.
+- `grid` manages multiple BUY and multiple SELL orders per pair. Grid orders are managed independently; a new BUY must not silently cancel or resize unrelated SELL orders.
+- Grid eligibility does not depend on `makerPercent`. Any configured pair may use Grid.
+- Maker fees and commissions affect execution economics and profitability checks, not strategy selection.
+- No automatic mode switching and no silent fallback between modes.
+
+### Initial BUY behavior
+
+- When `makerPercent = 0`, use post-only `LIMIT_MAKER` orders and place the initial BUY immediately.
+- When `makerPercent > 0`, use the existing price-trigger behavior for the initial BUY.
+- This is the only agreed mode-specific initial-entry distinction so far. Do not invent additional startup conditions.
+
+### First working release: deliberately no restore
+
+- Do not implement persisted Grid-state restoration or restart recovery in the first working Grid milestone.
+- Prioritize a working in-process trading lifecycle first. Persistence and restoration are a later extension.
+- Requirements elsewhere in this document for restart reconstruction describe future work, not a blocker for the first working milestone.
+- Do not claim restart safety until that later work is implemented and tested.
+
+### Global trading fail-closed rule
+
+- A trading error must pause the affected pair or the whole bot, according to the error's scope.
+- Do not silently swallow a trading error, continue with assumed state, or switch strategies.
+- A pair-specific failure must not unnecessarily stop other pairs that remain demonstrably safe.
+- Trading may resume only after the cause is resolved and the affected state is verified safe.
+- This rule applies equally to aggregated and Grid modes.
+
+### Mode and safety overview
+
+```mermaid
+flowchart TD
+    A[Pair configuration] --> B{Selected mode}
+    B -->|aggregated| C[One managed BUY + one managed SELL]
+    B -->|grid| D[Multiple managed BUYs + multiple managed SELLs]
+    C --> E[Shared trading safety rules]
+    D --> E
+    E --> F{Trading error?}
+    F -->|No| G[Continue]
+    F -->|Pair scope| H[Pause affected pair]
+    F -->|Bot scope| I[Pause bot]
+    H --> J[Resolve cause and verify state]
+    I --> J
+    J --> K[Explicitly resume when safe]
+```
+
 ---
 
 ## 1. Purpose
@@ -20,18 +73,17 @@ This document defines the proposed Grid behavior. It does not describe current r
 
 ## 2. First-release scope
 
-Grid mode intentionally keeps the existing single-BUY model:
+Grid mode supports multiple managed BUY orders and multiple independent SELL orders per pair:
 
-- At most one working BUY order per pair.
-- A BUY order is replenished after the previous BUY has fully filled and its cycle has been safely recorded.
-- Every completed BUY becomes a separate cycle.
-- Every open cycle may have one live SELL order.
+- Multiple BUY orders may be working at the same time.
+- Each BUY belongs to its own independently tracked BUY cycle.
+- Each eligible cycle may have its own live SELL order.
 - Multiple cycle SELL orders may remain open simultaneously.
-- SELL orders for different cycles are independent.
+- A new BUY cycle must not cancel or resize unrelated cycle SELL orders.
 - SELL completion order does not matter.
-- No multiple-level BUY grid is included.
+- The exact BUY placement/replenishment schedule beyond the agreed initial-entry rule remains a separate design decision; do not assume a one-working-BUY limit.
 
-This is a BUY-cycle grid, not a classic ladder of simultaneous BUY price levels.
+This is a BUY-cycle Grid: each BUY cycle has independent recovery ownership. It is not the legacy aggregated one-BUY/one-SELL model.
 
 ## 3. Example: two DOGE cycles
 
@@ -118,14 +170,14 @@ Compatibility rules:
 
 ## 6. BUY lifecycle
 
-1. The bot maintains no more than one working BUY order per pair.
-2. It observes the same approved market-data source, trigger, tick-size, and readiness rules as the existing strategy.
-3. Every execution is captured in the canonical fill ledger with stable identity and actual commission facts.
-4. The strategy waits for the BUY order to become fully filled, consistent with the existing approved partial-fill policy.
-5. It reconciles the final order status and all fills.
+1. Grid may maintain multiple working BUY orders per pair; do not impose the legacy one-working-BUY limit.
+2. For the initial BUY, use the agreed entry rule: `makerPercent = 0` means immediate post-only `LIMIT_MAKER`; nonzero `makerPercent` means use the existing price-trigger behavior.
+3. Every execution is captured with stable identity and actual commission facts.
+4. The strategy waits for each BUY order to become fully filled before advancing that BUY cycle, consistent with the currently approved partial-fill policy.
+5. It reconciles the final order status and all fills using the in-process state available in the first milestone.
 6. It creates exactly one cycle, idempotently associated with that BUY order/fill identity.
 7. It calculates and places that cycle's SELL.
-8. It replenishes the next BUY according to existing trigger, available-funds, and safety rules.
+8. Further BUY placement follows the separately approved Grid order-management rules; do not invent a schedule or silently fall back to aggregated behavior.
 
 A duplicate fill or order event must not create another cycle or duplicate SELL.
 
@@ -284,7 +336,9 @@ Pair-level active/reserved/free totals are derived from authoritative cycle and 
 
 Unknown or unowned broker orders, unexplained balance changes, or reservation mismatches pause the pair. Do not assume that total wallet balance belongs to Free-Roll.
 
-## 12. Recovery and restart
+## 12. Later phase: persistence, recovery, and restart
+
+**Out of scope for the first working Grid milestone.** The requirements below define a future extension; they must not delay the first in-process working implementation.
 
 A restart must reconstruct every cycle, not just one aggregate SELL.
 
