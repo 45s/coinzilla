@@ -32,44 +32,32 @@ const requirePrecision = (value, path) => {
 };
 
 /**
- * Validate the supported trading-config shape and its basic numeric invariants.
- * Returns the original object so callers can pass the validated configuration
- * without silently changing values or dropping fields.
+ * Validate Harvester's flat trading-config shape and basic numeric invariants.
+ * Each market pair owns its capital allocation and trading parameters.
+ * Returns the original object without silently changing values or dropping fields.
  */
 export function validateTradingConfig(config) {
   requireRecord(config, 'root');
-  requireRecord(config.strategies, 'strategies');
+  requireRecord(config.settings, 'settings');
+  requireNumber(config.settings.minProfit, 'settings.minProfit', { min: 0 });
+  requireRecord(config.pairs, 'pairs');
 
-  const strategyEntries = Object.entries(config.strategies);
-  if (strategyEntries.length === 0) {
-    fail('strategies', 'at least one strategy');
-  }
+  const pairs = Object.entries(config.pairs);
+  if (pairs.length === 0) fail('pairs', 'at least one pair');
 
-  for (const [strategyName, strategy] of strategyEntries) {
-    const strategyPath = `strategies.${strategyName}`;
-    if (!strategyName.trim()) fail('strategies', 'non-empty strategy names');
-    requireRecord(strategy, strategyPath);
-    requireBoolean(strategy.enabled, `${strategyPath}.enabled`);
-    requireRecord(strategy.settings, `${strategyPath}.settings`);
-    requireNumber(strategy.settings.minProfit, `${strategyPath}.settings.minProfit`, { min: 0 });
-    requireRecord(strategy.pairs, `${strategyPath}.pairs`);
-
-    const pairs = Object.entries(strategy.pairs);
-    if (pairs.length === 0) fail(`${strategyPath}.pairs`, 'at least one pair');
-
-    for (const [symbol, pair] of pairs) {
-      const pairPath = `${strategyPath}.pairs.${symbol}`;
-      if (!symbol.trim()) fail(`${strategyPath}.pairs`, 'non-empty pair symbols');
-      requireRecord(pair, pairPath);
-      requireBoolean(pair.enabled, `${pairPath}.enabled`);
-      requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true });
-      requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 });
-      requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true });
-      requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`);
-      requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`);
-      requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0 });
-      requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0 });
-    }
+  for (const [symbol, pair] of pairs) {
+    const pairPath = `pairs.${symbol}`;
+    if (!symbol.trim()) fail('pairs', 'non-empty pair symbols');
+    requireRecord(pair, pairPath);
+    requireBoolean(pair.enabled, `${pairPath}.enabled`);
+    requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true });
+    requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true });
+    requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 });
+    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true });
+    requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`);
+    requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`);
+    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0 });
+    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0 });
   }
 
   return config;
