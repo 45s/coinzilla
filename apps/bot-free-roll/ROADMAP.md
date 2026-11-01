@@ -90,6 +90,63 @@ Each adapter translates its exchange into Coinzilla contracts and must:
 
 A broker capability is optional only when the strategy can safely operate without it. The strategy must check capability availability before starting the affected behavior. Missing required capability means fail closed, not a silent fallback.
 
+
+### Application module layout
+
+The following is the **target organization for application code**, to be introduced incrementally as responsibilities are extracted. It is not a claim that every directory or module already exists, and it is not a requirement to create empty folders. Keep the current application working during each extraction.
+
+```text
+apps/bot-free-roll/
+└── src/
+    ├── index.js
+    ├── bootstrap/
+    │   ├── container.js
+    │   └── startup.js
+    ├── config/
+    │   ├── loader.js
+    │   └── validator.js
+    ├── application/
+    │   ├── strategy-runner.js
+    │   ├── pair-manager.js
+    │   └── reconciliation.js
+    ├── domain/
+    │   ├── strategy/
+    │   ├── accounting/
+    │   ├── profitability/
+    │   ├── inventory/
+    │   └── state-machine/
+    ├── infrastructure/
+    │   ├── persistence/
+    │   ├── scheduler/
+    │   └── logging/
+    └── ports/
+        ├── broker.js
+        ├── journal.js
+        └── event-bus.js
+```
+
+#### Responsibilities
+
+| Area | Responsibility |
+| --- | --- |
+| `index.js` | Thin executable entry point; delegates startup and owns no strategy logic. |
+| `bootstrap/` | Composition root: construct dependencies, wire adapters and ports, start the runtime, and coordinate startup failure cleanup. |
+| `config/` | Load and validate configuration at the application boundary; expose validated settings to the rest of the app. |
+| `application/` | Coordinate use cases and lifecycle: run the strategy, manage pair workflows, and orchestrate reconciliation. |
+| `domain/` | Broker-independent strategy rules, exact accounting, profitability decisions, inventory ownership, and explicit state transitions. Prefer pure functions and cohesive modules. |
+| `ports/` | Application-facing contracts for required capabilities. Reuse existing shared package contracts where available; do not duplicate or wrap them without a concrete need. |
+| `infrastructure/` | Concrete runtime concerns such as persistence, scheduling, and logging. Broker-specific implementations remain in `packages/brokers/`. |
+
+#### Dependency and implementation rules
+
+- Dependencies point inward: bootstrap/application/infrastructure may depend on domain contracts; domain calculations must not import infrastructure, SDKs, or exchange payloads.
+- Application services orchestrate; domain modules decide. Keep I/O, clocks, and mutable lifecycle state behind explicit boundaries.
+- Bootstrap performs composition and startup only. It must not contain trading decisions.
+- Keep broker adapters in `packages/brokers/`, shared entities in `packages/entities/`, and reusable event/journal implementations in their existing packages.
+- Treat this tree as a guide, not a rigid template. Add a module or folder only when it improves cohesion, testability, or change isolation.
+- Extract existing responsibilities in small PRs. Do not perform a large mechanical rewrite or change approved strategy behavior as part of the structural refactor.
+- Update tests and this roadmap as each extraction lands. Mark FR-088 complete only after the target structure is implemented and required checks pass.
+
 ## 4. Domain invariants
 
 These are safety invariants. Every implementation PR must preserve them and add tests when it touches related behavior.
@@ -496,3 +553,20 @@ Do not mark a roadmap item complete because code exists. Mark it complete only w
 **Acceptance:** notifications are opt-in, credentials are never committed, raw exchange payloads are not forwarded, and Telegram/network errors cannot alter trading state. Unit and CI tests must not require live Telegram credentials or network access.
 
 **Configuration:** see [README.md](./README.md#optional-telegram-notifications).
+
+## 13. Application module layout (FR-088)
+
+**Status:** [ ] planned
+
+**Goal:** Incrementally organize `apps/bot-free-roll/src/` into the layered application structure described in [Application module layout](#application-module-layout).
+
+**Acceptance criteria:**
+- Keep `src/index.js` thin and delegate composition/startup to bootstrap modules.
+- Separate configuration loading/validation, application orchestration, domain decisions, ports, and infrastructure concerns.
+- Keep domain logic broker-independent and exact; preserve all existing strategy invariants.
+- Reuse existing Coinzilla contracts and packages rather than introducing duplicate abstractions.
+- Extract responsibilities in focused PRs with deterministic tests; avoid empty placeholder folders and broad mechanical rewrites.
+- Preserve startup cleanup, shutdown ordering, and existing runtime behavior.
+- Run the app test and coverage scripts plus applicable workspace checks for each implementation PR.
+
+This is an architecture direction only. The documentation change does not claim that the structure has been implemented.
