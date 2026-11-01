@@ -5,6 +5,7 @@
 - [x] Define Harvester as an independent Node.js cryptocurrency-trading process.
 - [x] Establish two initial strategy modes: Conservative (Free-Roll) and Aggressive.
 - [x] Document the shared-engine / strategy-specific-policy boundary.
+- [x] Document the distinction between domain entities, domain policies, application use cases, and infrastructure adapters.
 - [x] Define and document the initial fill-driven Portfolio domain boundary.
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
 - [ ] Define Aggressive order-level behavior: multiple active BUY and SELL orders, price levels, sizing, and replacement.
