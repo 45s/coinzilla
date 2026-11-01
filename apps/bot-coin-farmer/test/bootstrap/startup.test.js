@@ -112,7 +112,7 @@ test("shutdownRuntime reports cleanup failures after attempting both resources",
   await startRuntime(runtime)
   await assert.rejects(shutdownRuntime(runtime), AggregateError)
 
-  assert.equal(runtime.state, "stopped")
+  assert.equal(runtime.state, "shutdown_failed")
   assert.ok(calls.some(([name]) => name === "event.close"))
 })
 
@@ -127,6 +127,7 @@ test("installSignalHandlers shuts down once and removes both listeners", async (
   processObject.emit("SIGTERM")
   processObject.emit("SIGINT")
   await shutdownRuntime(runtime)
+  await new Promise((resolve) => setImmediate(resolve))
 
   assert.equal(runtime.state, "stopped")
   assert.equal(processObject.listenerCount("SIGTERM"), 0)
