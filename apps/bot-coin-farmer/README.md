@@ -138,7 +138,8 @@ apps/bot-coin-farmer/
 │   │       ├── buy-order-flow.mmd
 │   │       ├── sell-recovery-flow.mmd
 │   │       ├── execution-accounting-flow.mmd
-│   │       ├── recovery-flow.mmd
+│   │       ├── execution-lifecycle.mmd
+│   │       ├── recovery-sequence.mmd
 │   │       ├── notification-flow.mmd
 │   │       └── persistence-evolution.mmd
 │   └── decisions/
