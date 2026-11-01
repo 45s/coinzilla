@@ -53,6 +53,17 @@ describe('Logger', () => {
     assert.equal(calls[1].includes('[object Object]'), true)
   })
 
+  it('executes every supported logging method without throwing', () => {
+    calls = []
+    console.log = (...args) => calls.push(args)
+    const logger = new Logger()
+
+    for (const methodName of ['info', 'system', 'debug', 'error', 'warn', 'success']) {
+      assert.doesNotThrow(() => logger[methodName]({ methodName }))
+    }
+    assert.equal(calls.length, 6)
+  })
+
   it('exposes all supported logging methods', () => {
     const logger = new Logger()
 
