@@ -20,7 +20,7 @@ describe('formatLogContent', () => {
     assert.equal(formatted.includes('sensitive-token'), false)
     assert.equal(formatted.includes('sensitive-key'), false)
     assert.equal(formatted.includes('sensitive-password'), false)
-    assert.equal((formatted.match(/\\[REDACTED\\]/g) ?? []).length, 3)
+    assert.equal(formatted.split('[REDACTED]').length - 1, 3)
   })
 
   it('falls back for circular and BigInt-containing objects', () => {
