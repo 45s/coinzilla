@@ -163,3 +163,20 @@ test("sanitizes transport and JSON parsing errors", async () => {
     return true
   })
 })
+
+test("rejects array-shaped HTTP and Telegram success responses", async () => {
+  const malformedResponses = [
+    async () => [],
+    async () => response([], true),
+    async () => response({ ok: true, result: [] }),
+  ]
+
+  for (const fetchImpl of malformedResponses) {
+    const notifier = new TelegramNotifier({
+      token: "123456:secret-token",
+      chatId: "-100123",
+      fetchImpl,
+    })
+    await assert.rejects(notifier.sendMessage("hello"))
+  }
+})
