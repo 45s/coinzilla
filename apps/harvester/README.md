@@ -35,7 +35,7 @@ Use a ports-and-adapters architecture:
 
 The engine must not contain Conservative- or Aggressive-specific policy. Strategies must not depend on exchange SDKs. Broker responses and market data must be validated at infrastructure boundaries.
 
-See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
+See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
 
 ### Portfolio domain
 
@@ -68,12 +68,22 @@ Do not add strategy parameters until their meaning and behavior have been agreed
 - Keep live exchange integration tests explicitly opt-in; the default test suite must not require credentials or place orders.
 - Do not claim restart recovery, exactly-once processing, or other guarantees until implemented and tested.
 
-## Startup entry point
+## Startup and broker connection
 
-Run `pnpm --filter @coinzilla/harvester start` from the repository root. The `src/index.js` CLI entry point calls `src/bootstrap/start-harvester.js`, which loads and validates the trading configuration before returning the startup context. A read, parse, or validation error is reported once and sets a non-zero process exit code.
+Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-The current startup context contains the validated configuration only. It intentionally does not start the trading engine or either strategy mode; their contracts and workflows remain under design. The command exits successfully after configuration validation and clearly reports that no processing workflow is configured yet.
+Broker connectivity is opt-in. Set these environment variables to connect to Binance (the broker package selects TESTNET outside production mode):
+
+```sh
+HARVESTER_BROKER=binance
+BINANCE_API_KEY=...
+BINANCE_API_SECRET_KEY=...
+```
+
+Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and disconnects on SIGINT/SIGTERM. A failed connection causes startup to fail; cleanup is attempted.
+
+**Order placement and strategy execution remain disabled.** The adapter exposes broker capabilities to application code, but Harvester does not yet subscribe to user-data events or place orders. User-data subscription must wait until durable reconciliation is implemented; the broker intentionally blocks state-changing operations while its recovery gate is closed.
 
 ## Current status
 
-The app foundation and initial config loading/validation exist. Trading-engine behavior, portfolio implementation, and both strategy modes are still in the design phase. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, dependency injection, opt-in connection, graceful disconnect, and offline adapter/bootstrap tests. Not yet implemented: Trading Engine, fill-driven Portfolio, order lifecycle, durable recovery/reconciliation, Conservative strategy, and Aggressive strategy. See [ROADMAP.md](./ROADMAP.md).

@@ -11,5 +11,8 @@
   "engines": {
     "node": ">=22.23.4"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@coinzilla/brokers": "workspace:*"
+  }
 }

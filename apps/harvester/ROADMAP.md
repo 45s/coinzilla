@@ -19,8 +19,9 @@
 ## 2. Shared trading engine
 
 - [ ] Define domain contracts for markets, orders, fills, balances, positions, and strategy decisions.
-- [~] Document the Harvester-owned broker port and the infrastructure-adapter mapping to `@coinzilla/brokers` (architecture/examples documented; executable port and adapter remain unimplemented).
-- [ ] Define the executable broker and market-data port contracts alongside the first consuming use cases; keep exchange-specific behavior in adapters.
+- [x] Define the Harvester-owned broker port and implement the Binance infrastructure adapter around `@coinzilla/brokers`.
+- [x] Wire opt-in broker connection and graceful shutdown through bootstrap; add offline port, adapter, and lifecycle tests.
+- [ ] Implement market-data validation, user-data event handling, and recovery-gated trading workflows.
 - [ ] Implement validated market data and exchange trading-rule handling.
 - [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.
 - [ ] Implement fill normalization, deduplication, and accounting from actual commissions.
