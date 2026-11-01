@@ -46,7 +46,10 @@ export async function startHarvester({
     try {
       await broker.disconnect();
     } catch (disconnectError) {
-      error.disconnectError = disconnectError;
+      throw new AggregateError(
+        [error, disconnectError],
+        "Harvester broker connection failed and disconnect cleanup also failed",
+      )
     }
     throw error;
   }
