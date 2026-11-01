@@ -1,6 +1,7 @@
 import { loadTradingConfig } from '../infrastructure/config/load-trading-config.js';
 import { createBinanceBrokerAdapter } from '../infrastructure/brokers/binance-broker-adapter.js';
 import { assertBrokerPort } from '../application/ports/broker.port.js';
+import { makePlaceOrder } from '../use-cases/place-order.js';
 
 /**
  * Load configuration and optionally connect the explicitly selected broker.
@@ -54,6 +55,8 @@ export async function startHarvester({
     throw error;
   }
 
+  const placeOrder = makePlaceOrder({ broker });
+
   let stopped = false;
   const stop = async () => {
     if (stopped) return;
@@ -64,6 +67,7 @@ export async function startHarvester({
   return Object.freeze({
     tradingConfig,
     broker,
+    placeOrder,
     connected: true,
     stop,
   });
