@@ -11,12 +11,20 @@ export function makeProcessMarketPrice({ strategy } = {}) {
   }
 
   return async function processMarketPrice({
+    symbol,
     priceEvent,
     pairConfig,
     settings,
   } = {}) {
     try {
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("processMarketPrice requires a market symbol")
+      }
+
       const marketPrice = createMarketPrice({ priceEvent })
+      if (marketPrice.symbol !== symbol) {
+        throw new TypeError(`Received price for ${marketPrice.symbol} while subscribed to ${symbol}`)
+      }
       if (pairConfig === null || typeof pairConfig !== "object" || Array.isArray(pairConfig)) {
         throw new TypeError("processMarketPrice requires a pairConfig object")
       }
