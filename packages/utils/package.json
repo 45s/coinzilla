@@ -1,7 +1,7 @@
 {
   "name": "@coinzilla/utils",
   "version": "1.0.0",
-  "description": "",
+  "description": "Domain-neutral helpers for the Coinzilla workspace",
   "main": "src/index.js",
   "keywords": [],
   "author": "",
@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "test:watch": "node --test --watch"
+    "test:watch": "node --test --watch",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/*.js --test-coverage-exclude=src/*.test.js --test-coverage-lines=90 --test-coverage-branches=85"
   }
 }
