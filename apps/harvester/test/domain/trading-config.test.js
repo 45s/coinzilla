@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { validateTradingConfig } from '../../src/domain/trading-config.js';
 
 const configUrl = new URL('../../trading-config.json', import.meta.url);
