@@ -1,7 +1,7 @@
 # Coin Farmer — Implementation Roadmap
 
 **Application:** `apps/bot-coin-farmer`  
-**Status:** Proposed implementation plan; all CF implementation items are not started  
+**Status:** Architecture baseline established; runtime skeleton in progress  
 **Reference:** Free-Roll V1 documentation and source on `develop`  
 **Target branch for implementation PRs:** `develop`
 
@@ -76,14 +76,16 @@ The dependency direction is inward. Infrastructure implements the contracts in `
 
 **Goal:** a runnable Node process that starts and stops safely without placing orders.
 
-- [ ] CF-010 — Add `apps/bot-coin-farmer/package.json` using ESM, Node engine `>=22.23.4`, workspace scripts and only reviewed workspace dependencies.
-- [ ] CF-011 — Add `src/index.js` and runtime composition/start/shutdown modules.
-- [ ] CF-012 — Add JSON config loading/validation and `.env.example`; credentials remain environment secrets.
-- [ ] CF-013 — Wire structured logger, EventBus and Journal through adapters.
-- [ ] CF-014 — Add partial-startup rollback, idempotent shutdown, SIGINT/SIGTERM handling and bounded cleanup tests.
-- [ ] CF-015 — Establish native Node test runner, syntax check, coverage baseline and app CI integration.
+- [~] CF-010 — Add `apps/bot-coin-farmer/package.json` using ESM, Node engine `>=22.23.4`, workspace scripts and only reviewed workspace dependencies.
+- [~] CF-011 — Add `src/index.js` and runtime composition/start/shutdown modules.
+- [~] CF-012 — Add JSON config loading/validation and `.env.example`; credentials remain environment secrets.
+- [~] CF-013 — Wire structured logger, EventBus and Journal through adapters.
+- [~] CF-014 — Add partial-startup rollback, idempotent shutdown, SIGINT/SIGTERM handling and bounded cleanup tests.
+- [~] CF-015 — Establish native Node test runner, syntax check, coverage baseline and app CI integration.
 
 **Acceptance:** app starts in no-trading mode with valid config; invalid config fails before broker order capability is exposed; partial startup cleans already-created resources; shutdown drains event/journal work; default tests require no network or credentials.
+
+**Current implementation note:** The package manifest, workspace importer, no-trading entry point, bootstrap lifecycle, JSON config loader/validator, EventBus/Journal/logger adapters and deterministic tests are now scaffolded. Broker connections, strategy workflows, market state and order placement are intentionally absent. CF-002/003/004 remain open; CF-015 still needs the supported Node/pnpm checks and CI integration before this phase can be accepted.
 
 ### Phase 2 — Canonical domain contracts and pure strategy kernel
 
