@@ -82,15 +82,15 @@ The diagram is a responsibility flow, not a mandated synchronous call sequence. 
 
 ### Implemented market-price and Portfolio flow
 
-Bootstrap loads configuration, connects the selected broker, subscribes enabled markets, normalizes price events, and invokes the selected strategy through process-market-price.
+Bootstrap loads and validates trading-config.json, connects the selected broker, and subscribes only to enabled markets. The Binance adapter receives the broker package's normalized aggregate-trade stream; the application validates the symbol, decimal price string, and event timestamp before invoking the strategy. A failed subscription aborts startup and cleans up subscriptions already created. Shutdown unsubscribes before disconnecting.
+
+The first market-price input is the first aggregate-trade event after subscription; there is no initial REST ticker snapshot. Ordered/serialized market-event evaluation, backpressure, stale-event policy, and market-data readiness states remain future Trading Engine work.
 
 Bootstrap composes the default aggressiveStrategy, an in-memory immutable Portfolio, and the update-portfolio use case. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
 
 The Portfolio is updated only from canonical Fill facts. The current broker user-data stream is not yet normalized into canonical Fill events, so live broker executions are not automatically wired into this use case.
 
 The Aggressive policy currently returns NO_ACTION with explicit blocker codes. It does not submit orders. This is deliberate until grid depth, percentage-step arithmetic, maximum-price-drop calculation, and SELL price/fee/rounding rules are agreed. This is not a claim that Aggressive trading is live or fully implemented.
-
-The first market-price input remains the first aggregate-trade event after subscription; no initial REST ticker snapshot is provided. Ordered/serialized market-event evaluation, backpressure, stale-event policy, and market-data readiness states remain future Trading Engine work.
 
 ## Use cases
 
