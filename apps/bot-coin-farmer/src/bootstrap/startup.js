@@ -24,7 +24,6 @@ async function runBounded(operation, timeoutMs, label) {
     timeoutHandle = setTimeout(() => {
       reject(new Error(`Coin Farmer ${label} timed out after ${timeoutMs}ms`))
     }, timeoutMs)
-    timeoutHandle.unref?.()
   })
 
   try {
@@ -213,6 +212,8 @@ export function installSignalHandlers({
           signal,
           error,
         })
+      } catch {
+        // Preserve the shutdown failure as the process exit status.
       } finally {
         processObject.exitCode = 1
       }
