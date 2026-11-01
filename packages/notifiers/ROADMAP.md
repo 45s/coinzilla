@@ -1,7 +1,7 @@
 # Notifiers roadmap
 
 **Owner:** packages/notifiers/  
-**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). A follow-up validation-hardening audit is in progress; the live Telegram smoke test remains an operator-only action.  
+**Status:** Telegram transport, provider-oriented source layout, reliability hardening, real EventBus integration coverage, delivery diagnostics, Node 22/24 CI, and operator-controlled smoke-test tooling are merged into develop (PRs #346, #348, #356, and #360). The validation-hardening audit was completed in PR #379; the live Telegram smoke test remains an operator-only action.  
 **Purpose:** provide small, dependency-free notification transports for operational alerts from Coinzilla applications.
 
 Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
@@ -23,6 +23,8 @@ Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
         telegram/                # implemented
           index.js
           telegram-notifier.js
+          telegram-validation.js       # pure configuration/message validation
+          safe-error-message.js        # bounded, credential-redacting errors
           telegram-event-subscriber.js
           format-telegram-notification.js
           *.test.js
@@ -96,17 +98,6 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [ ] Add a persistent outbox only when crash-safe delivery is a product requirement and an appropriate storage owner exists.
 - [ ] Add metrics/diagnostics only when their public contract is justified by production usage.
 
-## Phase 7 — Validation modularity and malformed-boundary hardening
-
-- [~] Extract Telegram configuration validation, message validation, and credential-safe error sanitization from the transport class into focused pure modules.
-- [~] Reject array-shaped HTTP responses, Bot API payloads, and success result objects rather than accepting structurally invalid objects.
-- [~] Add direct unit coverage for pure validation and error-sanitization helpers, including hostile coercion and encoded-token redaction.
-- [ ] Extend the package coverage gate to include the extracted modules and pass the package coverage threshold.
-- [ ] Verify package, workspace, syntax, and required GitHub Actions checks on the final PR head before merge.
-- [ ] Review final public documentation and update this roadmap with verified CI evidence after merge.
-
-**Acceptance:** the transport class coordinates network I/O only; all pure input/error transformations are independently testable; malformed provider responses fail closed; existing public exports and delivery behavior remain compatible.
-
 ## Decision log
 
 - Telegram is the first adapter because it satisfies the initial operator-alert use case.
@@ -164,3 +155,28 @@ CI run links: [Unit Tests](https://github.com/45s/coinzilla/actions/runs/4124070
 - [ ] Run the smoke test manually with a dedicated Telegram test chat after an operator supplies credentials.
 
 **Acceptance:** live delivery can be verified deliberately without exposing secrets or making ordinary CI depend on external Telegram availability.
+
+## Phase 7 — Validation modularity and malformed-boundary hardening
+
+- [x] Extract Telegram configuration validation, message validation, and credential-safe error sanitization from the transport class into focused pure modules.
+- [x] Reject array-shaped HTTP responses, Bot API payloads, and success result objects rather than accepting structurally invalid objects.
+- [x] Add direct unit coverage for pure validation and error-sanitization helpers, including hostile coercion and encoded-token redaction.
+- [x] Extend the package coverage gate to include the extracted modules and pass the package coverage threshold.
+- [x] Verify package, workspace, syntax, and required GitHub Actions checks on the final PR head before merge.
+- [x] Review final public documentation and update this roadmap with verified CI evidence after merge.
+
+**Acceptance:** the transport class coordinates network I/O only; all pure input/error transformations are independently testable; malformed provider responses fail closed; existing public exports and delivery behavior remain compatible.
+
+## Validation record — PR #379
+
+Validation modularity and malformed-boundary hardening was merged into `develop` in [PR #379](https://github.com/45s/coinzilla/pull/379), merge commit `1c4e459b3c971789941d84a48de90cbd6086c232`.
+
+All five workflow runs completed successfully on the exact PR head `79725255e3fc787f3d72236ca2b447240006dc2b`:
+
+- Unit tests, Node 22 and Node 24: [passed](https://github.com/45s/coinzilla/actions/runs/41288057684).
+- Workspace test coverage, including the notifiers 90% line / 85% branch thresholds and the newly extracted modules: [passed](https://github.com/45s/coinzilla/actions/runs/41288057705).
+- JavaScript syntax and actionlint: [passed](https://github.com/45s/coinzilla/actions/runs/41288057674).
+- Production dependency audit: [passed](https://github.com/45s/coinzilla/actions/runs/41288057679).
+- Utilities unit tests: [passed](https://github.com/45s/coinzilla/actions/runs/41288057694).
+
+The task branch was automatically deleted after merge. The live Telegram smoke test was not run because it requires operator-provided credentials and a dedicated test chat.
