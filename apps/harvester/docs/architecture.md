@@ -80,6 +80,53 @@ Updated state available to the next strategy evaluation
 
 The diagram is a responsibility flow, not a mandated synchronous call sequence. Event delivery, serialization, persistence, and recovery contracts remain to be designed.
 
+### Implemented market-price flow
+
+The initial market-data path follows the same dependency direction:
+
+~~~text
+apps/harvester/trading-config.json
+        |
+        v
+Infrastructure config loader
+        |
+        v
+Domain trading-config validation
+        |
+        v
+Bootstrap
+  - connect selected broker
+  - subscribe to each enabled pair
+        |
+        v
+Harvester broker port
+        |
+        v
+Binance infrastructure adapter
+        |
+        v
+@coinzilla/brokers normalized aggregate-trade event
+        |
+        v
+use-cases/process-market-price.js
+  - validate domain MarketPrice
+  - select matching pair config
+        |
+        v
+Domain Strategy.evaluate(...)
+        |
+        v
+Trading Decision (currently WAIT only)
+~~~
+
+The infrastructure broker package normalizes Binance's aggregate-trade message. The Harvester domain receives only the symbol, decimal price string, and event timestamp; it does not import Binance event types. Price values remain decimal strings to avoid introducing binary floating-point rounding.
+
+Bootstrap subscribes only to pairs with `enabled: true`. A subscription failure aborts startup and triggers cleanup of subscriptions already created plus broker disconnect. Shutdown unsubscribes market streams before disconnecting. The first strategy input is the first aggregate-trade event received after subscription; there is not yet an initial REST ticker snapshot.
+
+The current default `waitStrategy` deliberately returns `WAIT` and never requests orders. Conservative and Aggressive policies are not implemented. The market-price use case is the application boundary for future strategy evaluation; it returns a `toResult` result and does not perform broker I/O or mutate Portfolio state.
+
+The current stream callback invokes strategy evaluation for each event. Ordered/serialized evaluation, backpressure, stale-event policy, and market-data readiness states are not yet implemented and must be addressed before strategies with mutable state or order side effects are connected.
+
 ## Use cases
 
 Use cases coordinate application workflows and keep infrastructure details outside the domain. For example, `src/use-cases/update-portfolio.js` receives a normalized fill and coordinates applying it to the Portfolio. It should not parse raw Binance messages or contain strategy-specific decisions.
