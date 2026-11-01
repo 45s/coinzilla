@@ -32,3 +32,9 @@ test('fails startup when configuration loading or validation fails', async () =>
     (error) => error === startupError,
   );
 });
+
+test('loads the default validated trading configuration', async () => {
+  const context = await startHarvester();
+
+  assert.ok(context.tradingConfig.strategies['free-roll']);
+});
