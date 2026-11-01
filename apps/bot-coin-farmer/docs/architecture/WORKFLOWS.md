@@ -50,7 +50,7 @@ A cancel response alone is not proof of zero fills. A timeout is an unknown outc
 
 ## 4. SELL execution and free-coin allocation
 
-See [sell-recovery-sequence.mmd](./diagrams/sell-recovery-sequence.mmd).
+See [sell-recovery-flow.mmd](./diagrams/sell-recovery-flow.mmd).
 
 1. SELL fills are ingested and recorded individually with actual commission facts.
 2. Partial SELL fills update the immutable execution ledger but do not allocate free coins or complete a recovery cycle.
