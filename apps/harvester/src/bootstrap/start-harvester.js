@@ -1,9 +1,11 @@
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { aggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { makePlaceOrder } from "../use-cases/place-order.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
-import { waitStrategy } from "../domain/strategies/wait-strategy.js"
+import { makeUpdatePortfolio } from "../use-cases/update-portfolio.js"
 
 async function cleanupBroker({ broker, subscriptions }) {
   const unsubscribeResults = await Promise.allSettled(
@@ -12,36 +14,46 @@ async function cleanupBroker({ broker, subscriptions }) {
   const disconnectResult = await Promise.allSettled([
     Promise.resolve().then(() => broker.disconnect()),
   ])
-  return [
-    ...unsubscribeResults,
-    ...disconnectResult,
-  ].filter((result) => result.status === "rejected").map((result) => result.reason)
+  return [...unsubscribeResults, ...disconnectResult]
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
 }
 
-/**
- * Load configuration, connect the selected broker, and subscribe to every
- * enabled market. Market data is validated by an application use case before
- * it is passed to the injected domain strategy.
- *
- * Trading remains disabled: the default strategy returns WAIT and never
- * submits orders. Strategy decisions and order execution are separate flows.
- */
+const createPortfolioWorkflow = ({ strategy }) => {
+  let portfolio = new Portfolio()
+  let updateQueue = Promise.resolve()
+  const updatePortfolioUseCase = makeUpdatePortfolio()
+  const processMarketPriceUseCase = makeProcessMarketPrice({ strategy })
+
+  const updatePortfolio = ({ fill } = {}) => {
+    const task = updateQueue.then(async () => {
+      const result = await updatePortfolioUseCase({ portfolio, fill })
+      if (result.ok) portfolio = result.data.portfolio
+      return result
+    })
+    updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
+  const processMarketPrice = (input = {}) =>
+    processMarketPriceUseCase({ ...input, portfolio })
+
+  return { updatePortfolio, processMarketPrice, getPortfolio: () => portfolio }
+}
+
 export async function startHarvester({
   configSource,
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  strategy = waitStrategy,
+  strategy = aggressiveStrategy,
   logger = console,
   onMarketPriceError = ({ symbol, error, errors }) => {
-    logger.error?.("Harvester market price processing failed", {
-      symbol,
-      error,
-      errors,
-    })
+    logger.error?.("Harvester market price processing failed", { symbol, error, errors })
   },
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
+  const portfolioWorkflow = createPortfolioWorkflow({ strategy })
+  const { processMarketPrice, updatePortfolio, getPortfolio } = portfolioWorkflow
   const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
@@ -50,12 +62,14 @@ export async function startHarvester({
       broker: undefined,
       connected: false,
       subscriptions: [],
+      processMarketPrice,
+      updatePortfolio,
+      get portfolio() { return getPortfolio() },
       stop: async () => {},
     })
   }
-
   if (brokerName !== "binance") {
-    throw new Error(`Unsupported HARVESTER_BROKER value: ${brokerName}`)
+    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
   }
 
   const broker = assertBrokerPort({
@@ -66,7 +80,6 @@ export async function startHarvester({
       },
     }),
   })
-  const processMarketPrice = makeProcessMarketPrice({ strategy })
 
   try {
     await broker.connect()
@@ -95,7 +108,6 @@ export async function startHarvester({
   try {
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
-
       const result = await broker.subscribeForPrices({
         symbol,
         onPrice: (priceEvent) => processMarketPrice({
@@ -104,9 +116,7 @@ export async function startHarvester({
           pairConfig,
           settings: tradingConfig.settings,
         }).then((processed) => {
-          if (!processed.ok) {
-            reportPriceError({ symbol, errors: processed.errors })
-          }
+          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
           return processed
         }).catch((error) => {
           reportPriceError({ symbol, error })
@@ -117,14 +127,10 @@ export async function startHarvester({
       if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error(
-          `Unable to subscribe to market prices for ${symbol}${details ? `: ${details}` : ""}`,
+          "Unable to subscribe to market prices for " + symbol + (details ? ": " + details : ""),
         )
       }
-
-      subscriptions.push({
-        symbol,
-        unsubscribe: result.data.unsubscribe,
-      })
+      subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.("Harvester subscribed to market prices", { symbol })
     }
   } catch (error) {
@@ -142,7 +148,6 @@ export async function startHarvester({
   const stop = async () => {
     if (stopped) return
     stopped = true
-
     const cleanupErrors = await cleanupBroker({ broker, subscriptions })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
@@ -154,6 +159,8 @@ export async function startHarvester({
     broker,
     placeOrder,
     processMarketPrice,
+    updatePortfolio,
+    get portfolio() { return getPortfolio() },
     subscriptions: subscriptions.map(({ symbol }) => symbol),
     connected: true,
     stop,

@@ -11,7 +11,7 @@ This document records the current architectural direction. It does not define im
 | Concept | Responsibility | Architectural role |
 | --- | --- | --- |
 | Portfolio | Holds spot positions and applies fill-driven state changes | Domain entity |
-| Position | Tracks holdings and accounting for its defined scope | Domain entity |
+| Position | Tracks holdings and quote cash flow for its defined market scope | Domain entity |
 | Conservative strategy | Defines Free-Roll capital-recovery and free-asset rules | Domain policy |
 | Aggressive strategy | Defines rules for managing multiple BUY and SELL orders | Domain policy |
 | Trading Engine | Coordinates market updates, strategy evaluation, order workflows, and fill processing | Application layer / orchestrator |
@@ -80,52 +80,17 @@ Updated state available to the next strategy evaluation
 
 The diagram is a responsibility flow, not a mandated synchronous call sequence. Event delivery, serialization, persistence, and recovery contracts remain to be designed.
 
-### Implemented market-price flow
+### Implemented market-price and Portfolio flow
 
-The initial market-data path follows the same dependency direction:
+Bootstrap loads configuration, connects the selected broker, subscribes enabled markets, normalizes price events, and invokes the selected strategy through process-market-price.
 
-~~~text
-apps/harvester/trading-config.json
-        |
-        v
-Infrastructure config loader
-        |
-        v
-Domain trading-config validation
-        |
-        v
-Bootstrap
-  - connect selected broker
-  - subscribe to each enabled pair
-        |
-        v
-Harvester broker port
-        |
-        v
-Binance infrastructure adapter
-        |
-        v
-@coinzilla/brokers normalized aggregate-trade event
-        |
-        v
-use-cases/process-market-price.js
-  - validate domain MarketPrice
-  - select matching pair config
-        |
-        v
-Domain Strategy.evaluate(...)
-        |
-        v
-Trading Decision (currently WAIT only)
-~~~
+Bootstrap composes the default aggressiveStrategy, an in-memory immutable Portfolio, and the update-portfolio use case. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
 
-The infrastructure broker package normalizes Binance's aggregate-trade message. The Harvester domain receives only the symbol, decimal price string, and event timestamp; it does not import Binance event types. Price values remain decimal strings to avoid introducing binary floating-point rounding.
+The Portfolio is updated only from canonical Fill facts. The current broker user-data stream is not yet normalized into canonical Fill events, so live broker executions are not automatically wired into this use case.
 
-Bootstrap subscribes only to pairs with `enabled: true`. A subscription failure aborts startup and triggers cleanup of subscriptions already created plus broker disconnect. Shutdown unsubscribes market streams before disconnecting. The first strategy input is the first aggregate-trade event received after subscription; there is not yet an initial REST ticker snapshot.
+The Aggressive policy currently returns NO_ACTION with explicit blocker codes. It does not submit orders. This is deliberate until grid depth, percentage-step arithmetic, maximum-price-drop calculation, and SELL price/fee/rounding rules are agreed. This is not a claim that Aggressive trading is live or fully implemented.
 
-The current default `waitStrategy` deliberately returns `WAIT` and never requests orders. Conservative and Aggressive policies are not implemented. The market-price use case is the application boundary for future strategy evaluation; it returns a `toResult` result and does not perform broker I/O or mutate Portfolio state.
-
-The current stream callback invokes strategy evaluation for each event. Ordered/serialized evaluation, backpressure, stale-event policy, and market-data readiness states are not yet implemented and must be addressed before strategies with mutable state or order side effects are connected.
+The first market-price input remains the first aggregate-trade event after subscription; no initial REST ticker snapshot is provided. Ordered/serialized market-event evaluation, backpressure, stale-event policy, and market-data readiness states remain future Trading Engine work.
 
 ## Use cases
 

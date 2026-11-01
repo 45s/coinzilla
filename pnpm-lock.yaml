@@ -207,6 +207,9 @@ importers:
       '@coinzilla/brokers':
         specifier: workspace:*
         version: link:../../packages/brokers
+      '@coinzilla/entities':
+        specifier: workspace:*
+        version: link:../../packages/entities
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
