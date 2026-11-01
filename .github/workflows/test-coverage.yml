@@ -81,5 +81,29 @@ jobs:
           verify_threshold "--test-coverage-lines=100"
           verify_threshold "--test-coverage-branches=100"
 
+      - name: Enforce Utilities package coverage thresholds
+        run: pnpm --filter @coinzilla/utils test:coverage
+
+      - name: Verify Utilities coverage thresholds reject insufficient coverage
+        shell: bash
+        run: |
+          verify_utils_threshold() {
+            local threshold_flag="$1"
+            set +e
+            local output
+            output="$(pnpm --filter @coinzilla/utils exec node --test --experimental-test-coverage "$threshold_flag" --test-coverage-include=src/*.js --test-coverage-exclude=src/*.test.js 2>&1)"
+            local test_status=$?
+            set -e
+
+            if [[ "$test_status" -eq 0 ]] || ! grep -Fq "does not meet threshold of 100%" <<< "$output"; then
+              printf '%s\\n' "$output"
+              echo "::error::Expected Utilities coverage to fail with $threshold_flag."
+              exit 1
+            fi
+          }
+
+          verify_utils_threshold "--test-coverage-lines=100"
+          verify_utils_threshold "--test-coverage-branches=100"
+
       - name: Enforce Free-Roll bot coverage thresholds
         run: pnpm --filter @coinzilla/bot-free-roll test:coverage
