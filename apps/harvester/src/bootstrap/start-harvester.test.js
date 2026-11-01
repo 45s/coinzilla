@@ -49,6 +49,7 @@ test('connects the selected Binance broker and exposes idempotent shutdown', asy
   assert.deepEqual(received, { apiKey: 'key', apiSecret: 'secret' })
   assert.equal(result.connected, true)
   assert.ok(result.broker)
+  assert.equal(typeof result.placeOrder, 'function')
   await result.stop()
   await result.stop()
   assert.deepEqual(calls, ['connect', 'disconnect'])
