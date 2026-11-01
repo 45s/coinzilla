@@ -8,9 +8,10 @@
 - [x] Document the distinction between domain entities, domain policies, application use cases, and infrastructure adapters.
 - [x] Define and document the initial fill-driven Portfolio domain boundary.
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
-- [ ] Define Aggressive order-level behavior: multiple active BUY and SELL orders, price levels, sizing, and replacement.
-- [ ] Decide whether BUY fills create corresponding SELL orders or both sides are managed independently.
-- [ ] Define position ownership and allocation across pairs, strategies, and shared spot assets.
+- [~] Define Aggressive order-level behavior. The initial grid-style cycle, multiple active BUY/SELL orders, partial-fill response, shared inventory, 50% partial-SELL threshold, and Conservative fallback are documented; grid-level progression and exact order amendment rules remain open.
+- [x] Decide that Aggressive BUY executions create/update SELL exposure, while SELL orders reserve quantities from a shared per-market inventory pool (not exclusive BUY-owned lots).
+- [~] Define Aggressive risk limits and fallback behavior. Maximum invested quote and maximum price drop are agreed as triggers for switching to Conservative; exact price-drop calculation and investment-limit accounting remain open.
+- [~] Define position ownership and allocation across pairs, strategies, and shared spot assets. Aggressive uses a shared inventory pool per market; cross-strategy and cross-market allocation remains open.
 - [ ] Define accounting fields: invested quote, cost basis, realized profit, reserved quantity, and strategy-owned inventory.
 - [ ] Decide how third-asset commissions and duplicate fills are represented and handled.
 
