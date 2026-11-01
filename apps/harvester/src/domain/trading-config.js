@@ -14,9 +14,13 @@ const requireBoolean = (value, path) => {
 };
 
 const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false } = {}) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    fail(path, 'a finite number');
+  }
+
   const validMinimum = exclusiveMin ? value > min : value >= min;
 
-  if (typeof value !== 'number' || !Number.isFinite(value) || !validMinimum) {
+  if (!validMinimum) {
     fail(path, exclusiveMin ? `a finite number greater than ${min}` : `a finite number greater than or equal to ${min}`);
   }
 };
