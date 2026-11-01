@@ -2,11 +2,13 @@
 
 ## Discovery and foundation
 
-- [~] Initialize the app as a private Node.js ESM workspace package using the repository's pnpm and Node.js conventions.
+- [x] Initialize the app as a private Node.js ESM workspace package using the repository's pnpm and Node.js conventions.
+- [x] Copy the initial trading-config baseline and implement file loading plus pure structural/numeric validation with deterministic tests.
 - [ ] Define the harvester's product responsibility, source systems, data contracts, and expected outputs with the product owner.
 - [ ] Record security, privacy, retention, rate-limit, and operational requirements for each data source.
 - [ ] Choose the smallest architecture that satisfies the agreed requirements.
-- [ ] Implement the first vertical slice with deterministic unit tests and explicit failure handling.
+- [ ] Agree on the first business use case, including source, output, business rules, and acceptance criteria.
+- [ ] Implement the first business vertical slice with deterministic unit tests and explicit failure handling.
 - [ ] Add integration tests for external systems, keeping them opt-in and independent of the default unit-test suite.
 
 ## Delivery rules
