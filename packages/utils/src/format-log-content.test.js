@@ -14,7 +14,7 @@ describe('formatLogContent', () => {
     const formatted = formatLogContent({
       symbol: 'BTCUSDT',
       accessToken: 'sensitive-token',
-      credentials: { apiKey: 'sensitive-key', password: 'sensitive-password' },
+      nested: { apiKey: 'sensitive-key', password: 'sensitive-password' },
     })
     assert.match(formatted, /BTCUSDT/)
     assert.equal(formatted.includes('sensitive-token'), false)
