@@ -1,3 +1,5 @@
+import { redactSensitiveLogField } from './redact-sensitive-log-field.js'
+
 /**
  * Convert log data to a printable value without allowing hostile objects to
  * make the logging path throw.
@@ -10,7 +12,7 @@ export function formatLogContent(data) {
   try {
     // Preserve JSON.stringify's existing undefined result for unsupported
     // top-level values such as undefined and symbols.
-    return JSON.stringify(data, null, 2)
+    return JSON.stringify(data, redactSensitiveLogField, 2)
   } catch {
     try {
       return String(data)
