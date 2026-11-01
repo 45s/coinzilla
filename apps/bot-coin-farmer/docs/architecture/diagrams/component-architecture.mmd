@@ -1,17 +1,38 @@
 flowchart TB
-  runtime["Runtime\ncomposition / lifecycle / config"]
-  adapters["Adapters\nbroker / persistence / events / journal / notifications"]
-  ports["Application ports"]
-  app["Application workflows\nstart-stop / market / execution / reconcile / recover"]
-  domain["Coin Farmer domain\npolicy / inventory / profitability / state"]
-  contracts["Canonical Coinzilla contracts"]
+  subgraph runtime["Runtime / composition"]
+    entry["index.js"]
+    config["JSON config + env secrets"]
+    lifecycle["startup / shutdown"]
+  end
+  subgraph application["Application"]
+    coordinator["Strategy coordinator"]
+    workflows["Market / order / fill / reconcile / recovery workflows"]
+    ports["CEX-neutral broker + state + event + notification + clock ports"]
+  end
+  subgraph domain["Domain"]
+    policy["BUY planner + SELL profitability gate"]
+    ledger["Fill ledger + inventory + recovery-cycle accounting"]
+    state["Per-market state machine"]
+  end
+  subgraph adapters["Adapters"]
+    binance["Binance WebSocket broker"]
+    telegram["Telegram notifier"]
+    eventAdapter["EventBus adapter"]
+    journal["Journal adapter"]
+    persistence["In-memory repository\nthen durable adapter"]
+  end
+  entities["@coinzilla/entities\ncanonical shared contracts"]
 
-  runtime --> adapters
-  runtime --> app
-  app --> ports
-  ports -. "implemented by" .-> adapters
-  app --> domain
-  domain --> contracts
-
-  external["Exchange / storage / messaging"] <--> adapters
-  v1["Free-Roll V1"] -. "reference only; no imports" .-> app
+  entry --> config
+  entry --> lifecycle
+  lifecycle --> coordinator
+  coordinator --> workflows
+  workflows --> ports
+  workflows --> policy
+  workflows --> ledger
+  workflows --> state
+  ports -. implemented by .-> adapters
+  policy --> entities
+  ledger --> entities
+  binance --> entities
+  eventAdapter --> journal
