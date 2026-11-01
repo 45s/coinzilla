@@ -1,7 +1,7 @@
 import { EM } from './error-messages.js'
 
 // VR stands for "validation rule"
-export const VR = Object.freeze({
+export const VR = {
   num: 'number',
   str: 'string',
   arr: 'array',
@@ -10,7 +10,7 @@ export const VR = Object.freeze({
   notEmptyString: 'notEmptyString',
   notUndefined: 'notUndefined',
   notEmptyArr: 'notEmptyArr',
-})
+}
 
 /**
  * Validate the declarative [value, rules, fieldName] tuples used by Validator.
