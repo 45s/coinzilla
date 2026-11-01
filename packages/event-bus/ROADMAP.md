@@ -1,6 +1,6 @@
 # Event Bus Reliability Roadmap
 
-> Status: hardening in progress
+> Status: core hardening complete; optional enhancements remain demand-driven
 > Package: `@coinzilla/event-bus`
 > Primary objective: make the package bug-resistant, predictable under failure, fully tested, and easy for humans and AI agents to change safely.
 
@@ -271,7 +271,22 @@ pnpm run quality
 
 The package `test:coverage` script enforces at least 90% line coverage and 85% branch coverage. The Test Coverage workflow runs this command on every pull request and includes negative self-checks proving that deliberately insufficient 100% line and branch thresholds fail.
 
-## 8. Decision log
+## 8. Validation record
+
+Core audit hardening was merged in [PR #381](https://github.com/45s/coinzilla/pull/381) at merge commit `3488b42b0ecbbdf4e5f42b109b5a372c94fceecc`.
+
+The exact PR head passed all required checks:
+- Unit tests on Node.js 22.23.4 and Node.js 24.x, including the aggregate required-version job ([run](https://github.com/45s/coinzilla/actions/runs/41288818211)).
+- Workspace coverage, including event-bus 90% line / 85% branch thresholds and both negative threshold self-checks ([run](https://github.com/45s/coinzilla/actions/runs/41288818233)).
+- JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41288818236)).
+- Production dependency audit and actionlint ([run](https://github.com/45s/coinzilla/actions/runs/41288818191)).
+- Utilities unit tests ([run](https://github.com/45s/coinzilla/actions/runs/41288818217)).
+
+The additional malformed-input regression tests cover null/non-object arguments and throwing property accessors for public dispatch/subscription methods. Existing delivery, payload, concurrency, capacity, diagnostics, and lifecycle tests passed unchanged.
+
+Remaining unchecked roadmap items are intentionally deferred: sequential subscriber delivery, cooperative cancellation, additional counters, retry/dead-letter behavior, and performance benchmarks. They should be implemented only when a real consumer or measured operational need justifies the extra contract and complexity.
+
+## 9. Decision log
 
 - Keep the package in-process and dependency-light.
 - Prefer pure functions for deterministic decisions and transformations; keep side effects at explicit boundaries.
