@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 
 test('loads configuration before returning the startup context', async () => {
-  const tradingConfig = { strategies: {} };
+  const tradingConfig = { settings: { minProfit: 0.01 }, pairs: { ZROUSDT: { enabled: true } } };
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
 
@@ -36,5 +36,5 @@ test('fails startup when configuration loading or validation fails', async () =>
 test('loads the default validated trading configuration', async () => {
   const context = await startHarvester();
 
-  assert.ok(context.tradingConfig.strategies['free-roll']);
+  assert.ok(context.tradingConfig.pairs.ZROUSDT);
 });
