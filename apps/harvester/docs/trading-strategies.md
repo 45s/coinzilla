@@ -33,6 +33,14 @@ Agreed scope so far:
 
 Do not assume that Aggressive means a particular grid algorithm, that every BUY fill must create a matching SELL, or that orders are independent. Those are design decisions for discussion.
 
+## Strategy as a domain policy
+
+Conservative and Aggressive are treated as **domain policies**: they express business rules for deciding what trading action should be taken from relevant facts such as market prices, current orders, and Portfolio state.
+
+A strategy policy decides whether to BUY, SELL, wait, or revise its desired orders; determines strategy-specific prices, quantities, and reactions to fills; and may use domain concepts such as Portfolio and Position. It does not communicate with Binance or another exchange directly, and does not own WebSocket subscriptions, broker clients, or shared order-submission mechanics.
+
+A policy is a responsibility, not a prescribed class shape. It may be implemented as a module, function, or object once its contract is designed.
+
 ## Shared trading engine
 
 The following are candidates for shared engine capabilities, subject to contract design:
@@ -49,7 +57,9 @@ The following are candidates for shared engine capabilities, subject to contract
 
 The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. See [Portfolio Domain](./domain/portfolio.md) for the proposed domain contract and open decisions.
 
-The engine owns reliable execution mechanics. A strategy owns decisions such as when, where, and how much to buy or sell. Avoid duplicating broker/order lifecycle code in each strategy.
+The engine owns reliable execution mechanics and coordinates application workflows. A strategy policy owns decisions such as when, where, and how much to buy or sell. Avoid duplicating broker/order lifecycle code in each strategy.
+
+See [Architecture](./architecture.md) for the full responsibility split and interaction flow.
 
 ## Boundaries
 
