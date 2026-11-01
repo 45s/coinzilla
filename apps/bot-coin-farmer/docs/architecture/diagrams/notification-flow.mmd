@@ -1,0 +1,19 @@
+sequenceDiagram
+  participant Workflow as Application workflow
+  participant Bus as EventBus port
+  participant Mapper as Notification mapper
+  participant Telegram as Telegram adapter
+  participant TG as Telegram
+
+  Workflow->>Bus: Publish order.filled / market.paused / recovery / runtime event
+  Bus->>Mapper: Curated canonical event
+  Mapper->>Mapper: Select event + redact/summarize safe fields
+  Mapper->>Telegram: Notification message
+  Telegram->>TG: Send through @coinzilla/notifiers
+  alt Delivery succeeds
+    TG-->>Telegram: Accepted
+  else Delivery fails
+    TG-->>Telegram: Error
+    Telegram->>Telegram: Log and isolate failure
+  end
+  Note over Workflow,Telegram: Notification delivery never changes trading state or accounting
