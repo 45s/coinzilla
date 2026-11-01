@@ -4,7 +4,7 @@ const isRecord = (value) =>
 const isPositiveDecimal = (value) =>
   typeof value === "string" &&
   /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value) &&
-  Number(value) > 0
+  /[1-9]/.test(value)
 
 /**
  * Convert a normalized broker price event into a technology-independent
