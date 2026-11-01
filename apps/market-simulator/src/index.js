@@ -1,1 +1,5 @@
 export { HistoricalMarketBroker, validateMarketHistory } from "./historical-market-broker.js"
+export { JsonMarketHistoryRepository } from "./infrastructure/json-market-history-repository.js"
+export { TimeoutScheduler } from "./infrastructure/timeout-scheduler.js"
+export { loadMarketHistory } from "./application/load-market-history.js"
+export { createPriceStream } from "./application/create-price-stream.js"
