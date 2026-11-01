@@ -66,7 +66,7 @@ The maximum price drop is measured from the average price of actually filled BUY
 - SELL orders use the shared inventory pool; they do not own separate, exclusive coin lots tied permanently to individual BUY orders.
 - Every active SELL order must reserve its unfilled base quantity from the shared available inventory. The same coins must never be offered for sale by two orders.
 - Preserve the configured `freeCoin` quantity in the shared market inventory; it is a retained base-asset reserve, not an amount to subtract repeatedly from every separate SELL.
-- A SELL price must recover the BUY cost, cover all applicable BUY and SELL commissions, and produce both configured `minProfit` and the configured `freeCoin` quantity.
+- Price each SELL so the trade recovers its BUY cost and all applicable BUY/SELL commissions, earns the configured `minProfit`, and preserves the configured `freeCoin` reserve in base-asset inventory.
 
 The exact SELL price formula, including fee-asset conversion and price/quantity rounding, remains to be specified. Actual fills and actual commissions—not estimates—remain authoritative for accounting. The broker's own minimum-notional and precision filters must also be respected.
 
