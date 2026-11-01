@@ -1,5 +1,7 @@
 # ADR-0001: Clean and Hexagonal Architecture for Coinzilla
 
+> **Scope clarification:** ADR-0002 supersedes the original in-place Free-Roll application migration approach. The Clean/Hexagonal architecture style and cross-cutting dependency rules recorded here remain in effect; the successor is a separate application, not a refactor of V1.
+
 - **Status:** Accepted
 - **Date:** 2026-11-01
 - **Owners:** Coinzilla architecture (cross-cutting)
@@ -7,7 +9,7 @@
 
 ## Context
 
-Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. The Free-Roll application must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle.
+Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. The existing Free-Roll application is retained as V1; the successor-app boundary is defined by ADR-0002.
 
 The repository already has useful canonical entities, broker adapters, event and journal packages, and Free-Roll collaborators. It also has an explicit engineering roadmap that requires exact financial arithmetic, canonical fill-level accounting, broker capability contracts, safe reconciliation, deterministic tests, and incremental PRs.
 
@@ -24,6 +26,7 @@ The decision establishes these rules:
 3. Application workflows depend on stable capability contracts (ports), not concrete exchange adapter classes.
 4. Concrete adapters translate external protocols and payloads into canonical contracts.
 5. The runtime composition root selects and injects concrete adapters and owns process lifecycle and resource cleanup.
+6. For the successor application, these boundaries are implemented independently in apps/bot-coin-farmer; V1 is not an implementation dependency.
 6. Side effects such as network, filesystem, time, messaging, and persistence are explicit boundaries.
 7. Unknown, unsupported, stale, incomplete, or unreconciled facts must not be treated as safe defaults for financial or order decisions.
 8. Migrate incrementally; do not rewrite stable modules or introduce frameworks/packages without demonstrated need.
