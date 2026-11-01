@@ -1,15 +1,15 @@
-flowchart TB
-  subgraph apps["Coinzilla applications"]
-    v1["Free-Roll V1\nreference only"]
-    cf["Coin Farmer\nindependent successor"]
-  end
+flowchart LR
+  operator["Operator / deployment"]
+  cf["Coin Farmer\nNode.js process"]
+  v1["Free-Roll V1\nread-only behavior reference"]
+  shared["Coinzilla shared packages\nentities / brokers / event-bus / journal / notifiers / utils"]
+  binance["Binance CEX\nfirst concrete adapter"]
+  telegram["Telegram\nfirst notification channel"]
+  database["Future database\nnot selected"]
 
-  cf --> shared["Shared Coinzilla packages\npublic contracts only"]
-  shared --> broker["Broker adapters"]
-  shared --> events["Event bus / journal"]
-  cf --> persistence["Coin Farmer-owned persistence"]
-  cf --> runtime["Coin Farmer runtime and configuration"]
-
-  v1 -. "behavior, tests, lessons\n(no runtime dependency)" .-> cf
-  exchange["External CEX APIs / streams"] <--> broker
-  operator["Operator / notifications"] <--> cf
+  operator --> cf
+  cf <--> shared
+  cf <--> binance
+  cf --> telegram
+  cf -. future durable repository .-> database
+  v1 -. specs / tests / operational lessons\n(no runtime imports) .-> cf
