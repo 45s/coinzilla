@@ -10,6 +10,19 @@ describe('formatLogContent', () => {
     assert.equal(formatLogContent({ message: 'hello' }), '{\n  "message": "hello"\n}')
   })
 
+  it('redacts common credential fields in nested structured log data', () => {
+    const formatted = formatLogContent({
+      symbol: 'BTCUSDT',
+      accessToken: 'sensitive-token',
+      credentials: { apiKey: 'sensitive-key', password: 'sensitive-password' },
+    })
+    assert.match(formatted, /BTCUSDT/)
+    assert.equal(formatted.includes('sensitive-token'), false)
+    assert.equal(formatted.includes('sensitive-key'), false)
+    assert.equal(formatted.includes('sensitive-password'), false)
+    assert.equal((formatted.match(/\\[REDACTED\\]/g) ?? []).length, 3)
+  })
+
   it('falls back for circular and BigInt-containing objects', () => {
     const circular = {}
     circular.self = circular
