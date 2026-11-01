@@ -1,0 +1,15 @@
+flowchart TB
+  subgraph apps["Coinzilla applications"]
+    v1["Free-Roll V1\nreference only"]
+    cf["Coin Farmer\nindependent successor"]
+  end
+
+  cf --> shared["Shared Coinzilla packages\npublic contracts only"]
+  shared --> broker["Broker adapters"]
+  shared --> events["Event bus / journal"]
+  cf --> persistence["Coin Farmer-owned persistence"]
+  cf --> runtime["Coin Farmer runtime and configuration"]
+
+  v1 -. "behavior, tests, lessons\n(no runtime dependency)" .-> cf
+  exchange["External CEX APIs / streams"] <--> broker
+  operator["Operator / notifications"] <--> cf
