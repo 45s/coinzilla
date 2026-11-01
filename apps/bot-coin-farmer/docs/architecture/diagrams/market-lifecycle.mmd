@@ -1,0 +1,19 @@
+stateDiagram-v2
+  [*] --> INITIALIZING
+  INITIALIZING --> READY: all startup gates + reconciliation pass
+  INITIALIZING --> PAUSED_UNSAFE: required fact missing / invalid
+  READY --> ACTIVE: strategy activated
+  ACTIVE --> RECONCILING: disconnect / gap / ambiguous order / mismatch
+  READY --> RECONCILING: uncertainty detected
+  RECONCILING --> ACTIVE: consistent active position/orders restored
+  RECONCILING --> READY: no active position or working order
+  RECONCILING --> PAUSED_UNSAFE: incomplete or inconsistent evidence
+  PAUSED_UNSAFE --> RECONCILING: explicit operator recovery request
+  ACTIVE --> PAUSED_UNSAFE: safety invariant fails
+  READY --> PAUSED_UNSAFE: safety invariant fails
+  INITIALIZING --> STOPPED: explicit stop
+  READY --> STOPPED: explicit stop
+  ACTIVE --> STOPPED: explicit stop
+  RECONCILING --> STOPPED: explicit stop
+  PAUSED_UNSAFE --> STOPPED: explicit stop
+  STOPPED --> INITIALIZING: explicit start; reconcile again
