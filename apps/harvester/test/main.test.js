@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { main } from '../src/main.js';
+import { main } from '../src/index.js';
 
 test('reports successful configuration startup without claiming a workflow ran', async () => {
   const messages = [];
