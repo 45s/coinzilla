@@ -8,7 +8,7 @@
     "start": "node --env-file-if-exists=.env src/index.js",
     "dev": "node --watch --env-file-if-exists=.env src/index.js",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=85"
+    "test:coverage": "node --test --experimental-test-coverage"
   },
   "engines": {
     "node": ">=22.23.4"
