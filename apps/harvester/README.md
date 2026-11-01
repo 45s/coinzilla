@@ -2,7 +2,7 @@
 
 Harvester is a private Node.js application workspace in the Coinzilla pnpm monorepo. Its architecture is intended to follow the same separation of concerns used by `apps/bot-coin-farmer`: a small composition root, application orchestration, a pure domain core, explicit ports, and replaceable infrastructure adapters.
 
-This is an **architecture guide, not an implementation claim**. Harvester's concrete business purpose, source systems, data contracts, processing rules, persistence guarantees, and consumers must be agreed before they are implemented. Do not infer them from the application name.
+This document describes both the implemented foundation and the intended architecture. The trading-config loader is implemented; Harvester's wider business purpose, source systems, processing rules, persistence guarantees, and consumers still require explicit product decisions. Do not infer them from the application name.
 
 ## Package
 
@@ -19,8 +19,6 @@ pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
 
-The current entry point validates the trading configuration at startup and exits successfully once validation is complete. It intentionally does not start a processing workflow: Harvester's business responsibility and first use case have not yet been agreed. Invalid or unreadable configuration is reported as a startup failure and sets a non-zero process exit code.
-
 ## Architectural direction
 
 Use a ports-and-adapters (hexagonal) architecture, with the domain at the center:
@@ -32,6 +30,36 @@ Use a ports-and-adapters (hexagonal) architecture, with the domain at the center
 5. **Infrastructure** implements those ports: concrete source clients, storage, queues, schedulers, event/journal integrations, and logging. Vendor payloads are translated at this boundary.
 
 Dependencies point inward. Domain code must not import application, infrastructure, SDKs, network clients, or environment configuration. Application code depends on domain rules and port contracts, never on a concrete provider implementation. Bootstrap is allowed to know concrete implementations because it wires them together.
+
+## Configuration loading
+
+The initial configuration baseline lives at `trading-config.json`. It preserves the strategy and pair values copied from `apps/bot-free-roll/trading-config.json`; it is a starting data contract, not evidence that Harvester currently executes that strategy.
+
+Load it with the infrastructure adapter:
+
+```js
+import { loadTradingConfig } from './src/infrastructure/config/load-trading-config.js';
+
+const tradingConfig = await loadTradingConfig();
+```
+
+The loader defaults to `apps/harvester/trading-config.json`. It also accepts a filesystem path or `file:` URL for tests and deployment-specific configuration. It reads and parses JSON, then calls the pure `validateTradingConfig` function. Read and parse errors include the source path and preserve the original cause; invalid structure raises a `TypeError` with the failing configuration path.
+
+The validator currently checks the shape needed by the initial config:
+
+- at least one strategy and at least one pair per strategy;
+- boolean strategy/pair enablement flags;
+- a non-negative `minProfit`, `keepQuantity`, and fee percentages;
+- positive order quantity and price-step percentage;
+- non-negative integer price and quantity precision.
+
+The loader does not read environment variables, mutate configuration, apply defaults, or decide trading policy. The composition root should call it during startup and pass the validated object to whichever application components need it. Domain/application code must not read the JSON file directly. Extend the schema only alongside an agreed configuration requirement and corresponding tests.
+
+## Startup entry point
+
+Run `pnpm --filter @coinzilla/harvester start` from the repository root. The `src/main.js` CLI entry point calls `src/bootstrap/start-harvester.js`, which loads and validates the trading configuration before returning the startup context. A read, parse, or validation error is reported once and sets a non-zero process exit code.
+
+The current startup context contains the validated configuration only. It intentionally does not start a processing workflow or construct speculative adapters: Harvester's business responsibility and first use case have not yet been agreed. The command exits successfully after configuration validation and clearly reports that no processing workflow is configured yet.
 
 ## Target component diagram
 
@@ -160,6 +188,6 @@ Record material decisions in the application documentation before encoding them 
 
 ## Development status
 
-The package is initialized, but no Harvester business workflow or external integration has been selected. The next implementation step is to define one thin, end-to-end use case with explicit input/output contracts and acceptance criteria, then implement only the modules that use case requires.
+The package foundation, trading-config loading/validation, and fail-fast startup entry point are implemented. No Harvester business workflow or external integration has been selected yet. The next implementation step is to agree on the first business use case and its input/output contract, then compose its dependencies through the bootstrap boundary.
 
 AI coding agents working in this directory must follow [AGENTS.md](./AGENTS.md) and applicable repository-level engineering guidance.
