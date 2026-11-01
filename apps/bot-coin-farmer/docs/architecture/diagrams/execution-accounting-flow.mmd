@@ -1,0 +1,25 @@
+sequenceDiagram
+  participant CEX
+  participant Adapter as Broker adapter
+  participant Workflow as Process-fill workflow
+  participant Ledger as Immutable fill ledger
+  participant Inventory as Inventory / recovery projection
+  participant Repository as StateRepository
+  participant Events as Event publisher
+
+  CEX->>Adapter: Execution event or trade-history row
+  Adapter->>Workflow: Canonical Fill + commission completeness
+  Workflow->>Ledger: Append by stable market/trade identity
+  alt New fill
+    Ledger-->>Workflow: Accepted immutable fact
+    Workflow->>Inventory: Apply exact base/quote/fee deltas
+    Inventory-->>Workflow: New projection or invariant failure
+    Workflow->>Repository: Save state/checkpoint
+    Workflow->>Events: Publish fill-recorded / order-progress event
+  else Identical duplicate
+    Ledger-->>Workflow: Duplicate; no economic change
+  else Same ID, changed facts
+    Ledger-->>Workflow: Conflict
+    Workflow->>Events: Publish market-paused diagnostic
+  end
+  Note over Ledger,Inventory: Unknown fee is not zero; third-asset fee pauses the market
