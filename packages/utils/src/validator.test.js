@@ -9,6 +9,14 @@ describe('Validator', () => {
     assert.throws(() => Validator.validate({ items: {} }), { message: EM.invalidParameter('items') })
   })
 
+  it('rejects malformed validation tuples with a descriptive error', () => {
+    assert.throws(() => Validator.validate({ items: [null] }), {
+      name: 'TypeError',
+      message: 'Validation item at index 0 must be [value, rules, fieldName?]',
+    })
+    assert.throws(() => Validator.validate({ items: [['value', null]] }), TypeError)
+  })
+
   it('returns undefined when all rules pass', () => {
     const items = [
       [42, [VR.required, VR.num, VR.notUndefined], 'price'],
