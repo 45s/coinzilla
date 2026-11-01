@@ -130,3 +130,100 @@ Do not assume Aggressive is a particular grid algorithm, that each BUY fill auto
 - [Portfolio Domain](./domain/portfolio.md)
 - [Trading Strategies](./trading-strategies.md)
 - [Harvester Roadmap](../ROADMAP.md)
+
+
+## Implementation pattern for use cases
+
+Harvester follows a dependency-injected, factory-based style for application workflows. This is the useful part of the Clean Architecture tutorial pattern: separate domain behavior, application orchestration, external adapters, and composition. The pattern is adapted to Harvester's trading-process architecture; it does **not** require copying the tutorial's Express/MongoDB/controller stack.
+
+The dependency direction is:
+
+~~~text
+Strategy / inbound event
+        |
+        v
+Application use case  <------ Bootstrap composes and injects dependencies
+        |
+        +------> Domain factories / pure domain functions
+        |
+        +------> Application ports (broker, persistence, clock, journal)
+                         ^
+                         |
+                Infrastructure adapters
+                         |
+                    Exchange / DB
+~~~
+
+A use case may call domain behavior and ports. Domain code must not depend on use cases, ports, adapters, or exchange SDKs. Infrastructure implements the ports; bootstrap is the composition root that selects concrete implementations.
+
+### Example: placing an order
+
+This is a responsibility example, not a claim that the following APIs already exist. Before implementation, inspect Harvester and shared-package contracts and use their actual names and shapes.
+
+1. A strategy evaluates market and portfolio facts and returns a trading decision. It does not submit the order.
+2. The engine/application workflow applies shared safety checks and invokes a focused `place-order` use case.
+3. The use case validates/co-ordinates the application request using existing domain contracts, then calls an injected broker port.
+4. A Binance adapter translates the normalized request into the Binance SDK/API format and normalizes the response.
+5. The use case returns the established result type. It does not update Portfolio merely because the exchange accepted the order.
+
+Conceptually:
+
+~~~js
+// Illustrative only: adapt names and contracts to the existing repository.
+const makePlaceOrder = ({ broker, validateOrderRequest }) => {
+  return async function placeOrder({ request }) {
+    const validation = validateOrderRequest(request);
+
+    if (!validation.ok) {
+      return toResult({ error: validation.error });
+    }
+
+    try {
+      const order = await broker.placeOrder({ request });
+      return toResult({ data: order });
+    } catch (error) {
+      return toResult({ error });
+    }
+  };
+};
+~~~
+
+The example deliberately shows dependency injection and orchestration only. Do not add a new `validateOrderRequest`, `broker.placeOrder`, or result shape if equivalent contracts already exist. Preserve actionable errors and follow the app's established error/result semantics; never catch an error only to disguise it as success.
+
+The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker.
+
+### Example: applying an actual fill to Portfolio
+
+`update-portfolio` is a different use case with a different trigger and invariant:
+
+1. An adapter/event boundary normalizes an exchange execution into the shared Fill contract.
+2. The use case receives that normalized fill; it does not parse a raw Binance event.
+3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
+4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
+5. Duplicate fills, partial fills, invalid quantities, and commissions in third assets must follow explicit domain/application rules—not be silently discarded.
+
+**Critical accounting rule:** order submission, acknowledgement, cancellation, rejection, and market-price updates do not change holdings. Only actual normalized fills change Portfolio state, including partial fills and actual commissions. See [Portfolio Domain](./domain/portfolio.md).
+
+### Where responsibilities belong
+
+| Responsibility | Harvester location / owner |
+| --- | --- |
+| Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
+| One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
+| Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
+| Binance/simulator request translation and response normalization | `src/infrastructure/` |
+| Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
+| Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
+| Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
+
+Use factories where they make dependencies and construction explicit; use plain pure functions for deterministic calculations and policies. Classes are not prohibited, but do not introduce them just to imitate a tutorial. Likewise, do not create a one-function file or folder mechanically: follow the repository's cohesion and pure-function extraction standards.
+
+### Testing pattern
+
+- **Domain:** direct unit tests of invariants, calculations, and state transitions; no broker, database, network, or framework mocks.
+- **Use case:** inject fake ports and assert the observable request, result, and error behavior. Cover rejected dependencies and invalid domain input.
+- **Adapter:** test translation and normalization against the shared broker contract; mock the external SDK boundary in default tests.
+- **Composition:** verify wiring where composition mistakes could cause observable failures; do not duplicate every unit test as a bootstrap test.
+- **Integration:** keep external exchange tests opt-in and TESTNET-only. Default unit tests must remain offline and credential-free.
+
+The tutorial's companion implementation is a pattern reference, not a source of Harvester APIs. Reuse its separation of concerns and explicit dependency composition, while retaining Harvester's ports-and-adapters direction, existing package contracts, exact-decimal accounting, and reliability requirements.
