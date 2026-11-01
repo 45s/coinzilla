@@ -289,7 +289,7 @@ Grid intentionally changes that policy to two independent recovery cycles (two 9
 
 **Open PR inventory (actual base/head refs checked)**
 - [#352](https://github.com/45s/coinzilla/pull/352) — draft Grid integration PR; base `develop`, head `feature/bot-grid`. It is the only currently open PR targeting `develop` that is directly relevant to this workstream. Its recorded base is the old shared ancestor, so it is 17 commits behind current `develop`. It was not modified.
-- [#373](https://github.com/45s/coinzilla/pull/373) — base `feature/bot-grid`; proposed fix for replay/projection accounting. Not present in the work branch.
+- [#373](https://github.com/45s/coinzilla/pull/373) — base `feature/bot-grid`; proposes lazy construction of Grid order execution (fixing the legacy constructor regression), canonical active/free projection after fill replay, and a corrected snapshot-test fixture. Not present in the work branch.
 - [#374](https://github.com/45s/coinzilla/pull/374) — base `feature/bot-grid`; adds a dedicated multi-SELL reservation projection helper. Not present in the work branch.
 - [#375](https://github.com/45s/coinzilla/pull/375) — base `feature/bot-grid`; adds duplicate broker-order-ID validation to snapshots. Not present in the work branch.
 - [#376](https://github.com/45s/coinzilla/pull/376) — base `feature/bot-grid`; adds cycle-aware open-order reconciliation mapping. Not present in the work branch.
@@ -297,8 +297,8 @@ Grid intentionally changes that policy to two independent recovery cycles (two 9
 
 **CI evidence at the current work-branch head**
 - Node 22 and Node 24 package-test jobs both fail. The Node 22 app test summary is **397 passed / 18 failed** (415 total).
-- The dominant regression is constructor wiring: `FreeRollBot` constructs `createGridOrderExecution` unconditionally, and that factory throws unless `broker.createOrder` exists. This breaks existing non-Grid cases, including a disabled strategy that is explicitly allowed to run without a broker. Several unrelated legacy startup/configuration tests fail before reaching their own assertions.
-- Two additional Grid runtime tests fail: canonical fill replay produces active quantity `1` where the test expects `0`; the multi-pair snapshot restore test returns `ok: false` where it expects `true`. PR #373 contains a proposed replay/projection correction, but it is not in this branch.
+- The dominant regression is constructor wiring: `FreeRollBot` constructs `createGridOrderExecution` unconditionally, and that factory throws unless `broker.createOrder` exists. This breaks existing non-Grid cases, including a disabled strategy that is explicitly allowed to run without a broker. PR #373 proposes lazy construction to remove this regression, but remains open and is not in the work branch.
+- Two additional Grid runtime tests fail: canonical fill replay produces active quantity `1` where the test expects `0`; the multi-pair snapshot restore test returns `ok: false` where it expects `true`. PR #373 proposes the replay/projection correction and adds the missing snapshot fixture fields; it is not in this branch.
 - Workspace coverage fails after the app test failure; the Free-Roll coverage threshold step is not reached. JavaScript syntax, actionlint, production dependency audit, and the standalone `packages/utils` test job pass. Passing checks do not offset the failed package suite.
 
 **Implementation blockers confirmed**
@@ -507,7 +507,7 @@ Each item should be a small PR with a clear Grid roadmap ID, complete tests, and
 
 - [~] **GRID-010 — Add legacy lifecycle characterization tests.** In progress on `feature/bot-grid`: strengthened the existing partial-SELL/cancel/replacement integration test to assert that the original aggregate SELL is canceled, the replacement SELL is exactly 189 units after a 10-unit partial fill and a second 100-unit BUY, and the legacy pair still has one active SELL with zero free allocation. Remaining: add explicit full-fill aggregation and cancellation-race assertions if not already covered by the existing suite; run the complete app test and coverage commands. No production behavior change.
 - [~] **GRID-011 — Capture current test and coverage baseline.** CI evidence captured at the current branch head: Node 22 and Node 24 package tests fail; Node 22 reports 397 passed / 18 failed. Syntax and production dependency audit pass; workspace coverage fails because app tests fail. A green baseline is not established.
-- [x] **GRID-012 — Add explicit legacy-mode config compatibility tests.** Tests prove absent mode preserves the legacy default and explicit `aggregated` is accepted. This is a config-validation test completion only; the full app suite remains red.
+- [~] **GRID-012 — Add explicit legacy-mode config compatibility tests.** Tests prove absent mode preserves the legacy default and explicit `aggregated` is accepted (the focused test passes in CI). Keep partial until the overall Free-Roll suite is green and the branch workstream's completion gate is satisfied.
 
 ### Stage G2 — Pure domain model and projections (safe additive preparation)
 
