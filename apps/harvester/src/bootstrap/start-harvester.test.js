@@ -74,14 +74,12 @@ test("subscribes only enabled pairs and passes broker prices to the strategy", a
   assert.deepEqual(result.subscriptions, ["BTCUSDT"])
   assert.deepEqual(calls, ["connect", "subscribe:BTCUSDT"])
 
-  broker.emitPrice("BTCUSDT", {
+  await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
     symbol: "BTCUSDT",
     price: "65000.12000000",
     timestamp: 123,
   })
-
-  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(strategyCalls.length, 1)
   assert.deepEqual(strategyCalls[0], {
     marketPrice: {
