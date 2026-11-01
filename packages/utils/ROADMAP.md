@@ -18,7 +18,7 @@ The current audit identified these concrete items:
 
 - [~] Extract the non-trivial pure numeric operations and validation rules from static facade classes into focused modules while preserving `NH`, `Validator`, and `VR` entry points.
 - [~] Validate wait durations before passing them to Node timers; reject negative, non-finite, non-numeric, and out-of-range values rather than relying on timer coercion.
-- [~] Make log formatting resilient to hostile values whose JSON serialization and string coercion both throw.
+- [~] Make log formatting resilient to hostile values whose JSON serialization and string coercion both throw, and redact common credential-bearing fields from structured payloads.
 - [~] Stop including feature-flag environment variable values in warning diagnostics; return a deterministic `false` if warning reporting fails but error reporting succeeds.
 - [~] Remove the filesystem helper's import through the public package index to avoid an unnecessary circular dependency.
 - [~] Add package-specific coverage thresholds and a CI negative self-check, then expand regression coverage for the affected boundaries.
