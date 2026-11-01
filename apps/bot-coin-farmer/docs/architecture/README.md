@@ -1,24 +1,31 @@
-# Coin Farmer Architecture
+# Coin Farmer Architecture Documentation
 
-**Status:** Design baseline for discussion  
-**Implementation status:** Not started
+This directory is the app-level design reference for `apps/bot-coin-farmer`.
 
-## Documents
+## Read in this order
 
-- [Application architecture](./COIN_FARMER_ARCHITECTURE.md) — context, boundaries, dependency direction, logical components, workflows, safety, testing, runtime isolation, and open decisions.
-- [V1-to-successor behavior plan](./V1_TO_V2_BEHAVIOR_PLAN.md) — behavior discovery, mapping, reuse policy, and parity/acceptance approach.
-- [System context diagram](./diagrams/system-context.mmd)
-- [Component architecture diagram](./diagrams/component-architecture.mmd)
-- [Execution lifecycle diagram](./diagrams/execution-lifecycle.mmd)
-- [Recovery sequence diagram](./diagrams/recovery-sequence.mmd)
+1. [Application architecture](./COIN_FARMER_ARCHITECTURE.md) — system context, dependencies, domain/application/adapters/runtime, strategy and safety.
+2. [Module catalog](./MODULE_CATALOG.md) — concrete folder/file structure and responsibility boundaries.
+3. [Workflows](./WORKFLOWS.md) — runtime, BUY, SELL, fills, recovery, notifications and shutdown.
+4. [V1-to-CF behavior map](./V1_TO_V2_BEHAVIOR_PLAN.md) — what is preserved, redesigned or left open.
+5. [Implementation roadmap](../../ROADMAP.md) — phased implementation, PR-sized work and acceptance gates.
 
-## Reading order
+## Diagrams
 
-1. Read the Coin Farmer application architecture.
-2. Read the V1 strategy specification and roadmap as references, not as implementation instructions for copying V1.
-3. Review the behavior mapping and identify unresolved strategy decisions.
-4. Agree the contracts and implementation plan before creating application code.
+The `.mmd` files are editable Mermaid source. The application README embeds the system context diagram; the architecture/workflow documents link to the other diagrams.
 
-## Design discipline
+- [System context](./diagrams/system-context.mmd)
+- [Component architecture](./diagrams/component-architecture.mmd)
+- [Per-market lifecycle](./diagrams/market-lifecycle.mmd)
+- [Standing BUY flow](./diagrams/buy-order-flow.mmd)
+- [Recovery SELL flow](./diagrams/sell-recovery-flow.mmd)
+- [Execution accounting](./diagrams/execution-accounting-flow.mmd)
+- [Reconnect/restart recovery](./diagrams/recovery-flow.mmd)
+- [Telegram notifications](./diagrams/notification-flow.mmd)
+- [Persistence evolution](./diagrams/persistence-evolution.mmd)
 
-These documents establish the agreed separate-app direction and a proposed architecture model. They do not claim that any source modules, interfaces, state machines, persistence, or safety mechanisms already exist. Open decisions remain open until explicitly resolved.
+## Design status
+
+The separate-app boundary, Node.js/JavaScript runtime, CEX-agnostic strategy boundary, first Binance WebSocket adapter, first Telegram notifier, and persistence-port/future-database direction are the current design baseline. Exact method signatures, DB technology, and unresolved strategy policy are deliberately left for the roadmap phases that have evidence to decide them.
+
+No document here implies that a source module exists or that trading is safe to enable.
