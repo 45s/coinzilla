@@ -41,7 +41,7 @@ To run only the Binance SDK integration tests:
 pnpm --filter @coinzilla/brokers test:sdk
 ```
 
-Integration tests need network access. Tests that place orders use TESTNET only and are intentionally not part of the default CI unit-test run. Never use production credentials for these tests or commit real credentials.
+Integration tests need network access. Tests that place orders use TESTNET only and are intentionally not part of the default test/CI unit-test run. Never use production credentials for these tests or commit real credentials.
 
 To run the utility package tests directly:
 
@@ -85,14 +85,14 @@ formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 
 ## Continuous integration
 
-GitHub Actions currently runs these checks:
+The GitHub Actions workflows run separate checks; there is no single workflow that installs dependencies and runs the full `pnpm run quality` script:
 
-- **Quality Gate** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm run quality` (workspace unit tests plus JavaScript syntax checks).
-- **Unit Tests** runs `pnpm test` independently.
-- **Utils Unit Tests** runs `@coinzilla/utils` tests independently.
-- **Test Coverage** runs workspace tests with Node.js coverage reporting.
-- **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pushes, pull requests, and a weekly schedule.
+- **JavaScript Syntax** (`.github/workflows/quality-gate.yml`) runs actionlint and `node scripts/check-syntax.js`. It does not install workspace dependencies or run unit tests.
+- **Unit Tests** (`.github/workflows/unit-tests.yml`) installs with `pnpm install --frozen-lockfile` and runs `pnpm test` on Node.js 22.23.4 and 24.x.
+- **Utils Unit Tests** (`.github/workflows/utils-unit-tests.yml`) independently runs `node --test packages/utils` on Node.js 22.23.4.
+- **Test Coverage** (`.github/workflows/test-coverage.yml`) installs dependencies, runs workspace coverage, and enforces package-specific coverage thresholds on Node.js 22.23.4.
+- **Dependency Audit** (`.github/workflows/dependency-audit.yml`) runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
 
-The Unit Tests and Utils Unit Tests workflows overlap with the Quality Gate. Keep that duplication until repository branch-protection requirements have been reviewed; removing a workflow can invalidate a required status check.
+The root `pnpm run quality` script is available for local use; it runs `pnpm test` followed by `pnpm run check:syntax`. It is not currently invoked as a single CI job. The Unit Tests and Utils Unit Tests workflows overlap with workspace/package coverage checks; keep the independent utils workflow until branch-protection requirements have been reviewed, because removing a workflow can invalidate a required status check.
 
-A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the **Quality Gate / Tests and JavaScript syntax** check. Consider requiring coverage and dependency audit as well if their runtime and failure policies are appropriate for every pull request.
+A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the relevant status checks. The repository's root `ROADMAP.md` records the currently configured check contexts and the remaining ruleset follow-up; re-check the live ruleset before changing workflow names or removing checks.
