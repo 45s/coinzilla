@@ -10,7 +10,6 @@
 - [x] Define and document the initial fill-driven Portfolio domain boundary.
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
 - [~] Define Aggressive order-level behavior. The initial grid-style cycle, immediate placement of the full BUY grid, one-grid-per-market rule, fixed reference-based levels, upward repricing by all crossed `priceStep` levels, replacement-grid capacity checks, multiple active BUY/SELL orders, shared inventory, partial-SELL threshold, BUY-fill SELL eligibility (>50% cumulative BUY fill and >$5 USD-equivalent notional, otherwise wait for full BUY fill), separate SELL orders, and Conservative fallback are documented. BUY/SELL tick rounding is agreed (BUY down, SELL up); exact percentage-step calculation and remaining order/fee edge cases are still open.
-- [x] Decide that Aggressive BUY executions create/update SELL exposure, while SELL orders reserve quantities from a shared per-market inventory pool (not exclusive BUY-owned lots).
 - [~] Define Aggressive risk limits and fallback behavior. Maximum invested quote and maximum price drop are agreed as triggers for switching to Conservative; the price-drop baseline is the average price of actually filled BUY orders, while the exact percentage calculation remains open. The BUY-grid replacement check counts already invested quote plus the proposed grid's unfilled quote commitment; the current grid is retained if the complete replacement grid does not fit.
 - [~] Define position ownership and allocation across pairs, strategies, and shared spot assets. Aggressive uses a shared inventory pool per market; cross-strategy and cross-market allocation remains open.
 - [ ] Define accounting fields: invested quote, cost basis, realized profit, reserved quantity, and strategy-owned inventory.
@@ -42,7 +41,7 @@
 - [x] Initialize the app as a private Node.js ESM workspace package.
 - [x] Add initial trading-config loading and pure structural validation.
 - [x] Add fail-fast startup bootstrap and CLI entry point; startup validates configuration but does not launch an unimplemented trading workflow.
-- [ ] Replace the copied Free-Roll config baseline with an agreed Harvester configuration schema.
+- [x] Replace the copied Free-Roll config baseline with the agreed flat Harvester configuration schema: process-wide settings and per-pair capital allocation and trading parameters.
 - [ ] Keep dependencies minimal and follow repository engineering standards.
 - [ ] Update this roadmap as decisions are closed and functionality is verified.
 
