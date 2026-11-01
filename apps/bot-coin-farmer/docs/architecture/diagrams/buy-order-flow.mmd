@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant CEX as CEX market stream
+  participant Adapter as Binance adapter
+  participant Workflow as Process-market-observation
+  participant Domain as BUY policy
+  participant Trading as Trading port
+  participant State as Order/reservation state
+
+  CEX->>Adapter: Last trade event
+  Adapter->>Workflow: Canonical observation + source time
+  Workflow->>State: Serialize market task / read current state
+  Workflow->>Workflow: Validate freshness, gap and market readiness
+  Workflow->>Domain: Evaluate standing BUY requirement
+  Domain-->>Workflow: Exact BUY intent or refusal
+  Workflow->>State: Check existing order + available funds
+  Workflow->>Trading: Submit with stable client order ID
+  Trading->>Adapter: Canonical order request
+  Adapter->>CEX: Binance WebSocket API request
+  CEX-->>Adapter: Ack / reject / unknown outcome
+  Adapter-->>Workflow: Normalized result
+  Note over Workflow,State: Acknowledgement is not an execution; fills update accounting separately
