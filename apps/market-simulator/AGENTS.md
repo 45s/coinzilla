@@ -7,19 +7,30 @@ Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md` be
 
 ## Architecture rules
 
-- Extend the existing `CoreBroker` from `@coinzilla/brokers`.
-- Do not instantiate `BinanceWebSocketBroker` or inject Binance WebSocket stream clients.
-- Do not create another broker contract or change shared broker interfaces.
-- Read the real DOGEUSDT fixture at `apps/bot-free-roll/doge-history.json`; do not copy or fabricate its data.
-- Emit candle close prices through the existing `subscribeForPrices({ symbol, onPrice })` callback.
+- Follow Clean Architecture: dependencies point inward.
+- Domain modules are pure and cannot import application, infrastructure, Node APIs, or broker packages.
+- Application use cases depend on domain behavior and explicit port contracts, never concrete infrastructure.
+- Infrastructure implements repository/scheduler ports.
+- Broker integration belongs in adapters and must reuse `CoreBroker` from `@coinzilla/brokers`.
+- Do not create a second strategy-facing broker contract or change shared broker interfaces.
+- Read `apps/bot-free-roll/doge-history.json` in place; never copy or fabricate fixture data.
+- Never instantiate Binance broker clients or send exchange requests.
 - Preserve source decimal strings and timestamps.
-- This phase is market-data-only. Never send exchange requests or real orders.
-- Do not add manual step/pause/resume/reset controls unless explicitly requested.
-- Tests must inject timers and remain offline.
+- Use exact string/BigInt decimal arithmetic for simulated accounting.
+- Document simulation assumptions and limitations; never present simulation as a live profitability estimate.
+
+## Simulation rules
+
+- No manual step/pause/resume/reset price controls.
+- Market orders fill at the latest candle close.
+- Limit orders fill fully at the limit when candle high/low crosses it.
+- Fees are quote-asset debits.
+- Partial fills, queue position, slippage, spread, market impact and intrabar order are unsupported until explicitly designed and tested.
+- Unit tests must be offline and use injected timers.
 
 ## Workflow
 
-- Target PRs to `develop`.
+- Target changes to `develop`.
 - Run package tests/coverage and applicable workspace CI.
-- Keep README and roadmap aligned with actual functionality.
-- Never claim unsupported account/order behavior is simulated.
+- Keep README and roadmap aligned with implemented behavior.
+- Do not claim checks passed unless they were executed.

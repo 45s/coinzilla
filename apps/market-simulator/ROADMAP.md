@@ -6,61 +6,89 @@
 
 ## Mission
 
-Provide a market-data-only mock broker that strategies can consume through the existing Coinzilla `CoreBroker` contract, using the repository's existing DOGEUSDT historical fixture.
+Provide a deterministic, offline simulation environment that lets strategy code consume historical prices and a controlled simulated spot-order lifecycle through Coinzilla's existing `CoreBroker` contract.
 
 ## Architecture
 
-~~~text
-Strategy under test
-        |
-        | CoreBroker contract
-        v
-HistoricalMarketBroker
-        |
-        v
-apps/bot-free-roll/doge-history.json
-(10,080 DOGEUSDT 1m candles)
-~~~
+```text
+Strategy
+   |
+Application use cases / simulation runner
+   |
+Ports (history repository, scheduler)
+   |
+Domain (history, decimals, matching rules)
+   ^
+Infrastructure adapters (JSON, timers)
+   ^
+Broker adapters (CoreBroker-compatible historical and execution brokers)
+```
+
+Dependencies point inward. Domain/application code must not depend on CoreBroker, Node.js I/O, timers, or exchange implementations. The composition boundary wires concrete adapters.
 
 ## Engineering constraints
 
-- Extend and reuse `CoreBroker` from `@coinzilla/brokers`; do not change the shared contract.
-- Do not instantiate `BinanceWebSocketBroker`, inject Binance stream clients, or manufacture raw Binance WebSocket messages.
-- Emit historical candle-close data through `subscribeForPrices({ symbol, onPrice })`.
-- Preserve source decimal strings and timestamps. The callback's `price` is the candle `close`.
-- Read the existing DOGE fixture in place. Do not copy, rewrite, or fabricate historical records.
-- No exchange network access, API credentials, or real orders.
-- This phase simulates market data only. Order execution, balances, fills, and user-data events remain unsupported.
-- No public manual step/pause/resume/reset API. Subscriptions advance automatically at the configured speed and stop at end-of-file.
-- Tests remain offline and deterministic with injected timers.
+- Reuse the existing `CoreBroker` contract; do not fork or modify it.
+- Never instantiate a Binance broker or send exchange requests.
+- Read the actual DOGE fixture in place; do not copy or fabricate history.
+- Preserve source decimal strings and timestamps.
+- Use string-based exact decimal arithmetic for simulated balances, prices, quantities and fees.
+- Keep tests offline, deterministic, credential-free and based on injected timers.
+- Do not add manual price-playback step/pause/resume/reset controls.
+- Clearly document all execution assumptions and unsupported exchange behavior.
+- Do not claim simulation output represents live-market profitability or exchange execution.
 
 ## Phases
 
-### MS-001 — Application scaffold
-- [x] Create the workspace package, local instructions, README, and roadmap.
-- [x] Register the app in workspace package documentation.
+### MS-001 — Workspace scaffold
+- [x] Private ESM workspace package, local instructions, README and roadmap.
+- [x] Workspace package map and lockfile registration.
 
-### MS-002 — Historical market-data broker (current PR)
-- [x] Extend the existing `CoreBroker` class.
-- [x] Load the actual DOGEUSDT history from `apps/bot-free-roll/doge-history.json`.
-- [x] Validate metadata, candle count, decimal strings, and chronological timestamps.
-- [x] Implement `connect()`, `disconnect()`, `getPrice(s)`, and `subscribeForPrices()`.
-- [x] Emit each candle close as the current price, preserving OHLCV and source timestamps.
-- [x] Support configurable speed and automatic subscription cleanup.
-- [x] Test against the complete 10,080-candle source file.
-- [ ] Verify package/workspace CI and review before merge.
+### MS-002 — Historical market-data broker
+- [x] Load the actual 10,080-candle DOGEUSDT fixture.
+- [x] Validate candle structure and ascending timestamps.
+- [x] Implement CoreBroker-compatible connect/disconnect, getPrice(s), and subscribeForPrices.
+- [x] Preserve decimal strings, timestamps and OHLCV.
+- [x] Configurable playback speed and automatic timer cleanup.
 
-### MS-003 — Strategy test integration
-- [ ] Add a strategy integration harness using `HistoricalMarketBroker`.
-- [ ] Specify simulated order lifecycle before implementing order/fill/account behavior.
-- [ ] Test strategy behavior reproducibly without a live exchange.
-- [ ] Do not implement order simulation until its semantics are agreed and tested.
+### MS-003 — Clean Architecture foundation
+- [x] Extract pure domain validation.
+- [x] Introduce application use cases for history loading and price streaming.
+- [x] Define repository and scheduler ports through application-facing contracts.
+- [x] Implement JSON repository and timer scheduler adapters.
+- [x] Keep CoreBroker dependency at the outbound adapter boundary.
+- [x] Add independent domain/application/infrastructure tests.
+
+### MS-004 — Strategy simulation harness
+- [x] Add lifecycle-based strategy runner with onStart/onPrice/onStop hooks.
+- [x] Serialize asynchronous strategy callbacks.
+- [x] Support deterministic max-candle termination.
+- [x] Return reproducible balances/orders/fills report.
+- [x] Test runner without real time or exchange access.
+
+### MS-005 — Simulated spot execution
+- [x] Implement in-memory MARKET, LIMIT and LIMIT_MAKER orders.
+- [x] Match resting limits against candle high/low using documented deterministic rules.
+- [x] Track open orders, order history, fills and balances.
+- [x] Reserve and release funds on order placement/cancellation.
+- [x] Charge configurable quote-asset fees.
+- [x] Use BigInt-backed exact decimal arithmetic.
+- [x] Cover order matching, maker rejection, insufficient funds, cancellation and accounting.
+
+## Explicit limitations of MS-005
+
+- Full fills only; no partial fills or queue priority.
+- Market orders use the latest candle close.
+- Limit fills occur at limit price; no price improvement.
+- No spread, slippage, market impact, intrabar path, latency or exchange-specific filters.
+- No exchange user-data stream, leverage, margin, funding, liquidation, or derivatives simulation.
+- Market metadata and initial balances must be supplied by the test configuration.
+
+These limitations are intentional. Extend the model only with explicit semantics and tests.
 
 ## Quality gates
 
-- Use repository Node.js and pnpm versions.
-- Keep tests offline, deterministic, and credential-free.
-- Inject timers; do not use real sleeps in unit tests.
-- Preserve source decimal strings; avoid floating-point conversions in the market-data adapter.
-- Report only checks actually executed.
-- Mark roadmap work complete only after merge to `develop` and required checks pass.
+- Run package tests and coverage plus repository CI.
+- Verify Node 22 and Node 24.
+- Keep the default test suite offline.
+- Do not mark a phase delivered until the corresponding checks pass on the branch and the change is merged into `develop`.

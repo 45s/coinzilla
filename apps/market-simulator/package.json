@@ -1,7 +1,7 @@
 {
   "name": "@coinzilla/market-simulator",
   "version": "1.0.0",
-  "description": "CoreBroker-compatible historical market-data simulator",
+  "description": "Clean Architecture historical market and deterministic spot execution simulator",
   "private": true,
   "type": "module",
   "scripts": {

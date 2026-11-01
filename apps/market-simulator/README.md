@@ -5,46 +5,80 @@
 
 ## Purpose
 
-A mock implementation of Coinzilla's existing `CoreBroker` contract. It supplies historical market prices from the repository's real DOGEUSDT fixture and makes no exchange connections.
+A deterministic, offline market simulator that exposes the existing Coinzilla `CoreBroker` contract. It can replay the repository's real DOGEUSDT history and simulate a deliberately documented subset of spot order execution. It never connects to an exchange.
 
-## Data source
+## Clean Architecture
 
-By default, the broker reads `apps/bot-free-roll/doge-history.json` directly. The file contains **10,080 DOGEUSDT one-minute candles across seven days**. The source is not copied, changed, or fabricated.
+Dependencies point inward:
 
-## Broker behavior
+- **Domain:** immutable market-history validation, exact decimal arithmetic, and pure candle/order matching rules.
+- **Application:** load-history and price-stream use cases, plus the strategy simulation runner.
+- **Ports:** repository and scheduler contracts are expressed as the methods required by application use cases.
+- **Infrastructure:** JSON history repository and replaceable timer scheduler.
+- **Adapters:** `HistoricalMarketBroker` maps the existing `CoreBroker` interface to application use cases; `SimulatedExecutionBroker` adds an in-memory execution adapter.
 
-`HistoricalMarketBroker` extends `CoreBroker`:
+Domain and application modules do not import `CoreBroker`, Binance SDKs, filesystem APIs, or Node timers. Concrete dependencies are wired at the adapter/composition boundary.
 
-- `connect()` loads and validates the configured history.
-- `subscribeForPrices({ symbol, onPrice })` emits each candle close through the existing callback contract, preserving source timestamps and OHLCV fields.
-- `getPrices({ symbol })` and `getPrice({ symbol })` return the latest emitted close.
-- `disconnect()` clears active subscriptions.
+## Historical market data
 
-Default speed is 60x (one source minute per real second). Each subscription begins at the first candle and ends at the end of the file. There are no manual step, pause, resume, or reset APIs.
+The default source is `apps/bot-free-roll/doge-history.json`, read in place. It contains 10,080 DOGEUSDT one-minute candles. The fixture is not copied or modified.
 
-**Scope:** market data only. Order placement, balances, fills, account methods, and user-data events are not simulated; inherited `CoreBroker` methods fail explicitly. No real exchange requests or orders are made.
+`HistoricalMarketBroker`:
 
-## Usage
+- loads and validates the history on `connect()`;
+- streams candle close prices through `subscribeForPrices({ symbol, onPrice })`;
+- preserves source decimal strings, timestamps and OHLCV fields;
+- exposes latest prices through `getPrice(s)()`;
+- defaults to 60x playback speed;
+- automatically cleans up timers on completion, unsubscribe, and disconnect.
+
+No manual stepping, pause, resume, or reset controls are provided.
+
+## Simulated order execution
+
+Use `SimulatedExecutionBroker` when the strategy needs order/account behavior as well as historical prices.
 
 ~~~js
-import { HistoricalMarketBroker } from "@coinzilla/market-simulator"
+import { SimulatedExecutionBroker, runStrategySimulation } from "@coinzilla/market-simulator"
 
-const broker = new HistoricalMarketBroker({ speed: 60 })
-await broker.connect()
-
-const result = await broker.subscribeForPrices({
-  symbol: "DOGEUSDT",
-  onPrice: (tick) => console.log(tick.timestamp, tick.price),
+const broker = new SimulatedExecutionBroker({
+  markets: {
+    DOGEUSDT: { baseAsset: "DOGE", quoteAsset: "USDT", pricePrecision: 5, quantityPrecision: 0 },
+  },
+  initialBalances: { USDT: "1000", DOGE: "0" },
+  feeRate: "0.00075",
 })
 
-if (!result.ok) throw result.errors[0]
-
-// Unsubscribe when the consumer is finished.
-await result.data.unsubscribe()
-await broker.disconnect()
+const report = await runStrategySimulation({
+  broker,
+  symbol: "DOGEUSDT",
+  strategy: {
+    async onStart({ broker }) {
+      // Place initial orders here.
+    },
+    async onPrice(candle, { broker }) {
+      // React to each historical candle and manage orders.
+    },
+    async onStop() {},
+  },
+})
 ~~~
 
-A different compatible history can be supplied with `historyFile`; `speed` controls how quickly source candle intervals are emitted.
+### Explicit fill model
+
+- `MARKET` orders fill immediately at the latest emitted candle close.
+- `LIMIT` and `LIMIT_MAKER` orders rest until a candle low (BUY) or high (SELL) touches the limit price.
+- Resting limit orders fill completely at their limit price. No price improvement is assumed.
+- `LIMIT_MAKER` orders that would immediately take liquidity are rejected.
+- Fees are a decimal fraction (for example `"0.00075"`) and are charged in the quote asset.
+- BUY orders reserve quote funds including the fee; SELL orders reserve base quantity. Cancellation releases the reservation.
+- Decimal calculations use string inputs and BigInt-backed fixed-point arithmetic.
+
+This is a deterministic test model, not an exchange emulator. It does **not** model partial fills, queue priority, spread, slippage, market impact, intrabar price path, exchange latency, or exchange-specific filters beyond supplied market metadata. Do not use its results as a profitability guarantee or production execution estimate.
+
+## Strategy runner
+
+`runStrategySimulation({ broker, symbol, strategy, maxCandles })` runs optional `onStart`, serialized `onPrice` callbacks, then `onStop`, and returns a report containing processed candle count, balances, orders and fills. The strategy receives the same broker instance used by the runner and can call its normal broker methods.
 
 ## Tests
 
@@ -52,3 +86,5 @@ A different compatible history can be supplied with `historyFile`; `speed` contr
 pnpm --filter @coinzilla/market-simulator test
 pnpm --filter @coinzilla/market-simulator test:coverage
 ~~~
+
+All unit tests are offline. Timer behavior is injected; no exchange credentials or network calls are required.
