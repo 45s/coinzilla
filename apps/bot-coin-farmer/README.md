@@ -4,7 +4,7 @@
 **Runtime:** Node.js `>=22.23.4`  
 **Language:** JavaScript (ES modules)  
 **Configuration:** JSON + environment secrets  
-**Status:** Architecture and implementation roadmap; application code has not started
+**Status:** Runtime skeleton initialized; strategy implementation has not started
 
 Coin Farmer is a CEX-agnostic cryptocurrency spot-trading application. Its initial strategy is a **fill-driven accumulation and capital-recovery strategy** informed by the existing Free-Roll specification. **It is not a grid bot.** It does not define a ladder of independent grid levels or trade each level as an isolated grid cycle. Instead, it coordinates a market's active position, standing BUY, recovery SELL, actual fees, recovery target and permanently retained free inventory as one strategy state.
 
@@ -20,6 +20,19 @@ The first concrete exchange adapter will use the existing Binance WebSocket impl
 | [Implementation roadmap](./ROADMAP.md) | Ordered delivery phases, PR-sized tasks, dependencies and acceptance gates |
 | [V1 behavior map](./docs/architecture/V1_TO_V2_BEHAVIOR_PLAN.md) | Which V1 strategy behavior is the starting point and what needs explicit review |
 | [Architecture diagrams](./docs/architecture/README.md#diagrams) | Editable Mermaid source and rendered diagrams |
+
+## Runtime skeleton
+
+The initial runtime shell loads and validates JSON configuration, composes the shared EventBus and Journal, and handles startup, rollback and shutdown. It deliberately runs with trading disabled. It does not connect to Binance, initialize markets, create orders or implement strategy decisions.
+
+Run from the repository root:
+
+```bash
+pnpm --filter @coinzilla/bot-coin-farmer start
+pnpm --filter @coinzilla/bot-coin-farmer test
+```
+
+The default configuration is `config/coin-farmer.config.json`. Set `CF_CONFIG_PATH` to use another JSON file. Trading must remain disabled until the domain behavior, broker contracts and safety gates in the roadmap are implemented and reviewed.
 
 ## Application context
 
