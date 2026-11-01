@@ -6,7 +6,7 @@
 **Configuration:** JSON + environment secrets  
 **Status:** Architecture and implementation roadmap; application code has not started
 
-Coin Farmer is a CEX-agnostic cryptocurrency spot-trading application. Its initial strategy is a **fill-driven accumulation and capital-recovery strategy** informed by the existing Free-Roll specification. It is similar to a grid bot only in the broad sense that it may keep buy and sell limit orders resting around a position. **It is not a conventional grid bot:** it does not define a ladder of independent grid levels or trade each level as an isolated grid cycle. Its orders, inventory, recovery target, fees, and retained free coins are coordinated as one strategy state per market.
+Coin Farmer is a CEX-agnostic cryptocurrency spot-trading application. Its initial strategy is a **fill-driven accumulation and capital-recovery strategy** informed by the existing Free-Roll specification. **It is not a grid bot.** It does not define a ladder of independent grid levels or trade each level as an isolated grid cycle. Instead, it coordinates a market's active position, standing BUY, recovery SELL, actual fees, recovery target and permanently retained free inventory as one strategy state.
 
 The first concrete exchange adapter will use the existing Binance WebSocket implementation in `@coinzilla/brokers`. The first notification adapter will use the existing Telegram implementation in `@coinzilla/notifiers`. Neither integration is allowed to leak into strategy policy.
 
