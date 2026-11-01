@@ -10,7 +10,7 @@ const tradingConfig = {
   },
 }
 
-const createBroker = (calls = [], { subscribeResult } = {}) => {
+const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   return {
     connect: async () => calls.push("connect"),
@@ -25,7 +25,7 @@ const createBroker = (calls = [], { subscribeResult } = {}) => {
     subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push(`subscribe:${symbol}`)
       subscriptions.set(symbol, onPrice)
-      return subscribeResult ?? {
+      return subscribeResultBySymbol[symbol] ?? subscribeResult ?? {
         ok: true,
         data: { unsubscribe: async () => calls.push(`unsubscribe:${symbol}`) },
       }
@@ -142,6 +142,39 @@ test("disconnects when a market price subscription fails", async () => {
     /Unable to subscribe to market prices for BTCUSDT: stream unavailable/,
   )
   assert.deepEqual(calls, ["connect", "subscribe:BTCUSDT", "disconnect"])
+})
+
+test("unsubscribes earlier markets when a later market subscription fails", async () => {
+  const calls = []
+  const broker = createBroker(calls, {
+    subscribeResultBySymbol: {
+      ETHUSDT: { ok: false, errors: [new Error("stream unavailable")] },
+    },
+  })
+  const config = {
+    ...tradingConfig,
+    pairs: {
+      BTCUSDT: tradingConfig.pairs.BTCUSDT,
+      ETHUSDT: { enabled: true, orderQuantity: 0.1 },
+    },
+  }
+
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => config,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /Unable to subscribe to market prices for ETHUSDT/,
+  )
+  assert.deepEqual(calls, [
+    "connect",
+    "subscribe:BTCUSDT",
+    "subscribe:ETHUSDT",
+    "unsubscribe:BTCUSDT",
+    "disconnect",
+  ])
 })
 
 test("rejects an unsupported broker selection", async () => {
