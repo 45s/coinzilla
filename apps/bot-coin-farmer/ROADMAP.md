@@ -39,17 +39,19 @@ The first real-money release is blocked until exact financial accounting, fill/o
 src/index.js
    |
    v
-runtime (config, composition, lifecycle)
+bootstrap (composition root + process lifecycle)
    |
-   +---- constructs adapters (Binance / Telegram / EventBus / Journal / StateRepository)
+   +---- config (JSON loading + validation)
    |
-   v
-application workflows + ports
-   |
-   +---- call pure domain decisions
+   +---- constructs infrastructure (Binance / Telegram / EventBus / Journal / StateRepository)
    |
    v
-domain policy + accounting + per-market state
+application (strategy runner, pair manager, reconciliation)
+   |
+   +---- depends on ports and calls pure domain decisions
+   |
+   v
+domain (strategy, accounting, profitability, inventory, state machine)
    |
    v
 @coinzilla/entities (canonical shared values)
