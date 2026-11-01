@@ -1,7 +1,7 @@
 # Coinzilla Architecture Blueprint
 
-**Status:** Target architecture — accepted direction, incremental implementation  
-**Scope:** Coinzilla workspace, with detailed application guidance for Free-Roll  
+**Status:** Cross-cutting guidance — accepted architecture style; Coin Farmer successor design  
+**Scope:** Coinzilla workspace, with the new Coin Farmer application as the successor-app design target  
 **Decision record:** [ADR-0001](./decisions/ADR-0001-clean-hexagonal-architecture.md)  
 **Last reviewed:** 2026-11-01
 
@@ -53,7 +53,9 @@ For Free-Roll this means:
 
 ## 3. Current system context
 
-Coinzilla is a pnpm workspace with applications under `apps/*` and shared packages under `packages/*`. The Free-Roll application currently depends on shared packages including:
+Coinzilla is a pnpm workspace with applications under `apps/*` and shared packages under `packages/*`. The existing Free-Roll application (V1) is the behavioral and engineering reference. The new Coin Farmer application is planned as an independent sibling at apps/bot-coin-farmer. It will not import V1 source code or share V1 runtime state. Both applications may coexist during development and validation. Coin Farmer may reuse stable public APIs from shared workspace packages after their contracts and ownership are reviewed. Its concrete package dependencies are not approved by this document.
+
+V1 currently depends on shared packages including:
 
 - `@coinzilla/entities`
 - `@coinzilla/brokers`
@@ -67,7 +69,7 @@ The Free-Roll application already has useful foundations: a per-pair task queue,
 
 The runtime entry point currently prepares notifications, journal, broker, and bot, and the broker preparation module currently selects a Binance WebSocket broker. That is a legitimate outer-layer responsibility. The target is to keep that concrete selection out of strategy policy and use-case modules.
 
-The dated [Free-Roll current-state audit](../../apps/bot-free-roll/CURRENT_STATE.md) documents important gaps found at its audited ref. In particular, it is a source audit rather than runtime certification. Re-inspect the current branch before relying on any individual finding.
+The dated [Free-Roll V1 current-state audit](../../apps/bot-free-roll/CURRENT_STATE.md) documents findings at its audited ref. It is a source audit, not runtime certification. Use it to guide V1 behavior discovery, then verify relevant source and tests before deciding what Coin Farmer should reproduce, improve, or deliberately leave behind.
 
 ## 4. Architecture at a glance
 
@@ -172,65 +174,102 @@ A use case should state the external capability it needs, not the adapter class 
 
 Do not introduce a new workspace package solely to satisfy a textbook diagram. First inspect the current broker API and consumers, then make a focused contract decision under the owning domain workflow.
 
-## 6. Target Free-Roll application structure
+## 6. Coin Farmer application boundary
 
-The following is a **logical organization**, not a mandatory one-file-per-function template. Keep existing cohesive modules where they already work; split only when ownership, testability, or change isolation improves.
+The successor application is a separate workspace app at:
 
 ```text
-apps/bot-free-roll/src/
-  domain/
-    free-roll/
-      buy-policy.js
-      sell-profitability.js
-      inventory-ledger.js
-      pair-state.js
-      errors/
-    # Free-Roll-only pure rules and invariants
-
-  application/
-    ports/
-      market-data.js
-      trading.js
-      account.js
-      execution-history.js
-      persistence.js
-      clock.js
-      event-publisher.js
-      logger.js
-    use-cases/
-      start-strategy.js
-      stop-strategy.js
-      process-market-tick.js
-      process-execution.js
-      reconcile-pair.js
-      recover-strategy.js
-    services/
-      # Cohesive workflows shared by more than one use case, if justified
-
-  infrastructure/
-    adapters/
-      broker/
-        # App-specific translation only if it is not already owned by packages/brokers
-      persistence/
-      events/
-      notifications/
-
-  runtime/
-    compose-application.js
-    lifecycle.js
-    index.js
-
-  bot/
-    # Existing orchestration modules retained/migrated as justified
+apps/
+├── bot-free-roll/       # V1: existing reference application
+└── bot-coin-farmer/     # successor: independent implementation
 ```
 
-Guidance:
+This is an application boundary, not a rename or in-place refactor.
 
-- Do not move shared entities into this tree; import them from `@coinzilla/entities`.
-- Do not duplicate the broker adapter implementation under the application. The `packages/brokers` domain owns CEX integration.
-- The `infrastructure/adapters/broker` location is only for a thin application-specific adapter when a genuine translation is required; it is not a second home for Binance SDK code.
-- The target structure may be reached gradually. A focused module can remain in the existing `bot/` folder until there is a clear reason to move it.
-- Avoid an empty `domain/`, `application/`, or `infrastructure/` folder created just for appearance.
+### V1 protection rules
+
+- Keep apps/bot-free-roll source, tests, configuration, README, and ROADMAP unchanged as part of the Coin Farmer initiative.
+- Treat V1 as a read-only reference for documented strategy behavior, known edge cases, test scenarios, and operational lessons.
+- Any future V1 maintenance is a separate, explicitly scoped task; it is not part of the successor-app design.
+- Do not make V1 a runtime dependency of Coin Farmer.
+- Do not move V1 modules into shared packages merely to make them importable by Coin Farmer.
+
+### Coin Farmer ownership
+
+Coin Farmer owns its implementation, tests, configuration, documentation, runtime lifecycle, and persistence model. It may consume shared Coinzilla package APIs through their public contracts. Shared-package changes remain owned by the relevant package domain and follow the repository cross-domain workflow.
+
+### Logical architecture
+
+The intended dependency direction is:
+
+```text
+runtime / composition
+        |
+        v
+adapters / integrations
+        |
+        v
+application workflows + ports
+        |
+        v
+Coin Farmer domain policy
+        |
+        v
+Coinzilla canonical domain contracts
+```
+
+The logical responsibilities are:
+
+| Area | Responsibility | Must not own |
+|---|---|---|
+| Domain | Pure strategy policy, inventory/accounting rules, profitability decisions, state invariants | Network, broker SDKs, filesystem, process lifecycle |
+| Application | Use cases and workflows that coordinate domain decisions through ports | Concrete exchange SDK classes or process globals |
+| Adapters | Translate external broker, persistence, event, journal, and notification protocols into application-facing contracts | Strategy policy or financial decision-making |
+| Runtime | Configuration loading, composition, resource lifecycle, startup/shutdown, process signals | Trading rules and accounting calculations |
+
+This is a responsibility model, not an instruction to create a folder or class for every row. The concrete module map and source-level contracts are deliberately left for the Coin Farmer design discussion.
+
+### Proposed source organization
+
+The following is a starting point for discussion, not an approved file-by-file specification:
+
+```text
+apps/bot-coin-farmer/
+  docs/
+    architecture/
+    decisions/
+    workflows/
+    diagrams/
+  src/
+    domain/
+    application/
+      ports/
+      use-cases/
+      workflows/
+    adapters/
+      broker/
+      persistence/
+      events/
+      journal/
+      notifications/
+    runtime/
+  test/
+    unit/
+    integration/
+    contract/
+    simulation/
+    acceptance/
+```
+
+Do not create empty layers or mechanically move V1 files into this layout. First define responsibilities and contracts, then choose cohesive modules. The app-level [Coin Farmer architecture document](../../apps/bot-coin-farmer/docs/architecture/COIN_FARMER_ARCHITECTURE.md) is the detailed design reference.
+
+### Runtime isolation and coexistence
+
+- V1 and Coin Farmer must have independent configuration, process lifecycle, logs/diagnostics, and state ownership.
+- Coin Farmer must not read, mutate, or write V1 runtime state.
+- Shared package reuse must be through public package exports, not deep imports into another application's src directory.
+- Running both applications must not cause duplicate order placement from shared credentials/accounts. Operational coexistence and account isolation must be designed and tested before simultaneous live use is considered.
+- A cutover or V1 retirement is a separate release decision, not an automatic consequence of Coin Farmer reaching feature parity.
 
 ## 7. Ports and adapter contracts
 
@@ -299,7 +338,7 @@ For trading software, decimal exactness is not a utility detail. It is a domain 
 
 The exact arithmetic implementation belongs in shared primitives where reusable and tested; Free-Roll owns the meaning of its calculations (cost basis, realized proceeds, profitability threshold, inventory allocation).
 
-## 9. Free-Roll workflows
+## 9. Strategy workflows to design for Coin Farmer
 
 ### 9.1 Market observation to order intent
 
@@ -365,7 +404,7 @@ A successful WebSocket subscription alone is not evidence of a reconciled or tra
 
 ### 9.4 Pair lifecycle
 
-The Free-Roll strategy specification/roadmap defines the intended pair readiness states and safety transitions. Keep pair readiness distinct from the process lifecycle. The process can be running while one pair is paused or reconciling.
+The Free-Roll V1 strategy specification and roadmap are the initial behavioral/safety references for Coin Farmer. They do not automatically settle every successor implementation detail; map each relevant rule and unresolved decision before implementation. Keep pair readiness distinct from the process lifecycle. The process can be running while one pair is paused or reconciling.
 
 The architecture must support these principles:
 
@@ -465,20 +504,20 @@ Default unit tests must remain deterministic and independent of credentials, net
 - Provide an operator-visible explanation for every unsafe pause and a deliberate recovery action.
 - Bound buffers, queues, retries, and retained event/history data.
 
-## 15. Incremental migration plan
+## 15. Parallel successor-app development plan
 
-Do not perform a big-bang rewrite. Preserve working modules and migrate one responsibility at a time. The Free-Roll roadmap's FR identifiers and acceptance criteria remain the implementation backlog; this section describes the architectural sequence, not a replacement roadmap.
+Do not refactor V1 in place. Build Coin Farmer as a separate application while preserving V1 as the reference. Reuse shared package contracts where appropriate; reimplement application-owned behavior behind Coin Farmer's own boundaries. The V1 roadmap remains authoritative for V1 only and is not automatically Coin Farmer's backlog.
 
 | Phase | Focus | Expected result | Guardrail |
 |---|---|---|---|
-| 0 | Protect strategy and document boundaries | Architecture rules agreed; no behavior changes | Existing README/roadmap remain authoritative |
-| 1 | Canonical financial and execution contracts | Reusable exact Money/Quantity/Fill/Commission/Balance/TradingRules contracts are complete and validated | Audit current entities first; no duplicate models |
-| 2 | Broker capability contracts | Small, explicit, canonical capabilities with shared contract tests | Broker package owner designs broker-owned implementation; app does not prescribe internals |
-| 3 | Exact fill ledger and profitability policy | Actual fill/fee facts drive idempotent accounting and centralized SELL approval | Preserve all strategy decisions and fail-closed behavior |
-| 4 | Extract use-case workflows | Market tick, execution, reconciliation, recovery, start/stop workflows are independently testable | Extract only where cohesive; retain current collaborators |
-| 5 | Persistence and deterministic restart | Versioned durable state plus complete broker reconciliation | No resume based only on stream connection |
-| 6 | Composition-root simplification | Runtime selects adapters and injects ports; app policy has no concrete exchange imports | No exchange-specific leakage inward |
-| 7 | Dependency enforcement and release review | Automated boundary checks, adapter contract coverage, simulation evidence | Mark complete only after CI and acceptance evidence |
+| 0 | Preserve V1 and agree the successor boundary | V1 remains unchanged; Coin Farmer has a distinct app identity and design home | No V1 source edits or runtime dependency |
+| 1 | Behavior discovery and mapping | Documented strategy rules, safety invariants, edge cases, and unresolved decisions mapped from V1 | Do not copy implementation defects or silently alter policy |
+| 2 | Canonical contract audit | Identify reusable entities, broker capabilities, event/journal APIs, and gaps | Reuse public shared contracts; package owners implement shared changes |
+| 3 | Coin Farmer domain and application design | Define domain ownership, use cases, state boundaries, ports, and failure semantics | Design before selecting frameworks or adding dependencies |
+| 4 | Adapter and runtime design | Define broker translation, persistence, composition, lifecycle, and configuration boundaries | No exchange-specific leakage into policy |
+| 5 | Deterministic test and simulation strategy | Define contract, replay, concurrency, restart, and acceptance evidence | No live exchange dependency in default tests |
+| 6 | Incremental Coin Farmer implementation | Implement independently in focused tasks against its own contracts | V1 remains frozen; no V1 runtime imports |
+| 7 | Validation and cutover review | Demonstrate behavior, safety, operations, and migration readiness | No V1 retirement or production cutover without explicit approval |
 
 ### PR sizing and ownership
 
@@ -511,7 +550,7 @@ Before merging a material change, ask:
 
 ## 17. Open decisions
 
-The architecture does not silently settle product or accounting policy questions that the strategy specification leaves open. In particular, Free-Roll still tracks unresolved decisions in its own README/roadmap. Keep those decisions there and ask only the question that blocks the next implementation task.
+The architecture does not silently settle product or accounting policy questions inherited from V1. Keep V1's unresolved decisions in its own README/roadmap. Coin Farmer must maintain its own decision log and behavior mapping, explicitly recording which V1 rules it preserves, changes, or leaves unresolved.
 
 Architecture questions that require evidence before a later decision:
 
