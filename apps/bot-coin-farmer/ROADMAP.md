@@ -57,7 +57,7 @@ domain (strategy, accounting, profitability, inventory, state machine)
 @coinzilla/entities (canonical shared values)
 ```
 
-The dependency direction is inward. Adapters implement application ports; runtime composes them. No domain/application import of Binance or Telegram packages.
+The dependency direction is inward. Infrastructure implements the contracts in `ports/`; bootstrap composes concrete implementations and injects them into application workflows. No domain/application import of Binance or Telegram packages.
 
 ## 4. Phases and deliverables
 
