@@ -1,300 +1,378 @@
-# Coin Farmer — Application Architecture
+# Coin Farmer — Concrete Application Architecture
 
-**Status:** Proposed target architecture for discussion  
 **Application:** `apps/bot-coin-farmer`  
-**V1 reference:** `apps/bot-free-roll`  
-**Implementation:** Not started
+**Runtime:** Node.js `>=22.23.4`, JavaScript ESM  
+**Status:** Target design for implementation; source code not yet created
 
-> This document describes the intended architecture of the new application. It is not a description of existing code and does not authorize implementation by itself. Detailed contracts, module responsibilities, and strategy decisions must be agreed before coding.
+## 1. Product and strategy definition
 
-## 1. Purpose and architectural decision
+Coin Farmer is a spot cryptocurrency trading application. The first strategy is a **fill-driven accumulation and recovery strategy**, based on the approved Free-Roll V1 behavior.
 
-Coin Farmer is a new application beside the existing Free-Roll app, not a rename and not an in-place refactor.
+Do not label this a grid bot in code or documentation. It is not a traditional grid strategy with a ladder of fixed price levels and independent buy/sell level pairs. For each configured market, the strategy coordinates one active trading position and the relevant standing BUY and recovery SELL orders. Its next BUY price is derived from a reference/last qualifying BUY price and a configured percentage step. Its SELL is gated by exact recovery accounting and a minimum net-profit requirement.
 
-The two-app model is deliberate:
+The strategy does not guarantee fills, profit, or market movement. Its safety objective is narrower: never intentionally submit a SELL that fails the approved conservative net-profit rule, and refuse to trade when the required facts are unknown or inconsistent.
 
-- **V1 — `apps/bot-free-roll`:** preserve the existing implementation as the reference while the successor is designed, built, and validated.
-- **Successor — `apps/bot-coin-farmer`:** create an independent implementation with new architecture. It may reuse proven strategy knowledge and shared Coinzilla packages, but it must not import V1 source code at runtime.
+## 2. Concrete product context
 
-The goal is to preserve the useful strategy intent and safety lessons while giving the successor freedom to redesign module boundaries, contracts, state ownership, persistence, orchestration, and runtime composition.
+- **Markets:** cryptocurrency spot markets, configured independently.
+- **CEX independence:** strategy and application workflows consume Coinzilla-owned canonical contracts and app-owned capability ports. No exchange SDK type or raw payload may enter domain/application policy.
+- **Initial CEX:** Binance through the existing `BinanceWebSocketBroker` and `BinanceWebSocketConfig` exported by `@coinzilla/brokers`. This is an adapter choice, not a strategy dependency.
+- **Notifications:** Telegram first, using `TelegramNotifier` and `subscribeTelegramNotifications` from `@coinzilla/notifiers`. Notification delivery is optional and must not block or alter trading.
+- **Eventing/journal:** existing `@coinzilla/event-bus` and `@coinzilla/journal` are integration candidates already used by V1.
+- **Persistence:** a repository port is part of the design from day one. A durable DB adapter is a future phase; initial in-memory state is not restart recovery.
+- **Runtime:** Node.js `>=22.23.4` (the current `@coinzilla/brokers` package declares this engine floor), ESM JavaScript, JSON config, pnpm workspace.
 
-## 2. Goals and non-goals
-
-### Goals
-
-1. Keep the trading strategy independent of any specific exchange.
-2. Make financial policy and inventory ownership explicit and testable.
-3. Separate pure decisions from external effects and runtime lifecycle.
-4. Treat actual executions and actual commissions as authoritative accounting facts.
-5. Make order lifecycle, ambiguous outcomes, reconciliation, and recovery explicit.
-6. Reuse stable Coinzilla-owned canonical contracts when they fit, without duplicating shared domain models.
-7. Give the successor independent tests, configuration, persistence, diagnostics, and release gates.
-8. Allow V1 and the successor to coexist during development without accidental runtime coupling.
-
-### Non-goals for this design phase
-
-- Modifying or refactoring V1.
-- Copying the V1 directory wholesale and renaming it.
-- Reusing V1 application modules through relative imports, aliases, symlinks, or deep imports.
-- Selecting a database, persistence technology, dependency-injection framework, or new workspace package before requirements are agreed.
-- Changing the Free-Roll strategy's intended behavior without an explicit decision.
-- Claiming the successor is production-ready or authorizing live trading.
-
-## 3. System context and application boundary
+## 3. System context
 
 See [system-context.mmd](./diagrams/system-context.mmd).
 
-Coin Farmer is one application in the existing pnpm monorepo. Its external dependencies are accessed through public shared-package contracts and adapters.
+```mermaid
+flowchart LR
+  operator["Operator / deployment"]
+  cf["Coin Farmer application\nNode.js process"]
+  cex["Binance CEX\nfirst adapter"]
+  telegram["Telegram"]
+  db["Future durable database"]
+  v1["Free-Roll V1\nread-only behavior reference"]
+  shared["Coinzilla shared packages\nentities / brokers / event-bus / journal / notifiers / utils"]
 
-### V1 is a reference, not a dependency
+  operator --> cf
+  cf <--> shared
+  cf <--> cex
+  cf --> telegram
+  cf -. future state repository .-> db
+  v1 -. strategy docs, tests, lessons only .-> cf
+```
 
-V1 may be consulted for:
+CF and V1 are sibling applications. CF must not import V1 source, reuse its process memory, or read/write its state directory.
 
-- The current strategy specification and documented behavior.
-- Existing test scenarios and observed edge cases.
-- Operational lifecycle and recovery lessons.
-- Known implementation gaps and safety risks.
-- A source-level inventory of useful algorithms that may be independently reimplemented.
-
-V1 must not be:
-
-- Imported by Coin Farmer at runtime.
-- Used as a shared mutable state store.
-- A source of implicit configuration, credentials, or runtime services.
-- Modified as part of Coin Farmer implementation tasks.
-
-If a piece of V1 logic is genuinely reusable by more than one application, first determine whether it is a stable domain concept or technical capability. Then request an owning-package change through the repository's cross-domain workflow. Do not promote application-specific code into a shared package just to avoid reimplementation.
-
-### Shared packages
-
-Potential shared-package reuse includes canonical entities and value objects, broker capabilities/adapters, event delivery, journaling, and generic utilities. These are candidates, not an approved dependency list. Inspect public exports and package roadmaps before choosing them.
-
-- Prefer exact, canonical financial and execution contracts over app-local duplicates.
-- Do not assume current entities already satisfy the successor's exactness or fill-level accounting requirements.
-- Do not import package internals or exchange SDK types into strategy policy.
-- Shared package changes must be implemented by their owning domain.
-
-## 4. Logical architecture
+## 4. Component architecture
 
 See [component-architecture.mmd](./diagrams/component-architecture.mmd).
 
-Use **Clean Architecture with Hexagonal (Ports and Adapters) boundaries and lightweight Domain-Driven Design**. This is a dependency and ownership model, not a requirement to use a framework or create one file/class per concept.
-
-### Domain
-
-Owns Coin Farmer strategy policy and invariants, such as:
-
-- Buy and sell eligibility decisions.
-- Profitability and fee-coverage policy.
-- Inventory ownership and reservation rules.
-- Pair/market readiness policy.
-- Strategy-specific accounting semantics.
-- Pure state transitions and refusal reasons.
-
-Domain policy consumes canonical values and facts. It does not call a broker, publish directly to an event bus, read files, inspect process environment, or know exchange-specific payload/status/filter names.
-
-### Application
-
-Owns use cases and workflows that coordinate domain policy through ports. Candidate workflow responsibilities include:
-
-- Start/stop strategy operation.
-- Process a canonical market observation.
-- Evaluate and submit an order intent.
-- Process an actual execution/fill.
-- Reconcile an order or pair.
-- Recover after disconnect or restart.
-- Pause/resume under explicit safety rules.
-
-The final use-case boundaries and public contracts are open design work. Avoid creating a separate workflow for every event or noun without a clear reason.
-
-### Ports
-
-Ports describe capabilities required by application workflows. Candidate capabilities include market data, order mutation/query, account balances, execution history, market rules, persistence, clock, event publication, logging, and notifications.
-
-Prefer small capability-oriented contracts over a single broad broker interface. Decide whether each contract belongs in Coin Farmer or an existing shared package only after inspecting current consumers and ownership. A port is not an excuse to duplicate an existing canonical broker contract.
-
-### Adapters
-
-Adapters translate external protocols into canonical application-facing facts and execute requested effects. Likely adapter areas include:
-
-- Broker integration through the broker package's supported API.
-- Persistence and state snapshots.
-- Event publication and journal recording.
-- Notifications and structured logging.
-- Configuration parsing/validation.
-
-Exchange SDK objects, raw payloads, exchange-specific statuses, commission field names, and filter names must be normalized at the broker boundary.
-
-### Runtime
-
-Runtime owns composition and process lifecycle:
-
-- Load and validate application configuration.
-- Construct adapters and application dependencies.
-- Start resources in a deliberate order.
-- Handle partial-startup failure and cleanup.
-- Coordinate graceful shutdown and signal handling.
-- Keep resource ownership and idempotent start/stop behavior explicit.
-
-Runtime selects concrete adapters; it must not become a home for trading policy.
-
-## 5. Dependency rules
-
-The source dependency direction points inward:
-
-1. Domain depends on canonical domain contracts and pure helpers.
-2. Application depends on domain and the ports it consumes.
-3. Adapters implement ports and translate external systems.
-4. Runtime composes application components with concrete adapters.
-5. Tests use deterministic fakes at external boundaries.
-
-The following are prohibited:
-
-- Domain/application imports from Binance or another exchange SDK.
-- Domain/application imports from V1 application source.
-- Deep imports into another package's private src paths.
-- Direct network, filesystem, process-environment, or wall-clock access inside pure policy.
-- Exchange-specific values leaking beyond the adapter normalization boundary.
-- Duplicated strategy policy inside adapters.
-
-A diagram or folder name is not enforcement. Add automated dependency checks only after the actual module graph is agreed and the check can enforce the rule reliably.
-
-## 6. Financial and execution safety constraints
-
-The Free-Roll V1 roadmap contains important safety invariants. They are initial requirements to evaluate and map for the successor, not proof that Coin Farmer already implements them.
-
-The successor design must explicitly address:
-
-### Exact values
-
-- Use exact decimal representations for price, quantity, money, fees, notionals, balances, and exchange increments.
-- Do not use JavaScript Number arithmetic for financial decisions.
-- Preserve exact source decimal strings at adapter boundaries where provenance and auditability matter.
-- Define rounding direction explicitly and re-check exchange constraints after rounding.
-- Missing, malformed, stale, or inconsistent financial facts remain unknown; never silently coerce them to zero.
-
-### Executions and commissions
-
-- An order acknowledgement is not an execution.
-- Actual fills are authoritative economic events; partial fills are first-class.
-- Fill identity must be stable and processing idempotent.
-- Preserve actual commission amount and asset per fill, including explicit zero and multiple commission records if the broker contract supports them.
-- Missing or unsupported fee facts must not be replaced by configured estimates.
-- Third-asset commission policy must be explicitly resolved. V1 currently documents rejection before start and pause if such a fee unexpectedly appears; successor behavior must be confirmed in the behavior mapping.
-
-### Inventory and profitability
-
-- Define ownership buckets for strategy inventory, permanently retained free inventory, open-order reservations, executed-but-not-reconciled inventory, and external/unmanaged wallet inventory.
-- Never sell free or external inventory and never reserve the same quantity twice.
-- Define one centralized, pure SELL profitability approval rule using exact quantities, price, cost basis, proceeds, fees, reserves, and minimum-profit policy.
-- Missing, stale, unsupported, inconsistent, or inexact inputs must deny approval.
-
-### Order lifecycle and uncertainty
-
-- A cancel request is not proof of cancellation.
-- Do not replace an order until final status and fills have been reconciled.
-- A timeout after a create/cancel request is an ambiguous outcome, not proof that the exchange rejected it.
-- Reconcile by stable client identity and authoritative history before retrying an ambiguous mutation.
-- Do not release reservations or resume a pair while execution facts remain unknown.
-
-These constraints should become explicit domain contracts, workflow rules, and test cases—not comments scattered through event handlers.
-
-## 7. Core execution and accounting flow
-
-See [execution-lifecycle.mmd](./diagrams/execution-lifecycle.mmd).
-
-The intended high-level flow is:
-
-1. Adapter receives external market or account data.
-2. Adapter validates and normalizes it into canonical facts, preserving source identity and exact values.
-3. Application workflow checks readiness and obtains the relevant current state.
-4. Domain policy evaluates the facts and returns a decision or refusal reason.
-5. Application validates reservations and submits an order request through a port.
-6. Broker adapter reports the order outcome without conflating acknowledgement with execution.
-7. Actual fill events are normalized and applied idempotently to the accounting/inventory model.
-8. Reconciliation verifies local state against authoritative broker facts.
-9. Only a fully understood state may produce another trading decision.
-
-The detailed BUY and SELL algorithms, fee model, cost basis, partial recovery behavior, and state transitions must be mapped from V1 and explicitly reviewed before implementation. This architecture document does not invent or silently settle them.
-
-## 8. Recovery and reconciliation
-
-See [recovery-sequence.mmd](./diagrams/recovery-sequence.mmd).
-
-Recovery is a safety workflow, not simply reconnecting a WebSocket.
-
-The successor must design a reconciliation contract that can establish, as applicable:
-
-- Current balances and locked amounts.
-- Open orders and their final/unknown states.
-- Tracked order history and all relevant executions.
-- Fill identity and deduplication boundaries.
-- Commission completeness and supported fee assets.
-- Trading rules and metadata freshness.
-- Local reservations, ledger totals, and inventory ownership.
-- Persistence snapshot version and last reconciled cursor/time.
-
-A pair or strategy remains paused when required evidence is incomplete or inconsistent. A live market-data subscription alone is not proof that it is safe to trade.
-
-The persistence format, recovery cursor, replay semantics, and operator resume procedure remain open decisions for the next design stage.
-
-## 9. Runtime isolation and coexistence
-
-V1 and Coin Farmer are separate applications and must own separate runtime resources.
-
-- Separate configuration files and environment-variable namespaces.
-- Separate logs/diagnostic identity.
-- Separate persistence locations and schema/version ownership.
-- Separate startup/shutdown and resource cleanup.
-- No V1 process state or in-memory object sharing.
-- No implicit sharing of order IDs, queues, reservations, or pair state.
-
-Development-time coexistence is expected. Simultaneous trading against the same exchange account is not automatically safe: both applications could observe or mutate the same balances and orders. Before any such use, define account/subaccount separation or a deliberate single-writer/ownership mechanism and prove it with tests.
-
-Cutover from V1 to Coin Farmer, disabling V1, renaming paths, and deleting V1 are separate release decisions requiring explicit approval.
-
-## 10. Testing and validation model
-
-Coin Farmer must have its own deterministic test suite. V1 tests may inform scenarios, but they do not validate Coin Farmer.
-
-| Test level | What it should prove |
-|---|---|
-| Domain unit | Exact calculations, profitability decisions, inventory invariants, state transitions |
-| Application workflow | Port call order, idempotency, refusal paths, retries, cancellation and timeout behavior |
-| Adapter contract | Canonical mapping, source identity, decimal preservation, fee completeness, pagination semantics |
-| Adapter integration | Real SDK/network behavior in controlled environments; order placement on TESTNET only |
-| Simulation/replay | Partial fills, duplicate/late events, event ordering, cancel/fill races, disconnects, restart |
-| Acceptance | Full strategy lifecycle and operational safeguards in a safe environment |
-
-Default tests must not require credentials, network access, or a live exchange. Control clocks and concurrency deterministically. Every test must clean up resources it creates.
-
-## 11. Proposed development sequence
-
-This is a design sequence, not yet an implementation roadmap:
-
-1. Agree the V1 protection and successor scope.
-2. Inventory V1 documented rules, source modules, tests, and known gaps.
-3. Produce a behavior mapping with preserve/change/review decisions.
-4. Audit shared Coinzilla entities and broker contracts against successor needs.
-5. Define domain concepts, application workflows, ports, and error semantics.
-6. Define persistence, recovery, runtime composition, and operational isolation.
-7. Agree test/acceptance evidence and implementation milestones.
-8. Implement Coin Farmer incrementally in its own app and task branches.
-9. Validate safe-environment behavior and operational readiness.
-10. Make a separate, explicit cutover decision.
-
-## 12. Open decisions — do not assume
-
-The following are intentionally not decided by this document:
-
-- Whether Coin Farmer remains exclusively a Free-Roll strategy or may later host other coin-accumulation strategies.
-- Exact behavior parity policy: which V1 rules are preserved exactly, which known defects may be corrected, and which ambiguities require product decisions.
-- Exact application package name, package scripts, config schema, and environment-variable names.
-- Which shared entity and broker contracts are sufficiently mature for reuse and which need owner-led changes.
-- Exact use-case list, module names, port shapes, and source folder granularity.
-- Persistence technology, durability guarantees, schema migration, and replay cursor.
-- Whether V1 and successor may ever run simultaneously against one account.
-- The acceptance threshold and operational soak required before cutover.
-- When, if ever, V1 is retired or its directory renamed.
-
-No item above should be silently settled by implementation convenience. Record approved decisions in ADRs and the Coin Farmer roadmap before they become code constraints.
+```mermaid
+flowchart TB
+  subgraph runtime["runtime"]
+    entry["index.js"]
+    composition["create-runtime"]
+    lifecycle["start / shutdown"]
+    config["load + validate JSON config"]
+  end
+
+  subgraph application["application"]
+    coordinator["strategy coordinator"]
+    workflows["market / order / fill / reconcile / recovery workflows"]
+    ports["broker, state, event, notification, clock ports"]
+  end
+
+  subgraph domain["domain"]
+    policy["BUY planning + SELL approval"]
+    ledger["fill ledger + inventory ledger + recovery cycle"]
+    machine["per-market state transitions"]
+  end
+
+  subgraph adapters["adapters"]
+    binance["Binance WebSocket broker adapter"]
+    telegram["Telegram notifier adapter"]
+    bus["EventBus / Journal adapters"]
+    state["In-memory state repository\nthen durable adapter"]
+  end
+
+  entities["@coinzilla/entities\nAsset, Market, Money, Quantity, CanonicalOrder, Fill, Commission, Balance, TradingRules, BrokerCapabilities, BrokerResult"]
+
+  entry --> composition
+  composition --> config
+  composition --> lifecycle
+  composition --> coordinator
+  coordinator --> workflows
+  workflows --> ports
+  workflows --> policy
+  workflows --> ledger
+  workflows --> machine
+  ports -. implemented by .-> adapters
+  policy --> entities
+  ledger --> entities
+  binance --> entities
+```
+
+### 4.1 Runtime
+
+Owns process startup, composition, configuration, resource ownership, signal handling and shutdown ordering. It constructs the concrete Binance/Telegram/EventBus/Journal/persistence adapters and injects their capabilities into application workflows. It contains no BUY/SELL formulas or inventory decisions.
+
+### 4.2 Application
+
+Owns use-case orchestration. It coordinates domain decisions and external effects through ports. It decides *when* to call a policy, persist state, submit/cancel an order, reconcile broker facts, or publish an event. It does not know Binance payload names or Telegram HTTP details.
+
+### 4.3 Domain
+
+Owns pure rules and state invariants:
+- Buy-price calculation and buy eligibility.
+- Sell profitability approval.
+- Fill and commission interpretation.
+- Active/free/reserved/external inventory ownership.
+- Recovery-cycle completion.
+- Per-market readiness state transitions.
+
+Domain functions receive canonical data and return decisions, updated immutable projections, or explicit refusal reasons. They do not perform I/O.
+
+### 4.4 Adapters
+
+Implement ports:
+- Binance maps WebSocket API/Streams events, orders, fills, balances, trading rules and history into canonical Coinzilla contracts.
+- Telegram maps curated application events to human-readable messages through the existing notifier package.
+- EventBus and Journal adapters isolate those package APIs from use cases.
+- State repository begins in-memory for tests/development; a future durable adapter can be added without changing domain rules or workflow contracts.
+
+## 5. Dependency and package reuse rules
+
+The current `@coinzilla/entities` public index exports canonical candidates including `Asset`, `Market`, `Money`, `Quantity`, `CanonicalOrder`, `Commission`, `Fill`, `Balance`, `TradingRules`, `BrokerCapabilities`, and `BrokerResult`. CF should use these contracts after reviewing their constructors, invariants, exports and tests. Do not create app-local duplicates of these concepts.
+
+The current `@coinzilla/brokers` public index exports `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, and `CoreBroker`. `CoreBroker` is not itself a complete CEX-neutral application port specification. CF should define narrow application-facing broker ports and implement the first adapter using the existing Binance broker. If later multiple apps/adapters need the same ports, propose a shared package contract through the owning domain.
+
+The current `@coinzilla/notifiers` public index exports `TelegramNotifier` and `subscribeTelegramNotifications`. Keep Telegram optional and behind the notification adapter.
+
+Use `@coinzilla/event-bus`, `@coinzilla/journal`, and `@coinzilla/utils` only through public package exports. Do not deep-import package internals.
+
+### Dependency rules
+
+- Domain imports canonical entities and pure local domain modules only.
+- Application imports domain modules and application port contracts.
+- Adapters import application ports, shared contracts, and their concrete integration packages.
+- Runtime imports all outer layers and performs composition.
+- No domain/application import from `@coinzilla/brokers`, Binance SDKs, Telegram packages, process environment, network clients or filesystem APIs.
+- No imports from `apps/bot-free-roll`.
+- Shared package changes are owned by the relevant package domain and follow `AI_AGENT_WORKFLOW.md`.
+
+## 6. Proposed source structure
+
+See [MODULE_CATALOG.md](./MODULE_CATALOG.md) for file-by-file responsibilities and contracts.
+
+```text
+src/
+├── index.js
+├── runtime/
+│   ├── create-runtime.js
+│   ├── start-runtime.js
+│   ├── shutdown-runtime.js
+│   └── config/
+│       ├── load-config.js
+│       └── validate-config.js
+├── domain/
+│   ├── strategy/
+│   │   ├── calculate-buy-price.js
+│   │   ├── plan-buy.js
+│   │   ├── approve-sell.js
+│   │   └── market-state.js
+│   ├── accounting/
+│   │   ├── fill-ledger.js
+│   │   ├── inventory-ledger.js
+│   │   ├── recovery-cycle.js
+│   │   └── calculate-fill-accounting.js
+│   └── orders/
+│       ├── order-intent.js
+│       └── order-transition.js
+├── application/
+│   ├── ports/
+│   │   ├── broker/
+│   │   │   ├── market-data.js
+│   │   │   ├── trading.js
+│   │   │   ├── account.js
+│   │   │   ├── execution-history.js
+│   │   │   └── market-rules.js
+│   │   ├── state-repository.js
+│   │   ├── event-publisher.js
+│   │   ├── notification-publisher.js
+│   │   └── clock.js
+│   ├── workflows/
+│   │   ├── initialize-market.js
+│   │   ├── process-market-observation.js
+│   │   ├── process-order-update.js
+│   │   ├── process-fill.js
+│   │   ├── reconcile-market.js
+│   │   ├── recover-market.js
+│   │   └── stop-strategy.js
+│   └── services/
+│       ├── strategy-coordinator.js
+│       └── market-task-queue.js
+└── adapters/
+    ├── broker/binance-websocket/
+    │   ├── create-binance-broker.js
+    │   ├── market-data-adapter.js
+    │   ├── trading-adapter.js
+    │   ├── account-adapter.js
+    │   ├── history-adapter.js
+    │   └── mappers/
+    ├── notifications/telegram/
+    │   ├── telegram-adapter.js
+    │   └── notification-mapper.js
+    ├── events/event-bus-adapter.js
+    ├── journal/journal-adapter.js
+    ├── persistence/in-memory-state-repository.js
+    └── logging/logger-adapter.js
+
+test/
+├── unit/domain/
+├── unit/application/
+├── contract/broker/
+├── contract/notifications/
+├── integration/
+├── simulation/
+└── acceptance/
+```
+
+This is a deliberate target structure, not an instruction to create empty files. Each module should be introduced with the behavior and tests it owns.
+
+## 7. Strategy behavior to implement
+
+The V1 README remains the starting behavior reference. The following summary is intentionally concrete; the behavior-map document records details and open questions.
+
+### Per-market BUY policy
+
+- Use last traded price for initial entry and ongoing monitoring.
+- Calculate initial/subsequent BUY limit using the approved percentage-step formula from V1: `referencePrice * (1 - priceStepPercent / 100)`.
+- The subsequent reference is the last qualifying BUY price.
+- Round limit prices down to the broker's exact price increment and validate all market constraints.
+- The next BUY is a standing order; do not wait for a later tick to decide to place it if current state says it should already be maintained.
+- Do not create duplicate BUY reservations after repeated ticks/events.
+- If last-trade data is stale, invalid, missing or gap-affected, block price-based actions.
+
+### Per-market SELL policy
+
+- SELL only active strategy inventory; exclude permanently free, external/unmanaged and already-reserved quantity.
+- Centralize SELL approval in one pure function. Inputs include exact candidate quantity/price, cost/recovery accounting, actual known fees, conservative fee reserve, trading rules and configured minimum net profit.
+- Deny when any required input is unknown, unsupported, stale, inconsistent or inexact.
+- After a new BUY completes, do not replace an existing recovery SELL until its cancel/final status and fills have been reconciled.
+- Allocate `keepQuantity` only after the recovery SELL is fully filled and cumulative actual net profit meets `minProfit`.
+- Partial/canceled/under-profitable SELLs allocate no free coins.
+
+### Fill and commission policy
+
+- Every execution is an immutable fill with stable identity.
+- Apply a fill exactly once even if seen through WebSocket, REST history and replay.
+- Preserve exact base quantity, quote quantity, price, execution time, liquidity role and all commission facts.
+- Explicit zero commission differs from unknown commission.
+- Quote/base fees are supported according to the strategy accounting contract.
+- Third-asset fees remain unsupported in the initial strategy: reject known third-asset fee configurations before trading; if an unexpected third-asset fee appears, record the reported fact, mark accounting incomplete and pause the market. Do not convert or value it.
+- Configured fee percentages are planning assumptions/reserves only; never book them as actual fees.
+
+### Partial fills
+
+Capture each partial fill immediately in the immutable ledger. The current V1 strategy decision says not to advance to the next strategy step or place replacement strategy orders until the relevant order is fully filled. The workflow must still reconcile partial fills and handle cancellation/fill races safely.
+
+## 8. Market state machine
+
+See [market-lifecycle.mmd](./diagrams/market-lifecycle.mmd).
+
+The target per-market states are:
+
+- `INITIALIZING`: config, broker capabilities, fee eligibility, trading rules, subscriptions and starting facts are checked.
+- `READY`: safe initial state; no active strategy order/position requiring management.
+- `ACTIVE`: strategy is managing a position and/or working orders.
+- `RECONCILING`: order, fill, balance or stream state is uncertain; order mutations are forbidden.
+- `PAUSED_UNSAFE`: required facts are unknown/inconsistent or an invariant failed; no automatic resume.
+- `STOPPED`: explicit stop; no new strategy orders.
+
+A process may be running while one market is paused and another is active. State transitions must be pure decisions, persisted through the repository port when durable persistence is implemented, and tested independently of broker I/O.
+
+## 9. Notifications and operational events
+
+See [notification-flow.mmd](./diagrams/notification-flow.mmd).
+
+The strategy/application publishes stable, canonical events. A notification mapper selects user-relevant events and formats safe messages. The Telegram adapter sends them using `@coinzilla/notifiers`.
+
+Initial notification categories:
+- Order fully executed (side, market, order identity, actual executed quantity/price where known).
+- Execution/fill accounted (only if distinct from order completion and useful; avoid message spam).
+- Market paused/unsafe with actionable reason.
+- Recovery completed or remains blocked.
+- Runtime startup, shutdown and unrecoverable runtime error.
+
+Telegram is optional: if both credentials are absent, notifications are disabled; if only one is configured, startup validation fails clearly. Telegram/network errors are logged and isolated; they must never roll back a fill, alter inventory, or trigger a trading decision. Never forward raw exchange payloads or secrets.
+
+## 10. Persistence and restart strategy
+
+See [persistence-evolution.mmd](./diagrams/persistence-evolution.mmd).
+
+Define a `StateRepository` port before the first strategy workflow so application use cases do not depend on storage technology. Initially provide an in-memory implementation for unit tests and deterministic simulation. The first runnable milestones must clearly state that process restart does not restore strategy-owned accounting unless a durable adapter and reconciliation workflow have landed.
+
+A future durable adapter (database not selected) must store versioned strategy state, immutable fill identities/facts or a replayable ledger, inventory buckets, order intents/identities, recovery-cycle state and a reconciliation cursor/checkpoint. Writes must be atomic enough to prevent partially applied state transitions. Startup must load state, query authoritative broker balances/orders/fills, reconcile, and only then allow order mutations.
+
+The event journal is operational history, not automatically the authoritative ledger or a database substitute. Never claim restart safety from a log file alone.
+
+## 11. Configuration direction
+
+Use JSON for strategy settings and environment variables only for secrets/deployment-specific credentials.
+
+Proposed logical configuration shape (illustrative; schema must be finalized in the configuration phase):
+
+```json
+{
+  "application": {
+    "enabled": true,
+    "mode": "testnet"
+  },
+  "broker": {
+    "adapter": "binance-websocket",
+    "marketMappings": {
+      "doge-usdt": "DOGEUSDT"
+    }
+  },
+  "notifications": {
+    "telegram": {
+      "enabled": true
+    }
+  },
+  "strategy": {
+    "enabled": true,
+    "settings": {
+      "minProfit": "0.01"
+    },
+    "markets": {
+      "doge-usdt": {
+        "baseAssetCode": "DOGE",
+        "quoteAssetCode": "USDT",
+        "enabled": true,
+        "makerPercent": "0.075",
+        "takerPercent": "0.075",
+        "priceStepPercent": "0.05",
+        "orderQuantity": "400",
+        "keepQuantity": "1"
+      }
+    }
+  }
+}
+```
+
+The logical market key and asset identities are strategy-facing. The Binance symbol mapping belongs to broker adapter configuration. Financial values are decimal strings, not JSON numbers. Do not add arbitrary precision fields when exact trading rules are provided by the broker. The final shape must be validated against actual broker/account requirements and V1 decisions.
+
+Environment secrets expected for the first integrations:
+- Binance API key and secret (names aligned with the existing broker config conventions).
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` when Telegram is enabled.
+
+No credentials belong in JSON committed to the repository.
+
+## 12. Testing strategy
+
+| Suite | What it proves | Network? |
+|---|---|---|
+| Domain unit | Exact calculations, inventory conservation, profitability, state transitions | No |
+| Application unit | Correct workflow ordering, refusal paths, retries, idempotency | No; fake ports |
+| Broker contract | Binance adapter maps the same canonical facts and failure semantics required by the ports | No for fixtures |
+| Notification contract | Curated event mapping, optional/invalid config, failure isolation | No; fake notifier |
+| Integration | Real package wiring and controlled Binance TESTNET interactions | Explicit opt-in only |
+| Simulation/replay | Partial fills, duplicate/late events, cancel races, gaps, restart, multi-market concurrency | No |
+| Acceptance | End-to-end lifecycle and operator safety gates | TESTNET only before release |
+
+Use the native Node.js test runner. Default tests must not require API credentials, Telegram credentials, network access or a database.
+
+## 13. Explicit non-goals and open decisions
+
+Not decided by this architecture:
+- Database product/schema and exact durability guarantees.
+- Whether CF eventually supports multiple strategy types or remains focused on this accumulation/recovery strategy.
+- Any change to V1 strategy rules that are not yet approved.
+- Whether V1 and CF can ever run simultaneously against the same live account.
+- Exact final method signatures for app-owned broker ports until they are checked against the actual Binance broker methods and shared entities.
+- Live-trading enablement and production cutover.
+
+Do not resolve these by implementation convenience. Record material choices as ADRs and update the CF roadmap.
