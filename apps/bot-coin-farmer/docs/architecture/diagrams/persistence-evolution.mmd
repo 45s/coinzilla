@@ -1,0 +1,22 @@
+flowchart LR
+  subgraph early["Early development / tests"]
+    app1["Application workflows"]
+    port1["StateRepository port"]
+    memory["In-memory repository"]
+    app1 --> port1 --> memory
+  end
+  subgraph later["Durable recovery phase"]
+    app2["Same application workflows"]
+    port2["Same StateRepository port"]
+    dbadapter["Database adapter\ntechnology TBD"]
+    db["Durable database"]
+    broker["Authoritative CEX balances / orders / fills"]
+    reconcile["Startup reconciliation + replay"]
+    app2 --> port2 --> dbadapter --> db
+    db --> reconcile
+    broker --> reconcile
+    reconcile --> app2
+  end
+  journal["Event Journal\noperational history only"]
+  app1 -. diagnostic events .-> journal
+  app2 -. diagnostic events .-> journal
