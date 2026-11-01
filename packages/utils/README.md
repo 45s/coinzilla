@@ -6,7 +6,7 @@ Domain-neutral helpers shared across the Coinzilla workspace. The package uses n
 
 Import the supported API from the package entry point:
 
-- `Logger`, `defaultLogger`: console logger with `debug`, `info`, `warn`, `error`, `success`, and `system` methods.
+- `Logger`, `defaultLogger`: console logger with `debug`, `info`, `warn`, `error`, `success`, and `system` methods. Structured payloads redact common credential field names; free-form strings must not contain secrets.
 - `EM`: shared error-message factories.
 - `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft })` accepts `[value, rules, fieldName?]` tuples; soft mode returns structured errors and hard mode throws them.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
