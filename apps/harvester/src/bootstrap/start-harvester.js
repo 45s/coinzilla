@@ -1,35 +1,59 @@
-import { loadTradingConfig } from '../infrastructure/config/load-trading-config.js';
-import { createBinanceBrokerAdapter } from '../infrastructure/brokers/binance-broker-adapter.js';
-import { assertBrokerPort } from '../application/ports/broker.port.js';
-import { makePlaceOrder } from '../use-cases/place-order.js';
+import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
+import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import { assertBrokerPort } from "../application/ports/broker.port.js"
+import { makePlaceOrder } from "../use-cases/place-order.js"
+import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
+import { waitStrategy } from "../domain/strategies/wait-strategy.js"
+
+async function cleanupBroker({ broker, subscriptions }) {
+  const unsubscribeResults = await Promise.allSettled(
+    subscriptions.map(({ unsubscribe }) => unsubscribe()),
+  )
+  const disconnectResult = await Promise.allSettled([broker.disconnect()])
+  return [
+    ...unsubscribeResults,
+    ...disconnectResult,
+  ].filter((result) => result.status === "rejected").map((result) => result.reason)
+}
 
 /**
- * Load configuration and optionally connect the explicitly selected broker.
+ * Load configuration, connect the selected broker, and subscribe to every
+ * enabled market. Market data is validated by an application use case before
+ * it is passed to the injected domain strategy.
  *
- * Broker connectivity is opt-in through HARVESTER_BROKER=binance. No orders
- * are submitted here; strategy execution remains disabled until its contracts
- * and unresolved trading rules are implemented.
+ * Trading remains disabled: the default strategy returns WAIT and never
+ * submits orders. Strategy decisions and order execution are separate flows.
  */
 export async function startHarvester({
   configSource,
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
+  strategy = waitStrategy,
+  logger = console,
+  onMarketPriceError = ({ symbol, error, errors }) => {
+    logger.error?.("Harvester market price processing failed", {
+      symbol,
+      error,
+      errors,
+    })
+  },
 } = {}) {
-  const tradingConfig = await loadConfig(configSource);
-  const brokerName = env.HARVESTER_BROKER;
+  const tradingConfig = await loadConfig(configSource)
+  const brokerName = env.HARVESTER_BROKER
 
-  if (brokerName === undefined || brokerName === '') {
+  if (brokerName === undefined || brokerName === "") {
     return Object.freeze({
       tradingConfig,
       broker: undefined,
       connected: false,
+      subscriptions: [],
       stop: async () => {},
-    });
+    })
   }
 
-  if (brokerName !== 'binance') {
-    throw new Error(`Unsupported HARVESTER_BROKER value: ${brokerName}`);
+  if (brokerName !== "binance") {
+    throw new Error(`Unsupported HARVESTER_BROKER value: ${brokerName}`)
   }
 
   const broker = assertBrokerPort({
@@ -39,36 +63,88 @@ export async function startHarvester({
         apiSecret: env.BINANCE_API_SECRET_KEY,
       },
     }),
-  });
+  })
 
   try {
-    await broker.connect();
+    await broker.connect()
   } catch (error) {
     try {
-      await broker.disconnect();
+      await broker.disconnect()
     } catch (disconnectError) {
       throw new AggregateError(
         [error, disconnectError],
         "Harvester broker connection failed and disconnect cleanup also failed",
       )
     }
-    throw error;
+    throw error
   }
 
-  const placeOrder = makePlaceOrder({ broker });
+  const placeOrder = makePlaceOrder({ broker })
+  const processMarketPrice = makeProcessMarketPrice({ strategy })
+  const subscriptions = []
 
-  let stopped = false;
+  try {
+    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
+      if (!pairConfig.enabled) continue
+
+      const result = await broker.subscribeForPrices({
+        symbol,
+        onPrice: (priceEvent) => {
+          void processMarketPrice({
+            symbol,
+            priceEvent,
+            pairConfig,
+            settings: tradingConfig.settings,
+          }).then((processed) => {
+            if (!processed.ok) {
+              onMarketPriceError({ symbol, errors: processed.errors })
+            }
+          }).catch((error) => onMarketPriceError({ symbol, error }))
+        },
+      })
+
+      if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
+        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          `Unable to subscribe to market prices for ${symbol}${details ? `: ${details}` : ""}`,
+        )
+      }
+
+      subscriptions.push({
+        symbol,
+        unsubscribe: result.data.unsubscribe,
+      })
+      logger.info?.("Harvester subscribed to market prices", { symbol })
+    }
+  } catch (error) {
+    const cleanupErrors = await cleanupBroker({ broker, subscriptions })
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "Harvester market-data startup failed and cleanup was incomplete",
+      )
+    }
+    throw error
+  }
+
+  let stopped = false
   const stop = async () => {
-    if (stopped) return;
-    stopped = true;
-    await broker.disconnect();
-  };
+    if (stopped) return
+    stopped = true
+
+    const cleanupErrors = await cleanupBroker({ broker, subscriptions })
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
+    }
+  }
 
   return Object.freeze({
     tradingConfig,
     broker,
     placeOrder,
+    processMarketPrice,
+    subscriptions: subscriptions.map(({ symbol }) => symbol),
     connected: true,
     stop,
-  });
+  })
 }
