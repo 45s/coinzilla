@@ -14,9 +14,12 @@ This is an **architecture guide, not an implementation claim**. Harvester's conc
 Run from the repository root:
 
 ```sh
+pnpm --filter @coinzilla/harvester start
 pnpm --filter @coinzilla/harvester test
 pnpm --filter @coinzilla/harvester test:coverage
 ```
+
+The current entry point validates the trading configuration at startup and exits successfully once validation is complete. It intentionally does not start a processing workflow: Harvester's business responsibility and first use case have not yet been agreed. Invalid or unreadable configuration is reported as a startup failure and sets a non-zero process exit code.
 
 ## Architectural direction
 
