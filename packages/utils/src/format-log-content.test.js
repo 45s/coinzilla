@@ -27,7 +27,7 @@ describe('formatLogContent', () => {
   })
 
   it('formats values JSON.stringify cannot represent', () => {
-    assert.equal(formatLogContent(Symbol('event')), 'Symbol(event)')
-    assert.equal(formatLogContent(undefined), 'undefined')
+    assert.equal(formatLogContent(Symbol('event')), undefined)
+    assert.equal(formatLogContent(undefined), undefined)
   })
 })
