@@ -177,3 +177,6 @@ The following questions remain open and must be answered before implementation w
 10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
+## Current implementation status
+
+The default composed policy is now Aggressive and receives the latest in-memory Portfolio snapshot. It currently returns NO_ACTION with blocker codes rather than emitting order intents: the agreed grid depth, exact percentage-step calculation, maximum-price-drop formula, and SELL price/fee/rounding formula are not yet fully specified. This is a safe policy integration, not an executable or live Aggressive strategy. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending.

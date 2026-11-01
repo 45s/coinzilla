@@ -149,6 +149,16 @@ Use the repository's object-input/object-output function convention and `toResul
 - Do not mutate shared portfolio state concurrently without an explicit serialization/consistency policy.
 - Keep persistence, restart recovery, and exchange reconciliation separate from the initial in-memory domain model; do not claim those guarantees until designed and implemented.
 
+## Implemented in-memory transition
+
+Position and Portfolio are implemented under src/domain/portfolio/. Position stores a canonical Market, net base Quantity, and signed quote-net-cash-flow Money. Applying BUY/SELL fills accounts for commissions charged in the base or quote asset using exact decimal-string arithmetic.
+
+Portfolio.applyFill({ fill }) creates or replaces the Position for fill.market.id and tracks canonical fill IDs for process-lifetime duplicate protection. A duplicate returns the unchanged Portfolio. A SELL that would make base holdings negative fails. The domain accepts only COMPLETE commission data and rejects third-asset commissions rather than ignoring an asset debit.
+
+makeUpdatePortfolio() exposes this transition through a toResult application use case. Bootstrap owns the latest immutable Portfolio snapshot, serializes fill updates, and supplies the latest snapshot to strategy evaluation. The implementation does not yet calculate cost basis, invested quote, realized P/L, free inventory, or SELL reservations. Fill deduplication is not durable, and no restart recovery or exchange reconciliation is provided.
+
+The broker user-data stream is not yet normalized into canonical Fill events. runtime.updatePortfolio({ fill }) is therefore an application integration point, not evidence that live broker fills are already ingested.
+
 ## Decisions still required
 
 The following are deliberately not implied by the initial definition and must be agreed before implementation:

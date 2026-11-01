@@ -5,7 +5,7 @@ Harvester is an independent Node.js process for cryptocurrency trading, built in
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
 - **Conservative (Free-Roll):** the capital-recovery and free-coin accumulation strategy derived from `apps/bot-free-roll`.
-- **Aggressive:** actively maintains multiple BUY and SELL orders to trade price movements. Exact order-placement and position-management rules are not decided yet.
+- **Aggressive:** the policy is now composed by default and receives Portfolio/Position state. It currently returns NO_ACTION until unresolved grid, risk, and SELL-pricing rules are specified; it does not submit orders.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
 
@@ -48,7 +48,7 @@ See [Architecture](./docs/architecture.md) for the responsibilities of domain en
 
 ### Portfolio domain
 
-A Portfolio is a collection of spot positions. Positions are updated from normalized, actual fills through the application use case `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings.
+A Portfolio is an immutable in-memory collection of market-scoped Positions. Positions track net base quantity and signed quote cash flow and are updated from canonical actual fills through `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings. Base/quote commissions are applied exactly; incomplete/unknown and third-asset commissions fail closed. Duplicate canonical fill IDs are ignored for the current process.
 
 See [Portfolio Domain](./docs/domain/portfolio.md) for the domain boundary, fill accounting flow, responsibilities, reliability requirements, and unresolved design decisions.
 
@@ -121,10 +121,10 @@ BINANCE_API_SECRET_KEY=...
 
 Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown unsubscribes market data before disconnecting.
 
-Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. The CLI currently uses a safe `WAIT` strategy policy: it receives prices but never creates orders. The strategy can be injected into `startHarvester({ strategy })` for tests or future strategy composition.
+Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. The CLI composes `aggressiveStrategy` by default. It receives validated prices and the latest Portfolio snapshot, but currently returns `NO_ACTION` with explicit blockers because exact grid depth, percentage-step, maximum-price-drop, and SELL price/fee/rounding rules remain unresolved. It does not submit orders. The strategy can be injected into `startHarvester({ strategy })` for tests or future composition.
 
-Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. User-data subscription, order placement, and fill processing remain disabled until their workflows and recovery requirements are implemented. The broker intentionally blocks state-changing operations while its user-data recovery gate is closed.
+Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is not yet normalized into canonical Fill events. Normalized fills can be applied through `runtime.updatePortfolio({ fill })`, but live fill ingestion, order lifecycle handling, persistence, restart recovery, and exchange reconciliation remain unimplemented. The broker intentionally blocks state-changing operations while its user-data recovery gate is closed.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated trading-config loading, enabled-pair market-price subscriptions, domain market-price validation, application strategy handoff, safe WAIT policy, graceful unsubscribe/disconnect, and offline tests. Not yet implemented: full Trading Engine/order execution, fill-driven Portfolio, user-data recovery/reconciliation, Conservative strategy, and Aggressive strategy. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated trading-config loading, enabled-pair market-price subscriptions, domain market-price validation, default Aggressive policy composition, in-memory fill-driven Position/Portfolio transitions, update-portfolio use case, graceful unsubscribe/disconnect, and offline tests. Not yet implemented: executable Aggressive order planning, full Trading Engine/order lifecycle, live fill ingestion, durable recovery/reconciliation, and Conservative strategy. See [ROADMAP.md](./ROADMAP.md).
