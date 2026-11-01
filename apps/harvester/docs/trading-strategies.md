@@ -52,19 +52,23 @@ The exchange's post-only and price/quantity constraints still apply. The Trading
 - New BUY orders and rebuilt grids are bounded by the configured maximum total invested quote amount.
 - A configured maximum price-drop limit is also a risk boundary. Reaching either the investment limit or the price-drop limit triggers the Conservative fallback described below.
 
-The exact maximum price-drop calculation and reference baseline remain open. The exact exchange tick-size rounding rules are still to be specified. The grid reference moves upward by the full number of crossed steps; lower levels are calculated from that reference.
+The maximum price drop is measured from the average price of actually filled BUY orders. BUY prices are rounded down to the nearest valid exchange tick; SELL prices are rounded up. The grid reference moves upward by the full number of crossed steps; lower levels are calculated from that reference. The exact maximum price-drop calculation beyond this baseline, and the detailed interaction between percentage steps and exchange filters, remain to be specified.
 
 #### 3. BUY fills and SELL orders
 
 - A BUY fill makes the actually executed quantity available in the Aggressive strategy's shared inventory.
-- A partial BUY fill is actionable immediately: do not wait for the entire BUY order to fill before creating/updating a SELL.
-- As additional portions of that BUY execute, update the relevant SELL order quantity to reflect the additional executed quantity.
+- SELL creation depends on the **cumulative filled percentage of each individual BUY order**:
+  - If that BUY order is **more than 50% filled**, the strategy may create a SELL for newly filled, unreserved quantity once its notional value is **strictly greater than $5 USD equivalent**.
+  - If that BUY order is **50% filled or less**, do not create a SELL from that partial fill; wait until the BUY order is fully filled.
+  - The $5 threshold is a minimum for creating the SELL, not a target order size. If eligible filled quantity is not yet worth more than $5, wait until enough eligible quantity accumulates or the BUY order completes.
+- When eligible quantity is ready to sell, create a **separate SELL order**. Do not increase or amend an existing SELL order to absorb this BUY fill.
 - Multiple SELL orders may remain active simultaneously.
 - SELL orders use the shared inventory pool; they do not own separate, exclusive coin lots tied permanently to individual BUY orders.
 - Every active SELL order must reserve its unfilled base quantity from the shared available inventory. The same coins must never be offered for sale by two orders.
-- A SELL price must cover all applicable commissions, the configured `minProfit`, and the configured `freeCoin` amount/requirement.
+- Preserve the configured `freeCoin` quantity in the shared market inventory; it is a retained base-asset reserve, not an amount to subtract repeatedly from every separate SELL.
+- A SELL price must recover the BUY cost, cover all applicable BUY and SELL commissions, and produce both configured `minProfit` and the configured `freeCoin` quantity.
 
-The exact SELL price formula, including how commissions and `freeCoin` are represented and rounded, remains to be specified. Actual fills and actual commissions—not estimates—remain authoritative for accounting.
+The exact SELL price formula, including fee-asset conversion and price/quantity rounding, remains to be specified. Actual fills and actual commissions—not estimates—remain authoritative for accounting. The broker's own minimum-notional and precision filters must also be respected.
 
 #### 4. SELL fills and new BUY opportunities
 
@@ -161,10 +165,10 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 The following questions remain open and must be answered before implementation where they affect behavior:
 
-1. What are the exact grid anchoring and rounding rules (including exchange tick-size handling), and what reference price is used to determine whether the market has risen by one `priceStep` and the grid must be rebuilt?
+1. What exact percentage-step calculation and market-price observation should be used when determining crossed grid levels? BUY tick rounding down and SELL tick rounding up are agreed.
 2. What is the exact maximum-price-drop calculation and its reference price/baseline?
 3. What is the exact SELL price formula for commissions, `minProfit`, and `freeCoin`, including rounding and commission-asset handling?
-4. When a partial BUY adds quantity, should the existing SELL be amended or cancelled/replaced, and how should the strategy behave if amendment is unavailable?
+4. What exact SELL price calculation and fee-asset conversion/rounding rules guarantee recovery of BUY cost, all BUY/SELL commissions, configured `minProfit`, and the retained `freeCoin` quantity?
 5. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 6. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
 7. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
