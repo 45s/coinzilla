@@ -26,22 +26,22 @@
 - [ ] Implement exchange trading-rule loading and validation (tick size, lot size, minimum notional).
 - [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.
 - [ ] Implement fill normalization, deduplication, and accounting from actual commissions.
-- [ ] Implement `src/domain/portfolio/` and `src/use-cases/update-portfolio.js` with deterministic tests.
+- [x] Implement in-memory Position and Portfolio transitions from canonical fills, plus the update-portfolio use case and strategy context handoff (merged in PR #414).
 - [ ] Add journal, readiness states, pause controls, and operational safety checks.
 - [ ] Define persistence and restart/reconciliation requirements before implementing recovery.
 
 ## 3. Strategy implementations
 
 - [ ] Implement Conservative (Free-Roll) strategy behind the shared engine contracts.
-- [ ] Implement Aggressive strategy behind the shared engine contracts.
-- [ ] Add deterministic unit tests for strategy decisions and boundary conditions.
+- [~] Implement Aggressive strategy behind the shared engine contracts. The policy is composed by default and reads Portfolio/Position state, but returns NO_ACTION while grid depth, exact percentage-step, maximum-price-drop, and SELL price/fee/rounding rules remain unresolved. It does not place orders.
+- [x] Add deterministic unit tests for Portfolio transitions, exact decimal arithmetic, fill deduplication, and Aggressive policy blockers (merged in PR #414).
 - [ ] Add broker contract and integration tests; live exchange tests must be explicitly opt-in.
 
 ## 4. Foundation and delivery
 
 - [x] Initialize the app as a private Node.js ESM workspace package.
 - [x] Add initial trading-config loading and pure structural validation.
-- [x] Extend startup bootstrap to load config, subscribe enabled pairs, validate incoming market prices, and pass them to the safe default strategy (merged in PR #411).
+- [x] Extend startup bootstrap to load config, subscribe enabled pairs, validate incoming market prices, and pass them with the latest Portfolio snapshot to the default Aggressive policy (PR #411 and #414).
 - [x] Replace the copied Free-Roll config baseline with the agreed flat Harvester configuration schema: process-wide settings and per-pair capital allocation and trading parameters.
 - [ ] Keep dependencies minimal and follow repository engineering standards.
 - [ ] Update this roadmap as decisions are closed and functionality is verified.
