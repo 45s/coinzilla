@@ -3,7 +3,7 @@
 ## Discovery and foundation
 
 - [x] Initialize the app as a private Node.js ESM workspace package using the repository's pnpm and Node.js conventions.
-- [~] Implement the initial trading-config loader/validator and deterministic tests (PR #395).
+- [x] Copy the initial trading-config baseline and implement file loading plus pure structural/numeric validation with deterministic tests.
 - [~] Establish startup bootstrap and CLI entry point with fail-fast configuration loading.
 - [ ] Define the harvester's product responsibility, source systems, data contracts, and expected outputs with the product owner.
 - [ ] Record security, privacy, retention, rate-limit, and operational requirements for each data source.
