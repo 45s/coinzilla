@@ -47,7 +47,7 @@ Use `HistoricalMarketBroker` when you only need market data and do not need to p
 import { HistoricalMarketBroker } from "@coinzilla/market-simulator"
 
 const broker = new HistoricalMarketBroker({
-  speed: 60, // 60 candle events per second; default is 60x real-time
+  speed: 60, // 60x real-time; one-minute candles are emitted about once per second
 })
 
 try {
