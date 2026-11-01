@@ -25,6 +25,16 @@ describe('addTextToFile', () => {
     assert.equal(await readFile(fileName, 'utf8'), 'first line\nsecond line\n')
   })
 
+  it('normalizes null and non-object options into the documented error result', async () => {
+    for (const options of [null, [], 'invalid']) {
+      await assert.rejects(addTextToFile(options), (error) => {
+        assert.equal(error.message, 'Error appending data to file')
+        assert.equal(error.cause.message, 'Invalid \\"options\\" parameter')
+        return true
+      })
+    }
+  })
+
   it('rejects when the file name is missing', async () => {
     await assert.rejects(
       addTextToFile({ fileName: '', text: '' }),
