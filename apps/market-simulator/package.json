@@ -1,0 +1,13 @@
+{
+  "name": "@coinzilla/market-simulator",
+  "version": "1.0.0",
+  "description": "Deterministic market replay and simulation for Coinzilla strategy testing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  }
+}
