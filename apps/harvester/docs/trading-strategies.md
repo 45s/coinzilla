@@ -61,7 +61,7 @@ The exact SELL price formula, including how commissions and `freeCoin` are repre
 
 - A partial SELL is measured against that SELL order's original quantity.
 - If cumulative executed quantity becomes **strictly greater than 50%** of the original SELL quantity, the strategy may consider placing another BUY.
-- At exactly 50% or below, wait; do not create a BUY based on this partial-SSELL threshold.
+- At exactly 50% or below, wait; do not create a BUY based on this partial-SELL threshold.
 - Any BUY considered after a partial SELL must still respect the maximum invested quote amount and maximum price-drop risk limit.
 - When a SELL is fully filled, Aggressive immediately starts another cycle by placing a post-only BUY at the current market price.
 
