@@ -6,7 +6,7 @@
 - [x] Establish two initial strategy modes: Conservative (Free-Roll) and Aggressive.
 - [x] Document the shared-engine / strategy-specific-policy boundary.
 - [x] Document the distinction between domain entities, domain policies, application use cases, and infrastructure adapters.
-- [x] Document mandatory AI-agent implementation guidance using dependency-injected use-case factories, domain boundaries, adapters, and bootstrap composition.
+- [~] Document mandatory AI-agent implementation guidance using dependency-injected use-case factories, domain boundaries, adapters, and bootstrap composition (PR #405; mark complete after merge).
 - [x] Define and document the initial fill-driven Portfolio domain boundary.
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
 - [~] Define Aggressive order-level behavior. The initial grid-style cycle, immediate placement of the full BUY grid, one-grid-per-market rule, fixed reference-based levels, upward repricing by all crossed `priceStep` levels, replacement-grid capacity checks, multiple active BUY/SELL orders, shared inventory, partial-SELL threshold, BUY-fill SELL eligibility (>50% cumulative BUY fill and >$5 USD-equivalent notional, otherwise wait for full BUY fill), separate SELL orders, and Conservative fallback are documented. BUY/SELL tick rounding is agreed (BUY down, SELL up); exact percentage-step calculation and remaining order/fee edge cases are still open.
