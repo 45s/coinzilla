@@ -92,6 +92,27 @@ flowchart TB
   persistence -. future durable adapter .-> future
 ```
 
+The strategy loop is event-driven and fill-driven. Market observations may cause an order *plan*, but only broker-confirmed executions change the economic ledger.
+
+```mermaid
+flowchart TD
+  tick["Last-trade observation"] --> quality{"Fresh and stream healthy?"}
+  quality -- no --> pause["Keep market blocked / reconcile"]
+  quality -- yes --> policy["Evaluate current per-market state"]
+  policy --> buy["Maintain next standing BUY if valid"]
+  policy --> sell["Evaluate recovery SELL profitability"]
+  buy --> broker["Submit through CEX-neutral trading port"]
+  sell --> broker
+  broker --> ack["Order acknowledgement / status"]
+  ack -. not an execution .-> orders["Track order lifecycle"]
+  broker --> fill["Actual fill event or history record"]
+  fill --> ledger["Idempotent exact fill ledger"]
+  ledger --> inventory["Update active / free / reserved / external inventory"]
+  inventory --> policy
+  pause --> recovery["Reconcile broker facts before resume"]
+  recovery --> policy
+```
+
 ### Proposed source layout
 
 This is the intended starting structure for implementation. It is deliberately specific enough to guide PRs, but it does not require a separate class for every file. The [module catalog](./docs/architecture/MODULE_CATALOG.md) defines each proposed module.
