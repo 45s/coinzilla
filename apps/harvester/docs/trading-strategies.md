@@ -35,15 +35,19 @@ When the market has no position to manage and a current market price is received
 
 The exchange's post-only and price/quantity constraints still apply. The Trading Engine is responsible for validating and executing the strategy's order intent through the broker boundary.
 
-#### 2. Multiple active BUY orders
+#### 2. BUY grid placement and repricing
 
-- Multiple BUY orders may be active simultaneously for the same market.
-- A new grid opportunity may create another BUY without waiting for earlier BUY orders to fill.
-- There is no configured maximum number of active BUY orders in the agreed design.
-- New BUY orders are bounded by the configured maximum total invested quote amount.
+- When the first BUY of a new Aggressive cycle is triggered, place the **entire configured BUY grid immediately**; do not wait for one BUY to fill before placing the remaining grid orders.
+- The first BUY level follows the cycle-start rule above: with `makerPercent = 0`, request a post-only BUY at the current market price; with nonzero `makerPercent`, place the first BUY below market using `priceStep`.
+- Further BUY levels are calculated as a fixed grid from the first level. For example, with a 1% step and a first level at 100, the grid levels are 100, 99, 98, 97, and so on.
+- While the market moves down or remains within the current grid's upward-repricing threshold, existing BUY orders remain at their original prices. The grid does not trail the market downward.
+- If the market rises by at least one `priceStep` from the grid's current reference price, cancel the unfilled BUY orders and rebuild the entire BUY grid around the updated market price.
+- Existing SELL orders are **not** cancelled or recreated during a BUY-grid rebuild; they remain unchanged.
+- Multiple BUY orders may be active simultaneously for the same market. There is no configured maximum number of active BUY orders in the agreed design.
+- New BUY orders and rebuilt grids are bounded by the configured maximum total invested quote amount.
 - A configured maximum price-drop limit is also a risk boundary. Reaching either the investment limit or the price-drop limit triggers the Conservative fallback described below.
 
-The exact definition and measurement baseline for the maximum price drop still need to be agreed.
+The exact maximum price-drop calculation and reference baseline remain open. The precise grid anchoring/rounding rules must respect exchange tick size and are still to be specified.
 
 #### 3. BUY fills and SELL orders
 
@@ -152,7 +156,7 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 The following questions remain open and must be answered before implementation where they affect behavior:
 
-1. What exactly constitutes a new Aggressive grid opportunity after the initial BUY, and how is `priceStep` measured/applied to subsequent BUY levels?
+1. What are the exact grid anchoring and rounding rules (including exchange tick-size handling), and what reference price is used to determine whether the market has risen by one `priceStep` and the grid must be rebuilt?
 2. What is the exact maximum-price-drop calculation and its reference price/baseline?
 3. What is the exact SELL price formula for commissions, `minProfit`, and `freeCoin`, including rounding and commission-asset handling?
 4. When a partial BUY adds quantity, should the existing SELL be amended or cancelled/replaced, and how should the strategy behave if amendment is unavailable?
