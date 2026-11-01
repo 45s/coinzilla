@@ -12,13 +12,26 @@ Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide
 - Validate boundaries and document edge-case behavior.
 - Keep the public entry point explicit and thin.
 
+## Audit findings and active remediation
+
+The current audit identified these concrete items:
+
+- [~] Extract the non-trivial pure numeric operations and validation rules from static facade classes into focused modules while preserving `NH`, `Validator`, and `VR` entry points.
+- [~] Validate wait durations before passing them to Node timers; reject negative, non-finite, non-numeric, and out-of-range values rather than relying on timer coercion.
+- [~] Make log formatting resilient to hostile values whose JSON serialization and string coercion both throw, and redact common credential-bearing fields from structured payloads.
+- [~] Stop including feature-flag environment variable values in warning diagnostics; return a deterministic `false` if warning reporting fails but error reporting succeeds.
+- [~] Remove the filesystem helper's import through the public package index to avoid an unnecessary circular dependency.
+- [~] Add package-specific coverage thresholds and a CI negative self-check, then expand regression coverage for the affected boundaries.
+
+Compatibility constraints: retain existing public exports and the legacy `NH` / `Validator` facade shapes; preserve existing numeric calculations, result structures, event-emitter singleton behavior, and successful filesystem append semantics. No runtime dependencies are required.
+
 ## Roadmap
 
-- [ ] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
-- [ ] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
-- [ ] Keep logging utilities structured, safe, and free of secrets or sensitive payloads.
+- [~] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
+- [~] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
+- [~] Keep logging utilities structured, safe, and free of secrets or sensitive payloads.
 - [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
-- [ ] Review dependency usage and keep the package minimal.
+- [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
 ## Scope guard
 
