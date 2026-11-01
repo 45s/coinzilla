@@ -28,6 +28,8 @@ src/
 
 The use case is the application boundary between incoming execution facts and the domain model. It must not depend on Binance SDK types, WebSocket message formats, or other exchange-specific structures.
 
+See [Harvester Architecture](../architecture.md) for the distinction between domain entities, strategy policies, use cases, the Trading Engine, and infrastructure adapters.
+
 ## Lifecycle and data flow
 
 1. Bootstrap loads and validates `trading-config.json`.
@@ -118,7 +120,8 @@ Only the executed part is applied. A partially filled order updates the portfoli
 - **Order lifecycle handling:** tracks order state. An order is not a position and an accepted order is not a fill.
 - **`update-portfolio` use case:** validates the normalized fill's applicability, finds the matching position, delegates the domain update, and returns the result. It coordinates; it must not own strategy policy or exchange-specific parsing.
 - **Portfolio domain:** enforces position/accounting invariants and calculates the state transition from a fill. It remains deterministic and I/O-free.
-- **Strategy:** decides what to do using prices, orders, and portfolio state. It does not directly interpret raw broker messages or bypass portfolio accounting.
+- **Strategy policy:** decides what to do using prices, orders, and portfolio state. It does not directly interpret raw broker messages or bypass portfolio accounting.
+- **Trading Engine:** coordinates the workflow between market data, the selected strategy policy, broker operations, and fill processing. It does not own strategy-specific trading rules.
 
 Use the repository's object-input/object-output function convention and `toResult` for use-case outcomes. Keep meaningful pure calculations in focused domain modules.
 
