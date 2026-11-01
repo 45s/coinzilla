@@ -35,7 +35,7 @@ describe('checkIfFeatureEnable', () => {
   })
 
   it('returns false and warns when the environment variable is not "1"', () => {
-    process.env.UTILS_TEST_FEATURE_FLAG = 'true'
+    process.env.UTILS_TEST_FEATURE_FLAG = 'super-secret-value'
 
     assert.equal(
       checkIfFeatureEnable({
@@ -46,9 +46,24 @@ describe('checkIfFeatureEnable', () => {
       false,
     )
     assert.deepEqual(logger.warnings, [{
-      why: 'process.env.UTILS_TEST_FEATURE_FLAG : true',
+      envVarName: 'UTILS_TEST_FEATURE_FLAG',
+      enabled: false,
       where: 'unit test',
     }])
+    assert.equal(JSON.stringify(logger.warnings).includes('super-secret-value'), false)
+  })
+
+  it('returns false and reports logger failures without leaking environment values', () => {
+    const errors = []
+    process.env.UTILS_TEST_FEATURE_FLAG = 'sensitive-value'
+    const failingLogger = {
+      warn() { throw new Error('warning sink failed') },
+      error(payload) { errors.push(payload) },
+    }
+
+    assert.equal(checkIfFeatureEnable({ envVarName: 'UTILS_TEST_FEATURE_FLAG', logger: failingLogger }), false)
+    assert.equal(errors.length, 1)
+    assert.equal(errors[0].message, 'warning sink failed')
   })
 
   it('returns false when the environment variable is unset', () => {
