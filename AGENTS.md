@@ -29,6 +29,10 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
    - Keep feature orchestration in a clearly named feature module. Avoid both giant files and excessive fragmentation into one-function files without a cohesion or testing benefit.
    - Use descriptive, consistent file and symbol names. Prefer domain-specific names over vague names such as common, misc, or stuff.
    - Keep dependencies flowing toward stable, lower-level contracts; avoid circular dependencies and hidden side effects.
+   - **Extract meaningful pure functions into separate modules.** If a non-trivial function can be evaluated from its inputs without reading or mutating object state, globals, or external systems, it MUST live in a dedicated, cohesive module rather than inside a class/service or a large orchestration file. This applies even when the function currently has only one caller; reuse is not a prerequisite for separation.
+   - Group closely related pure functions by domain/responsibility in focused files (for example, `helpers/validate-telegram-options.js` or `telegram/telegram-message-validation.js`). Do not create a generic `utils.js` dumping ground or split trivial one-line expressions into files.
+   - Classes and services should orchestrate side effects and own state. Keep validation, parsing, formatting, normalization, mapping, calculations, and business-rule decisions in pure modules whenever practical.
+   - Avoid god files. A file approaching 300 lines must be reviewed for cohesive extraction opportunities; files exceeding 500 lines require a clear technical justification in the PR or a refactoring plan. These are review triggers, not reasons to fragment tightly coupled code mechanically.
 
 4. **Evidence-Based Completion**
    - Inspect the final diff for correctness, missing tests, accidental changes, dead code, secrets, and weakened checks.
