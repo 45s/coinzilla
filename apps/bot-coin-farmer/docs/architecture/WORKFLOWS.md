@@ -75,7 +75,7 @@ See [execution-accounting-flow.mmd](./diagrams/execution-accounting-flow.mmd).
 
 ## 6. Recovery after reconnect or restart
 
-See [recovery-flow.mmd](./diagrams/recovery-flow.mmd).
+See [recovery-sequence.mmd](./diagrams/recovery-flow.mmd).
 
 1. On disconnect, stream gap, ambiguous order mutation, restart or mismatch, move the affected market to RECONCILING and block order mutations.
 2. Restore the last durable state if a durable repository exists. In early in-memory-only milestones, restart recovery is not supported; do not pretend otherwise.
