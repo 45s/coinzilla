@@ -68,7 +68,8 @@ flowchart TB
   subgraph adapters["Infrastructure adapters"]
     binance["Binance WebSocket adapter"]
     telegram["Telegram notification adapter"]
-    eventbus["EventBus + Journal adapters"]
+    eventbus["EventBus adapter"]
+    journal["Journal adapter"]
     persistence["State repository adapter (in-memory first; durable later)"]
   end
 
@@ -87,7 +88,7 @@ flowchart TB
   accounting --> contracts
   binance <--> exchange
   telegram --> tg
-  eventbus --> eventbus
+  eventbus --> journal
   persistence -. future durable adapter .-> future
 ```
 
