@@ -7,6 +7,7 @@
 **Status:** Design and migration plan — no Grid runtime behavior is enabled by this document.
 
 **Strategy specification:** [GRID-README.md](./GRID-README.md)  
+**Mandatory AI-agent workflow:** [GRID-AGENT-INSTRUCTIONS.md](./GRID-AGENT-INSTRUCTIONS.md)  
 **Existing strategy specification:** [README.md](./README.md)  
 **Existing engineering roadmap:** [ROADMAP.md](./ROADMAP.md)
 
