@@ -57,7 +57,7 @@ The loader does not read environment variables, mutate configuration, apply defa
 
 ## Startup entry point
 
-Run `pnpm --filter @coinzilla/harvester start` from the repository root. The `src/main.js` CLI entry point calls `src/bootstrap/start-harvester.js`, which loads and validates the trading configuration before returning the startup context. A read, parse, or validation error is reported once and sets a non-zero process exit code.
+Run `pnpm --filter @coinzilla/harvester start` from the repository root. The `src/index.js` CLI entry point calls `src/bootstrap/start-harvester.js`, which loads and validates the trading configuration before returning the startup context. A read, parse, or validation error is reported once and sets a non-zero process exit code.
 
 The current startup context contains the validated configuration only. It intentionally does not start a processing workflow or construct speculative adapters: Harvester's business responsibility and first use case have not yet been agreed. The command exits successfully after configuration validation and clearly reports that no processing workflow is configured yet.
 
