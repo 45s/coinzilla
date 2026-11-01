@@ -21,9 +21,9 @@ The key dependency rule is:
 
 For Free-Roll this means:
 
-- Free-Roll policy and accounting do not know Binance, Bybit, WebSocket payloads, SDK classes, or exchange-specific status strings.
+- Coin Farmer policy and accounting must not know Binance, Bybit, WebSocket payloads, SDK classes, or exchange-specific status strings.
 - Shared canonical financial and trading concepts are owned by Coinzilla's shared entity/contracts packages where they are genuinely reusable.
-- Free-Roll-specific decisions remain owned by the Free-Roll application.
+- Coin Farmer-specific successor decisions remain owned by Coin Farmer; V1 remains an independent reference application.
 - Broker adapters translate between exchange-specific facts and canonical Coinzilla contracts.
 - A runtime composition root chooses concrete adapters and injects them into the application.
 - Unknown, stale, unsupported, or unreconciled facts fail closed before an unsafe trading action.
@@ -65,9 +65,9 @@ V1 currently depends on shared packages including:
 
 The entities package already exports canonical concepts including `Money`, `Quantity`, `Asset`, `Market`, `CanonicalOrder`, `Commission`, `Fill`, `Balance`, `TradingRules`, `BrokerCapabilities`, and `BrokerResult`. Reuse and evolve these contracts where they fit; do not create duplicate types in the application.
 
-The Free-Roll application already has useful foundations: a per-pair task queue, event handling and order-execution collaborators, fill-reconciliation helpers, recovery/snapshot logic, inventory allocation helpers, and deterministic tests. Preserve these foundations and improve their boundaries incrementally.
+V1 provides useful reference material: a per-pair task queue, event handling and order-execution collaborators, fill-reconciliation helpers, recovery/snapshot logic, inventory allocation helpers, and deterministic tests. Use these modules and tests to discover behavior and edge cases. Do not refactor or move V1 code as part of the Coin Farmer initiative; independently design and implement successor responsibilities behind Coin Farmer's own boundaries.
 
-The runtime entry point currently prepares notifications, journal, broker, and bot, and the broker preparation module currently selects a Binance WebSocket broker. That is a legitimate outer-layer responsibility. The target is to keep that concrete selection out of strategy policy and use-case modules.
+V1's runtime entry point currently prepares notifications, journal, broker, and bot, while its broker preparation module selects a Binance WebSocket broker. This is evidence about V1's composition, not a template that Coin Farmer must copy. Coin Farmer will own an independent composition root that selects concrete adapters and keeps that selection out of domain policy and application workflows.
 
 The dated [Free-Roll V1 current-state audit](../../apps/bot-free-roll/CURRENT_STATE.md) documents findings at its audited ref. It is a source audit, not runtime certification. Use it to guide V1 behavior discovery, then verify relevant source and tests before deciding what Coin Farmer should reproduce, improve, or deliberately leave behind.
 
@@ -144,7 +144,7 @@ A common failure mode is putting every business concept into a shared package or
 
 ### Shared packages own reusable contracts
 
-`packages/entities` owns canonical, exchange-neutral concepts that are meaningful across applications and adapters: exact `Money` and `Quantity`, assets and markets, canonical orders, fills, commissions, balances, trading rules, broker capabilities, and result/error contracts.
+`packages/entities` is the current home for canonical, exchange-neutral concepts such as money, quantity, assets, markets, orders, fills, commissions, balances, trading rules, broker capabilities, and result/error contracts. Do not assume every required successor capability or exact-decimal guarantee is already implemented: audit the actual public API and tests before reuse, and coordinate missing shared contracts with the package owner.
 
 A shared entity should describe a stable fact or invariant. It should not know how Free-Roll chooses its next order.
 
@@ -157,7 +157,7 @@ Other packages own their technical capabilities:
 
 ### The application owns its strategy
 
-Free-Roll owns its strategy-specific rules and workflows:
+Each application owns its strategy-specific rules and workflows. V1's documented strategy remains the reference for behavior discovery; Coin Farmer owns its independently implemented successor policy:
 
 - Buy and sell policy.
 - Recovery profitability decision.
