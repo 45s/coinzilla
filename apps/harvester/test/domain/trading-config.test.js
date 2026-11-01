@@ -6,60 +6,53 @@ import { validateTradingConfig } from '../../src/domain/trading-config.js';
 const configUrl = new URL('../../trading-config.json', import.meta.url);
 const validConfig = JSON.parse(await readFile(configUrl, 'utf8'));
 
-test('accepts the initial Harvester trading configuration', () => {
+test('accepts the flat Harvester trading configuration', () => {
   assert.equal(validateTradingConfig(validConfig), validConfig);
+  assert.equal('strategies' in validConfig, false);
+  assert.equal('free-roll' in validConfig, false);
 });
 
-test('rejects a missing strategies object', () => {
+test('rejects missing settings or pairs objects', () => {
+  assert.throws(() => validateTradingConfig({ pairs: {} }), /settings.*expected an object/);
   assert.throws(
-    () => validateTradingConfig({}),
-    /strategies.*expected an object/,
+    () => validateTradingConfig({ settings: { minProfit: 0.01 } }),
+    /pairs.*expected an object/,
   );
 });
 
-test('rejects an empty strategies collection', () => {
+test('rejects an empty pairs collection', () => {
   assert.throws(
-    () => validateTradingConfig({ strategies: {} }),
-    /strategies.*at least one strategy/,
+    () => validateTradingConfig({ settings: { minProfit: 0.01 }, pairs: {} }),
+    /pairs.*at least one pair/,
   );
 });
 
-test('rejects invalid strategy flags', () => {
+test('rejects invalid pair enabled flags', () => {
   const config = structuredClone(validConfig);
-  config.strategies['free-roll'].enabled = 'true';
+  config.pairs.DOGEUSDT.enabled = 'true';
 
   assert.throws(
     () => validateTradingConfig(config),
-    /strategies\.free-roll\.enabled.*expected a boolean/,
+    /pairs\.DOGEUSDT\.enabled.*expected a boolean/,
   );
 });
 
-test('rejects missing strategy settings', () => {
-  const config = structuredClone(validConfig);
-  delete config.strategies['free-roll'].settings;
+test('rejects non-positive investment and order quantities', () => {
+  const invalidInvestment = structuredClone(validConfig);
+  invalidInvestment.pairs.DOGEUSDT.investment = 0;
+  assert.throws(() => validateTradingConfig(invalidInvestment), /investment.*greater than 0/);
 
-  assert.throws(
-    () => validateTradingConfig(config),
-    /strategies\.free-roll\.settings.*expected an object/,
-  );
-});
-
-test('rejects non-positive order quantities', () => {
-  const config = structuredClone(validConfig);
-  config.strategies['free-roll'].pairs.DOGEUSDT.orderQuantity = 0;
-
-  assert.throws(
-    () => validateTradingConfig(config),
-    /orderQuantity.*greater than 0/,
-  );
+  const invalidOrderQuantity = structuredClone(validConfig);
+  invalidOrderQuantity.pairs.DOGEUSDT.orderQuantity = 0;
+  assert.throws(() => validateTradingConfig(invalidOrderQuantity), /orderQuantity.*greater than 0/);
 });
 
 test('rejects negative fees and invalid precision', () => {
   const negativeFee = structuredClone(validConfig);
-  negativeFee.strategies['free-roll'].pairs.DOGEUSDT.makerPercent = -0.01;
+  negativeFee.pairs.DOGEUSDT.makerPercent = -0.01;
   assert.throws(() => validateTradingConfig(negativeFee), /makerPercent/);
 
   const invalidPrecision = structuredClone(validConfig);
-  invalidPrecision.strategies['free-roll'].pairs.DOGEUSDT.pricePrecision = 1.5;
+  invalidPrecision.pairs.DOGEUSDT.pricePrecision = 1.5;
   assert.throws(() => validateTradingConfig(invalidPrecision), /pricePrecision/);
 });

@@ -49,14 +49,44 @@ See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and 
 
 ## Configuration
 
-The initial `trading-config.json` was copied from Free-Roll as a starting point. It is not yet a final Harvester configuration contract and does not mean that either strategy mode is implemented.
+Harvester uses one flat configuration shared by its strategy policies. The root contains:
 
-Configuration loading and pure structural validation currently live in:
+- `settings`: process-wide trading settings, currently `minProfit`.
+- `pairs`: market-specific settings keyed by symbol (for example, `ZROUSDT` or `ZROFDUSD`).
+
+There is no strategy-name wrapper in the config. Each pair has its own `enabled` flag, `investment` limit, order sizing, reserve quantity, price/quantity precision, and fee percentages.
+
+`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable.
+
+Example:
+
+```json
+{
+  "settings": {
+    "minProfit": 0.01
+  },
+  "pairs": {
+    "ZROUSDT": {
+      "enabled": true,
+      "investment": 100,
+      "orderQuantity": 5,
+      "keepQuantity": 0.01,
+      "priceStepPercent": 0.05,
+      "pricePrecision": 3,
+      "quantityPrecision": 1,
+      "makerPercent": 0.075,
+      "takerPercent": 0.075
+    }
+  }
+}
+```
+
+The configuration loader and structural validation live in:
 
 - `src/infrastructure/config/load-trading-config.js`
 - `src/domain/trading-config.js`
 
-Do not add strategy parameters until their meaning and behavior have been agreed and documented.
+The configuration contract does not imply that either strategy mode or order execution is implemented. Strategy behavior must be agreed and documented before strategy-specific parameters or runtime behavior are added.
 
 ## Engineering rules
 
