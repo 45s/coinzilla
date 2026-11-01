@@ -22,7 +22,12 @@ test("passes validated market price and pair settings to the strategy", async ()
     },
   })
 
-  const result = await processMarketPrice({ priceEvent, pairConfig, settings })
+  const result = await processMarketPrice({
+    symbol: "BTCUSDT",
+    priceEvent,
+    pairConfig,
+    settings,
+  })
 
   assert.equal(result.ok, true)
   assert.deepEqual(received, {
@@ -33,12 +38,29 @@ test("passes validated market price and pair settings to the strategy", async ()
   assert.deepEqual(result.data.decision, { action: "WAIT" })
 })
 
+test("rejects a price event routed to a different subscribed market", async () => {
+  const processMarketPrice = makeProcessMarketPrice({
+    strategy: { evaluate: () => ({ action: "WAIT" }) },
+  })
+
+  const result = await processMarketPrice({
+    symbol: "ETHUSDT",
+    priceEvent,
+    pairConfig: {},
+    settings: {},
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /while subscribed to ETHUSDT/)
+})
+
 test("returns a failed result for invalid broker price events", async () => {
   const processMarketPrice = makeProcessMarketPrice({
     strategy: { evaluate: () => ({ action: "WAIT" }) },
   })
 
   const result = await processMarketPrice({
+    symbol: "BTCUSDT",
     priceEvent: { ...priceEvent, price: "invalid" },
     pairConfig: {},
     settings: {},
@@ -53,7 +75,12 @@ test("returns strategy failures instead of swallowing them", async () => {
     strategy: { evaluate: async () => { throw new Error("strategy failed") } },
   })
 
-  const result = await processMarketPrice({ priceEvent, pairConfig: {}, settings: {} })
+  const result = await processMarketPrice({
+    symbol: "BTCUSDT",
+    priceEvent,
+    pairConfig: {},
+    settings: {},
+  })
 
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].message, "strategy failed")
