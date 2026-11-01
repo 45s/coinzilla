@@ -31,6 +31,25 @@ export function createBinanceBrokerAdapter({
   }
 
   const client = brokerFactory({ config, logger })
+  const requiredMethods = [
+    "connect",
+    "disconnect",
+    "createOrder",
+    "cancelOrder",
+    "getOpenOrders",
+    "getFills",
+    "getAccountSnapshot",
+    "getSymbolFilters",
+    "getPrices",
+    "subscribeForPrices",
+    "subscribeForUserData",
+  ]
+  const missingMethods = requiredMethods.filter(
+    (method) => typeof client?.[method] !== "function",
+  )
+  if (missingMethods.length > 0) {
+    throw new TypeError(`Binance broker implementation is missing methods: ${missingMethods.join(", ")}`)
+  }
 
   const broker = Object.freeze({
     connect: () => client.connect(),
