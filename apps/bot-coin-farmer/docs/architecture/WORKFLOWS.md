@@ -50,7 +50,7 @@ A cancel response alone is not proof of zero fills. A timeout is an unknown outc
 
 ## 4. SELL execution and free-coin allocation
 
-See [sell-recovery-flow.mmd](./diagrams/sell-recovery-flow.mmd).
+See [sell-recovery-sequence.mmd](./diagrams/sell-recovery-sequence.mmd).
 
 1. SELL fills are ingested and recorded individually with actual commission facts.
 2. Partial SELL fills update the immutable execution ledger but do not allocate free coins or complete a recovery cycle.
@@ -75,7 +75,7 @@ See [execution-accounting-flow.mmd](./diagrams/execution-accounting-flow.mmd).
 
 ## 6. Recovery after reconnect or restart
 
-See [recovery-sequence.mmd](./diagrams/recovery-flow.mmd).
+See [recovery-sequence.mmd](./diagrams/recovery-sequence.mmd).
 
 1. On disconnect, stream gap, ambiguous order mutation, restart or mismatch, move the affected market to RECONCILING and block order mutations.
 2. Restore the last durable state if a durable repository exists. In early in-memory-only milestones, restart recovery is not supported; do not pretend otherwise.
