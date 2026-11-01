@@ -17,15 +17,40 @@ function assertResult(result, operation) {
   }
 }
 
+async function runBounded(operation, timeoutMs, label) {
+  let timeoutHandle
+
+  const timeout = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`Coin Farmer ${label} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    timeoutHandle.unref?.()
+  })
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      timeout,
+    ])
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
+}
+
 async function closeAfterStartupFailure(runtime, startupError) {
   const cleanupErrors = []
+  const timeoutMs = runtime.config.runtime.shutdownTimeoutMs
 
   for (const [name, resource] of [
     ["journal", runtime.journal],
     ["event bus", runtime.eventBus],
   ]) {
     try {
-      const result = await resource.close()
+      const result = await runBounded(
+        () => resource.close(name === "event bus" ? { timeoutMs } : undefined),
+        timeoutMs,
+        `${name} cleanup`,
+      )
       assertResult(result, `${name} cleanup`)
     } catch (error) {
       cleanupErrors.push(error)
@@ -96,6 +121,7 @@ export function shutdownRuntime(runtime) {
     }
 
     const wasStarted = runtime.state === "started"
+    const timeoutMs = runtime.config.runtime.shutdownTimeoutMs
     runtime.state = "stopping"
     const errors = []
 
@@ -113,22 +139,28 @@ export function shutdownRuntime(runtime) {
     }
 
     try {
-      const result = await runtime.journal.close()
+      const result = await runBounded(
+        () => runtime.journal.close(),
+        timeoutMs,
+        "journal shutdown",
+      )
       assertResult(result, "journal shutdown")
     } catch (error) {
       errors.push(error)
     }
 
     try {
-      const result = await runtime.eventBus.close({
-        timeoutMs: runtime.config.runtime.shutdownTimeoutMs,
-      })
+      const result = await runBounded(
+        () => runtime.eventBus.close({ timeoutMs }),
+        timeoutMs,
+        "event bus shutdown",
+      )
       assertResult(result, "event bus shutdown")
     } catch (error) {
       errors.push(error)
     }
 
-    runtime.state = "stopped"
+    runtime.state = errors.length === 0 ? "stopped" : "shutdown_failed"
 
     if (errors.length > 0) {
       throw new AggregateError(errors, "Coin Farmer shutdown completed with errors")
@@ -175,12 +207,15 @@ export function installSignalHandlers({
       runtime.logger.info({ message: "Shutdown signal received", signal })
       await shutdownRuntime(runtime)
     } catch (error) {
-      runtime.logger.error({
-        message: "Coin Farmer shutdown failed",
-        signal,
-        error,
-      })
-      processObject.exitCode = 1
+      try {
+        runtime.logger.error({
+          message: "Coin Farmer shutdown failed",
+          signal,
+          error,
+        })
+      } finally {
+        processObject.exitCode = 1
+      }
     } finally {
       removeHandlers()
     }
