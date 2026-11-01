@@ -1,19 +1,44 @@
 # Harvester Roadmap
 
-## Discovery and foundation
+## 1. Product and strategy design
 
-- [x] Initialize the app as a private Node.js ESM workspace package using the repository's pnpm and Node.js conventions.
-- [x] Copy the initial trading-config baseline and implement file loading plus pure structural/numeric validation with deterministic tests.
-- [ ] Define the harvester's product responsibility, source systems, data contracts, and expected outputs with the product owner.
-- [ ] Record security, privacy, retention, rate-limit, and operational requirements for each data source.
-- [ ] Choose the smallest architecture that satisfies the agreed requirements.
-- [ ] Agree on the first business use case, including source, output, business rules, and acceptance criteria.
-- [ ] Implement the first business vertical slice with deterministic unit tests and explicit failure handling.
-- [ ] Add integration tests for external systems, keeping them opt-in and independent of the default unit-test suite.
+- [x] Define Harvester as an independent Node.js cryptocurrency-trading process.
+- [x] Establish two initial strategy modes: Conservative (Free-Roll) and Aggressive.
+- [x] Document the shared-engine / strategy-specific-policy boundary.
+- [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
+- [ ] Define Aggressive order-level behavior: multiple active BUY and SELL orders, price levels, sizing, and replacement.
+- [ ] Decide whether BUY fills create corresponding SELL orders or both sides are managed independently.
+- [ ] Define position, capital, inventory, and risk allocation across orders, pairs, and strategies.
+- [ ] Decide whether multiple strategies may operate on the same pair/account simultaneously.
+
+## 2. Shared trading engine
+
+- [ ] Define domain contracts for markets, orders, fills, balances, positions, and strategy decisions.
+- [ ] Define broker and market-data ports; keep exchange-specific behavior in adapters.
+- [ ] Implement validated market data and exchange trading-rule handling.
+- [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.
+- [ ] Implement fill deduplication and accounting from actual commissions.
+- [ ] Add journal, readiness states, pause controls, and operational safety checks.
+- [ ] Define persistence and restart/reconciliation requirements before implementing recovery.
+
+## 3. Strategy implementations
+
+- [ ] Implement Conservative (Free-Roll) strategy behind the shared engine contracts.
+- [ ] Implement Aggressive strategy behind the same shared engine contracts.
+- [ ] Add deterministic unit tests for strategy decisions and boundary conditions.
+- [ ] Add broker contract and integration tests; live exchange tests must be explicitly opt-in.
+
+## 4. Foundation and delivery
+
+- [x] Initialize the app as a private Node.js ESM workspace package.
+- [x] Add initial trading-config loading and pure structural validation.
+- [ ] Replace the copied Free-Roll config baseline with an agreed Harvester configuration schema.
+- [ ] Keep dependencies minimal and follow repository engineering standards.
+- [ ] Update this roadmap as decisions are closed and functionality is verified.
 
 ## Delivery rules
 
-- Follow the repository root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md`, plus this app's `AGENTS.md`.
-- Keep credentials and environment-specific values out of source control.
-- Do not introduce runtime dependencies until a concrete requirement justifies them.
-- Mark work complete only after implementation is merged into `develop` and required checks pass.
+- Follow repository root guidance and `apps/harvester/AGENTS.md`.
+- Do not implement unresolved strategy behavior by assumption.
+- Do not mark work complete until implementation and required checks pass on `develop`.
+- Keep live trading disabled by default; tests must never place live orders.
