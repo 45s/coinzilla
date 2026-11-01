@@ -62,9 +62,9 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
 
-## Example: infrastructure adapter
+## Implemented infrastructure adapter
 
-Illustrative mapping only; this is not an implemented Harvester port. Final signatures must be agreed with the consuming use cases and canonical entity contracts.
+The implementation lives in `src/infrastructure/brokers/binance-broker-adapter.js`. It constructs `BinanceWebSocketBroker`, validates the concrete broker methods, and returns the application-owned port. Its `placeOrder({ order })` method maps to the package's `createOrder(order)` method. The adapter preserves the broker's result objects and error behavior.
 
 ```js
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -93,7 +93,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
 
-## Example: application use case
+## Application use case boundary
 
 ```js
 import { toResult } from "@coinzilla/utils"
@@ -107,7 +107,7 @@ export const makePlaceOrder = ({ broker }) => {
 }
 ```
 
-This illustrates dependency direction, not a completed use case. Add domain validation and shared safety checks only through agreed canonical contracts. The strategy returns a decision; the Trading Engine/application invokes the use case; the use case executes through the port. The strategy never submits orders directly.
+This remains an example of the intended use-case boundary; a production order use case is not yet enabled. Add domain validation and shared safety checks only through agreed canonical contracts. The strategy returns a decision; the Trading Engine/application invokes the use case; the use case executes through the port. The strategy never submits orders directly.
 
 ## Example: bootstrap composition
 
@@ -122,7 +122,7 @@ export const createHarvesterServices = ({ config, logger }) => {
 }
 ```
 
-The process lifecycle connects once during startup and disconnects during graceful shutdown. Keep live order placement disabled until readiness, reconciliation, and safety workflows are implemented. Add `@coinzilla/brokers: workspace:*` to Harvester's package dependencies when the adapter is actually implemented; this documentation-only change does not add a runtime dependency.
+Bootstrap now selects the adapter only when `HARVESTER_BROKER=binance` is explicitly set, requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`, connects once, and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile. Order placement remains disabled because no strategy engine or recovery reconciliation is implemented.
 
 ## Reliability rules
 
@@ -146,4 +146,4 @@ A user-data subscription exposes recovery acknowledgement through its returned s
 
 ## Implementation status
 
-This document records the selected architecture and examples only. The executable broker port, adapter, Trading Engine, Portfolio workflows, and strategy implementations remain roadmap work. Do not infer that they are implemented from these examples.
+Implemented: structural application broker port, Binance adapter, bootstrap composition, opt-in connection, graceful disconnect, and offline tests. Not implemented: Trading Engine, user-data reconciliation, Portfolio accounting, order lifecycle orchestration, and Conservative/Aggressive policies. Do not treat a connected broker as a readiness signal for trading.
