@@ -88,6 +88,20 @@ At minimum, the domain contract needs to distinguish the base asset and quote as
 
 A market price is not part of the position's held-quantity accounting. If valuation is needed, it should be a separate calculation using an explicitly supplied price.
 
+### Aggressive strategy inventory
+
+The agreed Aggressive strategy model uses **one shared inventory pool per market**:
+
+- Filled quantities from different BUY orders contribute to the same available base-asset inventory.
+- Inventory is not treated as a collection of exclusive coin lots permanently owned by individual BUY orders.
+- Multiple SELL orders may coexist, but each SELL order reserves its remaining unfilled quantity from the shared pool.
+- The sum of active SELL reservations must never exceed the available base quantity.
+- A SELL fill reduces the shared inventory by the actual executed quantity and applicable commission.
+- A cancelled or rejected SELL releases only its unfilled reservation. Any execution received during cancellation remains a real fill and must be applied.
+- When Aggressive switches to Conservative, active SELL reservations are cancelled/reconciled and the remaining available position is consolidated into one SELL order. The transition must not count reserved or in-flight quantities twice.
+
+This defines inventory sharing **inside Aggressive for one market**. It does not yet define whether Conservative and Aggressive may trade the same market simultaneously, or how balances shared across different markets are allocated.
+
 ### Fill
 
 A fill is an execution fact, not an order intention. It must carry enough normalized information to account for the executed portion of an order, including:
@@ -139,13 +153,13 @@ Use the repository's object-input/object-output function convention and `toResul
 
 The following are deliberately not implied by the initial definition and must be agreed before implementation:
 
-1. **Position ownership:** is a position strictly pair-scoped, account-asset-scoped, or split by strategy as well as pair?
+1. **Position ownership:** is a position strictly pair-scoped, account-asset-scoped, or split by strategy as well as pair? Aggressive uses one shared inventory pool per market, but cross-strategy ownership is not yet defined.
 2. **Shared assets:** how should balances be represented when the same asset participates in multiple configured pairs (for example, USDT across BTCUSDT and ZROUSDT)?
 3. **Strategy allocation:** how are actual holdings divided between Conservative/Free-Roll and Aggressive strategies, especially if both can trade the same pair?
 4. **Accounting fields:** which cost-basis, invested-quote, realized-profit, reserved-quantity, and free-inventory values belong in the shared position versus strategy-specific state?
 5. **Third-asset commission:** should the portfolio track account-wide asset debits, or should unsupported commission assets fail the update until that capability exists?
 6. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide the required deduplication?
-7. **Order reservations:** where are balances reserved for open orders represented? Reservations must not be confused with executed holdings.
+7. **Order reservations:** where are balances reserved for open BUY orders and SELL orders represented? The Aggressive SELL-reservation invariant is agreed, but the full shared reservation model is not yet designed.
 8. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
 
 Until these decisions are closed, implement only the agreed fill-driven portfolio boundary and avoid inventing strategy accounting semantics.
