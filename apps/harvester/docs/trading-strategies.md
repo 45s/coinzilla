@@ -166,9 +166,8 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 The following questions remain open and must be answered before implementation where they affect behavior:
 
 1. What exact percentage-step calculation and market-price observation should be used when determining crossed grid levels? BUY tick rounding down and SELL tick rounding up are agreed.
-2. What is the exact maximum-price-drop calculation and its reference price/baseline?
-3. What is the exact SELL price formula for commissions, `minProfit`, and `freeCoin`, including rounding and commission-asset handling?
-4. What exact SELL price calculation and fee-asset conversion/rounding rules guarantee recovery of BUY cost, all BUY/SELL commissions, configured `minProfit`, and the retained `freeCoin` quantity?
+2. What is the exact maximum-price-drop calculation, using the average price of actually filled BUY orders as its baseline?
+3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
 5. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 6. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
 7. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
