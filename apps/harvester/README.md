@@ -1,15 +1,25 @@
 # Harvester
 
-Application workspace for the Harvester app.
+Harvester is a private Node.js application workspace in the Coinzilla pnpm monorepo.
 
-## Status
+## Package
 
-Initial scaffold. No runtime, framework, dependencies, or product behavior have been selected yet. Follow the conventions already established by the parent repository when implementing the application.
+- Package: `@coinzilla/harvester`
+- Runtime: Node.js `>=22.23.4`
+- Modules: native ECMAScript modules
+- Dependencies: none yet; add only when an agreed requirement needs them
 
 ## Development
 
-Before adding implementation, inspect the repository's existing app structure and tooling. Add setup, run, test, and build instructions here once those commands are established.
+Run commands from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester test
+pnpm --filter @coinzilla/harvester test:coverage
+```
+
+The package is initialized, but its product responsibility and runtime behavior have not yet been specified. Do not invent data sources, scraping behavior, persistence, or external integrations; agree those contracts before implementation.
 
 ## Engineering guidance
 
-AI coding agents working in this directory must follow [AGENTS.md](./AGENTS.md), as well as all applicable repository-level contribution and engineering guidance.
+AI coding agents working in this directory must follow [AGENTS.md](./AGENTS.md), [ROADMAP.md](./ROADMAP.md), and all applicable repository-level engineering guidance.
