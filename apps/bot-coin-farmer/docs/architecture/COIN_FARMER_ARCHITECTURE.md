@@ -8,7 +8,7 @@
 
 Coin Farmer is a spot cryptocurrency trading application. The first strategy is a **fill-driven accumulation and recovery strategy**, based on the approved Free-Roll V1 behavior.
 
-Do not label this a grid bot in code or documentation. It is not a traditional grid strategy with a ladder of fixed price levels and independent buy/sell level pairs. For each configured market, the strategy coordinates one active trading position and the relevant standing BUY and recovery SELL orders. Its next BUY price is derived from a reference/last qualifying BUY price and a configured percentage step. Its SELL is gated by exact recovery accounting and a minimum net-profit requirement.
+Do not label this a grid bot in code or documentation. It does not use a ladder of fixed grid levels or independent buy/sell level pairs. For each configured market, the strategy coordinates one active trading position and the relevant standing BUY and recovery SELL orders. Its next BUY price is derived from a reference/last qualifying BUY price and a configured percentage step. Its SELL is gated by exact recovery accounting and a minimum net-profit requirement.
 
 The strategy does not guarantee fills, profit, or market movement. Its safety objective is narrower: never intentionally submit a SELL that fails the approved conservative net-profit rule, and refuse to trade when the required facts are unknown or inconsistent.
 
