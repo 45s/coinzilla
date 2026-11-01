@@ -66,6 +66,7 @@ export async function startHarvester({
       },
     }),
   })
+  const processMarketPrice = makeProcessMarketPrice({ strategy })
 
   try {
     await broker.connect()
@@ -82,7 +83,6 @@ export async function startHarvester({
   }
 
   const placeOrder = makePlaceOrder({ broker })
-  const processMarketPrice = makeProcessMarketPrice({ strategy })
   const subscriptions = []
   const reportPriceError = (details) => {
     try {
