@@ -24,13 +24,23 @@ test('rejects an empty strategies collection', () => {
   );
 });
 
-test('rejects invalid strategy flags and missing settings', () => {
+test('rejects invalid strategy flags', () => {
   const config = structuredClone(validConfig);
   config.strategies['free-roll'].enabled = 'true';
 
   assert.throws(
     () => validateTradingConfig(config),
     /strategies\.free-roll\.enabled.*expected a boolean/,
+  );
+});
+
+test('rejects missing strategy settings', () => {
+  const config = structuredClone(validConfig);
+  delete config.strategies['free-roll'].settings;
+
+  assert.throws(
+    () => validateTradingConfig(config),
+    /strategies\\.free-roll\\.settings.*expected an object/,
   );
 });
 
