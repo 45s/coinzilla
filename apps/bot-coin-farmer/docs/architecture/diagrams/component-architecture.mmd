@@ -1,0 +1,17 @@
+flowchart TB
+  runtime["Runtime\ncomposition / lifecycle / config"]
+  adapters["Adapters\nbroker / persistence / events / journal / notifications"]
+  ports["Application ports"]
+  app["Application workflows\nstart-stop / market / execution / reconcile / recover"]
+  domain["Coin Farmer domain\npolicy / inventory / profitability / state"]
+  contracts["Canonical Coinzilla contracts"]
+
+  runtime --> adapters
+  runtime --> app
+  app --> ports
+  ports -. "implemented by" .-> adapters
+  app --> domain
+  domain --> contracts
+
+  external["Exchange / storage / messaging"] <--> adapters
+  v1["Free-Roll V1"] -. "reference only; no imports" .-> app

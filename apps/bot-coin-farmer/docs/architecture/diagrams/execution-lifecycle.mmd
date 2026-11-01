@@ -1,0 +1,24 @@
+sequenceDiagram
+  participant CEX as Exchange
+  participant BA as Broker adapter
+  participant WF as Application workflow
+  participant DP as Domain policy
+  participant Ledger as Inventory / accounting
+  participant Store as Persistence port
+
+  CEX->>BA: Market observation
+  BA->>WF: Canonical observation
+  WF->>DP: Evaluate current state and market facts
+  DP-->>WF: Decision or refusal reason
+  WF->>Ledger: Validate and reserve resources
+  WF->>BA: Submit canonical order request via port
+  BA->>CEX: Exchange-specific order request
+  CEX-->>BA: Order acknowledgement / rejection
+  BA-->>WF: Normalized order outcome
+  Note over WF,Ledger: Acknowledgement is not an execution
+  CEX->>BA: Actual fill event(s)
+  BA->>WF: Canonical fill(s) with exact fee facts
+  WF->>Ledger: Apply idempotently by stable fill identity
+  Ledger->>Store: Persist state / ledger checkpoint
+  WF->>DP: Re-evaluate only from reconciled facts
+  DP-->>WF: Next decision or safe refusal
