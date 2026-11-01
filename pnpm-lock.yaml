@@ -202,7 +202,11 @@ importers:
         specifier: workspace:*
         version: link:../../packages/notifiers
 
-  apps/harvester: {}
+  apps/harvester:
+    dependencies:
+      '@coinzilla/brokers':
+        specifier: workspace:*
+        version: link:../../packages/brokers
 
   apps/market-simulator:
     dependencies:
