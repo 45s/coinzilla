@@ -1,0 +1,26 @@
+sequenceDiagram
+  participant Buy as BUY workflow
+  participant Trading as Trading port
+  participant CEX
+  participant Ledger as Fill / inventory ledger
+  participant Policy as SELL approval
+  participant Sell as SELL workflow
+
+  Buy->>Trading: Request cancel of prior recovery SELL
+  Trading->>CEX: Cancel request
+  CEX-->>Trading: Cancel result (not final proof)
+  Sell->>Trading: Query final order + complete fills
+  Trading->>CEX: Order/history queries
+  CEX-->>Trading: Final status and executions
+  Trading-->>Sell: Reconciled canonical facts
+  Sell->>Ledger: Apply missing fills; adjust reservation
+  Sell->>Policy: Evaluate exact active inventory and recovery amount
+  Policy-->>Sell: Approved intent or refusal reason
+  alt approved and market safe
+    Sell->>Trading: Submit replacement SELL
+    Trading->>CEX: Limit order
+    CEX-->>Trading: Ack / rejection / unknown
+  else not approved
+    Sell-->>Ledger: Keep state safe; no forced sale
+  end
+  Note over Ledger,Policy: Free quantity is allocated only after a fully filled profitable recovery SELL
