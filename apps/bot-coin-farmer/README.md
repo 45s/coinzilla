@@ -45,50 +45,75 @@ The exact strategy rules and unresolved decisions must be mapped from V1 before 
 
 ## Architecture at a glance
 
-The runtime composes application workflows with adapters. Workflows call ports; domain policy is pure and exchange-neutral. Adapters translate Binance, Telegram, event bus, journal and (later) persistence integrations into those contracts.
+Bootstrap composes the application with infrastructure implementations through explicit ports. Configuration is loaded and validated before startup; domain policy remains pure and exchange-neutral.
 
 ```mermaid
 flowchart TB
-  subgraph runtime["Coin Farmer runtime (Node.js)"]
-    config["JSON config + environment secrets"]
-    composition["Composition root / lifecycle"]
+  subgraph bootstrap["Bootstrap"]
+    entry["index.js"]
+    container["container.js"]
+    startup["startup.js"]
   end
+  config["Config: loader + validator"]
 
   subgraph app["Coin Farmer application"]
-    workflows["Use cases and workflows"]
-    ports["Ports: broker / state / events / notifications / clock"]
+    runner["Strategy runner"]
+    pairs["Pair manager"]
+    reconciliation["Reconciliation"]
+  end
+
+  subgraph ports["Application ports"]
+    brokerPort["Broker"]
+    statePort["State repository"]
+    eventPort["Event bus / Journal"]
+    notifyPort["Notifications / clock"]
   end
 
   subgraph domain["Coin Farmer domain"]
     strategy["Strategy decisions"]
-    accounting["Fill ledger / inventory / recovery accounting"]
+    accounting["Fill accounting"]
+    profitability["SELL profitability"]
+    inventory["Inventory ownership"]
     state["Per-market state machine"]
   end
 
-  subgraph adapters["Infrastructure adapters"]
+  subgraph infrastructure["Infrastructure"]
     binance["Binance WebSocket adapter"]
     telegram["Telegram notification adapter"]
     eventbus["EventBus adapter"]
     journal["Journal adapter"]
-    persistence["State repository adapter (in-memory first; durable later)"]
+    persistence["State repository (in-memory first)"]
+    scheduler["Market task scheduler"]
+    logging["Structured logging"]
   end
 
-  contracts["@coinzilla/entities\ncanonical shared contracts"]
+  contracts["@coinzilla/entities\\ncanonical shared contracts"]
   exchange["Binance CEX"]
   tg["Telegram"]
   future["Future CEX adapters / database"]
 
-  config --> composition
-  composition --> workflows
-  composition --> adapters
-  workflows --> ports
-  workflows --> domain
-  ports -. implemented by .-> adapters
+  entry --> container
+  container --> config
+  container --> startup
+  container --> runner
+  runner --> pairs
+  runner --> reconciliation
+  pairs --> brokerPort
+  reconciliation --> brokerPort
+  pairs --> strategy
+  pairs --> accounting
+  pairs --> profitability
+  pairs --> inventory
+  pairs --> state
+  brokerPort -. implemented by .-> binance
+  statePort -. implemented by .-> persistence
+  eventPort -. implemented by .-> eventbus
+  eventPort -. implemented by .-> journal
+  notifyPort -. implemented by .-> telegram
   strategy --> contracts
   accounting --> contracts
   binance <--> exchange
   telegram --> tg
-  eventbus --> journal
   persistence -. future durable adapter .-> future
 ```
 
