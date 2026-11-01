@@ -1,7 +1,7 @@
 # Coin Farmer — Implementation Roadmap
 
 **Application:** `apps/bot-coin-farmer`  
-**Status:** Proposed implementation plan; all CF implementation items are not started  
+**Status:** Architecture baseline established; runtime skeleton in progress  
 **Reference:** Free-Roll V1 documentation and source on `develop`  
 **Target branch for implementation PRs:** `develop`
 
@@ -39,23 +39,25 @@ The first real-money release is blocked until exact financial accounting, fill/o
 src/index.js
    |
    v
-runtime (config, composition, lifecycle)
+bootstrap (composition root + process lifecycle)
    |
-   +---- constructs adapters (Binance / Telegram / EventBus / Journal / StateRepository)
+   +---- config (JSON loading + validation)
    |
-   v
-application workflows + ports
-   |
-   +---- call pure domain decisions
+   +---- constructs infrastructure (Binance / Telegram / EventBus / Journal / StateRepository)
    |
    v
-domain policy + accounting + per-market state
+application (strategy runner, pair manager, reconciliation)
+   |
+   +---- depends on ports and calls pure domain decisions
+   |
+   v
+domain (strategy, accounting, profitability, inventory, state machine)
    |
    v
 @coinzilla/entities (canonical shared values)
 ```
 
-The dependency direction is inward. Adapters implement application ports; runtime composes them. No domain/application import of Binance or Telegram packages.
+The dependency direction is inward. Infrastructure implements the contracts in `ports/`; bootstrap composes concrete implementations and injects them into application workflows. No domain/application import of Binance or Telegram packages.
 
 ## 4. Phases and deliverables
 
@@ -74,14 +76,16 @@ The dependency direction is inward. Adapters implement application ports; runtim
 
 **Goal:** a runnable Node process that starts and stops safely without placing orders.
 
-- [ ] CF-010 — Add `apps/bot-coin-farmer/package.json` using ESM, Node engine `>=22.23.4`, workspace scripts and only reviewed workspace dependencies.
-- [ ] CF-011 — Add `src/index.js` and runtime composition/start/shutdown modules.
-- [ ] CF-012 — Add JSON config loading/validation and `.env.example`; credentials remain environment secrets.
-- [ ] CF-013 — Wire structured logger, EventBus and Journal through adapters.
-- [ ] CF-014 — Add partial-startup rollback, idempotent shutdown, SIGINT/SIGTERM handling and bounded cleanup tests.
-- [ ] CF-015 — Establish native Node test runner, syntax check, coverage baseline and app CI integration.
+- [~] CF-010 — Add `apps/bot-coin-farmer/package.json` using ESM, Node engine `>=22.23.4`, workspace scripts and only reviewed workspace dependencies.
+- [~] CF-011 — Add `src/index.js` and runtime composition/start/shutdown modules.
+- [~] CF-012 — Add JSON config loading/validation and `.env.example`; credentials remain environment secrets.
+- [~] CF-013 — Wire structured logger, EventBus and Journal through adapters.
+- [~] CF-014 — Add partial-startup rollback, idempotent shutdown, SIGINT/SIGTERM handling and bounded cleanup tests.
+- [~] CF-015 — Establish native Node test runner, syntax check, coverage baseline and app CI integration.
 
 **Acceptance:** app starts in no-trading mode with valid config; invalid config fails before broker order capability is exposed; partial startup cleans already-created resources; shutdown drains event/journal work; default tests require no network or credentials.
+
+**Current implementation note:** The package manifest, workspace importer, no-trading entry point, bootstrap lifecycle, JSON config loader/validator, EventBus/Journal/logger adapters and deterministic tests are now scaffolded. Broker connections, strategy workflows, market state and order placement are intentionally absent. CI has passed package tests on Node 22.23.4 and Node 24, workspace coverage, JavaScript syntax and dependency audit for the current PR head. CF-002/003/004 remain open; Phase 1 stays in progress until this work is merged and the remaining acceptance review is complete.
 
 ### Phase 2 — Canonical domain contracts and pure strategy kernel
 

@@ -1,0 +1,13 @@
+{
+  "application": {
+    "name": "coin-farmer",
+    "environment": "development"
+  },
+  "runtime": {
+    "shutdownTimeoutMs": 10000
+  },
+  "trading": {
+    "enabled": false
+  },
+  "markets": []
+}

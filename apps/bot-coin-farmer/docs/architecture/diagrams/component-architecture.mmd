@@ -1,38 +1,64 @@
 flowchart TB
-  subgraph runtime["Runtime / composition"]
+  subgraph bootstrap["bootstrap"]
     entry["index.js"]
-    config["JSON config + env secrets"]
-    lifecycle["startup / shutdown"]
+    container["container.js"]
+    startup["startup.js"]
   end
-  subgraph application["Application"]
-    coordinator["Strategy coordinator"]
-    workflows["Market / order / fill / reconcile / recovery workflows"]
-    ports["CEX-neutral broker + state + event + notification + clock ports"]
-  end
-  subgraph domain["Domain"]
-    policy["BUY planner + SELL profitability gate"]
-    ledger["Fill ledger + inventory + recovery-cycle accounting"]
-    state["Per-market state machine"]
-  end
-  subgraph adapters["Adapters"]
-    binance["Binance WebSocket broker"]
-    telegram["Telegram notifier"]
-    eventAdapter["EventBus adapter"]
-    journal["Journal adapter"]
-    persistence["In-memory repository\nthen durable adapter"]
-  end
-  entities["@coinzilla/entities\ncanonical shared contracts"]
+  config["config: loader + validator"]
 
-  entry --> config
-  entry --> lifecycle
-  lifecycle --> coordinator
-  coordinator --> workflows
-  workflows --> ports
-  workflows --> policy
-  workflows --> ledger
-  workflows --> state
-  ports -. implemented by .-> adapters
-  policy --> entities
-  ledger --> entities
-  binance --> entities
-  eventAdapter --> journal
+  subgraph application["application"]
+    runner["strategy-runner"]
+    pairManager["pair-manager"]
+    reconciliation["reconciliation"]
+  end
+
+  subgraph domain["domain"]
+    strategy["strategy policy"]
+    accounting["fill + recovery accounting"]
+    profitability["SELL profitability"]
+    inventory["inventory ownership"]
+    stateMachine["market/order state machine"]
+  end
+
+  subgraph ports["ports"]
+    brokerPort["broker"]
+    journalPort["journal"]
+    eventBusPort["event-bus"]
+    otherPorts["state / notification / clock"]
+  end
+
+  subgraph infrastructure["infrastructure"]
+    binance["Binance WebSocket adapter"]
+    telegram["Telegram adapter"]
+    journal["Journal adapter"]
+    eventBus["EventBus adapter"]
+    persistence["state repository"]
+    scheduler["scheduler"]
+    logging["logger"]
+  end
+
+  entities["@coinzilla/entities"]
+
+  entry --> container
+  container --> config
+  container --> startup
+  container --> runner
+  runner --> pairManager
+  runner --> reconciliation
+  pairManager --> brokerPort
+  pairManager --> strategy
+  pairManager --> accounting
+  pairManager --> profitability
+  pairManager --> inventory
+  pairManager --> stateMachine
+  reconciliation --> brokerPort
+  reconciliation --> accounting
+  reconciliation --> inventory
+  brokerPort -. implemented by .-> binance
+  journalPort -. implemented by .-> journal
+  eventBusPort -. implemented by .-> eventBus
+  otherPorts -. implemented by .-> persistence
+  otherPorts -. implemented by .-> telegram
+  strategy --> entities
+  accounting --> entities
+  inventory --> entities

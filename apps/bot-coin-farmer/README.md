@@ -4,7 +4,7 @@
 **Runtime:** Node.js `>=22.23.4`  
 **Language:** JavaScript (ES modules)  
 **Configuration:** JSON + environment secrets  
-**Status:** Architecture and implementation roadmap; application code has not started
+**Status:** Runtime skeleton initialized; strategy implementation has not started
 
 Coin Farmer is a CEX-agnostic cryptocurrency spot-trading application. Its initial strategy is a **fill-driven accumulation and capital-recovery strategy** informed by the existing Free-Roll specification. **It is not a grid bot.** It does not define a ladder of independent grid levels or trade each level as an isolated grid cycle. Instead, it coordinates a market's active position, standing BUY, recovery SELL, actual fees, recovery target and permanently retained free inventory as one strategy state.
 
@@ -20,6 +20,19 @@ The first concrete exchange adapter will use the existing Binance WebSocket impl
 | [Implementation roadmap](./ROADMAP.md) | Ordered delivery phases, PR-sized tasks, dependencies and acceptance gates |
 | [V1 behavior map](./docs/architecture/V1_TO_V2_BEHAVIOR_PLAN.md) | Which V1 strategy behavior is the starting point and what needs explicit review |
 | [Architecture diagrams](./docs/architecture/README.md#diagrams) | Editable Mermaid source and rendered diagrams |
+
+## Runtime skeleton
+
+The initial runtime shell loads and validates JSON configuration, composes the shared EventBus and Journal, and handles startup, rollback and shutdown. It deliberately runs with trading disabled. It does not connect to Binance, initialize markets, create orders or implement strategy decisions.
+
+Run from the repository root:
+
+```bash
+pnpm --filter @coinzilla/bot-coin-farmer start
+pnpm --filter @coinzilla/bot-coin-farmer test
+```
+
+The default configuration is `config/coin-farmer.config.json`. Set `CF_CONFIG_PATH` to use another JSON file. Trading must remain disabled until the domain behavior, broker contracts and safety gates in the roadmap are implemented and reviewed.
 
 ## Application context
 
@@ -45,50 +58,75 @@ The exact strategy rules and unresolved decisions must be mapped from V1 before 
 
 ## Architecture at a glance
 
-The runtime composes application workflows with adapters. Workflows call ports; domain policy is pure and exchange-neutral. Adapters translate Binance, Telegram, event bus, journal and (later) persistence integrations into those contracts.
+Bootstrap composes the application with infrastructure implementations through explicit ports. Configuration is loaded and validated before startup; domain policy remains pure and exchange-neutral.
 
 ```mermaid
 flowchart TB
-  subgraph runtime["Coin Farmer runtime (Node.js)"]
-    config["JSON config + environment secrets"]
-    composition["Composition root / lifecycle"]
+  subgraph bootstrap["Bootstrap"]
+    entry["index.js"]
+    container["container.js"]
+    startup["startup.js"]
   end
+  config["Config: loader + validator"]
 
   subgraph app["Coin Farmer application"]
-    workflows["Use cases and workflows"]
-    ports["Ports: broker / state / events / notifications / clock"]
+    runner["Strategy runner"]
+    pairs["Pair manager"]
+    reconciliation["Reconciliation"]
+  end
+
+  subgraph ports["Application ports"]
+    brokerPort["Broker"]
+    statePort["State repository"]
+    eventPort["Event bus / Journal"]
+    notifyPort["Notifications / clock"]
   end
 
   subgraph domain["Coin Farmer domain"]
     strategy["Strategy decisions"]
-    accounting["Fill ledger / inventory / recovery accounting"]
+    accounting["Fill accounting"]
+    profitability["SELL profitability"]
+    inventory["Inventory ownership"]
     state["Per-market state machine"]
   end
 
-  subgraph adapters["Infrastructure adapters"]
+  subgraph infrastructure["Infrastructure"]
     binance["Binance WebSocket adapter"]
     telegram["Telegram notification adapter"]
     eventbus["EventBus adapter"]
     journal["Journal adapter"]
-    persistence["State repository adapter (in-memory first; durable later)"]
+    persistence["State repository (in-memory first)"]
+    scheduler["Market task scheduler"]
+    logging["Structured logging"]
   end
 
-  contracts["@coinzilla/entities\ncanonical shared contracts"]
+  contracts["@coinzilla/entities\\ncanonical shared contracts"]
   exchange["Binance CEX"]
   tg["Telegram"]
   future["Future CEX adapters / database"]
 
-  config --> composition
-  composition --> workflows
-  composition --> adapters
-  workflows --> ports
-  workflows --> domain
-  ports -. implemented by .-> adapters
+  entry --> container
+  container --> config
+  container --> startup
+  container --> runner
+  runner --> pairs
+  runner --> reconciliation
+  pairs --> brokerPort
+  reconciliation --> brokerPort
+  pairs --> strategy
+  pairs --> accounting
+  pairs --> profitability
+  pairs --> inventory
+  pairs --> state
+  brokerPort -. implemented by .-> binance
+  statePort -. implemented by .-> persistence
+  eventPort -. implemented by .-> eventbus
+  eventPort -. implemented by .-> journal
+  notifyPort -. implemented by .-> telegram
   strategy --> contracts
   accounting --> contracts
   binance <--> exchange
   telegram --> tg
-  eventbus --> journal
   persistence -. future durable adapter .-> future
 ```
 
@@ -145,71 +183,57 @@ apps/bot-coin-farmer/
 │   └── decisions/
 ├── src/
 │   ├── index.js
-│   ├── runtime/
-│   │   ├── create-runtime.js
-│   │   ├── start-runtime.js
-│   │   ├── shutdown-runtime.js
-│   │   └── config/
-│   │       ├── load-config.js
-│   │       └── validate-config.js
+│   ├── bootstrap/
+│   │   ├── container.js
+│   │   └── startup.js
+│   ├── config/
+│   │   ├── loader.js
+│   │   └── validator.js
+│   ├── application/
+│   │   ├── strategy-runner.js
+│   │   ├── pair-manager.js
+│   │   └── reconciliation.js
 │   ├── domain/
 │   │   ├── strategy/
 │   │   │   ├── calculate-buy-price.js
-│   │   │   ├── plan-buy.js
-│   │   │   ├── approve-sell.js
-│   │   │   └── market-state.js
+│   │   │   └── plan-buy.js
 │   │   ├── accounting/
 │   │   │   ├── fill-ledger.js
-│   │   │   ├── inventory-ledger.js
-│   │   │   ├── recovery-cycle.js
-│   │   │   └── calculate-fill-accounting.js
-│   │   └── orders/
-│   │       ├── order-intent.js
+│   │   │   ├── calculate-fill-accounting.js
+│   │   │   └── recovery-cycle.js
+│   │   ├── profitability/
+│   │   │   └── approve-sell.js
+│   │   ├── inventory/
+│   │   │   └── inventory-ledger.js
+│   │   └── state-machine/
+│   │       ├── market-state.js
 │   │       └── order-transition.js
-│   ├── application/
-│   │   ├── ports/
-│   │   │   ├── broker/
-│   │   │   │   ├── market-data.js
-│   │   │   │   ├── trading.js
-│   │   │   │   ├── account.js
-│   │   │   │   ├── execution-history.js
-│   │   │   │   └── market-rules.js
-│   │   │   ├── state-repository.js
-│   │   │   ├── event-publisher.js
-│   │   │   ├── notification-publisher.js
-│   │   │   └── clock.js
-│   │   ├── workflows/
-│   │   │   ├── initialize-market.js
-│   │   │   ├── process-market-observation.js
-│   │   │   ├── process-order-update.js
-│   │   │   ├── process-fill.js
-│   │   │   ├── reconcile-market.js
-│   │   │   ├── recover-market.js
-│   │   │   └── stop-strategy.js
-│   │   └── services/
-│   │       ├── strategy-coordinator.js
-│   │       └── market-task-queue.js
-│   └── adapters/
-│       ├── broker/
-│       │   └── binance-websocket/
-│       │       ├── create-binance-broker.js
-│       │       ├── market-data-adapter.js
-│       │       ├── trading-adapter.js
-│       │       ├── account-adapter.js
-│       │       ├── history-adapter.js
-│       │       └── mappers/
-│       ├── notifications/
-│       │   └── telegram/
-│       │       ├── telegram-adapter.js
-│       │       └── notification-mapper.js
-│       ├── events/
-│       │   └── event-bus-adapter.js
-│       ├── journal/
-│       │   └── journal-adapter.js
-│       ├── persistence/
-│       │   └── in-memory-state-repository.js
-│       └── logging/
-│           └── logger-adapter.js
+│   ├── infrastructure/
+│   │   ├── broker/binance-websocket/
+│   │   │   ├── create-binance-broker.js
+│   │   │   ├── market-data-adapter.js
+│   │   │   ├── trading-adapter.js
+│   │   │   ├── account-adapter.js
+│   │   │   ├── history-adapter.js
+│   │   │   └── mappers/
+│   │   ├── notifications/telegram/
+│   │   │   ├── telegram-adapter.js
+│   │   │   └── notification-mapper.js
+│   │   ├── persistence/
+│   │   │   └── in-memory-state-repository.js
+│   │   ├── scheduler/
+│   │   │   └── market-task-queue.js
+│   │   ├── logging/
+│   │   │   └── logger-adapter.js
+│   │   ├── journal/journal-adapter.js
+│   │   └── event-bus/event-bus-adapter.js
+│   └── ports/
+│       ├── broker.js
+│       ├── journal.js
+│       ├── event-bus.js
+│       ├── state-repository.js
+│       ├── notification-publisher.js
+│       └── clock.js
 └── test/
     ├── unit/
     │   ├── domain/

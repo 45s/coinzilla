@@ -52,18 +52,19 @@ See [component-architecture.mmd](./diagrams/component-architecture.mmd).
 
 ```mermaid
 flowchart TB
-  subgraph runtime["runtime"]
+  subgraph bootstrap["bootstrap"]
     entry["index.js"]
-    composition["create-runtime"]
-    lifecycle["start / shutdown"]
-    config["load + validate JSON config"]
+    composition["container.js"]
+    lifecycle["startup.js"]
   end
+  config["config: loader + validator"]
 
   subgraph application["application"]
-    coordinator["strategy coordinator"]
-    workflows["market / order / fill / reconcile / recovery workflows"]
-    ports["broker, state, event, notification, clock ports"]
+    runner["strategy-runner"]
+    pairs["pair-manager"]
+    reconciliation["reconciliation"]
   end
+  ports["ports: broker, journal, event-bus, state, notification, clock"]
 
   subgraph domain["domain"]
     policy["BUY planning + SELL approval"]
@@ -71,11 +72,13 @@ flowchart TB
     machine["per-market state transitions"]
   end
 
-  subgraph adapters["adapters"]
+  subgraph infrastructure["infrastructure"]
     binance["Binance WebSocket broker adapter"]
     telegram["Telegram notifier adapter"]
     bus["EventBus / Journal adapters"]
     state["In-memory state repository\nthen durable adapter"]
+    scheduler["market task scheduler"]
+    logging["structured logging"]
   end
 
   entities["@coinzilla/entities\nAsset, Market, Money, Quantity, CanonicalOrder, Fill, Commission, Balance, TradingRules, BrokerCapabilities, BrokerResult"]
@@ -83,21 +86,23 @@ flowchart TB
   entry --> composition
   composition --> config
   composition --> lifecycle
-  composition --> coordinator
-  coordinator --> workflows
-  workflows --> ports
-  workflows --> policy
-  workflows --> ledger
-  workflows --> machine
-  ports -. implemented by .-> adapters
+  composition --> runner
+  runner --> pairs
+  runner --> reconciliation
+  pairs --> ports
+  reconciliation --> ports
+  pairs --> policy
+  pairs --> ledger
+  pairs --> machine
+  ports -. implemented by .-> infrastructure
   policy --> entities
   ledger --> entities
   binance --> entities
 ```
 
-### 4.1 Runtime
+### 4.1 Bootstrap and configuration
 
-Owns process startup, composition, configuration, resource ownership, signal handling and shutdown ordering. It constructs the concrete Binance/Telegram/EventBus/Journal/persistence adapters and injects their capabilities into application workflows. It contains no BUY/SELL formulas or inventory decisions.
+Bootstrap owns dependency construction, resource ownership, signal handling, startup ordering, rollback and shutdown. `container.js` is the composition root; `startup.js` starts and stops the composed application. The separate `config/` layer loads JSON and environment secrets and validates them before broker order capabilities are exposed. Neither layer contains BUY/SELL formulas or inventory decisions.
 
 ### 4.2 Application
 
@@ -115,13 +120,9 @@ Owns pure rules and state invariants:
 
 Domain functions receive canonical data and return decisions, updated immutable projections, or explicit refusal reasons. They do not perform I/O.
 
-### 4.4 Adapters
+### 4.4 Infrastructure and ports
 
-Implement ports:
-- Binance maps WebSocket API/Streams events, orders, fills, balances, trading rules and history into canonical Coinzilla contracts.
-- Telegram maps curated application events to human-readable messages through the existing notifier package.
-- EventBus and Journal adapters isolate those package APIs from use cases.
-- State repository begins in-memory for tests/development; a future durable adapter can be added without changing domain rules or workflow contracts.
+Ports define the capabilities application workflows need; `ports/broker.js`, `journal.js` and `event-bus.js` are app-facing contracts, alongside state, notification and clock ports. Infrastructure implements those contracts: Binance maps WebSocket events and operations into canonical Coinzilla contracts; Telegram maps curated events to messages; EventBus and Journal integrations isolate shared package APIs; persistence starts in-memory and can later gain a durable adapter. Scheduler and logging implementations also live in infrastructure.
 
 ## 5. Dependency and package reuse rules
 
@@ -137,8 +138,8 @@ Use `@coinzilla/event-bus`, `@coinzilla/journal`, and `@coinzilla/utils` only th
 
 - Domain imports canonical entities and pure local domain modules only.
 - Application imports domain modules and application port contracts.
-- Adapters import application ports, shared contracts, and their concrete integration packages.
-- Runtime imports all outer layers and performs composition.
+- Infrastructure imports ports, shared contracts, and concrete integration packages.
+- Bootstrap imports outer layers and performs composition.
 - No domain/application import from `@coinzilla/brokers`, Binance SDKs, Telegram packages, process environment, network clients or filesystem APIs.
 - No imports from `apps/bot-free-roll`.
 - Shared package changes are owned by the relevant package domain and follow `AI_AGENT_WORKFLOW.md`.
@@ -150,77 +151,60 @@ See [MODULE_CATALOG.md](./MODULE_CATALOG.md) for file-by-file responsibilities a
 ```text
 src/
 ├── index.js
-├── runtime/
-│   ├── create-runtime.js
-│   ├── start-runtime.js
-│   ├── shutdown-runtime.js
-│   └── config/
-│       ├── load-config.js
-│       └── validate-config.js
+├── bootstrap/
+│   ├── container.js
+│   └── startup.js
+├── config/
+│   ├── loader.js
+│   └── validator.js
+├── application/
+│   ├── strategy-runner.js
+│   ├── pair-manager.js
+│   └── reconciliation.js
 ├── domain/
 │   ├── strategy/
 │   │   ├── calculate-buy-price.js
-│   │   ├── plan-buy.js
-│   │   ├── approve-sell.js
-│   │   └── market-state.js
+│   │   └── plan-buy.js
 │   ├── accounting/
 │   │   ├── fill-ledger.js
-│   │   ├── inventory-ledger.js
-│   │   ├── recovery-cycle.js
-│   │   └── calculate-fill-accounting.js
-│   └── orders/
-│       ├── order-intent.js
+│   │   ├── calculate-fill-accounting.js
+│   │   └── recovery-cycle.js
+│   ├── profitability/
+│   │   └── approve-sell.js
+│   ├── inventory/
+│   │   └── inventory-ledger.js
+│   └── state-machine/
+│       ├── market-state.js
 │       └── order-transition.js
-├── application/
-│   ├── ports/
-│   │   ├── broker/
-│   │   │   ├── market-data.js
-│   │   │   ├── trading.js
-│   │   │   ├── account.js
-│   │   │   ├── execution-history.js
-│   │   │   └── market-rules.js
-│   │   ├── state-repository.js
-│   │   ├── event-publisher.js
-│   │   ├── notification-publisher.js
-│   │   └── clock.js
-│   ├── workflows/
-│   │   ├── initialize-market.js
-│   │   ├── process-market-observation.js
-│   │   ├── process-order-update.js
-│   │   ├── process-fill.js
-│   │   ├── reconcile-market.js
-│   │   ├── recover-market.js
-│   │   └── stop-strategy.js
-│   └── services/
-│       ├── strategy-coordinator.js
-│       └── market-task-queue.js
-└── adapters/
-    ├── broker/binance-websocket/
-    │   ├── create-binance-broker.js
-    │   ├── market-data-adapter.js
-    │   ├── trading-adapter.js
-    │   ├── account-adapter.js
-    │   ├── history-adapter.js
-    │   └── mappers/
-    ├── notifications/telegram/
-    │   ├── telegram-adapter.js
-    │   └── notification-mapper.js
-    ├── events/event-bus-adapter.js
-    ├── journal/journal-adapter.js
-    ├── persistence/in-memory-state-repository.js
-    └── logging/logger-adapter.js
-
-test/
-├── unit/domain/
-├── unit/application/
-├── contract/broker/
-├── contract/notifications/
-├── integration/
-├── simulation/
-└── acceptance/
+├── infrastructure/
+│   ├── broker/binance-websocket/
+│   │   ├── create-binance-broker.js
+│   │   ├── market-data-adapter.js
+│   │   ├── trading-adapter.js
+│   │   ├── account-adapter.js
+│   │   ├── history-adapter.js
+│   │   └── mappers/
+│   ├── notifications/telegram/
+│   │   ├── telegram-adapter.js
+│   │   └── notification-mapper.js
+│   ├── persistence/
+│   │   └── in-memory-state-repository.js
+│   ├── scheduler/
+│   │   └── market-task-queue.js
+│   ├── logging/
+│   │   └── logger-adapter.js
+│   ├── journal/journal-adapter.js
+│   └── event-bus/event-bus-adapter.js
+└── ports/
+    ├── broker.js
+    ├── journal.js
+    ├── event-bus.js
+    ├── state-repository.js
+    ├── notification-publisher.js
+    └── clock.js
 ```
 
-This is a deliberate target structure, not an instruction to create empty files. Each module should be introduced with the behavior and tests it owns.
+This is the preferred target structure: bootstrap/config/application/domain/infrastructure/ports. It is a deliberate target, not an instruction to create empty files. Each module should be introduced with the behavior and tests it owns.
 
 ## 7. Strategy behavior to implement
 

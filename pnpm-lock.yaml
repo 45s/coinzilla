@@ -169,6 +169,18 @@ importers:
 
   .: {}
 
+  apps/bot-coin-farmer:
+    dependencies:
+      '@coinzilla/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+      '@coinzilla/journal':
+        specifier: workspace:*
+        version: link:../../packages/journal
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+
   apps/bot-free-roll:
     dependencies:
       '@coinzilla/entities':
