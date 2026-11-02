@@ -18,7 +18,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - [~] Verify append/read ordering and behavior after partial write failures. Read/replay is deterministic and bounded; a write failure poisons the active session and incomplete tails fail closed. Runtime tests still need execution.
 - [~] Define and test duplicate/replay handling and stable record identity. Record IDs are required and duplicates fail recovery; replay is ordered and consumers must remain idempotent.
 - [~] Define serialization compatibility and schema evolution policy. Unknown versions fail explicitly; legacy records remain readable.
-- [~] Verify recovery behavior after process interruption and malformed records. Incomplete, empty, malformed, and unsupported records return explicit errors; no automatic truncation is performed.
+- [~] Verify recovery behavior after process interruption and malformed records. Incomplete, empty, malformed, invalid-encoding, and unsupported records return explicit errors; no automatic truncation is performed.
 - [~] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery has configurable record, total-byte, and per-record limits.
 
 ## Current contract

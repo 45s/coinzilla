@@ -51,7 +51,7 @@ for (const record of result.records) {
 
 Sessions are ordered by timestamp and then numeric collision suffix (the unsuffixed file first); records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
-The reader rejects duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current versioned envelope. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
+The reader rejects invalid UTF-8, duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current versioned envelope. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 
 Recovery is bounded by configurable `maxRecords`, `maxBytes`, and `maxRecordBytes`. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record. Exceeding a limit fails the entire read; increase limits deliberately when the retained history requires it.
 

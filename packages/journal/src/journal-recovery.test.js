@@ -113,6 +113,22 @@ test("rejects an incomplete final line without silently truncating it", async ()
   }
 })
 
+test("rejects invalid UTF-8 without replacing historical bytes", async () => {
+  const { directory, journal } = await createStoppedJournal()
+  const filePath = path.join(directory, "2026-01-01_00-00-00.jsonl")
+  const invalidBytes = Buffer.from([0x7b, 0xff, 0x7d, 0x0a])
+  try {
+    await writeFile(filePath, invalidBytes)
+    const result = await journal.read()
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "JOURNAL_INVALID_ENCODING")
+    assert.deepEqual(await readFile(filePath), invalidBytes)
+  } finally {
+    await journal.eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("rejects malformed JSON and empty records with source positions", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {

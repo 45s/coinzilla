@@ -80,8 +80,17 @@ export async function readJournalRecords({
         throw error
       }
 
-      const content = await readFile(filePath, "utf8")
-      const fileBytes = Buffer.byteLength(content, "utf8")
+      const contentBuffer = await readFile(filePath)
+      const fileBytes = contentBuffer.byteLength
+      let content
+      try {
+        content = new TextDecoder("utf-8", { fatal: true }).decode(contentBuffer)
+      } catch (cause) {
+        const error = new Error(`Journal session ${entry.name} is not valid UTF-8`)
+        error.code = "JOURNAL_INVALID_ENCODING"
+        error.details = { fileName: entry.name, cause }
+        throw error
+      }
       bytesRead += fileBytes
       if (bytesRead > maxBytes) {
         const error = new Error(`Journal recovery exceeds maxBytes while reading ${entry.name}`)
