@@ -245,7 +245,7 @@ test("disconnects after a failed broker connection", async () => {
   assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
-test("blocks order placement after an execution until the event handler confirms accounting", async () => {
+test("accounts canonical execution events before allowing further order placement", async () => {
   const broker = createBroker()
   let handled
   const result = await startHarvester({
@@ -254,7 +254,6 @@ test("blocks order placement after an execution until the event handler confirms
     brokerAdapterFactory: () => broker,
     onUserDataEvent: async (input) => {
       handled = input.event
-      return { ok: true, accounted: false }
     },
     logger: { info() {}, error() {} },
   })
@@ -262,23 +261,24 @@ test("blocks order placement after an execution until the event handler confirms
   broker.emitUserDataEvent({
     eventType: "executionReport",
     executionType: "TRADE",
-    fill: { id: "trade-1" },
+    fill: createFill({ tradeId: "user-data-trade-1" }),
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.deepEqual(handled, {
-    eventType: "executionReport",
-    executionType: "TRADE",
-    fill: { id: "trade-1" },
-  })
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_REQUIRED")
+  assert.equal(handled.eventType, "executionReport")
+  assert.ok(handled.fill instanceof Fill)
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
+  assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
+  assert.equal(
+    result.getRecoveryLedger({ marketId: handled.fill.market.id }).buyCost,
+    "650",
+  )
 
   const order = await result.placeOrder({
     order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
   })
-  assert.equal(order.ok, false)
-  assert.match(order.errors[0].message, /user-data accounting is not ready/)
+  assert.equal(order.ok, true)
   await result.stop()
 })
 
@@ -343,7 +343,7 @@ test("allows order placement again only after the execution handler confirms acc
   broker.emitUserDataEvent({
     eventType: "executionReport",
     executionType: "TRADE",
-    fill: { id: "trade-2" },
+    fill: createFill({ tradeId: "trade-2" }),
   })
   await new Promise((resolve) => setImmediate(resolve))
 
@@ -396,5 +396,31 @@ test("exposed broker port cannot bypass the user-data readiness gate", async () 
 
   assert.equal(order.ok, false)
   assert.match(order.errors[0].message, /user-data accounting is not ready/)
+  await result.stop()
+})
+
+test("blocks order placement when a trade event cannot be accounted", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: { malformed: true },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
+  assert.equal(result.portfolio.positions.length, 0)
+  const order = await result.broker.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
   await result.stop()
 })
