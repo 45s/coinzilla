@@ -699,6 +699,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     disconnect: async () => calls.push("disconnect"),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
+    getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
     cancelOrder: async ({ order }) => ({
       ok: true,
       data: new CanonicalOrder({
