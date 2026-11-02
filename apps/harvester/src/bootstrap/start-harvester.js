@@ -8,10 +8,13 @@ import { makePlaceOrder } from "../use-cases/place-order.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
 import { updatePortfolio as applyPortfolioFill } from "../use-cases/update-portfolio.js"
 
-async function cleanupBroker({ broker, subscriptions }) {
-  const unsubscribeResults = await Promise.allSettled(
-    subscriptions.map(({ unsubscribe }) => Promise.resolve().then(() => unsubscribe())),
-  )
+async function cleanupBroker({ broker, subscriptions, userDataSubscription }) {
+  const unsubscribeResults = await Promise.allSettled([
+    ...subscriptions.map(({ unsubscribe }) => Promise.resolve().then(() => unsubscribe())),
+    ...(typeof userDataSubscription?.disconnect === "function"
+      ? [Promise.resolve().then(() => userDataSubscription.disconnect())]
+      : []),
+  ])
   const disconnectResult = await Promise.allSettled([
     Promise.resolve().then(() => broker.disconnect()),
   ])
@@ -57,6 +60,8 @@ export async function startHarvester({
       errors,
     })
   },
+  onUserDataEvent = async () => ({ ok: false, accounted: false }),
+  onUserDataStatus = () => {},
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
   const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
@@ -102,8 +107,12 @@ export async function startHarvester({
     throw error
   }
 
-  const placeOrder = makePlaceOrder({ broker })
+  const placeOrderWithReadiness = makePlaceOrder({ broker })
   const subscriptions = []
+  let userDataSubscription
+  let userDataReady = false
+  let userDataStatus = "NOT_SUBSCRIBED"
+  let userDataEventQueue = Promise.resolve()
   const reportPriceError = (details) => {
     try {
       onMarketPriceError(details)
@@ -116,6 +125,80 @@ export async function startHarvester({
   }
 
   try {
+    const userDataResult = await broker.subscribeForUserData({
+      onEvent: ({ event } = {}) => {
+        userDataEventQueue = userDataEventQueue.then(async () => {
+          if (!event || typeof event !== "object" || Array.isArray(event)) {
+            userDataReady = false
+            userDataStatus = "INVALID_EVENT"
+            return
+          }
+
+          if (event.eventType === "executionReport" && event.executionType === "TRADE") {
+            // A trade event changes financial state. Until the application
+            // confirms that the execution was accounted, block further orders.
+            userDataReady = false
+            userDataStatus = "EXECUTION_ACCOUNTING_REQUIRED"
+          }
+
+          try {
+            const result = await onUserDataEvent({
+              event,
+              portfolio: getPortfolio(),
+              updatePortfolio,
+            })
+            if (
+              event.eventType === "executionReport" &&
+              event.executionType === "TRADE" &&
+              result?.ok === true &&
+              result?.accounted === true
+            ) {
+              userDataReady = true
+              userDataStatus = "READY"
+            }
+          } catch (error) {
+            userDataReady = false
+            userDataStatus = "EVENT_HANDLER_FAILED"
+            logger.error?.({
+              message: "Harvester user-data event handling failed",
+              eventType: event.eventType ?? "UNKNOWN",
+              error,
+            })
+          }
+        }).catch((error) => {
+          userDataReady = false
+          userDataStatus = "EVENT_QUEUE_FAILED"
+          logger.error?.({ message: "Harvester user-data event queue failed", error })
+        })
+      },
+      onStatus: (status = {}) => {
+        userDataStatus = status.type ?? "UNKNOWN"
+        if (status.recoveryRequired === true || status.reconciliationRequired === true) {
+          userDataReady = false
+        } else if (status.type === "reconciled") {
+          userDataReady = true
+          userDataStatus = "READY"
+        }
+        try {
+          onUserDataStatus({ status, ready: userDataReady })
+        } catch (error) {
+          userDataReady = false
+          userDataStatus = "STATUS_HANDLER_FAILED"
+          logger.error?.({ message: "Harvester user-data status handler failed", error })
+        }
+      },
+    })
+
+    if (!userDataResult?.ok || typeof userDataResult.data?.disconnect !== "function") {
+      const details = userDataResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Unable to subscribe to user data" + (details ? ": " + details : ""),
+      )
+    }
+    userDataSubscription = userDataResult.data
+    userDataReady = true
+    userDataStatus = "READY"
+
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       const result = await broker.subscribeForPrices({
@@ -144,7 +227,7 @@ export async function startHarvester({
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
     }
   } catch (error) {
-    const cleanupErrors = await cleanupBroker({ broker, subscriptions })
+    const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
@@ -158,7 +241,9 @@ export async function startHarvester({
   const stop = async () => {
     if (stopped) return
     stopped = true
-    const cleanupErrors = await cleanupBroker({ broker, subscriptions })
+    userDataReady = false
+    userDataStatus = "STOPPED"
+    const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }
@@ -167,7 +252,17 @@ export async function startHarvester({
   return Object.freeze({
     tradingConfig,
     broker,
-    placeOrder,
+    placeOrder: async (input = {}) => {
+      if (!userDataReady) {
+        return {
+          ok: false,
+          errors: [new Error("Cannot place orders while Harvester user-data accounting is not ready: " + userDataStatus)],
+        }
+      }
+      return placeOrderWithReadiness(input)
+    },
+    get userDataReady() { return userDataReady },
+    get userDataStatus() { return userDataStatus },
     processMarketPrice,
     updatePortfolio,
     get portfolio() { return getPortfolio() },
