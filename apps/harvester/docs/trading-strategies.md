@@ -147,7 +147,7 @@ The following are candidates for shared engine capabilities, subject to contract
 - Order/fill journal and operational logging.
 - Trading readiness, pause, and unsafe-state handling.
 
-The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. See [Portfolio Domain](./domain/portfolio.md) for the proposed domain contract and open decisions.
+The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. The pair-level Position is shared by Conservative and Aggressive and is the authoritative source for complete accounting and inventory availability. See [Portfolio Domain](./domain/portfolio.md) for confirmed decisions and remaining open questions.
 
 The engine owns reliable execution mechanics and coordinates application workflows. A strategy policy owns decisions such as when, where, and how much to buy or sell. Avoid duplicating broker/order lifecycle code in each strategy.
 
@@ -171,10 +171,12 @@ The following questions remain open and must be answered before implementation w
 4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
 6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
-7. Can both strategy modes run on the same pair/account simultaneously, or is strategy selection exclusive per market?
-8. How are shared quote assets and inventory allocated across different markets and strategy modes?
-9. How are third-asset commissions represented and valued?
-10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
+7. How are shared quote assets and inventory coordinated across different pairs that use the same account asset?
+8. What is the exact reservation lifecycle for BUY and SELL orders, including partial fills, cancellation races, rejections, and uncertain exchange outcomes?
+9. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
+10. If both strategies trade the same pair using shared inventory, is strategy-specific performance attribution required, and how should it work without splitting the actual position?
+
+Confirmed decisions: both strategy modes may run on the same pair and share its inventory; there is one Position per trading pair; that Position owns complete shared accounting (including invested quote, average cost, realized profit, commissions, reserved quantity, and free inventory); and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
 ## Current implementation status
