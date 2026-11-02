@@ -1,6 +1,5 @@
 # ADR-0001: Clean and Hexagonal Architecture for Coinzilla
 
-> **Scope clarification:** ADR-0002 supersedes the original in-place Free-Roll application migration approach. The Clean/Hexagonal architecture style and cross-cutting dependency rules recorded here remain in effect; the successor is a separate application, not a refactor of V1.
 
 - **Status:** Accepted
 - **Date:** 2026-11-01
