@@ -17,6 +17,17 @@ permissions:
   checks: write
 
 jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
   syntax:
     name: Check JavaScript syntax
     runs-on: ubuntu-latest
@@ -39,3 +50,6 @@ jobs:
 
       - name: Check JavaScript syntax
         run: node scripts/check-syntax.js
+
+      - name: Check agent policy and domain ownership
+        run: node scripts/check-agent-policy.js
