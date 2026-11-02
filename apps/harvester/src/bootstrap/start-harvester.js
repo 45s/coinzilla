@@ -442,6 +442,7 @@ export async function startHarvester({
         updateTradingAccounting,
         completeRecoveryCycle,
         canTrade: () => userDataReady,
+        isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
         },
