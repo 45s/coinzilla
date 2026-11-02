@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
+import { compareDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -8,10 +8,10 @@ import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
-  updateTradingAccounting, completeRecoveryCycle, canTrade, onPause,
+  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause,
 } = {}) {
   for (const [name, callback] of Object.entries({
-    getPortfolio, getRecoveryLedger, getMarketMetadata, updateTradingAccounting,
+    getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
     completeRecoveryCycle, canTrade, onPause,
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
@@ -60,7 +60,27 @@ export function makeConservativeTradingEngine({
         lastBuyPrice: state.lastBuyPrices.get(symbol),
       })
       if (decision.actions.length === 0) return toResult({ data: { decision, submittedOrders: [] } })
-      const result = await submit({ decision, marketMetadata: metadata })
+      const accountSnapshot = getAccountSnapshot()
+      if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
+      const executableActions = []
+      for (const action of decision.actions) {
+        const asset = action.side === "BUY" ? metadata.market.quoteAsset : metadata.market.baseAsset
+        const available = accountSnapshot.getFreeBalance({ assetId: asset.id })
+        if (!available) throw new Error("Available balance is missing for " + asset.code)
+        const required = action.side === "BUY"
+          ? multiplyDecimal({ left: action.price, right: action.quantity })
+          : action.quantity
+        if (compareDecimal({ left: required, right: available.amount }) > 0) {
+          if (action.side === "BUY") continue
+          throw new Error("Strategy SELL quantity exceeds free " + asset.code + " balance")
+        }
+        executableActions.push(action)
+      }
+      if (executableActions.length === 0) {
+        return toResult({ data: { decision, submittedOrders: [], waitingForAvailableQuoteBalance: true } })
+      }
+      const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
+      const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       return result.ok
         ? toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
         : result
