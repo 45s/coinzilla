@@ -200,3 +200,34 @@ Coinzilla remains JavaScript-first unless the user approves a specific TypeScrip
 - JSDoc must match the implementation and must not replace runtime validation or tests.
 - Treat TypeScript declaration support as an explicit compatibility requirement. JSDoc alone does not resolve every TypeScript declaration error, including `TS7016`.
 - If a task genuinely requires TypeScript interoperability, state which consumers need it, add accurate declarations, and test the published/resolved package contract without changing the JavaScript-only default.
+
+
+## 14. Mandatory AI continuation prompt after every completed job or PR
+
+Every AI agent MUST provide a full, self-contained, copy-paste-ready continuation prompt at the end of its user-facing response after **each completed job** and after **each PR closeout**. This is required even if a larger task is unfinished, the PR remains open, or work is being handed to another agent on the same branch.
+
+The continuation prompt is the final section of the response. It is not optional and cannot be replaced by a short summary or generic next-step suggestions.
+
+### Required contents
+
+The prompt must include:
+
+- Repository URL, task purpose, affected app/package, and applicable engineering instructions.
+- PR number and URL, title, source branch, target branch, draft/open/merged/closed state, and an explicit merged/not-merged statement.
+- Latest commit message (prefer the commit message rather than a hash), and current roadmap/documentation references.
+- A factual list of what was implemented in the completed job, including important files and behavior. Clearly label foundations, incomplete wiring, placeholders, and documentation-only changes.
+- Verification evidence: actual CI workflow/check names and results, links to completed runs, and explicit pending, failed, cancelled, or not-run checks.
+- Remaining requirements, known defects, unresolved decisions, safety gaps, blockers, and the next actions in dependency order.
+- Instructions for the next agent to inspect the latest repository and PR state, continue the existing branch/PR when appropriate, avoid redoing completed work, synchronize with the PR's actual target branch, run required checks, review the full diff, and obey merge/branch-cleanup rules.
+- Safety constraints and the exact merge authorization boundary. Never imply permission to merge where none exists.
+
+### Required accuracy and closeout behavior
+
+Immediately before preparing the handoff prompt, re-check the live PR state, source/target branches, latest commit message, and associated CI runs. Report facts, not assumptions. Passing local tests do not imply CI passed; a pushed commit does not imply a PR merged; a cancelled check is not a pass.
+
+- **Job complete, PR still open:** state that the job is complete but the PR is not merged; tell the next agent to continue the same PR and branch.
+- **PR merged:** state the merge result, include the merge commit message when available, verify source-branch cleanup under Section 12, and direct the next agent to the next uncompleted roadmap item.
+- **PR closed without merge:** state that it was not merged; preserve the branch/work until its disposition is clear.
+- **Blocked/incomplete:** state the exact blocker, what remains, and the safest next action. Do not describe the task as complete.
+
+The continuation prompt MUST be the last substantive content in every completed-job/PR response. A response that omits it is an incomplete handoff.
