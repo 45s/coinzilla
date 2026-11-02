@@ -9,7 +9,7 @@ function createJournalError({ code, message, details = {} }) {
 }
 
 /**
- * Serialize a stable, versioned journal envelope.
+ * Serialize a stable event with additive versioned journal metadata.
  * @param {{ event: object }} input
  * @returns {string}
  */
@@ -40,7 +40,7 @@ export function serializeJournalRecord({ event } = {}) {
 
 /**
  * Parse one complete JSONL session. No partial or malformed record is ignored.
- * Legacy raw event records are interpreted as schema version 1.
+ * Legacy raw event records without metadata are interpreted as schema version 1.
  * @param {{ content: string, fileName: string, maxRecordBytes: number }} input
  * @returns {Array<{ id: string, schemaVersion: number, payload: object, position: object }>}
  */
@@ -116,7 +116,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
       schemaVersion = metadata.schemaVersion
       id = metadata.id
       payload = { ...parsed }
-      delete payload[JOURNAL_METADATA_KEY].payload
+      delete payload[JOURNAL_METADATA_KEY]
 
       if (schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
         throw createJournalError({
@@ -140,7 +140,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
         })
       }
     } else {
-      // Existing JSONL sessions predate the versioned envelope.
+      // Existing JSONL sessions predate the additive metadata field.
       id = parsed.id
       schemaVersion = SUPPORTED_SCHEMA_VERSION
       payload = parsed
