@@ -47,9 +47,9 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### P0.2 — Trading rules, account state, and startup readiness
 
-- [ ] Load and validate exchange symbol filters for enabled markets: price tick, quantity step, min/max quantity, min/max notional, supported order types, and post-only constraints.
-- [ ] Normalize broker filters into a stable Harvester-owned domain/application shape; do not leak exchange SDK payloads.
-- [ ] Load account balances and distinguish free, locked, and total balances.
+- [~] Load and validate exchange symbol filters for enabled markets: price tick, quantity step, min/max quantity, min/max notional, and supported order types are loaded/validated; authoritative post-only crossing validation remains.
+- [x] Normalize broker filters into a stable Harvester-owned domain/application shape; do not leak exchange SDK payloads.
+- [~] Load account balances and distinguish free, locked, and total balances. A canonical free/locked account snapshot is loaded and checked for enabled-market assets; balance allocation and reconciliation against strategy-owned inventory/commitments remain.
 - [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
 - [ ] Seed market state with a current REST price/snapshot before relying on WebSocket trade events; define stale/missing-price behavior.
 - [~] Subscribe to user-data events and surface connection/recovery status. Bootstrap establishes the stream before market subscriptions, serializes inbound event handling, and exposes readiness/status. Broker-backed startup and reconnect now remain fail-closed until authoritative reconciliation is implemented; a stream-level "reconciled" acknowledgement cannot clear the order gate. Canonical fill normalization exists, but REST reconciliation across balances, open orders, execution history, strategy-owned inventory, and outstanding commitments remains unfinished.
@@ -164,7 +164,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] **No engine:** market-price processing returns a decision but does not pass it into safety validation, order planning, or order submission.
 - [ ] **Order use case is disconnected:** `placeOrder` is composed and exposed by runtime but is not invoked by the strategy/price workflow.
 - [~] **User-data processing is only partially wired:** bootstrap subscribes to the stream and fails closed on execution events until an injected handler confirms accounting; recovery status blocks order placement. Exchange execution reports are still not normalized into canonical Fill values, applied to RecoveryLedger/Portfolio, or reconciled against REST history.
-- [ ] **No exchange filters/account initialization:** no symbol filters or account snapshot are loaded into runtime; config precision is not a substitute for exchange rules.
+- [~] **Incomplete account/rule readiness:** enabled-market symbol filters and a canonical account snapshot are loaded and validated, but these facts are not yet reconciled with open orders, execution history, local strategy inventory, and outstanding commitments; startup remains blocked pending that work.
 - [ ] **No current-price seed/staleness policy:** strategy only receives stream trade-price events; no REST snapshot initializes price or protects against stale data.
 - [ ] **Portfolio is incomplete for strategy execution:** current Position stores net base quantity and signed quote cash flow only. It does not yet provide the agreed invested quote, average cost, realized profit, free/retained quantity, reserved inventory, or available inventory calculations.
 - [ ] **No order model/state store:** no active-order registry, order lifecycle state machine, client order ID policy, or order-to-fill coordination.
@@ -172,7 +172,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] **No cross-pair balance allocator:** separate pair budgets can compete for the same real exchange asset.
 - [ ] **No durable deduplication or persistence:** fill IDs exist only in process memory; restart loses Portfolio and applied-fill history.
 - [~] **No reconciliation:** broker-backed startup and reconnect now remain fail-closed, including after the stream emits its own "reconciled" status. Authoritative comparison of local state with balances, open orders, execution history, strategy-owned inventory, and outstanding commitments is still not implemented.
-- [ ] **No readiness/pause safety state:** broker connected and subscribed is currently the closest runtime status; it is not sufficient to authorize trading.
+- [~] **Incomplete readiness/pause state:** broker-backed order submission is explicitly gated and remains closed until authoritative reconciliation; a complete process/per-pair state machine and pause/resume controls remain.
 - [ ] **No complete operational journal:** lifecycle/decision/fill audit trail and operator-facing pause/recovery visibility are not implemented.
 - [ ] **No end-to-end trading test:** current offline tests validate components, not a complete market-to-order-to-fill-to-next-decision cycle.
 - [ ] **Live/testnet mode is not an explicit trading safety gate:** broker package environment behavior must be surfaced and verified by Harvester; live order submission must require an explicit opt-in separate from merely configuring a broker.

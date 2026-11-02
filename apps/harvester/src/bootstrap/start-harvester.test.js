@@ -401,6 +401,26 @@ test("does not become ready when recovery is reported during subscription setup"
   await result.stop()
 })
 
+test("does not surface a stream-ready status as application readiness before reconciliation", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataStatus({ type: "ready", recoveryRequired: false })
+
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
+  await result.stop()
+})
+
 test("does not reopen order placement after execution accounting without authoritative reconciliation", async () => {
   const calls = []
   const broker = createBroker(calls)

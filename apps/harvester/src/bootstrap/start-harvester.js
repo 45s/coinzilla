@@ -325,6 +325,15 @@ export async function startHarvester({
             : pendingExecutionEvents > 0
               ? "EXECUTION_ACCOUNTING_PENDING"
               : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+        } else if (userDataRequiresReconciliation) {
+          // Informational stream statuses such as "ready" must not overwrite
+          // the application-level readiness state while reconciliation is open.
+          userDataReady = false
+          userDataStatus = userDataAccountingFailed
+            ? "EXECUTION_ACCOUNTING_FAILED"
+            : pendingExecutionEvents > 0
+              ? "EXECUTION_ACCOUNTING_PENDING"
+              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
