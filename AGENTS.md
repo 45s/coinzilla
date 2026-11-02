@@ -95,3 +95,25 @@ Coinzilla is JavaScript-first. Follow [the JavaScript and JSDoc standard](docs/e
 - JSDoc is documentation and editor assistance; it does not replace runtime validation or tests.
 - Do not enable project-wide `checkJs` or add a documentation-generation dependency without a concrete, reviewed need.
 - When a TypeScript consumer needs declarations, treat that as an explicit interoperability requirement and document its scope rather than changing the JavaScript-only default.
+
+
+## Mandatory AI handoff prompt after every completed job or PR
+
+**At the end of every completed job and every PR closeout, the responsible AI agent MUST provide a complete, copy-paste-ready prompt for the next AI agent.** This is mandatory even when the current PR remains open and the next agent is expected to continue the same branch/PR.
+
+The handoff prompt MUST be the final section of the agent's user-facing completion response. Do not replace it with a short summary, a list of suggested next steps, or a generic "continue the work" instruction.
+
+The prompt must be self-contained and include:
+
+1. **Repository and task:** repository URL, task/feature, relevant application/package, and the user's mandatory engineering and safety constraints.
+2. **Exact PR status:** PR number and URL, title, source branch, target branch, and whether it is draft/open/merged/closed. State explicitly whether it was merged. Never imply a PR is merged merely because changes were pushed or CI passed.
+3. **Current code position:** the latest commit message (prefer this over a commit hash), and the relevant roadmap/documentation locations.
+4. **Completed work:** concrete behavior and files/capabilities actually implemented in this job/PR. Distinguish implementation from scaffolding, placeholders, and documentation-only changes.
+5. **Verification evidence:** each relevant CI/check name and its actual result (passed, failed, pending, cancelled, or not run), with links to runs where available. Never describe pending, skipped, or cancelled checks as passed.
+6. **Remaining work:** explicit unfinished requirements, known defects, safety gaps, unresolved product decisions, and the next concrete implementation steps in dependency order.
+7. **Continuation instructions:** tell the next agent to inspect the latest repository/PR state first, continue the existing branch/PR when appropriate, avoid duplicating completed work, and obey branch synchronization, testing, review, and merge rules.
+8. **Safety and merge boundary:** state any live/production restrictions and whether the next agent is authorized to merge. Do not invent authorization.
+
+The prompt must be accurate at the time it is written. Re-check GitHub PR state, latest commit, and CI immediately before preparing it. If a job is complete but its PR is not, say so and instruct the next agent to continue that same PR. If a PR is merged, include the merge result and identify the next uncompleted roadmap item. If blocked, explain the exact blocker and the safest next action.
+
+**No completed-job response is complete without this continuation prompt at the end.**
