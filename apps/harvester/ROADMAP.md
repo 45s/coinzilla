@@ -6,6 +6,7 @@
 - [x] Establish two initial strategy modes: Conservative (Free-Roll) and Aggressive.
 - [x] Document the shared-engine / strategy-specific-policy boundary.
 - [x] Document the distinction between domain entities, domain policies, application use cases, and infrastructure adapters.
+- [~] Make Harvester's class-versus-plain-pure-function implementation standard explicit in agent guidance, architecture, and README (this task PR).
 - [~] Document mandatory AI-agent implementation guidance using dependency-injected use-case factories, domain boundaries, adapters, and bootstrap composition (PR #405; mark complete after merge).
 - [x] Define and document the initial fill-driven Portfolio domain boundary.
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
