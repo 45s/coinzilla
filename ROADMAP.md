@@ -18,11 +18,13 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
+- [~] Protect `main`: require pull requests, one approving review, and the complete release CI check set.
 
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires one approving review, has no bypass actors, and blocks force pushes and deletions. Its required status checks still omit `Workspace test coverage` and `actionlint`; add both before treating the release CI gate as complete.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
-- [ ] Review dependency updates and GitHub Actions permissions for least privilege.
+- [x] Review dependency updates and GitHub Actions permissions for least privilege.
+
+  Existing workflows use read-only `contents` permissions and pin third-party Actions to full commit SHAs. GitHub-native Dependabot updates are configured weekly for the pnpm workspace and GitHub Actions; no package dependency is added.
 
 ## 3. Test critical behavior
 
@@ -33,7 +35,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 4. Improve code quality and dependency safety
 
-- [ ] Add consistent linting and formatting checks if the repository does not already enforce them. GitHub Actions workflow linting is enforced by the existing JavaScript Syntax workflow; JavaScript linting and formatting are still follow-up work.
+- [ ] Add JavaScript linting and formatting only when separately approved. ESLint is intentionally deferred; GitHub Actions workflow linting remains enforced by the existing workflow.
 - [x] Add dependency vulnerability checks to CI.
 
   Current check: `pnpm audit --prod --audit-level high` runs on pull requests, pushes to `main` and `develop`, and the weekly schedule.
@@ -74,3 +76,12 @@ The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is en
 ### Active package roadmaps
 
 - [Broker package roadmap](packages/brokers/ROADMAP.md) — native Binance WebSocket migration, compatibility contract, lifecycle/recovery phases, and broker-specific acceptance criteria.
+
+
+## 7. Agent-policy enforcement
+
+- [x] Validate domain ownership maps against discovered local `AGENTS.md` files.
+- [x] Validate that each owned domain has a roadmap and that central policy documents do not contain broken local links.
+- [x] Add regression tests for missing policy links and missing domain roadmaps.
+- [x] Configure GitHub-native weekly dependency update PRs for npm/pnpm manifests and GitHub Actions; no new package dependency is introduced.
+- [ ] Add `Workspace test coverage` and `actionlint` to the live `main` ruleset. The current ruleset was read back on 2026-11-02 and still requires only four contexts.

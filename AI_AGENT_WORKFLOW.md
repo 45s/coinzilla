@@ -205,3 +205,47 @@ Coinzilla remains JavaScript-first unless the user approves a specific TypeScrip
 - JSDoc must match the implementation and must not replace runtime validation or tests.
 - Treat TypeScript declaration support as an explicit compatibility requirement. JSDoc alone does not resolve every TypeScript declaration error, including `TS7016`.
 - If a task genuinely requires TypeScript interoperability, state which consumers need it, add accurate declarations, and test the published/resolved package contract without changing the JavaScript-only default.
+
+
+## 14. Safe CI and repository-automation changes
+
+CI is part of the repository's release safety boundary. Before changing a workflow, status context, test command, coverage threshold, dependency audit, or repository rule:
+
+1. Read the current workflow files and inspect recent successful workflow runs to capture exact check-context names.
+2. Read the live rulesets for every affected target branch. Record the required contexts and approval/freshness rules before editing.
+3. Preserve existing required context names until the replacement has run successfully and the ruleset has been updated and read back. Never remove a required context first.
+4. Keep required checks blocking. Do not mask failures with `continue-on-error`, `|| true`, broad exception handling, or a conditional that silently skips a required job.
+5. Check `pull_request`, `push` to `main` and `develop`, and scheduled/manual triggers as appropriate.
+6. Keep job permissions minimal and action references pinned to reviewed commit SHAs. Prefer built-in GitHub capabilities over adding dependencies.
+7. Update policy-script tests and `ROADMAP.md`; distinguish a configured workflow from a required branch-protection check.
+8. Verify the exact final commit SHA against every required check before merge. If the tools cannot run checks or read a required ruleset, stop before merge and report the blocker.
+
+### Standard task completion report
+
+Use this structure in the PR description or final handoff. Mark a check complete only when its exact command or CI run actually passed.
+
+```markdown
+## Implementation
+- Changes:
+- Files affected:
+- Roadmap item(s):
+
+## Verification
+- [ ] Focused tests:
+- [ ] Workspace tests:
+- [ ] Coverage:
+- [ ] Syntax and policy:
+- [ ] Workflow validation:
+- [ ] Required CI on exact head SHA:
+
+## Review
+- Risks:
+- Known limitations:
+- Checks not executed:
+
+## Git
+- Target branch:
+- Source branch:
+- Commit:
+- Pull request:
+```

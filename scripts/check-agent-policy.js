@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -55,11 +55,72 @@ export function findOwnershipGaps(directories, ownershipDocument, workflowDocume
   ];
 }
 
+
+/**
+ * Find broken relative Markdown links in the repository's central policy documents.
+ * External URLs, mail links, and same-document anchors are intentionally ignored.
+ *
+ * @param {string} root Repository root.
+ * @param {{ path: string, content: string }[]} documents Documents to inspect.
+ * @returns {string[]} Human-readable link errors.
+ */
+export function findMissingLocalLinks(root, documents) {
+  const gaps = [];
+
+  for (const document of documents) {
+    const links = document.content.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)/g);
+
+    for (const match of links) {
+      const target = match[1];
+      if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(target)) continue;
+
+      const relativeTarget = decodeURIComponent(target.split(/[?#]/, 1)[0]);
+      if (!relativeTarget) continue;
+
+      const absoluteTarget = resolve(root, dirname(document.path), relativeTarget);
+      if (!existsSync(absoluteTarget)) {
+        gaps.push(`${document.path} links to missing path ${target}`);
+      }
+    }
+  }
+
+  return gaps.sort();
+}
+
+/**
+ * Ensure every top-level domain in the ownership map has its own roadmap.
+ *
+ * @param {string} root Repository root.
+ * @param {string} ownershipDocument Domain ownership Markdown.
+ * @returns {string[]} Missing roadmap errors.
+ */
+export function findMissingRoadmaps(root, ownershipDocument) {
+  return extractMappedPaths(ownershipDocument, '/')
+    .filter((directory) => !existsSync(join(root, directory, 'ROADMAP.md')))
+    .map((directory) => `${directory} is missing ROADMAP.md`);
+}
+
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
   const workflowDocument = readFileSync(join(repositoryRoot, 'AI_AGENT_WORKFLOW.md'), 'utf8');
-  const gaps = findOwnershipGaps(directories, ownershipDocument, workflowDocument);
+  const policyPaths = [
+    'AGENTS.md',
+    'AI_AGENT_WORKFLOW.md',
+    'ENGINEERING_STANDARDS.md',
+    'docs/engineering/TASK_WORKFLOWS.md',
+    'docs/engineering/DOMAIN_OWNERSHIP.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+  ];
+  const policyDocuments = policyPaths.map((path) => ({
+    path,
+    content: readFileSync(join(repositoryRoot, path), 'utf8'),
+  }));
+  const gaps = [
+    ...findOwnershipGaps(directories, ownershipDocument, workflowDocument),
+    ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
+    ...findMissingLocalLinks(repositoryRoot, policyDocuments),
+  ];
 
   if (gaps.length > 0) {
     console.error('Agent policy ownership check failed:');
@@ -68,7 +129,7 @@ function main() {
     return;
   }
 
-  console.log(`Agent policy ownership check passed (${directories.length} domain instruction files; both maps are complete and unique).`);
+  console.log(`Agent policy check passed (${directories.length} domain instruction files; ownership maps, domain roadmaps, and central policy links are valid).`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

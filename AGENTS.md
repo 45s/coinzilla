@@ -100,3 +100,27 @@ Coinzilla is JavaScript-first. Follow [the JavaScript and JSDoc standard](docs/e
 - JSDoc is documentation and editor assistance; it does not replace runtime validation or tests.
 - Do not enable project-wide `checkJs` or add a documentation-generation dependency without a concrete, reviewed need.
 - When a TypeScript consumer needs declarations, treat that as an explicit interoperability requirement and document its scope rather than changing the JavaScript-only default.
+
+
+## Policy ownership and CI safety
+
+Use the documents below as the canonical source for each concern; do not copy whole policy sections between them:
+
+| Concern | Canonical document |
+| --- | --- |
+| Task selection and execution checklists | `docs/engineering/TASK_WORKFLOWS.md` |
+| Branches, domain ownership, cross-domain coordination, PR lifecycle | `AI_AGENT_WORKFLOW.md` |
+| Design, testing, security, dependencies, and definition of done | `ENGINEERING_STANDARDS.md` |
+| Path ownership and domain responsibilities | `docs/engineering/DOMAIN_OWNERSHIP.md` |
+| Domain-specific constraints and backlog | The owning domain's `AGENTS.md` and `ROADMAP.md` |
+
+When changing CI or repository automation:
+
+- Preserve the exact names of required status-check contexts unless the corresponding GitHub rulesets are updated and read back successfully.
+- Do not remove, rename, skip, or make a required check non-blocking to get a green build.
+- Do not use `continue-on-error`, `|| true`, or equivalent masking for required validation.
+- Verify pull-request and push triggers for both `develop` and `main`, plus scheduled/manual triggers where applicable.
+- Keep workflow permissions least-privilege; default to read-only and grant write access only to the job that needs it.
+- Pin third-party Actions to reviewed full commit SHAs. Prefer GitHub-native automation before introducing another Action or package.
+- Update tests for policy scripts and the root roadmap when enforcement or repository configuration changes.
+- Report GitHub ruleset state separately from workflow presence. A workflow existing does not mean its check is required by branch protection.

@@ -236,3 +236,17 @@ Coinzilla's default implementation language is modern JavaScript using the repos
 - A TypeScript consumer reporting `TS7016` is a separate package-interop issue. JSDoc comments alone do not guarantee that TypeScript can resolve declarations. If TypeScript consumers become a supported contract, add and test accurate declarations or an intentional declaration-generation workflow; do not solve it by silently declaring the package as `any`.
 
 See [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for examples and decision guidance.
+
+
+## CI and repository automation safety
+
+Treat required CI as a production safety boundary, not as advisory feedback.
+
+- Required status-check context names are contracts with GitHub rulesets. Do not rename or remove one until the replacement has passed and every affected ruleset has been updated and read back.
+- A required check must fail closed. Do not use `continue-on-error`, `|| true`, broad catch-and-log behavior, or conditions that turn missing validation into success.
+- Keep workflow permissions least-privilege. Use read-only defaults and narrowly scoped job-level write permissions only when needed.
+- Pin third-party Actions to reviewed full commit SHAs. Prefer native GitHub features before introducing another Action or package.
+- Validate workflow triggers for pull requests and pushes to both `main` and `develop`; preserve scheduled and manual runs where they serve a distinct purpose.
+- Keep unit tests deterministic and offline. Integration tests requiring credentials or network access must remain explicitly separate.
+- Report workflow availability, actual successful runs, and branch-protection enforcement as three distinct facts.
+- When changing policy enforcement, add regression tests for both the passing case and representative invalid configurations.
