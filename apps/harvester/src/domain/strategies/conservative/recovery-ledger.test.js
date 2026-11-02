@@ -100,3 +100,16 @@ test("rejects fills for another market", () => {
     /does not match/,
   )
 })
+
+test("rejects a reused Fill ID when recovery execution facts differ", () => {
+  const ledger = RecoveryLedger.empty({ market }).applyFill({
+    fill: makeFill({ tradeId: "reused-trade", quantity: "100", quoteQuantity: "10" }),
+  }).ledger
+
+  assert.throws(
+    () => ledger.applyFill({
+      fill: makeFill({ tradeId: "reused-trade", quantity: "99", quoteQuantity: "9.9" }),
+    }),
+    /Conflicting execution facts reused Fill ID/,
+  )
+})
