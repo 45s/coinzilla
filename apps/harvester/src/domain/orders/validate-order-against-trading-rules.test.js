@@ -25,9 +25,9 @@ const makeOrder = ({ price = "0.1", quantity = "100", market: orderMarket = mark
     market: orderMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({ amount: price, asset: orderMarket.quoteAsset }),
+    originalQuantity: new Quantity({ amount: quantity, asset: orderMarket.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: orderMarket.baseAsset }),
     status: "PENDING",
   })
 
