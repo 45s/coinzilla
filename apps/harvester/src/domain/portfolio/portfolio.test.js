@@ -81,3 +81,16 @@ test("does not permit free allocation for an unknown market", () => {
     /no Position/,
   )
 })
+
+test("rejects a reused Fill ID when execution facts differ", () => {
+  const portfolio = new Portfolio().applyFill({
+    fill: makeFill({ tradeId: "reused-trade", quantity: "1" }),
+  }).portfolio
+
+  assert.throws(
+    () => portfolio.applyFill({
+      fill: makeFill({ tradeId: "reused-trade", quantity: "2" }),
+    }),
+    /Conflicting execution facts reused Fill ID/,
+  )
+})
