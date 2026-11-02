@@ -1,12 +1,14 @@
+import { Fill } from "@coinzilla/entities"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { makePlaceOrder } from "../use-cases/place-order.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
-import { updatePortfolio as applyPortfolioFill } from "../use-cases/update-portfolio.js"
+import { updateTradingAccounting as applyTradingAccounting } from "../use-cases/update-trading-accounting.js"
 
 async function cleanupBroker({ broker, subscriptions, userDataSubscription }) {
   const unsubscribeResults = await Promise.allSettled([
@@ -25,13 +27,26 @@ async function cleanupBroker({ broker, subscriptions, userDataSubscription }) {
 
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
+  const recoveryLedgers = new Map()
   let updateQueue = Promise.resolve()
   const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy })
 
-  const updatePortfolio = ({ fill } = {}) => {
+  const updateTradingAccounting = ({ fill } = {}) => {
     const task = updateQueue.then(() => {
-      const result = applyPortfolioFill({ portfolio, fill })
-      if (result.ok) portfolio = result.data.portfolio
+      if (!(fill instanceof Fill)) {
+        return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
+      }
+      const currentLedger = recoveryLedgers.get(fill.market.id) ??
+        RecoveryLedger.empty({ market: fill.market })
+      const result = applyTradingAccounting({
+        portfolio,
+        recoveryLedger: currentLedger,
+        fill,
+      })
+      if (result.ok) {
+        portfolio = result.data.portfolio
+        recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+      }
       return result
     })
     updateQueue = task.then(() => undefined, () => undefined)
@@ -39,9 +54,11 @@ const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   }
 
   return {
-    updatePortfolio,
+    updatePortfolio: updateTradingAccounting,
+    updateTradingAccounting,
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
+    getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
   }
 }
 
@@ -60,12 +77,18 @@ export async function startHarvester({
       errors,
     })
   },
-  onUserDataEvent = async () => ({ ok: false, accounted: false }),
+  onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
   const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
-  const { processMarketPrice, updatePortfolio, getPortfolio } = portfolioWorkflow
+  const {
+    processMarketPrice,
+    updatePortfolio,
+    updateTradingAccounting,
+    getPortfolio,
+    getRecoveryLedger,
+  } = portfolioWorkflow
   const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
@@ -149,32 +172,38 @@ export async function startHarvester({
           }
 
           if (event.eventType === "executionReport" && event.executionType === "TRADE") {
-            // A trade event changes financial state. Until the application
-            // confirms that the execution was accounted, block further orders.
+            // A trade event changes financial state. Apply it to both shared
+            // inventory and Conservative recovery accounting before resuming.
             userDataReady = false
-            userDataStatus = "EXECUTION_ACCOUNTING_REQUIRED"
+            userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+            const accounting = await updateTradingAccounting({ fill: event.fill })
+            if (!accounting.ok) {
+              userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
+              logger.error?.({
+                message: "Harvester could not account for a canonical execution",
+                errors: accounting.errors,
+              })
+              return
+            }
+            userDataReady = !userDataRequiresReconciliation
+            userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
           }
 
           try {
-            const result = await onUserDataEvent({
+            await onUserDataEvent({
               event,
               portfolio: getPortfolio(),
+              recoveryLedger: event.fill instanceof Fill
+                ? getRecoveryLedger({ marketId: event.fill.market.id })
+                : undefined,
               updatePortfolio,
+              updateTradingAccounting,
             })
-            if (
-              event.eventType === "executionReport" &&
-              event.executionType === "TRADE" &&
-              result?.ok === true &&
-              result?.accounted === true
-            ) {
-              userDataReady = !userDataRequiresReconciliation
-              userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
-            }
           } catch (error) {
-            userDataReady = false
-            userDataStatus = "EVENT_HANDLER_FAILED"
+            // Observability hooks must not roll back a fill already committed
+            // to both immutable accounting projections.
             logger.error?.({
-              message: "Harvester user-data event handling failed",
+              message: "Harvester user-data observer failed",
               eventType: event.eventType ?? "UNKNOWN",
               error,
             })
@@ -276,6 +305,7 @@ export async function startHarvester({
     processMarketPrice,
     updatePortfolio,
     get portfolio() { return getPortfolio() },
+    getRecoveryLedger,
     subscriptions: subscriptions.map(({ symbol }) => symbol),
     connected: true,
     stop,
