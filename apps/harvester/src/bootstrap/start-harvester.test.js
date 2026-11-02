@@ -13,6 +13,7 @@ const tradingConfig = {
 }
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
+  let userDataHandlers
   return {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
@@ -31,7 +32,16 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) },
       }
     },
-    subscribeForUserData: async () => ({ ok: true }),
+    subscribeForUserData: async (handlers) => {
+      calls.push("subscribe:user-data")
+      userDataHandlers = handlers
+      return {
+        ok: true,
+        data: { disconnect: async () => calls.push("unsubscribe:user-data") },
+      }
+    },
+    emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
+    emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
   }
 }
@@ -82,7 +92,8 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   })
   assert.equal(result.connected, true)
   assert.deepEqual(result.subscriptions, ["BTCUSDT"])
-  assert.deepEqual(calls, ["connect", "subscribe:BTCUSDT"])
+  assert.deepEqual(calls, ["connect", "subscribe:user-data", "subscribe:BTCUSDT"])
+  assert.equal(result.userDataReady, true)
 
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
@@ -102,7 +113,14 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
 
   await result.stop()
   await result.stop()
-  assert.deepEqual(calls, ["connect", "subscribe:BTCUSDT", "unsubscribe:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, [
+    "connect",
+    "subscribe:user-data",
+    "subscribe:BTCUSDT",
+    "unsubscribe:BTCUSDT",
+    "unsubscribe:user-data",
+    "disconnect",
+  ])
 })
 
 test("uses Aggressive by default and passes updated Portfolio after a fill", async () => {
@@ -165,7 +183,7 @@ test("disconnects when a market price subscription fails", async () => {
     }),
     /Unable to subscribe to market prices for BTCUSDT: stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "subscribe:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "subscribe:user-data", "subscribe:BTCUSDT", "unsubscribe:user-data", "disconnect"])
 })
 
 test("unsubscribes earlier markets when a later market subscription fails", async () => {
@@ -193,9 +211,11 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   )
   assert.deepEqual(calls, [
     "connect",
+    "subscribe:user-data",
     "subscribe:BTCUSDT",
     "subscribe:ETHUSDT",
     "unsubscribe:BTCUSDT",
+    "unsubscribe:user-data",
     "disconnect",
   ])
 })
@@ -223,4 +243,88 @@ test("disconnects after a failed broker connection", async () => {
     /connection failed/,
   )
   assert.deepEqual(calls, ["connect", "disconnect"])
+})
+
+test("blocks order placement after an execution until the event handler confirms accounting", async () => {
+  const broker = createBroker()
+  let handled
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    onUserDataEvent: async (input) => {
+      handled = input.event
+      return { ok: true, accounted: false }
+    },
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: { id: "trade-1" },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(handled, {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: { id: "trade-1" },
+  })
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_REQUIRED")
+
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
+  assert.match(order.errors[0].message, /user-data accounting is not ready/)
+  await result.stop()
+})
+
+test("requires explicit reconciliation acknowledgement after a user-data stream recovery", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataStatus({
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  assert.equal(result.userDataReady, false)
+
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+  })
+  assert.equal(result.userDataReady, true)
+  await result.stop()
+})
+
+test("does not become ready when recovery is reported during subscription setup", async () => {
+  const broker = createBroker()
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    handlers.onStatus({
+      type: "recovered",
+      recoveryRequired: true,
+      reconciliationRequired: true,
+    })
+    return result
+  }
+
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  assert.equal(result.userDataReady, false)
+  await result.stop()
 })
