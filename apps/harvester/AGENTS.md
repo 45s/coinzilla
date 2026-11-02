@@ -106,3 +106,12 @@ Before implementing a use case, document its input, output, dependencies/ports, 
 - Harvester application, domain, and infrastructure modules MUST NOT call global `console` directly. Use the injected/shared logger at the outer application boundary.
 - The shared logger accepts one data argument per method. Use a structured object such as `logger.error({ message, symbol, error })` when context is needed; do not pass metadata as a second argument.
 - The shared logger implementation in `packages/utils` is the only place where console output is expected.
+
+
+## Mandatory continuation prompt after every completed Harvester job or PR
+
+After every completed Harvester job and every PR closeout, the agent MUST finish its user-facing response with a complete, copy-paste-ready AI continuation prompt. This applies even when the job is only one milestone within a larger PR, or when the PR is still open and another agent must continue it.
+
+The prompt must state the exact PR status (number, URL, title, source/target branches, draft/open/merged/closed, and whether merged), latest commit message, concrete work completed, relevant files/docs/roadmap updates, exact CI/test results with links and pending/cancelled/not-run checks clearly identified, all remaining work and known blockers, and the next implementation steps in dependency order. It must repeat Harvester's critical constraints: pure functions for deterministic calculations/decisions, object-shaped inputs/outputs, shared decimal utilities, broker-independent strategy policies, no global console logging, deterministic offline tests, TESTNET-only integration verification, and live trading disabled by default.
+
+Before writing the prompt, re-check the current PR, branch, latest commit message, and CI status. Do not claim a feature is complete when only its foundations or placeholders exist. The prompt must direct the next agent to inspect the latest state and continue the existing PR/branch rather than starting duplicate work. It must end the response; a summary without this prompt is an incomplete handoff.
