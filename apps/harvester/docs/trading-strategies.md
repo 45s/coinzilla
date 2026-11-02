@@ -167,7 +167,7 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 The following questions remain open and must be answered before implementation where they affect behavior:
 
-1. What is the exact maximum-price-drop calculation, using the average price of actually filled BUY orders as its baseline?
+1. **Maximum price drop (not decided):** We already agreed that the reference is the average price of BUY orders that actually filled. We still need to decide what the configured drop percentage compares. In plain terms: if the average BUY price is 100 USDT and the limit is 5%, should Conservative take control when the latest market price reaches 95 USDT, or should the calculation also account for the fees that would be paid to sell? Do not choose either rule without asking the user.
 2. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
 3. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 4. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
@@ -180,6 +180,21 @@ The following questions remain open and must be answered before implementation w
 Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
+
+## Guidance for continuing the strategy discussion
+
+The user is making product decisions, not taking a trading terminology test. Continue one unresolved decision at a time and use plain everyday English.
+
+- Do not ask a question using unexplained terms such as *drawdown*, *notional*, *compounding*, *realized PnL*, or *fee-adjusted valuation*. Explain the idea in ordinary words first.
+- Use a small numerical example with round numbers. Show what would happen under each option, not just the technical difference.
+- Offer A/B options only when the alternatives are genuinely distinct and can be explained simply. Keep each option short.
+- Ask only one question per turn. Do not bundle several decisions together.
+- If the user says they do not understand, do not repeat the same question with slightly different wording. Explain the situation from the beginning, or ask what outcome they want.
+- Never interpret confusion or silence as a decision. Record a rule only after the user clearly chooses it.
+- After a decision, explain it back in plain English, update this document and the roadmap, then move to the next unresolved decision.
+
+The next unresolved decision is the maximum-price-drop rule described above. No choice has been made yet.
+
 ## Current implementation status
 
 The default composed policy is now Aggressive and receives the latest in-memory Portfolio snapshot. It currently returns NO_ACTION with blocker codes rather than emitting order intents: the agreed grid depth, exact percentage-step calculation, maximum-price-drop formula, and SELL price/fee/rounding formula are not yet fully specified. This is a safe policy integration, not an executable or live Aggressive strategy. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending.
