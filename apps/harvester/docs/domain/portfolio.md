@@ -2,9 +2,9 @@
 
 ## Purpose
 
-A **Portfolio** is the domain representation of the bot's spot positions. It contains multiple positions, normally one position for each configured spot market (trading pair).
+A **Portfolio** is the domain representation of the bot's spot positions. It contains one position for each configured spot market (trading pair).
 
-For example, a portfolio may contain positions for `BTCUSDT`, `ETHUSDT`, and `ZROFDUSD`. A position describes the bot's holdings and trading activity for that market. It is not a market-price snapshot and it is not an order.
+For example, a portfolio may contain separate positions for `BTCUSDT`, `ETHUSDT`, and `ZROFDUSD`. A position describes the bot's holdings and trading activity for that pair. Conservative and Aggressive share the same position and inventory when they operate on the same pair; the position is not duplicated or split by strategy. It is not a market-price snapshot and it is not an order.
 
 The portfolio is updated from **executed fills**. Prices, submitted orders, open orders, and order-status changes without an execution do not change held quantities.
 
@@ -82,11 +82,18 @@ trading-config.json
 
 ### Position
 
-A position is associated with a spot market/pair (for example, `ZROUSDT`) and tracks the bot's position for that market.
+A position is associated with exactly one spot market/pair (for example, `ZROUSDT`) and is shared by all strategy modes operating on that pair.
 
-At minimum, the domain contract needs to distinguish the base asset and quote asset and represent their quantities using exact decimal arithmetic. The position may later expose strategy-relevant accounting such as invested quote, average entry cost, realized profit, reserved quantity, and free inventory, but those meanings must be agreed before they become fields or invariants.
+The agreed Position accounting responsibility includes:
 
-A market price is not part of the position's held-quantity accounting. If valuation is needed, it should be a separate calculation using an explicitly supplied price.
+- actual net base and quote quantities, represented with exact decimal arithmetic;
+- quote capital invested and average entry cost;
+- realized profit and actual commissions;
+- base inventory reserved for open orders and the remaining available inventory.
+
+These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. Both strategies must consult and respect the same position and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting.
+
+A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule.
 
 ### Aggressive strategy inventory
 
@@ -123,7 +130,7 @@ For a spot fill, before commissions:
 | BUY | increase by executed base quantity | decrease by executed quote quantity |
 | SELL | decrease by executed base quantity | increase by executed quote quantity |
 
-Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset must not be silently ignored; the portfolio/accounting contract must explicitly represent that asset debit or reject the fill as unsupported.
+Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) is currently unsupported and the fill must be rejected as unsupported. Do not ignore the debit or invent a conversion rate. Supporting third-asset commissions requires a future explicit accounting and valuation decision.
 
 Only the executed part is applied. A partially filled order updates the portfolio by that partial execution; a later fill applies only its own newly executed quantities. Never apply the original requested order quantity as if it had all executed.
 
@@ -153,23 +160,29 @@ Use the repository's object-input/object-output function convention and `toResul
 
 Position and Portfolio are implemented under src/domain/portfolio/. Position stores a canonical Market, net base Quantity, and signed quote-net-cash-flow Money. Applying BUY/SELL fills accounts for commissions charged in the base or quote asset using exact decimal-string arithmetic.
 
-Portfolio.applyFill({ fill }) creates or replaces the Position for fill.market.id and tracks canonical fill IDs for process-lifetime duplicate protection. A duplicate returns the unchanged Portfolio. A SELL that would make base holdings negative fails. The domain accepts only COMPLETE commission data and rejects third-asset commissions rather than ignoring an asset debit.
+Portfolio.applyFill({ fill }) creates or replaces the Position for fill.market.id and tracks canonical fill IDs for process-lifetime duplicate protection. A duplicate returns the unchanged Portfolio. A SELL that would make base holdings negative fails. The domain accepts only COMPLETE commission data and rejects third-asset commissions rather than ignoring an asset debit. This matches the agreed current product behavior: third-asset commission fills are unsupported and must fail visibly.
 
 makeUpdatePortfolio() exposes this transition through a toResult application use case. Bootstrap owns the latest immutable Portfolio snapshot, serializes fill updates, and supplies the latest snapshot to strategy evaluation. The implementation does not yet calculate cost basis, invested quote, realized P/L, free inventory, or SELL reservations. Fill deduplication is not durable, and no restart recovery or exchange reconciliation is provided.
 
 The broker user-data stream is not yet normalized into canonical Fill events. runtime.updatePortfolio({ fill }) is therefore an application integration point, not evidence that live broker fills are already ingested.
 
+## Confirmed domain decisions
+
+The following decisions have been agreed:
+
+1. **Position ownership — one position per trading pair.** `BTCUSDT` and `ETHUSDT` have separate positions. A Position is not account-wide per asset and is not split into separate strategy-owned positions.
+2. **Cross-strategy inventory — fully shared per pair.** Conservative and Aggressive may operate on the same pair and use the same actual holdings and available inventory. Neither strategy receives a private copy or exclusive allocation of that pair's coins.
+3. **Accounting — complete shared accounting.** Position is the authoritative source for actual holdings, invested quote, average entry cost, realized profit, commissions, reserved inventory, and available inventory. Both strategies use this shared accounting.
+4. **Third-asset commissions — reject for now.** A fill whose commission is charged in an asset other than the pair's base or quote asset is unsupported and must be rejected visibly. It must never be silently ignored or valued using an invented conversion.
+
+These decisions define pair-level accounting and strategy sharing. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
+
 ## Decisions still required
 
-The following are deliberately not implied by the initial definition and must be agreed before implementation:
+1. **Order reservation lifecycle:** when exactly is quantity reserved for a submitted BUY or SELL, and when is it released after rejection, cancellation, expiration, partial fill, or an uncertain exchange response? The shared Position must expose reserved and available inventory, but the lifecycle and race-handling contract still needs to be specified.
+2. **Cross-pair asset coordination:** how does the engine prevent separate pair positions from spending or selling the same underlying account balance? Pair-level positions do not by themselves solve account-wide balance contention.
+3. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide durable deduplication?
+4. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
+5. **Profit attribution:** if both strategies trade the same pair and share the same inventory, is strategy-specific performance reporting required, and if so, how should it be attributed without creating separate competing positions?
 
-1. **Position ownership:** is a position strictly pair-scoped, account-asset-scoped, or split by strategy as well as pair? Aggressive uses one shared inventory pool per market, but cross-strategy ownership is not yet defined.
-2. **Shared assets:** how should balances be represented when the same asset participates in multiple configured pairs (for example, USDT across BTCUSDT and ZROUSDT)?
-3. **Strategy allocation:** how are actual holdings divided between Conservative/Free-Roll and Aggressive strategies, especially if both can trade the same pair?
-4. **Accounting fields:** which cost-basis, invested-quote, realized-profit, reserved-quantity, and free-inventory values belong in the shared position versus strategy-specific state?
-5. **Third-asset commission:** should the portfolio track account-wide asset debits, or should unsupported commission assets fail the update until that capability exists?
-6. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide the required deduplication?
-7. **Order reservations:** where are balances reserved for open BUY orders and SELL orders represented? The Aggressive SELL-reservation invariant is agreed, but the full shared reservation model is not yet designed.
-8. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
-
-Until these decisions are closed, implement only the agreed fill-driven portfolio boundary and avoid inventing strategy accounting semantics.
+Until these remaining decisions are closed, do not invent reservation timing, cross-pair allocation, recovery, or profit-attribution rules.
