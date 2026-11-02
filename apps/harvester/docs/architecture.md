@@ -155,12 +155,12 @@ This is a conceptual direction, not a request to create every directory immediat
 
 ## Shared engine, separate policies
 
-Both initial strategy modes use the same Trading Engine and Portfolio:
+Both initial strategy modes use the same Trading Engine and Portfolio, but they do not control a pair simultaneously:
 
 - **Conservative (Free-Roll):** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
-- **Aggressive:** may maintain multiple active BUY and multiple active SELL orders. Its exact order planning, inventory allocation, and risk rules remain undecided.
+- **Aggressive:** may maintain multiple active BUY and multiple active SELL orders while it controls the pair. Its exact order planning and risk rules remain partly undecided.
 
-Aggressive's detailed order rules are documented in [Trading Strategies](./trading-strategies.md). A confirmed domain decision allows Conservative and Aggressive to operate on the same pair simultaneously using one shared pair-level Position and inventory pool. They must coordinate through the shared Portfolio accounting and order reservations; they must not maintain separate competing copies of the same holdings. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved.
+There is exactly one Position per trading pair, shared by both strategies. The Trading Engine grants operational control to only one strategy at a time. It automatically switches from Aggressive to Conservative when the pair's available unspent quote balance becomes low, and back to Aggressive when enough quote balance becomes available again. Exact thresholds and anti-oscillation behavior remain to be decided. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
 
 ## Non-negotiable boundaries
 
