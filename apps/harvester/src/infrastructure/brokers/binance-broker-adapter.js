@@ -3,6 +3,7 @@ import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 import { createCanonicalFillFromBinanceEvent } from "./binance-execution-fill.js"
+import { createCanonicalOrderFromBinanceEvent } from "./binance-execution-order.js"
 
 const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
@@ -63,21 +64,25 @@ export function createBinanceBrokerAdapter({
   }
 
   const normalizeUserDataEvent = async ({ event } = {}) => {
-    if (
-      event?.eventType !== "executionReport" ||
-      event?.executionType !== "TRADE"
-    ) {
-      return event
-    }
+    if (event?.eventType !== "executionReport") return event
+
     const metadata = await getCanonicalMarketMetadata({
-      symbol: event.fill?.symbol,
+      symbol: event.executedOrder?.symbol ?? event.fill?.symbol,
     })
     return {
       ...event,
-      fill: createCanonicalFillFromBinanceEvent({
+      executedOrder: createCanonicalOrderFromBinanceEvent({
         event,
         market: metadata.market,
       }),
+      ...(event.executionType === "TRADE"
+        ? {
+            fill: createCanonicalFillFromBinanceEvent({
+              event,
+              market: metadata.market,
+            }),
+          }
+        : {}),
     }
   }
 
@@ -124,8 +129,12 @@ export function createBinanceBrokerAdapter({
     subscribeForUserData: ({ onEvent, onStatus }) =>
       client.subscribeForUserData({
         onEvent: ({ event } = {}) => {
-          if (event?.eventType === "executionReport" && event?.executionType === "TRADE") {
-            onStatus?.({ type: "executionPending", executionPending: true })
+          if (event?.eventType === "executionReport") {
+            onStatus?.({
+              type: event.executionType === "TRADE" ? "executionPending" : "orderUpdatePending",
+              executionPending: event.executionType === "TRADE",
+              orderUpdatePending: event.executionType !== "TRADE",
+            })
           }
           Promise.resolve()
             .then(() => normalizeUserDataEvent({ event }))
