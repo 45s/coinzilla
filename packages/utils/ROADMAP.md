@@ -49,6 +49,16 @@ The exact final PR head passed:
 
 No runtime dependencies were added and no consumer package source files were changed. Remaining work is deliberately limited to reviewing duplicate generic helpers when a concrete use case justifies consolidation; no speculative API changes are planned.
 
+## Repository-wide reuse audit
+
+- [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
+- [ ] Consolidate exact decimal-string arithmetic shared by Free-Roll, Harvester, and Market Simulator; preserve each domain's business rules and compatibility contracts.
+- [ ] Audit direct console usage and app-local logger adapters; standardize diagnostics on the shared Logger / defaultLogger API.
+- [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
+- [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
+
+The initial findings and mandatory agent workflow are in [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). The inventory is preliminary; do not mark this audit complete until every candidate has been inspected and classified.
+
 ## Scope guard
 
 Do not move strategy, broker, entity, event-bus, or journal rules into this package merely to share code. A helper belongs here only when it is domain-neutral and has a real shared use case.

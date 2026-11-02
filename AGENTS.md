@@ -41,6 +41,9 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
 
 ## Required workflow
 
+**Shared-utility search is mandatory before implementation.** Before adding a helper, logger, validator, formatter, parser, numeric/decimal operation, time utility, or other cross-cutting capability, follow [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md). Search packages/utils first, inspect its public exports and tests, then search the whole repository. Reuse or extend the shared public API when the behavior is domain-neutral; keep business and protocol rules in their owning domains. Do not create a duplicate generic implementation without recording why reuse is inappropriate.
+
+
 1. Read `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest applicable package/application `AGENTS.md`.
 2. Identify the owning domain and roadmap item before editing.
 3. Inspect the affected implementation, consumers, tests, scripts, and relevant current branch history.
