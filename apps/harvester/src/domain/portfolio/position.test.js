@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Position } from "./position.js"
+import { calculatePositionFill } from "./position-accounting.js"
 
 const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
@@ -23,6 +24,21 @@ const makeFill = ({
   quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
   commissions,
   commissionStatus,
+})
+
+test("calculates BUY accounting with base and quote commissions as a pure function", () => {
+  const result = calculatePositionFill({
+    market,
+    baseQuantity: "0",
+    quoteNetCashFlow: "0",
+    fill: makeFill({
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.01", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.2", asset: quoteAsset }) }),
+      ],
+    }),
+  })
+  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2" })
 })
 
 test("applies BUY fills and base/quote commissions exactly", () => {
