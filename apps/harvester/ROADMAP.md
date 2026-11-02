@@ -100,7 +100,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.6 — Persistence, restart, and recovery required for safe operation
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
-- [ ] Implement durable journal/state storage using the repository's approved shared packages or a separately approved persistence adapter; do not create an app-local generic storage framework.
+- [ ] Implement durable journal/state storage using the repository's approved shared packages or a separately approved persistence adapter; do not create an app-local generic storage framework. The current Journal package does not expose read/replay recovery; a Journal-owned capability request is tracked in [#429](https://github.com/45s/coinzilla/issues/429).
 - [ ] Persist execution facts before acknowledging successful processing/recovery.
 - [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
