@@ -1,5 +1,6 @@
 import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, subtractDecimal } from "@coinzilla/utils"
 import { Fill, Market } from "@coinzilla/entities"
+import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
 import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 
 /**
@@ -14,12 +15,14 @@ export class RecoveryLedger {
   #buyCost
   #netSellProceeds
   #appliedFillIds
+  #appliedFillFingerprints
 
   constructor({
     market,
     buyCost = "0",
     netSellProceeds = "0",
     appliedFillIds = [],
+    appliedFillFingerprints = [],
   } = {}) {
     if (!(market instanceof Market)) {
       throw new TypeError("RecoveryLedger.market must be a canonical Market")
@@ -39,11 +42,26 @@ export class RecoveryLedger {
     ) {
       throw new TypeError("RecoveryLedger.appliedFillIds must contain unique non-empty strings")
     }
+    if (
+      !Array.isArray(appliedFillFingerprints) ||
+      appliedFillFingerprints.some((item) =>
+        !item || typeof item.id !== "string" || !item.id.trim() ||
+        typeof item.fingerprint !== "string" || !item.fingerprint
+      ) ||
+      new Set(appliedFillFingerprints.map((item) => item.id)).size !== appliedFillFingerprints.length ||
+      appliedFillFingerprints.length !== appliedFillIds.length ||
+      appliedFillFingerprints.some((item) => !appliedFillIds.includes(item.id))
+    ) {
+      throw new TypeError("RecoveryLedger fill IDs and fingerprints must match exactly")
+    }
 
     this.#market = market
     this.#buyCost = buyCost
     this.#netSellProceeds = netSellProceeds
     this.#appliedFillIds = Object.freeze([...appliedFillIds])
+    this.#appliedFillFingerprints = Object.freeze(
+      appliedFillFingerprints.map((item) => Object.freeze({ ...item })),
+    )
     Object.freeze(this)
   }
 
@@ -66,6 +84,7 @@ export class RecoveryLedger {
     })
   }
   get appliedFillIds() { return this.#appliedFillIds }
+  get appliedFillFingerprints() { return this.#appliedFillFingerprints }
 
   applyFill({ fill } = {}) {
     if (!(fill instanceof Fill)) {
@@ -74,7 +93,13 @@ export class RecoveryLedger {
     if (fill.market.id !== this.#market.id) {
       throw new TypeError("Fill market does not match RecoveryLedger market")
     }
-    if (this.#appliedFillIds.includes(fill.id)) {
+
+    const fingerprint = createFillFingerprint({ fill })
+    const existingFingerprint = this.#appliedFillFingerprints.find((item) => item.id === fill.id)
+    if (existingFingerprint) {
+      if (existingFingerprint.fingerprint !== fingerprint) {
+        throw new Error("Conflicting execution facts reused Fill ID " + fill.id)
+      }
       return Object.freeze({
         ledger: this,
         applied: false,
@@ -94,6 +119,10 @@ export class RecoveryLedger {
         right: accounting.netSellProceeds,
       }),
       appliedFillIds: [...this.#appliedFillIds, fill.id],
+      appliedFillFingerprints: [
+        ...this.#appliedFillFingerprints,
+        { id: fill.id, fingerprint },
+      ],
     })
 
     return Object.freeze({
@@ -111,6 +140,7 @@ export class RecoveryLedger {
       outstandingRecoveryAmount: this.outstandingRecoveryAmount,
       realizedNetProfit: this.realizedNetProfit,
       appliedFillIds: [...this.#appliedFillIds],
+      appliedFillFingerprints: this.#appliedFillFingerprints.map((item) => ({ ...item })),
     })
   }
 
