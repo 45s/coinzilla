@@ -54,12 +54,14 @@ export function createCanonicalOrderFromBinanceEvent({ event, market } = {}) {
   assertDecimalString({ value: order.quantity, field: "order.quantity" })
   assertDecimalString({ value: order.executedQuantity, field: "order.executedQuantity" })
   const status = BINANCE_ORDER_STATUS_MAP[order.status] ?? "UNKNOWN"
-  const limitPrice = order.type === "MARKET"
-    ? undefined
-    : new Money({
-        amount: assertDecimalString({ value: order.price, field: "order.price" }),
-        asset: market.quoteAsset,
-      })
+  let limitPrice
+  if (order.type !== "MARKET") {
+    assertDecimalString({ value: order.price, field: "order.price" })
+    limitPrice = new Money({
+      amount: order.price,
+      asset: market.quoteAsset,
+    })
+  }
   const updatedAt = Number.isSafeInteger(order.updatedAt) && order.updatedAt >= 0
     ? order.updatedAt
     : undefined
