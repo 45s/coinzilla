@@ -457,3 +457,61 @@ test("blocks order placement when a trade event cannot be accounted", async () =
   assert.equal(order.ok, false)
   await result.stop()
 })
+
+test("fails startup before opening streams when required minimum notional is unavailable", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  broker.getSymbolFilters = async ({ symbol }) => {
+    calls.push("filters:" + symbol)
+    const metadata = createMarketMetadata(symbol)
+    return {
+      ok: true,
+      data: {
+        ...metadata,
+        tradingRules: new TradingRules({
+          market: metadata.market,
+          constraints: metadata.tradingRules.constraints.filter(
+            ({ type }) => type !== "MIN_NOTIONAL",
+          ),
+        }),
+      },
+    }
+  }
+
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /Required exchange trading rule is unavailable: MIN_NOTIONAL/,
+  )
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+})
+
+test("fails startup when the configured post-only order type is unsupported", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  broker.getSymbolFilters = async ({ symbol }) => {
+    calls.push("filters:" + symbol)
+    return {
+      ok: true,
+      data: {
+        ...createMarketMetadata(symbol),
+        supportedOrderTypes: ["LIMIT", "MARKET"],
+      },
+    }
+  }
+
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /does not support required LIMIT_MAKER/,
+  )
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+})
