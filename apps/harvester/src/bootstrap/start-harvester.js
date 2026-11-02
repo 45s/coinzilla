@@ -184,6 +184,7 @@ export async function startHarvester({
   let pendingExecutionEvents = 0
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
+  let stopped = false
   const guardedBroker = Object.freeze({
     ...broker,
     placeOrder: async ({ order } = {}) => {
@@ -324,6 +325,11 @@ export async function startHarvester({
           logger.error?.({ message: "Harvester user-data event queue failed", error })
         }).finally(async () => {
           if (isOrderUpdate) pendingExecutionEvents -= 1
+          if (stopped) {
+            userDataReady = false
+            userDataStatus = "STOPPED"
+            return
+          }
           if (pendingExecutionEvents !== 0) return
 
           if (userDataAccountingFailed) {
@@ -478,7 +484,6 @@ export async function startHarvester({
     throw error
   }
 
-  let stopped = false
   const stop = async () => {
     if (stopped) return
     stopped = true

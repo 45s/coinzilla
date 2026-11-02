@@ -741,7 +741,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     pairs: {
       BTCUSDT: {
         enabled: true,
-        investment: 1000,
+        investment: 2000,
         orderQuantity: 0.01,
         keepQuantity: 0.001,
         priceStepPercent: 0.05,
