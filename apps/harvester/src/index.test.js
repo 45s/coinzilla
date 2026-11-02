@@ -47,6 +47,9 @@ test("logs startup failures as one structured logger argument", async () => {
     assert.equal(calls[0].level, "error")
     assert.equal(calls[0].data.message, "Harvester startup failed.")
     assert.equal(calls[0].data.error, error)
+    assert.equal(calls[0].data.errorDetails.name, "Error")
+    assert.equal(calls[0].data.errorDetails.message, "configuration failed")
+    assert.match(calls[0].data.errorDetails.stack, /configuration failed/)
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -84,4 +87,31 @@ test("reports broker-connected read-only mode without claiming trading is blocke
   assert.deepEqual(messages, [
     "Harvester connected and subscribed to 1 enabled market(s) in read-only mode; order execution is disabled.",
   ])
+})
+
+
+test("preserves nested AggregateError details in startup diagnostics", async () => {
+  const calls = []
+  const rootError = new Error("broker request failed")
+  const error = new AggregateError([rootError], "startup and cleanup failed")
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      start: async () => { throw error },
+      logger: {
+        info() {},
+        debug() {},
+        error: (data) => calls.push(data),
+      },
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].errorDetails.name, "AggregateError")
+    assert.equal(calls[0].errorDetails.message, "startup and cleanup failed")
+    assert.equal(calls[0].errorDetails.errors[0].message, "broker request failed")
+    assert.match(calls[0].errorDetails.errors[0].stack, /broker request failed/)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })
