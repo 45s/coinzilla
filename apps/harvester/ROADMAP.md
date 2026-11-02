@@ -2,7 +2,7 @@
 
 ## Mission and delivery priority
 
-**First priority: make Harvester execute a complete, safe, repeatable trading cycle.** Architecture expansion, optional features, and optimization come after the first strategy can trade end to end.
+**First priority: implement Conservative (Free-Roll) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing `apps/bot-free-roll/README.md` is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
 
 The current `develop` implementation is a connected market-data prototype, not a trading bot. It loads config, can connect to Binance, subscribes to enabled-pair trade-price streams, validates prices, invokes the Aggressive policy, and maintains an in-memory Portfolio when canonical fills are supplied manually. The default Aggressive policy deliberately returns `NO_ACTION`; no order is generated or submitted from a market-price event. Live user-data/fill ingestion, order lifecycle management, exchange-rule validation, account/risk coordination, durable recovery, and an executable strategy are missing.
 
@@ -29,20 +29,21 @@ Live trading must remain explicitly disabled by default. TESTNET verification is
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
 
-### P0.1 — Freeze the first executable strategy scope
+### P0.1 — Freeze the first executable strategy scope: Conservative Free-Roll
 
-- [ ] Select the first strategy mode to make executable (Aggressive is currently composed by default; Conservative/Free-Roll is documented but not implemented).
-- [ ] Close only the strategy decisions that block a complete first cycle; do not expand into optional strategy features.
-- [ ] Resolve Aggressive grid depth. Upward grid repricing is already decided: use the latest last-traded price from the subscribed `aggTrade` stream and compound each upward percentage step from the previous level. Lower BUY grid levels remain fixed percentages from the grid reference.
-- [ ] Resolve the maximum-price-drop formula using the agreed baseline: average price of actually filled BUY orders.
-- [ ] Resolve the SELL price formula, including BUY/SELL commissions, configured `minProfit`, retained `keepQuantity`, fee asset, and exact tick rounding.
-- [ ] Resolve the 50% partial-SELL threshold behavior, including BUY placement price and duplicate-trigger prevention.
-- [ ] Define first-cycle order intent shape and the minimum strategy context required (market price, pair settings, Position/Portfolio, active orders, reservations, balances, exchange filters).
-- [ ] Ensure the strategy returns deterministic domain decisions/order intents as plain pure functions; it must never call the broker or perform I/O.
-- [ ] Preserve the agreed one-grid-per-market rule, one shared Position/inventory per pair, multiple active BUY/SELL orders where specified, BUY rounding down, SELL rounding up, and >50% cumulative BUY-fill / >$5 USD-equivalent SELL-to-BUY trigger behavior.
-- [ ] Preserve Conservative takeover: switch when actual executed BUY investment exceeds `conservativeTakeoverPercent` (default 20%) of the pair budget; unfilled BUY commitments do not count. Conservative retains control until the position is fully sold and invested quote is recovered.
-- [ ] Preserve loss protection: stop creating new BUY orders while losing; keep existing SELL orders active; never force a loss-making sale just to switch strategies.
-- [ ] Document the final first-release strategy contract and examples before implementation.
+- [x] Select Conservative (Free-Roll) as the first strategy. Its source of truth is `apps/bot-free-roll/README.md` v0.014; Aggressive is deferred to P1.
+- [~] Port the Free-Roll business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
+- [ ] Define the minimal first-cycle order intent and strategy context (last traded price, pair config, active Position/recovery ledger, active orders, reservations, balances, exchange filters).
+- [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
+- [ ] Preserve standing-order behavior: after a qualifying BUY fill, maintain both a profitable recovery SELL and the next standing BUY when state and available funds permit.
+- [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
+- [~] Preserve fee rules: actual fill commission rates are calculated from canonical fills; the configured maker/taker ceiling is activated only after a non-zero actual commission is observed; base/quote fees are supported; third-asset or incomplete commission data is rejected. The fee policy and calculation are implemented as pure domain functions but are not yet wired into strategy evaluation.
+- [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
+- [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
+- [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
+- [ ] Ensure all deterministic strategy calculations and decisions are plain pure functions; strategy policies never call the broker or perform I/O.
+- [ ] Record any unresolved Free-Roll requirements as explicit blockers; do not invent financial behavior.
+
 
 ### P0.2 — Trading rules, account state, and startup readiness
 
