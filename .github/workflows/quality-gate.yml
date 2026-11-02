@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  actionlint:
-    name: actionlint
+  workflow-lint:
+    name: Lint GitHub Actions workflows
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
