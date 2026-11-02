@@ -498,6 +498,7 @@ export async function startHarvester({
       }
       for (const [symbol] of enabledPairs) {
         const metadata = marketMetadata.get(symbol)
+        logger.debug?.({ message: "Checking for pre-existing open orders", symbol })
         const openOrders = await broker.getOpenOrders({ symbol })
         if (!openOrders?.ok || !Array.isArray(openOrders.data)) {
           throw new Error("Unable to verify clean TESTNET open orders for " + symbol)
@@ -505,6 +506,11 @@ export async function startHarvester({
         if (openOrders.data.length > 0) {
           throw new Error("TESTNET account has pre-existing open orders for " + symbol + "; cancel or reconcile them before starting Harvester")
         }
+        logger.debug?.({
+          message: "Checking initial base-asset inventory",
+          symbol,
+          asset: metadata.market.baseAsset.code,
+        })
         const baseBalance = accountSnapshot.getBalance({ assetId: metadata.market.baseAsset.id })
         if (!baseBalance || compareDecimal({ left: baseBalance.free.amount, right: "0" }) !== 0 ||
             compareDecimal({ left: baseBalance.locked.amount, right: "0" }) !== 0) {
@@ -553,11 +559,11 @@ export async function startHarvester({
             timestamp: priceEvent?.timestamp,
           })
           return Promise.resolve().then(() => processMarketPrice({
-          symbol,
-          priceEvent,
-          pairConfig,
-          settings: tradingConfig.settings,
-        })).then((processed) => {
+            symbol,
+            priceEvent,
+            pairConfig,
+            settings: tradingConfig.settings,
+          })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
           if (processed?.ok) {
             logger.debug?.({
