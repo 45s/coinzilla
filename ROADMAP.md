@@ -13,7 +13,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
   Audit result: the broker package has two `.integration.js` tests that require network access. The default `pnpm test` runs package `node --test` scripts and discovers `.test.js` files, so those integration tests are not part of the deterministic unit-test run. Run them explicitly with `pnpm --filter @coinzilla/brokers test:integration`; the Binance SDK integration suite skips unless non-placeholder credentials are configured. Integration tests are not currently run in CI.
 - [~] Verify all relevant checks consistently pass on pull requests; distinguish checks that run from checks enforced by branch protection.
 
-  Verified on PR #339 at head `80ec1a1f2c65ae1d9d62eae1f9c4d82cad50ac1c`: the six required `develop` check contexts all completed successfully — `actionlint`, `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. The active `develop-core` ruleset requires these exact contexts and requires the branch to be up to date. This change also makes coverage, syntax/actionlint, dependency audit, and utils tests run on pushes to both `main` and `develop`, not only on PRs. Re-verify the new push runs after this change merges.
+  Verified on PR #339 at head `80ec1a1f2c65ae1d9d62eae1f9c4d82cad50ac1c`: the six required `develop` check contexts all completed successfully — `actionlint`, `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. The active `develop-core` ruleset requires these exact contexts, requires the branch to be up to date, and protects the branch against deletion. This change also makes coverage, syntax/actionlint, dependency audit, and utils tests run on pushes to both `main` and `develop`, not only on PRs. Re-verify the new push runs after this change merges.
 - [ ] Give unit tests explicit test configuration and mocks. Keep live API tests opt-in and use GitHub Secrets only when genuinely required.
 
 ## 2. Protect main and improve change safety
@@ -57,7 +57,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 - [~] Establish `develop` as the shared integration branch, with protected PR-only merges and required automated checks.
 
-  The branch was restored from the release merge commit after PR #339 was merged. The active `develop-core` ruleset requires PRs, up-to-date branches, and six CI contexts, with no bypass actors. **The ruleset currently does not include a deletion rule**, while repository auto-delete-on-merge is enabled. Therefore `develop` is protected against force-pushes but is not yet protected against deletion; this item remains in progress until the deletion rule is added and verified.
+  The branch was restored from the release merge commit after PR #339 was merged. The active `develop-core` ruleset requires PRs, up-to-date branches, six CI contexts, deletion protection, and no bypass actors. Repository auto-delete-on-merge is enabled, so merged task branches are cleaned up without weakening protection on `develop` itself.
 - [x] Keep `main` as the stable release branch; only milestone/release PRs from `develop` to `main` require the user's final approval.
 - [x] Require every AI agent to follow `AI_AGENT_WORKFLOW.md`, root `AGENTS.md`, and the owning domain's local instructions.
 - [x] Give each application/package its own roadmap and local agent instructions; keep domain ownership independent of Git branch lifetime.
@@ -66,7 +66,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 - [x] Define cross-domain requests so consumer agents report needs and owning-domain agents implement shared package changes.
 - [~] Configure GitHub rulesets for `develop` and `main`; verify the exact required check names and auto-merge/agent merge permissions.
 
-  Both rulesets are active. The `main` ruleset blocks deletion and force-pushes. The `develop` ruleset blocks force-pushes and requires all six CI contexts, but currently lacks the deletion rule. Auto-merge is disabled. The GitHub connection available for this task can inspect rulesets but cannot update them, so adding and verifying the missing deletion rule remains an administrator-side configuration blocker.
+  Both rulesets are active. The `main` ruleset blocks deletion and force-pushes but currently requires zero approving reviews and only four status contexts (it omits `Workspace test coverage` and `actionlint`). The `develop` ruleset blocks deletion and force-pushes and requires all six CI contexts. Auto-merge is disabled. The main release-approval requirement remains an administrator-side configuration blocker.
 - [ ] Retire or migrate legacy long-lived feature branches and open PRs only after their work is safely preserved.
 
 The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is enforced by repository rulesets, not documentation alone.
