@@ -136,6 +136,44 @@ BINANCE_API_KEY=...
 BINANCE_API_SECRET_KEY=...
 ```
 
+## Controlled TESTNET runbook
+
+1. Use Binance Spot TESTNET credentials only. Never place production keys in
+   the Harvester environment file.
+2. Copy `.env.example` to `.env.development`. Set
+   `HARVESTER_BROKER=binance`, `HARVESTER_TRADING_MODE=testnet`, and
+   `HARVESTER_ENABLE_TRADING=true`. Keep `NODE_ENV=development`.
+3. Keep exactly one pair enabled. The committed default is `ZROUSDT`;
+   `ZROFDUSD`, DOGEUSDT, and SOLFDUSD are disabled.
+4. In the TESTNET account, cancel every existing order for the enabled pair
+   and clear its base-asset balance. Leave sufficient free quote balance for
+   the configured investment. Startup deliberately refuses an ambiguous
+   account.
+5. Start the app with
+   `pnpm --filter @coinzilla/harvester dev`.
+6. Confirm the broker connects, user-data readiness becomes READY, and the
+   enabled pair receives prices. The first Conservative BUY is submitted below
+   the current last trade by `priceStepPercent`, rounded down to the exchange
+   tick.
+7. When the BUY fills, Harvester accounts the actual fill and places the next
+   standing BUY plus the recovery SELL. If another BUY fills while that SELL
+   is open, Harvester cancels it, reconciles its fill history, and places a
+   recalculated SELL only after the cancellation is confirmed.
+8. After the recovery SELL fills, Harvester verifies actual net proceeds and
+   moves exactly `keepQuantity` into free inventory. Confirm the next BUY
+   remains active and the free amount is excluded from invested-position
+   calculations.
+
+**Shutdown/restart warning:** stopping Harvester does not cancel exchange
+orders. Before restarting, inspect the TESTNET account, cancel any remaining
+orders, and clear any unexplained base inventory. The first-cycle startup gate
+will reject an account that is not clean. If Harvester pauses because an order
+outcome or fill history is uncertain, do not restart and blindly resubmit;
+inspect the account and reconcile it first.
+
+This runbook is for TESTNET only. It does not enable live trading or claim
+durable restart recovery.
+
 Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown closes the trading gate first, drains queued user-data processing, and unsubscribes market data before disconnecting; queued fills cannot schedule new orders after shutdown begins.
 
 Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The first trading run is deliberately limited to one enabled pair and requires a clean TESTNET account with no open orders or pre-existing base inventory. Strategy BUY intents respect the configured pair investment cap; the engine checks each BUY against free quote balance and each SELL against free base balance. If quote funds are insufficient for the next BUY, a valid recovery SELL is still allowed to proceed. Aggressive remains deferred.

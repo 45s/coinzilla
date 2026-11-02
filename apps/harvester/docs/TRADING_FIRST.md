@@ -79,6 +79,10 @@ Trading-first changes must still follow repository and Harvester engineering sta
 - Add deterministic offline tests for every changed behavior. TESTNET order tests are explicit opt-in only.
 - Keep changes focused on the next missing trading step. Update this document's linked roadmap and relevant implementation docs as progress changes.
 
+## Current implementation status
+
+The Conservative policy and in-process TESTNET workflow are implemented and have deterministic fake-broker coverage for initial BUY, trailing replacement, BUY-driven SELL replacement, full recovery SELL, and free-inventory allocation. The remaining first-milestone proof is a real Binance TESTNET run. The committed default config enables only ZROUSDT. Use the [controlled TESTNET runbook](../README.md#controlled-testnet-runbook); do not use production credentials.
+
 ## Definition of done for the first trading milestone
 
 All of the following must be demonstrated, not merely described:
