@@ -1,6 +1,6 @@
 # Market Simulator Engineering Roadmap
 
-**Application:** `apps/market-simulator`  
+**Package path:** `packages/market-simulator`  
 **Package:** `@coinzilla/market-simulator`  
 **Target branch:** `develop`
 

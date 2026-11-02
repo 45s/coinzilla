@@ -1,6 +1,6 @@
 # Market Simulator agent instructions
 
-Owned path: `apps/market-simulator/**`  
+Owned path: `packages/market-simulator/**`  
 Roadmap: `ROADMAP.md`
 
 Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md` before changes.
