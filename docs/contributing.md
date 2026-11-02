@@ -4,7 +4,7 @@ This guide describes the local checks and pull-request workflow for the Coinzill
 
 ## Prerequisites
 
-- Node.js 22
+- Node.js 24 or newer
 - pnpm 12.11.2 (the version pinned in the root `package.json`)
 
 Install dependencies from the repository root:
@@ -21,7 +21,7 @@ Run the checks relevant to your change from the repository root:
 | --- | --- |
 | `pnpm test` | Run all workspace tests that define a `test` script |
 | `pnpm run check:syntax` | Parse JavaScript files under `apps/` and `packages/` with Node.js |
-| `pnpm run quality` | Run workspace tests and the syntax check |
+| `pnpm run quality` | Run workspace tests, syntax checks, and agent-policy checks |
 | `pnpm run test:coverage` | Run workspace tests with Node.js coverage reporting |
 | `pnpm --filter @coinzilla/utils test` | Run the shared utilities package tests |
 
@@ -49,7 +49,7 @@ For tests that need environment configuration, copy `packages/brokers/.env.examp
 
 ## Continuous integration
 
-GitHub Actions currently includes the Quality Gate, Unit Tests, Utils Unit Tests, Test Coverage, and Dependency Audit workflows. Their triggers and scopes are defined in `.github/workflows/`.
+GitHub Actions includes the JavaScript Syntax, Unit Tests, Utils Unit Tests, Test Coverage, and Dependency Audit workflows. All workflows that execute Node.js use Node.js 24.x. Their triggers and scopes are defined in `.github/workflows/`.
 
 A successful workflow run is evidence for that run and commit only. Whether GitHub blocks merging on required checks depends on the repository's branch-protection or ruleset configuration.
 

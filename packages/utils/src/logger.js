@@ -1,4 +1,5 @@
 import { isProdMode, isTestingMode } from './environment-mode.js'
+import { formatLogContent } from './format-log-content.js'
 
 const colors = {
   reset: '\x1b[0m',
@@ -44,30 +45,9 @@ const levelColorsMap = {
   success: [colors.fg.green],
 }
 
-const formatContent = (data) => {
-  if (['string', 'number', 'boolean'].some((type) => typeof data === type)) {
-    return data
-  }
-
-  try {
-    return JSON.stringify(data, null, 2)
-  } catch {
-    return String(data)
-  }
-}
-
-/**
- *
- * @param {*} input
- * @param {{
- * isUseJsonStringify:  boolean
- * level: 'info' | 'system' | 'error' | 'warn' | 'success'
- * }} options
- * @returns
- */
 function createLog(input, { level = 'info' } = {}) {
   const timestamp = [colors.fg.gray, new Date().toLocaleTimeString()]
-  console.log(...timestamp, ...levelColorsMap[level], formatContent(input), colors.reset)
+  console.log(...timestamp, ...levelColorsMap[level], formatLogContent(input), colors.reset)
 }
 
 export class Logger {
@@ -77,21 +57,26 @@ export class Logger {
     }
     createLog(data, { level: 'debug' })
   }
+
   info(data) {
     createLog(data, { level: 'info' })
   }
+
   warn(data) {
     if (isTestingMode) {
       return
     }
     createLog(data, { level: 'warn' })
   }
+
   error(data) {
     createLog(data, { level: 'error' })
   }
+
   success(data) {
     createLog(data, { level: 'success' })
   }
+
   system(data) {
     createLog(data, { level: 'system' })
   }

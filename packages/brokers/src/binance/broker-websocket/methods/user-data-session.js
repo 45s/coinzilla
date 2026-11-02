@@ -198,7 +198,7 @@ export class BinanceUserDataSession {
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
           this.getClient() !== client || client.state !== "open") {
         try {
-          await client.request("userDataStream.unsubscribe", { subscriptionId })
+          await this.#unsubscribeRemoteSubscription(client, subscriptionId)
         } catch (error) {
           logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
         }
@@ -227,11 +227,14 @@ export class BinanceUserDataSession {
       throw originalError
     }
 
-    const subscriptions = Array.isArray(response.data) ? response.data : []
-    const ids = subscriptions
-      .map((item) => item?.subscriptionId)
-      .filter((id) => Number.isSafeInteger(id) && id >= 0)
+    if (!Array.isArray(response.data)) throw originalError
 
+    const ids = response.data.map((item) => item?.subscriptionId)
+    if (ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+      throw new Error("Cannot safely identify the user-data subscription: malformed subscription state", {
+        cause: originalError,
+      })
+    }
     if (ids.length > 1) {
       throw new Error("Cannot safely identify the user-data subscription: multiple active subscriptions exist", {
         cause: originalError,
@@ -241,19 +244,85 @@ export class BinanceUserDataSession {
     throw originalError
   }
 
+  async #unsubscribeRemoteSubscription(client, subscriptionId) {
+    try {
+      await client.request("userDataStream.unsubscribe", { subscriptionId })
+      return
+    } catch (originalError) {
+      let response
+      try {
+        response = await client.request("session.subscriptions")
+      } catch (lookupError) {
+        logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
+        throw originalError
+      }
+
+      if (!Array.isArray(response.data)) {
+        throw new Error("Cannot safely verify the Binance user-data unsubscribe outcome", {
+          cause: originalError,
+        })
+      }
+
+      const activeIds = response.data.map((item) => item?.subscriptionId)
+      if (activeIds.some((id) => !Number.isSafeInteger(id) || id < 0)) {
+        throw new Error("Cannot safely verify malformed Binance user-data subscription state", {
+          cause: originalError,
+        })
+      }
+      if (!activeIds.includes(subscriptionId)) return
+
+      try {
+        await client.request("userDataStream.unsubscribe", { subscriptionId })
+      } catch (retryError) {
+        logSafely(this.logger, "warn", "Binance user-data subscription remains active after verified unsubscribe retry", {
+          subscriptionId,
+          error: retryError,
+        })
+        throw new AggregateError(
+          [originalError, retryError],
+          "Unable to unsubscribe the verified active Binance user-data subscription",
+        )
+      }
+    }
+  }
+
   #bindClient(client, { includeUserData = true } = {}) {
     this.#detachClientListeners()
-    if (includeUserData) {
-      this.#removeEventListener = client.onEvent((message) => {
-        if (this.getClient() === client) this.#handleEvent(message)
+    const removers = []
+
+    try {
+      if (includeUserData) {
+        const removeEventListener = client.onEvent((message) => {
+          if (this.getClient() === client) this.#handleEvent(message)
+        })
+        if (typeof removeEventListener === "function") removers.push(removeEventListener)
+        this.#removeEventListener = removeEventListener ?? null
+
+        const removeErrorListener = client.onError?.((error) => {
+          if (this.getClient() === client) this.#handleError(error)
+        })
+        if (typeof removeErrorListener === "function") removers.push(removeErrorListener)
+        this.#removeErrorListener = removeErrorListener ?? null
+      }
+
+      const removeCloseListener = client.onClose?.((event) => {
+        if (this.getClient() === client) this.#handleClose(event)
       })
-      this.#removeErrorListener = client.onError?.((error) => {
-        if (this.getClient() === client) this.#handleError(error)
-      }) ?? null
+      if (typeof removeCloseListener === "function") removers.push(removeCloseListener)
+      this.#removeCloseListener = removeCloseListener ?? null
+    } catch (error) {
+      for (const remove of removers.reverse()) {
+        try {
+          remove()
+        } catch (cleanupError) {
+          logSafely(this.logger, "warn", "Unable to roll back Binance user-data listener setup", cleanupError)
+        }
+      }
+      this.#removeEventListener = null
+      this.#removeErrorListener = null
+      this.#removeCloseListener = null
+      throw error
     }
-    this.#removeCloseListener = client.onClose?.((event) => {
-      if (this.getClient() === client) this.#handleClose(event)
-    }) ?? null
   }
 
   #handleEvent(message) {
@@ -303,6 +372,7 @@ export class BinanceUserDataSession {
 
   #handleClose(event) {
     if (this.#stopped) return
+    this.#detachClientListeners()
     this.setConnected(false)
     if (this.#subscribers.size === 0) {
       this.setUnavailable(true)
@@ -356,7 +426,7 @@ export class BinanceUserDataSession {
     const wait = delay ?? Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
     this.#reconnectTimer = this.setTimeout(() => {
       this.#reconnectTimer = null
-      void this.#recover()
+      return this.#recover()
     }, wait)
   }
 
@@ -374,7 +444,12 @@ export class BinanceUserDataSession {
           client = this.createClient()
           this.setClient(client)
           this.#bindClient(client)
-          await client.connect()
+          try {
+            await client.connect()
+          } catch (error) {
+            if (this.getClient() === client) this.#detachClientListeners()
+            throw error
+          }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
               this.getClient() !== client) {
             await client.disconnect()
@@ -490,7 +565,7 @@ export class BinanceUserDataSession {
     const client = this.getClient()
     try {
       if (subscriptionId !== null && client?.state === "open") {
-        await client.request("userDataStream.unsubscribe", { subscriptionId })
+        await this.#unsubscribeRemoteSubscription(client, subscriptionId)
       }
     } finally {
       this.#detachUserDataListeners()
@@ -499,16 +574,28 @@ export class BinanceUserDataSession {
   }
 
   #detachUserDataListeners() {
-    this.#removeEventListener?.()
-    this.#removeErrorListener?.()
+    const removers = [this.#removeEventListener, this.#removeErrorListener]
     this.#removeEventListener = null
     this.#removeErrorListener = null
+
+    for (const remove of removers) {
+      try {
+        remove?.()
+      } catch (error) {
+        logSafely(this.logger, "warn", "Unable to detach Binance user-data listener", error)
+      }
+    }
   }
 
   #detachClientListeners() {
     this.#detachUserDataListeners()
-    this.#removeCloseListener?.()
+    const removeCloseListener = this.#removeCloseListener
     this.#removeCloseListener = null
+    try {
+      removeCloseListener?.()
+    } catch (error) {
+      logSafely(this.logger, "warn", "Unable to detach Binance user-data close listener", error)
+    }
   }
 
   #clearReconnectTimer() {

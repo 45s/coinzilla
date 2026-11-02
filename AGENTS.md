@@ -1,6 +1,11 @@
 # Instructions for coding agents
 
-Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
+## Harvester execution priority — mandatory
+
+For all work in `apps/harvester/**`, follow [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). **FIRST MAKE IT WORK. THEN MAKE IT BETTER.** The first deliverable is a working Conservative TESTNET trading loop: load config → connect/subscribe → receive price → decide → submit order → process order updates/fills → update state → repeat. Journal integration, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, optimization, and Aggressive are secondary and MUST NOT delay the first working TESTNET cycle. Implement only the minimum targeted safety required for that cycle; then return to the trading workflow. The Harvester roadmap must reflect this priority.
+
+
+Before making changes, select the task-specific checklist in [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md), then read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles
 
@@ -29,6 +34,10 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
    - Keep feature orchestration in a clearly named feature module. Avoid both giant files and excessive fragmentation into one-function files without a cohesion or testing benefit.
    - Use descriptive, consistent file and symbol names. Prefer domain-specific names over vague names such as common, misc, or stuff.
    - Keep dependencies flowing toward stable, lower-level contracts; avoid circular dependencies and hidden side effects.
+   - **Extract meaningful pure logic when separation improves cohesion, testability, or comprehension.** A single caller does not prevent extraction, but purity alone does not require a separate file. Keep trivial expressions, tightly coupled callbacks, and context-dependent details local when extraction would obscure the flow.
+   - Group related pure functions by domain/responsibility in focused modules (for example, `helpers/validate-telegram-options.js` or `telegram/telegram-message-validation.js`). Do not create a generic `utils.js` dumping ground or split trivial one-line expressions into files.
+   - Classes and services should orchestrate side effects and own state. Separate validation, parsing, formatting, normalization, mapping, calculations, and business rules when doing so creates a clearer responsibility or independently testable contract.
+   - Avoid god files. A file approaching 300 lines must be reviewed for cohesive extraction opportunities; files exceeding 500 lines require a clear technical justification in the PR or a refactoring plan. These are review triggers, not reasons to fragment tightly coupled code mechanically.
 
 4. **Evidence-Based Completion**
    - Inspect the final diff for correctness, missing tests, accidental changes, dead code, secrets, and weakened checks.
@@ -36,6 +45,9 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
    - In the completion summary, list the behavior changed, tests/checks actually run and their outcomes, and anything not run or still uncertain.
 
 ## Required workflow
+
+**Shared-utility search is mandatory before implementation.** Before adding a helper, logger, validator, formatter, parser, numeric/decimal operation, time utility, or other cross-cutting capability, follow [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md). Search packages/utils first, inspect its public exports and tests, then search the whole repository. Reuse or extend the shared public API when the behavior is domain-neutral; keep business and protocol rules in their owning domains. Do not create a duplicate generic implementation without recording why reuse is inappropriate.
+
 
 1. Read `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest applicable package/application `AGENTS.md`.
 2. Identify the owning domain and roadmap item before editing.
@@ -77,3 +89,38 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
 - Never delete `main`, `develop`, a release branch, or any branch with an open PR or active work depending on it.
 - If GitHub's automatic head-branch deletion is enabled, verify that GitHub deleted the branch. If it is disabled or deletion fails, the responsible agent must delete the merged source branch manually and verify the branch is gone.
 - Branch cleanup is part of completing the task PR, not optional housekeeping. Report any branch that could not safely be deleted and why.
+
+
+## JavaScript and JSDoc policy
+
+Coinzilla is JavaScript-first. Follow [the JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for source-language, annotation, editor-support, and TypeScript-interop decisions.
+
+- Do not introduce TypeScript source, TypeScript configuration, generated declaration files, or a TypeScript migration as an incidental cleanup.
+- Use JSDoc where it communicates a public contract, non-obvious input/output shape, callback contract, or important constraint. Do not add comments that merely restate obvious code.
+- JSDoc is documentation and editor assistance; it does not replace runtime validation or tests.
+- Do not enable project-wide `checkJs` or add a documentation-generation dependency without a concrete, reviewed need.
+- When a TypeScript consumer needs declarations, treat that as an explicit interoperability requirement and document its scope rather than changing the JavaScript-only default.
+
+
+## Policy ownership and CI safety
+
+Use the documents below as the canonical source for each concern; do not copy whole policy sections between them:
+
+| Concern | Canonical document |
+| --- | --- |
+| Task selection and execution checklists | `docs/engineering/TASK_WORKFLOWS.md` |
+| Branches, domain ownership, cross-domain coordination, PR lifecycle | `AI_AGENT_WORKFLOW.md` |
+| Design, testing, security, dependencies, and definition of done | `ENGINEERING_STANDARDS.md` |
+| Path ownership and domain responsibilities | `docs/engineering/DOMAIN_OWNERSHIP.md` |
+| Domain-specific constraints and backlog | The owning domain's `AGENTS.md` and `ROADMAP.md` |
+
+When changing CI or repository automation:
+
+- Preserve the exact names of required status-check contexts unless the corresponding GitHub rulesets are updated and read back successfully.
+- Do not remove, rename, skip, or make a required check non-blocking to get a green build.
+- Do not use `continue-on-error`, `|| true`, or equivalent masking for required validation.
+- Verify pull-request and push triggers for both `develop` and `main`, plus scheduled/manual triggers where applicable.
+- Keep workflow permissions least-privilege; default to read-only and grant write access only to the job that needs it.
+- Pin third-party Actions to reviewed full commit SHAs. Prefer GitHub-native automation before introducing another Action or package.
+- Update tests for policy scripts and the root roadmap when enforcement or repository configuration changes.
+- Report GitHub ruleset state separately from workflow presence. A workflow existing does not mean its check is required by branch protection.

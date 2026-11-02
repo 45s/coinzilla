@@ -168,6 +168,7 @@ export class BinanceWebSocketApiClient {
     } catch (error) {
       this.#state = "closed"
       this.#rejectPending(new BinanceRpcConnectionError("Binance WebSocket API connection failed"))
+      this.#removeListeners()
       throw error
     }
   }
@@ -402,9 +403,23 @@ export class BinanceWebSocketApiClient {
   }
 
   #removeListeners() {
-    this.#removeMessageListener?.()
-    this.#removeErrorListener?.()
-    this.#removeCloseListener?.()
+    const removers = [
+      this.#removeMessageListener,
+      this.#removeErrorListener,
+      this.#removeCloseListener,
+    ]
+    this.#removeMessageListener = null
+    this.#removeErrorListener = null
+    this.#removeCloseListener = null
+
+    for (const remove of removers) {
+      try {
+        remove?.()
+      } catch (error) {
+        this.#emitError(error)
+      }
+    }
+
     this.#eventListeners.clear()
     this.#errorListeners.clear()
     this.#closeListeners.clear()

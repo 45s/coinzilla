@@ -1,6 +1,6 @@
 # Event Bus Reliability Roadmap
 
-> Status: active engineering plan
+> Status: core hardening complete; optional enhancements remain demand-driven
 > Package: `@coinzilla/event-bus`
 > Primary objective: make the package bug-resistant, predictable under failure, fully tested, and easy for humans and AI agents to change safely.
 
@@ -149,7 +149,9 @@ The audit also identified these risks:
 6. **Logging context mismatch (addressed in this change):** the event bus now passes one structured object, matching the repository Logger's single-argument contract.
 7. **Subscription lifecycle ambiguity (addressed):** close invalidates subscription handles and clears registries; repeated unsubscribe reports an inactive handle.
 8. **Validation gaps (addressed in this change):** constructor options now reject malformed option objects, unknown keys, invalid logger hooks, and invalid error handlers. Event names are validated against a bounded, documented character set and preserved exactly; Node-special names remain ordinary application names.
-9. **Coverage gap (partially addressed):** package-specific line/branch thresholds are enforced in PR CI and the baseline is recorded; a negative self-check for threshold failure remains open.
+9. **Coverage gate (addressed):** package-specific line/branch thresholds and negative self-checks are enforced by the Test Coverage workflow.
+
+10. **Malformed public operation inputs (addressed in this change):** `publish`, `subscribe`, `subscribeAll`, and the internal subscription-registration boundary now return the package's standard failure result for null/non-object inputs and property accessors that throw, rather than leaking synchronous exceptions.
 
 These are audit observations to verify against the current implementation before each fix; do not blindly apply stale line numbers or assumptions.
 
@@ -176,6 +178,7 @@ Event names are preserved exactly when valid. They must be 1–128 ASCII charact
 - [x] Validate constructor options and reject malformed event names without rewriting accepted names.
 - [x] Make subscription state consistent after close.
 - [x] Add regression tests for corrected payload immutability defects.
+- [x] Convert malformed public operation inputs and throwing input accessors into standard failure results; add regression coverage.
 
 Acceptance: all accepted events have consistent envelopes; event names cannot trigger host runtime behavior; payload guarantees are accurate and tested.
 
@@ -266,11 +269,24 @@ pnpm run check:syntax
 pnpm run quality
 ```
 
-The package has a `test:coverage` script using Node's built-in test-runner coverage, but it does not yet enforce line or branch thresholds. Do not describe coverage as gated until CI actually enforces the package-specific thresholds.
+The package `test:coverage` script enforces at least 90% line coverage and 85% branch coverage. The Test Coverage workflow runs this command on every pull request and includes negative self-checks proving that deliberately insufficient 100% line and branch thresholds fail.
 
-CI should run package tests on every pull request. Coverage thresholds should be package-specific and should fail the workflow when violated.
+## 8. Validation record
 
-## 8. Decision log
+Core audit hardening was merged in [PR #381](https://github.com/45s/coinzilla/pull/381) at merge commit `3488b42b0ecbbdf4e5f42b109b5a372c94fceecc`.
+
+The exact PR head passed all required checks:
+- Unit tests on Node.js 22.23.4 and Node.js 24.x, including the aggregate required-version job ([run](https://github.com/45s/coinzilla/actions/runs/41288818211)).
+- Workspace coverage, including event-bus 90% line / 85% branch thresholds and both negative threshold self-checks ([run](https://github.com/45s/coinzilla/actions/runs/41288818233)).
+- JavaScript syntax ([run](https://github.com/45s/coinzilla/actions/runs/41288818236)).
+- Production dependency audit and actionlint ([run](https://github.com/45s/coinzilla/actions/runs/41288818191)).
+- Utilities unit tests ([run](https://github.com/45s/coinzilla/actions/runs/41288818217)).
+
+The additional malformed-input regression tests cover null/non-object arguments and throwing property accessors for public dispatch/subscription methods. Existing delivery, payload, concurrency, capacity, diagnostics, and lifecycle tests passed unchanged.
+
+Remaining unchecked roadmap items are intentionally deferred: sequential subscriber delivery, cooperative cancellation, additional counters, retry/dead-letter behavior, and performance benchmarks. They should be implemented only when a real consumer or measured operational need justifies the extra contract and complexity.
+
+## 9. Decision log
 
 - Keep the package in-process and dependency-light.
 - Prefer pure functions for deterministic decisions and transformations; keep side effects at explicit boundaries.

@@ -372,3 +372,138 @@ test("socket close before opening rejects the connection and cleans listeners", 
   assert.deepEqual(messages, [])
   assert.equal(await transport.close(), undefined)
 })
+
+
+test("listener registration failure closes the socket and removes previously attached handlers", async () => {
+  const clock = new FakeClock()
+  const registered = []
+  const removed = []
+  let socket
+
+  class BrokenListenerSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    addEventListener(type, listener, options) {
+      if (type === "message") throw new Error("message listener registration failed")
+      registered.push(type)
+      return super.addEventListener(type, listener, options)
+    }
+
+    removeEventListener(type, listener, options) {
+      removed.push(type)
+      return super.removeEventListener(type, listener, options)
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenListenerSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+  })
+
+  await assert.rejects(transport.connect(), /message listener registration failed/)
+
+  assert.equal(transport.state, "closed")
+  assert.deepEqual(registered, ["open"])
+  assert.deepEqual(removed, ["open"])
+  assert.equal(socket.closeCalls.length, 1)
+  assert.equal(clock.pendingCount, 0)
+})
+
+
+test("finalizes close and attempts every socket listener removal when one remover throws", async () => {
+  const clock = new FakeClock()
+  const removed = []
+  const errors = []
+  const closes = []
+  let socket
+
+  class BrokenRemovalSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    removeEventListener(type, listener, options) {
+      removed.push(type)
+      super.removeEventListener(type, listener, options)
+      if (type === "open") throw new Error("open listener removal failed")
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenRemovalSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+    connectTimeout: 100,
+    closeTimeout: 50,
+  })
+  transport.onError((error) => errors.push(error.message))
+  transport.onClose((event) => closes.push(event))
+
+  const connecting = transport.connect()
+  socket.open()
+  await connecting
+
+  const closing = transport.close()
+  socket.serverClose({ code: 1000, reason: "finished", wasClean: true })
+  await assert.doesNotReject(closing)
+
+  assert.deepEqual(removed, ["open", "message", "error", "close"])
+  assert.deepEqual(errors, ["open listener removal failed"])
+  assert.deepEqual(closes, [{ code: 1000, reason: "finished", wasClean: true }])
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(await transport.close(), undefined)
+})
+
+
+test("socket close exceptions still finalize transport shutdown and resolve close", async () => {
+  const clock = new FakeClock()
+  const errors = []
+  const closes = []
+  let socket
+
+  class BrokenCloseSocket extends FakeWebSocket {
+    constructor(url) {
+      super(url)
+      socket = this
+    }
+
+    close() {
+      throw new Error("socket close failed")
+    }
+  }
+
+  const transport = new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: BrokenCloseSocket,
+    setTimeoutFn: clock.setTimeout.bind(clock),
+    clearTimeoutFn: clock.clearTimeout.bind(clock),
+    connectTimeout: 100,
+    closeTimeout: 50,
+  })
+  transport.onError((error) => errors.push(error.message))
+  transport.onClose((event) => closes.push(event))
+
+  const connecting = transport.connect()
+  socket.open()
+  await connecting
+
+  await assert.doesNotReject(transport.close())
+
+  assert.deepEqual(errors, ["socket close failed"])
+  assert.deepEqual(closes, [{
+    code: 1006,
+    reason: "WebSocket close failed",
+    wasClean: false,
+  }])
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(await transport.close(), undefined)
+})

@@ -1,0 +1,21 @@
+{
+  "name": "@coinzilla/harvester",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Harvester application workspace",
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "start": "node src/index.js",
+    "dev": "node --env-file=.env.development src/index.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "type": "module",
+  "dependencies": {
+    "@coinzilla/brokers": "workspace:*",
+    "@coinzilla/entities": "workspace:*",
+    "@coinzilla/utils": "workspace:*"
+  }
+}

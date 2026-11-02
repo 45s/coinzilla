@@ -35,6 +35,8 @@ await bus.close()
 
 ### Event names and inputs
 
+- Public operation inputs to `publish()`, `subscribe()`, and `subscribeAll()` must be objects. Null/non-object values and input properties whose getters throw return the normal failure result instead of leaking a synchronous exception.
+
 - Event names are preserved exactly and must be 1–128 ASCII characters.
 - A name starts with a letter, digit, or underscore; subsequent characters may also include `.`, `:`, or `-`.
 - `source` must be a non-empty string (whitespace-only strings are rejected).

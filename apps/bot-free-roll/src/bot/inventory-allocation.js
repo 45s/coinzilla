@@ -3,7 +3,7 @@ import {
   assertDecimalString,
   compareDecimal,
   subtractDecimal,
-} from "./helpers/decimal.js"
+} from "@coinzilla/utils"
 
 // Move exactly one configured keepQuantity from active strategy inventory
 // into permanently retained free inventory after a profitable recovery cycle.
@@ -11,7 +11,7 @@ import {
 export function allocateFreeInventory({ activeQuantity, freeQuantity, keepQuantity }) {
   const values = { activeQuantity, freeQuantity, keepQuantity }
   for (const [name, value] of Object.entries(values)) {
-    assertDecimalString(value, name)
+    assertDecimalString({ value, field: name })
   }
 
   if (

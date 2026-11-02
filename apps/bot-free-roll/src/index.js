@@ -5,8 +5,10 @@ import tradingConfig from "../trading-config.json" with { type: "json" }
 
 import { prepareBroker } from "./prepare-broker.js"
 import { prepareJournal } from "./prepare-journal.js"
+import { prepareTelegramNotifications } from "./prepare-telegram-notifications.js"
 import { FreeRollBot } from "./bot/index.js"
 import { validateTradingConfig } from "./validate-config.js"
+import { cleanupStartupResources } from "./cleanup-startup-resources.js"
 
 const validatedTradingConfig = validateTradingConfig({ tradingConfig })
 
@@ -17,41 +19,80 @@ if (!validatedTradingConfig.ok) {
 }
 
 const eventBus = new EventBus({ logger })
-const journalResult = prepareJournal({
-  eventBus,
-  logger,
-  folderPath: "../../../logs_bot-free-roll",
-})
-
-if (!journalResult.ok) {
-  throw new Error("Failed to prepare journal", {
-    cause: journalResult.errors,
-  })
-}
-
-const { data: journal } = journalResult
-
+let telegramNotifications = null
+let journal = null
 let broker = null
+let bot = null
 
-if (tradingConfig.strategies["free-roll"].enabled !== false) {
-  const brokerResult = await prepareBroker()
+// Resource preparation happens before signal handlers and the normal shutdown
+// coordinator exist. If any later preparation step fails, release everything
+// that was already initialized before allowing the startup error to escape.
+try {
+  const telegramNotificationsResult = prepareTelegramNotifications({
+    eventBus,
+    logger,
+  })
 
-  if (!brokerResult.ok) {
-    throw new Error("Failed to prepare broker", {
-      cause: brokerResult.errors,
+  if (!telegramNotificationsResult.ok) {
+    throw new Error("Failed to prepare Telegram notifications", {
+      cause: telegramNotificationsResult.errors,
     })
   }
 
-  broker = brokerResult.data
-} else {
-  logger.info?.("[bot] Free-Roll strategy disabled; skipping broker connection")
-}
+  telegramNotifications = telegramNotificationsResult.data
 
-const bot = new FreeRollBot({
-  broker,
-  eventBus,
-  tradingConfig,
-})
+  const journalResult = prepareJournal({
+    eventBus,
+    logger,
+    folderPath: "../../../logs_bot-free-roll",
+  })
+
+  if (!journalResult.ok) {
+    throw new Error("Failed to prepare journal", {
+      cause: journalResult.errors,
+    })
+  }
+
+  journal = journalResult.data
+
+  if (tradingConfig.strategies["free-roll"].enabled !== false) {
+    const brokerResult = await prepareBroker()
+
+    if (!brokerResult.ok) {
+      throw new Error("Failed to prepare broker", {
+        cause: brokerResult.errors,
+      })
+    }
+
+    broker = brokerResult.data
+  } else {
+    logger.info?.("[bot] Free-Roll strategy disabled; skipping broker connection")
+  }
+
+  bot = new FreeRollBot({
+    broker,
+    eventBus,
+    tradingConfig,
+  })
+} catch (error) {
+  const cleanupErrors = await cleanupStartupResources({
+    broker,
+    journal,
+    telegramNotifications,
+    eventBus,
+    logger,
+  })
+
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [error, ...cleanupErrors.map(({ error: cleanupError }) => cleanupError)],
+      "Free-Roll startup failed and cleanup was incomplete",
+      { cause: error },
+    )
+  }
+
+  throw error
+}
 
 let shuttingDown = false
 
@@ -228,7 +269,25 @@ async function shutdown() {
       return result
     })
 
-    // Stage 5: flush pending event handlers and close the journal.
+    // Stage 5: flush every accepted event before closing notification subscribers.
+    await runStage("eventBus.flush()", async () => {
+      const result = await eventBus.flush()
+
+      if (!result?.ok) {
+        throw new Error(`eventBus.flush failed: ${JSON.stringify(result)}`)
+      }
+
+      return result
+    })
+
+    // Stage 6: unsubscribe and drain Telegram sends while the event bus is still open.
+    if (telegramNotifications) {
+      await runStage("telegramNotifications.close()", () =>
+        telegramNotifications.close(),
+      )
+    }
+
+    // Stage 7: close the journal after all event handlers have finished.
     await runStage("journal.close()", async () => {
       const result = await journal.close()
 
@@ -239,7 +298,7 @@ async function shutdown() {
       return result
     })
 
-    // Stage 6: close the event bus after the journal has flushed.
+    // Stage 8: close the event bus after notification and journal cleanup.
     await runStage("eventBus.close()", async () => {
       const result = await eventBus.close()
 

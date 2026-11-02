@@ -24,6 +24,7 @@ describe("checkIfFeatureEnable environment values", () => {
     process.env.COINZILLA_TEST_FEATURE = "0"
     assert.equal(checkIfFeatureEnable({ envVarName: "COINZILLA_TEST_FEATURE", logger: { warn: (value) => warnings.push(value) } }), false)
     assert.equal(warnings.length, 1)
-    assert.match(warnings[0].why, /COINZILLA_TEST_FEATURE/)
+    assert.equal(warnings[0].envVarName, "COINZILLA_TEST_FEATURE")
+    assert.equal(warnings[0].enabled, false)
   })
 })

@@ -1,8 +1,8 @@
-import { assertDecimalString, compareDecimal, multiplyDecimal, roundDecimalToIncrement } from "./decimal.js"
+import { assertDecimalString, compareDecimal, multiplyDecimal, roundDecimalToIncrement } from "@coinzilla/utils"
 
 export function calculateNotional({ price, quantity }) {
-  assertDecimalString(price, "price");
-  assertDecimalString(quantity, "quantity");
+  assertDecimalString({ value: price, field: "price" });
+  assertDecimalString({ value: quantity, field: "quantity" });
 
   if (compareDecimal({ left: price, right: "0" }) <= 0) {
     throw new Error("price must be greater than zero");
@@ -16,7 +16,7 @@ export function calculateNotional({ price, quantity }) {
 }
 
 export function meetsMinimumNotional({ price, quantity, minNotional }) {
-  assertDecimalString(minNotional, "minNotional");
+  assertDecimalString({ value: minNotional, field: "minNotional" });
 
   if (compareDecimal({ left: minNotional, right: "0" }) < 0) {
     throw new Error("minNotional must be non-negative");
@@ -53,7 +53,7 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
   }
 
   for (const field of ["priceIncrement", "quantityIncrement"]) {
-    assertDecimalString(rules[field], `rules.${field}`);
+    assertDecimalString({ value: rules[field], field: `rules.${field}` });
     if (compareDecimal({ left: rules[field], right: "0" }) <= 0) {
       throw new Error(`rules.${field} must be greater than zero`);
     }
@@ -66,7 +66,7 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
 
   for (const field of TRADING_RULE_DECIMAL_FIELDS) {
     if (rules[field] === undefined || field === "priceIncrement" || field === "quantityIncrement") continue;
-    assertDecimalString(rules[field], `rules.${field}`);
+    assertDecimalString({ value: rules[field], field: `rules.${field}` });
     if (["minQuantity", "maxQuantity", "minNotional", "maxNotional", "minPrice", "maxPrice",
       "minPriceMultiplier", "maxPriceMultiplier"].includes(field) &&
       compareDecimal({ left: rules[field], right: "0" }) < 0) {
@@ -96,8 +96,8 @@ export function validateOrderAgainstTradingRules({ order, rules }) {
     throw new Error("Percent price bands require referencePrice, minPriceMultiplier, and maxPriceMultiplier");
   }
 
-  assertDecimalString(order.price, "order.price");
-  assertDecimalString(order.quantity, "order.quantity");
+  assertDecimalString({ value: order.price, field: "order.price" });
+  assertDecimalString({ value: order.quantity, field: "order.quantity" });
 
   const reasons = [];
   const reject = (code, field, message) => reasons.push({ code, field, message });

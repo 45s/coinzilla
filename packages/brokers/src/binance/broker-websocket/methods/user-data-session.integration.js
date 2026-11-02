@@ -13,6 +13,7 @@ const hasTestnetCredentials =
   Boolean(apiSecret) &&
   !/replace-with|mock/i.test(apiKey) &&
   !/replace-with|mock/i.test(apiSecret)
+const isExplicitlyOptedIn = process.env.BINANCE_TESTNET_INTEGRATION === "1"
 
 const symbol = process.env.BINANCE_TESTNET_SYMBOL || "BTCUSDT"
 const eventTimeoutMs = Number(process.env.BINANCE_TESTNET_EVENT_TIMEOUT_MS || 60_000)
@@ -44,7 +45,8 @@ async function waitForEvent(events, timeoutMs) {
 
 describe(
   "Binance user-data recovery integration (TESTNET only)",
-  { skip: !hasTestnetCredentials && "Set non-placeholder Binance TESTNET credentials to run these tests" },
+  { skip: !(isExplicitlyOptedIn && hasTestnetCredentials) &&
+      "Set BINANCE_TESTNET_INTEGRATION=1 and non-placeholder Binance TESTNET credentials to run these tests" },
   () => {
     let broker
     let subscription

@@ -11,6 +11,16 @@ This page is a quick guide to where shared code lives in the Coinzilla pnpm work
 | `.github/workflows/` | Automated checks | Workflow triggers and commands are defined in the workflow YAML files. |
 | `docs/` | Contributor and operational guidance | Keep process documentation aligned with the actual scripts and configuration. |
 
+## Applications
+
+### `@coinzilla/market-simulator` — `apps/market-simulator/`
+
+Deterministic market replay and simulation for strategy testing. The simulator must implement the existing Coinzilla broker contract and reuse established normalized messages; it must not introduce a parallel strategy-facing API.
+
+- Package roadmap: [`apps/market-simulator/ROADMAP.md`](../apps/market-simulator/ROADMAP.md)
+- Unit tests: `pnpm --filter @coinzilla/market-simulator test`
+- Initial DOGE history fixture migration is blocked because the existing Free-Roll `doge-history.json` is empty.
+
 ## Shared packages
 
 ### `@coinzilla/utils` — `packages/utils/`
@@ -80,6 +90,7 @@ When a package is added, removed, renamed, or its public responsibility changes,
 The paths above are ownership boundaries for independent AI workstreams. Each domain's local `AGENTS.md` and `ROADMAP.md` are authoritative for its backlog and local conventions:
 
 - `apps/bot-free-roll/` — Free-Roll application and strategy.
+- `apps/market-simulator/` — CoreBroker-compatible mock that streams historical market prices from the existing DOGEUSDT fixture.
 - `packages/entities/` — shared domain entities and value contracts.
 - `packages/brokers/` — broker abstractions, exchange adapters, and broker-facing contracts.
 - `packages/utils/` — domain-neutral shared utilities.

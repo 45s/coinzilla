@@ -476,3 +476,30 @@ This is a snapshot of known repository state when the roadmap was created. Re-ch
 - [ ] Reconciliation, persistence, and release gates.
 
 Do not mark a roadmap item complete because code exists. Mark it complete only when its acceptance criteria and tests are verified.
+
+
+## 12. Operational notifications (FR-087)
+
+**Scope:** optional Telegram alerts for operational events. This is an observability side effect only; it does not change strategy decisions, order execution, accounting, or broker behavior.
+
+- [x] Use the reusable `@coinzilla/notifiers` package rather than embedding Telegram HTTP calls in the bot.
+- [x] Keep Telegram disabled when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are absent.
+- [x] Fail startup with a clear configuration error when only one Telegram credential is supplied.
+- [x] Subscribe only to curated order-fill, execution-fill, pair-pause, recovery, and bot lifecycle events.
+- [x] Flush accepted event-bus work and drain/unsubscribe Telegram before journal and event-bus shutdown.
+- [x] Clean up already-created Telegram, journal, broker, and event-bus resources when a later startup preparation stage fails; dependency-safe cleanup order and failure isolation are implemented in PR #358, with deterministic tests and a 100% line / 100% branch coverage gate.
+- [x] Add deterministic tests for disabled, incomplete, valid, and failing notifier setup.
+- [x] Add the helper to the application's coverage gate.
+- [x] Exercise the app's Telegram wiring against the real EventBus and verify accepted notifications drain before close (PR #358).
+- [ ] Configure real Telegram credentials in the deployment secret manager and perform a controlled test-chat smoke test.
+
+**Acceptance:** notifications are opt-in, credentials are never committed, raw exchange payloads are not forwarded, and Telegram/network errors cannot alter trading state. Unit and CI tests must not require live Telegram credentials or network access.
+
+**Configuration:** see [README.md](./README.md#optional-telegram-notifications).
+
+## Shared utility reuse
+
+- [x] Remove the app-local exact decimal engine and import arithmetic from `@coinzilla/utils`.
+- [x] Move generic exact percentage calculations to `@coinzilla/utils`; keep price-threshold, fee, order-planning, and trading-rule policy in Free-Roll.
+- [x] Move the generic keyed asynchronous task queue to `@coinzilla/utils`; keep subscription disconnection in Free-Roll.
+- [x] Preserve legacy Number-based price/accounting interfaces where still used, while routing their decimal calculations through the shared utility. Exact financial paths continue to use decimal strings.

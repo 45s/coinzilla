@@ -104,3 +104,10 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 ## Completion policy
 
 An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
+
+
+## Shared utility reuse
+
+- [x] Delegate exact decimal canonicalization to `normalizeDecimalString` in `@coinzilla/utils`.
+- [x] Delegate decimal subtraction to `subtractDecimal` in `@coinzilla/utils`.
+- [x] Preserve the Entities package's structured `toResult` API and field-specific validation messages.

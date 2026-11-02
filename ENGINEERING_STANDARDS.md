@@ -13,6 +13,8 @@ A change is ready to merge only when:
 - [ ] The affected package's tests and coverage checks pass; applicable workspace and CI checks pass.
 - [ ] Error handling, validation, structured diagnostics, security, and resource cleanup are appropriate to the change.
 - [ ] Modules are cohesive, follow single-responsibility boundaries, and do not turn public entry points into implementation dumping grounds.
+- [ ] Non-trivial pure logic is extracted into cohesive, independently testable modules rather than embedded in large classes/services or unrelated files.
+- [ ] Large files have been split by responsibility, or a concrete reason for keeping them together is documented in the PR.
 - [ ] Public APIs, configuration, and documentation are updated when behavior changes.
 - [ ] No secrets, credentials, generated artifacts, or unrelated changes are included.
 - [ ] Any deliberate deviation from these standards is explained in the pull request, with a reason and follow-up plan when appropriate.
@@ -102,6 +104,32 @@ A change is ready to merge only when:
 - Avoid overengineering, speculative generality, unnecessary dependencies, and abstraction layers without a concrete benefit.
 - Refactor when it improves understanding, testability, or change safety—not solely to make files shorter.
 
+### 7.1 Mandatory pure-function extraction and file-size discipline
+
+This section is a required design and code-review standard for all new code and materially changed code.
+
+- **A meaningful pure function belongs in a separate module.** When a function can produce its result from explicit inputs alone, without reading or mutating instance state, shared mutable state, globals, or external systems, extract it from a class/service or large feature file into a focused module. Do this even if there is only one current caller; independent testability and clear responsibility are sufficient reasons.
+- Keep pure logic separate from effectful orchestration. Validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions are common extraction candidates. Leave network, filesystem, database, clock, randomness, and process-environment access at explicit adapter/service boundaries.
+- A module may contain several closely related pure functions. Group by domain and reason to change, not by the fact that each function is technically pure. Use a focused feature-local `helpers/` or domain-named module for internal logic; reserve shared `utils/` for genuinely generic functions used across domains.
+- The owning class/service should retain only the state and orchestration it needs. It should import and compose extracted functions rather than implementing unrelated validation, transformation, formatting, and calculation details inline.
+- Keep modules independently testable. Add focused unit tests for extracted pure behavior and test the class/service's observable orchestration at its boundary. Avoid mocking internal pure functions just to test their callers.
+- **Do not create artificial fragmentation.** Trivial one-line expressions, tiny local callbacks whose meaning depends on their immediate context, and tightly coupled implementation details may remain local when extraction would obscure the flow. Do not create one-function files mechanically or introduce circular dependencies.
+- **Do not allow god files to grow.** Treat approximately 300 lines as a prompt for a modularity review, not an automatic failure. A file exceeding 500 lines must be split where cohesive responsibilities can be extracted; if it genuinely cannot be split without harming correctness or cohesion, document the reason in the PR. Generated files, declarative registries, schemas, and similarly constrained files may need explicit exceptions.
+- Line count is a warning signal, not the design goal. A short file with several unrelated responsibilities is still poorly structured; a longer cohesive file may be justified. The required outcome is clear ownership, low coupling, independent testability, and maintainable change boundaries.
+
+**Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, and safe error-message sanitization into focused modules such as `telegram-options.js`, `telegram-message.js`, and `safe-error-message.js` (or group closely related functions where that is more cohesive). Keep Telegram-specific constants near the feature or in a dedicated constants module. Do not put these unrelated pure operations into a generic catch-all `utils.js`.
+
+### 7.2 Shared utilities: search and reuse before implementation
+
+This rule is mandatory for every contributor and AI agent. Before implementing a helper or cross-cutting capability, search packages/utils/src/, its tests, and public exports first; then search the entire monorepo for equivalent behavior and consumers. Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) and follow its classification and migration rules.
+
+- Reuse an existing public @coinzilla/utils API when its contract fits. Do not import private files from another package.
+- If a genuinely generic capability is missing, extend packages/utils through the Utilities domain, with documented contracts, deterministic boundary/failure tests, and meaningful line/branch coverage.
+- Do not move business policy, domain invariants, or protocol-specific behavior into shared utilities. Pure does not automatically mean generic.
+- Do not create a duplicate generic helper because the existing API has a different name or because the agent did not search. Document intentional duplication and its domain boundary.
+- Use Logger or defaultLogger from @coinzilla/utils for application/package diagnostics. Direct console calls are limited to the logger implementation and intentional CLI stdout/stderr output; other exceptions require an explicit reason.
+- For exact financial arithmetic, do not use the legacy Number-based NH helpers. Use an exact decimal-string API; until a shared exact decimal API is approved and exported, keep the current domain implementation and track consolidation through the Utilities roadmap.
+
 ### 8. Security and external boundaries
 
 - Fail clearly and early when an invariant or required input is invalid.
@@ -174,10 +202,12 @@ Before approving a pull request, ask:
 5. Are side effects and state changes explicit?
 6. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
 7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
-8. Is logic duplicated, or has an abstraction been introduced too early?
-9. Could the change expose secrets, weaken security, or break compatibility?
-10. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
-11. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+8. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
+9. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
+10. Is logic duplicated, or has an abstraction been introduced too early?
+11. Could the change expose secrets, weaken security, or break compatibility?
+12. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
+13. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
 
 ## Rollout policy
 
@@ -189,3 +219,34 @@ The repository's GitHub Actions workflows currently run package tests and test c
 ## AI-agent workflow authority
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
+
+
+## JavaScript and JSDoc
+
+Coinzilla's default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
+
+- Keep implementation files as JavaScript (`.js`). Do not add `tsconfig.json`, TypeScript build steps, `.ts` source, or generated `.d.ts` files unless a separately approved requirement explicitly calls for TypeScript interoperability or migration.
+- Use JSDoc selectively to describe public/exported APIs, non-obvious parameter and return shapes, callbacks, important invariants, and meaningful exceptions.
+- Do not annotate every trivial local variable or obvious one-line function. Avoid comments that repeat the implementation or become stale.
+- Prefer precise JSDoc types that match runtime behavior. Represent optional values, defaults, nullability, promises, and thrown errors accurately; do not promise validation or guarantees the implementation does not provide.
+- Use `@param`, `@returns`, `@throws`, `@typedef`, and `@callback` when they improve clarity. Keep shared typedefs close to their owning domain and avoid a global type-definition dumping ground.
+- JSDoc does not validate runtime input. Validate untrusted values in code and test the behavior with the native Node.js test conventions.
+- VS Code and other language servers can use JSDoc for IntelliSense without installing the JSDoc documentation generator. Add a documentation generator or CI documentation job only when maintainers have a concrete published-docs requirement.
+- Do not turn on project-wide `checkJs` or `@ts-check` by default. Adopt static checking incrementally only with a defined scope, a clean baseline, and CI ownership.
+- A TypeScript consumer reporting `TS7016` is a separate package-interop issue. JSDoc comments alone do not guarantee that TypeScript can resolve declarations. If TypeScript consumers become a supported contract, add and test accurate declarations or an intentional declaration-generation workflow; do not solve it by silently declaring the package as `any`.
+
+See [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for examples and decision guidance.
+
+
+## CI and repository automation safety
+
+Treat required CI as a production safety boundary, not as advisory feedback.
+
+- Required status-check context names are contracts with GitHub rulesets. Do not rename or remove one until the replacement has passed and every affected ruleset has been updated and read back.
+- A required check must fail closed. Do not use `continue-on-error`, `|| true`, broad catch-and-log behavior, or conditions that turn missing validation into success.
+- Keep workflow permissions least-privilege. Use read-only defaults and narrowly scoped job-level write permissions only when needed.
+- Pin third-party Actions to reviewed full commit SHAs. Prefer native GitHub features before introducing another Action or package.
+- Validate workflow triggers for pull requests and pushes to both `main` and `develop`; preserve scheduled and manual runs where they serve a distinct purpose.
+- Keep unit tests deterministic and offline. Integration tests requiring credentials or network access must remain explicitly separate.
+- Report workflow availability, actual successful runs, and branch-protection enforcement as three distinct facts.
+- When changing policy enforcement, add regression tests for both the passing case and representative invalid configurations.

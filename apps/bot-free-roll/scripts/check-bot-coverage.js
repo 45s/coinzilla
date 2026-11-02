@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process"
 
+// Shared decimal primitives are covered by packages/utils; keep this gate scoped to Free-Roll-owned source.
 const coverageThresholds = [
   ["bot-free-roll.js", 95, 75],
   ["fill-ledger.js", 100, 100],
@@ -8,12 +9,13 @@ const coverageThresholds = [
   ["event-handling.js", 90, 90],
   ["fill-reconciliation.js", 95, 75],
   ["accounting.js", 90, 85],
-  ["decimal.js", 95, 90],
   ["order-planning.js", 90, 60],
   ["price.js", 80, 65],
   ["trading-rules.js", 90, 90],
   ["order-execution.js", 95, 75],
   ["prepare-broker.js", 80, 70],
+  ["prepare-telegram-notifications.js", 95, 85],
+  ["cleanup-startup-resources.js", 100, 100],
   ["validate-config.js", 90, 90],
 ]
 
@@ -39,7 +41,7 @@ if (result.status !== 0) {
   for (const [filename, minimumLineCoverage, minimumBranchCoverage] of coverageThresholds) {
     const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     const pattern = new RegExp(
-      `^\\s*#\\s+${escapedFilename}\\s+\\|\\s+([\\d.]+)\\s+\\|\\s+([\\d.]+)`,
+      `^\\s*(?:#|ℹ)\\s+${escapedFilename}\\s+\\|\\s+([\\d.]+)\\s+\\|\\s+([\\d.]+)`,
     )
     const matches = coverageLines
       .map((line) => line.match(pattern))

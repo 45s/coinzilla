@@ -186,6 +186,30 @@ importers:
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@coinzilla/notifiers':
+        specifier: workspace:*
+        version: link:../../packages/notifiers
+
+  apps/harvester:
+    dependencies:
+      '@coinzilla/brokers':
+        specifier: workspace:*
+        version: link:../../packages/brokers
+      '@coinzilla/entities':
+        specifier: workspace:*
+        version: link:../../packages/entities
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+
+  apps/market-simulator:
+    dependencies:
+      '@coinzilla/brokers':
+        specifier: workspace:*
+        version: link:../../packages/brokers
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
 
   packages/brokers:
     dependencies:
@@ -216,6 +240,8 @@ importers:
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../utils
+
+  packages/notifiers: {}
 
   packages/utils: {}
 

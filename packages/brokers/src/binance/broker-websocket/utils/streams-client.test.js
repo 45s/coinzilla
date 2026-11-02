@@ -333,3 +333,51 @@ test("disconnect is idempotent and prevents future reconnects", async () => {
   assert.equal(client.state, "closed")
   assert.deepEqual(client.subscriptions, [])
 })
+
+
+test("synchronous transport connect failures detach listeners and close the transport", async () => {
+  const failure = new Error("synchronous transport startup failure")
+  const transports = []
+  const { client } = createClient({
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      transport.connect = () => { throw failure }
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  await assert.rejects(client.subscribe("btcusdt@aggTrade", () => {}), failure)
+
+  assert.equal(client.state, "closed")
+  assert.equal(transports.length, 1)
+  assert.equal(transports[0].closeCalls.length, 1)
+  assert.equal(transports[0].messageListener, null)
+  assert.equal(transports[0].errorListener, null)
+  assert.equal(transports[0].closeListener, null)
+  await client.disconnect()
+})
+
+test("transport listener setup failures remove earlier listeners and close the transport", async () => {
+  const transports = []
+  const { client } = createClient({
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      transport.onError = () => { throw new Error("error listener setup failed") }
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  await assert.rejects(
+    client.subscribe("btcusdt@aggTrade", () => {}),
+    /error listener setup failed/,
+  )
+
+  assert.equal(client.state, "closed")
+  assert.equal(transports[0].closeCalls.length, 1)
+  assert.equal(transports[0].messageListener, null)
+  assert.equal(transports[0].errorListener, null)
+  assert.equal(transports[0].closeListener, null)
+  await client.disconnect()
+})
