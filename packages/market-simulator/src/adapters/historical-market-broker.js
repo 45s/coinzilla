@@ -5,7 +5,7 @@ import { createPriceStream } from "../application/create-price-stream.js"
 import { JsonMarketHistoryRepository } from "../infrastructure/json-market-history-repository.js"
 import { TimeoutScheduler } from "../infrastructure/timeout-scheduler.js"
 
-const DEFAULT_HISTORY_FILE = new URL("../../../bot-free-roll/doge-history.json", import.meta.url)
+const DEFAULT_HISTORY_FILE = new URL("../../../../apps/bot-free-roll/doge-history.json", import.meta.url)
 const DEFAULT_SPEED = 60
 
 /** CoreBroker outbound adapter. Application and domain code do not depend on broker APIs. */
