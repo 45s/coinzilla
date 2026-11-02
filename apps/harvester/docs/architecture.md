@@ -277,3 +277,10 @@ Use dependency-injected functions for application workflows and plain pure funct
 - **Integration:** keep external exchange tests opt-in and TESTNET-only. Default unit tests must remain offline and credential-free.
 
 The tutorial's companion implementation is a pattern reference, not a source of Harvester APIs. Reuse its separation of concerns and explicit dependency composition, while retaining Harvester's ports-and-adapters direction, existing package contracts, exact-decimal accounting, and reliability requirements.
+
+
+## Exchange market metadata
+
+The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
+
+This is only a market-metadata readiness gate. It does not yet initialize account-wide available balances, reserve quote/base assets, reconcile open orders, or enforce all min/max constraints at the final order-submission boundary. Those are separate P0 execution-safety requirements.
