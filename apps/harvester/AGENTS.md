@@ -97,3 +97,12 @@ When implementing a Harvester capability, follow the dependency-injected, factor
 - **Do not invent APIs from illustrative examples.** The existing repository contracts and roadmap are authoritative. If a required shared capability is missing, follow the cross-domain request process rather than implementing a duplicate inside Harvester.
 
 Before implementing a use case, document its input, output, dependencies/ports, domain invariants, failure modes, and observable side effects. Keep the module focused; extract meaningful pure logic into cohesive domain modules and keep public entry points thin.
+
+
+## Logging
+
+- Bootstrap and process-entry modules MUST use `defaultLogger` from `@coinzilla/utils` as their default logger.
+- Keep logger injection available for tests and alternate runtime composition.
+- Harvester application, domain, and infrastructure modules MUST NOT call global `console` directly. Use the injected/shared logger at the outer application boundary.
+- The shared logger accepts one data argument per method. Use a structured object such as `logger.error({ message, symbol, error })` when context is needed; do not pass metadata as a second argument.
+- The shared logger implementation in `packages/utils` is the only place where console output is expected.
