@@ -44,26 +44,30 @@ export async function readJournalRecords({
     let directoryHandle
     try {
       directoryHandle = await opendir(directory)
-      for await (const entry of directoryHandle) {
-        if (!entry.name.endsWith(".jsonl")) continue
-        if (!entry.isFile() || !SESSION_FILE_PATTERN.test(entry.name)) {
-          const error = new Error(`Invalid journal session file entry: ${entry.name}`)
-          error.code = "JOURNAL_INVALID_SESSION_FILE"
-          throw error
-        }
-        if (sessionEntries.length >= maxSessions) {
-          const error = new Error(`Journal recovery exceeds maxSessions while scanning ${directory}`)
-          error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
-          error.details = { maxSessions }
-          throw error
-        }
-        sessionEntries.push(entry)
+    } catch (cause) {
+      if (cause.code === "ENOENT") {
+        const error = new Error(`Journal directory does not exist: ${directory}`)
+        error.code = "JOURNAL_DIRECTORY_NOT_FOUND"
+        error.details = { directory, cause }
+        throw error
       }
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        return toResult({ records: [], count: 0, sessions: [], bytesRead: 0 })
+      throw cause
+    }
+
+    for await (const entry of directoryHandle) {
+      if (!entry.name.endsWith(".jsonl")) continue
+      if (!entry.isFile() || !SESSION_FILE_PATTERN.test(entry.name)) {
+        const error = new Error(`Invalid journal session file entry: ${entry.name}`)
+        error.code = "JOURNAL_INVALID_SESSION_FILE"
+        throw error
       }
-      throw error
+      if (sessionEntries.length >= maxSessions) {
+        const error = new Error(`Journal recovery exceeds maxSessions while scanning ${directory}`)
+        error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
+        error.details = { maxSessions }
+        throw error
+      }
+      sessionEntries.push(entry)
     }
 
     sessionEntries.sort((left, right) => {

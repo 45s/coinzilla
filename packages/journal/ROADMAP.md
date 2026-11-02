@@ -29,7 +29,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - `read({ maxRecords, maxBytes, maxRecordBytes })` validates all session files in filename and line order before returning records. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record.
 - `replay({ handler, ...limits })` validates the entire journal before calling the handler sequentially. A handler failure stops replay and reports the number already applied. Replay is at-least-once across crashes; consumers must use stable record IDs idempotently.
 - A partial final line, malformed record, duplicate ID, unsupported schema version, or limit violation fails the entire read/replay. Journal never silently truncates or discards historical facts.
-- Only one writer may own a journal directory at a time. Read/replay is available while the Journal instance is stopped, before start or after close.
+- Only one writer may own a journal directory at a time (not enforced by an inter-process lock yet). Read/replay is available while the Journal instance is stopped, before start or after close. A missing directory is an explicit failure, not an empty-history success.
 
 ## Completion policy
 

@@ -38,6 +38,7 @@ test("reads new versioned records after restart and preserves their payload", as
     assert.equal(result.records[0].schemaVersion, 1)
     assert.equal(result.records[0].payload.name, "order.filled")
     assert.equal(result.records[0].payload.data.orderId, "42")
+    assert.equal(Object.hasOwn(result.records[0].payload, "__coinzillaJournal"), false)
     assert.deepEqual(result.records[0].position, {
       fileName: path.basename(writer.filePath),
       lineNumber: 1,
@@ -350,6 +351,20 @@ test("requires stable event identity when appending records", async () => {
   }
 })
 
+
+test("fails explicitly when the journal directory is missing", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-missing-"))
+  const missingDirectory = path.join(root, "not-created")
+  const journal = new Journal({ directory: missingDirectory, eventBus: new EventBus() })
+  try {
+    const result = await journal.read()
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "JOURNAL_DIRECTORY_NOT_FOUND")
+  } finally {
+    await journal.eventBus.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test("returns an explicit error when the journal directory cannot be read", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-io-error-"))
