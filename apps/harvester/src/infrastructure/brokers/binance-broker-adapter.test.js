@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Fill, Market, TradingRules } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Market, TradingRules } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
@@ -141,7 +141,19 @@ test("normalizes execution reports into canonical Fill values at the adapter bou
     event: {
       eventType: "executionReport",
       executionType: "TRADE",
-      executedOrder: { clientOrderId: "client-7" },
+      executedOrder: {
+        id: "88",
+        symbol: "BTCUSDT",
+        type: "LIMIT",
+        side: "BUY",
+        quantity: "0.01",
+        executedQuantity: "0.01",
+        price: "65000",
+        status: "FILLED",
+        clientOrderId: "client-7",
+        createdAt: 100,
+        updatedAt: 123,
+      },
       fill: {
         id: "77",
         orderId: "88",
@@ -159,6 +171,10 @@ test("normalizes execution reports into canonical Fill values at the adapter bou
   })
   await new Promise((resolve) => setImmediate(resolve))
 
+  assert.ok(receiveEvent.executedOrder instanceof CanonicalOrder)
+  assert.equal(receiveEvent.executedOrder.clientOrderId, "client-7")
+  assert.equal(receiveEvent.executedOrder.status, "FILLED")
+  assert.equal(receiveEvent.executedOrder.executedQuantity.amount, "0.01")
   assert.ok(receiveEvent.fill instanceof Fill)
   assert.equal(receiveEvent.fill.id, "binance:BTCUSDT:77")
   assert.equal(receiveEvent.fill.quantity.amount, "0.01")
