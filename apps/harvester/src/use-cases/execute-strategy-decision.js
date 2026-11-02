@@ -4,8 +4,9 @@ import { createPendingCanonicalOrder } from "../domain/orders/create-pending-can
 import { validateOrderAgainstTradingRules } from "../domain/orders/validate-order-against-trading-rules.js"
 
 /**
- * Compose strategy order intents into validated broker submissions.
- * Register the PENDING order before I/O; never blindly retry unknown outcomes.
+ * Validate a complete strategy decision before submitting any of its orders.
+ * Register each PENDING canonical order before network I/O. Unknown outcomes
+ * are reported to the caller and are never retried automatically.
  */
 export function makeExecuteStrategyDecision({
   broker,
@@ -33,8 +34,8 @@ export function makeExecuteStrategyDecision({
       if (!marketMetadata?.market || !marketMetadata?.tradingRules) {
         throw new TypeError("executeStrategyDecision requires canonical market metadata and trading rules")
       }
-      const submittedOrders = []
-      for (const action of decision.actions) {
+
+      const pendingOrders = decision.actions.map((action) => {
         const clientOrderId = "h-" + marketMetadata.market.symbol + "-" + (++orderSequence)
         const orderIntent = {
           symbol: marketMetadata.market.symbol,
@@ -51,8 +52,12 @@ export function makeExecuteStrategyDecision({
           supportedOrderTypes: marketMetadata.supportedOrderTypes,
         })
         validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
-        await onPendingOrder({ order: pendingOrder })
+        return Object.freeze({ orderIntent, pendingOrder })
+      })
 
+      const submittedOrders = []
+      for (const { orderIntent, pendingOrder } of pendingOrders) {
+        await onPendingOrder({ order: pendingOrder })
         let brokerResult
         try {
           brokerResult = await broker.placeOrder({ order: orderIntent })
@@ -72,12 +77,17 @@ export function makeExecuteStrategyDecision({
           return toResult({ errors })
         }
         const acknowledgedOrder = brokerResult.data
-        if (acknowledgedOrder.clientOrderId !== clientOrderId) {
+        if (acknowledgedOrder.clientOrderId !== pendingOrder.clientOrderId) {
           const error = new Error("Broker acknowledgement clientOrderId does not match submitted order")
           await onSubmissionFailure({ order: pendingOrder, error, outcome: "UNKNOWN" })
           return toResult({ error })
         }
-        await onAcknowledgedOrder({ order: acknowledgedOrder })
+        try {
+          await onAcknowledgedOrder({ order: acknowledgedOrder })
+        } catch (error) {
+          await onSubmissionFailure({ order: pendingOrder, error, outcome: "UNKNOWN" })
+          throw error
+        }
         submittedOrders.push(acknowledgedOrder)
       }
       return toResult({ data: { submittedOrders } })

@@ -302,10 +302,12 @@ This does not yet solve account-wide budget allocation or order reservations. Mu
 ## Strategy decision execution
 
 The `makeExecuteStrategyDecision` use case is the application boundary between
-pure strategy order intents and broker submission. It creates a local PENDING
-`CanonicalOrder`, validates exchange increments and bounds, registers the
-pending order before the network request, and requires a canonical broker
-acknowledgement with the same client order ID. A transport failure or malformed
+pure strategy order intents and broker submission. It first creates and validates every local PENDING
+`CanonicalOrder` in the decision, so a malformed second intent cannot leave a
+first order partially submitted. It then registers each pending order before
+the network request and requires a canonical broker acknowledgement with the
+same client order ID. A local acknowledgement-registration failure is also
+reported as an unknown broker outcome and pauses the pair. A transport failure or malformed
 acknowledgement is treated as an unknown outcome: the caller pauses the pair and
 must not blindly retry. The use case never decides whether to BUY or SELL and
 never mutates Portfolio.

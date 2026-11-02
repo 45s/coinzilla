@@ -88,3 +88,37 @@ test("does not silently accept a non-canonical broker acknowledgement", async ()
   assert.equal(result.ok, false)
   assert.deepEqual(failures, ["UNKNOWN"])
 })
+
+test("validates every action before submitting the first order", async () => {
+  let brokerCalls = 0
+  const execute = makeExecuteStrategyDecision({
+    broker: { placeOrder: async () => { brokerCalls += 1; return { ok: false } } },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+  })
+  const result = await execute({
+    decision: {
+      actions: [
+        decision.actions[0],
+        { side: "SELL", type: "LIMIT_MAKER", price: "0.0991", quantity: "1" },
+      ],
+    },
+    marketMetadata,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(brokerCalls, 0)
+})
+
+test("pauses an unknown order outcome when local acknowledgement registration fails", async () => {
+  const outcomes = []
+  const execute = makeExecuteStrategyDecision({
+    broker: { placeOrder: async ({ order }) => ({ ok: true, data: makeAcknowledgement(order) }) },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => { throw new Error("registry conflict") },
+    onSubmissionFailure: async ({ outcome }) => outcomes.push(outcome),
+  })
+  const result = await execute({ decision, marketMetadata })
+  assert.equal(result.ok, false)
+  assert.deepEqual(outcomes, ["UNKNOWN"])
+})
