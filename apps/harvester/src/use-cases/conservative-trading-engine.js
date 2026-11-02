@@ -75,7 +75,7 @@ export function makeConservativeTradingEngine({
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       state.prices.set(symbol, price)
-      return evaluateLatest({ symbol })
+      return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
       return toResult({ error })
     }

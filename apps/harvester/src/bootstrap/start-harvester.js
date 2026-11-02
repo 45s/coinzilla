@@ -1,11 +1,13 @@
 import { Fill } from "@coinzilla/entities"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { compareDecimal, defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
+import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
+import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
-import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
@@ -62,6 +64,30 @@ const createPortfolioWorkflow = ({ evaluateStrategy }) => {
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
+    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit } = {}) => {
+      const recoveryLedger = recoveryLedgers.get(marketId)
+      const position = portfolio.getPosition({ marketId })
+      if (!recoveryLedger || !position) {
+        return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
+      }
+      try {
+        const completion = evaluateRecoveryCompletion({
+          sellOrderFullyFilled: true,
+          buyCost: recoveryLedger.buyCost,
+          netSellProceeds: recoveryLedger.netSellProceeds,
+          activeQuantity: position.baseQuantity.amount,
+          keepQuantity,
+          minProfit,
+        })
+        if (completion.eligible) {
+          portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          recoveryLedgers.set(marketId, recoveryLedger.resetCycle())
+        }
+        return toResult({ data: completion })
+      } catch (error) {
+        return toResult({ error })
+      }
+    },
   }
 }
 
@@ -70,7 +96,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = evaluateAggressiveStrategy,
+  evaluateStrategy = evaluateConservativeStrategy,
   logger = defaultLogger,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.({
@@ -85,17 +111,19 @@ export async function startHarvester({
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
   const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
+  let processMarketPrice = portfolioWorkflow.processMarketPrice
   const {
-    processMarketPrice,
     updatePortfolio,
     updateTradingAccounting,
     getPortfolio,
     getRecoveryLedger,
+    completeRecoveryCycle,
   } = portfolioWorkflow
   const marketMetadata = new Map()
   let accountSnapshot
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const getAccountSnapshot = () => accountSnapshot
+  let tradingEngine
   const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
@@ -116,6 +144,9 @@ export async function startHarvester({
   }
   if (brokerName !== "binance") {
     throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
+  }
+  if (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production") {
+    throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
   const broker = assertBrokerPort({
@@ -144,9 +175,8 @@ export async function startHarvester({
   const subscriptions = []
   let userDataSubscription
   let userDataReady = false
-  // A balance snapshot and a recovered stream do not prove that local strategy
-  // inventory, open orders, and execution history match the exchange. Keep the
-  // order gate closed until authoritative reconciliation is implemented.
+  // Startup permits only a clean, controlled TESTNET account. Reconnects still
+  // close the gate because in-memory state is not comprehensively reconciled.
   let userDataRequiresReconciliation = true
   let userDataAccountingFailed = false
   let pendingExecutionEvents = 0
@@ -222,41 +252,46 @@ export async function startHarvester({
       onEvent: ({ event } = {}) => {
         const isExecution = event?.eventType === "executionReport" &&
           event?.executionType === "TRADE"
+        const isOrderUpdate = event?.eventType === "executionReport" && event?.executedOrder !== undefined
         if (!event || typeof event !== "object" || Array.isArray(event)) {
           userDataReady = false
           userDataAccountingFailed = true
           userDataStatus = "INVALID_EVENT"
           return
         }
-        if (isExecution) {
-          // Close the order gate synchronously, before queuing asynchronous
-          // accounting, so a concurrent caller cannot race past this fill.
+        if (isOrderUpdate) {
           pendingExecutionEvents += 1
           userDataReady = false
-          userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+          userDataStatus = isExecution ? "EXECUTION_ACCOUNTING_PENDING" : "ORDER_UPDATE_PENDING"
         }
+        let reevaluateSymbol
 
         const task = userDataEventQueue.then(async () => {
-          if (isExecution) {
+          if (tradingEngine && isOrderUpdate) {
+            const processed = await tradingEngine.processUserDataEvent({ event })
+            if (!processed.ok) {
+              userDataAccountingFailed = true
+              userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
+              logger.error?.({ message: "Harvester rejected an unowned or invalid order event", errors: processed.errors })
+              return
+            }
+            if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
+            if (isExecution) {
+              try {
+                await refreshAccountSnapshot()
+              } catch (error) {
+                userDataAccountingFailed = true
+                userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
+                logger.error?.({ message: "Harvester could not refresh exchange balances after an execution", error })
+                return
+              }
+            }
+          } else if (isExecution) {
             const accounting = await updateTradingAccounting({ fill: event.fill })
             if (!accounting.ok) {
               userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
-              logger.error?.({
-                message: "Harvester could not account for a canonical execution",
-                errors: accounting.errors,
-              })
-              return
-            }
-            try {
-              await refreshAccountSnapshot()
-            } catch (error) {
-              userDataAccountingFailed = true
-              userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
-              logger.error?.({
-                message: "Harvester could not refresh exchange balances after an execution",
-                error,
-              })
+              logger.error?.({ message: "Harvester could not account for a canonical execution", errors: accounting.errors })
               return
             }
           }
@@ -285,8 +320,8 @@ export async function startHarvester({
           userDataReady = false
           userDataStatus = "EVENT_QUEUE_FAILED"
           logger.error?.({ message: "Harvester user-data event queue failed", error })
-        }).finally(() => {
-          if (isExecution) pendingExecutionEvents -= 1
+        }).finally(async () => {
+          if (isOrderUpdate) pendingExecutionEvents -= 1
           if (pendingExecutionEvents !== 0) return
 
           if (userDataAccountingFailed) {
@@ -300,6 +335,10 @@ export async function startHarvester({
           }
           userDataReady = true
           userDataStatus = "READY"
+          if (reevaluateSymbol && tradingEngine) {
+            const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
+            if (!reevaluated.ok) logger.error?.({ message: "Harvester next strategy evaluation failed", errors: reevaluated.errors })
+          }
         })
         userDataEventQueue = task
       },
@@ -358,11 +397,44 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    // Queue the first account snapshot behind any execution events received
-    // during stream setup. Subsequent fills refresh balances on this same queue.
+    // A clean TESTNET account is the minimal starting point: no open orders and
+    // no pre-existing base inventory that could be mistaken for strategy coins.
     const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
+    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
+      if (!pairConfig.enabled) continue
+      const metadata = marketMetadata.get(symbol)
+      const openOrders = await broker.getOpenOrders({ symbol })
+      if (!openOrders?.ok || !Array.isArray(openOrders.data)) {
+        throw new Error("Unable to verify clean TESTNET open orders for " + symbol)
+      }
+      if (openOrders.data.length > 0) {
+        throw new Error("TESTNET account has pre-existing open orders for " + symbol + "; cancel or reconcile them before starting Harvester")
+      }
+      const baseBalance = accountSnapshot.getBalance({ assetId: metadata.market.baseAsset.id })
+      if (!baseBalance || compareDecimal({ left: baseBalance.free.amount, right: "0" }) !== 0 ||
+          compareDecimal({ left: baseBalance.locked.amount, right: "0" }) !== 0) {
+        throw new Error("TESTNET account has pre-existing " + metadata.market.baseAsset.code + " inventory for " + symbol + "; clear it before starting Harvester")
+      }
+    }
+    userDataRequiresReconciliation = false
+    userDataReady = true
+    userDataStatus = "READY"
+    tradingEngine = makeConservativeTradingEngine({
+      broker: guardedBroker,
+      tradingConfig,
+      getPortfolio,
+      getRecoveryLedger,
+      getMarketMetadata,
+      updateTradingAccounting,
+      completeRecoveryCycle,
+      canTrade: () => userDataReady,
+      onPause: async ({ symbol, reason, error }) => {
+        logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
+      },
+    })
+    processMarketPrice = tradingEngine.processMarketPrice
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
@@ -371,8 +443,6 @@ export async function startHarvester({
         onPrice: (priceEvent) => Promise.resolve().then(() => processMarketPrice({
           symbol,
           priceEvent,
-          pairConfig,
-          settings: tradingConfig.settings,
         })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
           return processed
