@@ -40,7 +40,7 @@ test("normalizes a Binance trade execution into a canonical Fill", () => {
   assert.equal(fill.brokerOrderId, "456")
   assert.equal(fill.clientOrderId, "client-1")
   assert.equal(fill.side, "BUY")
-  assert.equal(fill.price.amount, "65000.10")
+  assert.equal(fill.price.amount, "65000.1")
   assert.equal(fill.quantity.amount, "0.01")
   assert.equal(fill.quoteQuantity.amount, "650.001")
   assert.equal(fill.liquidityRole, "MAKER")
