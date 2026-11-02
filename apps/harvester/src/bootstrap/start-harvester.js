@@ -1,4 +1,4 @@
-import { defaultLogger } from "@coinzilla/utils"
+import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -107,13 +107,26 @@ export async function startHarvester({
     throw error
   }
 
-  const placeOrderWithReadiness = makePlaceOrder({ broker })
   const subscriptions = []
   let userDataSubscription
   let userDataReady = false
   let userDataRequiresReconciliation = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
+  const guardedBroker = Object.freeze({
+    ...broker,
+    placeOrder: async ({ order } = {}) => {
+      if (!userDataReady) {
+        return toResult({
+          error: new Error(
+            "Cannot place orders while Harvester user-data accounting is not ready: " + userDataStatus,
+          ),
+        })
+      }
+      return broker.placeOrder({ order })
+    },
+  })
+  const placeOrder = makePlaceOrder({ broker: guardedBroker })
   const reportPriceError = (details) => {
     try {
       onMarketPriceError(details)
@@ -256,16 +269,8 @@ export async function startHarvester({
 
   return Object.freeze({
     tradingConfig,
-    broker,
-    placeOrder: async (input = {}) => {
-      if (!userDataReady) {
-        return {
-          ok: false,
-          errors: [new Error("Cannot place orders while Harvester user-data accounting is not ready: " + userDataStatus)],
-        }
-      }
-      return placeOrderWithReadiness(input)
-    },
+    broker: guardedBroker,
+    placeOrder,
     get userDataReady() { return userDataReady },
     get userDataStatus() { return userDataStatus },
     processMarketPrice,
