@@ -16,6 +16,7 @@ export function updateOrderRegistry({ registry, order } = {}) {
         registry: result.registry,
         applied: result.applied,
         duplicate: result.duplicate,
+        stale: result.stale === true,
         unknown: result.unknown,
       },
     })
