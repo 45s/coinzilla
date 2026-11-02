@@ -97,6 +97,18 @@ The configuration loader and structural validation live in:
 
 The configuration contract does not imply that either strategy mode or order execution is implemented. Strategy behavior must be agreed and documented before strategy-specific parameters or runtime behavior are added.
 
+## Implementation style
+
+Harvester has a mandatory class-versus-function rule:
+
+- **Plain pure functions are required** for deterministic calculations, trading decisions, validation, predicates, parsing, normalization, and transformations. They receive explicit inputs, return results, and have no side effects.
+- Meaningful pure functions must live in focused, cohesive, independently testable modules—even if they have only one caller.
+- **Classes are for domain concepts that own state and protect state-related invariants**, such as `Fill`, `Position`, and `Portfolio`. Use private fields and deliberate getters/methods where appropriate.
+- Do not put independent calculations or trading decisions into class methods just because the class has the relevant data.
+- **Use cases are dependency-injected functions** that coordinate domain logic and explicit ports. Keep I/O at application/infrastructure boundaries.
+
+See [Architecture — implementation style](./docs/architecture.md#implementation-style-classes-versus-plain-pure-functions) and [Harvester agent standards](./AGENTS.md#required-domain-implementation-style-classes-and-pure-functions).
+
 ## Engineering rules
 
 - Follow [AGENTS.md](./AGENTS.md) and repository-level engineering guidance.
