@@ -44,7 +44,6 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Ensure all deterministic strategy calculations and decisions are plain pure functions; strategy policies never call the broker or perform I/O.
 - [ ] Record any unresolved Free-Roll requirements as explicit blockers; do not invent financial behavior.
 
-
 ### P0.2 — Trading rules, account state, and startup readiness
 
 - [~] Load and validate exchange symbol filters for enabled markets: price tick, quantity step, min/max quantity, min/max notional, and supported order types are loaded/validated; authoritative post-only crossing validation remains.
@@ -100,7 +99,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.6 — Persistence, restart, and recovery required for safe operation
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
-- [ ] Implement durable journal/state storage using the repository's approved shared packages or a separately approved persistence adapter; do not create an app-local generic storage framework. The current Journal package does not expose read/replay recovery; a Journal-owned capability request is tracked in [#429](https://github.com/45s/coinzilla/issues/429).
+- [~] Integrate durable journal/state storage using the repository's approved shared packages; do not create an app-local generic storage framework. Journal now provides documented bounded `read()`/`replay()` APIs (merged via [#430](https://github.com/45s/coinzilla/pull/430)); Harvester still needs its domain-specific record schema, durable state transitions, replay integration, and restart reconciliation.
 - [ ] Persist execution facts before acknowledging successful processing/recovery.
 - [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
 - [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
@@ -170,7 +169,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] **No order model/state store:** no active-order registry, order lifecycle state machine, client order ID policy, or order-to-fill coordination.
 - [ ] **No reservations:** open/uncertain BUY quote and SELL base commitments are not represented or enforced.
 - [ ] **No cross-pair balance allocator:** separate pair budgets can compete for the same real exchange asset.
-- [ ] **No durable deduplication or persistence:** fill IDs exist only in process memory; restart loses Portfolio and applied-fill history.
+- [~] **Durable persistence not integrated:** Journal now provides bounded read/replay with stable record IDs, but Harvester does not yet persist/replay its Portfolio, RecoveryLedger, order lifecycle, reservations, or applied execution identities; restart still loses those states.
 - [~] **No reconciliation:** broker-backed startup and reconnect now remain fail-closed, including after the stream emits its own "reconciled" status. Authoritative comparison of local state with balances, open orders, execution history, strategy-owned inventory, and outstanding commitments is still not implemented.
 - [~] **Incomplete readiness/pause state:** broker-backed order submission is explicitly gated and remains closed until authoritative reconciliation; a complete process/per-pair state machine and pause/resume controls remain.
 - [ ] **No complete operational journal:** lifecycle/decision/fill audit trail and operator-facing pause/recovery visibility are not implemented.
@@ -198,7 +197,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
 - [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [ ] Finalize durable storage and restart/reconciliation guarantees.
+- [~] Integrate the Journal read/replay contract into Harvester's domain-specific durable state and finalize restart/reconciliation guarantees.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 

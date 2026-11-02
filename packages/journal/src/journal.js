@@ -2,6 +2,9 @@ import { mkdir, open } from "node:fs/promises"
 import path from "node:path"
 
 import { defaultLogger, toResult } from "@coinzilla/utils"
+import { serializeJournalRecord } from "./helpers/journal-record.js"
+import { readJournalRecords } from "./read-journal-records.js"
+import { replayJournalRecords } from "./replay-journal-records.js"
 
 export class Journal {
   constructor({ eventBus, directory, logger = defaultLogger } = {}) {
@@ -19,6 +22,8 @@ export class Journal {
     this.closing = false
     this.closed = false
     this.writeErrors = []
+    this.writeFailed = false
+    this.closeDurable = false
   }
 
   async start({} = {}) {
@@ -150,45 +155,79 @@ export class Journal {
         error: new Error("Journal is not accepting records"),
       })
     }
-
-    if (!event || typeof event !== "object" || Array.isArray(event)) {
+    if (this.writeFailed) {
       return toResult({
-        error: new TypeError("A valid event object is required"),
+        error: new Error("Journal session is failed after a previous write error"),
       })
     }
 
     let line
-
     try {
-      line = `${JSON.stringify(event)}\n`
+      line = serializeJournalRecord({ event })
     } catch (error) {
       return toResult({ error })
     }
 
-    if (line === "undefined\n") {
-      return toResult({
-        error: new TypeError("Event cannot be serialized to JSON"),
-      })
-    }
-
     const task = this.writeQueue.then(async () => {
+      if (this.writeFailed) {
+        return toResult({
+          error: new Error("Journal session is failed after a previous write error"),
+        })
+      }
       try {
         await this.fileHandle.writeFile(line, "utf8")
-
-        return toResult({ written: true })
+        return toResult({ written: true, durable: false, recordId: event.id })
       } catch (error) {
+        this.writeFailed = true
         this.writeErrors.push(error)
-
         return toResult({ error })
       }
     })
 
     this.writeQueue = task.then(() => undefined)
-
     return task
   }
 
+  /**
+   * Read and validate all persisted sessions. Call before start or after close.
+   * @param {{ maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} options
+   */
+  async read({ maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
+    if (this.started || this.starting || this.closing) {
+      return toResult({ error: new Error("Journal records can only be read while the journal is stopped") })
+    }
+    return readJournalRecords({
+      directory: this.directory,
+      maxRecords,
+      maxSessions,
+      maxBytes,
+      maxRecordBytes,
+    })
+  }
+
+  /**
+   * Replay a fully validated snapshot in deterministic order.
+   * @param {{ handler: (input: { record: object }) => unknown, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} options
+   */
+  async replay({ handler, maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
+    if (this.started || this.starting || this.closing) {
+      return toResult({ error: new Error("Journal can only be replayed while stopped") })
+    }
+    return replayJournalRecords({
+      directory: this.directory,
+      handler,
+      maxRecords,
+      maxSessions,
+      maxBytes,
+      maxRecordBytes,
+    })
+  }
+
   async flush({} = {}) {
+    if (!this.started || !this.fileHandle || this.closing || this.closed) {
+      return toResult({ error: new Error("Journal must be started to flush durable records") })
+    }
+
     const errors = []
 
     try {
@@ -206,7 +245,7 @@ export class Journal {
 
     if (errors.length === 0 && this.fileHandle && !this.closed) {
       try {
-        // Wait for queued writes, then ask the OS to sync file data to storage.
+        // record() acknowledges a completed write; flush() acknowledges an fsync.
         await this.fileHandle.sync()
       } catch (error) {
         errors.push(error)
@@ -217,12 +256,19 @@ export class Journal {
       return toResult({ errors })
     }
 
-    return toResult({ flushed: true, filePath: this.filePath })
+    return toResult({ flushed: true, durable: true, filePath: this.filePath })
   }
 
   async close({} = {}) {
     if (this.closed) {
-      return toResult({ closed: true })
+      if (!this.closeDurable) {
+        return toResult({
+          error: new Error("Journal closed without durable confirmation"),
+          closed: true,
+          durable: false,
+        })
+      }
+      return toResult({ closed: true, durable: true })
     }
 
     if (this.closing) {
@@ -233,8 +279,8 @@ export class Journal {
 
     if (!this.started) {
       this.closed = true
-
-      return toResult({ closed: true })
+      this.closeDurable = true
+      return toResult({ closed: true, durable: true })
     }
 
     const errors = []
@@ -260,7 +306,6 @@ export class Journal {
     }
 
     this.closing = true
-
     await this.writeQueue
 
     errors.push(...this.writeErrors)
@@ -288,6 +333,7 @@ export class Journal {
     this.closing = false
 
     if (errors.length > 0) {
+      this.closeDurable = false
       this.reportError({
         message: "Journal closed with errors",
         errors,
@@ -297,6 +343,7 @@ export class Journal {
       return toResult({ errors })
     }
 
+    this.closeDurable = true
     try {
       this.logger.info?.("Journal closed", {
         filePath: this.filePath,
@@ -307,6 +354,7 @@ export class Journal {
 
     return toResult({
       closed: true,
+      durable: true,
       filePath: this.filePath,
     })
   }
