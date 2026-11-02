@@ -171,6 +171,10 @@ export class OrderRegistry {
     })
   }
 
+  static empty() {
+    return new OrderRegistry()
+  }
+
   get value() {
     return Object.freeze({
       orders: this.#orders.map((order) => order.value),
