@@ -1,6 +1,7 @@
-import { Asset, Market } from "@coinzilla/entities"
+import { toResult } from "@coinzilla/utils"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
+import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 import { createCanonicalFillFromBinanceEvent } from "./binance-execution-fill.js"
 
 const createBroker = ({ config, logger }) =>
@@ -36,7 +37,7 @@ export function createBinanceBrokerAdapter({
   const markets = new Map()
   const marketRequests = new Map()
 
-  const getCanonicalMarket = async ({ symbol } = {}) => {
+  const getCanonicalMarketMetadata = async ({ symbol } = {}) => {
     if (markets.has(symbol)) return markets.get(symbol)
     if (marketRequests.has(symbol)) return marketRequests.get(symbol)
 
@@ -48,21 +49,12 @@ export function createBinanceBrokerAdapter({
           "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
         )
       }
-      const { baseAsset, quoteAsset, symbol: resolvedSymbol } = result.data
-      if (resolvedSymbol !== symbol || typeof baseAsset !== "string" ||
-          !baseAsset.trim() || typeof quoteAsset !== "string" || !quoteAsset.trim()) {
-        throw new TypeError("Binance market metadata is incomplete for " + symbol)
+      if (result.data.symbol !== symbol) {
+        throw new TypeError("Binance market metadata symbol does not match " + symbol)
       }
-      const baseCode = baseAsset.trim().toUpperCase()
-      const quoteCode = quoteAsset.trim().toUpperCase()
-      const market = new Market({
-        venue: "binance",
-        symbol,
-        baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
-        quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
-      })
-      markets.set(symbol, market)
-      return market
+      const metadata = createBinanceMarketMetadata({ symbolFilters: result.data })
+      markets.set(symbol, metadata)
+      return metadata
     }).finally(() => {
       marketRequests.delete(symbol)
     })
@@ -77,10 +69,15 @@ export function createBinanceBrokerAdapter({
     ) {
       return event
     }
-    const market = await getCanonicalMarket({ symbol: event.fill?.symbol })
+    const metadata = await getCanonicalMarketMetadata({
+      symbol: event.fill?.symbol,
+    })
     return {
       ...event,
-      fill: createCanonicalFillFromBinanceEvent({ event, market }),
+      fill: createCanonicalFillFromBinanceEvent({
+        event,
+        market: metadata.market,
+      }),
     }
   }
 
@@ -112,7 +109,15 @@ export function createBinanceBrokerAdapter({
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: (input) => client.getFills(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),
-    getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
+    getSymbolFilters: async ({ symbol }) => {
+      try {
+        return toResult({
+          data: await getCanonicalMarketMetadata({ symbol }),
+        })
+      } catch (error) {
+        return toResult({ error })
+      }
+    },
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
