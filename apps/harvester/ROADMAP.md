@@ -52,7 +52,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Load account balances and distinguish free, locked, and total balances.
 - [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
 - [ ] Seed market state with a current REST price/snapshot before relying on WebSocket trade events; define stale/missing-price behavior.
-- [~] Subscribe to user-data events and surface connection/recovery status. Bootstrap now establishes the stream before market subscriptions, serializes inbound event handling, exposes readiness/status, and blocks order placement while execution accounting or stream reconciliation is pending. Canonical fill normalization and REST reconciliation remain.
+- [~] Subscribe to user-data events and surface connection/recovery status. Bootstrap establishes the stream before market subscriptions, serializes inbound event handling, and exposes readiness/status. Broker-backed startup and reconnect now remain fail-closed until authoritative reconciliation is implemented; a stream-level "reconciled" acknowledgement cannot clear the order gate. Canonical fill normalization exists, but REST reconciliation across balances, open orders, execution history, strategy-owned inventory, and outstanding commitments remains unfinished.
 - [ ] Implement explicit process and per-pair readiness states (e.g. CONFIG_VALID, CONNECTING, RECONCILING, READY, PAUSED, STOPPING, FAILED); connection alone must never mean READY.
 - [ ] Do not enable order submission until required account, filters, market data, user stream, and reconciliation gates are satisfied.
 - [ ] Validate environment/config combinations; require explicit TESTNET/live mode selection and explicit live-trading opt-in. Fail closed on ambiguous or missing production settings.
@@ -171,7 +171,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] **No reservations:** open/uncertain BUY quote and SELL base commitments are not represented or enforced.
 - [ ] **No cross-pair balance allocator:** separate pair budgets can compete for the same real exchange asset.
 - [ ] **No durable deduplication or persistence:** fill IDs exist only in process memory; restart loses Portfolio and applied-fill history.
-- [~] **No reconciliation:** the broker's user-data recovery status now gates Harvester order placement, but startup/reconnect still does not compare local state with balances, open orders, and exchange executions or acknowledge recovery after a real reconciliation.
+- [~] **No reconciliation:** broker-backed startup and reconnect now remain fail-closed, including after the stream emits its own "reconciled" status. Authoritative comparison of local state with balances, open orders, execution history, strategy-owned inventory, and outstanding commitments is still not implemented.
 - [ ] **No readiness/pause safety state:** broker connected and subscribed is currently the closest runtime status; it is not sufficient to authorize trading.
 - [ ] **No complete operational journal:** lifecycle/decision/fill audit trail and operator-facing pause/recovery visibility are not implemented.
 - [ ] **No end-to-end trading test:** current offline tests validate components, not a complete market-to-order-to-fill-to-next-decision cycle.

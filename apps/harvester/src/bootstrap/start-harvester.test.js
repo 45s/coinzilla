@@ -144,7 +144,8 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   ])
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
-  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
 
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
@@ -309,7 +310,7 @@ test("disconnects after a failed broker connection", async () => {
   assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
-test("accounts canonical execution events before allowing further order placement", async () => {
+test("accounts canonical execution events but keeps orders blocked without authoritative reconciliation", async () => {
   const broker = createBroker()
   let handled
   const result = await startHarvester({
@@ -331,8 +332,8 @@ test("accounts canonical execution events before allowing further order placemen
 
   assert.equal(handled.eventType, "executionReport")
   assert.ok(handled.fill instanceof Fill)
-  assert.equal(result.userDataReady, true)
-  assert.equal(result.userDataStatus, "READY")
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
   assert.equal(result.getAccountSnapshot().sourceTime, 2)
   assert.equal(
@@ -343,11 +344,12 @@ test("accounts canonical execution events before allowing further order placemen
   const order = await result.placeOrder({
     order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
   })
-  assert.equal(order.ok, true)
+  assert.equal(order.ok, false)
+  assert.match(order.errors[0].message, /AUTHORITATIVE_RECONCILIATION_REQUIRED/)
   await result.stop()
 })
 
-test("requires explicit reconciliation acknowledgement after a user-data stream recovery", async () => {
+test("requires authoritative reconciliation after a user-data stream recovery", async () => {
   const broker = createBroker()
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
@@ -367,7 +369,12 @@ test("requires explicit reconciliation acknowledgement after a user-data stream 
     type: "reconciled",
     recoveryRequired: false,
   })
-  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
   await result.stop()
 })
 
@@ -394,7 +401,7 @@ test("does not become ready when recovery is reported during subscription setup"
   await result.stop()
 })
 
-test("allows order placement again after canonical execution accounting completes", async () => {
+test("does not reopen order placement after execution accounting without authoritative reconciliation", async () => {
   const calls = []
   const broker = createBroker(calls)
   const result = await startHarvester({
@@ -412,12 +419,12 @@ test("allows order placement again after canonical execution accounting complete
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.equal(result.userDataReady, true)
-  assert.equal(result.userDataStatus, "READY")
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
   const order = await result.placeOrder({
     order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
   })
-  assert.equal(order.ok, true)
+  assert.equal(order.ok, false)
   await result.stop()
 })
 

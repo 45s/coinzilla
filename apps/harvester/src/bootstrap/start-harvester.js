@@ -144,7 +144,10 @@ export async function startHarvester({
   const subscriptions = []
   let userDataSubscription
   let userDataReady = false
-  let userDataRequiresReconciliation = false
+  // A balance snapshot and a recovered stream do not prove that local strategy
+  // inventory, open orders, and execution history match the exchange. Keep the
+  // order gate closed until authoritative reconciliation is implemented.
+  let userDataRequiresReconciliation = true
   let userDataAccountingFailed = false
   let pendingExecutionEvents = 0
   let userDataStatus = "NOT_SUBSCRIBED"
@@ -284,14 +287,19 @@ export async function startHarvester({
           logger.error?.({ message: "Harvester user-data event queue failed", error })
         }).finally(() => {
           if (isExecution) pendingExecutionEvents -= 1
-          if (
-            pendingExecutionEvents === 0 &&
-            !userDataRequiresReconciliation &&
-            !userDataAccountingFailed
-          ) {
-            userDataReady = true
-            userDataStatus = "READY"
+          if (pendingExecutionEvents !== 0) return
+
+          if (userDataAccountingFailed) {
+            userDataReady = false
+            return
           }
+          if (userDataRequiresReconciliation) {
+            userDataReady = false
+            userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+            return
+          }
+          userDataReady = true
+          userDataStatus = "READY"
         })
         userDataEventQueue = task
       },
@@ -307,16 +315,16 @@ export async function startHarvester({
           userDataRequiresReconciliation = true
           userDataReady = false
         } else if (status.type === "reconciled") {
-          // Stream recovery acknowledgement does not repair a fill that failed
-          // local accounting. Keep the order gate closed until a separate,
-          // authoritative reconciliation can prove the missing state is safe.
-          userDataRequiresReconciliation = false
-          userDataReady = pendingExecutionEvents === 0 && !userDataAccountingFailed
-          userDataStatus = userDataReady
-            ? "READY"
-            : userDataAccountingFailed
-              ? "EXECUTION_ACCOUNTING_FAILED"
-              : "EXECUTION_ACCOUNTING_PENDING"
+          // This status only acknowledges stream recovery. It is not evidence
+          // that exchange balances, open orders, execution history, strategy
+          // inventory, and outstanding commitments have been reconciled.
+          userDataRequiresReconciliation = true
+          userDataReady = false
+          userDataStatus = userDataAccountingFailed
+            ? "EXECUTION_ACCOUNTING_FAILED"
+            : pendingExecutionEvents > 0
+              ? "EXECUTION_ACCOUNTING_PENDING"
+              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
@@ -336,8 +344,10 @@ export async function startHarvester({
       )
     }
     userDataSubscription = userDataResult.data
-    userDataReady = !userDataRequiresReconciliation && !userDataAccountingFailed
-    userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
+    userDataReady = false
+    userDataStatus = userDataAccountingFailed
+      ? "EXECUTION_ACCOUNTING_FAILED"
+      : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
     // Queue the first account snapshot behind any execution events received
     // during stream setup. Subsequent fills refresh balances on this same queue.
