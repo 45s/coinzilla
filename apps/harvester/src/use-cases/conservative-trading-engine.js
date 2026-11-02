@@ -3,7 +3,6 @@ import { addDecimal, compareDecimal, multiplyDecimal, toResult } from "@coinzill
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
-import { calculateInitialBuyPrice } from "../domain/strategies/conservative/initial-buy-price.js"
 import { evaluateTrailingBuyRepricing } from "../domain/strategies/conservative/trailing-buy-repricing.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 
