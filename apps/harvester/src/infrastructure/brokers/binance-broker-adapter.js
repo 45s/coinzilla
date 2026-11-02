@@ -119,6 +119,9 @@ export function createBinanceBrokerAdapter({
     subscribeForUserData: ({ onEvent, onStatus }) =>
       client.subscribeForUserData({
         onEvent: ({ event } = {}) => {
+          if (event?.eventType === "executionReport" && event?.executionType === "TRADE") {
+            onStatus?.({ type: "executionPending", executionPending: true })
+          }
           Promise.resolve()
             .then(() => normalizeUserDataEvent({ event }))
             .then((normalizedEvent) => onEvent({ event: normalizedEvent }))
