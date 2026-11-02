@@ -168,12 +168,6 @@ settings:
 importers:
 
   .: {}
-      '@coinzilla/journal':
-        specifier: workspace:*
-        version: link:../../packages/journal
-      '@coinzilla/utils':
-        specifier: workspace:*
-        version: link:../../packages/utils
 
   apps/bot-free-roll:
     dependencies:

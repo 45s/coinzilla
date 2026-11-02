@@ -247,3 +247,14 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
 - Keep live trading disabled by default; TESTNET trading must be explicitly opt-in.
 - Report exact checks actually run; source inspection is not runtime verification.
+
+### CI lockfile repair
+
+The 2026-11-02 CI failure was caused by a malformed root importer in
+`pnpm-lock.yaml`: after removing the Coin Farmer workspace, two dependency
+entries were left indented under the empty root importer. This made the second
+pnpm 12 lockfile document invalid YAML and blocked dependency installation,
+unit tests, coverage, and audit. The root importer has been restored to the
+empty form matching the root manifest; the full CI suite must be rerun on the
+updated PR head before treating this repair as verified.
+
