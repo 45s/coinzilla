@@ -328,3 +328,50 @@ test("does not become ready when recovery is reported during subscription setup"
   assert.equal(result.userDataReady, false)
   await result.stop()
 })
+
+test("allows order placement again only after the execution handler confirms accounting", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    onUserDataEvent: async () => ({ ok: true, accounted: true }),
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: { id: "trade-2" },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, true)
+  await result.stop()
+})
+
+test("fails startup closed when user-data subscription cannot be established", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  broker.subscribeForUserData = async () => ({
+    ok: false,
+    errors: [new Error("user stream unavailable")],
+  })
+
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /Unable to subscribe to user data: user stream unavailable/,
+  )
+  assert.deepEqual(calls, ["connect", "disconnect"])
+})
