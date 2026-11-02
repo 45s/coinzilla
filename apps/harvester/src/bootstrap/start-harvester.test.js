@@ -690,7 +690,9 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   let baseBalance = "0"
   const submittedOrders = []
   let resolveThreeOrders
+  let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
+  const fiveOrdersSubmitted = new Promise((resolve) => { resolveFiveOrders = resolve })
   const marketMetadata = createMarketMetadata("BTCUSDT")
   const broker = {
     connect: async () => calls.push("connect"),
@@ -742,6 +744,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
       submittedOrders.push(order)
       if (submittedOrders.length === 3) resolveThreeOrders()
+      if (submittedOrders.length === 5) resolveFiveOrders()
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -841,32 +844,73 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
   })
   await threeOrdersSubmitted
-  const sellIntent = submittedOrders[2]
-  assert.equal(sellIntent.side, "SELL")
-  const canonicalSell = new CanonicalOrder({
-    clientOrderId: sellIntent.clientOrderId,
-    brokerOrderId: "broker-" + sellIntent.clientOrderId,
+  const secondBuyIntent = submittedOrders[1]
+  const canonicalSecondBuy = new CanonicalOrder({
+    clientOrderId: secondBuyIntent.clientOrderId,
+    brokerOrderId: "broker-" + secondBuyIntent.clientOrderId,
     market: marketMetadata.market,
-    side: "SELL",
+    side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: sellIntent.price, asset: marketMetadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    limitPrice: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 3,
     completedAt: 3,
   })
+  const secondBuyFill = new Fill({
+    tradeId: "testnet-second-buy-fill",
+    brokerOrderId: canonicalSecondBuy.brokerOrderId,
+    market: marketMetadata.market,
+    side: "BUY",
+    price: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
+    quantity: new Quantity({ amount: secondBuyIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: secondBuyIntent.price, right: secondBuyIntent.quantity }),
+      asset: marketMetadata.market.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  baseBalance = "0.02"
+  userDataHandlers.onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: canonicalSecondBuy,
+      fill: secondBuyFill,
+    },
+  })
+  await fiveOrdersSubmitted
+
+  const replacementSell = submittedOrders[4]
+  assert.equal(replacementSell.side, "SELL")
+  const canonicalSell = new CanonicalOrder({
+    clientOrderId: replacementSell.clientOrderId,
+    brokerOrderId: "broker-" + replacementSell.clientOrderId,
+    market: marketMetadata.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 4,
+    completedAt: 4,
+  })
   const sellFill = new Fill({
     tradeId: "testnet-sell-fill",
     brokerOrderId: canonicalSell.brokerOrderId,
     market: marketMetadata.market,
     side: "SELL",
-    price: new Money({ amount: sellIntent.price, asset: marketMetadata.market.quoteAsset }),
-    quantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    price: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
+    quantity: new Quantity({ amount: replacementSell.quantity, asset: marketMetadata.market.baseAsset }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({ left: sellIntent.price, right: sellIntent.quantity }),
+      amount: multiplyDecimal({ left: replacementSell.price, right: replacementSell.quantity }),
       asset: marketMetadata.market.quoteAsset,
     }),
     commissions: [],
@@ -886,5 +930,5 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL", "BUY", "SELL"])
 })
