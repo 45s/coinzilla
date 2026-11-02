@@ -41,8 +41,8 @@ The exchange's post-only and price/quantity constraints still apply. The Trading
 - The first BUY level follows the cycle-start rule above: with `makerPercent = 0`, request a post-only BUY at the current market price; with nonzero `makerPercent`, place the first BUY below market using `priceStep`.
 - Further BUY levels are calculated as a fixed grid from the first level. For example, with a 1% step and a first level at 100, the grid levels are 100, 99, 98, 97, and so on.
 - While the market moves down or remains within the current grid's upward-repricing threshold, existing BUY orders remain at their original prices. The grid does not trail the market downward.
-- If the market rises by at least one `priceStep` from the grid's current reference price, rebuild the grid by shifting its reference upward by the full number of crossed `priceStep` levels. For example, a grid referenced at 100 with a 1% step that is repriced after the market reaches 103 is rebuilt around 103.
-- Every lower BUY level is calculated directly from the grid's first/reference BUY price, not compounded from the previous level. For example, a 1% grid referenced at 100 has levels 100, 99, 98, 97, and so on.
+- If the market rises by at least one `priceStep` from the grid's current reference price, rebuild the grid by shifting its reference upward by the full number of crossed compounded `priceStep` levels. Each upward level is calculated from the previous level. For example, with a 1% step and a reference of 100, the upward levels are 101, 102.01, and 103.0301. At a market price of 103, two complete steps have been crossed, so the new reference advances to 102.01; the third step has not been reached.
+- The lower BUY levels within a grid remain calculated directly from that grid's first/reference BUY price, not compounded from the previous lower level. For example, a 1% BUY grid referenced at 100 has levels 100, 99, 98, 97, and so on. This fixed downward grid calculation is separate from the compounded upward steps used to decide when to reprice the grid.
 - A grid rebuild preserves the configured grid depth only if the investment limit allows it; otherwise, determine the maximum number of levels the limit would permit. The agreed behavior is to place **no replacement grid** unless the entire configured grid fits.
 - There is exactly **one BUY grid per market**. It may contain a mixture of partially filled and unfilled BUY orders. Repricing replaces that grid; it never creates a second, overlapping grid.
 - Before replacing the current grid, check whether the complete replacement grid fits within the investment limit. If it does not fit, leave the current grid unchanged. If it fits, cancel/replace the current grid as one logical grid-replacement operation, accounting for fills that arrive during cancellation.
@@ -52,7 +52,7 @@ The exchange's post-only and price/quantity constraints still apply. The Trading
 - New BUY orders and rebuilt grids are bounded by the configured maximum total invested quote amount.
 - A configured maximum price-drop limit is also a risk boundary. Reaching either the investment limit or the price-drop limit triggers the Conservative fallback described below.
 
-The maximum price drop is measured from the average price of actually filled BUY orders. BUY prices are rounded down to the nearest valid exchange tick; SELL prices are rounded up. The grid reference moves upward by the full number of crossed steps; lower levels are calculated from that reference. The exact maximum price-drop calculation beyond this baseline, and the detailed interaction between percentage steps and exchange filters, remain to be specified.
+The maximum price drop is measured from the average price of actually filled BUY orders. BUY prices are rounded down to the nearest valid exchange tick; SELL prices are rounded up. Upward repricing steps compound from one level to the next: each next level is the previous level multiplied by `1 + priceStep`. The grid reference advances only by the number of complete compounded levels crossed. Lower BUY levels inside each grid remain fixed percentages from the grid reference. The exact maximum price-drop calculation beyond its agreed average-filled-BUY baseline, and the detailed interaction with exchange filters, remain to be specified.
 
 #### 3. BUY fills and SELL orders
 
@@ -165,8 +165,7 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 The following questions remain open and must be answered before implementation where they affect behavior:
 
-1. What exact percentage-step calculation and market-price observation should be used when determining crossed grid levels? BUY tick rounding down and SELL tick rounding up are agreed.
-2. What is the exact maximum-price-drop calculation, using the average price of actually filled BUY orders as its baseline?
+1. **Maximum price drop (not decided):** We agreed that the reference is the average price of BUY orders that actually filled. We still need to decide exactly how the configured drop percentage is measured. For example, if the average BUY price is 100 USDT and the limit is 5%, should Conservative take control when the latest market price reaches 95 USDT, or should the calculation also account for the fees that would be paid to sell? Do not choose either rule without asking the user.
 3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
 4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
@@ -179,6 +178,18 @@ The following questions remain open and must be answered before implementation w
 Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
+## Guidance for continuing the strategy discussion
+
+The user is making product decisions, not taking a trading terminology test. Continue one unresolved decision at a time and use plain everyday English.
+
+- Do not ask a question using unexplained trading or technical terms. Explain the idea in ordinary words first.
+- Use a small numerical example with round numbers. Show what would happen under each option, not just the technical difference.
+- Offer A/B options only when the alternatives are genuinely distinct and can be explained simply. Keep each option short.
+- Ask only one question per turn. Do not bundle several decisions together.
+- If the user says they do not understand, do not repeat the same question with slightly different wording. Explain the situation from the beginning, or ask what outcome they want.
+- Never interpret confusion or silence as a decision. Record a rule only after the user clearly chooses it.
+- After a decision, explain it back in plain English, update this document and the roadmap, then move to the next unresolved decision.
+
 ## Current implementation status
 
-The current `develop` code still composes the Aggressive placeholder, which returns NO_ACTION. The next implementation work replaces that first-release composition with Conservative (Free-Roll), ported from `apps/bot-free-roll/README.md` v0.014. The Free-Roll policy must remain broker-independent and execute through Harvester's shared engine; the old app's broker/runtime code must not be copied. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending. Aggressive implementation is deferred until Conservative has completed a verified TESTNET cycle.
+The default composed policy is now Aggressive and receives the latest in-memory Portfolio snapshot. It currently returns NO_ACTION with blocker codes rather than emitting order intents: the agreed grid depth, exact percentage-step calculation, maximum-price-drop formula, and SELL price/fee/rounding formula are not yet fully specified. This is a safe policy integration, not an executable or live Aggressive strategy. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending.
