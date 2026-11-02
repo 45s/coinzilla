@@ -1,12 +1,14 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-function createBroker(handler) {
+function createBroker(handler, exchangeInfoHandler = () => ({ symbols: [] })) {
   const rpc = createFakeRpcClient({
     "userDataStream.subscribe.signature": handler,
     "userDataStream.unsubscribe": () => ({}),
+    exchangeInfo: exchangeInfoHandler,
   })
   rpc.state = "open"
   const broker = new BinanceSdkBroker({
@@ -138,6 +140,175 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
 
     assert.equal(received.length, 2)
+    await result.data.disconnect()
+  })
+
+  it("forwards canonical order states and canonical fills for TRADE reports", async () => {
+    const { broker, rpc } = createBroker(
+      () => ({ subscriptionId: 26 }),
+      ({ symbol }) => ({
+        symbols: [{
+          symbol,
+          baseAsset: "BTC",
+          quoteAsset: "USDT",
+          orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+          filters: [
+            { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "0.01", maxPrice: "1000000" },
+            { filterType: "LOT_SIZE", stepSize: "0.00001", minQty: "0.00001", maxQty: "1000" },
+            { filterType: "MIN_NOTIONAL", minNotional: "5" },
+          ],
+        }],
+      }),
+    )
+    broker.connected = true
+    const received = []
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: (input) => received.push(input),
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: 26,
+      event: {
+        e: "executionReport",
+        s: "BTCUSDT",
+        i: 100,
+        I: 200,
+        x: "TRADE",
+        X: "FILLED",
+        c: "harvester-order-100",
+        S: "BUY",
+        o: "LIMIT_MAKER",
+        q: "1.000",
+        p: "100",
+        z: "1.000",
+        l: "1.000",
+        L: "100",
+        n: "0",
+        N: null,
+        T: 300,
+        O: 299,
+        t: 400,
+        E: 301,
+        Y: "100",
+      },
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(statuses[0].type, "executionPending")
+    assert.equal(received.length, 1)
+    assert.ok(received[0].event.executedOrder instanceof CanonicalOrder)
+    assert.ok(received[0].event.fill instanceof Fill)
+    assert.equal(received[0].event.executedOrder.status, "FILLED")
+    assert.equal(received[0].event.executedOrder.executedQuantity.amount, "1")
+    assert.equal(received[0].event.fill.id, "binance:BTCUSDT:400")
+    assert.equal(received[0].event.fill.commissionStatus, "COMPLETE")
+    assert.equal(received[0].event.fill.quoteQuantity.amount, "100")
+    await result.data.disconnect()
+  })
+
+  it("normalizes non-trade order reports without fabricating fills", async () => {
+    const { broker, rpc } = createBroker(
+      () => ({ subscriptionId: 27 }),
+      ({ symbol }) => ({
+        symbols: [{
+          symbol,
+          baseAsset: "BTC",
+          quoteAsset: "USDT",
+          orderTypes: ["LIMIT", "LIMIT_MAKER"],
+          filters: [
+            { filterType: "PRICE_FILTER", tickSize: "0.01" },
+            { filterType: "LOT_SIZE", stepSize: "0.00001" },
+          ],
+        }],
+      }),
+    )
+    broker.connected = true
+    const received = []
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: (input) => received.push(input),
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: 27,
+      event: {
+        e: "executionReport",
+        s: "BTCUSDT",
+        i: 101,
+        I: 201,
+        x: "NEW",
+        X: "NEW",
+        c: "harvester-order-101",
+        S: "BUY",
+        o: "LIMIT",
+        q: "1",
+        p: "100",
+        z: "0",
+        l: "0",
+        L: "0",
+        n: "0",
+        N: null,
+        T: 301,
+        O: 300,
+        E: 302,
+      },
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(statuses[0].type, "orderUpdatePending")
+    assert.equal(received.length, 1)
+    assert.ok(received[0].event.executedOrder instanceof CanonicalOrder)
+    assert.equal(received[0].event.executedOrder.status, "OPEN")
+    assert.equal(Object.hasOwn(received[0].event, "fill"), false)
+    await result.data.disconnect()
+  })
+
+  it("marks an execution normalization failure as a recovery gap", async () => {
+    const { broker, rpc } = createBroker(
+      () => ({ subscriptionId: 28 }),
+      () => ({ symbols: [] }),
+    )
+    broker.connected = true
+    const statuses = []
+    const result = await broker.subscribeForUserData({
+      onEvent: () => assert.fail("malformed execution must not be forwarded"),
+      onStatus: (status) => statuses.push(status),
+    })
+
+    rpc.emitEvent({
+      subscriptionId: 28,
+      event: {
+        e: "executionReport",
+        s: "BTCUSDT",
+        i: 102,
+        I: 202,
+        x: "TRADE",
+        X: "FILLED",
+        c: "harvester-order-102",
+        S: "BUY",
+        o: "LIMIT",
+        q: "1",
+        p: "100",
+        z: "1",
+        l: "1",
+        L: "100",
+        n: "0",
+        N: null,
+        T: 302,
+        O: 301,
+        t: 402,
+        E: 303,
+        Y: "100",
+      },
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(statuses[0].type, "executionPending")
+    assert.equal(statuses[1].type, "executionNormalizationFailed")
+    assert.equal(statuses[1].recoveryRequired, true)
     await result.data.disconnect()
   })
 
