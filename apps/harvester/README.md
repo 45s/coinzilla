@@ -209,3 +209,34 @@ with documentation deferred to a later follow-up commit.
 ## Current status
 
 Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, clean TESTNET startup checks, and graceful shutdown. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable recovery, reservations, comprehensive reconciliation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+
+
+## Standalone Binance TESTNET order tools
+
+Harvester includes two operator-run scripts under `scripts/`. They are
+separate from `src/` and are not imported by or wired into the trading
+runtime. They use Node.js built-ins only and are fixed to the Binance Spot
+TESTNET API host.
+
+Prepare local TESTNET credentials in
+`apps/harvester/.env.development` (never commit this file), then run from
+the repository root:
+
+```sh
+# Read-only: list open orders across all symbols
+pnpm --filter @coinzilla/harvester testnet:orders
+
+# Destructive: cancel all open orders across all symbols after exact confirmation
+pnpm --filter @coinzilla/harvester testnet:cancel-orders
+```
+
+**Before cancellation:** stop Harvester and every other process that may
+submit/manage orders. The cancellation command displays the initial order
+list, requires typing `CANCEL ALL TESTNET ORDERS`, cancels per symbol, and
+queries the account again to verify the result. It targets orders from all
+applications and must not be used if any open order should be preserved.
+It does not clear existing asset balances or bypass Harvester's clean-account
+checks.
+
+See [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for
+permissions, exact behavior, safety warnings, and troubleshooting.
