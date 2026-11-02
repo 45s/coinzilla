@@ -160,7 +160,7 @@ Both initial strategy modes use the same Trading Engine and Portfolio:
 - **Conservative (Free-Roll):** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
 - **Aggressive:** may maintain multiple active BUY and multiple active SELL orders. Its exact order planning, inventory allocation, and risk rules remain undecided.
 
-Do not assume Aggressive is a particular grid algorithm, that each BUY fill automatically creates a SELL, or that both strategies can safely own the same pair simultaneously. Those are unresolved product/domain decisions.
+Aggressive's detailed order rules are documented in [Trading Strategies](./trading-strategies.md). A confirmed domain decision allows Conservative and Aggressive to operate on the same pair simultaneously using one shared pair-level Position and inventory pool. They must coordinate through the shared Portfolio accounting and order reservations; they must not maintain separate competing copies of the same holdings. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved.
 
 ## Non-negotiable boundaries
 
@@ -239,7 +239,7 @@ const makePlaceOrder = ({ broker, validateOrderRequest }) => {
 
 The example deliberately shows dependency injection and orchestration only. Do not add a new `validateOrderRequest`, `broker.placeOrder`, or result shape if equivalent contracts already exist. Preserve actionable errors and follow the app's established error/result semantics; never catch an error only to disguise it as success.
 
-The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements.
+The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements.
 
 ### Example: applying an actual fill to Portfolio
 
@@ -249,7 +249,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 2. The `updatePortfolio({ portfolio, fill })` workflow receives that normalized fill; it does not parse a raw Binance event.
 3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
 4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
-5. Duplicate fills, partial fills, invalid quantities, and commissions in third assets must follow explicit domain/application rules—not be silently discarded.
+5. Duplicate fills, partial fills, invalid quantities, and unsupported third-asset commissions must follow explicit domain/application rules—not be silently discarded. Third-asset commission fills are currently rejected.
 
 **Critical accounting rule:** order submission, acknowledgement, cancellation, rejection, and market-price updates do not change holdings. Only actual normalized fills change Portfolio state, including partial fills and actual commissions. See [Portfolio Domain](./domain/portfolio.md).
 
