@@ -102,3 +102,16 @@ export const cancelOpenOrdersForSymbol = async ({ symbol }) => {
 
   return { result: data }
 }
+
+export const getAccountBalances = async () => {
+  const { data } = await binanceTestnetRequest({
+    method: "GET",
+    path: "/api/v3/account",
+  })
+
+  if (!data || typeof data !== "object" || !Array.isArray(data.balances)) {
+    throw new Error("Binance TESTNET returned an invalid account response")
+  }
+
+  return { balances: data.balances }
+}

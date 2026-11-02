@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "dev": "node --env-file=.env.development src/index.js",
     "testnet:orders": "node --env-file=.env.development scripts/list-testnet-open-orders.js",
-    "testnet:cancel-orders": "node --env-file=.env.development scripts/cancel-testnet-open-orders.js"
+    "testnet:cancel-orders": "node --env-file=.env.development scripts/cancel-testnet-open-orders.js",
+    "testnet:balances": "node --env-file=.env.development scripts/list-testnet-balances.js"
   },
   "engines": {
     "node": ">=24"

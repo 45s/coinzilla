@@ -57,3 +57,29 @@ The command does not sell, transfer, or otherwise change asset balances. Canceli
 ## Implementation boundary
 
 All files for these tools live under `apps/harvester/scripts/`; none are imported by `src/` or composed into the trading runtime. The shared request helper fixes the API host to Spot TESTNET and signs requests locally. Unit tests cover deterministic request signing; the default test suite does not make network calls or require credentials.
+
+
+## List non-zero account balances (read-only)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:balances
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/account`,
+then displays every asset whose free or locked amount is non-zero. It prints
+the exact decimal strings returned by Binance (without rounding), including
+the asset symbol, free amount, and locked amount. Assets with both amounts
+equal to zero are omitted.
+
+This is a read-only account inspection. It does not place or cancel orders,
+transfer funds, or otherwise change balances. It is useful for diagnosing
+Harvester's clean-account gate: canceling open orders can release locked funds,
+but it does not remove existing free base-asset inventory. Do not sell or
+transfer an asset merely to satisfy the gate until you have independently
+identified and understood that inventory.
+
+The script is under `scripts/`, outside the trading runtime. Its filtering
+logic is a plain pure function with deterministic offline tests. The API call
+reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
