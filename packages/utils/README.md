@@ -4,6 +4,9 @@ Domain-neutral helpers shared across the Coinzilla workspace. The package uses n
 
 ## Public API
 
+**Search here before writing a generic helper.** The repository-wide rules and current duplication audit are documented in [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). Consumers should import supported APIs from this package entry point, not private source paths.
+
+
 Import the supported API from the package entry point:
 
 - `Logger`, `defaultLogger`: console logger with `debug`, `info`, `warn`, `error`, `success`, and `system` methods. Structured payloads redact common credential field names; free-form strings must not contain secrets.
