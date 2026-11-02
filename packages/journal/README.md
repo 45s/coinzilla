@@ -49,7 +49,7 @@ for (const record of result.records) {
 }
 ```
 
-Sessions are ordered lexicographically by their timestamped filenames; records retain their line order within each session. Each record includes its source filename and 1-based line number.
+Sessions are ordered by timestamp and then numeric collision suffix (the unsuffixed file first); records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
 The reader rejects duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current versioned envelope. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 

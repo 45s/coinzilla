@@ -57,9 +57,13 @@ export async function readJournalRecords({
       }
     }
 
-    sessionEntries.sort((left, right) =>
-      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
-    )
+    sessionEntries.sort((left, right) => {
+      const leftMatch = left.name.match(/^(.*?)(?:-(\\d+))?\\.jsonl$/)
+      const rightMatch = right.name.match(/^(.*?)(?:-(\\d+))?\\.jsonl$/)
+      const timestampOrder = leftMatch[1].localeCompare(rightMatch[1])
+      if (timestampOrder !== 0) return timestampOrder
+      return Number(leftMatch[2] ?? 0) - Number(rightMatch[2] ?? 0)
+    })
 
     const records = []
     const recordIds = new Set()
