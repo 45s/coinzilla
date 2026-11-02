@@ -50,7 +50,7 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | --- | --- | --- |
 | Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
 | Harvester application | `apps/harvester/**` | `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md` |
-| Market Simulator application | `apps/market-simulator/**` | `apps/market-simulator/AGENTS.md`, `apps/market-simulator/ROADMAP.md` |
+| Market Simulator package | `packages/market-simulator/**` | `packages/market-simulator/AGENTS.md`, `packages/market-simulator/ROADMAP.md` |
 | Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
 | Brokers | `packages/brokers/**` | `packages/brokers/AGENTS.md`, `packages/brokers/ROADMAP.md` |
 | Utilities | `packages/utils/**` | `packages/utils/AGENTS.md`, `packages/utils/ROADMAP.md` |
