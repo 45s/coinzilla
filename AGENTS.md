@@ -84,3 +84,14 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
 - Never delete `main`, `develop`, a release branch, or any branch with an open PR or active work depending on it.
 - If GitHub's automatic head-branch deletion is enabled, verify that GitHub deleted the branch. If it is disabled or deletion fails, the responsible agent must delete the merged source branch manually and verify the branch is gone.
 - Branch cleanup is part of completing the task PR, not optional housekeeping. Report any branch that could not safely be deleted and why.
+
+
+## JavaScript and JSDoc policy
+
+Coinzilla is JavaScript-first. Follow [the JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for source-language, annotation, editor-support, and TypeScript-interop decisions.
+
+- Do not introduce TypeScript source, TypeScript configuration, generated declaration files, or a TypeScript migration as an incidental cleanup.
+- Use JSDoc where it communicates a public contract, non-obvious input/output shape, callback contract, or important constraint. Do not add comments that merely restate obvious code.
+- JSDoc is documentation and editor assistance; it does not replace runtime validation or tests.
+- Do not enable project-wide `checkJs` or add a documentation-generation dependency without a concrete, reviewed need.
+- When a TypeScript consumer needs declarations, treat that as an explicit interoperability requirement and document its scope rather than changing the JavaScript-only default.
