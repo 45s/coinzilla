@@ -1,0 +1,59 @@
+# Binance Spot TESTNET order scripts
+
+These standalone package scripts let an operator inspect or clear open orders in a Binance Spot TESTNET account without adding diagnostics or cancellation behavior to Harvester's trading runtime.
+
+They use Node.js built-in `fetch` and `node:crypto`; no dependency is added. The API host is hard-coded to `https://testnet.binance.vision`. The scripts cannot be pointed at Binance production through environment configuration.
+
+## Prerequisites
+
+1. Stop Harvester and any other process that may submit or manage orders before running the cancellation command.
+2. Copy `apps/harvester/.env.example` to `apps/harvester/.env.development` if you have not already done so.
+3. Put your Binance Spot TESTNET API key and secret in that local file:
+   - `BINANCE_API_KEY`
+   - `BINANCE_API_SECRET_KEY`
+4. The API key must have permission to read account/open-order information. The cancellation command also requires trading permission.
+5. Keep `.env.development` local and never commit or share its credentials.
+
+The scripts use signed requests with a 5-second receive window and a 15-second request timeout. API keys are sent in the `X-MBX-APIKEY` header. Secrets and signatures are not printed.
+
+## List all open orders (read-only)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:orders
+```
+
+The command calls `GET /api/v3/openOrders` without a symbol, so it lists open orders across all symbols. It prints the symbol, order ID, side, type, price, original quantity, executed quantity, status, and client order ID. It does not change the account.
+
+## Cancel all open orders (destructive)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:cancel-orders
+```
+
+The command:
+
+1. Fetches and displays the current open orders across all symbols.
+2. Stops without making changes if there are no open orders.
+3. Requires the exact phrase `CANCEL ALL TESTNET ORDERS`.
+4. Calls `DELETE /api/v3/openOrders` once for each symbol found in the initial snapshot.
+5. Fetches open orders again and reports whether any remain.
+
+**This is account-wide in effect:** every open order on every symbol found in the snapshot is targeted, including orders placed manually or by another application. Review the displayed list and stop all trading processes first. Do not run this command if any order must be preserved. It does not cancel orders created after the initial snapshot, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
+
+The command does not sell, transfer, or otherwise change asset balances. Canceling an order may release its locked balance, but existing free base-asset inventory remains and can still prevent Harvester's clean-account startup check from passing.
+
+## Troubleshooting
+
+- **Missing credentials:** confirm both variables exist in `apps/harvester/.env.development`; do not paste secrets into chat or logs.
+- **API-key permission error:** verify the TESTNET key has the required read permission for listing and trading permission for cancellation.
+- **Timestamp/receive-window error:** check the computer's system clock and retry.
+- **Remaining orders:** inspect the final table. Do not assume a cancellation succeeded merely because one symbol's request returned successfully.
+- **Harvester still refuses startup:** these scripts only inspect/cancel open orders. They do not clear pre-existing base-asset inventory or disable Harvester's safety checks.
+
+## Implementation boundary
+
+All files for these tools live under `apps/harvester/scripts/`; none are imported by `src/` or composed into the trading runtime. The shared request helper fixes the API host to Spot TESTNET and signs requests locally. Unit tests cover deterministic request signing; the default test suite does not make network calls or require credentials.
