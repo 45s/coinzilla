@@ -307,10 +307,16 @@ export async function startHarvester({
           userDataRequiresReconciliation = true
           userDataReady = false
         } else if (status.type === "reconciled") {
+          // Stream recovery acknowledgement does not repair a fill that failed
+          // local accounting. Keep the order gate closed until a separate,
+          // authoritative reconciliation can prove the missing state is safe.
           userDataRequiresReconciliation = false
-          userDataAccountingFailed = false
-          userDataReady = pendingExecutionEvents === 0
-          userDataStatus = userDataReady ? "READY" : "EXECUTION_ACCOUNTING_PENDING"
+          userDataReady = pendingExecutionEvents === 0 && !userDataAccountingFailed
+          userDataStatus = userDataReady
+            ? "READY"
+            : userDataAccountingFailed
+              ? "EXECUTION_ACCOUNTING_FAILED"
+              : "EXECUTION_ACCOUNTING_PENDING"
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
