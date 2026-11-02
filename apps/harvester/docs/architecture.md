@@ -332,3 +332,19 @@ accounting but does not advance the strategy; the engine waits for the order's
 terminal state. Unknown/manual order events pause the pair and never alter
 strategy inventory. A fully filled order triggers immediate strategy
 reevaluation from the latest known price.
+
+## Conservative recovery SELL replacement
+
+When a BUY order becomes fully filled while a recovery SELL is still active,
+the engine cancels the old SELL before planning a replacement. It requires a
+canonical terminal cancellation acknowledgement, then queries the broker's
+canonical fills for that exact order. Every returned fill is identity-checked
+and applied through the idempotent Portfolio/RecoveryLedger accounting use
+case. The sum of reconciled fill quantities must equal the canceled order's
+cumulative executed quantity before the strategy is allowed to continue.
+
+If cancellation is unconfirmed, fill history is unavailable or incomplete,
+the order actually filled during cancellation, or any fill does not match the
+registered order, the pair pauses. No replacement SELL is submitted from
+unreconciled quantities. This covers the ordinary cancel/replace path without
+claiming durable restart or stream-recovery reconciliation.

@@ -89,7 +89,36 @@ export function createBinanceBrokerAdapter({
       if (typeof client.createCanonicalOrder === "function") return client.createCanonicalOrder(order)
       return client.createOrder(order)
     },
-    cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
+    cancelOrder: async ({ order, symbol, orderId } = {}) => {
+      const targetSymbol = order?.market?.symbol ?? symbol
+      const targetOrderId = order?.brokerOrderId ?? orderId
+      const cancelResult = await client.cancelOrder({
+        symbol: targetSymbol,
+        orderId: targetOrderId,
+      })
+      if (!order) return cancelResult
+      if (!cancelResult?.ok) return cancelResult
+      if (typeof client.getCanonicalOrderHistory !== "function") {
+        return toResult({ error: new Error("Canonical order history is required to confirm a cancellation") })
+      }
+      const historyResult = await client.getCanonicalOrderHistory({
+        symbol: targetSymbol,
+        orderId: targetOrderId,
+      })
+      if (!historyResult?.ok || !Array.isArray(historyResult.data)) {
+        return toResult({
+          errors: historyResult?.errors ?? [new Error("Unable to verify canceled order status")],
+        })
+      }
+      const canonicalOrder = historyResult.data.find((item) =>
+        item.clientOrderId === order.clientOrderId &&
+        item.brokerOrderId === order.brokerOrderId
+      )
+      if (!canonicalOrder) {
+        return toResult({ error: new Error("Canceled order was not found in canonical order history") })
+      }
+      return toResult({ data: canonicalOrder })
+    },
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: (input) => client.getFills(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),

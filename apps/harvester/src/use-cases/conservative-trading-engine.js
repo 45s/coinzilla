@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { compareDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -8,11 +8,11 @@ import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
-  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause,
+  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping,
 } = {}) {
   for (const [name, callback] of Object.entries({
     getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
-    completeRecoveryCycle, canTrade, onPause,
+    completeRecoveryCycle, canTrade, onPause, isStopping,
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
@@ -40,6 +40,66 @@ export function makeConservativeTradingEngine({
       await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: error ?? errors?.[0] })
     },
   })
+
+  const cancelAndReconcileRecoverySells = async ({ symbol, marketId } = {}) => {
+    const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
+    for (const order of activeSells) {
+      if (order.status === "UNKNOWN") {
+        await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
+        return toResult({ error: new Error("Cannot safely cancel a recovery SELL with unknown status") })
+      }
+      const cancelResult = await broker.cancelOrder({ order })
+      if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
+        const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
+        await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED", error: errors[0] })
+        return toResult({ errors })
+      }
+      const canceledOrder = cancelResult.data
+      const update = state.registry.applyUpdate({ order: canceledOrder })
+      if (update.unknown) {
+        await pause({ symbol, reason: "CANCELED_ORDER_NOT_REGISTERED" })
+        return toResult({ error: new Error("Canceled recovery SELL is not registered by Harvester") })
+      }
+      state.registry = update.registry
+
+      const fillsResult = await broker.getFills({
+        symbol,
+        orderId: order.brokerOrderId,
+      })
+      if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+        const errors = fillsResult?.errors ?? [new Error("Unable to reconcile recovery SELL fills after cancellation")]
+        await pause({ symbol, reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED", error: errors[0] })
+        return toResult({ errors })
+      }
+      let reconciledQuantity = "0"
+      const seenFillIds = new Set()
+      for (const fill of fillsResult.data) {
+        if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+            fill.side !== "SELL" || fill.brokerOrderId !== order.brokerOrderId) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILL_IDENTITY_MISMATCH" })
+          return toResult({ error: new Error("Recovered SELL fill does not match the canceled order") })
+        }
+        const accounting = await updateTradingAccounting({ fill })
+        if (!accounting?.ok) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILL_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
+          return toResult({ errors: accounting?.errors ?? [new Error("Recovered SELL fill accounting failed")] })
+        }
+        if (!seenFillIds.has(fill.id)) {
+          reconciledQuantity = addDecimal({ left: reconciledQuantity, right: fill.quantity.amount })
+          seenFillIds.add(fill.id)
+        }
+      }
+      if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
+        await pause({ symbol, reason: "RECOVERY_SELL_EXECUTED_QUANTITY_MISMATCH" })
+        return toResult({ error: new Error("Canceled SELL cumulative execution does not match reconciled fills") })
+      }
+      if (canceledOrder.status !== "CANCELED") {
+        await pause({ symbol, reason: "RECOVERY_SELL_FILLED_DURING_CANCEL" })
+        return toResult({ error: new Error("Recovery SELL completed while cancellation was being processed; pair paused for reconciliation") })
+      }
+    }
+    return toResult({ data: { canceled: activeSells.length } })
+  }
 
   const evaluateLatest = async ({ symbol } = {}) => {
     if (state.paused.has(symbol) || !canTrade({ symbol })) {
@@ -141,6 +201,12 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
+        if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
+        const cancellation = await cancelAndReconcileRecoverySells({
+          symbol,
+          marketId: order.market.id,
+        })
+        if (!cancellation.ok) return cancellation
         state.lastBuyPrices.set(symbol, order.limitPrice.amount)
       }
       if (order.status === "FILLED" && order.side === "SELL") {
