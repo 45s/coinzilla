@@ -137,6 +137,11 @@ This rule is mandatory for every contributor and AI agent. Before implementing a
 - Never log secrets, credentials, access tokens, or sensitive payloads.
 - Treat external API responses and user input as untrusted.
 - Keep production and test credentials separate; tests that place orders must use TESTNET only.
+- For exchange-backed workflows, distinguish order acknowledgements, order status updates, and actual executions. Only confirmed execution/fill facts update financial accounting.
+- Apply executions idempotently using stable execution identities; duplicate delivery must never double-count a fill or fee.
+- Treat timeouts, disconnects, and ambiguous mutation results as unknown outcomes, not proof that an order was rejected or cancelled. Reconcile external state before retrying or resuming.
+- Treat missing, stale, incomplete, or inconsistent financial facts as unknown and fail closed rather than coercing them to zero or assuming a safe default.
+- Keep strategy-owned, reserved, free, and externally held inventory/capital distinct; an exchange balance alone does not prove that all funds are available to a strategy.
 
 ### 9. Dependencies and maintainability
 

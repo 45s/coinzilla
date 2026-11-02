@@ -5,11 +5,11 @@
 - **Status:** Accepted
 - **Date:** 2026-11-01
 - **Owners:** Coinzilla architecture (cross-cutting)
-- **Related:** [Architecture blueprint](../COINZILLA_ARCHITECTURE.md), [Free-Roll roadmap](../../../apps/bot-free-roll/ROADMAP.md), [Engineering standards](../../../ENGINEERING_STANDARDS.md)
+- **Related:** [Engineering standards](../../../ENGINEERING_STANDARDS.md)
 
 ## Context
 
-Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. The existing Free-Roll application is retained as V1; the successor-app boundary is defined by ADR-0002.
+Coinzilla is a JavaScript pnpm monorepo with shared packages and applications. Coinzilla's trading applications must remain independent of any specific exchange while coordinating market data, orders, executions, commissions, accounting, inventory, recovery, and process lifecycle. The repository contains multiple independently owned applications and shared packages. Each application owns its strategy and workflows; shared contracts remain in their owning packages.
 
 The repository already has useful canonical entities, broker adapters, event and journal packages, and Free-Roll collaborators. It also has an explicit engineering roadmap that requires exact financial arithmetic, canonical fill-level accounting, broker capability contracts, safe reconciliation, deterministic tests, and incremental PRs.
 
@@ -26,7 +26,6 @@ The decision establishes these rules:
 3. Application workflows depend on stable capability contracts (ports), not concrete exchange adapter classes.
 4. Concrete adapters translate external protocols and payloads into canonical contracts.
 5. The runtime composition root selects and injects concrete adapters and owns process lifecycle and resource cleanup.
-6. For the successor application, these boundaries are implemented independently in apps/bot-coin-farmer; V1 is not an implementation dependency.
 6. Side effects such as network, filesystem, time, messaging, and persistence are explicit boundaries.
 7. Unknown, unsupported, stale, incomplete, or unreconciled facts must not be treated as safe defaults for financial or order decisions.
 8. Migrate incrementally; do not rewrite stable modules or introduce frameworks/packages without demonstrated need.
@@ -80,7 +79,7 @@ Rejected. Existing queueing, event handling, reconciliation helpers, entities, a
 
 ## Implementation guidance
 
-- Treat the [architecture blueprint](../COINZILLA_ARCHITECTURE.md) as the structural reference.
+- Treat this ADR and the repository engineering standards as the structural reference.
 - Treat the Free-Roll strategy README as authoritative for trading behavior and the Free-Roll roadmap as authoritative for sequencing and acceptance criteria.
 - Do not use this ADR to change trading policy, approve unresolved accounting decisions, or declare existing code production-ready.
 - Add a new ADR for a material change to this decision; do not silently overwrite the historical rationale.
