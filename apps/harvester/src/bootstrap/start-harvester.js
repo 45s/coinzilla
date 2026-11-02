@@ -237,6 +237,10 @@ export async function startHarvester({
       },
       onStatus: (status = {}) => {
         userDataStatus = status.type ?? "UNKNOWN"
+        if (status.executionPending === true) {
+          userDataReady = false
+          userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+        }
         if (status.recoveryRequired === true || status.reconciliationRequired === true) {
           userDataRequiresReconciliation = true
           userDataReady = false
@@ -250,6 +254,7 @@ export async function startHarvester({
           onUserDataStatus({ status, ready: userDataReady })
         } catch (error) {
           userDataReady = false
+          userDataAccountingFailed = true
           userDataStatus = "STATUS_HANDLER_FAILED"
           logger.error?.({ message: "Harvester user-data status handler failed", error })
         }
