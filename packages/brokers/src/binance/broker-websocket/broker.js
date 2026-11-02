@@ -1,5 +1,5 @@
 import { Asset, Market } from "@coinzilla/entities"
-import { handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
@@ -28,6 +28,31 @@ function createMarketClient(config, logger) {
     maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
     onError: (error) => logger.error?.("Binance market stream error", error),
   })
+}
+
+function validatePositiveDecimalFilter({ value, name, symbol }) {
+  try {
+    assertDecimalString({ value, field: name })
+  } catch (error) {
+    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
+  }
+  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+    throw new Error(`Binance ${name} missing or non-positive for ${symbol}`)
+  }
+  return value
+}
+
+function readOptionalDecimalFilter({ value, name, symbol }) {
+  if (value === undefined || value === null) return undefined
+  try {
+    assertDecimalString({ value, field: name })
+  } catch (error) {
+    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
+  }
+  if (compareDecimal({ left: value, right: "0" }) < 0) {
+    throw new RangeError(`Binance ${name} must be non-negative for ${symbol}`)
+  }
+  return value
 }
 
 function validateCallback(callback, name) {
@@ -402,20 +427,58 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
       const response = await this.tradingConnection.request("exchangeInfo", { symbol })
       const symbolInfo = response.data?.symbols?.find((item) => item.symbol === symbol)
-      const priceFilter = symbolInfo?.filters?.find((filter) => filter.filterType === "PRICE_FILTER")
-      const lotSizeFilter = symbolInfo?.filters?.find((filter) => filter.filterType === "LOT_SIZE")
-      const tickSize = priceFilter?.tickSize
-      const stepSize = lotSizeFilter?.stepSize
+      const filters = Array.isArray(symbolInfo?.filters) ? symbolInfo.filters : []
+      const priceFilter = filters.find((filter) => filter.filterType === "PRICE_FILTER")
+      const lotSizeFilter = filters.find((filter) => filter.filterType === "LOT_SIZE")
+      const notionalFilter = filters.find((filter) => filter.filterType === "NOTIONAL") ??
+        filters.find((filter) => filter.filterType === "MIN_NOTIONAL")
 
-      if (typeof tickSize !== "string" || !Number.isFinite(Number(tickSize)) || Number(tickSize) <= 0) {
-        throw new Error(`Binance PRICE_FILTER tickSize missing for ${symbol}`)
-      }
-      if (typeof stepSize !== "string" || !Number.isFinite(Number(stepSize)) || Number(stepSize) <= 0) {
-        throw new Error(`Binance LOT_SIZE stepSize missing for ${symbol}`)
-      }
+      const tickSize = validatePositiveDecimalFilter({
+        value: priceFilter?.tickSize,
+        name: "PRICE_FILTER.tickSize",
+        symbol,
+      })
+      const stepSize = validatePositiveDecimalFilter({
+        value: lotSizeFilter?.stepSize,
+        name: "LOT_SIZE.stepSize",
+        symbol,
+      })
       if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
           !Array.isArray(symbolInfo.orderTypes) || symbolInfo.orderTypes.length === 0) {
         throw new Error(`Binance market metadata is incomplete for ${symbol}`)
+      }
+
+      const optionalFilters = {
+        minPrice: readOptionalDecimalFilter({
+          value: priceFilter?.minPrice,
+          name: "PRICE_FILTER.minPrice",
+          symbol,
+        }),
+        maxPrice: readOptionalDecimalFilter({
+          value: priceFilter?.maxPrice,
+          name: "PRICE_FILTER.maxPrice",
+          symbol,
+        }),
+        minQuantity: readOptionalDecimalFilter({
+          value: lotSizeFilter?.minQty,
+          name: "LOT_SIZE.minQty",
+          symbol,
+        }),
+        maxQuantity: readOptionalDecimalFilter({
+          value: lotSizeFilter?.maxQty,
+          name: "LOT_SIZE.maxQty",
+          symbol,
+        }),
+        minNotional: readOptionalDecimalFilter({
+          value: notionalFilter?.minNotional,
+          name: "NOTIONAL.minNotional",
+          symbol,
+        }),
+        maxNotional: readOptionalDecimalFilter({
+          value: notionalFilter?.maxNotional,
+          name: "NOTIONAL.maxNotional",
+          symbol,
+        }),
       }
 
       return toResult({
@@ -425,6 +488,9 @@ export class BinanceWebSocketBroker extends CoreBroker {
           quoteAsset: symbolInfo.quoteAsset,
           tickSize,
           stepSize,
+          ...Object.fromEntries(
+            Object.entries(optionalFilters).filter(([, value]) => value !== undefined),
+          ),
           supportedOrderTypes: symbolInfo.orderTypes,
         },
       })
