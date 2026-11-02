@@ -58,6 +58,30 @@ function readOptionalDecimalFilter({ value, name, symbol }) {
   return value
 }
 
+async function getCanonicalMarket({ broker, symbol }) {
+  if (broker.canonicalMarkets.has(symbol)) return broker.canonicalMarkets.get(symbol)
+  const pending = broker.canonicalMarketRequests.get(symbol)
+  if (pending) return pending
+
+  const request = Promise.resolve().then(async () => {
+    const result = await broker.getSymbolFilters({ symbol })
+    if (!result?.ok || !result.data) {
+      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
+      )
+    }
+    const market = broker.canonicalMarkets.get(symbol) ??
+      createCanonicalMarket({ symbolInfo: result.data })
+    broker.canonicalMarkets.set(symbol, market)
+    return market
+  }).finally(() => {
+    broker.canonicalMarketRequests.delete(symbol)
+  })
+  broker.canonicalMarketRequests.set(symbol, request)
+  return request
+}
+
 function validateCallback(callback, name) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
@@ -80,6 +104,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
     this.marketConnection = marketClientFactory(this.config, this.logger)
     this.connected = false
     this.userDataUnavailable = false
+    this.canonicalMarkets = new Map()
+    this.canonicalMarketRequests = new Map()
     this.userDataSession = new BinanceUserDataSession({
       getClient: () => this.tradingConnection,
       createClient: () => this.apiClientFactory(this.config),
@@ -484,8 +510,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
         }),
       }
 
-      return toResult({
-        data: {
+      const data = {
           symbol,
           baseAsset: symbolInfo.baseAsset,
           quoteAsset: symbolInfo.quoteAsset,
@@ -495,8 +520,9 @@ export class BinanceWebSocketBroker extends CoreBroker {
             Object.entries(optionalFilters).filter(([, value]) => value !== undefined),
           ),
           supportedOrderTypes: symbolInfo.orderTypes,
-        },
-      })
+        }
+      this.canonicalMarkets.set(symbol, createCanonicalMarket({ symbolInfo: data }))
+      return toResult({ data })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getSymbolFilters()", error })
       return toResult({ errors: [error] })
@@ -527,7 +553,94 @@ export class BinanceWebSocketBroker extends CoreBroker {
   async subscribeForUserData({ onEvent, onStatus }) {
     try {
       if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
-      const result = await this.userDataSession.subscribe({ onEvent, onStatus })
+      validateCallback(onEvent, "onEvent")
+      if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
+
+      const forwardEvent = ({ event } = {}) => {
+        if (event?.eventType !== "executionReport") {
+          Promise.resolve()
+            .then(() => onEvent({ event }))
+            .catch((error) => {
+              onStatus?.({
+                type: "eventHandlerFailed",
+                recoveryRequired: true,
+                error,
+              })
+              this.logger.error?.("Binance user-data event handler failed", error)
+            })
+          return
+        }
+
+        const isTrade = event.executionType === "TRADE"
+        onStatus?.({
+          type: isTrade ? "executionPending" : "orderUpdatePending",
+          executionPending: isTrade,
+          orderUpdatePending: !isTrade,
+        })
+
+        Promise.resolve()
+          .then(async () => {
+            const symbol = event.executedOrder?.symbol ?? event.fill?.symbol
+            const market = await getCanonicalMarket({ broker: this, symbol })
+            const sourceOrder = event.executedOrder
+            const executedOrder = adaptCanonicalOrder({
+              market,
+              order: {
+                orderId: sourceOrder?.id,
+                clientOrderId: sourceOrder?.clientOrderId,
+                type: sourceOrder?.type,
+                side: sourceOrder?.side,
+                origQty: sourceOrder?.quantity,
+                executedQty: sourceOrder?.executedQuantity,
+                price: sourceOrder?.price,
+                status: sourceOrder?.status,
+                time: sourceOrder?.createdAt,
+                updateTime: sourceOrder?.updatedAt,
+              },
+            })
+
+            let fill
+            if (isTrade) {
+              const sourceFill = event.fill
+              fill = adaptCanonicalFill({
+                market,
+                trade: {
+                  id: sourceFill?.id,
+                  orderId: sourceFill?.orderId,
+                  isBuyer: sourceFill?.side === "BUY",
+                  commission: sourceFill?.commissionAmount,
+                  commissionAsset: sourceFill?.commissionAsset,
+                  isMaker: sourceFill?.isMaker,
+                  price: sourceFill?.price,
+                  qty: sourceFill?.quantity,
+                  quoteQty: sourceFill?.quoteQuantity,
+                  time: sourceFill?.time,
+                },
+              })
+            }
+
+            await onEvent({
+              event: {
+                ...event,
+                executedOrder,
+                ...(isTrade ? { fill } : {}),
+              },
+            })
+          })
+          .catch((error) => {
+            onStatus?.({
+              type: "executionNormalizationFailed",
+              recoveryRequired: true,
+              error,
+            })
+            this.logger.error?.("Unable to normalize Binance user-data execution", error)
+          })
+      }
+
+      const result = await this.userDataSession.subscribe({
+        onEvent: forwardEvent,
+        onStatus,
+      })
       return toResult(result)
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()", error })
