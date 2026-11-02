@@ -34,6 +34,12 @@ export function calculateFillCommissionRate({ market, fill } = {}) {
   assertDecimalString({ value: fill.quoteQuantity?.amount, field: "fill.quoteQuantity.amount" })
 
   if (
+    fill.price.asset?.id !== market.quoteAsset.id ||
+    fill.quoteQuantity.asset?.id !== market.quoteAsset.id
+  ) {
+    throw new TypeError("Fill price and quote quantity must use the market quote asset")
+  }
+  if (
     compareDecimal({ left: fill.price.amount, right: "0" }) <= 0 ||
     compareDecimal({ left: fill.quoteQuantity.amount, right: "0" }) <= 0
   ) {
