@@ -90,7 +90,10 @@ export function calculateRecoverySellPlan({
     }),
   })
 
-  if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
+  if (
+    compareDecimal({ left: quantity, right: "0" }) <= 0 ||
+    compareDecimal({ left: requiredNetProceeds, right: "0" }) <= 0
+  ) {
     return Object.freeze({
       quantity: "0",
       price: null,
