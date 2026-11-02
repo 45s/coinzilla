@@ -13,10 +13,11 @@ if (!started.ok) throw started.errors[0]
 eventBus.publish({ name: "order.filled", source: "broker", data: { orderId: "42" } })
 
 // A successful record() means the JSONL write completed, not that the OS
-// has confirmed the data on durable storage.
+// has confirmed the file contents on durable storage. The session directory
+// is single-writer; directory-entry fsync is not part of this acknowledgement.
 const flushed = await journal.flush()
 if (!flushed.ok) throw flushed.errors[0]
-// flushed.durable === true only after the queued writes and file sync succeed.
+// flushed.durable === true only after the queued writes and file-content sync succeed.
 
 const closed = await journal.close()
 if (!closed.ok) throw closed.errors[0]

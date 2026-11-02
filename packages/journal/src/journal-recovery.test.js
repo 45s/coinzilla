@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -272,5 +272,22 @@ test("requires stable event identity when appending records", async () => {
     await journal.close()
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("returns an explicit error when the journal directory cannot be read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-io-error-"))
+  const notDirectory = path.join(root, "not-a-directory")
+  const eventBus = new EventBus()
+  const journal = new Journal({ directory: notDirectory, eventBus })
+  try {
+    await writeFile(notDirectory, "not a directory")
+    const result = await journal.read()
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /ENOTDIR/)
+  } finally {
+    await eventBus.close()
+    await rm(root, { recursive: true, force: true })
   }
 })
