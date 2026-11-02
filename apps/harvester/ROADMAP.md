@@ -145,7 +145,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [x] Opt-in Binance adapter and Harvester-owned broker port.
 - [x] Broker connect/disconnect lifecycle and cleanup of partially-created price subscriptions.
 - [x] Enabled-pair aggregate-trade price subscriptions and incoming market-price validation.
-- [x] Existing default Aggressive policy composition and handoff of validated prices plus the latest in-memory Portfolio (to be replaced by Conservative for the first executable release).
+- [x] Default Aggressive policy composition and handoff of validated prices plus the latest in-memory Portfolio.
 - [x] Canonical Fill-driven in-memory Position/Portfolio transitions with base/quote commission accounting and process-lifetime duplicate-ID protection.
 - [x] Application use cases for place-order, process-market-price, and update-portfolio.
 - [x] Shared decimal helper reuse and shared default logger usage.
@@ -153,7 +153,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### Confirmed blockers / gaps found in the audit
 
-- [ ] **No executable Conservative strategy:** Free-Roll is specified in `apps/bot-free-roll/README.md` but has not been ported into Harvester; the current Aggressive policy returns `NO_ACTION`.
+- [ ] **No executable strategy:** `evaluateAggressiveStrategy` always returns `NO_ACTION`; no order intent is produced.
 - [ ] **No engine:** market-price processing returns a decision but does not pass it into safety validation, order planning, or order submission.
 - [ ] **Order use case is disconnected:** `placeOrder` is composed and exposed by runtime but is not invoked by the strategy/price workflow.
 - [ ] **No live user-data processing:** the broker port/adapter expose user-data subscription methods, but bootstrap does not subscribe to them or translate events into canonical order/fill events.
@@ -188,7 +188,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## Open product decisions
 
-- [ ] Complete only Free-Roll decisions that block the first executable cycle, using `apps/bot-free-roll/README.md` as source of truth. Aggressive decisions are deferred until P1.
+- [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
 - [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
 - [ ] Finalize durable storage and restart/reconciliation guarantees.
