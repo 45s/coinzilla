@@ -119,6 +119,17 @@ This section is a required design and code-review standard for all new code and 
 
 **Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, and safe error-message sanitization into focused modules such as `telegram-options.js`, `telegram-message.js`, and `safe-error-message.js` (or group closely related functions where that is more cohesive). Keep Telegram-specific constants near the feature or in a dedicated constants module. Do not put these unrelated pure operations into a generic catch-all `utils.js`.
 
+### 7.2 Shared utilities: search and reuse before implementation
+
+This rule is mandatory for every contributor and AI agent. Before implementing a helper or cross-cutting capability, search packages/utils/src/, its tests, and public exports first; then search the entire monorepo for equivalent behavior and consumers. Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) and follow its classification and migration rules.
+
+- Reuse an existing public @coinzilla/utils API when its contract fits. Do not import private files from another package.
+- If a genuinely generic capability is missing, extend packages/utils through the Utilities domain, with documented contracts, deterministic boundary/failure tests, and meaningful line/branch coverage.
+- Do not move business policy, domain invariants, or protocol-specific behavior into shared utilities. Pure does not automatically mean generic.
+- Do not create a duplicate generic helper because the existing API has a different name or because the agent did not search. Document intentional duplication and its domain boundary.
+- Use Logger or defaultLogger from @coinzilla/utils for application/package diagnostics. Direct console calls are limited to the logger implementation and intentional CLI stdout/stderr output; other exceptions require an explicit reason.
+- For exact financial arithmetic, do not use the legacy Number-based NH helpers. Use an exact decimal-string API; until a shared exact decimal API is approved and exported, keep the current domain implementation and track consolidation through the Utilities roadmap.
+
 ### 8. Security and external boundaries
 
 - Fail clearly and early when an invariant or required input is invalid.
