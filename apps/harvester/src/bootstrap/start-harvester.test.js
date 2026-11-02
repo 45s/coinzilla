@@ -334,6 +334,7 @@ test("accounts canonical execution events before allowing further order placemen
   assert.equal(result.userDataReady, true)
   assert.equal(result.userDataStatus, "READY")
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
+  assert.equal(result.getAccountSnapshot().sourceTime, 2)
   assert.equal(
     result.getRecoveryLedger({ marketId: handled.fill.market.id }).buyCost,
     "650",
@@ -545,4 +546,75 @@ test("fails startup when the configured post-only order type is unsupported", as
     /does not support required LIMIT_MAKER/,
   )
   assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+})
+
+test("blocks order placement when account balances cannot be refreshed after a fill", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let calls = 0
+  broker.getAccountSnapshot = async () => {
+    calls += 1
+    if (calls === 1) return getAccountSnapshot()
+    return { ok: false, errors: [new Error("account endpoint unavailable")] }
+  }
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: createFill({ tradeId: "account-refresh-failure" }),
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "ACCOUNT_SNAPSHOT_REFRESH_FAILED")
+  assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
+  assert.equal(result.getAccountSnapshot().sourceTime, 1)
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
+  await result.stop()
+})
+
+test("fails startup when the exchange snapshot omits an enabled market asset", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  broker.getAccountSnapshot = async () => {
+    calls.push("account:snapshot")
+    const asset = new Asset({ id: "asset:BTC", code: "BTC" })
+    return {
+      ok: true,
+      data: {
+        balances: [new Balance({
+          free: new Quantity({ amount: "1", asset }),
+          locked: new Quantity({ amount: "0", asset }),
+        })],
+        sourceTime: 1,
+      },
+    }
+  }
+
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      logger: { info() {}, error() {} },
+    }),
+    /missing required market asset balances: USDT/,
+  )
+  assert.deepEqual(calls, [
+    "connect",
+    "filters:BTCUSDT",
+    "subscribe:user-data",
+    "account:snapshot",
+    "unsubscribe:user-data",
+    "disconnect",
+  ])
 })
