@@ -6,7 +6,7 @@
 
 **First priority: implement Conservative (Free-Roll) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing `apps/bot-free-roll/README.md` is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
 
-The current `develop` implementation is a connected market-data prototype, not a trading bot. It loads config, can connect to Binance, subscribes to enabled-pair trade-price streams, validates prices, invokes the Aggressive policy, and maintains an in-memory Portfolio when canonical fills are supplied manually. The default Aggressive policy deliberately returns `NO_ACTION`; no order is generated or submitted from a market-price event. Live user-data/fill ingestion, order lifecycle management, exchange-rule validation, account/risk coordination, durable recovery, and an executable strategy are missing.
+The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
 ### Definition of "Harvester can trade"
 
@@ -28,6 +28,23 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 12. Shut down cleanly and do not report in-flight orders as completed. Durable restart recovery is a later hardening milestone.
 
 Live trading must remain explicitly disabled by default. TESTNET verification is required before any live-trading enablement.
+
+## Runtime entrypoint hardening — current task
+
+- [x] Remove public `runtime.placeOrder` and `runtime.broker` escape hatches.
+      The broker port remains private to bootstrap and the Conservative engine;
+      runtime consumers cannot submit orders outside the engine workflow.
+- [x] Report the actual startup mode: Conservative TESTNET trading enabled,
+      broker-connected read-only, or configuration-only/no broker.
+- [x] Add regression coverage for startup messages and the absence of public
+      broker/order-submission methods.
+- [x] Update the README and agent delivery rules in the same implementation
+      commit as the code and tests.
+- [ ] Run Harvester tests and repository CI on the PR head; do not treat source
+      inspection or a successful GitHub write as test verification.
+
+This hardening does not change strategy decisions or claim a successful real
+TESTNET cycle. The next proof remains a controlled Binance TESTNET run.
 
 ## Current branch implementation status
 
@@ -179,7 +196,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Add performance optimization only after profiling a correct end-to-end implementation.
 - [ ] Review dependency/security findings and shared package contracts as part of regular maintenance.
 
-## Audit: current implementation on `develop`
+## Historical audit snapshot (superseded by the current implementation status above)
 
 ### Implemented and verified by source inspection
 

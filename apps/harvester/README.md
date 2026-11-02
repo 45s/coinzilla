@@ -180,6 +180,27 @@ Each normalized broker price event is validated by the `process-market-price` ap
 
 Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is normalized into canonical order and Fill events. Harvester correlates order updates against its in-process registry and applies actual fills to Portfolio and RecoveryLedger. Reconnect recovery, durable restart state, reservation accounting, and complete TESTNET BUY → SELL → next-cycle proof remain unfinished.
 
+## Runtime boundary and startup reporting
+
+The runtime returned by `startHarvester` exposes read-only state and lifecycle
+operations (configuration, subscriptions, Portfolio/account snapshots,
+readiness status, and `stop`). It deliberately does **not** expose the broker
+port or a standalone `placeOrder` function. All order submission must flow
+through the Conservative trading engine so strategy decisions, market rules,
+balance checks, order ownership, and fill lifecycle cannot be bypassed by
+runtime callers.
+
+Startup logging reports the actual mode:
+- **Conservative TESTNET trading enabled:** the engine is composed and waits
+  for validated market prices and user-data readiness before acting.
+- **Broker read-only:** market data may be connected, but order execution is
+  disabled.
+- **No broker:** configuration is validated without exchange connectivity.
+
+Every Harvester implementation commit must include its corresponding
+documentation update in that same commit. Tests and code must not be committed
+with documentation deferred to a later follow-up commit.
+
 ## Current status
 
 Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, clean TESTNET startup checks, and graceful shutdown. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable recovery, reservations, comprehensive reconciliation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).

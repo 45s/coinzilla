@@ -29,6 +29,12 @@ Before planning or editing, read [Trading First](./docs/TRADING_FIRST.md). This 
 - Never claim a check passed unless it was actually run and passed. If a check cannot be run, state why and what remains unverified.
 - Do not weaken, delete, skip, or rewrite tests merely to make a change pass. Fix the underlying issue or explain the blocker.
 
+**Per-commit documentation rule:** every commit that changes Harvester
+implementation, configuration, tests, or runtime behavior MUST include the
+corresponding documentation update in that same commit. Do not commit code
+first and defer the documentation to a later commit. If behavior is unchanged,
+state that explicitly in the commit/PR summary.
+
 ## Changes and delivery
 - Keep changes scoped to the requested task. Do not overwrite user work or unrelated files.
 - Use clear, conventional commit messages consistent with repository history.

@@ -52,3 +52,36 @@ test("logs startup failures as one structured logger argument", async () => {
     process.exitCode = previousExitCode
   }
 })
+
+
+test("reports the actual Conservative TESTNET trading mode at startup", async () => {
+  const messages = []
+  await main({
+    start: async () => ({
+      connected: true,
+      tradingEnabled: true,
+      strategyMode: "conservative",
+      subscriptions: ["ZROUSDT"],
+    }),
+    logger: { info: (message) => messages.push(message), error() {} },
+  })
+  assert.deepEqual(messages, [
+    "Harvester connected and subscribed to 1 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
+  ])
+})
+
+test("reports broker-connected read-only mode without claiming trading is blocked by unresolved rules", async () => {
+  const messages = []
+  await main({
+    start: async () => ({
+      connected: true,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: ["ZROUSDT"],
+    }),
+    logger: { info: (message) => messages.push(message), error() {} },
+  })
+  assert.deepEqual(messages, [
+    "Harvester connected and subscribed to 1 enabled market(s) in read-only mode; order execution is disabled.",
+  ])
+})
