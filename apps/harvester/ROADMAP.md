@@ -81,17 +81,17 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and actual commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
 - [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
-- [ ] **Verify order ownership before accounting:** only executions correlated to an order submitted/tracked by Harvester may update its strategy Position/RecoveryLedger. Quarantine unknown, manual, or external executions for the clean-state/reconciliation path; never silently adopt them. Cover unknown client IDs, other-symbol orders, duplicates, and partial fills.
+- [~] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause the pair and are not accounted. Additional multi-symbol and duplicate/out-of-order event cases remain.
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
 - [~] Apply only incremental actual executions to shared Portfolio and Conservative RecoveryLedger in one immutable use-case transition; never apply requested order quantity or cumulative executed quantity twice.
 - [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
 - [ ] Ensure cancel/fill races, duplicate events, late events, and out-of-order events cannot double-count fills or release filled reservations.
-- [ ] Feed every successful fill/account/order transition back into the strategy context and trigger the next decision when appropriate.
+- [~] Feed successful fill/order transitions back into strategy evaluation. The engine triggers the next decision after a terminal full-fill update and deliberately waits after partial fills; live bootstrap callback composition remains.
 - [ ] Ensure the bot does not wait for a new market-price event when a fill/order-state transition itself requires an immediate strategy reaction.
 
 ### P0.5 — Trading Engine orchestration
 
-- [ ] Implement the shared Trading Engine workflow that connects market events, user-data events, current Portfolio/Position, active orders, balances, filters, readiness, strategy decisions, safety checks, order execution, and fill accounting.
+- [~] Implement the first in-process Conservative trading workflow. `makeConservativeTradingEngine` now connects market prices to the pure policy, order registry, validated broker submission, canonical order updates, ownership checks, fill accounting, and immediate reevaluation after terminal order updates. Bootstrap composition, account readiness, reservations, and recovery-cycle completion remain.
 - [ ] Keep strategy-specific policy out of the engine and broker adapter.
 - [ ] Ensure exactly one strategy controls each pair's shared Position at a time.
 - [ ] Serialize or otherwise consistently coordinate concurrent market, order, fill, and cancellation events.

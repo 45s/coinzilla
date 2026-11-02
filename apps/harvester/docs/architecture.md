@@ -314,3 +314,19 @@ The Binance adapter prefers the broker's canonical order-placement operation
 so the application receives a `CanonicalOrder` acknowledgement rather than a
 raw exchange response.
 
+
+## In-process Conservative trading engine
+
+`makeConservativeTradingEngine` connects market-price events to the pure
+Conservative policy and validated order-submission use case. It owns the
+in-process order registry, latest market prices, last completed BUY reference
+prices, and pair pause flags. Portfolio and RecoveryLedger remain owned by the
+bootstrap domain workflow and are supplied through explicit callbacks.
+
+Only order updates matching a registered Harvester client order ID are
+accepted. TRADE events must contain a canonical Fill and are applied through
+the injected accounting use case. A partial order fill updates actual
+accounting but does not advance the strategy; the engine waits for the order's
+terminal state. Unknown/manual order events pause the pair and never alter
+strategy inventory. A fully filled order triggers immediate strategy
+reevaluation from the latest known price.

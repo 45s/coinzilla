@@ -71,6 +71,16 @@ export function evaluateConservativeStrategy({
   const hasActiveSell = orders.some((order) =>
     order.side === "SELL" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
   const actions = []
+  const partiallyFilledOrder = orders.find((order) =>
+    order.status === "PARTIALLY_FILLED" ||
+    (order.executedQuantity?.amount && compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0 &&
+      ["PENDING", "OPEN", "UNKNOWN"].includes(order.status)))
+  if (partiallyFilledOrder) {
+    return Object.freeze({
+      strategy: "CONSERVATIVE", symbol: marketPrice.symbol, action: "NO_ACTION",
+      actions: Object.freeze([]), reason: "WAIT_FOR_ORDER_TO_FINISH_AFTER_PARTIAL_FILL",
+    })
+  }
 
   if (!hasActiveBuy) {
     const referencePrice = lastBuyPrice ?? marketPrice.price
