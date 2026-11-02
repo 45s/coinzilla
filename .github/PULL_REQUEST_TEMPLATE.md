@@ -13,10 +13,17 @@
 - [ ] Ran the relevant package tests.
 - [ ] Ran applicable workspace/repository checks when feasible.
 - **Commands and results:** <!-- List exact commands and pass/fail/not-run status. -->
-- **CI:** <!-- Link checks and identify the exact PR head SHA they validated; say pending/not run when applicable. -->
+- **CI:** <!-- Link checks and identify the exact PR head SHA they validated; list each required context as passed/failed/pending/skipped. Never infer success from a workflow being present. -->
+- **Not run / blocked:** <!-- Name every relevant check not executed and why. -->
 - [ ] Reviewed naming, side effects, mutation, duplication, cohesion, and complexity against [ENGINEERING_STANDARDS.md](../blob/main/ENGINEERING_STANDARDS.md).
 - [ ] No secrets, credentials, unrelated changes, or weakened tests are included.
 - [ ] Documentation and public contracts are updated if needed.
+
+## Completion report
+
+- **Implementation:** <!-- Concise summary and affected files. -->
+- **Risks / known limitations:** <!-- Include any remaining work or "None". -->
+- **Final source commit:** <!-- Exact SHA validated by CI. -->
 
 ## Design notes
 
