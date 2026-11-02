@@ -1,6 +1,6 @@
 # Harvester Trading Strategies
 
-Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY fills represent more than 20% of that pair's planned total quote budget, and returns control to Aggressive when that filled exposure falls back to or below the threshold. Unfilled/open BUY orders do not count.
+Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
 
 ## Strategy modes
 
@@ -96,7 +96,7 @@ If either boundary is reached:
 5. Combine the remaining available position into one SELL order.
 6. Use Conservative behavior to try to sell the entire position with that single order.
 
-After the fallback, control remains with Conservative until actual filled BUY exposure falls back to or below the configured percentage of the pair's planned total quote budget. The Trading Engine then automatically returns control to Aggressive. Open/unfilled BUY orders do not count toward this calculation. Whether a separate switch-back threshold is needed to prevent rapid toggling remains open.
+After the fallback, control remains with Conservative until the entire position is sold and the invested quote capital has been recovered. The Trading Engine then returns control to Aggressive. A reduction in position size, including a reduction below the 20% takeover threshold, does not release control. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Do not force a sale at a loss merely to close the position or switch strategies. Existing SELL orders may execute; the strategy must wait for a recovery rather than realize a loss.
 
 This is a strategy-mode transition, not a restart of the Harvester process. Shared execution safety, fill accounting, and broker constraints continue to apply during the transition.
 
@@ -147,7 +147,7 @@ The following are candidates for shared engine capabilities, subject to contract
 - Order/fill journal and operational logging.
 - Trading readiness, pause, and unsafe-state handling.
 
-The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. The pair-level Position is shared by Conservative and Aggressive and is the authoritative source for complete accounting and inventory availability, but only one strategy controls it at a time. The Trading Engine automatically hands control to Conservative when actual executed BUY fills exceed the configured `conservativeTakeoverPercent` of the pair's planned total quote budget (default 20%), and returns control to Aggressive when filled exposure falls back to or below that threshold. Open/unfilled BUY orders are excluded. See [Portfolio Domain](./domain/portfolio.md) for confirmed decisions and remaining open questions.
+The Portfolio changes only when an actual execution is applied. Price updates and order lifecycle events without executions do not change holdings. The pair-level Position is shared by Conservative and Aggressive and is the authoritative source for complete accounting and inventory availability, but only one strategy controls it at a time. The Trading Engine hands control to Conservative when actual executed BUY investment exceeds the configured `conservativeTakeoverPercent` of the pair's planned total quote budget (default 20%); open/unfilled BUY orders are excluded. Conservative retains control until the entire position is sold and the invested quote capital is recovered. If the position is losing money, new BUY orders stop while existing SELL orders remain active; a loss-making sale must never be forced just to switch strategies. See [Portfolio Domain](./domain/portfolio.md) for confirmed decisions and remaining open questions.
 
 The engine owns reliable execution mechanics and coordinates application workflows. A strategy policy owns decisions such as when, where, and how much to buy or sell. Avoid duplicating broker/order lifecycle code in each strategy.
 
@@ -171,13 +171,12 @@ The following questions remain open and must be answered before implementation w
 4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
 5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
 6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
-7. Should the automatic switch-back threshold differ from the 20% Conservative takeover threshold to prevent rapid switching near the boundary? The takeover threshold itself is configurable and defaults to 20%; only actual executed BUY fills count, not open/unfilled BUY orders.
 8. How are shared quote assets and inventory coordinated across different pairs that use the same account asset?
 9. What is the exact reservation lifecycle for BUY and SELL orders, including partial fills, cancellation races, rejections, and uncertain exchange outcomes?
 10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
 11. If strategy-specific performance attribution is required, how should it work without splitting the actual Position?
 
-Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches automatically using the configurable `conservativeTakeoverPercent` threshold (default 20%), calculated from actual executed BUY fills only; open/unfilled BUY orders are excluded; and third-asset commission fills are rejected as unsupported for now. Whether separate switch-back hysteresis is needed remains open. See [Portfolio Domain](./domain/portfolio.md).
+Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
 
 Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
 ## Current implementation status
