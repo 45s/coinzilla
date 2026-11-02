@@ -7,7 +7,7 @@ This document defines how independent AI workstreams collaborate in the Coinzill
 
 ### Harvester priority override
 
-When the owning task is in `apps/harvester/**`, the task order is governed by [Harvester Trading First](apps/harvester/docs/TRADING_FIRST.md). The first deliverable is an executable Conservative TESTNET trading loop (configuration → price subscription → strategy decision → broker order → execution updates/fills → state update → next order). Do not let Journal, durable persistence, comprehensive recovery/reconciliation, optional operations features, optimization, or Aggressive work delay this. Build only the minimum safety needed for the current TESTNET cycle, then resume the order workflow. This is a mandatory product priority, not an optional roadmap preference.
+When the owning task is Harvester, the task order is governed by [Harvester Trading First](apps/harvester/docs/TRADING_FIRST.md). The first deliverable is an executable Conservative TESTNET trading loop (configuration → price subscription → strategy decision → broker order → execution updates/fills → state update → next order). Do not let Journal, durable persistence, comprehensive recovery/reconciliation, optional operations features, optimization, or Aggressive work delay this. Build only the minimum safety needed for the current TESTNET cycle, then resume the order workflow. This is a mandatory product priority, not an optional roadmap preference.
 
 ## 1. The short version
 
@@ -49,6 +49,7 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | Domain | Owned paths | Local instructions / roadmap |
 | --- | --- | --- |
 | Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
+| Coin Farmer application | `apps/bot-coin-farmer/**` | `apps/bot-coin-farmer/AGENTS.md`, `apps/bot-coin-farmer/ROADMAP.md` |
 | Harvester application | `apps/harvester/**` | `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md` |
 | Market Simulator application | `apps/market-simulator/**` | `apps/market-simulator/AGENTS.md`, `apps/market-simulator/ROADMAP.md` |
 | Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
