@@ -4,7 +4,7 @@
 
 A **Portfolio** is the domain representation of the bot's spot positions. It contains one position for each configured spot market (trading pair).
 
-For example, a portfolio may contain separate positions for `BTCUSDT`, `ETHUSDT`, and `ZROFDUSD`. A position describes the bot's holdings and trading activity for that pair. Conservative and Aggressive share the same position and inventory when they operate on the same pair; the position is not duplicated or split by strategy. It is not a market-price snapshot and it is not an order.
+For example, a portfolio may contain separate positions for `BTCUSDT`, `ETHUSDT`, and `ZROFDUSD`. A position describes the bot's holdings and trading activity for that pair. Conservative and Aggressive use the same position and inventory, but **only one strategy controls that position at a time**. The position is not duplicated or split by strategy. It is not a market-price snapshot and it is not an order.
 
 The portfolio is updated from **executed fills**. Prices, submitted orders, open orders, and order-status changes without an execution do not change held quantities.
 
@@ -91,7 +91,7 @@ The agreed Position accounting responsibility includes:
 - realized profit and actual commissions;
 - base inventory reserved for open orders and the remaining available inventory.
 
-These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. Both strategies must consult and respect the same position and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting.
+These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. The active strategy must consult and respect this accounting and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting. The Trading Engine grants operational control to only one strategy for a pair at a time; the inactive strategy must not submit or manage orders for that Position.
 
 A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule.
 
@@ -107,7 +107,7 @@ The agreed Aggressive strategy model uses **one shared inventory pool per market
 - A cancelled or rejected SELL releases only its unfilled reservation. Any execution received during cancellation remains a real fill and must be applied.
 - When Aggressive switches to Conservative, active SELL reservations are cancelled/reconciled and the remaining available position is consolidated into one SELL order. The transition must not count reserved or in-flight quantities twice.
 
-This defines inventory sharing **inside Aggressive for one market**. It does not yet define whether Conservative and Aggressive may trade the same market simultaneously, or how balances shared across different markets are allocated.
+This defines inventory sharing **inside Aggressive for one market**. Conservative and Aggressive do not operate that market simultaneously: the Trading Engine selects one active controller for the shared Position. Switching controllers requires the outgoing strategy to stop issuing new orders and the engine to reconcile/cancel its outstanding orders before the incoming strategy acts. Allocation of balances shared across different markets remains a separate open decision.
 
 ### Fill
 
@@ -171,11 +171,11 @@ The broker user-data stream is not yet normalized into canonical Fill events. ru
 The following decisions have been agreed:
 
 1. **Position ownership — one position per trading pair.** `BTCUSDT` and `ETHUSDT` have separate positions. A Position is not account-wide per asset and is not split into separate strategy-owned positions.
-2. **Cross-strategy inventory — fully shared per pair.** Conservative and Aggressive may operate on the same pair and use the same actual holdings and available inventory. Neither strategy receives a private copy or exclusive allocation of that pair's coins.
+2. **Cross-strategy control — exclusive, with shared accounting.** Conservative and Aggressive use the same Position and inventory for a pair, but only one strategy controls it at a time. The Trading Engine automatically switches control based on the pair's available unspent quote balance: Aggressive controls the Position while sufficient quote balance remains; when that balance becomes low because most allocated quote capital is committed/invested, Conservative takes control to manage the accumulated position. When available quote balance recovers sufficiently, control automatically returns to Aggressive. The exact switching thresholds and any hysteresis are still to be defined. The inactive strategy must not operate the Position.
 3. **Accounting — complete shared accounting.** Position is the authoritative source for actual holdings, invested quote, average entry cost, realized profit, commissions, reserved inventory, and available inventory. Both strategies use this shared accounting.
 4. **Third-asset commissions — reject for now.** A fill whose commission is charged in an asset other than the pair's base or quote asset is unsupported and must be rejected visibly. It must never be silently ignored or valued using an invented conversion.
 
-These decisions define pair-level accounting and strategy sharing. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
+These decisions define pair-level accounting and exclusive strategy control for each pair. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
 
 ## Decisions still required
 
