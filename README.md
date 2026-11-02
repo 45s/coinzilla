@@ -12,7 +12,7 @@ See the [architecture documentation](docs/architecture/README.md) for Coinzilla-
 
 ## Requirements
 
-- Node.js 22
+- Node.js 24 or newer
 - pnpm `12.11.2` (the version declared in the root `package.json`)
 
 ## Getting started
@@ -87,14 +87,14 @@ formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 
 ## Continuous integration
 
-The GitHub Actions workflows run separate checks; there is no single workflow that installs dependencies and runs the full `pnpm run quality` script:
+GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.js line):
 
-- **JavaScript Syntax** (`.github/workflows/quality-gate.yml`) runs actionlint and `node scripts/check-syntax.js`. It does not install workspace dependencies or run unit tests.
-- **Unit Tests** (`.github/workflows/unit-tests.yml`) installs with `pnpm install --frozen-lockfile` and runs `pnpm test` on Node.js 22.23.4 and 24.x.
-- **Utils Unit Tests** (`.github/workflows/utils-unit-tests.yml`) independently runs `node --test packages/utils` on Node.js 22.23.4.
-- **Test Coverage** (`.github/workflows/test-coverage.yml`) installs dependencies, runs workspace coverage, and enforces package-specific coverage thresholds on Node.js 22.23.4.
-- **Dependency Audit** (`.github/workflows/dependency-audit.yml`) runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
+- **JavaScript Syntax** runs actionlint, JavaScript syntax checks, and agent-policy checks.
+- **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
+- **Utils Unit Tests** independently runs `node --test packages/utils`.
+- **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.
+- **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
 
-The root `pnpm run quality` script is available for local use; it runs `pnpm test` followed by `pnpm run check:syntax`. It is not currently invoked as a single CI job. The Unit Tests and Utils Unit Tests workflows overlap with workspace/package coverage checks; keep the independent utils workflow until branch-protection requirements have been reviewed, because removing a workflow can invalidate a required status check.
+The Unit Tests and Utils Unit Tests workflows overlap with other workspace/package checks. Keep their independent status checks until branch-protection requirements have been reviewed; removing a workflow can invalidate a required status check.
 
 A workflow reporting success does not, by itself, prevent merging. Configure GitHub branch protection or a ruleset for `main` and require the relevant status checks. The repository's root `ROADMAP.md` records the currently configured check contexts and the remaining ruleset follow-up; re-check the live ruleset before changing workflow names or removing checks.
