@@ -60,15 +60,15 @@ test("does not create a SELL when no quantity remains above keepQuantity", () =>
   })
 })
 
-test("does not request more recovery proceeds than remain after prior sales", () => {
+test("continues the recovery SELL at a positive tick when proceeds already cover cost and minProfit", () => {
   const plan = calculateRecoverySellPlan({
     ...basePlan,
     saleProceeds: "10.01",
   })
 
   assert.deepEqual(plan, {
-    quantity: "0",
-    price: null,
+    quantity: "99",
+    price: "0.001",
     requiredNetProceeds: "0",
   })
 })
