@@ -12,7 +12,6 @@ import { validateMarketTradingReadiness } from "../domain/market/validate-market
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
-import { makePlaceOrder } from "../use-cases/place-order.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
 import { updateTradingAccounting as applyTradingAccounting } from "../use-cases/update-trading-accounting.js"
 
@@ -131,6 +130,8 @@ export async function startHarvester({
     return Object.freeze({
       tradingConfig,
       broker: undefined,
+      tradingEnabled: false,
+      strategyMode: "read-only",
       connected: false,
       subscriptions: [],
       processMarketPrice,
@@ -198,7 +199,6 @@ export async function startHarvester({
       return broker.placeOrder({ order })
     },
   })
-  const placeOrder = makePlaceOrder({ broker: guardedBroker })
   const refreshAccountSnapshot = async () => {
     const result = await broker.getAccountSnapshot()
     if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
@@ -503,8 +503,8 @@ export async function startHarvester({
 
   return Object.freeze({
     tradingConfig,
-    broker: guardedBroker,
-    placeOrder,
+    tradingEnabled,
+    strategyMode: tradingEnabled ? "conservative" : "read-only",
     get userDataReady() { return userDataReady },
     get userDataStatus() { return userDataStatus },
     processMarketPrice,
