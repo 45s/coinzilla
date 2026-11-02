@@ -75,7 +75,7 @@ export function makeConservativeTradingEngine({
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       state.prices.set(symbol, price)
-      return toResult({ data: { order, reevaluate: true } })
+      return evaluateLatest({ symbol })
     } catch (error) {
       return toResult({ error })
     }
@@ -99,6 +99,11 @@ export function makeConservativeTradingEngine({
 
       if (event.executionType === "TRADE") {
         if (!(event.fill instanceof Fill)) throw new TypeError("TRADE event requires a canonical Fill")
+        if (event.fill.market.id !== order.market.id || event.fill.side !== order.side ||
+            event.fill.brokerOrderId !== order.brokerOrderId) {
+          await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH" })
+          throw new Error("Canonical Fill identity does not match its registered order")
+        }
         const accounting = await updateTradingAccounting({ fill: event.fill })
         if (!accounting?.ok) {
           await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
@@ -108,7 +113,7 @@ export function makeConservativeTradingEngine({
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
-      if (order.status === "CANCELED" && order.executedQuantity.amount !== "0") {
+      if (["CANCELED", "EXPIRED"].includes(order.status) && order.executedQuantity.amount !== "0") {
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return toResult({ error: new Error("Partially filled order canceled; pair paused for review") })
       }
@@ -133,7 +138,7 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "ORDER_REJECTED" })
         return toResult({ data: { order, paused: true } })
       }
-      return evaluateLatest({ symbol })
+      return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
       return toResult({ error })
     }
