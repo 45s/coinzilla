@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Fill } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
@@ -138,7 +139,7 @@ test("normalizes execution reports into canonical Fill values at the adapter bou
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.ok(receiveEvent.fill instanceof (await import("@coinzilla/entities")).Fill)
+  assert.ok(receiveEvent.fill instanceof Fill)
   assert.equal(receiveEvent.fill.id, "binance:BTCUSDT:77")
   assert.equal(receiveEvent.fill.quantity.amount, "0.01")
   assert.equal(receiveEvent.fill.commissions[0].amount.asset.code, "BTC")
@@ -170,7 +171,8 @@ test("fails closed and requests reconciliation when execution normalization fail
   })
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.equal(statuses.length, 1)
-  assert.equal(statuses[0].type, "executionNormalizationFailed")
-  assert.equal(statuses[0].recoveryRequired, true)
+  assert.equal(statuses.length, 2)
+  assert.equal(statuses[0].type, "executionPending")
+  assert.equal(statuses[1].type, "executionNormalizationFailed")
+  assert.equal(statuses[1].recoveryRequired, true)
 })
