@@ -12,7 +12,7 @@ const rules = new TradingRules({
     { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
     { type: "MIN_PRICE", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
     { type: "MAX_PRICE", status: "SUPPORTED", value: new Money({ amount: "10", asset: quoteAsset }) },
-    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
+    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
     { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1", asset: baseAsset }) },
     { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1000", asset: baseAsset }) },
     { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
@@ -43,7 +43,7 @@ test("rejects prices and quantities that do not align to exchange increments", (
     /PRICE_INCREMENT/,
   )
   assert.throws(
-    () => validateOrderAgainstTradingRules({ order: makeOrder({ quantity: "100.1" }), tradingRules: rules }),
+    () => validateOrderAgainstTradingRules({ order: makeOrder({ quantity: "100.15" }), tradingRules: rules }),
     /QUANTITY_INCREMENT/,
   )
 })
@@ -52,7 +52,7 @@ test("rejects min/max price, quantity and notional violations", () => {
   for (const [order, expected] of [
     [makeOrder({ price: "0.009" }), "MIN_PRICE"],
     [makeOrder({ price: "10.001" }), "MAX_PRICE"],
-    [makeOrder({ quantity: "0" }), "MIN_QUANTITY"],
+    [makeOrder({ quantity: "0.9" }), "MIN_QUANTITY"],
     [makeOrder({ quantity: "1001" }), "MAX_QUANTITY"],
     [makeOrder({ price: "0.01", quantity: "100" }), "MIN_NOTIONAL"],
     [makeOrder({ price: "10", quantity: "501" }), "MAX_NOTIONAL"],
