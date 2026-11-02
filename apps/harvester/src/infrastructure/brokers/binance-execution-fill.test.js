@@ -104,6 +104,12 @@ test("rejects non-trade reports and malformed execution facts", () => {
     () => createCanonicalFillFromBinanceEvent({ event: wrongSymbol, market }),
     /symbol does not match/,
   )
+  const missingTradeId = createEvent()
+  missingTradeId.fill.id = "not-a-number"
+  assert.throws(
+    () => createCanonicalFillFromBinanceEvent({ event: missingTradeId, market }),
+    /numeric identifier/,
+  )
   const negativeFee = createEvent()
   negativeFee.fill.commissionAmount = "-0.01"
   assert.throws(
