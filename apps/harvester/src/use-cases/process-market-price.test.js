@@ -10,20 +10,18 @@ const priceEvent = {
   timestamp: 123,
 }
 
-test("passes validated price, pair settings, and Portfolio to the strategy", async () => {
+test("passes validated price, pair settings, and Portfolio to a plain strategy function", () => {
   const pairConfig = { enabled: true, orderQuantity: 0.01 }
   const settings = { minProfit: 0.01 }
   const portfolio = new Portfolio()
   let received
   const processMarketPrice = makeProcessMarketPrice({
-    strategy: {
-      evaluate: async (input) => {
-        received = input
-        return { action: "NO_ACTION" }
-      },
+    evaluateStrategy: (input) => {
+      received = input
+      return { action: "NO_ACTION" }
     },
   })
-  const result = await processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig, settings, portfolio })
+  const result = processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig, settings, portfolio })
 
   assert.equal(result.ok, true)
   assert.deepEqual(received, {
@@ -35,16 +33,20 @@ test("passes validated price, pair settings, and Portfolio to the strategy", asy
   assert.deepEqual(result.data.decision, { action: "NO_ACTION" })
 })
 
-test("rejects a price event routed to a different subscribed market", async () => {
-  const processMarketPrice = makeProcessMarketPrice({ strategy: { evaluate: () => ({ action: "NO_ACTION" }) } })
-  const result = await processMarketPrice({ symbol: "ETHUSDT", priceEvent, pairConfig: {}, settings: {} })
+test("rejects a price event routed to a different subscribed market", () => {
+  const processMarketPrice = makeProcessMarketPrice({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+  })
+  const result = processMarketPrice({ symbol: "ETHUSDT", priceEvent, pairConfig: {}, settings: {} })
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /while subscribed to ETHUSDT/)
 })
 
-test("returns a failed result for invalid broker price events", async () => {
-  const processMarketPrice = makeProcessMarketPrice({ strategy: { evaluate: () => ({ action: "NO_ACTION" }) } })
-  const result = await processMarketPrice({
+test("returns a failed result for invalid broker price events", () => {
+  const processMarketPrice = makeProcessMarketPrice({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+  })
+  const result = processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: { ...priceEvent, price: "invalid" },
     pairConfig: {},
@@ -54,18 +56,20 @@ test("returns a failed result for invalid broker price events", async () => {
   assert.match(result.errors[0].message, /positive decimal/)
 })
 
-test("returns strategy failures instead of swallowing them", async () => {
+test("returns strategy failures instead of swallowing them", () => {
   const processMarketPrice = makeProcessMarketPrice({
-    strategy: { evaluate: async () => { throw new Error("strategy failed") } },
+    evaluateStrategy: () => { throw new Error("strategy failed") },
   })
-  const result = await processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig: {}, settings: {} })
+  const result = processMarketPrice({ symbol: "BTCUSDT", priceEvent, pairConfig: {}, settings: {} })
   assert.equal(result.ok, false)
   assert.equal(result.errors[0].message, "strategy failed")
 })
 
-test("rejects a non-Portfolio strategy context", async () => {
-  const processMarketPrice = makeProcessMarketPrice({ strategy: { evaluate: () => ({ action: "NO_ACTION" }) } })
-  const result = await processMarketPrice({
+test("rejects a non-Portfolio strategy context", () => {
+  const processMarketPrice = makeProcessMarketPrice({
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+  })
+  const result = processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent,
     pairConfig: {},
@@ -76,6 +80,6 @@ test("rejects a non-Portfolio strategy context", async () => {
   assert.match(result.errors[0].message, /requires a Portfolio/)
 })
 
-test("requires an explicit strategy contract", () => {
-  assert.throws(() => makeProcessMarketPrice(), /strategy with evaluate/)
+test("requires an explicit plain strategy function", () => {
+  assert.throws(() => makeProcessMarketPrice(), /evaluateStrategy function/)
 })

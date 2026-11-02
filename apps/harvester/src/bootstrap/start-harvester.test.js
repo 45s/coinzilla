@@ -74,11 +74,9 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    strategy: {
-      evaluate: (input) => {
-        strategyCalls.push(input)
-        return { action: "NO_ACTION" }
-      },
+    evaluateStrategy: (input) => {
+      strategyCalls.push(input)
+      return { action: "NO_ACTION" }
     },
     logger: { info() {}, error() {} },
   })

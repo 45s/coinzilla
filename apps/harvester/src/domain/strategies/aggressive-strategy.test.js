@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../portfolio/portfolio.js"
-import { aggressiveStrategy } from "./aggressive-strategy.js"
+import { evaluateAggressiveStrategy } from "./aggressive-strategy.js"
 
 const marketPrice = { symbol: "BTCUSDT", price: "65000.12", timestamp: 123 }
 const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
@@ -21,7 +21,7 @@ const buyFill = new Fill({
 })
 
 test("is the active Aggressive policy and blocks unsafe initial grid assumptions", () => {
-  const decision = aggressiveStrategy.evaluate({
+  const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0, orderQuantity: 0.01 },
     portfolio: new Portfolio(),
@@ -33,7 +33,7 @@ test("is the active Aggressive policy and blocks unsafe initial grid assumptions
 
 test("exposes the current Position and blocks unresolved SELL pricing", () => {
   const portfolio = new Portfolio().applyFill({ fill: buyFill }).portfolio
-  const decision = aggressiveStrategy.evaluate({
+  const decision = evaluateAggressiveStrategy({
     marketPrice,
     pairConfig: { makerPercent: 0 },
     portfolio,
@@ -45,7 +45,7 @@ test("exposes the current Position and blocks unresolved SELL pricing", () => {
 
 test("requires a Portfolio input", () => {
   assert.throws(
-    () => aggressiveStrategy.evaluate({ marketPrice, pairConfig: {}, portfolio: {} }),
+    () => evaluateAggressiveStrategy({ marketPrice, pairConfig: {}, portfolio: {} }),
     /requires a Portfolio/,
   )
 })

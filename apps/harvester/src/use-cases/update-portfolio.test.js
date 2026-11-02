@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { makeUpdatePortfolio } from "./update-portfolio.js"
+import { updatePortfolio } from "./update-portfolio.js"
 
 const baseAsset = new Asset({ id: "asset:X", code: "X" })
 const quoteAsset = new Asset({ id: "asset:USD", code: "USD" })
@@ -19,25 +19,22 @@ const fill = new Fill({
   commissionStatus: "COMPLETE",
 })
 
-test("returns an updated Portfolio after applying a normalized Fill", async () => {
-  const updatePortfolio = makeUpdatePortfolio()
-  const result = await updatePortfolio({ portfolio: new Portfolio(), fill })
+test("returns an updated Portfolio after applying a normalized Fill", () => {
+  const result = updatePortfolio({ portfolio: new Portfolio(), fill })
   assert.equal(result.ok, true)
   assert.equal(result.data.applied, true)
   assert.equal(result.data.portfolio.getPosition({ symbol: "XUSD" }).baseQuantity.amount, "2")
 })
 
-test("returns duplicate status without applying the same Fill twice", async () => {
-  const updatePortfolio = makeUpdatePortfolio()
-  const first = await updatePortfolio({ portfolio: new Portfolio(), fill })
-  const second = await updatePortfolio({ portfolio: first.data.portfolio, fill })
+test("returns duplicate status without applying the same Fill twice", () => {
+  const first = updatePortfolio({ portfolio: new Portfolio(), fill })
+  const second = updatePortfolio({ portfolio: first.data.portfolio, fill })
   assert.equal(second.ok, true)
   assert.equal(second.data.duplicate, true)
   assert.equal(second.data.portfolio.getPosition({ symbol: "XUSD" }).baseQuantity.amount, "2")
 })
 
-test("returns explicit failures for invalid portfolio or fill inputs", async () => {
-  const updatePortfolio = makeUpdatePortfolio()
-  assert.equal((await updatePortfolio({ portfolio: {}, fill })).ok, false)
-  assert.equal((await updatePortfolio({ portfolio: new Portfolio(), fill: {} })).ok, false)
+test("returns explicit failures for invalid portfolio or fill inputs", () => {
+  assert.equal(updatePortfolio({ portfolio: {}, fill }).ok, false)
+  assert.equal(updatePortfolio({ portfolio: new Portfolio(), fill: {} }).ok, false)
 })

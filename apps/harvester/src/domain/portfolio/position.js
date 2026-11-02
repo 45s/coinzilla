@@ -1,19 +1,5 @@
 import { Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { addDecimalStrings, negateDecimalString, subtractDecimalStrings } from "./decimal-arithmetic.js"
-
-const sumCommissions = ({ fill, assetId, market }) => {
-  let total = "0"
-  for (const commission of fill.commissions) {
-    const commissionAssetId = commission.amount.asset.id
-    if (commissionAssetId !== market.baseAsset.id && commissionAssetId !== market.quoteAsset.id) {
-      throw new TypeError("Unsupported third-asset commission: " + commission.amount.asset.code)
-    }
-    if (commissionAssetId === assetId) {
-      total = addDecimalStrings({ left: total, right: commission.amount.amount })
-    }
-  }
-  return total
-}
+import { calculatePositionFill } from "./position-accounting.js"
 
 export class Position {
   #market
@@ -41,33 +27,18 @@ export class Position {
   applyFill({ fill } = {}) {
     if (!(fill instanceof Fill)) throw new TypeError("Position.applyFill requires a canonical Fill")
     if (fill.market.id !== this.#market.id) throw new TypeError("Fill market does not match Position market")
-    if (fill.commissionStatus !== "COMPLETE") {
-      throw new TypeError("Portfolio requires complete commission data before applying a fill")
-    }
 
-    const baseCommission = sumCommissions({ fill, assetId: this.#market.baseAsset.id, market: this.#market })
-    const quoteCommission = sumCommissions({ fill, assetId: this.#market.quoteAsset.id, market: this.#market })
-    const baseDelta = fill.side === "BUY"
-      ? subtractDecimalStrings({ left: fill.quantity.amount, right: baseCommission })
-      : addDecimalStrings({ left: fill.quantity.amount, right: baseCommission })
-    const nextBase = fill.side === "BUY"
-      ? addDecimalStrings({ left: this.#baseQuantity.amount, right: baseDelta })
-      : subtractDecimalStrings({ left: this.#baseQuantity.amount, right: baseDelta })
-
-    if (nextBase.startsWith("-")) throw new RangeError("Fill would make Position base quantity negative")
-
-    const quoteDelta = fill.side === "BUY"
-      ? negateDecimalString({ value: addDecimalStrings({ left: fill.quoteQuantity.amount, right: quoteCommission }) })
-      : subtractDecimalStrings({ left: fill.quoteQuantity.amount, right: quoteCommission })
-    const nextQuoteCashFlow = addDecimalStrings({
-      left: this.#quoteNetCashFlow.amount,
-      right: quoteDelta,
+    const accounting = calculatePositionFill({
+      market: this.#market,
+      baseQuantity: this.#baseQuantity.amount,
+      quoteNetCashFlow: this.#quoteNetCashFlow.amount,
+      fill,
     })
 
     return new Position({
       market: this.#market,
-      baseQuantity: new Quantity({ amount: nextBase, asset: this.#market.baseAsset }),
-      quoteNetCashFlow: new Money({ amount: nextQuoteCashFlow, asset: this.#market.quoteAsset }),
+      baseQuantity: new Quantity({ amount: accounting.baseQuantity, asset: this.#market.baseAsset }),
+      quoteNetCashFlow: new Money({ amount: accounting.quoteNetCashFlow, asset: this.#market.quoteAsset }),
     })
   }
 
