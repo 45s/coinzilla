@@ -2,6 +2,11 @@
 
 These instructions apply to all work in `apps/harvester/` and take precedence over generic agent defaults. Follow repository-wide guidance (including root `AGENTS.md`, contribution docs, and existing conventions) as well.
 
+
+## Mandatory product priority: trading first
+
+Before planning or editing, read [Trading First](./docs/TRADING_FIRST.md). This is the controlling priority for every Harvester task. **FIRST MAKE IT WORK. THEN MAKE IT BETTER.** Deliver the working Conservative TESTNET loop first: config → broker connection/price subscriptions → price event → strategy decision → validated order submission → order/execution updates → fill-driven state update → next decision/order. Do not prioritize Journal, durable state, comprehensive recovery/reconciliation, dashboards, optimization, or Aggressive while this loop is not working. These are secondary roadmap items, not prerequisites. Implement only a narrowly scoped safety control when you can identify the immediate TESTNET order-flow failure it prevents. Do not use broad claims about production readiness or architecture as reasons to postpone actual order placement. Update the roadmap after each completed step.
+
 ## Before changing code
 - Read the relevant repository and app documentation, nearby implementation, tests, and configuration.
 - Identify the app's existing language, framework, package manager, architecture, and formatting/linting conventions. Do not introduce a new stack or dependency without a clear need.
