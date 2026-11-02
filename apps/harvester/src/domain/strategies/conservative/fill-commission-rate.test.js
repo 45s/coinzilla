@@ -15,7 +15,7 @@ function makeFill({ market: fillMarket = market, commissions = [], commissionSta
     market: fillMarket,
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "2", asset: baseAsset }),
+    quantity: new Quantity({ amount: "2", asset: fillMarket.baseAsset }),
     quoteQuantity: new Money({ amount: "200", asset: quoteAsset }),
     commissions,
     commissionStatus,
