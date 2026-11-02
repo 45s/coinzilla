@@ -70,9 +70,9 @@ test("reads legacy raw event sessions and sorts sessions deterministically", asy
 test("orders same-timestamp session suffixes after the base session", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent("third"))}\\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\\n`)
-    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent("second"))}\\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-002.jsonl"), `${JSON.stringify(legacyEvent("third"))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), `${JSON.stringify(legacyEvent("first"))}\n`)
+    await writeFile(path.join(directory, "2026-01-01_00-00-00-001.jsonl"), `${JSON.stringify(legacyEvent("second"))}\n`)
     const result = await journal.read()
     assert.equal(result.ok, true)
     assert.deepEqual(result.records.map((record) => record.id), ["first", "second", "third"])
