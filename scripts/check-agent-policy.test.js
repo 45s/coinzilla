@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findOwnershipGaps } from './check-agent-policy.js';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { findInstructionDirectories, findOwnershipGaps } from './check-agent-policy.js';
 
 const ownershipRow = (path) => `| Domain | \`${path}/\` | Responsibility |\n`;
 const workflowRow = (path) => `| Domain | \`${path}/**\` | Instructions |\n`;
@@ -33,7 +36,18 @@ test('detects stale ownership rows without a matching AGENTS.md', () => {
   );
 });
 
-test('checks nested domain instruction directories', () => {
-  const directory = 'apps/harvester/strategies';
-  assert.deepEqual(findOwnershipGaps([directory], ownershipRow(directory), workflowRow(directory)), []);
+test('recursively discovers nested domain instruction files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-agent-policy-'));
+  try {
+    mkdirSync(join(root, 'apps', 'harvester', 'strategies'), { recursive: true });
+    mkdirSync(join(root, 'packages', 'entities'), { recursive: true });
+    writeFileSync(join(root, 'apps', 'harvester', 'strategies', 'AGENTS.md'), '# nested');
+    writeFileSync(join(root, 'packages', 'entities', 'AGENTS.md'), '# package');
+    assert.deepEqual(findInstructionDirectories(root), [
+      'apps/harvester/strategies',
+      'packages/entities',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
