@@ -2,6 +2,7 @@ import { Fill } from "@coinzilla/entities"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -89,6 +90,8 @@ export async function startHarvester({
     getPortfolio,
     getRecoveryLedger,
   } = portfolioWorkflow
+  const marketMetadata = new Map()
+  const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
@@ -102,6 +105,7 @@ export async function startHarvester({
       updateTradingAccounting,
       get portfolio() { return getPortfolio() },
       getRecoveryLedger,
+      getMarketMetadata,
       stop: async () => {},
     })
   }
@@ -166,6 +170,24 @@ export async function startHarvester({
   }
 
   try {
+    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
+      if (!pairConfig.enabled) continue
+      const filtersResult = await broker.getSymbolFilters({ symbol })
+      if (!filtersResult?.ok || !filtersResult.data) {
+        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          "Unable to load required exchange trading rules for " + symbol +
+          (details ? ": " + details : ""),
+        )
+      }
+      const validatedMetadata = validateMarketTradingReadiness({
+        symbol,
+        pairConfig,
+        marketMetadata: filtersResult.data,
+      })
+      marketMetadata.set(symbol, validatedMetadata)
+    }
+
     const userDataResult = await broker.subscribeForUserData({
       onEvent: ({ event } = {}) => {
         const isExecution = event?.eventType === "executionReport" &&
@@ -333,6 +355,7 @@ export async function startHarvester({
     updatePortfolio,
     get portfolio() { return getPortfolio() },
     getRecoveryLedger,
+    getMarketMetadata,
     subscriptions: subscriptions.map(({ symbol }) => symbol),
     connected: true,
     stop,
