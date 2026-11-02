@@ -32,11 +32,11 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.1 — Freeze the first executable strategy scope: Conservative Free-Roll
 
 - [x] Select Conservative (Free-Roll) as the first strategy. Its source of truth is `apps/bot-free-roll/README.md` v0.014; Aggressive is deferred to P1.
-- [ ] Port the Free-Roll business rules into Harvester domain policies without copying the old app's broker/runtime implementation.
+- [~] Port the Free-Roll business rules into Harvester domain policies without copying the old app's broker/runtime implementation. First exact-decimal planning primitives are in progress; they are not yet connected to order execution.
 - [ ] Define the minimal first-cycle order intent and strategy context (last traded price, pair config, active Position/recovery ledger, active orders, reservations, balances, exchange filters).
-- [ ] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick.
+- [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [ ] Preserve standing-order behavior: after a qualifying BUY fill, maintain both a profitable recovery SELL and the next standing BUY when state and available funds permit.
-- [ ] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost.
+- [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. A pure exact-decimal recovery SELL planner has been added on the current task branch; fill-ledger integration and lifecycle orchestration remain.
 - [ ] Preserve fee rules: actual fill commissions are authoritative; configured maker/taker rates are planning ceilings; base/quote fees are supported; third-asset fees or incomplete commission data pause the pair.
 - [ ] Preserve free-coin rules: allocate exactly `keepQuantity` only after a fully reconciled recovery SELL and actual cumulative net profit meets `minProfit`; previously earned free coins never re-enter active calculations.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled.
