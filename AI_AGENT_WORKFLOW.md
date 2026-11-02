@@ -6,6 +6,9 @@ This document defines how independent AI workstreams collaborate in the Coinzill
 
 ## 1. The short version
 
+**Before implementing any helper or cross-cutting capability, search packages/utils first.** Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md), inspect the public exports/tests in packages/utils, and then search the rest of the monorepo. Reuse or extend a domain-neutral shared capability instead of reimplementing it. Keep business and protocol rules with their owning domain. This applies to logging: use Logger / defaultLogger from @coinzilla/utils, not ad-hoc console calls or app-local logger replacements.
+
+
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
