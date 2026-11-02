@@ -12,10 +12,11 @@ const market = new Market({
   quoteAsset,
 })
 const makeMetadata = ({
+  market: metadataMarket = market,
   supportedOrderTypes = ["LIMIT", "LIMIT_MAKER"],
   omitRule,
 } = {}) => ({
-  market,
+  market: metadataMarket,
   tradingRules: new TradingRules({
     market,
     constraints: [
