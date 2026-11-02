@@ -136,6 +136,8 @@ export async function startHarvester({
   let userDataSubscription
   let userDataReady = false
   let userDataRequiresReconciliation = false
+  let userDataAccountingFailed = false
+  let pendingExecutionEvents = 0
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
   const guardedBroker = Object.freeze({
@@ -166,20 +168,27 @@ export async function startHarvester({
   try {
     const userDataResult = await broker.subscribeForUserData({
       onEvent: ({ event } = {}) => {
-        userDataEventQueue = userDataEventQueue.then(async () => {
-          if (!event || typeof event !== "object" || Array.isArray(event)) {
-            userDataReady = false
-            userDataStatus = "INVALID_EVENT"
-            return
-          }
+        const isExecution = event?.eventType === "executionReport" &&
+          event?.executionType === "TRADE"
+        if (!event || typeof event !== "object" || Array.isArray(event)) {
+          userDataReady = false
+          userDataAccountingFailed = true
+          userDataStatus = "INVALID_EVENT"
+          return
+        }
+        if (isExecution) {
+          // Close the order gate synchronously, before queuing asynchronous
+          // accounting, so a concurrent caller cannot race past this fill.
+          pendingExecutionEvents += 1
+          userDataReady = false
+          userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+        }
 
-          if (event.eventType === "executionReport" && event.executionType === "TRADE") {
-            // A trade event changes financial state. Apply it to both shared
-            // inventory and Conservative recovery accounting before resuming.
-            userDataReady = false
-            userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+        const task = userDataEventQueue.then(async () => {
+          if (isExecution) {
             const accounting = await updateTradingAccounting({ fill: event.fill })
             if (!accounting.ok) {
+              userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
               logger.error?.({
                 message: "Harvester could not account for a canonical execution",
@@ -187,8 +196,6 @@ export async function startHarvester({
               })
               return
             }
-            userDataReady = !userDataRequiresReconciliation
-            userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
           }
 
           try {
@@ -211,10 +218,22 @@ export async function startHarvester({
             })
           }
         }).catch((error) => {
+          userDataAccountingFailed = true
           userDataReady = false
           userDataStatus = "EVENT_QUEUE_FAILED"
           logger.error?.({ message: "Harvester user-data event queue failed", error })
+        }).finally(() => {
+          if (isExecution) pendingExecutionEvents -= 1
+          if (
+            pendingExecutionEvents === 0 &&
+            !userDataRequiresReconciliation &&
+            !userDataAccountingFailed
+          ) {
+            userDataReady = true
+            userDataStatus = "READY"
+          }
         })
+        userDataEventQueue = task
       },
       onStatus: (status = {}) => {
         userDataStatus = status.type ?? "UNKNOWN"
@@ -223,8 +242,9 @@ export async function startHarvester({
           userDataReady = false
         } else if (status.type === "reconciled") {
           userDataRequiresReconciliation = false
-          userDataReady = true
-          userDataStatus = "READY"
+          userDataAccountingFailed = false
+          userDataReady = pendingExecutionEvents === 0
+          userDataStatus = userDataReady ? "READY" : "EXECUTION_ACCOUNTING_PENDING"
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
@@ -243,7 +263,7 @@ export async function startHarvester({
       )
     }
     userDataSubscription = userDataResult.data
-    userDataReady = !userDataRequiresReconciliation
+    userDataReady = !userDataRequiresReconciliation && !userDataAccountingFailed
     userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
