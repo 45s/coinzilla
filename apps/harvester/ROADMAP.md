@@ -33,7 +33,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [ ] Select the first strategy mode to make executable (Aggressive is currently composed by default; Conservative/Free-Roll is documented but not implemented).
 - [ ] Close only the strategy decisions that block a complete first cycle; do not expand into optional strategy features.
-- [ ] Resolve Aggressive grid depth and the exact percentage-step/reference-price calculation.
+- [ ] Resolve Aggressive grid depth. Upward grid repricing is already decided: use the latest last-traded price from the subscribed `aggTrade` stream and compound each upward percentage step from the previous level. Lower BUY grid levels remain fixed percentages from the grid reference.
 - [ ] Resolve the maximum-price-drop formula using the agreed baseline: average price of actually filled BUY orders.
 - [ ] Resolve the SELL price formula, including BUY/SELL commissions, configured `minProfit`, retained `keepQuantity`, fee asset, and exact tick rounding.
 - [ ] Resolve the 50% partial-SELL threshold behavior, including BUY placement price and duplicate-trigger prevention.
