@@ -1,11 +1,11 @@
 import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { aggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
+import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { makePlaceOrder } from "../use-cases/place-order.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
-import { makeUpdatePortfolio } from "../use-cases/update-portfolio.js"
+import { updatePortfolio as applyPortfolioFill } from "../use-cases/update-portfolio.js"
 
 async function cleanupBroker({ broker, subscriptions }) {
   const unsubscribeResults = await Promise.allSettled(
@@ -19,25 +19,26 @@ async function cleanupBroker({ broker, subscriptions }) {
     .map((result) => result.reason)
 }
 
-const createPortfolioWorkflow = ({ strategy }) => {
+const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
   let updateQueue = Promise.resolve()
-  const updatePortfolioUseCase = makeUpdatePortfolio()
-  const processMarketPriceUseCase = makeProcessMarketPrice({ strategy })
+  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy })
 
   const updatePortfolio = ({ fill } = {}) => {
-    const task = updateQueue.then(async () => {
-      const result = await updatePortfolioUseCase({ portfolio, fill })
+    const task = updateQueue.then(() => {
+      const result = applyPortfolioFill({ portfolio, fill })
       if (result.ok) portfolio = result.data.portfolio
       return result
     })
     updateQueue = task.then(() => undefined, () => undefined)
     return task
   }
-  const processMarketPrice = (input = {}) =>
-    processMarketPriceUseCase({ ...input, portfolio })
 
-  return { updatePortfolio, processMarketPrice, getPortfolio: () => portfolio }
+  return {
+    updatePortfolio,
+    processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
+    getPortfolio: () => portfolio,
+  }
 }
 
 export async function startHarvester({
@@ -45,14 +46,14 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  strategy = aggressiveStrategy,
+  evaluateStrategy = evaluateAggressiveStrategy,
   logger = console,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.("Harvester market price processing failed", { symbol, error, errors })
   },
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
-  const portfolioWorkflow = createPortfolioWorkflow({ strategy })
+  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
   const { processMarketPrice, updatePortfolio, getPortfolio } = portfolioWorkflow
   const brokerName = env.HARVESTER_BROKER
 
