@@ -102,7 +102,7 @@ The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils
 
 - `logger.debug({ message, ...context })` traces startup stages, broker operations, market metadata/rule validation, user-data subscription and status, account snapshot loading, open-order/base-inventory checks, market-price processing, and cleanup. A failed startup leaves the last completed/in-progress stage visible; debug output is suppressed when `NODE_ENV=production` by the shared logger.
 - `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, accepted account snapshot, clean TESTNET readiness, engine activation, active market subscriptions, and shutdown.
-- `logger.error({ message, errorName, errorMessage, errorStack })` records actionable failures. The process entry point also emits normalized nested error details so `Error` and `AggregateError` messages/stacks remain visible in structured logs.
+- `logger.error({ message, errorName, errorMessage, errorStack })` records actionable failures. The process entry point also emits normalized nested error details so `Error` and `AggregateError` messages/stacks remain visible in structured logs. Startup tests verify both the original error and its normalized diagnostic details.
 - Never log API keys, API secrets, signed requests, or raw exchange payloads. Market-price diagnostics include only the symbol, price, and event timestamp; user-data diagnostics include event type and relevant symbol/side metadata.
 
 ## Implementation style
