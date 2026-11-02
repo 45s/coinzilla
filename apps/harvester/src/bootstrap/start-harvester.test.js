@@ -329,14 +329,14 @@ test("does not become ready when recovery is reported during subscription setup"
   await result.stop()
 })
 
-test("allows order placement again only after the execution handler confirms accounting", async () => {
+test("allows order placement again after canonical execution accounting completes", async () => {
   const calls = []
   const broker = createBroker(calls)
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
-    onUserDataEvent: async () => ({ ok: true, accounted: true }),
+    onUserDataEvent: async () => {},
     logger: { info() {}, error() {} },
   })
 
