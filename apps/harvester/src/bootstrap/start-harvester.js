@@ -1,6 +1,8 @@
 import { Fill } from "@coinzilla/entities"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { AccountSnapshot } from "../domain/account/account-snapshot.js"
+import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
@@ -91,7 +93,9 @@ export async function startHarvester({
     getRecoveryLedger,
   } = portfolioWorkflow
   const marketMetadata = new Map()
+  let accountSnapshot
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
+  const getAccountSnapshot = () => accountSnapshot
   const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
@@ -106,6 +110,7 @@ export async function startHarvester({
       get portfolio() { return getPortfolio() },
       getRecoveryLedger,
       getMarketMetadata,
+      getAccountSnapshot,
       stop: async () => {},
     })
   }
@@ -158,6 +163,28 @@ export async function startHarvester({
     },
   })
   const placeOrder = makePlaceOrder({ broker: guardedBroker })
+  const refreshAccountSnapshot = async () => {
+    const result = await broker.getAccountSnapshot()
+    if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
+      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
+      )
+    }
+    const nextSnapshot = new AccountSnapshot({
+      balances: result.data.balances,
+      sourceTime: result.data.sourceTime,
+    })
+    assertAccountSnapshotCoversMarkets({
+      accountSnapshot: nextSnapshot,
+      markets: [...marketMetadata.values()].map(({ market }) => market),
+    })
+    if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
+      throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
+    }
+    accountSnapshot = nextSnapshot
+    return nextSnapshot
+  }
   const reportPriceError = (details) => {
     try {
       onMarketPriceError(details)
@@ -215,6 +242,17 @@ export async function startHarvester({
               logger.error?.({
                 message: "Harvester could not account for a canonical execution",
                 errors: accounting.errors,
+              })
+              return
+            }
+            try {
+              await refreshAccountSnapshot()
+            } catch (error) {
+              userDataAccountingFailed = true
+              userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
+              logger.error?.({
+                message: "Harvester could not refresh exchange balances after an execution",
+                error,
               })
               return
             }
@@ -293,6 +331,12 @@ export async function startHarvester({
     userDataReady = !userDataRequiresReconciliation && !userDataAccountingFailed
     userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
 
+    // Queue the first account snapshot behind any execution events received
+    // during stream setup. Subsequent fills refresh balances on this same queue.
+    const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
+    userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
+    await initialSnapshotTask
+
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       const result = await broker.subscribeForPrices({
@@ -356,6 +400,7 @@ export async function startHarvester({
     get portfolio() { return getPortfolio() },
     getRecoveryLedger,
     getMarketMetadata,
+    getAccountSnapshot,
     subscriptions: subscriptions.map(({ symbol }) => symbol),
     connected: true,
     stop,
