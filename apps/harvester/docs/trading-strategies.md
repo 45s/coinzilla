@@ -52,6 +52,8 @@ The exchange's post-only and price/quantity constraints still apply. The Trading
 - New BUY orders and rebuilt grids are bounded by the configured maximum total invested quote amount.
 - A configured maximum price-drop limit is also a risk boundary. Reaching either the investment limit or the price-drop limit triggers the Conservative fallback described below.
 
+**Market-price observation — decided:** Aggressive uses the latest last-traded price delivered by the subscribed `aggTrade` WebSocket stream when checking whether the grid reference has crossed one or more upward `priceStep` levels. It does not use best bid, best ask, or midpoint price. For example, with a grid reference of 100 USDT and a 1% step, a latest `aggTrade` price of 103 USDT means three upward steps have been crossed. The strategy consumes the normalized last-trade price supplied by the market-data boundary; it does not subscribe to the exchange stream itself.
+
 The maximum price drop is measured from the average price of actually filled BUY orders. BUY prices are rounded down to the nearest valid exchange tick; SELL prices are rounded up. The grid reference moves upward by the full number of crossed steps; lower levels are calculated from that reference. The exact maximum price-drop calculation beyond this baseline, and the detailed interaction between percentage steps and exchange filters, remain to be specified.
 
 #### 3. BUY fills and SELL orders
@@ -165,7 +167,7 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 The following questions remain open and must be answered before implementation where they affect behavior:
 
-1. What exact percentage-step calculation and market-price observation should be used when determining crossed grid levels? BUY tick rounding down and SELL tick rounding up are agreed.
+1. What exact percentage-step calculation should be used when determining crossed grid levels? The market-price observation is decided: use the latest last-traded price delivered by the subscribed `aggTrade` WebSocket stream. BUY tick rounding down and SELL tick rounding up are agreed.
 2. What is the exact maximum-price-drop calculation, using the average price of actually filled BUY orders as its baseline?
 3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
 4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
