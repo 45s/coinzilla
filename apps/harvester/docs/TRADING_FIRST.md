@@ -29,7 +29,7 @@ The first milestone is complete only when the application has demonstrably place
 
 Trading first does not mean careless execution. Implement the smallest safety boundary that makes the TESTNET cycle controlled and testable:
 
-- Require an explicit TESTNET environment selection. Live trading stays disabled and cannot be enabled implicitly.
+- Require explicit `HARVESTER_ENABLE_TRADING=true` and `HARVESTER_TRADING_MODE=testnet`; reject production NODE_ENV. The default remains read-only. Live trading stays disabled and cannot be enabled implicitly.
 - Validate the enabled pair, current price, exchange tick/step rules, supported order type, minimum quantity/notional, and available balance needed for the specific order.
 - Use stable client order identifiers where the broker supports them and retain enough in-process order state to associate updates/fills with submitted orders.
 - Never submit duplicate orders because of repeated market events or duplicate execution events.

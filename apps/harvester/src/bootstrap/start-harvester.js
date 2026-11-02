@@ -254,7 +254,7 @@ export async function startHarvester({
       onEvent: ({ event } = {}) => {
         const isExecution = event?.eventType === "executionReport" &&
           event?.executionType === "TRADE"
-        const isOrderUpdate = event?.eventType === "executionReport" && event?.executedOrder !== undefined
+        const isOrderUpdate = event?.eventType === "executionReport"
         if (!event || typeof event !== "object" || Array.isArray(event)) {
           userDataReady = false
           userDataAccountingFailed = true

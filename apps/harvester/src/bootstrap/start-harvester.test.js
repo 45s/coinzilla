@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { startHarvester } from "./start-harvester.js"
 
@@ -678,4 +678,151 @@ test("does not clear execution accounting failures after stream recovery acknowl
   })
   assert.equal(order.ok, false)
   await result.stop()
+})
+
+
+test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", async () => {
+  const calls = []
+  const subscriptions = new Map()
+  let userDataHandlers
+  let snapshotTime = 0
+  let bought = false
+  const marketMetadata = createMarketMetadata("BTCUSDT")
+  const broker = {
+    connect: async () => calls.push("connect"),
+    disconnect: async () => calls.push("disconnect"),
+    getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getAccountSnapshot: async () => {
+      snapshotTime += 1
+      const balances = [
+        new Balance({
+          free: new Quantity({ amount: bought ? "0.01" : "0", asset: marketMetadata.market.baseAsset }),
+          locked: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+        }),
+        new Balance({
+          free: new Quantity({ amount: "10000", asset: marketMetadata.market.quoteAsset }),
+          locked: new Quantity({ amount: "0", asset: marketMetadata.market.quoteAsset }),
+        }),
+      ]
+      return { ok: true, data: { balances, sourceTime: snapshotTime } }
+    },
+    subscribeForUserData: async (handlers) => {
+      userDataHandlers = handlers
+      return { ok: true, data: { disconnect: async () => calls.push("unsubscribe:user-data") } }
+    },
+    subscribeForPrices: async ({ symbol, onPrice }) => {
+      subscriptions.set(symbol, onPrice)
+      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) } }
+    },
+    placeOrder: async ({ order }) => {
+      calls.push({ side: order.side, price: order.price, quantity: order.quantity })
+      return {
+        ok: true,
+        data: new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: "broker-" + order.clientOrderId,
+          market: marketMetadata.market,
+          side: order.side,
+          type: order.type,
+          limitPrice: new Money({ amount: order.price, asset: marketMetadata.market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity, asset: marketMetadata.market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+          status: "OPEN",
+          createdAt: 1,
+          acknowledgedAt: 1,
+          updatedAt: 1,
+        }),
+      }
+    },
+  }
+  const config = {
+    settings: { minProfit: 0.01 },
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        investment: 1000,
+        orderQuantity: 0.01,
+        keepQuantity: 0.001,
+        priceStepPercent: 0.05,
+        pricePrecision: 2,
+        quantityPrecision: 3,
+        makerPercent: 0,
+        takerPercent: 0.075,
+      },
+    },
+  }
+  const runtime = await startHarvester({
+    loadConfig: async () => config,
+    env: {
+      NODE_ENV: "development",
+      HARVESTER_BROKER: "binance",
+      HARVESTER_TRADING_MODE: "testnet",
+      HARVESTER_ENABLE_TRADING: "true",
+      BINANCE_API_KEY: "test-key",
+      BINANCE_API_SECRET_KEY: "test-secret",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+  assert.equal(runtime.userDataReady, true)
+  await subscriptions.get("BTCUSDT")({
+    eventType: "aggTrade",
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp: 1,
+  })
+  const firstOrder = runtime.tradingEngine?.getOrders?.()[0]
+  assert.equal(calls.filter((call) => typeof call === "object").length, 1)
+  assert.equal(calls.find((call) => typeof call === "object").side, "BUY")
+  assert.equal(firstOrder, undefined)
+
+  const submitted = calls.find((call) => typeof call === "object")
+  const clientOrderId = "h-BTCUSDT-1"
+  const canonicalBuy = new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId: "broker-" + clientOrderId,
+    market: marketMetadata.market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const fill = new Fill({
+    tradeId: "testnet-buy-fill",
+    brokerOrderId: canonicalBuy.brokerOrderId,
+    market: marketMetadata.market,
+    side: "BUY",
+    price: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
+    quantity: new Quantity({ amount: submitted.quantity, asset: marketMetadata.market.baseAsset }),
+    quoteQuantity: new Money({
+      amount: "649.6761",
+      asset: marketMetadata.market.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  bought = true
+  userDataHandlers.onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: canonicalBuy,
+      fill,
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(runtime.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
+  assert.deepEqual(
+    calls.filter((call) => typeof call === "object").map((call) => call.side),
+    ["BUY", "BUY", "SELL"],
+  )
+  await runtime.stop()
 })
