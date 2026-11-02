@@ -6,6 +6,13 @@ Harvester uses one shared Trading Engine with multiple strategy policies. The en
 
 This document records the current architectural direction. It does not define implementation APIs or settle the strategy and portfolio decisions listed in the roadmap.
 
+
+## Product priority: make the trading loop work first
+
+The architecture exists to deliver a running trading application, not to postpone it. The mandatory first workflow is: load configuration → connect and subscribe to enabled-market prices → evaluate Conservative → validate and submit a broker order → process order updates and actual fills → update trading state → evaluate again and place the next required order. See [Trading First](./TRADING_FIRST.md), which takes precedence over optional architecture work.
+
+For the first controlled TESTNET cycle, implement only the minimum execution safeguards needed for valid orders, balance/market-rule checks, fill correctness, duplicate prevention, and safe pause on uncertain state. Journal integration, durable state, comprehensive restart recovery/reconciliation, dashboards, optimization, and Aggressive are later work. Do not build those systems before the actual strategy-to-order-to-execution path exists and works. Keep the code simple and use existing contracts; do not add abstractions solely for hypothetical future needs.
+
 ## Architectural roles
 
 | Concept | Responsibility | Architectural role |
