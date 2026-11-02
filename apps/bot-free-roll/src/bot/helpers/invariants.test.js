@@ -7,8 +7,8 @@ import {
   multiplyDecimal,
   roundDecimalToIncrement,
   subtractDecimal,
-} from "./decimal.js";
-import { calculatePercentageChange } from "./percentage.js";
+} from "@coinzilla/utils";
+import { calculatePercentageChange } from "@coinzilla/utils";
 import {
   calculateCommissionRateExact,
   calculateFillAccountingExact,

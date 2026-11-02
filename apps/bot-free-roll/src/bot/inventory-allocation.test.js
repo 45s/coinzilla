@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { addDecimal } from "./helpers/decimal.js"
+import { addDecimal } from "@coinzilla/utils"
 import { allocateFreeInventory } from "./inventory-allocation.js"
 
 test("allocates exactly keepQuantity and leaves excess inventory active", () => {
@@ -62,4 +62,15 @@ test("rejects negative and malformed inventory amounts", () => {
     { activeQuantity: "1", freeQuantity: "0", keepQuantity: "-0.1" },
     { activeQuantity: "bad", freeQuantity: "0", keepQuantity: "0" },
   ]) assert.throws(() => allocateFreeInventory(input))
+})
+
+test("reports the exact inventory field when a Number is supplied", () => {
+  assert.throws(
+    () => allocateFreeInventory({
+      activeQuantity: 1,
+      freeQuantity: "0",
+      keepQuantity: "0",
+    }),
+    /activeQuantity must be a decimal string/,
+  )
 })

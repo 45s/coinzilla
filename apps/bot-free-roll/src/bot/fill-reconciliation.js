@@ -10,7 +10,7 @@ import {
   compareDecimal,
   maxDecimal,
   subtractDecimal,
-} from "./helpers/decimal.js"
+} from "@coinzilla/utils"
 import {
   calculateCommissionRateExact,
   calculateFillAccountingExact,

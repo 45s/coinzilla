@@ -1,4 +1,4 @@
-import { compareDecimal } from "./helpers/decimal.js"
+import { compareDecimal } from "@coinzilla/utils"
 
 function failure(reason) {
   return { ok: false, reason }

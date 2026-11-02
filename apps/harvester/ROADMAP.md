@@ -56,3 +56,11 @@
 - Do not implement unresolved strategy behavior by assumption.
 - Do not mark work complete until implementation and required checks pass on `develop`.
 - Keep live trading disabled by default; tests must never place live orders.
+
+
+## Shared utility reuse
+
+- [x] Remove the app-local decimal arithmetic implementation and duplicate unit suite.
+- [x] Use \`addDecimal\`, \`subtractDecimal\`, and \`negateDecimal\` from \`@coinzilla/utils\` in portfolio fill accounting.
+- [x] Keep commission asset validation and Position accounting policy in the Harvester domain.
+- [x] Use the shared \`defaultLogger\` instead of defaulting to the global \`console\`.

@@ -1,5 +1,5 @@
 import { Balance, CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, subtractDecimal } from "./helpers/decimal.js"
+import { addDecimal, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 import { getOrderId, unwrapResult } from "./helpers/exchange.js"
 import { validateRecoveryBalances } from "./recovery.js"
 

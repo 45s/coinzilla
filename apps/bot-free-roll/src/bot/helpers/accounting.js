@@ -1,4 +1,4 @@
-import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, assertDecimalString } from "./decimal.js"
+import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, assertDecimalString, percentageToRate } from "@coinzilla/utils"
 
 export function getFeeRate({ makerPercent, takerPercent }) {
   for (const [name, percent] of Object.entries({ makerPercent, takerPercent })) {
@@ -30,8 +30,8 @@ export function estimateBuyAccounting({ quantity, price, feeRate }) {
 
     // Keep quote accounting as a decimal string; do not accumulate binary floats.
     estimatedCost: multiplyDecimal({
-      left: multiplyDecimal({ left: quantity, right: price }),
-      right: addDecimal({ left: "1", right: feeRate }),
+      left: multiplyDecimal({ left: String(quantity), right: String(price) }),
+      right: addDecimal({ left: "1", right: String(feeRate) }),
     }),
   }
 }
@@ -52,8 +52,8 @@ export function estimateSellAccounting({ quantity, price, feeRate }) {
   return {
     // Keep quote accounting as a decimal string; do not accumulate binary floats.
     estimatedProceeds: multiplyDecimal({
-      left: multiplyDecimal({ left: quantity, right: price }),
-      right: subtractDecimal({ left: "1", right: feeRate }),
+      left: multiplyDecimal({ left: String(quantity), right: String(price) }),
+      right: subtractDecimal({ left: "1", right: String(feeRate) }),
     }),
 
     // Conservative base-asset deduction.
@@ -71,14 +71,14 @@ export function getFeeRateExact({ makerPercent, takerPercent }) {
     }
   }
 
-  const makerRate = divideDecimal({ left: String(makerPercent), right: "100", scale: 18, rounding: "half-up" });
-  const takerRate = divideDecimal({ left: String(takerPercent), right: "100", scale: 18, rounding: "half-up" });
+  const makerRate = percentageToRate({ percent: String(makerPercent) });
+  const takerRate = percentageToRate({ percent: String(takerPercent) });
   return maxDecimal({ left: makerRate, right: takerRate });
 }
 
 export function estimateBuyAccountingExact({ quantity, price, feeRate }) {
   for (const [name, value] of Object.entries({ quantity, price, feeRate })) {
-    assertDecimalString(value, name);
+    assertDecimalString({ value, field: name });
   }
   if (compareDecimal({ left: quantity, right: "0" }) <= 0 ||
       compareDecimal({ left: price, right: "0" }) <= 0 ||
@@ -101,7 +101,7 @@ export function estimateBuyAccountingExact({ quantity, price, feeRate }) {
 
 export function estimateSellAccountingExact({ quantity, price, feeRate }) {
   for (const [name, value] of Object.entries({ quantity, price, feeRate })) {
-    assertDecimalString(value, name);
+    assertDecimalString({ value, field: name });
   }
   if (compareDecimal({ left: quantity, right: "0" }) < 0 ||
       compareDecimal({ left: price, right: "0" }) <= 0 ||
@@ -151,7 +151,7 @@ export function calculateFillAccountingExact({
     quoteQuantity,
     commissionAmount,
   })) {
-    assertDecimalString(value, name);
+    assertDecimalString({ value, field: name });
   }
 
   if (!["BUY", "SELL"].includes(side)) {
@@ -215,7 +215,7 @@ export function calculateCommissionRateExact({
     quoteQuantity,
     commissionAmount,
   })) {
-    assertDecimalString(value, name);
+    assertDecimalString({ value, field: name });
   }
 
   if (compareDecimal({ left: price, right: "0" }) <= 0 ||
