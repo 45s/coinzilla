@@ -10,6 +10,8 @@ The current `develop` implementation is a connected market-data prototype, not a
 
 ### Definition of "Harvester can trade"
 
+The first proof is deliberately scoped to one explicitly enabled TESTNET pair and a clean test account. Expand to multiple enabled pairs and shared-asset allocation after that first cycle works.
+
 A first-trading release is not complete until a TESTNET end-to-end scenario demonstrates:
 
 1. Start from the documented command and load/validate configuration.
@@ -99,7 +101,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Replace the current price-only callback flow with the actual decision-to-order execution pipeline.
 - [ ] Keep `runtime.placeOrder` as a controlled engine capability; callers must not bypass safety checks by invoking it directly.
 
-### Deferred after the first working cycle — Persistence, restart, and comprehensive recovery
+### Deferred follow-up (not a P0 gate) — Persistence, restart, and comprehensive recovery
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
 - [ ] Integrate the already available shared Journal read/replay capability into Harvester's domain-specific durable state. This is deferred until after the first successful TESTNET trading cycle; do not implement it as a prerequisite.
