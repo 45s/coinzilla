@@ -19,8 +19,7 @@ function sameOrderIntent({ current, next }) {
     current.side === next.side &&
     current.type === next.type &&
     current.originalQuantity.amount === next.originalQuantity.amount &&
-    current.limitPrice?.amount === next.limitPrice?.amount &&
-    current.createdAt === next.createdAt
+    current.limitPrice?.amount === next.limitPrice?.amount
 }
 
 function sameOrderState({ current, next }) {
@@ -126,10 +125,7 @@ export class OrderRegistry {
       }
       return Object.freeze({ registry: this, applied: false, duplicate: true })
     }
-    if (
-      order.brokerOrderId !== undefined ||
-      this.#orders.some((item) => item.brokerOrderId === order.brokerOrderId)
-    ) {
+    if (order.brokerOrderId !== undefined) {
       throw new Error("Pending order cannot already have a brokerOrderId")
     }
     return Object.freeze({
