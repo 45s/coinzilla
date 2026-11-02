@@ -18,7 +18,7 @@ When the owning task is Harvester, the task order is governed by [Harvester Trad
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
-5. Add tests and perform a documentation-impact assessment; update affected docs and the domain roadmap alongside the change when its behavior, contracts, configuration, architecture, operations, examples, or status changes.
+5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
 6. Run the required local checks and open a PR targeting `develop`.
 7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
 8. Never merge task work directly into `main`.
@@ -87,9 +87,8 @@ A task PR targeting `develop` must:
 - Pass the relevant package tests and coverage checks.
 - Pass the repository's required CI checks.
 - Contain the latest `develop` commit immediately before merge.
-- Include a documented impact assessment for every meaningful change. Update public API docs, examples, operational guidance, relevant instructions, and the local roadmap in the same task/PR whenever the change alters a documented behavior or contract; make the documentation update in the same commit where practical. If no update is needed (for example, a purely internal refactor), state why in the PR. Do not leave required documentation as an untracked follow-up.
+- Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.
 - Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
-- Include a **Documentation impact** note in the PR description: list the documentation updated, or explain why no documentation change is warranted. Review this for each meaningful change in the PR, not just at final release time.
 
 **Human approval is not a routine gate for `develop`.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent may merge its own task PR into `develop`. Prefer GitHub auto-merge if the repository enables it; otherwise merge only after the required checks have completed successfully. Never bypass branch protection or merge with pending/failed checks.
 
