@@ -146,6 +146,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
       T: 300,
       t: 400,
       E: 301,
+      Y: "100",
     }
 
     rpc.emitEvent({ subscriptionId: 20, event: report })
