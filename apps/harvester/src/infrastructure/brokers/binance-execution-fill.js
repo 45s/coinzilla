@@ -26,11 +26,13 @@ export function createCanonicalFillFromBinanceEvent({ event, market } = {}) {
   for (const [field, value] of Object.entries({
     tradeId: execution.id,
     orderId: execution.orderId,
-    symbol: execution.symbol,
   })) {
-    if (typeof value !== "string" || !/^\d+$/.test(value)) {
+    if (typeof value !== "string" || !/^\\d+$/.test(value)) {
       throw new TypeError("Binance execution " + field + " must be a numeric identifier")
     }
+  }
+  if (typeof execution.symbol !== "string" || !execution.symbol.trim()) {
+    throw new TypeError("Binance execution symbol must be a non-empty string")
   }
   if (execution.symbol !== market.symbol) {
     throw new TypeError("Binance execution symbol does not match its Market")
