@@ -306,7 +306,7 @@ test("disconnects after a failed broker connection", async () => {
     }),
     /connection failed/,
   )
-  assert.deepEqual(calls, ["connect", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
 
 test("accounts canonical execution events before allowing further order placement", async () => {
@@ -438,7 +438,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
 test("exposed broker port cannot bypass the user-data readiness gate", async () => {
