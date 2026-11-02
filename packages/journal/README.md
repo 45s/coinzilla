@@ -33,6 +33,7 @@ Create a stopped Journal instance and read before starting its writer:
 const journal = new Journal({ eventBus, directory: "./data/journal" })
 const result = await journal.read({
   maxRecords: 100_000,
+  maxSessions: 10_000,
   maxBytes: 64 * 1024 * 1024,
   maxRecordBytes: 1024 * 1024,
 })
@@ -53,7 +54,7 @@ Sessions are ordered by timestamp and then numeric collision suffix (the unsuffi
 
 The reader rejects invalid UTF-8, duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current versioned envelope. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 
-Recovery is bounded by configurable `maxRecords`, `maxBytes`, and `maxRecordBytes`. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record. Exceeding a limit fails the entire read; increase limits deliberately when the retained history requires it.
+Recovery is bounded by configurable `maxSessions`, `maxRecords`, `maxBytes`, and `maxRecordBytes`. Defaults are 10,000 sessions, 100,000 records, 64 MiB total, and 1 MiB per record. Exceeding a limit fails the entire read; increase limits deliberately when the retained history requires it.
 
 ## Sequential replay
 

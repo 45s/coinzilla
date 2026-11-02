@@ -4,7 +4,7 @@ import { readJournalRecords } from "./read-journal-records.js"
 /**
  * Validate the complete journal before invoking the consumer, then replay in order.
  * Handler effects are at-least-once across process crashes; consumers must be idempotent.
- * @param {{ directory: string, handler: (input: { record: object }) => unknown, maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} input
+ * @param {{ directory: string, handler: (input: { record: object }) => unknown, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
  */
 export async function replayJournalRecords({ handler, ...options } = {}) {
   if (typeof handler !== "function") {

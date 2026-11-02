@@ -164,6 +164,20 @@ test("rejects unsupported schema versions", async () => {
   }
 })
 
+test("bounds the number of session files", async () => {
+  const { directory, journal } = await createStoppedJournal()
+  try {
+    await writeFile(path.join(directory, "2026-01-01_00-00-00.jsonl"), "")
+    await writeFile(path.join(directory, "2026-01-02_00-00-00.jsonl"), "")
+    const result = await journal.read({ maxSessions: 1 })
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "JOURNAL_RECOVERY_LIMIT_EXCEEDED")
+  } finally {
+    await journal.eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("bounds record count, total bytes, and individual record size", async () => {
   const { directory, journal } = await createStoppedJournal()
   try {

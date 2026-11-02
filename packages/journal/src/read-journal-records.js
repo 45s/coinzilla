@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises"
+import { opendir, readFile, stat } from "node:fs/promises"
 import path from "node:path"
 
 import { toResult } from "@coinzilla/utils"
@@ -6,16 +6,17 @@ import { parseJournalSession } from "./helpers/journal-record.js"
 
 const DEFAULT_LIMITS = Object.freeze({
   maxRecords: 100_000,
+  maxSessions: 10_000,
   maxBytes: 64 * 1024 * 1024,
   maxRecordBytes: 1024 * 1024,
 })
 const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/
 
-function validateReadOptions({ directory, maxRecords, maxBytes, maxRecordBytes }) {
+function validateReadOptions({ directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
   if (typeof directory !== "string" || directory.trim() === "") {
     return toResult({ error: new TypeError("A journal directory is required") })
   }
-  for (const [name, value] of Object.entries({ maxRecords, maxBytes, maxRecordBytes })) {
+  for (const [name, value] of Object.entries({ maxRecords, maxSessions, maxBytes, maxRecordBytes })) {
     if (!Number.isSafeInteger(value) || value < 1) {
       return toResult({ error: new TypeError(`${name} must be a positive safe integer`) })
     }
@@ -26,35 +27,43 @@ function validateReadOptions({ directory, maxRecords, maxBytes, maxRecordBytes }
 /**
  * Read and validate all sessions in deterministic filename/line order.
  * The configured record and byte limits bound recovery memory and I/O.
- * @param {{ directory: string, maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} input
+ * @param {{ directory: string, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
  */
 export async function readJournalRecords({
   directory,
   maxRecords = DEFAULT_LIMITS.maxRecords,
+  maxSessions = DEFAULT_LIMITS.maxSessions,
   maxBytes = DEFAULT_LIMITS.maxBytes,
   maxRecordBytes = DEFAULT_LIMITS.maxRecordBytes,
 } = {}) {
-  const optionsResult = validateReadOptions({ directory, maxRecords, maxBytes, maxRecordBytes })
+  const optionsResult = validateReadOptions({ directory, maxRecords, maxSessions, maxBytes, maxRecordBytes })
   if (!optionsResult.ok) return optionsResult
 
   try {
-    let entries
+    const sessionEntries = []
+    let directoryHandle
     try {
-      entries = await readdir(directory, { withFileTypes: true })
+      directoryHandle = await opendir(directory)
+      for await (const entry of directoryHandle) {
+        if (!entry.name.endsWith(".jsonl")) continue
+        if (!entry.isFile() || !SESSION_FILE_PATTERN.test(entry.name)) {
+          const error = new Error(`Invalid journal session file entry: ${entry.name}`)
+          error.code = "JOURNAL_INVALID_SESSION_FILE"
+          throw error
+        }
+        if (sessionEntries.length >= maxSessions) {
+          const error = new Error(`Journal recovery exceeds maxSessions while scanning ${directory}`)
+          error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
+          error.details = { maxSessions }
+          throw error
+        }
+        sessionEntries.push(entry)
+      }
     } catch (error) {
       if (error.code === "ENOENT") {
         return toResult({ records: [], count: 0, sessions: [], bytesRead: 0 })
       }
       throw error
-    }
-
-    const sessionEntries = entries.filter((entry) => entry.name.endsWith(".jsonl"))
-    for (const entry of sessionEntries) {
-      if (!entry.isFile() || !SESSION_FILE_PATTERN.test(entry.name)) {
-        const error = new Error(`Invalid journal session file entry: ${entry.name}`)
-        error.code = "JOURNAL_INVALID_SESSION_FILE"
-        throw error
-      }
     }
 
     sessionEntries.sort((left, right) => {

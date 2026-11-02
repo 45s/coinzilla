@@ -191,13 +191,14 @@ export class Journal {
    * Read and validate all persisted sessions. Call before start or after close.
    * @param {{ maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} options
    */
-  async read({ maxRecords, maxBytes, maxRecordBytes } = {}) {
+  async read({ maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
     if (this.started || this.starting || this.closing) {
       return toResult({ error: new Error("Journal records can only be read while the journal is stopped") })
     }
     return readJournalRecords({
       directory: this.directory,
       maxRecords,
+      maxSessions,
       maxBytes,
       maxRecordBytes,
     })
@@ -207,7 +208,7 @@ export class Journal {
    * Replay a fully validated snapshot in deterministic order.
    * @param {{ handler: (input: { record: object }) => unknown, maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} options
    */
-  async replay({ handler, maxRecords, maxBytes, maxRecordBytes } = {}) {
+  async replay({ handler, maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
     if (this.started || this.starting || this.closing) {
       return toResult({ error: new Error("Journal can only be replayed while stopped") })
     }
@@ -215,6 +216,7 @@ export class Journal {
       directory: this.directory,
       handler,
       maxRecords,
+      maxSessions,
       maxBytes,
       maxRecordBytes,
     })
