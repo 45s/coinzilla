@@ -14,7 +14,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 
 ## Roadmap
 
-- [~] Document the current journal record schema and public API. Versioned schema-v1 envelopes are now written; legacy raw event records are read as schema v1. See [README](./README.md).
+- [~] Document the current journal record schema and public API. Schema-v1 metadata is added alongside the original top-level event fields; legacy raw event records remain readable as schema v1. See [README](./README.md).
 - [~] Verify append/read ordering and behavior after partial write failures. Read/replay is deterministic and bounded; a write failure poisons the active session and incomplete tails fail closed. Runtime tests still need execution.
 - [~] Define and test duplicate/replay handling and stable record identity. Record IDs are required and duplicates fail recovery; replay is ordered and consumers must remain idempotent.
 - [~] Define serialization compatibility and schema evolution policy. Unknown versions fail explicitly; legacy records remain readable.

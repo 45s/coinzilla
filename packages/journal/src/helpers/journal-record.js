@@ -21,15 +21,21 @@ export function serializeJournalRecord({ event } = {}) {
     throw new TypeError("Journal events require a non-empty stable id")
   }
 
-  const envelope = {
+  if (Object.hasOwn(event, JOURNAL_METADATA_KEY)) {
+    throw new TypeError(`Event field ${JOURNAL_METADATA_KEY} is reserved by Journal`)
+  }
+
+  // Keep event fields at the JSONL top level for existing consumers that
+  // inspect persisted events directly; the metadata is additive.
+  const record = {
+    ...event,
     [JOURNAL_METADATA_KEY]: {
       schemaVersion: SUPPORTED_SCHEMA_VERSION,
       id: event.id,
     },
-    payload: event,
   }
 
-  return `${JSON.stringify(envelope)}\n`
+  return `${JSON.stringify(record)}\n`
 }
 
 /**
@@ -109,7 +115,8 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
       }
       schemaVersion = metadata.schemaVersion
       id = metadata.id
-      payload = parsed.payload
+      payload = { ...parsed }
+      delete payload[JOURNAL_METADATA_KEY].payload
 
       if (schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
         throw createJournalError({
@@ -128,7 +135,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
       ) {
         throw createJournalError({
           code: "JOURNAL_MALFORMED_RECORD",
-          message: `Journal envelope at ${fileName}:${lineNumber} has invalid identity or payload`,
+          message: `Journal record metadata at ${fileName}:${lineNumber} has invalid identity or payload`,
           details: position,
         })
       }

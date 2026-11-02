@@ -23,7 +23,7 @@ const closed = await journal.close()
 if (!closed.ok) throw closed.errors[0]
 ```
 
-New records use a versioned envelope with schema version 1 and a stable record ID. Existing raw event JSONL records are supported as legacy schema-v1 records.
+New records retain the original event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
 
 ## Reading after restart
 
@@ -52,7 +52,7 @@ for (const record of result.records) {
 
 Sessions are ordered by timestamp and then numeric collision suffix (the unsuffixed file first); records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
-The reader rejects invalid UTF-8, duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current versioned envelope. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
+The reader rejects invalid UTF-8, duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current additive metadata format. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 
 Recovery is bounded by configurable `maxSessions`, `maxRecords`, `maxBytes`, and `maxRecordBytes`. Defaults are 10,000 sessions, 100,000 records, 64 MiB total, and 1 MiB per record. Exceeding a limit fails the entire read; increase limits deliberately when the retained history requires it.
 

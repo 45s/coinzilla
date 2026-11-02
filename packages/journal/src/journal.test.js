@@ -77,8 +77,9 @@ test("writes published events as JSONL records", async () => {
     const stored = JSON.parse(lines[0])
     assert.equal(stored.__coinzillaJournal.schemaVersion, 1)
     assert.equal(stored.__coinzillaJournal.id, published.event.id)
-    assert.equal(stored.payload.name, "order.filled")
-    assert.equal(stored.payload.data.orderId, "123")
+    assert.equal(stored.name, "order.filled")
+    assert.equal(stored.data.orderId, "123")
+    assert.equal(stored.id, published.event.id)
   } finally {
     await context.journal.close()
     await context.eventBus.close()
@@ -113,7 +114,10 @@ test("preserves event order when multiple events are published", async () => {
     const events = content
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line).payload)
+      .map((line) => {
+        const { __coinzillaJournal, ...event } = JSON.parse(line)
+        return event
+      })
 
     assert.deepEqual(
       events.map((event) => event.name),
@@ -141,7 +145,7 @@ test("close drains events published immediately before shutdown", async () => {
     assert.equal(result.ok, true)
 
     const content = await readFile(context.filePath, "utf8")
-    const event = JSON.parse(content.trim()).payload
+    const { __coinzillaJournal, ...event } = JSON.parse(content.trim())
 
     assert.equal(event.name, "order.filled")
     assert.equal(event.data.orderId, "456")
