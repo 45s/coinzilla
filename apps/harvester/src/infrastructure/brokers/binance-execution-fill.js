@@ -27,7 +27,7 @@ export function createCanonicalFillFromBinanceEvent({ event, market } = {}) {
     tradeId: execution.id,
     orderId: execution.orderId,
   })) {
-    if (typeof value !== "string" || !/^\\d+$/.test(value)) {
+    if (typeof value !== "string" || !/^\d+$/.test(value)) {
       throw new TypeError("Binance execution " + field + " must be a numeric identifier")
     }
   }
