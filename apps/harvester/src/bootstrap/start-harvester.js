@@ -438,6 +438,7 @@ export async function startHarvester({
         getPortfolio,
         getRecoveryLedger,
         getMarketMetadata,
+        getAccountSnapshot,
         updateTradingAccounting,
         completeRecoveryCycle,
         canTrade: () => userDataReady,
