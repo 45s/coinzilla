@@ -44,6 +44,7 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | Domain | Owned paths | Local instructions / roadmap |
 | --- | --- | --- |
 | Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
+| Harvester application | `apps/harvester/**` | `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md` |
 | Market Simulator application | `apps/market-simulator/**` | `apps/market-simulator/AGENTS.md`, `apps/market-simulator/ROADMAP.md` |
 | Coin Farmer application | `apps/bot-coin-farmer/**` | `apps/bot-coin-farmer/AGENTS.md`, `apps/bot-coin-farmer/ROADMAP.md` |
 | Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
@@ -147,22 +148,22 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 
 ### `develop`
 - Require pull requests; disallow direct pushes.
-- Require the relevant CI status checks.
-- Require branches to be up to date before merging.
-- Require conversation resolution if review comments are used.
-- Require zero human approvals (the goal is automated task integration).
-- Block force pushes and branch deletion.
-- Do not configure a bypass that lets agents skip required checks.
+- Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
+- Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
+- Require conversation resolution.
+- Require zero human approvals; agents may merge their own PRs only after every required check is green.
+- Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
+- Do not configure bypass actors or admin bypass for these gates.
 
 ### `main`
 - Require pull requests.
 - Require the release CI status checks and up-to-date branch.
-- Keep final release approval under user control.
+- Require at least one approving review so the final release approval is technically enforced, not merely documented.
 - Block force pushes and branch deletion.
 
 Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
 
-After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The existing `main` ruleset must be reviewed separately; do not weaken it to reduce routine review overhead.
+After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The active `develop-core` ruleset must require **every CI workflow check** listed below, with strict up-to-date branches and zero approving reviews. A missing, pending, cancelled, skipped-required, or failed required check must block merging. Do not add bypass actors. The active `main` ruleset must require at least one approving review for the release PR; do not rely on prose saying the user approves while GitHub technically permits zero approvals. The repository's automatic head-branch deletion setting must remain enabled.
 
 ## 11. Exceptions
 
