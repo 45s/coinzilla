@@ -15,9 +15,20 @@ A change is ready to merge only when:
 - [ ] Modules are cohesive, follow single-responsibility boundaries, and do not turn public entry points into implementation dumping grounds.
 - [ ] Non-trivial pure logic is extracted into cohesive, independently testable modules rather than embedded in large classes/services or unrelated files.
 - [ ] Large files have been split by responsibility, or a concrete reason for keeping them together is documented in the PR.
-- [ ] Public APIs, configuration, and documentation are updated when behavior changes.
+- [ ] Documentation impact requirements in [Documentation impact](#documentation-impact) are satisfied.
 - [ ] No secrets, credentials, generated artifacts, or unrelated changes are included.
 - [ ] Any deliberate deviation from these standards is explained in the pull request, with a reason and follow-up plan when appropriate.
+
+## Documentation impact
+
+This section is the canonical policy for assessing and updating documentation in every meaningful change.
+
+- Assess whether the change affects documented behavior, public APIs/contracts, configuration, architecture, ownership, operational procedures, examples, or roadmap status.
+- Update every affected source of documentation in the same task/PR as the change and, where practical, in the same commit. This includes agent instructions and domain roadmaps when their guidance or status changes.
+- If no documentation update is warranted (for example, an internal refactor or test-only change that does not alter a documented contract), record a concise reason in the PR description.
+- Do not defer a required documentation update to an unspecified follow-up. Include a **Documentation impact** note in every meaningful PR, listing updates or explaining why none are needed.
+
+Other repository instructions and task checklists should link to this section rather than restating its policy.
 
 ## Principles
 
@@ -208,6 +219,7 @@ Before approving a pull request, ask:
 11. Could the change expose secrets, weaken security, or break compatibility?
 12. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
 13. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+14. Are the requirements in [Documentation impact](#documentation-impact) satisfied?
 
 ## Rollout policy
 

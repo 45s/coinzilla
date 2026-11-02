@@ -18,7 +18,7 @@ When the owning task is Harvester, the task order is governed by [Harvester Trad
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
-5. Add tests and update the domain roadmap/docs.
+5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
 6. Run the required local checks and open a PR targeting `develop`.
 7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
 8. Never merge task work directly into `main`.
@@ -87,7 +87,7 @@ A task PR targeting `develop` must:
 - Pass the relevant package tests and coverage checks.
 - Pass the repository's required CI checks.
 - Contain the latest `develop` commit immediately before merge.
-- Include updates to public API docs, local roadmap, and relevant instructions when needed.
+- Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.
 - Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
 
 **Human approval is not a routine gate for `develop`.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent may merge its own task PR into `develop`. Prefer GitHub auto-merge if the repository enables it; otherwise merge only after the required checks have completed successfully. Never bypass branch protection or merge with pending/failed checks.

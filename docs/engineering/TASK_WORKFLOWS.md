@@ -5,6 +5,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 ## Documentation-only change
 
 - Confirm the owning documentation/domain and check linked references.
+- Follow the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact).
 - Preserve technical meaning; verify every command, path, and policy statement against the repository.
 - Run pnpm run check:agent-policy when ownership or agent instructions change.
 - Run actionlint/syntax checks when workflow or executable configuration files change.
@@ -21,7 +22,8 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 
 - Identify the user-visible contract, owning roadmap item, dependencies, and failure modes before implementation.
 - Add tests for success, invalid input, boundaries, failures, and relevant interactions.
-- Update API docs, examples, and roadmap status.
+- Apply the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact) to the changed behavior and affected roadmap.
+- Include the required **Documentation impact** note in the PR description, as specified by the canonical policy.
 - Run focused tests/coverage, workspace tests, syntax/policy checks, and applicable CI.
 
 ## Cross-domain or shared-infrastructure change
@@ -43,7 +45,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 ## Before merge
 
 - Synchronize with the latest actual PR target branch.
-- Inspect the complete diff and confirm ownership, tests, docs, and roadmap updates.
+- Inspect the complete diff and verify the documentation-impact policy is satisfied.
 - Wait for every required CI status check to complete successfully on the exact PR head SHA.
 - Confirm the target branch is up to date; do not bypass rules or merge with pending/failed checks.
 - Merge task PRs to develop without routine human approval; reserve user approval for the release PR to main.

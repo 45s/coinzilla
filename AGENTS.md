@@ -41,7 +41,7 @@ Before making changes, select the task-specific checklist in [docs/engineering/T
 
 4. **Evidence-Based Completion**
    - Inspect the final diff for correctness, missing tests, accidental changes, dead code, secrets, and weakened checks.
-   - Update relevant documentation, agent instructions, and package roadmaps when contracts or conventions change.
+   - Follow the canonical [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change.
    - In the completion summary, list the behavior changed, tests/checks actually run and their outcomes, and anything not run or still uncertain.
 
 ## Required workflow
@@ -55,7 +55,7 @@ Before making changes, select the task-specific checklist in [docs/engineering/T
 4. Add or update deterministic tests with the implementation; add regression coverage for defects whenever practical.
 5. Make the smallest cohesive change and keep ownership boundaries intact.
 6. Run focused tests and coverage, then applicable workspace checks.
-7. Review the complete diff and update the owning domain roadmap and docs when appropriate.
+7. Review the complete diff and satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact); include the required impact note in the PR.
 8. Follow the target-aware branch synchronization and PR rules in `AI_AGENT_WORKFLOW.md`.
 9. Report exact commands, outcomes, and the final commit SHA. Never claim an unrun check passed.
 
@@ -69,7 +69,7 @@ Before making changes, select the task-specific checklist in [docs/engineering/T
 - Keep task PRs focused and target `develop`. Run the required checks and merge the task PR after all automated gates pass; routine human approval is not required for `develop`.
 - Never merge task work directly into `main`. Only a milestone/release PR from `develop` to `main` receives the user's final review and approval.
 - Synchronize against the PR's actual target branch, not a hard-coded branch name. The agent owns branch freshness, conflict resolution, CI reruns, and verification; never ask the user to update a branch manually.
-- Update the relevant domain roadmap and documentation when work changes behavior, contracts, ownership, or completion status.
+- For every meaningful change, follow the canonical [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) and include its required impact note in the PR.
 - If required permissions, checks, or branch rules are missing, do not bypass them. Report the exact blocker and continue only with safe work.
 
 ## Repository-specific constraints
