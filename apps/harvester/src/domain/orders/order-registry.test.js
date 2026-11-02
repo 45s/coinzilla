@@ -249,3 +249,31 @@ test("validates constructor and operation input types", () => {
   assert.throws(() => OrderRegistry.empty().applyUpdate({ order: makeOrder() }), /broker-acknowledged/)
   assert.throws(() => OrderRegistry.empty().getOrder({}), /clientOrderId/)
 })
+
+test("ignores a stale OPEN acknowledgement that arrives after a newer fill event", () => {
+  const registry = OrderRegistry.empty().registerPending({
+    order: makeOrder(),
+  }).registry
+  const partial = registry.applyUpdate({
+    order: makeOrder({
+      brokerOrderId: "9001",
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "40",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+    }),
+  }).registry
+  const staleAcknowledgement = partial.applyUpdate({
+    order: makeOrder({
+      brokerOrderId: "9001",
+      status: "OPEN",
+      createdAt: 100,
+    }),
+  })
+
+  assert.equal(staleAcknowledgement.stale, true)
+  assert.equal(staleAcknowledgement.applied, false)
+  assert.equal(staleAcknowledgement.registry, partial)
+  assert.equal(partial.getOrder({ clientOrderId: "harvester-1" }).status, "PARTIALLY_FILLED")
+})
