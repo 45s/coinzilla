@@ -404,6 +404,50 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  async createCanonicalOrder(input = {}) {
+    try {
+      if (this.userDataUnavailable) {
+        throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
+      }
+      const { symbol, clientOrderId, ...orderInput } = input
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("createCanonicalOrder requires a symbol")
+      }
+      if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+        throw new TypeError("createCanonicalOrder requires clientOrderId")
+      }
+
+      const params = {
+        ...orderInput,
+        symbol,
+        newClientOrderId: clientOrderId,
+        side: input.side ?? "BUY",
+        type: input.type ?? "LIMIT",
+      }
+      if (params.type === "LIMIT_MAKER") {
+        delete params.timeInForce
+      } else {
+        params.timeInForce = input.timeInForce ?? "GTC"
+      }
+
+      const response = await this.tradingConnection.request(
+        "order.place",
+        params,
+        { signed: true, stateChanging: true },
+      )
+      const market = await getCanonicalMarket({ broker: this, symbol })
+      return toResult({
+        data: adaptCanonicalOrder({
+          order: response.data,
+          market,
+        }),
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.createCanonicalOrder()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
   async cancelOrder({ symbol, orderId }) {
     try {
       if (this.userDataUnavailable) {
