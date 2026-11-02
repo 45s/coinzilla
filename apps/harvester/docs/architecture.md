@@ -28,6 +28,42 @@ A **domain policy** expresses a business decision rule: given relevant facts, wh
 
 A policy can use domain entities such as Portfolio as input. It should not own broker clients, WebSocket subscriptions, timers, or exchange SDK objects.
 
+## Implementation style: classes versus plain pure functions
+
+Harvester uses two complementary styles. Choose based on responsibility, not personal preference.
+
+### Plain pure functions — required default for deterministic logic
+
+**Calculations and decisions MUST be plain pure functions.** A pure function receives all required facts through arguments, derives its result only from those arguments, and has no observable side effects. The same inputs must produce the same output.
+
+Use plain pure functions for:
+- price, quantity, fee, and profit calculations;
+- trading-policy and strategy decisions;
+- validation and predicates;
+- parsing, normalization, mapping, and deterministic transformations.
+
+Meaningful pure functions MUST live in focused, cohesive modules separate from classes, use cases, and large orchestration files—even when there is only one caller. Keep related functions together by domain responsibility. Do not create artificial files for trivial one-line expressions or tightly coupled callbacks.
+
+A pure function must not read object/instance state, globals, process environment, the clock, randomness, files, databases, networks, or broker clients. Supply the required facts explicitly. Pure domain modules must remain independent of infrastructure and application workflows.
+
+### Classes — for owned domain state
+
+Use classes when a domain concept owns state and must protect invariants across state changes. `Fill`, `Position`, and `Portfolio` demonstrate this style.
+
+- Keep internal state private where appropriate.
+- Expose deliberate getters and domain methods.
+- Enforce state-transition invariants inside the object.
+- Keep the object immutable when that matches its domain contract.
+- Extract independent calculations and decisions into plain pure functions instead of adding methods solely to access private fields.
+
+A value object can be a class when construction and encapsulation protect meaningful invariants. A simple data value does not need a class just to match `Fill`.
+
+### Use cases — injected workflow functions
+
+Use cases are focused functions created with explicit dependencies. They coordinate domain objects, pure functions, and application ports. Side effects happen through injected ports at application/infrastructure boundaries; deterministic domain logic stays pure.
+
+**Decision rule:** if a behavior can be calculated from explicit inputs without side effects, implement it as a plain pure function. If a concept must own state and protect its lifecycle invariants, use a class. Do not choose a class merely for stylistic uniformity.
+
 ## Trading Engine versus Strategy
 
 - **Strategy decides what and when:** whether to BUY or SELL, which price and quantity to request, and how its trading plan should respond to market and portfolio state.
@@ -229,7 +265,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
-Use factories where they make dependencies and construction explicit; use plain pure functions for deterministic calculations and policies. Classes are not prohibited, but do not introduce them just to imitate a tutorial. Likewise, do not create a one-function file or folder mechanically: follow the repository's cohesion and pure-function extraction standards.
+Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
 
 ### Testing pattern
 
