@@ -18,13 +18,13 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
+- [~] Protect `main`: require pull requests, one approving review, and the complete release CI check set.
 
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires one approving review, has no bypass actors, and blocks force pushes and deletions. Its required status checks still omit `Workspace test coverage` and `actionlint`; add both before treating the release CI gate as complete.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [x] Review dependency updates and GitHub Actions permissions for least privilege.
 
-  Existing workflows use read-only `contents` permissions and pin third-party Actions to full commit SHAs. Added GitHub-native Dependabot updates for the pnpm workspace and GitHub Actions; no runtime or development package dependency was added.
+  Existing workflows use read-only `contents` permissions and pin third-party Actions to full commit SHAs. GitHub-native Dependabot updates are configured weekly for the pnpm workspace and GitHub Actions; no package dependency is added.
 
 ## 3. Test critical behavior
 

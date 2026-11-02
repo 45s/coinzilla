@@ -24,8 +24,9 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
         quoteAsset: "USDT",
         orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
         filters: [
-          { filterType: "PRICE_FILTER", tickSize: "0.10" },
-          { filterType: "LOT_SIZE", stepSize: "0.001" },
+          { filterType: "PRICE_FILTER", tickSize: "0.10", minPrice: "0.10", maxPrice: "100000" },
+          { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0.001", maxQty: "1000" },
+          { filterType: "MIN_NOTIONAL", minNotional: "5" },
         ],
       }] }
     })
@@ -35,6 +36,9 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
       data: {
         symbol: "BTCUSDT", baseAsset: "BTC", quoteAsset: "USDT",
         tickSize: "0.10", stepSize: "0.001",
+        minPrice: "0.10", maxPrice: "100000",
+        minQuantity: "0.001", maxQuantity: "1000",
+        minNotional: "5",
         supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
       },
     })
@@ -84,3 +88,43 @@ describe("BinanceSdkBroker.getSymbolFilters", () => {
     assert.equal(rpc.calls.length, 0)
   })
 })
+
+  it("preserves disabled zero optional filters without treating them as invalid", async () => {
+    const { broker } = createBroker(() => ({ symbols: [{
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      orderTypes: ["LIMIT", "LIMIT_MAKER"],
+      filters: [
+        { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "0", maxPrice: "0" },
+        { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0", maxQty: "0" },
+        { filterType: "NOTIONAL", minNotional: "0", maxNotional: "0" },
+      ],
+    }] }))
+    const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.data.minPrice, "0")
+    assert.equal(result.data.maxPrice, "0")
+    assert.equal(result.data.minQuantity, "0")
+    assert.equal(result.data.maxQuantity, "0")
+    assert.equal(result.data.minNotional, "0")
+    assert.equal(result.data.maxNotional, "0")
+  })
+
+  it("rejects malformed optional filter decimals", async () => {
+    const { broker } = createBroker(() => ({ symbols: [{
+      symbol: "BTCUSDT",
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      orderTypes: ["LIMIT"],
+      filters: [
+        { filterType: "PRICE_FILTER", tickSize: "0.01", minPrice: "NaN" },
+        { filterType: "LOT_SIZE", stepSize: "0.001", minQty: "0.001" },
+      ],
+    }] }))
+    const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /minPrice is invalid/)
+  })

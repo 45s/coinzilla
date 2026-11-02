@@ -1,10 +1,64 @@
 # Harvester Trading Strategies
 
-Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
+Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. **Conservative (Free-Roll) is the first implementation priority and the default strategy for the first executable release. Aggressive is deferred until Conservative is proven end to end on TESTNET.** For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
+
+## Implementation priority
+
+Conservative is not merely the first policy to document: it is the first strategy that must actually produce and submit orders. The immediate deliverable is the complete market-price → Conservative decision → broker order → execution/fill → Portfolio update → next decision/order loop on TESTNET. See [Trading First](./TRADING_FIRST.md). Journal, durable recovery, comprehensive reconciliation, and Aggressive are deferred until this loop works; only minimum immediate execution safety may be added ahead of it.
 
 ## Strategy modes
 
 ### Conservative — Free-Roll
+
+This policy is implemented as a broker-independent pure function in
+`src/domain/strategies/conservative/conservative-strategy.js`. It emits order
+intents only; the application engine validates and submits them.
+
+The first connected policy behavior is:
+
+The initial standing BUY follows the Free-Roll trailing rule. While the strategy
+is in its trailing phase, if the last traded price rises by at least one full
+compounded `priceStepPercent` from the last BUY reference, cancel the current
+BUY and replace it below the new last trade by the configured percentage.
+Round the replacement price down to the exchange tick. If the cancellation
+reveals any execution, reconcile those fills and pause instead of placing a
+replacement from uncertain inventory. After a BUY fully fills, the next
+standing BUY is fixed and does not trail. Trailing becomes active again after
+a profitable recovery SELL completes.
+
+The default Harvester config enables only `ZROUSDT` while the first trading
+cycle is limited to one pair. `ZROFDUSD` remains configured but disabled until
+cross-pair shared-asset allocation is implemented.
+
+- With no active strategy inventory and no active BUY, create one BUY at the
+  last traded price reduced by `priceStepPercent`, rounded down to the
+  exchange price tick. Quantity is `orderQuantity`, rounded down to the
+  exchange quantity step.
+- Use `LIMIT_MAKER` when `makerPercent` is zero; otherwise use `LIMIT`, with
+  exchange time-in-force and filter requirements handled by the broker adapter.
+- When another BUY fully fills while a recovery SELL is open, cancel the old
+  SELL, query and account all canonical fills for that order, verify the
+  cumulative filled quantity, and then recalculate the recovery SELL. If the
+  cancellation or fill history is ambiguous, pause rather than guessing.
+- With active inventory, create a recovery SELL when no SELL is already active.
+  The existing exact-decimal recovery planner preserves `keepQuantity`, covers
+  cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
+  proceeds, and rounds the SELL price up to the exchange tick.
+- When inventory exists, also maintain the next standing BUY unless one is
+  already active. Its reference is the last qualifying BUY price; before a
+  last-buy reference exists, the current last traded price is used.
+- Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
+  intents on subsequent market events. A new BUY is omitted when outstanding
+  recovery capital plus the new order notional would exceed the pair investment cap.
+- A strategy decision can therefore request both a BUY and a SELL. The policy
+  does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
+
+The domain policy is composed by the Harvester trading engine. Offline
+bootstrap and engine tests cover BUY submission, trailing replacement,
+BUY-driven recovery-SELL replacement, fill accounting, recovery completion,
+and free-inventory allocation. A real Binance TESTNET run is still required
+to verify the broker integration against the exchange.
+
 
 This mode is based on the existing `apps/bot-free-roll` strategy.
 
@@ -163,21 +217,31 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 ## Still to decide
 
-The following questions remain open and must be answered before implementation where they affect behavior:
+The remaining questions are not blockers for the implemented Conservative
+first-cycle workflow:
 
-1. **Maximum price drop (not decided):** We agreed that the reference is the average price of BUY orders that actually filled. We still need to decide exactly how the configured drop percentage is measured. For example, if the average BUY price is 100 USDT and the limit is 5%, should Conservative take control when the latest market price reaches 95 USDT, or should the calculation also account for the fees that would be paid to sell? Do not choose either rule without asking the user.
-3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
-4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
-5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
-6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
-8. How are shared quote assets and inventory coordinated across different pairs that use the same account asset?
-9. What is the exact reservation lifecycle for BUY and SELL orders, including partial fills, cancellation races, rejections, and uncertain exchange outcomes?
-10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
-11. If strategy-specific performance attribution is required, how should it work without splitting the actual Position?
+1. **Aggressive maximum price drop:** the exact threshold measurement and
+   treatment of estimated SELL fees remain undecided.
+2. **Aggressive partial-SELL BUY trigger:** placement price and duplicate
+   threshold-crossing behavior remain to be specified.
+3. **Aggressive fallback:** behavior when the consolidated recovery SELL is
+   rejected, partially filled, or cannot be placed remains to be specified.
+4. **Multi-pair shared assets:** quote-currency and inventory allocation across
+   enabled pairs remains deferred. The first TESTNET configuration enables
+   exactly one pair.
+5. **Full order reservations:** durable and exchange-reconciled reservation
+   behavior for partial fills, cancellations, rejections, and uncertain
+   outcomes remains deferred beyond the current in-process single-pair flow.
+6. **Restart and reconnect recovery:** persistence, historical exchange
+   reconciliation, and unattended operation guarantees remain deferred until
+   after the first real TESTNET cycle.
+7. **Performance attribution:** strategy-specific attribution is optional and
+   must not split the actual shared Position.
 
-Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
+Third-asset commissions are explicitly unsupported for now and cause the
+affected execution to fail closed. BUY and SELL commissions in the market's
+base or quote asset are accounted from actual fills.
 
-Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
 ## Guidance for continuing the strategy discussion
 
 The user is making product decisions, not taking a trading terminology test. Continue one unresolved decision at a time and use plain everyday English.
@@ -192,4 +256,16 @@ The user is making product decisions, not taking a trading terminology test. Con
 
 ## Current implementation status
 
-The default composed policy is now Aggressive and receives the latest in-memory Portfolio snapshot. It currently returns NO_ACTION with blocker codes rather than emitting order intents: the agreed grid depth, exact percentage-step calculation, maximum-price-drop formula, and SELL price/fee/rounding formula are not yet fully specified. This is a safe policy integration, not an executable or live Aggressive strategy. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending.
+Conservative is the first executable strategy. The bootstrap composes it when
+TESTNET trading is explicitly enabled. The current implementation includes
+initial and standing BUY orders, upward trailing in the initial/post-recovery
+phase, fixed next-BUY behavior after a BUY fill, recovery SELL planning,
+cancel-and-reconcile replacement of an active SELL after a new BUY fills,
+actual fill/commission accounting, profit-gated free-inventory allocation,
+and immediate fill-driven reevaluation.
+
+A fake-broker integration scenario covers the complete first recovery cycle,
+including a second BUY arriving before the recovery SELL completes. This is
+offline evidence only. A real Binance TESTNET run remains outstanding.
+Aggressive, multi-pair shared-asset allocation, durable restart recovery,
+comprehensive reconnect reconciliation, and Journal remain deferred.

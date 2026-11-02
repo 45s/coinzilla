@@ -19,9 +19,12 @@ const adaptExecutedOrder = (message) => {
     type: report.orderType,
     side: report.side,
     quantity: report.quantity,
+    executedQuantity: report.totalTradeQuantity,
     price: report.price,
     status: report.orderStatus,
     clientOrderId: report.newClientOrderId,
+    createdAt: report.creationTime,
+    updatedAt: report.eventTime,
   }
 
   const fill = report.executionType === "TRADE"

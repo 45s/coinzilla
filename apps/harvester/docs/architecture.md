@@ -6,6 +6,13 @@ Harvester uses one shared Trading Engine with multiple strategy policies. The en
 
 This document records the current architectural direction. It does not define implementation APIs or settle the strategy and portfolio decisions listed in the roadmap.
 
+
+## Product priority: make the trading loop work first
+
+The architecture exists to deliver a running trading application, not to postpone it. The mandatory first workflow is: load configuration → connect and subscribe to enabled-market prices → evaluate Conservative → validate and submit a broker order → process order updates and actual fills → update trading state → evaluate again and place the next required order. See [Trading First](./TRADING_FIRST.md), which takes precedence over optional architecture work.
+
+For the first controlled TESTNET cycle, implement only the minimum execution safeguards needed for valid orders, balance/market-rule checks, fill correctness, duplicate prevention, and safe pause on uncertain state. Journal integration, durable state, comprehensive restart recovery/reconciliation, dashboards, optimization, and Aggressive are later work. Do not build those systems before the actual strategy-to-order-to-execution path exists and works. Keep the code simple and use existing contracts; do not add abstractions solely for hypothetical future needs.
+
 ## Architectural roles
 
 | Concept | Responsibility | Architectural role |
@@ -277,3 +284,83 @@ Use dependency-injected functions for application workflows and plain pure funct
 - **Integration:** keep external exchange tests opt-in and TESTNET-only. Default unit tests must remain offline and credential-free.
 
 The tutorial's companion implementation is a pattern reference, not a source of Harvester APIs. Reuse its separation of concerns and explicit dependency composition, while retaining Harvester's ports-and-adapters direction, existing package contracts, exact-decimal accounting, and reliability requirements.
+
+
+## Exchange market metadata
+
+The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
+
+This is only a market-metadata readiness gate. It does not yet initialize account-wide available balances, reserve quote/base assets, reconcile open orders, or enforce all min/max constraints at the final order-submission boundary. Those are separate P0 execution-safety requirements.
+
+
+## Account balance snapshot
+
+After the user-data stream is established, bootstrap loads a canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The same validation is repeated after each accounted execution. A failed or stale refresh blocks further order placement. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
+
+This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
+
+## Strategy decision execution
+
+The `makeExecuteStrategyDecision` use case is the application boundary between
+pure strategy order intents and broker submission. It first creates and validates every local PENDING
+`CanonicalOrder` in the decision, so a malformed second intent cannot leave a
+first order partially submitted. It then registers each pending order before
+the network request and requires a canonical broker acknowledgement with the
+same client order ID. A local acknowledgement-registration failure is also
+reported as an unknown broker outcome and pauses the pair. A transport failure or malformed
+acknowledgement is treated as an unknown outcome: the caller pauses the pair and
+must not blindly retry. The use case never decides whether to BUY or SELL and
+never mutates Portfolio.
+
+The Binance adapter prefers the broker's canonical order-placement operation
+so the application receives a `CanonicalOrder` acknowledgement rather than a
+raw exchange response.
+
+
+## In-process Conservative trading engine
+
+`makeConservativeTradingEngine` connects market-price events to the pure
+Conservative policy and validated order-submission use case. It owns the
+in-process order registry, latest market prices, last completed BUY reference
+prices, and pair pause flags. Portfolio and RecoveryLedger remain owned by the
+bootstrap domain workflow and are supplied through explicit callbacks.
+
+Only order updates matching a registered Harvester client order ID are
+accepted. TRADE events must contain a canonical Fill and are applied through
+the injected accounting use case. A partial order fill updates actual
+accounting but does not advance the strategy; the engine waits for the order's
+terminal state. Unknown/manual order events pause the pair and never alter
+strategy inventory. A fully filled order triggers immediate strategy
+reevaluation from the latest known price.
+
+## Conservative recovery SELL replacement
+
+When a BUY order becomes fully filled while a recovery SELL is still active,
+the engine cancels the old SELL before planning a replacement. It requires a
+canonical terminal cancellation acknowledgement, then queries the broker's
+canonical fills for that exact order. Every returned fill is identity-checked
+and applied through the idempotent Portfolio/RecoveryLedger accounting use
+case. The sum of reconciled fill quantities must equal the canceled order's
+cumulative executed quantity before the strategy is allowed to continue.
+
+If cancellation is unconfirmed, fill history is unavailable or incomplete,
+the order actually filled during cancellation, or any fill does not match the
+registered order, the pair pauses. No replacement SELL is submitted from
+unreconciled quantities. This covers the ordinary cancel/replace path without
+claiming durable restart or stream-recovery reconciliation.
+
+## Trailing BUY lifecycle
+
+The engine tracks whether the pair is in a trailing phase. A newly initialized
+pair and a pair whose recovery SELL has completed may trail its standing BUY
+upward. A BUY that has fully filled turns trailing off; the next standing BUY
+is fixed while the new recovery cycle is active. A profitable recovery SELL
+turns trailing back on, including for a next BUY that was already resting.
+
+A trailing adjustment occurs only after the last traded price rises by at
+least one full percentage step from the reference used for the current BUY.
+The engine cancels the old BUY, queries canonical fills, and verifies the final
+cumulative execution quantity. If any quantity filled during cancellation,
+the fills are accounted and the pair pauses; it never submits a replacement
+from uncertain inventory. A clean zero-fill cancellation is followed by a
+new BUY below the current last trade, rounded down to the exchange tick.

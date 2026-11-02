@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { Market, TradingRules } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
@@ -37,13 +38,33 @@ test("adapts Harvester placeOrder to Binance createOrder without changing the re
 
 test("maps object-shaped application inputs to the broker package methods", async () => {
   const { calls, client, result } = createClient()
+  client.getSymbolFilters = async (input) => {
+    calls.push(["getSymbolFilters", input])
+    return {
+      ok: true,
+      data: {
+        symbol: "BTCUSDT",
+        baseAsset: "BTC",
+        quoteAsset: "USDT",
+        tickSize: "0.01",
+        stepSize: "0.00001",
+        minQuantity: "0.0001",
+        minNotional: "5",
+        supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+      },
+    }
+  }
   const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
 
   assert.equal(await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 7 }), result)
   assert.equal(await broker.getOpenOrders({ symbol: "BTCUSDT" }), result)
   assert.equal(await broker.getFills({ symbol: "BTCUSDT", limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
-  assert.equal(await broker.getSymbolFilters({ symbol: "BTCUSDT" }), result)
+  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  assert.equal(marketMetadata.ok, true)
+  assert.ok(marketMetadata.data.market instanceof Market)
+  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
+  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
 
   assert.deepEqual(calls, [
@@ -68,10 +89,12 @@ test("forwards connection and subscription lifecycle methods", async () => {
   await broker.subscribeForUserData({ onEvent, onStatus })
   await broker.disconnect()
 
-  assert.deepEqual(calls, [
+  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
+  assert.equal(userDataCall[1].onStatus, onStatus)
+  assert.equal(typeof userDataCall[1].onEvent, "function")
+  assert.deepEqual(calls.filter(([method]) => method !== "subscribeForUserData"), [
     ["connect"],
     ["subscribeForPrices", { symbol: "BTCUSDT", onPrice }],
-    ["subscribeForUserData", { onEvent, onStatus }],
     ["disconnect"],
   ])
   assert.equal(result.ok, true)
@@ -90,3 +113,32 @@ test("rejects missing credentials and incomplete broker implementations", () => 
     /missing methods/,
   )
 })
+
+test("forwards broker-normalized user-data events without reinterpreting them", async () => {
+  const { calls, client } = createClient()
+  const event = Object.freeze({ eventType: "normalized", value: "canonical-from-broker" })
+  const status = Object.freeze({ type: "ready" })
+  client.subscribeForUserData = async ({ onEvent, onStatus }) => {
+    calls.push(["subscribeForUserData"])
+    onEvent({ event })
+    onStatus(status)
+    return { ok: true, data: { disconnect: async () => {} } }
+  }
+  const received = []
+  const statuses = []
+  const broker = createBinanceBrokerAdapter({
+    config,
+    brokerFactory: () => client,
+  })
+
+  const result = await broker.subscribeForUserData({
+    onEvent: ({ event: receivedEvent }) => received.push(receivedEvent),
+    onStatus: (receivedStatus) => statuses.push(receivedStatus),
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(received, [event])
+  assert.deepEqual(statuses, [status])
+})
+
+
