@@ -107,7 +107,21 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
 
 
   it("filters stale subscriptions and deduplicates repeated execution reports", async () => {
-    const { broker, rpc } = createBroker(() => ({ subscriptionId: 21 }))
+    const { broker, rpc } = createBroker(
+      () => ({ subscriptionId: 21 }),
+      ({ symbol }) => ({
+        symbols: [{
+          symbol,
+          baseAsset: "BTC",
+          quoteAsset: "USDT",
+          orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+          filters: [
+            { filterType: "PRICE_FILTER", tickSize: "0.01" },
+            { filterType: "LOT_SIZE", stepSize: "0.00001" },
+          ],
+        }],
+      }),
+    )
     broker.connected = true
     const received = []
     const result = await broker.subscribeForUserData({ onEvent: (event) => received.push(event) })
@@ -139,6 +153,7 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     rpc.emitEvent({ subscriptionId: 21, event: structuredClone(report) })
     rpc.emitEvent({ subscriptionId: 21, event: { ...report, I: 201 } })
 
+    await new Promise((resolve) => setImmediate(resolve))
     assert.equal(received.length, 2)
     await result.data.disconnect()
   })
