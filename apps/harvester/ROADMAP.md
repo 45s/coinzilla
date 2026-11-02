@@ -12,9 +12,10 @@
 - [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
 - [~] Define Aggressive order-level behavior. The initial grid-style cycle, immediate placement of the full BUY grid, one-grid-per-market rule, fixed reference-based levels, upward repricing by all crossed `priceStep` levels, replacement-grid capacity checks, multiple active BUY/SELL orders, shared inventory, partial-SELL threshold, BUY-fill SELL eligibility (>50% cumulative BUY fill and >$5 USD-equivalent notional, otherwise wait for full BUY fill), separate SELL orders, and Conservative fallback are documented. BUY/SELL tick rounding is agreed (BUY down, SELL up); exact percentage-step calculation and remaining order/fee edge cases are still open.
 - [~] Define Aggressive risk limits and fallback behavior. Maximum invested quote and maximum price drop are agreed as triggers for switching to Conservative; the price-drop baseline is the average price of actually filled BUY orders, while the exact percentage calculation remains open. The BUY-grid replacement check counts already invested quote plus the proposed grid's unfilled quote commitment; the current grid is retained if the complete replacement grid does not fit.
-- [~] Define position ownership and allocation across pairs, strategies, and shared spot assets. Aggressive uses a shared inventory pool per market; cross-strategy and cross-market allocation remains open.
-- [ ] Define accounting fields: invested quote, cost basis, realized profit, reserved quantity, and strategy-owned inventory.
-- [ ] Decide how third-asset commissions and duplicate fills are represented and handled.
+- [x] Decide pair and cross-strategy position ownership: one Position per trading pair; Conservative and Aggressive may operate simultaneously on the same pair and share its inventory (no strategy-specific position allocation).
+- [x] Decide shared Position accounting scope: actual holdings, invested quote, average cost, realized profit, commissions, reserved inventory, and available inventory belong to the authoritative pair-level Position.
+- [x] Decide current third-asset commission behavior: reject fills whose commission asset is neither the pair's base nor quote asset; do not silently ignore or estimate the debit.
+- [~] Define cross-pair account-balance coordination, order-reservation lifecycle, durable fill deduplication, persistence/reconciliation, and optional strategy-level performance attribution.
 
 ## 2. Shared trading engine
 
@@ -30,6 +31,8 @@
 - [x] Implement in-memory Position and Portfolio transitions from canonical fills, plus the update-portfolio use case and strategy context handoff (merged in PR #414).
 - [ ] Add journal, readiness states, pause controls, and operational safety checks.
 - [ ] Define persistence and restart/reconciliation requirements before implementing recovery.
+- [ ] Define reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders; the shared Position is the accounting owner, but lifecycle semantics remain open.
+- [ ] Define how pair-level positions coordinate shared exchange balances across different trading pairs.
 
 ## 3. Strategy implementations
 
