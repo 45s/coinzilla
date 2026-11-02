@@ -2,9 +2,37 @@ import { pathToFileURL } from "node:url"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 
+const describeError = (error) => {
+  if (error instanceof AggregateError) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      errors: [...error.errors].map(describeError),
+    }
+  }
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause ? describeError(error.cause) : undefined,
+    }
+  }
+  return { message: String(error) }
+}
+
 export async function main({ start = startHarvester, logger = defaultLogger } = {}) {
   try {
+    logger.debug?.({ message: "Harvester process startup requested" })
     const runtime = await start()
+    logger.debug?.({
+      message: "Harvester bootstrap completed",
+      connected: runtime.connected === true,
+      tradingEnabled: runtime.tradingEnabled === true,
+      strategyMode: runtime.strategyMode ?? "read-only",
+      subscriptions: runtime.subscriptions ?? [],
+    })
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
         ? "Harvester connected and subscribed to " + runtime.subscriptions.length +
@@ -31,7 +59,11 @@ export async function main({ start = startHarvester, logger = defaultLogger } = 
       process.once("SIGTERM", shutdown)
     }
   } catch (error) {
-    logger.error({ message: "Harvester startup failed.", error })
+    logger.error({
+      message: "Harvester startup failed.",
+      error,
+      errorDetails: describeError(error),
+    })
     process.exitCode = 1
   }
 }

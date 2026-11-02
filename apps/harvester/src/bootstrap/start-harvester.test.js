@@ -914,3 +914,34 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
   assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL", "BUY", "SELL"])
 })
+
+
+test("logs each broker startup stage and key readiness actions", async () => {
+  const calls = []
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      debug: (data) => calls.push({ level: "debug", ...data }),
+      info: (data) => calls.push({ level: "info", ...data }),
+      error: (data) => calls.push({ level: "error", ...data }),
+    },
+  })
+
+  const messages = calls.map(({ message }) => message)
+  assert.ok(messages.includes("Startup step: loading and validating trading configuration"))
+  assert.ok(messages.includes("Startup step: opening Binance WebSocket connection"))
+  assert.ok(messages.includes("Startup step: loading exchange trading rules"))
+  assert.ok(messages.includes("Startup step: opening user-data subscription"))
+  assert.ok(messages.includes("Startup step: loading initial exchange account snapshot"))
+  assert.ok(messages.includes("Startup step: subscribing to market prices"))
+  assert.ok(messages.includes("Binance broker connected"))
+  assert.ok(messages.includes("Binance user-data subscription established"))
+  assert.ok(messages.includes("Exchange account snapshot loaded"))
+  assert.ok(messages.includes("Harvester subscribed to market prices"))
+
+  await result.stop()
+})
