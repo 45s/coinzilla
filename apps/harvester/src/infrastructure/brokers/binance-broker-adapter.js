@@ -1,5 +1,7 @@
+import { Asset, Market } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
+import { createCanonicalFillFromBinanceEvent } from "./binance-execution-fill.js"
 
 const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
@@ -31,6 +33,57 @@ export function createBinanceBrokerAdapter({
   }
 
   const client = brokerFactory({ config, logger })
+  const markets = new Map()
+  const marketRequests = new Map()
+
+  const getCanonicalMarket = async ({ symbol } = {}) => {
+    if (markets.has(symbol)) return markets.get(symbol)
+    if (marketRequests.has(symbol)) return marketRequests.get(symbol)
+
+    const request = Promise.resolve().then(async () => {
+      const result = await client.getSymbolFilters({ symbol })
+      if (!result?.ok || !result.data) {
+        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
+        )
+      }
+      const { baseAsset, quoteAsset, symbol: resolvedSymbol } = result.data
+      if (resolvedSymbol !== symbol || typeof baseAsset !== "string" ||
+          !baseAsset.trim() || typeof quoteAsset !== "string" || !quoteAsset.trim()) {
+        throw new TypeError("Binance market metadata is incomplete for " + symbol)
+      }
+      const baseCode = baseAsset.trim().toUpperCase()
+      const quoteCode = quoteAsset.trim().toUpperCase()
+      const market = new Market({
+        venue: "binance",
+        symbol,
+        baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
+        quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
+      })
+      markets.set(symbol, market)
+      return market
+    }).finally(() => {
+      marketRequests.delete(symbol)
+    })
+    marketRequests.set(symbol, request)
+    return request
+  }
+
+  const normalizeUserDataEvent = async ({ event } = {}) => {
+    if (
+      event?.eventType !== "executionReport" ||
+      event?.executionType !== "TRADE"
+    ) {
+      return event
+    }
+    const market = await getCanonicalMarket({ symbol: event.fill?.symbol })
+    return {
+      ...event,
+      fill: createCanonicalFillFromBinanceEvent({ event, market }),
+    }
+  }
+
   const requiredMethods = [
     "connect",
     "disconnect",
@@ -64,7 +117,25 @@ export function createBinanceBrokerAdapter({
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
     subscribeForUserData: ({ onEvent, onStatus }) =>
-      client.subscribeForUserData({ onEvent, onStatus }),
+      client.subscribeForUserData({
+        onEvent: ({ event } = {}) => {
+          Promise.resolve()
+            .then(() => normalizeUserDataEvent({ event }))
+            .then((normalizedEvent) => onEvent({ event: normalizedEvent }))
+            .catch((error) => {
+              onStatus?.({
+                type: "executionNormalizationFailed",
+                recoveryRequired: true,
+                error,
+              })
+              logger?.error?.({
+                message: "Unable to normalize Binance execution event",
+                error,
+              })
+            })
+        },
+        onStatus,
+      }),
   })
 
   assertBrokerPort({ broker })
