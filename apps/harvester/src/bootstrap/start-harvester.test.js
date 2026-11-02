@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Balance, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { startHarvester } from "./start-harvester.js"
 
@@ -39,6 +39,7 @@ const createMarketMetadata = (symbol) => {
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   let userDataHandlers
+  let accountSnapshotTime = 0
   return {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
@@ -46,7 +47,21 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true }),
     getFills: async () => ({ ok: true }),
-    getAccountSnapshot: async () => ({ ok: true }),
+    getAccountSnapshot: async () => {
+      calls.push("account:snapshot")
+      accountSnapshotTime += 1
+      const balances = ["BTC", "ETH", "USDT"].map((code) => {
+        const asset = new Asset({ id: "asset:" + code, code })
+        return new Balance({
+          free: new Quantity({ amount: "1000", asset }),
+          locked: new Quantity({ amount: "0", asset }),
+        })
+      })
+      return {
+        ok: true,
+        data: { balances, sourceTime: accountSnapshotTime },
+      }
+    },
     getSymbolFilters: async ({ symbol }) => {
       calls.push("filters:" + symbol)
       return { ok: true, data: createMarketMetadata(symbol) }
@@ -120,7 +135,13 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   })
   assert.equal(result.connected, true)
   assert.deepEqual(result.subscriptions, ["BTCUSDT"])
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "subscribe:BTCUSDT"])
+  assert.deepEqual(calls, [
+    "connect",
+    "filters:BTCUSDT",
+    "subscribe:user-data",
+    "account:snapshot",
+    "subscribe:BTCUSDT",
+  ])
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, true)
@@ -147,6 +168,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
     "connect",
     "filters:BTCUSDT",
     "subscribe:user-data",
+    "account:snapshot",
     "subscribe:BTCUSDT",
     "unsubscribe:BTCUSDT",
     "unsubscribe:user-data",
@@ -214,7 +236,15 @@ test("disconnects when a market price subscription fails", async () => {
     }),
     /Unable to subscribe to market prices for BTCUSDT: stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "subscribe:BTCUSDT", "unsubscribe:user-data", "disconnect"])
+  assert.deepEqual(calls, [
+    "connect",
+    "filters:BTCUSDT",
+    "subscribe:user-data",
+    "account:snapshot",
+    "subscribe:BTCUSDT",
+    "unsubscribe:user-data",
+    "disconnect",
+  ])
 })
 
 test("unsubscribes earlier markets when a later market subscription fails", async () => {
@@ -245,6 +275,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
     "filters:BTCUSDT",
     "filters:ETHUSDT",
     "subscribe:user-data",
+    "account:snapshot",
     "subscribe:BTCUSDT",
     "subscribe:ETHUSDT",
     "unsubscribe:BTCUSDT",
