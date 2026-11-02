@@ -2,6 +2,8 @@
 
 ## Mission and delivery priority
 
+**Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
+
 **First priority: implement Conservative (Free-Roll) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing `apps/bot-free-roll/README.md` is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
 
 The current `develop` implementation is a connected market-data prototype, not a trading bot. It loads config, can connect to Binance, subscribes to enabled-pair trade-price streams, validates prices, invokes the Aggressive policy, and maintains an in-memory Portfolio when canonical fills are supplied manually. The default Aggressive policy deliberately returns `NO_ACTION`; no order is generated or submitted from a market-price event. Live user-data/fill ingestion, order lifecycle management, exchange-rule validation, account/risk coordination, durable recovery, and an executable strategy are missing.
@@ -13,15 +15,15 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 1. Start from the documented command and load/validate configuration.
 2. Connect to the selected broker and establish market-data and user-data streams.
 3. Load account balances and exchange trading rules for every enabled pair.
-4. Establish a reconciled initial state and explicit trading-readiness status.
+4. Establish the minimum safe TESTNET starting state: fresh balances and exchange filters for enabled pairs, a known price, and no unexplained pre-existing orders or strategy inventory. Comprehensive historical reconciliation and durable restart recovery are deferred.
 5. Receive a valid market update and evaluate the selected executable strategy.
 6. Convert the strategy decision into a validated order intent.
 7. Apply shared risk, balance, reservation, precision, minimum-notional, and post-only checks.
 8. Submit the order and track its acknowledgement or an unknown outcome.
 9. Receive order updates and every partial/final fill; normalize, deduplicate, and account for actual quantities and commissions.
 10. Re-evaluate the strategy from the latest consistent market, order, and Portfolio state and continue the cycle.
-11. Pause safely on disconnect, stale data, unreconciled state, unsupported commission, balance/risk violations, or other unsafe conditions.
-12. Shut down cleanly without losing track of in-flight operations.
+11. Pause new orders safely on disconnect, stale data, unknown order outcomes, unsupported commission, balance/risk violations, or other immediate execution hazards; resume only after the affected live state is refreshed and understood.
+12. Shut down cleanly and do not report in-flight orders as completed. Durable restart recovery is a later hardening milestone.
 
 Live trading must remain explicitly disabled by default. TESTNET verification is required before any live-trading enablement.
 
@@ -96,7 +98,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Replace the current price-only callback flow with the actual decision-to-order execution pipeline.
 - [ ] Keep `runtime.placeOrder` as a controlled engine capability; callers must not bypass safety checks by invoking it directly.
 
-### P0.6 — Persistence, restart, and recovery required for safe operation
+### Deferred after the first working cycle — Persistence, restart, and comprehensive recovery
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
 - [~] Integrate durable journal/state storage using the repository's approved shared packages; do not create an app-local generic storage framework. Journal now provides documented bounded `read()`/`replay()` APIs (merged via [#430](https://github.com/45s/coinzilla/pull/430)); Harvester still needs its domain-specific record schema, durable state transitions, replay integration, and restart reconciliation.
@@ -197,7 +199,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
 - [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [~] Integrate the Journal read/replay contract into Harvester's domain-specific durable state and finalize restart/reconciliation guarantees.
+- [ ] **Deferred until after the first TESTNET trading cycle:** integrate Journal read/replay into Harvester state and implement durable restart recovery/reconciliation.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 
@@ -205,7 +207,8 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 - Follow repository root guidance and `apps/harvester/AGENTS.md`.
 - Work from `develop` using a short-lived task branch and target PRs to `develop`; do not commit task work directly to `develop` or `main`.
-- Keep the first-trading milestone ahead of optional architecture work and optimization.
+- **Mandatory:** follow [Trading First](./docs/TRADING_FIRST.md); implement the next missing step in the actual trading loop before any secondary infrastructure work.
+- Keep Journal, durable recovery, comprehensive reconciliation, optional architecture work, and optimization deferred until the first Conservative TESTNET cycle succeeds.
 - Do not implement unresolved financial/risk behavior by assumption; close the decision first.
 - Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
 - Keep live trading disabled by default; TESTNET trading must be explicitly opt-in.
