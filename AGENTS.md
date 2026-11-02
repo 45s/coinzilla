@@ -1,6 +1,6 @@
 # Instructions for coding agents
 
-Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
+Before making changes, select the task-specific checklist in [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md), then read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles
 
