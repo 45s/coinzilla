@@ -188,3 +188,15 @@ Safety rules:
 - If permissions prevent deletion, report the exact blocker; do not silently leave cleanup unreported.
 
 This rule applies to every AI agent, coding assistant, human contributor, and automated workflow. It is part of task completion, not optional cleanup.
+
+
+## 13. JavaScript-first and JSDoc policy
+
+Coinzilla remains JavaScript-first unless the user approves a specific TypeScript requirement. AI agents must read [the JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) before changing language tooling or public API documentation.
+
+- Write runtime source in JavaScript and follow the package's existing Node.js module conventions.
+- Add JSDoc selectively for public contracts and non-obvious types; do not blanket-comment every function or variable.
+- Do not introduce TypeScript source, `tsconfig.json`, `checkJs`, declaration files, declaration generation, or a JSDoc build dependency merely to improve editor hints.
+- JSDoc must match the implementation and must not replace runtime validation or tests.
+- Treat TypeScript declaration support as an explicit compatibility requirement. JSDoc alone does not resolve every TypeScript declaration error, including `TS7016`.
+- If a task genuinely requires TypeScript interoperability, state which consumers need it, add accurate declarations, and test the published/resolved package contract without changing the JavaScript-only default.

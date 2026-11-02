@@ -219,3 +219,20 @@ The repository's GitHub Actions workflows currently run package tests and test c
 ## AI-agent workflow authority
 
 The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
+
+
+## JavaScript and JSDoc
+
+Coinzilla's default implementation language is modern JavaScript using the repository's Node.js and ECMAScript-module conventions. TypeScript is not the default and must not be introduced as an incidental refactor.
+
+- Keep implementation files as JavaScript (`.js`). Do not add `tsconfig.json`, TypeScript build steps, `.ts` source, or generated `.d.ts` files unless a separately approved requirement explicitly calls for TypeScript interoperability or migration.
+- Use JSDoc selectively to describe public/exported APIs, non-obvious parameter and return shapes, callbacks, important invariants, and meaningful exceptions.
+- Do not annotate every trivial local variable or obvious one-line function. Avoid comments that repeat the implementation or become stale.
+- Prefer precise JSDoc types that match runtime behavior. Represent optional values, defaults, nullability, promises, and thrown errors accurately; do not promise validation or guarantees the implementation does not provide.
+- Use `@param`, `@returns`, `@throws`, `@typedef`, and `@callback` when they improve clarity. Keep shared typedefs close to their owning domain and avoid a global type-definition dumping ground.
+- JSDoc does not validate runtime input. Validate untrusted values in code and test the behavior with the native Node.js test conventions.
+- VS Code and other language servers can use JSDoc for IntelliSense without installing the JSDoc documentation generator. Add a documentation generator or CI documentation job only when maintainers have a concrete published-docs requirement.
+- Do not turn on project-wide `checkJs` or `@ts-check` by default. Adopt static checking incrementally only with a defined scope, a clean baseline, and CI ownership.
+- A TypeScript consumer reporting `TS7016` is a separate package-interop issue. JSDoc comments alone do not guarantee that TypeScript can resolve declarations. If TypeScript consumers become a supported contract, add and test accurate declarations or an intentional declaration-generation workflow; do not solve it by silently declaring the package as `any`.
+
+See [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) for examples and decision guidance.
