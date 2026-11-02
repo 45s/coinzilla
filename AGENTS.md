@@ -5,7 +5,7 @@
 For all work in `apps/harvester/**`, follow [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). **FIRST MAKE IT WORK. THEN MAKE IT BETTER.** The first deliverable is a working Conservative TESTNET trading loop: load config → connect/subscribe → receive price → decide → submit order → process order updates/fills → update state → repeat. Journal integration, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, optimization, and Aggressive are secondary and MUST NOT delay the first working TESTNET cycle. Implement only the minimum targeted safety required for that cycle; then return to the trading workflow. The Harvester roadmap must reflect this priority.
 
 
-Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
+Before making changes, select the task-specific checklist in [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md), then read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles
 
@@ -34,9 +34,9 @@ Before making changes, read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_W
    - Keep feature orchestration in a clearly named feature module. Avoid both giant files and excessive fragmentation into one-function files without a cohesion or testing benefit.
    - Use descriptive, consistent file and symbol names. Prefer domain-specific names over vague names such as common, misc, or stuff.
    - Keep dependencies flowing toward stable, lower-level contracts; avoid circular dependencies and hidden side effects.
-   - **Extract meaningful pure functions into separate modules.** If a non-trivial function can be evaluated from its inputs without reading or mutating object state, globals, or external systems, it MUST live in a dedicated, cohesive module rather than inside a class/service or a large orchestration file. This applies even when the function currently has only one caller; reuse is not a prerequisite for separation.
-   - Group closely related pure functions by domain/responsibility in focused files (for example, `helpers/validate-telegram-options.js` or `telegram/telegram-message-validation.js`). Do not create a generic `utils.js` dumping ground or split trivial one-line expressions into files.
-   - Classes and services should orchestrate side effects and own state. Keep validation, parsing, formatting, normalization, mapping, calculations, and business-rule decisions in pure modules whenever practical.
+   - **Extract meaningful pure logic when separation improves cohesion, testability, or comprehension.** A single caller does not prevent extraction, but purity alone does not require a separate file. Keep trivial expressions, tightly coupled callbacks, and context-dependent details local when extraction would obscure the flow.
+   - Group related pure functions by domain/responsibility in focused modules (for example, `helpers/validate-telegram-options.js` or `telegram/telegram-message-validation.js`). Do not create a generic `utils.js` dumping ground or split trivial one-line expressions into files.
+   - Classes and services should orchestrate side effects and own state. Separate validation, parsing, formatting, normalization, mapping, calculations, and business rules when doing so creates a clearer responsibility or independently testable contract.
    - Avoid god files. A file approaching 300 lines must be reviewed for cohesive extraction opportunities; files exceeding 500 lines require a clear technical justification in the PR or a refactoring plan. These are review triggers, not reasons to fragment tightly coupled code mechanically.
 
 4. **Evidence-Based Completion**
@@ -100,25 +100,3 @@ Coinzilla is JavaScript-first. Follow [the JavaScript and JSDoc standard](docs/e
 - JSDoc is documentation and editor assistance; it does not replace runtime validation or tests.
 - Do not enable project-wide `checkJs` or add a documentation-generation dependency without a concrete, reviewed need.
 - When a TypeScript consumer needs declarations, treat that as an explicit interoperability requirement and document its scope rather than changing the JavaScript-only default.
-
-
-## Mandatory AI handoff prompt after every completed job or PR
-
-**At the end of every completed job and every PR closeout, the responsible AI agent MUST provide a complete, copy-paste-ready prompt for the next AI agent.** This is mandatory even when the current PR remains open and the next agent is expected to continue the same branch/PR.
-
-The handoff prompt MUST be the final section of the agent's user-facing completion response. Do not replace it with a short summary, a list of suggested next steps, or a generic "continue the work" instruction.
-
-The prompt must be self-contained and include:
-
-1. **Repository and task:** repository URL, task/feature, relevant application/package, and the user's mandatory engineering and safety constraints.
-2. **Exact PR status:** PR number and URL, title, source branch, target branch, and whether it is draft/open/merged/closed. State explicitly whether it was merged. Never imply a PR is merged merely because changes were pushed or CI passed.
-3. **Current code position:** the latest commit message (prefer this over a commit hash), and the relevant roadmap/documentation locations.
-4. **Completed work:** concrete behavior and files/capabilities actually implemented in this job/PR. Distinguish implementation from scaffolding, placeholders, and documentation-only changes.
-5. **Verification evidence:** each relevant CI/check name and its actual result (passed, failed, pending, cancelled, or not run), with links to runs where available. Never describe pending, skipped, or cancelled checks as passed.
-6. **Remaining work:** explicit unfinished requirements, known defects, safety gaps, unresolved product decisions, and the next concrete implementation steps in dependency order.
-7. **Continuation instructions:** tell the next agent to inspect the latest repository/PR state first, continue the existing branch/PR when appropriate, avoid duplicating completed work, and obey branch synchronization, testing, review, and merge rules.
-8. **Safety and merge boundary:** state any live/production restrictions and whether the next agent is authorized to merge. Do not invent authorization.
-
-The prompt must be accurate at the time it is written. Re-check GitHub PR state, latest commit, and CI immediately before preparing it. If a job is complete but its PR is not, say so and instruct the next agent to continue that same PR. If a PR is merged, include the merge result and identify the next uncompleted roadmap item. If blocked, explain the exact blocker and the safest next action.
-
-**No completed-job response is complete without this continuation prompt at the end.**

@@ -49,8 +49,8 @@ Every task branch must start from the latest `develop`. Every task PR targets `d
 | Domain | Owned paths | Local instructions / roadmap |
 | --- | --- | --- |
 | Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
+| Harvester application | `apps/harvester/**` | `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md` |
 | Market Simulator application | `apps/market-simulator/**` | `apps/market-simulator/AGENTS.md`, `apps/market-simulator/ROADMAP.md` |
-| Coin Farmer application | `apps/bot-coin-farmer/**` | `apps/bot-coin-farmer/AGENTS.md`, `apps/bot-coin-farmer/ROADMAP.md` |
 | Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
 | Brokers | `packages/brokers/**` | `packages/brokers/AGENTS.md`, `packages/brokers/ROADMAP.md` |
 | Utilities | `packages/utils/**` | `packages/utils/AGENTS.md`, `packages/utils/ROADMAP.md` |
@@ -152,22 +152,22 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 
 ### `develop`
 - Require pull requests; disallow direct pushes.
-- Require the relevant CI status checks.
-- Require branches to be up to date before merging.
-- Require conversation resolution if review comments are used.
-- Require zero human approvals (the goal is automated task integration).
-- Block force pushes and branch deletion.
-- Do not configure a bypass that lets agents skip required checks.
+- Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
+- Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
+- Require conversation resolution.
+- Require zero human approvals; agents may merge their own PRs only after every required check is green.
+- Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
+- Do not configure bypass actors or admin bypass for these gates.
 
 ### `main`
 - Require pull requests.
 - Require the release CI status checks and up-to-date branch.
-- Keep final release approval under user control.
+- Require at least one approving review so the final release approval is technically enforced, not merely documented.
 - Block force pushes and branch deletion.
 
 Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
 
-After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The existing `main` ruleset must be reviewed separately; do not weaken it to reduce routine review overhead.
+After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The active `develop-core` ruleset must require **every CI workflow check** listed below, with strict up-to-date branches and zero approving reviews. A missing, pending, cancelled, skipped-required, or failed required check must block merging. Do not add bypass actors. The active `main` ruleset must require at least one approving review for the release PR; do not rely on prose saying the user approves while GitHub technically permits zero approvals. The repository's automatic head-branch deletion setting must remain enabled.
 
 ## 11. Exceptions
 
@@ -205,34 +205,3 @@ Coinzilla remains JavaScript-first unless the user approves a specific TypeScrip
 - JSDoc must match the implementation and must not replace runtime validation or tests.
 - Treat TypeScript declaration support as an explicit compatibility requirement. JSDoc alone does not resolve every TypeScript declaration error, including `TS7016`.
 - If a task genuinely requires TypeScript interoperability, state which consumers need it, add accurate declarations, and test the published/resolved package contract without changing the JavaScript-only default.
-
-
-## 14. Mandatory AI continuation prompt after every completed job or PR
-
-Every AI agent MUST provide a full, self-contained, copy-paste-ready continuation prompt at the end of its user-facing response after **each completed job** and after **each PR closeout**. This is required even if a larger task is unfinished, the PR remains open, or work is being handed to another agent on the same branch.
-
-The continuation prompt is the final section of the response. It is not optional and cannot be replaced by a short summary or generic next-step suggestions.
-
-### Required contents
-
-The prompt must include:
-
-- Repository URL, task purpose, affected app/package, and applicable engineering instructions.
-- PR number and URL, title, source branch, target branch, draft/open/merged/closed state, and an explicit merged/not-merged statement.
-- Latest commit message (prefer the commit message rather than a hash), and current roadmap/documentation references.
-- A factual list of what was implemented in the completed job, including important files and behavior. Clearly label foundations, incomplete wiring, placeholders, and documentation-only changes.
-- Verification evidence: actual CI workflow/check names and results, links to completed runs, and explicit pending, failed, cancelled, or not-run checks.
-- Remaining requirements, known defects, unresolved decisions, safety gaps, blockers, and the next actions in dependency order.
-- Instructions for the next agent to inspect the latest repository and PR state, continue the existing branch/PR when appropriate, avoid redoing completed work, synchronize with the PR's actual target branch, run required checks, review the full diff, and obey merge/branch-cleanup rules.
-- Safety constraints and the exact merge authorization boundary. Never imply permission to merge where none exists.
-
-### Required accuracy and closeout behavior
-
-Immediately before preparing the handoff prompt, re-check the live PR state, source/target branches, latest commit message, and associated CI runs. Report facts, not assumptions. Passing local tests do not imply CI passed; a pushed commit does not imply a PR merged; a cancelled check is not a pass.
-
-- **Job complete, PR still open:** state that the job is complete but the PR is not merged; tell the next agent to continue the same PR and branch.
-- **PR merged:** state the merge result, include the merge commit message when available, verify source-branch cleanup under Section 12, and direct the next agent to the next uncompleted roadmap item.
-- **PR closed without merge:** state that it was not merged; preserve the branch/work until its disposition is clear.
-- **Blocked/incomplete:** state the exact blocker, what remains, and the safest next action. Do not describe the task as complete.
-
-The continuation prompt MUST be the last substantive content in every completed-job/PR response. A response that omits it is an incomplete handoff.
