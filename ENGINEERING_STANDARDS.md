@@ -15,7 +15,7 @@ A change is ready to merge only when:
 - [ ] Modules are cohesive, follow single-responsibility boundaries, and do not turn public entry points into implementation dumping grounds.
 - [ ] Non-trivial pure logic is extracted into cohesive, independently testable modules rather than embedded in large classes/services or unrelated files.
 - [ ] Large files have been split by responsibility, or a concrete reason for keeping them together is documented in the PR.
-- [ ] Public APIs, configuration, and documentation are updated when behavior changes.
+- [ ] Documentation impact has been assessed for every meaningful change. Public APIs, configuration, examples, architecture notes, operational guidance, and roadmaps are updated in the same task/PR when the change alters their documented behavior or contract; if no update is warranted, the reason is recorded in the PR.
 - [ ] No secrets, credentials, generated artifacts, or unrelated changes are included.
 - [ ] Any deliberate deviation from these standards is explained in the pull request, with a reason and follow-up plan when appropriate.
 
@@ -208,6 +208,7 @@ Before approving a pull request, ask:
 11. Could the change expose secrets, weaken security, or break compatibility?
 12. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
 13. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+14. Is the documentation impact of each meaningful change addressed—updated where behavior/contracts changed, or explicitly justified as not needed?
 
 ## Rollout policy
 
