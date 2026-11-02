@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { CanonicalOrder, Fill, Market, TradingRules } from "@coinzilla/entities"
+import { Market, TradingRules } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
@@ -114,101 +114,31 @@ test("rejects missing credentials and incomplete broker implementations", () => 
   )
 })
 
-test("normalizes execution reports into canonical Fill values at the adapter boundary", async () => {
+test("forwards broker-normalized user-data events without reinterpreting them", async () => {
   const { calls, client } = createClient()
-  client.getSymbolFilters = async ({ symbol }) => ({
-    ok: true,
-    data: {
-      symbol,
-      baseAsset: "BTC",
-      quoteAsset: "USDT",
-      tickSize: "0.01",
-      stepSize: "0.00001",
-      supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
-    },
-  })
-  let receiveEvent
-  const broker = createBinanceBrokerAdapter({
-    config,
-    brokerFactory: () => client,
-  })
-  await broker.subscribeForUserData({
-    onEvent: ({ event }) => { receiveEvent = event },
-  })
-
-  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
-  userDataCall[1].onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: {
-        id: "88",
-        symbol: "BTCUSDT",
-        type: "LIMIT",
-        side: "BUY",
-        quantity: "0.01",
-        executedQuantity: "0.01",
-        price: "65000",
-        status: "FILLED",
-        clientOrderId: "client-7",
-        createdAt: 100,
-        updatedAt: 123,
-      },
-      fill: {
-        id: "77",
-        orderId: "88",
-        symbol: "BTCUSDT",
-        side: "BUY",
-        price: "65000",
-        quantity: "0.01",
-        quoteQuantity: "650",
-        commissionAmount: "0.00001",
-        commissionAsset: "BTC",
-        isMaker: true,
-        time: 123,
-      },
-    },
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-
-  assert.ok(receiveEvent.executedOrder instanceof CanonicalOrder)
-  assert.equal(receiveEvent.executedOrder.clientOrderId, "client-7")
-  assert.equal(receiveEvent.executedOrder.status, "FILLED")
-  assert.equal(receiveEvent.executedOrder.executedQuantity.amount, "0.01")
-  assert.ok(receiveEvent.fill instanceof Fill)
-  assert.equal(receiveEvent.fill.id, "binance:BTCUSDT:77")
-  assert.equal(receiveEvent.fill.quantity.amount, "0.01")
-  assert.equal(receiveEvent.fill.commissions[0].amount.asset.code, "BTC")
-})
-
-test("fails closed and requests reconciliation when execution normalization fails", async () => {
-  const { calls, client } = createClient()
-  client.getSymbolFilters = async () => ({
-    ok: false,
-    errors: [new Error("metadata unavailable")],
-  })
+  const event = Object.freeze({ eventType: "normalized", value: "canonical-from-broker" })
+  const status = Object.freeze({ type: "ready" })
+  client.subscribeForUserData = async ({ onEvent, onStatus }) => {
+    calls.push(["subscribeForUserData"])
+    onEvent({ event })
+    onStatus(status)
+    return { ok: true, data: { disconnect: async () => {} } }
+  }
+  const received = []
   const statuses = []
   const broker = createBinanceBrokerAdapter({
     config,
     brokerFactory: () => client,
   })
-  await broker.subscribeForUserData({
-    onEvent: () => assert.fail("invalid execution must not be forwarded"),
-    onStatus: (status) => statuses.push(status),
+
+  const result = await broker.subscribeForUserData({
+    onEvent: ({ event: receivedEvent }) => received.push(receivedEvent),
+    onStatus: (receivedStatus) => statuses.push(receivedStatus),
   })
 
-  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
-  userDataCall[1].onEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      fill: { symbol: "BTCUSDT" },
-    },
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-
-  assert.equal(statuses.length, 2)
-  assert.equal(statuses[0].type, "executionPending")
-  assert.equal(statuses[1].type, "executionNormalizationFailed")
-  assert.equal(statuses[1].recoveryRequired, true)
+  assert.equal(result.ok, true)
+  assert.deepEqual(received, [event])
+  assert.deepEqual(statuses, [status])
 })
+
+
