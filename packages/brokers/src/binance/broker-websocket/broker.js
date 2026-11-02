@@ -31,6 +31,9 @@ function createMarketClient(config, logger) {
 }
 
 function validatePositiveDecimalFilter({ value, name, symbol }) {
+  if (value === undefined || value === null) {
+    throw new Error(`Binance ${name} missing for ${symbol}`)
+  }
   try {
     assertDecimalString({ value, field: name })
   } catch (error) {
