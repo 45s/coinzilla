@@ -74,11 +74,12 @@ test("writes published events as JSONL records", async () => {
 
     assert.equal(lines.length, 1)
 
-    const event = JSON.parse(lines[0])
-
-    assert.equal(event.id, published.event.id)
-    assert.equal(event.name, "order.filled")
-    assert.equal(event.data.orderId, "123")
+    const stored = JSON.parse(lines[0])
+    assert.equal(stored.__coinzillaJournal.schemaVersion, 1)
+    assert.equal(stored.__coinzillaJournal.id, published.event.id)
+    assert.equal(stored.name, "order.filled")
+    assert.equal(stored.data.orderId, "123")
+    assert.equal(stored.id, published.event.id)
   } finally {
     await context.journal.close()
     await context.eventBus.close()
@@ -113,7 +114,10 @@ test("preserves event order when multiple events are published", async () => {
     const events = content
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line))
+      .map((line) => {
+        const { __coinzillaJournal, ...event } = JSON.parse(line)
+        return event
+      })
 
     assert.deepEqual(
       events.map((event) => event.name),
@@ -141,7 +145,7 @@ test("close drains events published immediately before shutdown", async () => {
     assert.equal(result.ok, true)
 
     const content = await readFile(context.filePath, "utf8")
-    const event = JSON.parse(content.trim())
+    const { __coinzillaJournal, ...event } = JSON.parse(content.trim())
 
     assert.equal(event.name, "order.filled")
     assert.equal(event.data.orderId, "456")
@@ -373,6 +377,25 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
   }
 })
 
+
+test("does not claim a durable close on a repeated close after sync failure", async () => {
+  const context = await createTestJournal()
+  try {
+    context.journal.fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+    const first = await context.journal.close()
+    assert.equal(first.ok, false)
+    assert.equal(first.durable, undefined)
+    const second = await context.journal.close()
+    assert.equal(second.ok, false)
+    assert.equal(second.durable, false)
+    assert.match(second.errors[0].message, /without durable confirmation/)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
 
 test("reports a failed disk sync during close and still closes the file handle", async () => {
   const context = await createTestJournal()
