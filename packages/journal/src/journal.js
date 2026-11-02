@@ -23,6 +23,7 @@ export class Journal {
     this.closed = false
     this.writeErrors = []
     this.writeFailed = false
+    this.closeDurable = false
   }
 
   async start({} = {}) {
@@ -260,6 +261,13 @@ export class Journal {
 
   async close({} = {}) {
     if (this.closed) {
+      if (!this.closeDurable) {
+        return toResult({
+          error: new Error("Journal closed without durable confirmation"),
+          closed: true,
+          durable: false,
+        })
+      }
       return toResult({ closed: true, durable: true })
     }
 
@@ -271,6 +279,7 @@ export class Journal {
 
     if (!this.started) {
       this.closed = true
+      this.closeDurable = true
       return toResult({ closed: true, durable: true })
     }
 
@@ -324,6 +333,7 @@ export class Journal {
     this.closing = false
 
     if (errors.length > 0) {
+      this.closeDurable = false
       this.reportError({
         message: "Journal closed with errors",
         errors,
@@ -333,6 +343,7 @@ export class Journal {
       return toResult({ errors })
     }
 
+    this.closeDurable = true
     try {
       this.logger.info?.("Journal closed", {
         filePath: this.filePath,

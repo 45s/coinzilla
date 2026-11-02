@@ -24,7 +24,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 ## Current contract
 
 - `record({ event })` resolves after the JSONL write completes, but its `durable` field is `false`; it does not claim an fsync.
-- `flush()` waits for event-bus delivery and queued writes, then calls file sync. Only a successful result reports `durable: true`.
+- `flush()` waits for event-bus delivery and queued writes, then calls file sync. Only a successful result reports `durable: true`; repeated close calls preserve an earlier failed durability outcome.
 - `close()` drains and syncs the final writes before closing. A failed write/sync returns an error.
 - `read({ maxRecords, maxBytes, maxRecordBytes })` validates all session files in filename and line order before returning records. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record.
 - `replay({ handler, ...limits })` validates the entire journal before calling the handler sequentially. A handler failure stops replay and reports the number already applied. Replay is at-least-once across crashes; consumers must use stable record IDs idempotently.

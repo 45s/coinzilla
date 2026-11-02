@@ -378,6 +378,25 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
 })
 
 
+test("does not claim a durable close on a repeated close after sync failure", async () => {
+  const context = await createTestJournal()
+  try {
+    context.journal.fileHandle.sync = async () => {
+      throw new Error("simulated close sync failure")
+    }
+    const first = await context.journal.close()
+    assert.equal(first.ok, false)
+    assert.equal(first.durable, undefined)
+    const second = await context.journal.close()
+    assert.equal(second.ok, false)
+    assert.equal(second.durable, false)
+    assert.match(second.errors[0].message, /without durable confirmation/)
+  } finally {
+    await context.eventBus.close()
+    await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
 test("reports a failed disk sync during close and still closes the file handle", async () => {
   const context = await createTestJournal()
   const fileHandle = context.journal.fileHandle
