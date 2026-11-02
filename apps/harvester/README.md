@@ -4,7 +4,6 @@ Harvester is an independent Node.js process for cryptocurrency trading, built in
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
-- **Conservative (Free-Roll):** the capital-recovery and free-coin accumulation strategy derived from `apps/bot-free-roll`.
 - **Conservative (Free-Roll):** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
@@ -95,7 +94,7 @@ The configuration loader and structural validation live in:
 - `src/infrastructure/config/load-trading-config.js`
 - `src/domain/trading-config.js`
 
-The configuration contract does not imply that either strategy mode or order execution is implemented. Strategy behavior must be agreed and documented before strategy-specific parameters or runtime behavior are added.
+The configuration loader and validation are implemented. Conservative is the first executable strategy and is composed with the in-process trading engine when TESTNET trading is explicitly enabled. The default remains read-only; see the TESTNET startup requirements above and the trading-strategy documentation for the implemented policy.
 
 ## Logging
 

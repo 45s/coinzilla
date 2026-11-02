@@ -17,13 +17,13 @@ Agents MUST work in this order:
 1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
 3. **Receive usable market prices.** Validate incoming prices and make the latest usable price available to the trading workflow. Handle missing/stale prices safely.
-4. **Evaluate the first strategy.** Implement Conservative (Free-Roll) as the first executable strategy, using its documented rules and the existing Harvester domain model. Do not start Aggressive first and do not copy the old Free-Roll runtime/broker implementation.
+4. **Evaluate the first strategy.** Conservative is the first executable policy. Its initial BUY trails upward by one configured step; after a BUY fills, the next standing BUY is fixed; trailing resumes after a profitable recovery SELL. Recovery SELLs cover cumulative actual BUY cost, actual commissions, and minProfit while retaining keepQuantity. A new BUY fill cancels and reconciles any old recovery SELL before replacement. Do not start Aggressive first or copy the old Free-Roll runtime/broker implementation.
 5. **Create and submit orders.** Turn the strategy's decision into an order intent, apply the minimum necessary TESTNET execution checks and exchange filters, and submit a real TESTNET order through the broker.
 6. **Receive order updates and executions.** Process acknowledgements, partial fills, final fills, cancellations, and rejections. Update trading state only from actual executions; do not count a requested or acknowledged quantity as filled.
 7. **React and repeat.** Re-evaluate when a relevant price, order-state, or fill event arrives. Place the next required order without waiting for an unrelated new price event. Continue the strategy cycle.
 8. **Demonstrate the complete cycle.** Verify the full flow on TESTNET with bounded test funds and a reproducible runbook: config → price → decision → order → execution → state update → next decision/order.
 
-The first milestone is complete only when the application has demonstrably placed and managed orders and repeated the cycle on TESTNET. A collection of pure calculators, entities, adapters, placeholders, NO_ACTION decisions, or disconnected use cases is not a working trading application.
+The current branch has deterministic fake-broker coverage of the complete first recovery cycle and trailing/cancel-replace behavior. The first milestone is complete only when the application has demonstrably placed and managed orders and repeated the cycle on Binance TESTNET. A collection of pure calculators, entities, adapters, placeholders, NO_ACTION decisions, or disconnected use cases is not a working trading application.
 
 ## Minimum safety required for the first TESTNET cycle
 

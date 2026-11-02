@@ -34,6 +34,12 @@ cross-pair shared-asset allocation is implemented.
   last traded price reduced by `priceStepPercent`, rounded down to the
   exchange price tick. Quantity is `orderQuantity`, rounded down to the
   exchange quantity step.
+- Use `LIMIT_MAKER` when `makerPercent` is zero; otherwise use `LIMIT`, with
+  exchange time-in-force and filter requirements handled by the broker adapter.
+- When another BUY fully fills while a recovery SELL is open, cancel the old
+  SELL, query and account all canonical fills for that order, verify the
+  cumulative filled quantity, and then recalculate the recovery SELL. If the
+  cancellation or fill history is ambiguous, pause rather than guessing.
 - With active inventory, create a recovery SELL when no SELL is already active.
   The existing exact-decimal recovery planner preserves `keepQuantity`, covers
   cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
@@ -47,9 +53,11 @@ cross-pair shared-asset allocation is implemented.
 - A strategy decision can therefore request both a BUY and a SELL. The policy
   does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
 
-This is the domain-policy contract, not proof of a complete live execution
-lifecycle. Order submission, owned-order correlation, fill-driven reevaluation,
-and cycle completion are tracked separately in the roadmap.
+The domain policy is composed by the Harvester trading engine. Offline
+bootstrap and engine tests cover BUY submission, trailing replacement,
+BUY-driven recovery-SELL replacement, fill accounting, recovery completion,
+and free-inventory allocation. A real Binance TESTNET run is still required
+to verify the broker integration against the exchange.
 
 
 This mode is based on the existing `apps/bot-free-roll` strategy.
@@ -209,21 +217,31 @@ See [Architecture](./architecture.md) for the full responsibility split and inte
 
 ## Still to decide
 
-The following questions remain open and must be answered before implementation where they affect behavior:
+The remaining questions are not blockers for the implemented Conservative
+first-cycle workflow:
 
-1. **Maximum price drop (not decided):** We agreed that the reference is the average price of BUY orders that actually filled. We still need to decide exactly how the configured drop percentage is measured. For example, if the average BUY price is 100 USDT and the limit is 5%, should Conservative take control when the latest market price reaches 95 USDT, or should the calculation also account for the fees that would be paid to sell? Do not choose either rule without asking the user.
-3. What exact SELL price formula, fee-asset conversion, and price/quantity rounding guarantee recovery of BUY cost and all BUY/SELL commissions while earning configured `minProfit` and preserving the retained `freeCoin` quantity?
-4. When a partial SELL crosses 50%, what price/placement rule applies to the considered BUY? Is the BUY post-only at current market price or based on the initial `makerPercent`/`priceStep` rule?
-5. What happens if the 50% threshold is crossed more than once due to multiple partial execution events? The intended behavior must avoid creating duplicate BUY opportunities for the same threshold crossing.
-6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
-8. How are shared quote assets and inventory coordinated across different pairs that use the same account asset?
-9. What is the exact reservation lifecycle for BUY and SELL orders, including partial fills, cancellation races, rejections, and uncertain exchange outcomes?
-10. **Deferred until after the first working TESTNET cycle:** what persistence, restart, and comprehensive exchange-reconciliation guarantees are required before unattended/live operation?
-11. If strategy-specific performance attribution is required, how should it work without splitting the actual Position?
+1. **Aggressive maximum price drop:** the exact threshold measurement and
+   treatment of estimated SELL fees remain undecided.
+2. **Aggressive partial-SELL BUY trigger:** placement price and duplicate
+   threshold-crossing behavior remain to be specified.
+3. **Aggressive fallback:** behavior when the consolidated recovery SELL is
+   rejected, partially filled, or cannot be placed remains to be specified.
+4. **Multi-pair shared assets:** quote-currency and inventory allocation across
+   enabled pairs remains deferred. The first TESTNET configuration enables
+   exactly one pair.
+5. **Full order reservations:** durable and exchange-reconciled reservation
+   behavior for partial fills, cancellations, rejections, and uncertain
+   outcomes remains deferred beyond the current in-process single-pair flow.
+6. **Restart and reconnect recovery:** persistence, historical exchange
+   reconciliation, and unattended operation guarantees remain deferred until
+   after the first real TESTNET cycle.
+7. **Performance attribution:** strategy-specific attribution is optional and
+   must not split the actual shared Position.
 
-Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
+Third-asset commissions are explicitly unsupported for now and cause the
+affected execution to fail closed. BUY and SELL commissions in the market's
+base or quote asset are accounted from actual fills.
 
-Until these decisions are closed, do not invent defaults in code or configuration. See the [Harvester Roadmap](../ROADMAP.md) for the remaining design and implementation work.
 ## Guidance for continuing the strategy discussion
 
 The user is making product decisions, not taking a trading terminology test. Continue one unresolved decision at a time and use plain everyday English.
@@ -238,4 +256,16 @@ The user is making product decisions, not taking a trading terminology test. Con
 
 ## Current implementation status
 
-The current code still contains an Aggressive policy composition that returns NO_ACTION with blocker codes; it is not an executable trading strategy. That existing placeholder must not dictate the product priority. The next implementation work is to connect the documented Conservative policy to the actual market-price → order-intent → safety validation → broker submission → order/fill event → Portfolio update → next decision workflow. Portfolio/accounting and broker foundations are not evidence that the app can trade. Journal integration, durable restart recovery, and comprehensive reconciliation remain secondary until the first complete Conservative TESTNET cycle succeeds.
+Conservative is the first executable strategy. The bootstrap composes it when
+TESTNET trading is explicitly enabled. The current implementation includes
+initial and standing BUY orders, upward trailing in the initial/post-recovery
+phase, fixed next-BUY behavior after a BUY fill, recovery SELL planning,
+cancel-and-reconcile replacement of an active SELL after a new BUY fills,
+actual fill/commission accounting, profit-gated free-inventory allocation,
+and immediate fill-driven reevaluation.
+
+A fake-broker integration scenario covers the complete first recovery cycle,
+including a second BUY arriving before the recovery SELL completes. This is
+offline evidence only. A real Binance TESTNET run remains outstanding.
+Aggressive, multi-pair shared-asset allocation, durable restart recovery,
+comprehensive reconnect reconciliation, and Journal remain deferred.
