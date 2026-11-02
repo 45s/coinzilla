@@ -79,6 +79,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and actual commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
 - [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
+- [ ] **Verify order ownership before accounting:** only executions correlated to an order submitted/tracked by Harvester may update its strategy Position/RecoveryLedger. Quarantine unknown, manual, or external executions for the clean-state/reconciliation path; never silently adopt them. Cover unknown client IDs, other-symbol orders, duplicates, and partial fills.
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
 - [~] Apply only incremental actual executions to shared Portfolio and Conservative RecoveryLedger in one immutable use-case transition; never apply requested order quantity or cumulative executed quantity twice.
 - [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
