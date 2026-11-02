@@ -279,22 +279,23 @@ export async function startHarvester({
               return
             }
             if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
-            if (isExecution) {
-              try {
-                await refreshAccountSnapshot()
-              } catch (error) {
-                userDataAccountingFailed = true
-                userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
-                logger.error?.({ message: "Harvester could not refresh exchange balances after an execution", error })
-                return
-              }
-            }
           } else if (isExecution) {
             const accounting = await updateTradingAccounting({ fill: event.fill })
             if (!accounting.ok) {
               userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
               logger.error?.({ message: "Harvester could not account for a canonical execution", errors: accounting.errors })
+              return
+            }
+          }
+
+          if (isExecution) {
+            try {
+              await refreshAccountSnapshot()
+            } catch (error) {
+              userDataAccountingFailed = true
+              userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
+              logger.error?.({ message: "Harvester could not refresh exchange balances after an execution", error })
               return
             }
           }
@@ -454,6 +455,8 @@ export async function startHarvester({
         onPrice: (priceEvent) => Promise.resolve().then(() => processMarketPrice({
           symbol,
           priceEvent,
+          pairConfig,
+          settings: tradingConfig.settings,
         })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
           return processed
