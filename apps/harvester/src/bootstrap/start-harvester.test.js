@@ -618,3 +618,37 @@ test("fails startup when the exchange snapshot omits an enabled market asset", a
     "disconnect",
   ])
 })
+
+
+test("does not clear execution accounting failures after stream recovery acknowledgement", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    fill: { malformed: true },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
+
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+  })
+
+  assert.equal(result.userDataReady, false)
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
+  const order = await result.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+  assert.equal(order.ok, false)
+  await result.stop()
+})
