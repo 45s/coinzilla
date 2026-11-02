@@ -67,8 +67,8 @@ test("does not request more recovery proceeds than remain after prior sales", ()
   })
 
   assert.deepEqual(plan, {
-    quantity: "99",
-    price: "0",
+    quantity: "0",
+    price: null,
     requiredNetProceeds: "0",
   })
 })
