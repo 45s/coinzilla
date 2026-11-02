@@ -697,6 +697,25 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     disconnect: async () => calls.push("disconnect"),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
+    cancelOrder: async ({ order }) => ({
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: 3,
+        completedAt: 3,
+      }),
+    }),
+    getFills: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => {
       snapshotTime += 1
       const balances = [
