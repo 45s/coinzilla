@@ -26,6 +26,26 @@ function sameOrderState({ current, next }) {
   return JSON.stringify(current.value) === JSON.stringify(next.value)
 }
 
+function isStaleOrderUpdate({ current, next }) {
+  if (
+    compareDecimal({
+      left: next.executedQuantity.amount,
+      right: current.executedQuantity.amount,
+    }) > 0
+  ) {
+    return false
+  }
+  if (
+    current.updatedAt !== undefined &&
+    (next.updatedAt === undefined || next.updatedAt < current.updatedAt)
+  ) {
+    return true
+  }
+  return current.status !== "PENDING" &&
+    next.status === "OPEN" &&
+    current.status !== "OPEN"
+}
+
 function validateOrderUpdate({ current, next }) {
   if (!sameOrderIntent({ current, next })) {
     throw new Error("Canonical order update changed immutable order intent")
@@ -150,12 +170,26 @@ export class OrderRegistry {
     }
 
     const current = this.#orders[index]
+    if (
+      sameOrderIntent({ current, next: order }) &&
+      (current.brokerOrderId === undefined || current.brokerOrderId === order.brokerOrderId) &&
+      isStaleOrderUpdate({ current, next: order })
+    ) {
+      return Object.freeze({
+        registry: this,
+        applied: false,
+        duplicate: false,
+        stale: true,
+        unknown: false,
+      })
+    }
     validateOrderUpdate({ current, next: order })
     if (sameOrderState({ current, next: order })) {
       return Object.freeze({
         registry: this,
         applied: false,
         duplicate: true,
+        stale: false,
         unknown: false,
       })
     }
@@ -167,6 +201,7 @@ export class OrderRegistry {
       registry: new OrderRegistry({ orders }),
       applied: true,
       duplicate: false,
+      stale: false,
       unknown: false,
     })
   }
