@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process"
 
+// Shared decimal primitives are covered by packages/utils; keep this gate scoped to Free-Roll-owned source.
 const coverageThresholds = [
   ["bot-free-roll.js", 95, 75],
   ["fill-ledger.js", 100, 100],
@@ -8,7 +9,6 @@ const coverageThresholds = [
   ["event-handling.js", 90, 90],
   ["fill-reconciliation.js", 95, 75],
   ["accounting.js", 90, 85],
-  ["decimal.js", 95, 90],
   ["order-planning.js", 90, 60],
   ["price.js", 80, 65],
   ["trading-rules.js", 90, 90],

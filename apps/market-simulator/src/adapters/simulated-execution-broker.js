@@ -23,7 +23,7 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     if (!markets || typeof markets !== "object" || Array.isArray(markets)) {
       throw new TypeError("markets metadata is required")
     }
-    if (typeof feeRate !== "string" || compareDecimal(feeRate, "0") < 0) {
+    if (typeof feeRate !== "string" || compareDecimal({ left: feeRate, right: "0" }) < 0) {
       throw new TypeError("feeRate must be a non-negative decimal string")
     }
     this.markets = new Map(Object.entries(markets))
@@ -31,7 +31,7 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
     this.onExecution = onExecution
     this.balances = new Map()
     for (const [asset, amount] of Object.entries(initialBalances)) {
-      if (typeof amount !== "string" || compareDecimal(amount, "0") < 0) {
+      if (typeof amount !== "string" || compareDecimal({ left: amount, right: "0" }) < 0) {
         throw new TypeError(`Initial balance for ${asset} must be a non-negative decimal string`)
       }
       this.balances.set(asset, { free: amount, locked: "0" })
@@ -62,13 +62,13 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
       if (!["MARKET", "LIMIT", "LIMIT_MAKER"].includes(type)) throw new TypeError("Unsupported order type")
 
       const quantity = input.quantity
-      if (typeof quantity !== "string" || compareDecimal(quantity, "0") <= 0) {
+      if (typeof quantity !== "string" || compareDecimal({ left: quantity, right: "0" }) <= 0) {
         throw new TypeError("quantity must be a positive decimal string")
       }
       const marketPrice = this.prices.get(symbol)
       if (!marketPrice) throw new Error(`No current price available for ${symbol}`)
       const price = type === "MARKET" ? marketPrice : input.price
-      if (typeof price !== "string" || compareDecimal(price, "0") <= 0) {
+      if (typeof price !== "string" || compareDecimal({ left: price, right: "0" }) <= 0) {
         throw new TypeError("A positive decimal price is required")
       }
       if (type === "LIMIT_MAKER" && isLimitMakerImmediatelyMarketable({ side, limitPrice: price, marketPrice })) {
@@ -130,7 +130,7 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
   async getBalances() {
     return toResult({ data: [...this.balances.entries()].map(([asset, balance]) => ({
       asset, free: balance.free, locked: balance.locked,
-      total: addDecimal(balance.free, balance.locked),
+      total: addDecimal({ left: balance.free, right: balance.locked }),
     })) })
   }
 
@@ -151,14 +151,14 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
 
   #moveBalance(asset, from, to, amount) {
     const balance = this.#balance(asset)
-    if (compareDecimal(balance[from], amount) < 0) throw new Error(`Insufficient ${asset} ${from} balance`)
-    balance[from] = subtractDecimal(balance[from], amount)
-    balance[to] = addDecimal(balance[to], amount)
+    if (compareDecimal({ left: balance[from], right: amount }) < 0) throw new Error(`Insufficient ${asset} ${from} balance`)
+    balance[from] = subtractDecimal({ left: balance[from], right: amount })
+    balance[to] = addDecimal({ left: balance[to], right: amount })
   }
 
   #reserveFor({ side, quantity, price }) {
     if (side === "SELL") return quantity
-    return multiplyDecimal(multiplyDecimal(quantity, price), addDecimal("1", this.feeRate))
+    return multiplyDecimal({ left: multiplyDecimal({ left: quantity, right: price }), right: addDecimal({ left: "1", right: this.feeRate }) })
   }
 
   #matchRestingOrders(event) {
@@ -176,21 +176,21 @@ export class SimulatedExecutionBroker extends HistoricalMarketBroker {
 
   #fill(order, executionPrice, timestamp) {
     const market = this.markets.get(order.symbol)
-    const quoteQuantity = multiplyDecimal(order.origQty, executionPrice)
-    const commission = multiplyDecimal(quoteQuantity, this.feeRate)
+    const quoteQuantity = multiplyDecimal({ left: order.origQty, right: executionPrice })
+    const commission = multiplyDecimal({ left: quoteQuantity, right: this.feeRate })
     if (order.side === "BUY") {
-      const actualSpend = addDecimal(quoteQuantity, commission)
-      const refund = subtractDecimal(order.reservedAmount, actualSpend)
+      const actualSpend = addDecimal({ left: quoteQuantity, right: commission })
+      const refund = subtractDecimal({ left: order.reservedAmount, right: actualSpend })
       const quote = this.#balance(market.quoteAsset)
-      quote.locked = subtractDecimal(quote.locked, order.reservedAmount)
-      quote.free = addDecimal(quote.free, refund)
+      quote.locked = subtractDecimal({ left: quote.locked, right: order.reservedAmount })
+      quote.free = addDecimal({ left: quote.free, right: refund })
       const base = this.#balance(market.baseAsset)
-      base.free = addDecimal(base.free, order.origQty)
+      base.free = addDecimal({ left: base.free, right: order.origQty })
     } else {
       const base = this.#balance(market.baseAsset)
-      base.locked = subtractDecimal(base.locked, order.reservedAmount)
+      base.locked = subtractDecimal({ left: base.locked, right: order.reservedAmount })
       const quote = this.#balance(market.quoteAsset)
-      quote.free = addDecimal(quote.free, subtractDecimal(quoteQuantity, commission))
+      quote.free = addDecimal({ left: quote.free, right: subtractDecimal({ left: quoteQuantity, right: commission }) })
     }
     const fill = {
       tradeId: String(this.nextTradeId++), orderId: order.orderId, symbol: order.symbol,

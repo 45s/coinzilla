@@ -441,7 +441,7 @@ test("fails closed when supplied accounting contains malformed decimal values", 
 
   assert.equal(result.ok, false)
   assert.match(result.reason, /Market fill accounting is invalid/)
-  assert.match(result.reason, /Decimal value has an invalid format/)
+  assert.match(result.reason, /invalid decimal format/)
 })
 
 test("covers malformed ledger and supplied accounting shape boundaries", () => {

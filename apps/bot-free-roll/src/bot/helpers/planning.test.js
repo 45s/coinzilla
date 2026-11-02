@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { addDecimal, compareDecimal } from "./decimal.js"
+import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { getFeeRate, estimateBuyAccountingExact } from "./accounting.js"
 import { calculateSellPlanExact, calculateSellPlan } from "./order-planning.js"
 
@@ -175,7 +175,7 @@ test("calculateSellPlanExact rejects non-string and malformed values for every i
     )
     assert.throws(
       () => calculateSellPlanExact({ ...validExactSellPlan, [field]: "invalid" }),
-      /invalid format/,
+      /invalid decimal format/,
       `${field} must be a valid decimal`,
     )
   }

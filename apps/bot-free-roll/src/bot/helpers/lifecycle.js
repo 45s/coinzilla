@@ -8,34 +8,6 @@ async function disconnectSubscription({ subscription }) {
   }
 }
 
-export function createKeyedQueue({ onError } = {}) {
-  const queues = new Map()
-
-  function enqueue({ key, task }) {
-    const previous = queues.get(key) ?? Promise.resolve()
-
-    const next = previous
-      .then(task)
-      .catch((error) => {
-        onError?.({ key, error })
-      })
-      .finally(() => {
-        if (queues.get(key) === next) {
-          queues.delete(key)
-        }
-      })
-
-    queues.set(key, next)
-    return next
-  }
-
-  async function drain() {
-    await Promise.all([...queues.values()])
-  }
-
-  return { enqueue, drain }
-}
-
 export async function disconnectSubscriptions({ subscriptions }) {
   const results = await Promise.allSettled(
     subscriptions

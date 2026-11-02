@@ -1,4 +1,4 @@
-import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal, assertDecimalString } from "./decimal.js"
+import { addDecimal, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal, assertDecimalString } from "@coinzilla/utils"
 import { roundPriceUp, roundQuantityDown } from "./price.js"
 
 export function calculateSellPlan({
@@ -86,7 +86,7 @@ export function calculateSellPlanExact({
     priceTickSize,
     quantityStepSize,
   };
-  for (const [name, value] of Object.entries(values)) assertDecimalString(value, name);
+  for (const [name, value] of Object.entries(values)) assertDecimalString({ value, field: name });
 
   if (
     compareDecimal({ left: activeQuantity, right: "0" }) <= 0 ||

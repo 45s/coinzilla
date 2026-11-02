@@ -52,12 +52,22 @@ No runtime dependencies were added and no consumer package source files were cha
 ## Repository-wide reuse audit
 
 - [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
-- [ ] Consolidate exact decimal-string arithmetic shared by Free-Roll, Harvester, and Market Simulator; preserve each domain's business rules and compatibility contracts.
+- [~] Consolidate exact decimal-string arithmetic shared by Free-Roll, Harvester, Market Simulator, and Entities; shared API and first consumer migrations are in this PR, pending CI and compatibility review.
 - [ ] Audit direct console usage and app-local logger adapters; standardize diagnostics on the shared Logger / defaultLogger API.
 - [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
 - [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
 
 The initial findings and mandatory agent workflow are in [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). The inventory is preliminary; do not mark this audit complete until every candidate has been inspected and classified.
+
+## Shared exact decimal implementation
+
+- [x] Add BigInt-backed decimal parsing, formatting, arithmetic, comparison, rounding, rescaling, and canonical normalization to the public utils API.
+- [x] Move generic exact percentage calculations from Free-Roll into the public utils API.
+- [x] Move the reusable keyed asynchronous task queue from Free-Roll into the public utils API, including queue recovery when error reporting fails.
+- [x] Move the generic object-input assertion from EventBus into the public utils API.
+- [x] Reject JavaScript Number operands to prevent hidden precision loss; accept exact strings and bigint parsing inputs.
+- [x] Add focused tests for signed values, scientific notation bounds, maximum scale/precision, division-by-zero, explicit rounding modes, increment rounding, and deterministic arithmetic identities.
+- [x] Migrate Free-Roll, Harvester, Market Simulator, and Entities consumers to the shared API; workspace CI remains the final validation gate.
 
 ## Scope guard
 

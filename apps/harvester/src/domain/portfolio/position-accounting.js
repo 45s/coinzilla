@@ -1,8 +1,4 @@
-import {
-  addDecimalStrings,
-  subtractDecimalStrings,
-  negateDecimalString,
-} from "./decimal-arithmetic.js"
+import { addDecimal, subtractDecimal, negateDecimal } from "@coinzilla/utils"
 
 /**
  * Purely calculate the next Position amounts from its current values and one
@@ -32,7 +28,7 @@ export function calculatePositionFill({
       throw new TypeError("Unsupported third-asset commission: " + commission.amount.asset.code)
     }
     const previous = commissionByAsset.get(assetId) ?? "0"
-    commissionByAsset.set(assetId, addDecimalStrings({
+    commissionByAsset.set(assetId, addDecimal({
       left: previous,
       right: commission.amount.amount,
     }))
@@ -41,31 +37,31 @@ export function calculatePositionFill({
   const baseCommission = commissionByAsset.get(market.baseAsset.id) ?? "0"
   const quoteCommission = commissionByAsset.get(market.quoteAsset.id) ?? "0"
   const baseDelta = fill.side === "BUY"
-    ? subtractDecimalStrings({ left: fill.quantity.amount, right: baseCommission })
-    : addDecimalStrings({ left: fill.quantity.amount, right: baseCommission })
+    ? subtractDecimal({ left: fill.quantity.amount, right: baseCommission })
+    : addDecimal({ left: fill.quantity.amount, right: baseCommission })
   const nextBaseQuantity = fill.side === "BUY"
-    ? addDecimalStrings({ left: baseQuantity, right: baseDelta })
-    : subtractDecimalStrings({ left: baseQuantity, right: baseDelta })
+    ? addDecimal({ left: baseQuantity, right: baseDelta })
+    : subtractDecimal({ left: baseQuantity, right: baseDelta })
 
   if (nextBaseQuantity.startsWith("-")) {
     throw new RangeError("Fill would make Position base quantity negative")
   }
 
   const quoteDelta = fill.side === "BUY"
-    ? negateDecimalString({
-      value: addDecimalStrings({
+    ? negateDecimal({
+      value: addDecimal({
         left: fill.quoteQuantity.amount,
         right: quoteCommission,
       }),
     })
-    : subtractDecimalStrings({
+    : subtractDecimal({
       left: fill.quoteQuantity.amount,
       right: quoteCommission,
     })
 
   return Object.freeze({
     baseQuantity: nextBaseQuantity,
-    quoteNetCashFlow: addDecimalStrings({
+    quoteNetCashFlow: addDecimal({
       left: quoteNetCashFlow,
       right: quoteDelta,
     }),

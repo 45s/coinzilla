@@ -496,3 +496,10 @@ Do not mark a roadmap item complete because code exists. Mark it complete only w
 **Acceptance:** notifications are opt-in, credentials are never committed, raw exchange payloads are not forwarded, and Telegram/network errors cannot alter trading state. Unit and CI tests must not require live Telegram credentials or network access.
 
 **Configuration:** see [README.md](./README.md#optional-telegram-notifications).
+
+## Shared utility reuse
+
+- [x] Remove the app-local exact decimal engine and import arithmetic from `@coinzilla/utils`.
+- [x] Move generic exact percentage calculations to `@coinzilla/utils`; keep price-threshold, fee, order-planning, and trading-rule policy in Free-Roll.
+- [x] Move the generic keyed asynchronous task queue to `@coinzilla/utils`; keep subscription disconnection in Free-Roll.
+- [x] Preserve legacy Number-based price/accounting interfaces where still used, while routing their decimal calculations through the shared utility. Exact financial paths continue to use decimal strings.

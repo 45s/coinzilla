@@ -1,7 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { createKeyedQueue, disconnectSubscriptions } from "./lifecycle.js"
+import { createKeyedQueue } from "@coinzilla/utils"
+import { disconnectSubscriptions } from "./lifecycle.js"
 
 test("serializes tasks for the same key in enqueue order", async () => {
   const queue = createKeyedQueue()

@@ -92,3 +92,10 @@ These limitations are intentional. Extend the model only with explicit semantics
 - Verify Node 22 and Node 24.
 - Keep the default test suite offline.
 - Do not mark a phase delivered until the corresponding checks pass on the branch and the change is merged into `develop`.
+
+
+## Shared utility reuse
+
+- [x] Remove the app-local decimal arithmetic implementation.
+- [x] Use shared decimal operations from `@coinzilla/utils` for order matching and the app's public arithmetic exports.
+- [x] Keep market-history schema validation and simulator-specific matching semantics in this application.

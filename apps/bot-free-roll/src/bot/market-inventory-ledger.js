@@ -3,7 +3,7 @@ import {
   addDecimal,
   compareDecimal,
   subtractDecimal,
-} from "./helpers/decimal.js"
+} from "@coinzilla/utils"
 
 function failure(reason) {
   return { ok: false, reason }

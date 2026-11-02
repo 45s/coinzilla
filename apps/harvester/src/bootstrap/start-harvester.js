@@ -1,3 +1,4 @@
+import { defaultLogger } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -47,7 +48,7 @@ export async function startHarvester({
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
   evaluateStrategy = evaluateAggressiveStrategy,
-  logger = console,
+  logger = defaultLogger,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.("Harvester market price processing failed", { symbol, error, errors })
   },

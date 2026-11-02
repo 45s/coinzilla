@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { assertObjectInput, defaultLogger, toResult } from "@coinzilla/utils"
 import { isValidEventName } from "./helpers/event-name.js"
 import { assertSupportedPayload, cloneAndFreezePayload } from "./helpers/payload.js"
 import { validateOptions } from "./helpers/options.js"
 import { canAcceptDeliveries } from "./helpers/delivery-capacity.js"
-import { assertObjectInput } from "./helpers/object-input.js"
 
 const ALL_EVENTS = Symbol("all-events")
 export class EventBus {
@@ -32,7 +31,7 @@ export class EventBus {
     let data
 
     try {
-      assertObjectInput(input, "Event publish")
+      assertObjectInput({ input, operation: "Event publish" })
       ;({ name, source, data = {} } = input)
     } catch (error) {
       return toResult({ error })
@@ -106,7 +105,7 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput(input, "Event subscription")
+      assertObjectInput({ input, operation: "Event subscription" })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -125,7 +124,7 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput(input, "Event subscribeAll")
+      assertObjectInput({ input, operation: "Event subscribeAll" })
       ;({ handler } = input)
     } catch (error) {
       return toResult({ error })
@@ -142,7 +141,7 @@ export class EventBus {
     let handler
 
     try {
-      assertObjectInput(input, "Event subscription")
+      assertObjectInput({ input, operation: "Event subscription" })
       ;({ name, handler } = input)
     } catch (error) {
       return toResult({ error })

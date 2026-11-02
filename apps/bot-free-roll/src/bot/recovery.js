@@ -1,5 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { addDecimal, compareDecimal } from "./helpers/decimal.js"
+import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { getOrderId } from "./helpers/exchange.js"
 
 function failure(reason) {
