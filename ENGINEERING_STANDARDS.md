@@ -202,7 +202,7 @@ Before approving a pull request, ask:
 5. Are side effects and state changes explicit?
 6. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
 7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
-8. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
+8. Has meaningful pure logic been separated where that improves cohesion, independent testability, or comprehension, without mechanically fragmenting trivial/context-bound logic?
 9. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
 10. Is logic duplicated, or has an abstraction been introduced too early?
 11. Could the change expose secrets, weaken security, or break compatibility?
