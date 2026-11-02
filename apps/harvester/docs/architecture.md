@@ -348,3 +348,19 @@ the order actually filled during cancellation, or any fill does not match the
 registered order, the pair pauses. No replacement SELL is submitted from
 unreconciled quantities. This covers the ordinary cancel/replace path without
 claiming durable restart or stream-recovery reconciliation.
+
+## Trailing BUY lifecycle
+
+The engine tracks whether the pair is in a trailing phase. A newly initialized
+pair and a pair whose recovery SELL has completed may trail its standing BUY
+upward. A BUY that has fully filled turns trailing off; the next standing BUY
+is fixed while the new recovery cycle is active. A profitable recovery SELL
+turns trailing back on, including for a next BUY that was already resting.
+
+A trailing adjustment occurs only after the last traded price rises by at
+least one full percentage step from the reference used for the current BUY.
+The engine cancels the old BUY, queries canonical fills, and verifies the final
+cumulative execution quantity. If any quantity filled during cancellation,
+the fills are accounted and the pair pauses; it never submits a replacement
+from uncertain inventory. A clean zero-fill cancellation is followed by a
+new BUY below the current last trade, rounded down to the exchange tick.

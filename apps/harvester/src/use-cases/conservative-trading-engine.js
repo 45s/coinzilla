@@ -3,6 +3,8 @@ import { addDecimal, compareDecimal, multiplyDecimal, toResult } from "@coinzill
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
+import { calculateInitialBuyPrice } from "../domain/strategies/conservative/initial-buy-price.js"
+import { evaluateTrailingBuyRepricing } from "../domain/strategies/conservative/trailing-buy-repricing.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
@@ -20,6 +22,9 @@ export function makeConservativeTradingEngine({
     registry: OrderRegistry.empty(),
     prices: new Map(),
     lastBuyPrices: new Map(),
+    lastAdjustmentPrices: new Map(),
+    buyReferenceOverrides: new Map(),
+    trailingBuy: new Map(),
     paused: new Set(),
   }
   const pause = async ({ symbol, reason, error }) => {
@@ -101,6 +106,91 @@ export function makeConservativeTradingEngine({
     return toResult({ data: { canceled: activeSells.length } })
   }
 
+  const cancelAndReconcileTrailingBuy = async ({ symbol, order } = {}) => {
+    const cancelResult = await broker.cancelOrder({ order })
+    if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
+      const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
+      await pause({ symbol, reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED", error: errors[0] })
+      return toResult({ errors })
+    }
+    const canceledOrder = cancelResult.data
+    const update = state.registry.applyUpdate({ order: canceledOrder })
+    if (update.unknown) {
+      await pause({ symbol, reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED" })
+      return toResult({ error: new Error("Canceled trailing BUY is not registered by Harvester") })
+    }
+    state.registry = update.registry
+
+    const fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+      const errors = fillsResult?.errors ?? [new Error("Unable to reconcile trailing BUY fills after cancellation")]
+      await pause({ symbol, reason: "TRAILING_BUY_FILL_RECONCILIATION_FAILED", error: errors[0] })
+      return toResult({ errors })
+    }
+    let reconciledQuantity = "0"
+    const seenFillIds = new Set()
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId) {
+        await pause({ symbol, reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH" })
+        return toResult({ error: new Error("Recovered BUY fill does not match the canceled order") })
+      }
+      const accounting = await updateTradingAccounting({ fill })
+      if (!accounting?.ok) {
+        await pause({ symbol, reason: "TRAILING_BUY_FILL_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
+        return toResult({ errors: accounting?.errors ?? [new Error("Recovered BUY fill accounting failed")] })
+      }
+      if (!seenFillIds.has(fill.id)) {
+        reconciledQuantity = addDecimal({ left: reconciledQuantity, right: fill.quantity.amount })
+        seenFillIds.add(fill.id)
+      }
+    }
+    if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
+      await pause({ symbol, reason: "TRAILING_BUY_EXECUTED_QUANTITY_MISMATCH" })
+      return toResult({ error: new Error("Canceled BUY cumulative execution does not match reconciled fills") })
+    }
+    if (canceledOrder.status !== "CANCELED" || compareDecimal({ left: reconciledQuantity, right: "0" }) !== 0) {
+      await pause({ symbol, reason: "TRAILING_BUY_FILLED_DURING_CANCEL" })
+      return toResult({ error: new Error("Trailing BUY filled during cancellation; pair paused after fill reconciliation") })
+    }
+    return toResult({ data: { canceledOrder } })
+  }
+
+  const maybeReplaceTrailingBuy = async ({ symbol, marketPrice } = {}) => {
+    const metadata = getMarketMetadata({ symbol })
+    const pairConfig = tradingConfig.pairs[symbol]
+    const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      .find((order) => order.side === "BUY")
+    if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatest({ symbol })
+
+    const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
+    const trigger = evaluateTrailingBuyRepricing({
+      marketPrice: marketPrice.price,
+      referencePrice,
+      priceStepPercent: String(pairConfig.priceStepPercent),
+    })
+    if (!trigger.shouldReplace) return evaluateLatest({ symbol })
+    if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+
+    const cancellation = await cancelAndReconcileTrailingBuy({ symbol, order: activeBuy })
+    if (!cancellation.ok) return cancellation
+    state.buyReferenceOverrides.set(symbol, marketPrice.price)
+    if (!canTrade({ symbol }) || isStopping?.()) {
+      return toResult({ data: { canceled: true, waitingForTradingReadiness: true } })
+    }
+
+    const result = await evaluateLatest({ symbol })
+    if (!result.ok) return result
+    return toResult({
+      data: {
+        ...result.data,
+        trailingBuyReplaced: result.data.submittedOrders?.some((order) => order.side === "BUY") ?? false,
+        previousOrderId: activeBuy.brokerOrderId,
+        adjustmentThreshold: trigger.adjustmentThreshold,
+      },
+    })
+  }
+
   const evaluateLatest = async ({ symbol } = {}) => {
     if (state.paused.has(symbol) || !canTrade({ symbol })) {
       return toResult({ data: { skipped: true, reason: state.paused.has(symbol) ? "PAIR_PAUSED" : "TRADING_NOT_READY" } })
@@ -117,7 +207,7 @@ export function makeConservativeTradingEngine({
         recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id }),
         marketMetadata: metadata,
         activeOrders: state.registry.getActiveOrders({ marketId: metadata.market.id }),
-        lastBuyPrice: state.lastBuyPrices.get(symbol),
+        lastBuyPrice: state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol),
       })
       if (decision.actions.length === 0) return toResult({ data: { decision, submittedOrders: [] } })
       const accountSnapshot = getAccountSnapshot()
@@ -141,9 +231,15 @@ export function makeConservativeTradingEngine({
       }
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
-      return result.ok
-        ? toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
-        : result
+      if (!result.ok) return result
+      if (result.data.submittedOrders.some((order) => order.side === "BUY")) {
+        state.lastAdjustmentPrices.set(
+          symbol,
+          state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol) ?? marketPrice.price,
+        )
+        state.buyReferenceOverrides.delete(symbol)
+      }
+      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
       return toResult({ error })
