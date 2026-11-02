@@ -297,9 +297,11 @@ export async function startHarvester({
       },
       onStatus: (status = {}) => {
         userDataStatus = status.type ?? "UNKNOWN"
-        if (status.executionPending === true) {
+        if (status.executionPending === true || status.orderUpdatePending === true) {
           userDataReady = false
-          userDataStatus = "EXECUTION_ACCOUNTING_PENDING"
+          userDataStatus = status.executionPending === true
+            ? "EXECUTION_ACCOUNTING_PENDING"
+            : "ORDER_UPDATE_PENDING"
         }
         if (status.recoveryRequired === true || status.reconciliationRequired === true) {
           userDataRequiresReconciliation = true
