@@ -12,15 +12,15 @@ import {
 /**
  * Calculate a Free-Roll recovery SELL plan using exact decimal arithmetic.
  *
- * feeRate is the conservative execution-fee rate used by the Free-Roll
- * planning policy. The quantity reserves for a possible base-asset SELL fee;
- * the price covers the quote proceeds required after the fee and prior sales.
- * Actual fills and commissions remain authoritative for accounting.
+ * feeRate is the conservative execution-fee rate resolved by the strategy's
+ * commission policy. It reserves for a possible base-asset SELL fee and
+ * protects quote proceeds against a possible quote-asset SELL fee. Actual
+ * fills and commissions remain authoritative for accounting.
  *
  * @param {object} input
  * @param {string} input.activeQuantity Current strategy-owned base quantity.
  * @param {string} input.keepQuantity Base quantity retained after recovery.
- * @param {string} input.cycleCost Unrecovered BUY cost for the current cycle.
+ * @param {string} input.cycleCost Cumulative eligible BUY cost for this cycle.
  * @param {string} input.saleProceeds Confirmed net SELL proceeds already credited.
  * @param {string} input.minProfit Required minimum net quote profit.
  * @param {string} input.feeRate Conservative fee rate as a decimal fraction.
@@ -90,10 +90,7 @@ export function calculateRecoverySellPlan({
     }),
   })
 
-  if (
-    compareDecimal({ left: quantity, right: "0" }) <= 0 ||
-    compareDecimal({ left: requiredNetProceeds, right: "0" }) <= 0
-  ) {
+  if (compareDecimal({ left: quantity, right: "0" }) <= 0) {
     return Object.freeze({
       quantity: "0",
       price: null,
@@ -112,8 +109,15 @@ export function calculateRecoverySellPlan({
     scale: 36,
     rounding: "away-from-zero",
   })
+  // If earlier confirmed SELLs have already recovered the required amount,
+  // the remaining recovery quantity still needs a positive valid limit price
+  // so the cycle can finish and only then allocate keepQuantity.
+  const positiveMinimumPrice = maxDecimal({
+    left: minimumPrice,
+    right: priceTickSize,
+  })
   const price = roundDecimalToIncrement({
-    value: minimumPrice,
+    value: positiveMinimumPrice,
     increment: priceTickSize,
     direction: "up",
   })
