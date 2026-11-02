@@ -50,7 +50,12 @@ export async function startHarvester({
   evaluateStrategy = evaluateAggressiveStrategy,
   logger = defaultLogger,
   onMarketPriceError = ({ symbol, error, errors }) => {
-    logger.error?.("Harvester market price processing failed", { symbol, error, errors })
+    logger.error?.({
+      message: "Harvester market price processing failed",
+      symbol,
+      error,
+      errors,
+    })
   },
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
@@ -103,7 +108,10 @@ export async function startHarvester({
     try {
       onMarketPriceError(details)
     } catch (error) {
-      logger.error?.("Harvester market price error handler failed", { error })
+      logger.error?.({
+        message: "Harvester market price error handler failed",
+        error,
+      })
     }
   }
 
@@ -133,7 +141,7 @@ export async function startHarvester({
         )
       }
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
-      logger.info?.("Harvester subscribed to market prices", { symbol })
+      logger.info?.({ message: "Harvester subscribed to market prices", symbol })
     }
   } catch (error) {
     const cleanupErrors = await cleanupBroker({ broker, subscriptions })
