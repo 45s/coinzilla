@@ -97,6 +97,10 @@ The configuration loader and structural validation live in:
 
 The configuration contract does not imply that either strategy mode or order execution is implemented. Strategy behavior must be agreed and documented before strategy-specific parameters or runtime behavior are added.
 
+## Logging
+
+The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
+
 ## Implementation style
 
 Harvester has a mandatory class-versus-function rule:

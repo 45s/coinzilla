@@ -1,7 +1,8 @@
 import { pathToFileURL } from "node:url"
+import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 
-export async function main({ start = startHarvester, logger = console } = {}) {
+export async function main({ start = startHarvester, logger = defaultLogger } = {}) {
   try {
     const runtime = await start()
     logger.info(
@@ -20,7 +21,7 @@ export async function main({ start = startHarvester, logger = console } = {}) {
           await runtime.stop()
           logger.info("Harvester broker disconnected.")
         } catch (error) {
-          logger.error("Harvester shutdown failed.", error)
+          logger.error({ message: "Harvester shutdown failed.", error })
           process.exitCode = 1
         }
       }
@@ -28,7 +29,7 @@ export async function main({ start = startHarvester, logger = console } = {}) {
       process.once("SIGTERM", shutdown)
     }
   } catch (error) {
-    logger.error("Harvester startup failed.", error)
+    logger.error({ message: "Harvester startup failed.", error })
     process.exitCode = 1
   }
 }

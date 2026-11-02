@@ -39,5 +39,10 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  assert.deepEqual(messages, [['error', 'Harvester startup failed.', startupError]]);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0][0], 'error');
+  assert.deepEqual(messages[0][1], {
+    message: 'Harvester startup failed.',
+    error: startupError,
+  });
 });
