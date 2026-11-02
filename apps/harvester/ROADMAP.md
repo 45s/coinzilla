@@ -98,7 +98,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Prevent stale snapshots from producing duplicate or conflicting orders.
 - [ ] Handle strategy takeover as a controlled workflow: stop outgoing intents, reconcile/cancel relevant orders, account for in-flight fills/reservations, then activate the incoming strategy.
 - [ ] Make process startup, partial startup failure, reconnect, pause/resume, and shutdown idempotent and observable.
-- [ ] Replace the current price-only callback flow with the actual decision-to-order execution pipeline.
+- [~] Replace the current price-only callback flow with the actual decision-to-order execution pipeline. A tested application use case now converts pure Conservative intents into registered, exchange-rule-validated broker submissions; bootstrap composition and event-driven lifecycle integration remain.
 - [ ] Keep `runtime.placeOrder` as a controlled engine capability; callers must not bypass safety checks by invoking it directly.
 
 ### Deferred follow-up (not a P0 gate) — Persistence, restart, and comprehensive recovery

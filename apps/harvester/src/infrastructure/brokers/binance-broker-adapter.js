@@ -85,7 +85,10 @@ export function createBinanceBrokerAdapter({
   const broker = Object.freeze({
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
-    placeOrder: ({ order }) => client.createOrder(order),
+    placeOrder: ({ order }) => {
+      if (typeof client.createCanonicalOrder === "function") return client.createCanonicalOrder(order)
+      return client.createOrder(order)
+    },
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: (input) => client.getFills(input),

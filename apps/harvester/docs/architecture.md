@@ -298,3 +298,19 @@ This is only a market-metadata readiness gate. It does not yet initialize accoun
 After the user-data stream is established, bootstrap loads a canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The same validation is repeated after each accounted execution. A failed or stale refresh blocks further order placement. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
 
 This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
+
+## Strategy decision execution
+
+The `makeExecuteStrategyDecision` use case is the application boundary between
+pure strategy order intents and broker submission. It creates a local PENDING
+`CanonicalOrder`, validates exchange increments and bounds, registers the
+pending order before the network request, and requires a canonical broker
+acknowledgement with the same client order ID. A transport failure or malformed
+acknowledgement is treated as an unknown outcome: the caller pauses the pair and
+must not blindly retry. The use case never decides whether to BUY or SELL and
+never mutates Portfolio.
+
+The Binance adapter prefers the broker's canonical order-placement operation
+so the application receives a `CanonicalOrder` acknowledgement rather than a
+raw exchange response.
+
