@@ -111,6 +111,7 @@ export async function startHarvester({
   const subscriptions = []
   let userDataSubscription
   let userDataReady = false
+  let userDataRequiresReconciliation = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
   const reportPriceError = (details) => {
@@ -153,8 +154,8 @@ export async function startHarvester({
               result?.ok === true &&
               result?.accounted === true
             ) {
-              userDataReady = true
-              userDataStatus = "READY"
+              userDataReady = !userDataRequiresReconciliation
+              userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
             }
           } catch (error) {
             userDataReady = false
@@ -174,8 +175,10 @@ export async function startHarvester({
       onStatus: (status = {}) => {
         userDataStatus = status.type ?? "UNKNOWN"
         if (status.recoveryRequired === true || status.reconciliationRequired === true) {
+          userDataRequiresReconciliation = true
           userDataReady = false
         } else if (status.type === "reconciled") {
+          userDataRequiresReconciliation = false
           userDataReady = true
           userDataStatus = "READY"
         }
@@ -196,8 +199,8 @@ export async function startHarvester({
       )
     }
     userDataSubscription = userDataResult.data
-    userDataReady = true
-    userDataStatus = "READY"
+    userDataReady = !userDataRequiresReconciliation
+    userDataStatus = userDataReady ? "READY" : "RECONCILIATION_REQUIRED"
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
@@ -227,6 +230,7 @@ export async function startHarvester({
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
     }
   } catch (error) {
+    await userDataEventQueue
     const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
@@ -243,6 +247,7 @@ export async function startHarvester({
     stopped = true
     userDataReady = false
     userDataStatus = "STOPPED"
+    await userDataEventQueue
     const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
