@@ -240,3 +240,17 @@ checks.
 
 See [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for
 permissions, exact behavior, safety warnings, and troubleshooting.
+
+
+## Standalone Binance TESTNET balance inspection
+
+List every asset with a non-zero free or locked balance using the read-only
+account endpoint:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:balances
+```
+
+The command uses the local TESTNET credentials, displays exact exchange
+decimal strings, and does not place/cancel orders or change balances. See
+[Binance TESTNET operator scripts](./docs/testnet-order-tools.md).
