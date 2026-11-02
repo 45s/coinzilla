@@ -342,11 +342,8 @@ test("accounts canonical execution events but keeps orders blocked without autho
     "650",
   )
 
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
-  assert.match(order.errors[0].message, /AUTHORITATIVE_RECONCILIATION_REQUIRED/)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -372,10 +369,8 @@ test("requires authoritative reconciliation after a user-data stream recovery", 
   })
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -415,10 +410,8 @@ test("does not surface a stream-ready status as application readiness before rec
 
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -442,10 +435,8 @@ test("does not reopen order placement after execution accounting without authori
 
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -469,7 +460,7 @@ test("fails startup closed when user-data subscription cannot be established", a
   assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
 
-test("exposed broker port cannot bypass the user-data readiness gate", async () => {
+test("does not expose a broker port that could bypass the trading engine", async () => {
   const broker = createBroker()
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
@@ -483,12 +474,8 @@ test("exposed broker port cannot bypass the user-data readiness gate", async () 
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  const order = await result.broker.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-
-  assert.equal(order.ok, false)
-  assert.match(order.errors[0].message, /user-data accounting is not ready/)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -511,10 +498,8 @@ test("blocks order placement when a trade event cannot be accounted", async () =
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
   assert.equal(result.portfolio.positions.length, 0)
-  const order = await result.broker.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -603,10 +588,8 @@ test("blocks order placement when account balances cannot be refreshed after a f
   assert.equal(result.userDataStatus, "ACCOUNT_SNAPSHOT_REFRESH_FAILED")
   assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
   assert.equal(result.getAccountSnapshot().sourceTime, 1)
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 
@@ -674,10 +657,8 @@ test("does not clear execution accounting failures after stream recovery acknowl
 
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
-  const order = await result.placeOrder({
-    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
-  })
-  assert.equal(order.ok, false)
+  assert.equal(result.placeOrder, undefined)
+  assert.equal(result.broker, undefined)
   await result.stop()
 })
 

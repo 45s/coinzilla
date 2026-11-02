@@ -5,12 +5,14 @@ import { startHarvester } from "./bootstrap/start-harvester.js"
 export async function main({ start = startHarvester, logger = defaultLogger } = {}) {
   try {
     const runtime = await start()
-    logger.info(
-      runtime.connected
+    const startupMessage = runtime.connected
+      ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
         ? "Harvester connected and subscribed to " + runtime.subscriptions.length +
-          " enabled market(s). Aggressive policy is composed; order execution remains blocked by unresolved rules."
-        : "Harvester configuration validated; broker connection and market data are disabled.",
-    )
+          " enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness."
+        : "Harvester connected and subscribed to " + runtime.subscriptions.length +
+          " enabled market(s) in read-only mode; order execution is disabled."
+      : "Harvester configuration validated; broker connection and market data are disabled."
+    logger.info(startupMessage)
 
     if (runtime.connected && typeof runtime.stop === "function") {
       let shuttingDown = false
