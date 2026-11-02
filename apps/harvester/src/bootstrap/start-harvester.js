@@ -111,12 +111,12 @@ export async function startHarvester({
       if (!pairConfig.enabled) continue
       const result = await broker.subscribeForPrices({
         symbol,
-        onPrice: (priceEvent) => processMarketPrice({
+        onPrice: (priceEvent) => Promise.resolve().then(() => processMarketPrice({
           symbol,
           priceEvent,
           pairConfig,
           settings: tradingConfig.settings,
-        }).then((processed) => {
+        })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
           return processed
         }).catch((error) => {
