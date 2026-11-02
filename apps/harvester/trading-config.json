@@ -37,7 +37,7 @@
       "takerPercent": 0.075
     },
     "ZROFDUSD": {
-      "enabled": true,
+      "enabled": false,
       "investment": 100,
       "orderQuantity": 5,
       "keepQuantity": 0.01,

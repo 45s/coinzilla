@@ -29,6 +29,37 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 
 Live trading must remain explicitly disabled by default. TESTNET verification is required before any live-trading enablement.
 
+## Current branch implementation status
+
+The current task branch has progressed beyond the initial `develop` audit described
+below. The following first-cycle components are now implemented and composed
+when `HARVESTER_ENABLE_TRADING=true`:
+
+- Conservative pure policy: initial/standing BUY and recovery SELL intents,
+  exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
+  configured pair-investment limit, actual commission-aware recovery planning.
+- Submission: local PENDING canonical order registration, exchange-rule
+  validation, broker submission, canonical acknowledgement verification, and
+  unknown-outcome pause behavior.
+- In-process lifecycle: market prices invoke the policy; only registered
+  Harvester orders are accepted; canonical TRADE fills update Portfolio and
+  RecoveryLedger; terminal full fills trigger the next decision.
+- Recovery completion: a fully filled SELL must satisfy the actual cumulative
+  net-profit condition and leave at least `keepQuantity`; the retained amount
+  moves to free inventory and the cycle ledger resets.
+- Startup: explicit TESTNET trading opt-in, exactly one enabled pair, a fresh
+  account snapshot, no open orders, and no pre-existing base inventory.
+  Per-order BUY/SELL quantities are checked against current free account
+  balances. The default config now enables only `ZROUSDT`.
+
+Offline bootstrap coverage simulates the complete first recovery cycle:
+initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
+SELL fill → profit check → free-inventory allocation. This is a fake-broker
+simulation, not evidence of a real Binance TESTNET run. Reservations, stream
+reconnect reconciliation, restart recovery, and a real TESTNET execution
+remain unfinished. Do not mark the first trading milestone complete until the
+real TESTNET cycle and required CI checks pass.
+
 ## P0 — Deliver the first working trading cycle
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.

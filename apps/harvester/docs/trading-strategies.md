@@ -16,6 +16,10 @@ intents only; the application engine validates and submits them.
 
 The first connected policy behavior is:
 
+The default Harvester config enables only `ZROUSDT` while the first trading
+cycle is limited to one pair. `ZROFDUSD` remains configured but disabled until
+cross-pair shared-asset allocation is implemented.
+
 - With no active strategy inventory and no active BUY, create one BUY at the
   last traded price reduced by `priceStepPercent`, rounded down to the
   exchange price tick. Quantity is `orderQuantity`, rounded down to the
