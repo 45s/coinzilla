@@ -1,66 +1,205 @@
 # Harvester Roadmap
 
-## 1. Product and strategy design
+## Mission and delivery priority
 
-- [x] Define Harvester as an independent Node.js cryptocurrency-trading process.
-- [x] Establish two initial strategy modes: Conservative (Free-Roll) and Aggressive.
-- [x] Document the shared-engine / strategy-specific-policy boundary.
-- [x] Document the distinction between domain entities, domain policies, application use cases, and infrastructure adapters.
-- [~] Make Harvester's class-versus-plain-pure-function implementation standard explicit in agent guidance, architecture, and README (this task PR).
-- [~] Document mandatory AI-agent implementation guidance using dependency-injected use-case factories, domain boundaries, adapters, and bootstrap composition (PR #405; mark complete after merge).
-- [x] Define and document the initial fill-driven Portfolio domain boundary.
-- [ ] Agree on the Conservative mode contract by adapting the existing Free-Roll specification to Harvester.
-- [~] Define Aggressive order-level behavior. The initial grid-style cycle, immediate placement of the full BUY grid, one-grid-per-market rule, fixed reference-based levels, upward repricing by all crossed `priceStep` levels, replacement-grid capacity checks, multiple active BUY/SELL orders, shared inventory, partial-SELL threshold, BUY-fill SELL eligibility (>50% cumulative BUY fill and >$5 USD-equivalent notional, otherwise wait for full BUY fill), separate SELL orders, and Conservative fallback are documented. BUY/SELL tick rounding is agreed (BUY down, SELL up); exact percentage-step calculation and remaining order/fee edge cases are still open.
-- [~] Define Aggressive risk limits and fallback behavior. Maximum invested quote and maximum price drop are agreed as triggers for switching to Conservative; the price-drop baseline is the average price of actually filled BUY orders, while the exact percentage calculation remains open. The BUY-grid replacement check counts already invested quote plus the proposed grid's unfilled quote commitment; the current grid is retained if the complete replacement grid does not fit.
-- [x] Decide pair ownership and exclusive strategy control: one Position per trading pair, shared by Conservative and Aggressive; only one strategy controls it at a time. Control switches automatically to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20% of the pair's planned total quote budget); open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active; never force a sale at a loss to switch strategies.
-- [x] Decide shared Position accounting scope: actual holdings, invested quote, average cost, realized profit, commissions, reserved inventory, and available inventory belong to the authoritative pair-level Position.
-- [x] Decide current third-asset commission behavior: reject fills whose commission asset is neither the pair's base nor quote asset; do not silently ignore or estimate the debit.
-- [~] Define cross-pair account-balance coordination, order-reservation lifecycle, durable fill deduplication, persistence/reconciliation, and optional strategy-level performance attribution.
+**First priority: make Harvester execute a complete, safe, repeatable trading cycle.** Architecture expansion, optional features, and optimization come after the first strategy can trade end to end.
 
-## 2. Shared trading engine
+The current `develop` implementation is a connected market-data prototype, not a trading bot. It loads config, can connect to Binance, subscribes to enabled-pair trade-price streams, validates prices, invokes the Aggressive policy, and maintains an in-memory Portfolio when canonical fills are supplied manually. The default Aggressive policy deliberately returns `NO_ACTION`; no order is generated or submitted from a market-price event. Live user-data/fill ingestion, order lifecycle management, exchange-rule validation, account/risk coordination, durable recovery, and an executable strategy are missing.
 
-- [ ] Define domain contracts for markets, orders, fills, balances, positions, and strategy decisions.
-- [x] Define the Harvester-owned broker port and implement the Binance infrastructure adapter around `@coinzilla/brokers`.
-- [x] Wire opt-in broker connection and graceful shutdown through bootstrap; add offline port, adapter, and lifecycle tests.
-- [x] Implement and compose the broker-backed `place-order` application use case; preserve unknown transport outcomes.
-- [x] Implement market-data validation, enabled-pair price subscriptions, and strategy handoff through the application use case (merged in PR #411).
-- [ ] Implement user-data event handling and recovery-gated trading workflows.
-- [ ] Implement exchange trading-rule loading and validation (tick size, lot size, minimum notional).
-- [ ] Implement order lifecycle handling, including partial fills, cancellations, rejections, and cancel/replace races.
-- [ ] Implement fill normalization, deduplication, and accounting from actual commissions.
-- [x] Implement in-memory Position and Portfolio transitions from canonical fills, plus the update-portfolio use case and strategy context handoff (merged in PR #414).
-- [ ] Add journal, readiness states, pause controls, and operational safety checks, including the agreed loss-protection behavior: stop new BUY orders while preserving existing SELL orders and never force a loss-making sale.
-- [ ] Define persistence and restart/reconciliation requirements before implementing recovery.
-- [ ] Define reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders; the shared Position is the accounting owner, and order handover must reconcile outstanding reservations before the next strategy takes control.
-- [ ] Define how pair-level positions coordinate shared exchange balances across different trading pairs.
+### Definition of "Harvester can trade"
 
-## 3. Strategy implementations
+A first-trading release is not complete until a TESTNET end-to-end scenario demonstrates:
 
-- [ ] Implement Conservative (Free-Roll) strategy behind the shared engine contracts.
-- [~] Implement Aggressive strategy behind the shared engine contracts. The policy is composed by default and reads Portfolio/Position state, but returns NO_ACTION while grid depth, exact percentage-step, maximum-price-drop, and SELL price/fee/rounding rules remain unresolved. It does not place orders.
-- [x] Add deterministic unit tests for Portfolio transitions, exact decimal arithmetic, fill deduplication, and Aggressive policy blockers (merged in PR #414).
-- [ ] Add broker contract and integration tests; live exchange tests must be explicitly opt-in.
+1. Start from the documented command and load/validate configuration.
+2. Connect to the selected broker and establish market-data and user-data streams.
+3. Load account balances and exchange trading rules for every enabled pair.
+4. Establish a reconciled initial state and explicit trading-readiness status.
+5. Receive a valid market update and evaluate the selected executable strategy.
+6. Convert the strategy decision into a validated order intent.
+7. Apply shared risk, balance, reservation, precision, minimum-notional, and post-only checks.
+8. Submit the order and track its acknowledgement or an unknown outcome.
+9. Receive order updates and every partial/final fill; normalize, deduplicate, and account for actual quantities and commissions.
+10. Re-evaluate the strategy from the latest consistent market, order, and Portfolio state and continue the cycle.
+11. Pause safely on disconnect, stale data, unreconciled state, unsupported commission, balance/risk violations, or other unsafe conditions.
+12. Shut down cleanly without losing track of in-flight operations.
 
-## 4. Foundation and delivery
+Live trading must remain explicitly disabled by default. TESTNET verification is required before any live-trading enablement.
 
-- [x] Initialize the app as a private Node.js ESM workspace package.
-- [x] Add initial trading-config loading and pure structural validation.
-- [x] Extend startup bootstrap to load config, subscribe enabled pairs, validate incoming market prices, and pass them with the latest Portfolio snapshot to the default Aggressive policy (PR #411 and #414).
-- [x] Replace the copied Free-Roll config baseline with the agreed flat Harvester configuration schema: process-wide settings and per-pair capital allocation and trading parameters.
-- [ ] Keep dependencies minimal and follow repository engineering standards.
-- [ ] Update this roadmap as decisions are closed and functionality is verified.
+## P0 — Deliver the first working trading cycle
+
+Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
+
+### P0.1 — Freeze the first executable strategy scope
+
+- [ ] Select the first strategy mode to make executable (Aggressive is currently composed by default; Conservative/Free-Roll is documented but not implemented).
+- [ ] Close only the strategy decisions that block a complete first cycle; do not expand into optional strategy features.
+- [ ] Resolve Aggressive grid depth and the exact percentage-step/reference-price calculation.
+- [ ] Resolve the maximum-price-drop formula using the agreed baseline: average price of actually filled BUY orders.
+- [ ] Resolve the SELL price formula, including BUY/SELL commissions, configured `minProfit`, retained `keepQuantity`, fee asset, and exact tick rounding.
+- [ ] Resolve the 50% partial-SELL threshold behavior, including BUY placement price and duplicate-trigger prevention.
+- [ ] Define first-cycle order intent shape and the minimum strategy context required (market price, pair settings, Position/Portfolio, active orders, reservations, balances, exchange filters).
+- [ ] Ensure the strategy returns deterministic domain decisions/order intents as plain pure functions; it must never call the broker or perform I/O.
+- [ ] Preserve the agreed one-grid-per-market rule, one shared Position/inventory per pair, multiple active BUY/SELL orders where specified, BUY rounding down, SELL rounding up, and >50% cumulative BUY-fill / >$5 USD-equivalent SELL-to-BUY trigger behavior.
+- [ ] Preserve Conservative takeover: switch when actual executed BUY investment exceeds `conservativeTakeoverPercent` (default 20%) of the pair budget; unfilled BUY commitments do not count. Conservative retains control until the position is fully sold and invested quote is recovered.
+- [ ] Preserve loss protection: stop creating new BUY orders while losing; keep existing SELL orders active; never force a loss-making sale just to switch strategies.
+- [ ] Document the final first-release strategy contract and examples before implementation.
+
+### P0.2 — Trading rules, account state, and startup readiness
+
+- [ ] Load and validate exchange symbol filters for enabled markets: price tick, quantity step, min/max quantity, min/max notional, supported order types, and post-only constraints.
+- [ ] Normalize broker filters into a stable Harvester-owned domain/application shape; do not leak exchange SDK payloads.
+- [ ] Load account balances and distinguish free, locked, and total balances.
+- [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
+- [ ] Seed market state with a current REST price/snapshot before relying on WebSocket trade events; define stale/missing-price behavior.
+- [ ] Subscribe to user-data events and surface connection/recovery status.
+- [ ] Implement explicit process and per-pair readiness states (e.g. CONFIG_VALID, CONNECTING, RECONCILING, READY, PAUSED, STOPPING, FAILED); connection alone must never mean READY.
+- [ ] Do not enable order submission until required account, filters, market data, user stream, and reconciliation gates are satisfied.
+- [ ] Validate environment/config combinations; require explicit TESTNET/live mode selection and explicit live-trading opt-in. Fail closed on ambiguous or missing production settings.
+- [ ] Validate enabled pair configuration against actual exchange assets/filters and fail startup with actionable diagnostics when incompatible.
+
+### P0.3 — Order intent, safety checks, and reservations
+
+- [ ] Define canonical Harvester order intent/command contracts using existing `@coinzilla/entities` types wherever suitable.
+- [ ] Implement pure order construction and validation functions for price/quantity precision, tick/step rounding, min/max quantity, min notional, and post-only constraints.
+- [ ] Implement shared pre-trade safety checks: enabled pair, READY state, fresh price, available quote/base balance, investment cap, per-pair risk cap, account-wide asset availability, and strategy takeover state.
+- [ ] Define and implement BUY quote and SELL base reservation rules before submission.
+- [ ] Define reservation states and transitions for created/submitted/acknowledged/partially-filled/filled/cancel-pending/cancelled/rejected/expired/unknown outcomes.
+- [ ] Reserve conservatively before an order can race with another order; reconcile the exchange response before releasing or resizing reservations.
+- [ ] Ensure multiple SELL reservations never exceed available base inventory and multiple BUY commitments never exceed available quote/investment limits.
+- [ ] Treat timeout/disconnect during place/cancel as UNKNOWN, not failed; reconcile by client order ID, order status, open orders, and trade history before retrying.
+- [ ] Implement idempotent client order IDs and safe retry/reconciliation rules.
+- [ ] Implement cancel/replace workflow that processes fills received during cancellation before calculating replacement quantity.
+- [ ] Never blindly resubmit a state-changing request after an unknown transport outcome.
+
+### P0.4 — Live order and fill lifecycle
+
+- [ ] Normalize user-data order/execution events at the broker adapter boundary into canonical Harvester events.
+- [ ] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and actual commission amount/asset.
+- [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
+- [ ] Deduplicate fills using stable exchange execution identity; serialize concurrent event processing per account/market as required.
+- [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
+- [ ] Apply only incremental actual executions to Portfolio; never apply requested order quantity or cumulative executed quantity twice.
+- [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
+- [ ] Ensure cancel/fill races, duplicate events, late events, and out-of-order events cannot double-count fills or release filled reservations.
+- [ ] Feed every successful fill/account/order transition back into the strategy context and trigger the next decision when appropriate.
+- [ ] Ensure the bot does not wait for a new market-price event when a fill/order-state transition itself requires an immediate strategy reaction.
+
+### P0.5 — Trading Engine orchestration
+
+- [ ] Implement the shared Trading Engine workflow that connects market events, user-data events, current Portfolio/Position, active orders, balances, filters, readiness, strategy decisions, safety checks, order execution, and fill accounting.
+- [ ] Keep strategy-specific policy out of the engine and broker adapter.
+- [ ] Ensure exactly one strategy controls each pair's shared Position at a time.
+- [ ] Serialize or otherwise consistently coordinate concurrent market, order, fill, and cancellation events.
+- [ ] Prevent stale snapshots from producing duplicate or conflicting orders.
+- [ ] Handle strategy takeover as a controlled workflow: stop outgoing intents, reconcile/cancel relevant orders, account for in-flight fills/reservations, then activate the incoming strategy.
+- [ ] Make process startup, partial startup failure, reconnect, pause/resume, and shutdown idempotent and observable.
+- [ ] Replace the current price-only callback flow with the actual decision-to-order execution pipeline.
+- [ ] Keep `runtime.placeOrder` as a controlled engine capability; callers must not bypass safety checks by invoking it directly.
+
+### P0.6 — Persistence, restart, and recovery required for safe operation
+
+- [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
+- [ ] Implement durable journal/state storage using the repository's approved shared packages or a separately approved persistence adapter; do not create an app-local generic storage framework.
+- [ ] Persist execution facts before acknowledging successful processing/recovery.
+- [ ] On startup/reconnect, reconcile persisted state against exchange balances, open orders, and available order/trade history before READY.
+- [ ] Define behavior when exchange history is incomplete, retention-limited, or conflicts with local state; fail closed and require operator intervention where safe reconciliation is impossible.
+- [ ] Test crash/restart at each order/fill transition and ensure no duplicate order or fill application.
+- [ ] Do not claim exactly-once delivery; guarantee idempotent accounting through durable execution identity and reconciliation.
+
+### P0.7 — First strategy end-to-end verification
+
+- [ ] Build deterministic broker-port fakes/simulator scenarios for market updates, acknowledgements, partial fills, commissions, cancellations, rejections, disconnects, and recovery.
+- [ ] Add opt-in Binance TESTNET integration tests that place and cancel small, bounded test orders only when explicitly enabled.
+- [ ] Verify a complete buy → partial/full fill → position update → sell decision → sell fill → next cycle.
+- [ ] Verify configured investment and account balances cannot be exceeded across multiple enabled pairs sharing a quote asset.
+- [ ] Verify post-only rejection, insufficient balance, min-notional, precision, stale price, stream loss, and unknown order outcome all fail safely.
+- [ ] Verify loss protection and Conservative takeover do not force a loss-making sale or operate the same Position concurrently.
+- [ ] Provide a documented, reproducible TESTNET runbook and evidence (logs/journal/test results) for the first successful cycle.
+- [ ] Keep live trading disabled until the user explicitly approves a separate live-trading milestone after TESTNET evidence is reviewed.
+
+## P1 — Complete strategy coverage
+
+- [ ] Implement the first selected strategy fully against the shared engine and verify its full lifecycle.
+- [ ] Implement the second strategy mode (Conservative Free-Roll or Aggressive, whichever was not selected for P0) against the same engine contracts.
+- [ ] Complete the strategy handover and shared inventory behavior across all agreed edge cases.
+- [ ] Implement all remaining documented grid repricing, partial-fill, partial-SELL, fallback, and recovery edge cases.
+- [ ] Add strategy-level statistics/performance attribution only after shared Position accounting is stable and attribution semantics are agreed.
+- [ ] Add strategy backtesting/replay tooling if it materially improves deterministic verification; keep it separate from production execution paths.
+
+## P2 — Operational hardening and improvements
+
+- [ ] Add structured journal records for startup, readiness transitions, strategy decisions, order intent, submission, acknowledgement, cancellation, fills, reconciliation, pause/resume, and shutdown.
+- [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
+- [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
+- [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
+- [ ] Add alerts for unsafe states, rejected orders, reconciliation discrepancies, unsupported commissions, and repeated broker failures.
+- [ ] Add performance optimization only after profiling a correct end-to-end implementation.
+- [ ] Review dependency/security findings and shared package contracts as part of regular maintenance.
+
+## Audit: current implementation on `develop`
+
+### Implemented and verified by source inspection
+
+- [x] Node.js ESM workspace app, package scripts, config loader, and structural config validation.
+- [x] Opt-in Binance adapter and Harvester-owned broker port.
+- [x] Broker connect/disconnect lifecycle and cleanup of partially-created price subscriptions.
+- [x] Enabled-pair aggregate-trade price subscriptions and incoming market-price validation.
+- [x] Default Aggressive policy composition and handoff of validated prices plus the latest in-memory Portfolio.
+- [x] Canonical Fill-driven in-memory Position/Portfolio transitions with base/quote commission accounting and process-lifetime duplicate-ID protection.
+- [x] Application use cases for place-order, process-market-price, and update-portfolio.
+- [x] Shared decimal helper reuse and shared default logger usage.
+- [x] Offline tests exist for bootstrap, broker port/adapter, config, market price, strategy blocker behavior, order use case, and Portfolio transitions.
+
+### Confirmed blockers / gaps found in the audit
+
+- [ ] **No executable strategy:** `evaluateAggressiveStrategy` always returns `NO_ACTION`; no order intent is produced.
+- [ ] **No engine:** market-price processing returns a decision but does not pass it into safety validation, order planning, or order submission.
+- [ ] **Order use case is disconnected:** `placeOrder` is composed and exposed by runtime but is not invoked by the strategy/price workflow.
+- [ ] **No live user-data processing:** the broker port/adapter expose user-data subscription methods, but bootstrap does not subscribe to them or translate events into canonical order/fill events.
+- [ ] **No exchange filters/account initialization:** no symbol filters or account snapshot are loaded into runtime; config precision is not a substitute for exchange rules.
+- [ ] **No current-price seed/staleness policy:** strategy only receives stream trade-price events; no REST snapshot initializes price or protects against stale data.
+- [ ] **Portfolio is incomplete for strategy execution:** current Position stores net base quantity and signed quote cash flow only. It does not yet provide the agreed invested quote, average cost, realized profit, free/retained quantity, reserved inventory, or available inventory calculations.
+- [ ] **No order model/state store:** no active-order registry, order lifecycle state machine, client order ID policy, or order-to-fill coordination.
+- [ ] **No reservations:** open/uncertain BUY quote and SELL base commitments are not represented or enforced.
+- [ ] **No cross-pair balance allocator:** separate pair budgets can compete for the same real exchange asset.
+- [ ] **No durable deduplication or persistence:** fill IDs exist only in process memory; restart loses Portfolio and applied-fill history.
+- [ ] **No reconciliation:** startup/reconnect does not compare local state with balances, open orders, and exchange executions; broker recovery gate is not wired to Harvester readiness.
+- [ ] **No readiness/pause safety state:** broker connected and subscribed is currently the closest runtime status; it is not sufficient to authorize trading.
+- [ ] **No complete operational journal:** lifecycle/decision/fill audit trail and operator-facing pause/recovery visibility are not implemented.
+- [ ] **No end-to-end trading test:** current offline tests validate components, not a complete market-to-order-to-fill-to-next-decision cycle.
+- [ ] **Live/testnet mode is not an explicit trading safety gate:** broker package environment behavior must be surfaced and verified by Harvester; live order submission must require an explicit opt-in separate from merely configuring a broker.
+- [ ] **Startup does not reject an enabled pair because its exchange rules or balances are unavailable:** those prerequisites are not loaded yet.
+
+## Product and architecture decisions already recorded
+
+- [x] Harvester is an independent Node.js process with shared engine and strategy-specific policies.
+- [x] Domain, application use cases, infrastructure adapters, and bootstrap have explicit responsibilities.
+- [x] Meaningful deterministic calculations and decisions MUST be plain pure functions in focused modules.
+- [x] Classes are for domain concepts that own state and protect invariants (e.g. Fill, Position, Portfolio).
+- [x] Use cases are dependency-injected functions; strategies decide and never perform broker I/O.
+- [x] Harvester owns its application-facing broker port and adapts `@coinzilla/brokers`.
+- [x] One shared Position per market; Conservative and Aggressive share accounting but only one controls the pair at a time.
+- [x] Actual canonical fills, including actual commissions, are the only source of Portfolio holdings changes.
+- [x] Third-asset commission fills are rejected for now; they must never be silently ignored.
+- [x] BUY prices round down and SELL prices round up to exchange tick rules.
+- [x] Live exchange tests are opt-in and TESTNET-only; default tests never need credentials or network access.
+- [x] Use shared `@coinzilla/utils` decimal functions and `defaultLogger`; do not duplicate generic utilities or call global console from Harvester.
+
+## Open product decisions
+
+- [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
+- [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
+- [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
+- [ ] Finalize durable storage and restart/reconciliation guarantees.
+- [ ] Decide whether strategy-specific P/L attribution is required.
+- [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 
 ## Delivery rules
 
 - Follow repository root guidance and `apps/harvester/AGENTS.md`.
-- Do not implement unresolved strategy behavior by assumption.
-- Do not mark work complete until implementation and required checks pass on `develop`.
-- Keep live trading disabled by default; tests must never place live orders.
-
-
-## Shared utility reuse
-
-- [x] Remove the app-local decimal arithmetic implementation and duplicate unit suite.
-- [x] Use \`addDecimal\`, \`subtractDecimal\`, and \`negateDecimal\` from \`@coinzilla/utils\` in portfolio fill accounting.
-- [x] Keep commission asset validation and Position accounting policy in the Harvester domain.
-- [x] Use the shared \`defaultLogger\` instead of defaulting to the global \`console\`.
+- Work from `develop` using a short-lived task branch and target PRs to `develop`; do not commit task work directly to `develop` or `main`.
+- Keep the first-trading milestone ahead of optional architecture work and optimization.
+- Do not implement unresolved financial/risk behavior by assumption; close the decision first.
+- Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
+- Keep live trading disabled by default; TESTNET trading must be explicitly opt-in.
+- Report exact checks actually run; source inspection is not runtime verification.
