@@ -5,11 +5,15 @@ Coinzilla is a monorepo with independently maintained application and package do
 | Domain | Owned path | Responsibility |
 | --- | --- | --- |
 | Free-Roll | `apps/bot-free-roll/` | Strategy orchestration, pair lifecycle, trading decisions, application configuration |
+| Coin Farmer | `apps/bot-coin-farmer/` | Exchange-connected farming application, order safety and runtime orchestration |
+| Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
+| Market Simulator | `apps/market-simulator/` | Deterministic historical simulation, market data and simulated order matching |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
 | Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
 | Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
 | Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
 | Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
+| Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
 
 ## Shared infrastructure
 
