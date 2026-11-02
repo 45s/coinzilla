@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
 
 const tradingConfig = {
@@ -686,7 +687,10 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const subscriptions = new Map()
   let userDataHandlers
   let snapshotTime = 0
-  let bought = false
+  let baseBalance = "0"
+  const submittedOrders = []
+  let resolveThreeOrders
+  const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
   const marketMetadata = createMarketMetadata("BTCUSDT")
   const broker = {
     connect: async () => calls.push("connect"),
@@ -697,7 +701,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       snapshotTime += 1
       const balances = [
         new Balance({
-          free: new Quantity({ amount: bought ? "0.01" : "0", asset: marketMetadata.market.baseAsset }),
+          free: new Quantity({ amount: baseBalance, asset: marketMetadata.market.baseAsset }),
           locked: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
         }),
         new Balance({
@@ -717,6 +721,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
     placeOrder: async ({ order }) => {
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
+      submittedOrders.push(order)
+      if (submittedOrders.length === 3) resolveThreeOrders()
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -806,7 +812,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  bought = true
+  baseBalance = "0.01"
   userDataHandlers.onEvent({
     event: {
       eventType: "executionReport",
@@ -815,10 +821,51 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill,
     },
   })
+  await threeOrdersSubmitted
+  const sellIntent = submittedOrders[2]
+  assert.equal(sellIntent.side, "SELL")
+  const canonicalSell = new CanonicalOrder({
+    clientOrderId: sellIntent.clientOrderId,
+    brokerOrderId: "broker-" + sellIntent.clientOrderId,
+    market: marketMetadata.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: sellIntent.price, asset: marketMetadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 3,
+    completedAt: 3,
+  })
+  const sellFill = new Fill({
+    tradeId: "testnet-sell-fill",
+    brokerOrderId: canonicalSell.brokerOrderId,
+    market: marketMetadata.market,
+    side: "SELL",
+    price: new Money({ amount: sellIntent.price, asset: marketMetadata.market.quoteAsset }),
+    quantity: new Quantity({ amount: sellIntent.quantity, asset: marketMetadata.market.baseAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: sellIntent.price, right: sellIntent.quantity }),
+      asset: marketMetadata.market.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  baseBalance = "0.001"
+  userDataHandlers.onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: canonicalSell,
+      fill: sellFill,
+    },
+  })
   await runtime.stop()
-  assert.equal(runtime.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
-  assert.deepEqual(
-    calls.filter((call) => typeof call === "object").map((call) => call.side),
-    ["BUY", "BUY", "SELL"],
-  )
+  const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
+  assert.equal(position.baseQuantity.amount, "0")
+  assert.equal(position.freeBaseQuantity.amount, "0.001")
+  assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL"])
 })
