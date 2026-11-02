@@ -137,3 +137,24 @@ test("rejects zero or invalid free-inventory allocations", () => {
   assert.throws(() => position.allocateFreeQuantity({ quantity: "0" }), /greater than zero/)
   assert.throws(() => position.allocateFreeQuantity({ quantity: "nope" }))
 })
+
+test("SELL fills cannot consume previously allocated free inventory", () => {
+  const position = Position.empty({ market })
+    .applyFill({
+      fill: makeFill({ quantity: "100", quoteQuantity: "10" }),
+    })
+    .allocateFreeQuantity({ quantity: "1" })
+
+  const sold = position.applyFill({
+    fill: makeFill({
+      side: "SELL",
+      quantity: "99",
+      quoteQuantity: "10.5",
+      tradeId: "recovery-sell",
+    }),
+  })
+
+  assert.equal(sold.baseQuantity.amount, "0")
+  assert.equal(sold.freeBaseQuantity.amount, "1")
+  assert.equal(sold.totalBaseQuantity.amount, "1")
+})
