@@ -59,6 +59,31 @@ export class Portfolio {
     })
   }
 
+  /**
+   * Move a reconciled recovery allocation from active inventory to free
+   * inventory without creating or mutating an exchange execution record.
+   */
+  allocateFreeQuantity({ marketId, quantity } = {}) {
+    if (typeof marketId !== "string" || !marketId.trim()) {
+      throw new TypeError("Portfolio.allocateFreeQuantity requires marketId")
+    }
+    const positionIndex = this.#positions.findIndex((item) => item.market.id === marketId)
+    if (positionIndex < 0) {
+      throw new RangeError("Portfolio has no Position for market " + marketId)
+    }
+
+    const currentPosition = this.#positions[positionIndex]
+    const nextPosition = currentPosition.allocateFreeQuantity({ quantity })
+    const positions = this.#positions.map((item, index) =>
+      index === positionIndex ? nextPosition : item,
+    )
+
+    return new Portfolio({
+      positions,
+      appliedFillIds: this.#appliedFillIds,
+    })
+  }
+
   get value() {
     return Object.freeze({
       positions: this.#positions.map((position) => position.value),
