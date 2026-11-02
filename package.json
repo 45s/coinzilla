@@ -8,7 +8,7 @@
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
     "check:syntax": "node --check scripts/check-syntax.js && node scripts/check-syntax.js",
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
-    "quality": "pnpm test && pnpm run check:syntax"
+    "quality": "pnpm test && pnpm run check:syntax && pnpm run check:agent-policy"
   },
   "keywords": [],
   "author": "",
