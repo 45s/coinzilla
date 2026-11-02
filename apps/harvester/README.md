@@ -4,8 +4,7 @@ Harvester is an independent Node.js process for cryptocurrency trading, built in
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
-- **Conservative (Free-Roll):** the capital-recovery and free-coin accumulation strategy derived from `apps/bot-free-roll`.
-- **Aggressive:** the policy is now composed by default and receives Portfolio/Position state. It currently returns NO_ACTION until unresolved grid, risk, and SELL-pricing rules are specified; it does not submit orders.
+- **Conservative (Free-Roll):** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
 
@@ -95,7 +94,7 @@ The configuration loader and structural validation live in:
 - `src/infrastructure/config/load-trading-config.js`
 - `src/domain/trading-config.js`
 
-The configuration contract does not imply that either strategy mode or order execution is implemented. Strategy behavior must be agreed and documented before strategy-specific parameters or runtime behavior are added.
+The configuration loader and validation are implemented. Conservative is the first executable strategy and is composed with the in-process trading engine when TESTNET trading is explicitly enabled. The default remains read-only; see the TESTNET startup requirements above and the trading-strategy documentation for the implemented policy.
 
 ## Logging
 
@@ -127,20 +126,60 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity is opt-in. Set these environment variables to connect to Binance (the broker package selects TESTNET outside production mode):
+Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup enforces exactly one enabled pair, no open orders, and zero pre-existing base inventory for that pair. Enable additional pairs only after shared-asset allocation is implemented.
 
 ```sh
 HARVESTER_BROKER=binance
+HARVESTER_TRADING_MODE=testnet
+HARVESTER_ENABLE_TRADING=true
 BINANCE_API_KEY=...
 BINANCE_API_SECRET_KEY=...
 ```
 
-Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown unsubscribes market data before disconnecting.
+## Controlled TESTNET runbook
 
-Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. The CLI composes the plain pure function `evaluateAggressiveStrategy` by default. It receives validated prices and the latest Portfolio snapshot, but currently returns `NO_ACTION` with explicit blockers because exact grid depth, percentage-step, maximum-price-drop, and SELL price/fee/rounding rules remain unresolved. It does not submit orders. A different pure strategy function can be injected through `startHarvester({ evaluateStrategy })` for tests or future composition.
+1. Use Binance Spot TESTNET credentials only. Never place production keys in
+   the Harvester environment file.
+2. Copy `.env.example` to `.env.development`. Set
+   `HARVESTER_BROKER=binance`, `HARVESTER_TRADING_MODE=testnet`, and
+   `HARVESTER_ENABLE_TRADING=true`. Keep `NODE_ENV=development`.
+3. Keep exactly one pair enabled. The committed default is `ZROUSDT`;
+   `ZROFDUSD`, DOGEUSDT, and SOLFDUSD are disabled.
+4. In the TESTNET account, cancel every existing order for the enabled pair
+   and clear its base-asset balance. Leave sufficient free quote balance for
+   the configured investment. Startup deliberately refuses an ambiguous
+   account.
+5. Start the app with
+   `pnpm --filter @coinzilla/harvester dev`.
+6. Confirm the broker connects, user-data readiness becomes READY, and the
+   enabled pair receives prices. The first Conservative BUY is submitted below
+   the current last trade by `priceStepPercent`, rounded down to the exchange
+   tick.
+7. When the BUY fills, Harvester accounts the actual fill and places the next
+   standing BUY plus the recovery SELL. If another BUY fills while that SELL
+   is open, Harvester cancels it, reconciles its fill history, and places a
+   recalculated SELL only after the cancellation is confirmed.
+8. After the recovery SELL fills, Harvester verifies actual net proceeds and
+   moves exactly `keepQuantity` into free inventory. Confirm the next BUY
+   remains active and the free amount is excluded from invested-position
+   calculations.
 
-Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is not yet normalized into canonical Fill events. Normalized fills can be applied through `runtime.updatePortfolio({ fill })`, but live fill ingestion, order lifecycle handling, persistence, restart recovery, and exchange reconciliation remain unimplemented. The broker intentionally blocks state-changing operations while its user-data recovery gate is closed.
+**Shutdown/restart warning:** stopping Harvester does not cancel exchange
+orders. Before restarting, inspect the TESTNET account, cancel any remaining
+orders, and clear any unexplained base inventory. The first-cycle startup gate
+will reject an account that is not clean. If Harvester pauses because an order
+outcome or fill history is uncertain, do not restart and blindly resubmit;
+inspect the account and reconcile it first.
+
+This runbook is for TESTNET only. It does not enable live trading or claim
+durable restart recovery.
+
+Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown closes the trading gate first, drains queued user-data processing, and unsubscribes market data before disconnecting; queued fills cannot schedule new orders after shutdown begins.
+
+Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The first trading run is deliberately limited to one enabled pair and requires a clean TESTNET account with no open orders or pre-existing base inventory. Strategy BUY intents respect the configured pair investment cap; the engine checks each BUY against free quote balance and each SELL against free base balance. If quote funds are insufficient for the next BUY, a valid recovery SELL is still allowed to proceed. Aggressive remains deferred.
+
+Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is normalized into canonical order and Fill events. Harvester correlates order updates against its in-process registry and applies actual fills to Portfolio and RecoveryLedger. Reconnect recovery, durable restart state, reservation accounting, and complete TESTNET BUY → SELL → next-cycle proof remain unfinished.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated trading-config loading, enabled-pair market-price subscriptions, domain market-price validation, default Aggressive policy composition, in-memory fill-driven Position/Portfolio transitions, update-portfolio use case, graceful unsubscribe/disconnect, and offline tests. Not yet implemented: executable Aggressive order planning, full Trading Engine/order lifecycle, live fill ingestion, durable recovery/reconciliation, and Conservative strategy. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, clean TESTNET startup checks, and graceful shutdown. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable recovery, reservations, comprehensive reconciliation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).

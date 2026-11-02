@@ -10,7 +10,7 @@
     "dev": "node --env-file=.env.development src/index.js"
   },
   "engines": {
-    "node": ">=22.23.4"
+    "node": ">=24"
   },
   "type": "module",
   "dependencies": {

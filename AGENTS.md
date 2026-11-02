@@ -1,5 +1,10 @@
 # Instructions for coding agents
 
+## Harvester execution priority — mandatory
+
+For all work in `apps/harvester/**`, follow [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). **FIRST MAKE IT WORK. THEN MAKE IT BETTER.** The first deliverable is a working Conservative TESTNET trading loop: load config → connect/subscribe → receive price → decide → submit order → process order updates/fills → update state → repeat. Journal integration, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, optimization, and Aggressive are secondary and MUST NOT delay the first working TESTNET cycle. Implement only the minimum targeted safety required for that cycle; then return to the trading workflow. The Harvester roadmap must reflect this priority.
+
+
 Before making changes, select the task-specific checklist in [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md), then read `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, and the closest affected package/application `AGENTS.md` and `ROADMAP.md`. Then inspect the relevant implementation, consumers, and tests.
 
 ## Non-negotiable engineering principles

@@ -55,3 +55,42 @@ test("keeps positions isolated by canonical market identity", () => {
     .applyFill({ fill: otherFill }).portfolio
   assert.equal(portfolio.positions.length, 2)
 })
+
+test("allocates free inventory through the matching shared Position only", () => {
+  const initial = new Portfolio().applyFill({
+    fill: makeFill({ quantity: "100" }),
+  }).portfolio
+  const allocated = initial.allocateFreeQuantity({
+    marketId: market.id,
+    quantity: "1",
+  })
+  const position = allocated.getPosition({ marketId: market.id })
+
+  assert.equal(position.baseQuantity.amount, "99")
+  assert.equal(position.freeBaseQuantity.amount, "1")
+  assert.equal(position.totalBaseQuantity.amount, "100")
+  assert.equal(initial.getPosition({ marketId: market.id }).baseQuantity.amount, "100")
+})
+
+test("does not permit free allocation for an unknown market", () => {
+  assert.throws(
+    () => new Portfolio().allocateFreeQuantity({
+      marketId: "missing-market",
+      quantity: "1",
+    }),
+    /no Position/,
+  )
+})
+
+test("rejects a reused Fill ID when execution facts differ", () => {
+  const portfolio = new Portfolio().applyFill({
+    fill: makeFill({ tradeId: "reused-trade", quantity: "1" }),
+  }).portfolio
+
+  assert.throws(
+    () => portfolio.applyFill({
+      fill: makeFill({ tradeId: "reused-trade", quantity: "2" }),
+    }),
+    /Conflicting execution facts reused Fill ID/,
+  )
+})

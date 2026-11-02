@@ -13,7 +13,7 @@ A change is ready to merge only when:
 - [ ] The affected package's tests and coverage checks pass; applicable workspace and CI checks pass.
 - [ ] Error handling, validation, structured diagnostics, security, and resource cleanup are appropriate to the change.
 - [ ] Modules are cohesive, follow single-responsibility boundaries, and do not turn public entry points into implementation dumping grounds.
-- [ ] Meaningful pure logic is separated into cohesive, independently testable modules where doing so improves clarity, cohesion, or testability; trivial/context-bound logic remains local.
+- [ ] Non-trivial pure logic is extracted into cohesive, independently testable modules rather than embedded in large classes/services or unrelated files.
 - [ ] Large files have been split by responsibility, or a concrete reason for keeping them together is documented in the PR.
 - [ ] Public APIs, configuration, and documentation are updated when behavior changes.
 - [ ] No secrets, credentials, generated artifacts, or unrelated changes are included.
@@ -104,20 +104,20 @@ A change is ready to merge only when:
 - Avoid overengineering, speculative generality, unnecessary dependencies, and abstraction layers without a concrete benefit.
 - Refactor when it improves understanding, testability, or change safety—not solely to make files shorter.
 
-### 7.1 Cohesive pure logic and file-size discipline
+### 7.1 Mandatory pure-function extraction and file-size discipline
 
 This section is a required design and code-review standard for all new code and materially changed code.
 
-- **Extract meaningful pure logic when separation improves cohesion, testability, or comprehension.** A function's purity makes it a good candidate for independent testing, but does not by itself require a new file. A single caller is not a reason to keep meaningful domain logic embedded in a large service.
-- Keep pure logic separate from effectful orchestration when that creates a clear boundary. Validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions are common candidates. Leave network, filesystem, database, clock, randomness, and process-environment access at explicit adapter/service boundaries.
-- Group closely related pure functions by domain and reason to change. Use a focused feature-local `helpers/` or domain-named module for internal logic; reserve shared `utils/` for genuinely generic functions used across domains.
-- The owning class/service should retain the state and orchestration it needs. It should import and compose extracted functions rather than accumulate unrelated transformation and decision-making responsibilities.
-- Keep modules independently testable. Add focused unit tests for extracted pure behavior when they materially improve confidence, and test orchestration at its observable boundary.
-- **Do not create artificial fragmentation.** Trivial one-line expressions, tiny local callbacks whose meaning depends on immediate context, and tightly coupled implementation details may remain local when extraction would obscure the flow. Do not create one-function files mechanically or introduce circular dependencies.
-- **Do not allow god files to grow.** Treat approximately 300 lines as a prompt for a modularity review, not an automatic failure. Files exceeding 500 lines require cohesive extraction where practical; if they genuinely cannot be split without harming correctness or cohesion, document the reason in the PR. Generated files, declarative registries, schemas, and similarly constrained files may need explicit exceptions.
-- Line count is a warning signal, not the design goal. The required outcome is clear ownership, low coupling, independent testability, and maintainable change boundaries.
+- **A meaningful pure function belongs in a separate module.** When a function can produce its result from explicit inputs alone, without reading or mutating instance state, shared mutable state, globals, or external systems, extract it from a class/service or large feature file into a focused module. Do this even if there is only one current caller; independent testability and clear responsibility are sufficient reasons.
+- Keep pure logic separate from effectful orchestration. Validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions are common extraction candidates. Leave network, filesystem, database, clock, randomness, and process-environment access at explicit adapter/service boundaries.
+- A module may contain several closely related pure functions. Group by domain and reason to change, not by the fact that each function is technically pure. Use a focused feature-local `helpers/` or domain-named module for internal logic; reserve shared `utils/` for genuinely generic functions used across domains.
+- The owning class/service should retain only the state and orchestration it needs. It should import and compose extracted functions rather than implementing unrelated validation, transformation, formatting, and calculation details inline.
+- Keep modules independently testable. Add focused unit tests for extracted pure behavior and test the class/service's observable orchestration at its boundary. Avoid mocking internal pure functions just to test their callers.
+- **Do not create artificial fragmentation.** Trivial one-line expressions, tiny local callbacks whose meaning depends on their immediate context, and tightly coupled implementation details may remain local when extraction would obscure the flow. Do not create one-function files mechanically or introduce circular dependencies.
+- **Do not allow god files to grow.** Treat approximately 300 lines as a prompt for a modularity review, not an automatic failure. A file exceeding 500 lines must be split where cohesive responsibilities can be extracted; if it genuinely cannot be split without harming correctness or cohesion, document the reason in the PR. Generated files, declarative registries, schemas, and similarly constrained files may need explicit exceptions.
+- Line count is a warning signal, not the design goal. A short file with several unrelated responsibilities is still poorly structured; a longer cohesive file may be justified. The required outcome is clear ownership, low coupling, independent testability, and maintainable change boundaries.
 
-**Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, or safe error-message sanitization into focused modules when that separation improves reuse, independent testing, or readability. Closely related operations may share a module; do not create one-function files mechanically or put unrelated operations into a generic catch-all `utils.js`.
+**Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, and safe error-message sanitization into focused modules such as `telegram-options.js`, `telegram-message.js`, and `safe-error-message.js` (or group closely related functions where that is more cohesive). Keep Telegram-specific constants near the feature or in a dedicated constants module. Do not put these unrelated pure operations into a generic catch-all `utils.js`.
 
 ### 7.2 Shared utilities: search and reuse before implementation
 
@@ -137,11 +137,6 @@ This rule is mandatory for every contributor and AI agent. Before implementing a
 - Never log secrets, credentials, access tokens, or sensitive payloads.
 - Treat external API responses and user input as untrusted.
 - Keep production and test credentials separate; tests that place orders must use TESTNET only.
-- For exchange-backed workflows, distinguish order acknowledgements, order status updates, and actual executions. Only confirmed execution/fill facts update financial accounting.
-- Apply executions idempotently using stable execution identities; duplicate delivery must never double-count a fill or fee.
-- Treat timeouts, disconnects, and ambiguous mutation results as unknown outcomes, not proof that an order was rejected or cancelled. Reconcile external state before retrying or resuming.
-- Treat missing, stale, incomplete, or inconsistent financial facts as unknown and fail closed rather than coercing them to zero or assuming a safe default.
-- Keep strategy-owned, reserved, free, and externally held inventory/capital distinct; an exchange balance alone does not prove that all funds are available to a strategy.
 
 ### 9. Dependencies and maintainability
 
@@ -207,7 +202,7 @@ Before approving a pull request, ask:
 5. Are side effects and state changes explicit?
 6. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
 7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
-8. Has meaningful pure logic been separated where that improves cohesion, independent testability, or comprehension, without mechanically fragmenting trivial/context-bound logic?
+8. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
 9. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
 10. Is logic duplicated, or has an abstraction been introduced too early?
 11. Could the change expose secrets, weaken security, or break compatibility?

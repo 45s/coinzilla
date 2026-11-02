@@ -4,6 +4,11 @@
 
 This document defines how independent AI workstreams collaborate in the Coinzilla monorepo. The goal is to keep domain ownership clear, integration safe, and human process overhead low. These rules are mandatory; do not invent a different workflow for an individual task.
 
+
+### Harvester priority override
+
+When the owning task is Harvester, the task order is governed by [Harvester Trading First](apps/harvester/docs/TRADING_FIRST.md). The first deliverable is an executable Conservative TESTNET trading loop (configuration → price subscription → strategy decision → broker order → execution updates/fills → state update → next order). Do not let Journal, durable persistence, comprehensive recovery/reconciliation, optional operations features, optimization, or Aggressive work delay this. Build only the minimum safety needed for the current TESTNET cycle, then resume the order workflow. This is a mandatory product priority, not an optional roadmap preference.
+
 ## 1. The short version
 
 **Before implementing any helper or cross-cutting capability, search packages/utils first.** Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md), inspect the public exports/tests in packages/utils, and then search the rest of the monorepo. Reuse or extend a domain-neutral shared capability instead of reimplementing it. Keep business and protocol rules with their owning domain. This applies to logging: use Logger / defaultLogger from @coinzilla/utils, not ad-hoc console calls or app-local logger replacements.
