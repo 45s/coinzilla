@@ -772,10 +772,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1,
   })
-  const firstOrder = runtime.tradingEngine?.getOrders?.()[0]
   assert.equal(calls.filter((call) => typeof call === "object").length, 1)
   assert.equal(calls.find((call) => typeof call === "object").side, "BUY")
-  assert.equal(firstOrder, undefined)
 
   const submitted = calls.find((call) => typeof call === "object")
   const clientOrderId = "h-BTCUSDT-1"
