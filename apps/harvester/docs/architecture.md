@@ -18,7 +18,7 @@ This document records the current architectural direction. It does not define im
 | Use case | Performs an application goal by coordinating domain objects and ports | Application layer |
 | Broker adapter | Communicates with an exchange and translates exchange-specific messages | Infrastructure / interface adapter |
 
-These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy may eventually be represented by an object, module, or function; calling it a domain policy describes its business responsibility, not its implementation form.
+These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
 
 ## Entity versus policy
 
@@ -122,7 +122,7 @@ Bootstrap loads and validates trading-config.json, connects the selected broker,
 
 The first market-price input is the first aggregate-trade event after subscription; there is no initial REST ticker snapshot. Ordered/serialized market-event evaluation, backpressure, stale-event policy, and market-data readiness states remain future Trading Engine work.
 
-Bootstrap composes the default aggressiveStrategy, an in-memory immutable Portfolio, and the update-portfolio use case. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
+Bootstrap composes the plain pure function `evaluateAggressiveStrategy`, an in-memory immutable Portfolio, and the `updatePortfolio` application workflow. Each strategy evaluation receives the latest Portfolio snapshot. A normalized Fill can be applied through runtime.updatePortfolio({ fill }); a successful transition replaces the current snapshot and becomes visible to the next market-price evaluation. Portfolio updates are serialized within the process to prevent concurrent fill callbacks from overwriting one another.
 
 The Portfolio is updated only from canonical Fill facts. The current broker user-data stream is not yet normalized into canonical Fill events, so live broker executions are not automatically wired into this use case.
 
@@ -246,7 +246,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 `update-portfolio` is a different use case with a different trigger and invariant:
 
 1. An adapter/event boundary normalizes an exchange execution into the shared Fill contract.
-2. The use case receives that normalized fill; it does not parse a raw Binance event.
+2. The `updatePortfolio({ portfolio, fill })` workflow receives that normalized fill; it does not parse a raw Binance event.
 3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
 4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
 5. Duplicate fills, partial fills, invalid quantities, and commissions in third assets must follow explicit domain/application rules—not be silently discarded.
@@ -265,7 +265,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
-Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
+Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The current market-price workflow injects `evaluateStrategy`; the current `updatePortfolio` workflow is a direct function because it has no external dependencies. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
 
 ### Testing pattern
 
