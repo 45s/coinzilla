@@ -118,14 +118,21 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Provide a documented, reproducible TESTNET runbook and evidence (logs/journal/test results) for the first successful cycle.
 - [ ] Keep live trading disabled until the user explicitly approves a separate live-trading milestone after TESTNET evidence is reviewed.
 
-## P1 — Complete strategy coverage
+## P1 — Implement Aggressive after Conservative is proven
 
-- [ ] Implement the first selected strategy fully against the shared engine and verify its full lifecycle.
-- [ ] Implement the second strategy mode (Conservative Free-Roll or Aggressive, whichever was not selected for P0) against the same engine contracts.
-- [ ] Complete the strategy handover and shared inventory behavior across all agreed edge cases.
-- [ ] Implement all remaining documented grid repricing, partial-fill, partial-SELL, fallback, and recovery edge cases.
-- [ ] Add strategy-level statistics/performance attribution only after shared Position accounting is stable and attribution semantics are agreed.
-- [ ] Add strategy backtesting/replay tooling if it materially improves deterministic verification; keep it separate from production execution paths.
+Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
+
+- [ ] Review the remaining Aggressive decisions in [Trading Strategies](./docs/trading-strategies.md), ask one plain-language product question at a time, and update the specification before implementing unresolved behavior.
+- [ ] Implement the Aggressive policy as plain pure domain functions that return order intents; do not copy broker/runtime code from another app.
+- [ ] Implement exactly one BUY grid per market, with all configured BUY levels placed together when the cycle starts.
+- [ ] Preserve the agreed grid math: lower BUY levels remain fixed percentages from the grid reference; upward repricing steps compound from the previous level and advance only by fully crossed steps.
+- [ ] Implement per-BUY-order cumulative fill thresholds: create a separate SELL only after that BUY order is more than 50% filled and eligible unreserved quantity is worth strictly more than $5 USD equivalent; otherwise wait for full fill or more quantity.
+- [ ] Implement multiple independent SELL orders against one shared Position, with explicit reservations so the same base quantity cannot be sold twice.
+- [ ] Implement the agreed partial-SELL threshold for considering a new BUY, including duplicate-trigger prevention.
+- [ ] Implement risk fallback to Conservative when either the investment limit or maximum price-drop limit is reached: stop new BUYs, cancel/reconcile all active orders, and consolidate remaining inventory into one Conservative SELL without forcing a loss.
+- [ ] Add deterministic domain tests for grid construction/repricing, partial fills, reservations, cancel/fill races, risk fallback, and strategy handover.
+- [ ] Verify Aggressive end to end on TESTNET using the same shared Trading Engine, Portfolio, order lifecycle, and safety gates as Conservative.
+- [ ] Add strategy-specific statistics only after shared Position accounting and attribution semantics are stable.
 
 ## P2 — Operational hardening and improvements
 
