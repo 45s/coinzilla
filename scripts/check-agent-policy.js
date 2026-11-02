@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const domainAreas = ['apps', 'packages'];
 
-function findInstructionDirectories(root) {
+export function findInstructionDirectories(root) {
   const directories = [];
 
   function visit(directory, relativeDirectory) {
