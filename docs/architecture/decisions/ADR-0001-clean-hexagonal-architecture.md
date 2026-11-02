@@ -26,7 +26,6 @@ The decision establishes these rules:
 3. Application workflows depend on stable capability contracts (ports), not concrete exchange adapter classes.
 4. Concrete adapters translate external protocols and payloads into canonical contracts.
 5. The runtime composition root selects and injects concrete adapters and owns process lifecycle and resource cleanup.
-6. For the successor application, these boundaries are implemented independently in apps/bot-coin-farmer; V1 is not an implementation dependency.
 6. Side effects such as network, filesystem, time, messaging, and persistence are explicit boundaries.
 7. Unknown, unsupported, stale, incomplete, or unreconciled facts must not be treated as safe defaults for financial or order decisions.
 8. Migrate incrementally; do not rewrite stable modules or introduce frameworks/packages without demonstrated need.
