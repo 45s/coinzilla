@@ -9,12 +9,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: javascript-syntax-${{ github.workflow }}-${{ github.ref }}
+  group: javascript-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   actionlint:
@@ -28,20 +27,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-  syntax:
-    name: Check JavaScript syntax
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
       - name: Lint GitHub Actions workflows
         uses: reviewdog/action-actionlint@a5524e1c19e62881d79c1f1b9b6f09f16356e281 # v1.65.2
         with:
           reporter: github-pr-check
           fail_level: error
+
+  syntax:
+    name: Check JavaScript syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -52,4 +50,4 @@ jobs:
         run: node scripts/check-syntax.js
 
       - name: Check agent policy and domain ownership
-        run: node scripts/check-agent-policy.js
+        run: pnpm run check:agent-policy
