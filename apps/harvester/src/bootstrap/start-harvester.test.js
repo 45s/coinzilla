@@ -815,12 +815,10 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill,
     },
   })
-  await new Promise((resolve) => setImmediate(resolve))
-  await new Promise((resolve) => setImmediate(resolve))
+  await runtime.stop()
   assert.equal(runtime.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
   assert.deepEqual(
     calls.filter((call) => typeof call === "object").map((call) => call.side),
     ["BUY", "BUY", "SELL"],
   )
-  await runtime.stop()
 })
