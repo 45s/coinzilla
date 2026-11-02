@@ -18,9 +18,9 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
+- [~] Protect `main`: require pull requests and passing release checks; the live ruleset still needs at least one required approving review and the full CI check set.
 
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It currently requires zero approvals, has no bypass actors, and blocks force pushes and deletions. It also omits `Workspace test coverage` and `actionlint`; both gaps must be corrected before the release gate matches the documented policy.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
 
