@@ -5,7 +5,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 ## Documentation-only change
 
 - Confirm the owning documentation/domain and check linked references.
-- Assess documentation impact for every meaningful change: identify affected contracts, examples, configuration, architecture, operations, and roadmap status; update them in the same task/PR and preferably the same commit as the change. Record why no update is needed when the change is internal-only.
+- Follow the canonical [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact).
 - Preserve technical meaning; verify every command, path, and policy statement against the repository.
 - Run pnpm run check:agent-policy when ownership or agent instructions change.
 - Run actionlint/syntax checks when workflow or executable configuration files change.
@@ -23,7 +23,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 - Identify the user-visible contract, owning roadmap item, dependencies, and failure modes before implementation.
 - Add tests for success, invalid input, boundaries, failures, and relevant interactions.
 - Update API docs, examples, and roadmap status.
-- Add a PR **Documentation impact** note listing updates or explaining why none are needed.
+- Include the required **Documentation impact** note in the PR description, as specified by the canonical policy.
 - Run focused tests/coverage, workspace tests, syntax/policy checks, and applicable CI.
 
 ## Cross-domain or shared-infrastructure change
