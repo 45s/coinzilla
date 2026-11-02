@@ -113,3 +113,31 @@ test("rejects a reused Fill ID when recovery execution facts differ", () => {
     /Conflicting execution facts reused Fill ID/,
   )
 })
+
+test("retains the highest actual commission rate and fill identities across cycle reset", () => {
+  const withFee = RecoveryLedger.empty({ market }).applyFill({
+    fill: makeFill({
+      tradeId: "buy-with-fee",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+      ],
+    }),
+  }).ledger
+  const reset = withFee.resetCycle()
+
+  assert.equal(reset.buyCost, "0")
+  assert.equal(reset.netSellProceeds, "0")
+  assert.equal(reset.maxObservedCommissionRate, "0.001")
+  assert.equal(reset.appliedFillIds.length, 1)
+  assert.equal(
+    reset.applyFill({
+      fill: makeFill({
+        tradeId: "buy-with-fee",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
+        ],
+      }),
+    }).duplicate,
+    true,
+  )
+})
