@@ -8,11 +8,11 @@ const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const thirdAsset = new Asset({ id: "asset:BNB", code: "BNB" })
 const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
 
-function makeFill({ commissions = [], commissionStatus = "COMPLETE" } = {}) {
+function makeFill({ market: fillMarket = market, commissions = [], commissionStatus = "COMPLETE" } = {}) {
   return new Fill({
     tradeId: "trade-1",
     brokerOrderId: "order-1",
-    market,
+    market: fillMarket,
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
     quantity: new Quantity({ amount: "2", asset: baseAsset }),
