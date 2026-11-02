@@ -2,8 +2,6 @@ import { toResult } from "@coinzilla/utils"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
-import { createCanonicalFillFromBinanceEvent } from "./binance-execution-fill.js"
-import { createCanonicalOrderFromBinanceEvent } from "./binance-execution-order.js"
 
 const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
@@ -63,28 +61,6 @@ export function createBinanceBrokerAdapter({
     return request
   }
 
-  const normalizeUserDataEvent = async ({ event } = {}) => {
-    if (event?.eventType !== "executionReport") return event
-
-    const metadata = await getCanonicalMarketMetadata({
-      symbol: event.executedOrder?.symbol ?? event.fill?.symbol,
-    })
-    return {
-      ...event,
-      executedOrder: createCanonicalOrderFromBinanceEvent({
-        event,
-        market: metadata.market,
-      }),
-      ...(event.executionType === "TRADE"
-        ? {
-            fill: createCanonicalFillFromBinanceEvent({
-              event,
-              market: metadata.market,
-            }),
-          }
-        : {}),
-    }
-  }
 
   const requiredMethods = [
     "connect",
@@ -127,32 +103,7 @@ export function createBinanceBrokerAdapter({
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
     subscribeForUserData: ({ onEvent, onStatus }) =>
-      client.subscribeForUserData({
-        onEvent: ({ event } = {}) => {
-          if (event?.eventType === "executionReport") {
-            onStatus?.({
-              type: event.executionType === "TRADE" ? "executionPending" : "orderUpdatePending",
-              executionPending: event.executionType === "TRADE",
-              orderUpdatePending: event.executionType !== "TRADE",
-            })
-          }
-          Promise.resolve()
-            .then(() => normalizeUserDataEvent({ event }))
-            .then((normalizedEvent) => onEvent({ event: normalizedEvent }))
-            .catch((error) => {
-              onStatus?.({
-                type: "executionNormalizationFailed",
-                recoveryRequired: true,
-                error,
-              })
-              logger?.error?.({
-                message: "Unable to normalize Binance execution event",
-                error,
-              })
-            })
-        },
-        onStatus,
-      }),
+      client.subscribeForUserData({ onEvent, onStatus }),
   })
 
   assertBrokerPort({ broker })
