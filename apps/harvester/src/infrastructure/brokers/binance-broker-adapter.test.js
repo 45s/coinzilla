@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Fill } from "@coinzilla/entities"
+import { Fill, Market, TradingRules } from "@coinzilla/entities"
 import { createBinanceBrokerAdapter } from "./binance-broker-adapter.js"
 
 const createClient = () => {
@@ -38,13 +38,33 @@ test("adapts Harvester placeOrder to Binance createOrder without changing the re
 
 test("maps object-shaped application inputs to the broker package methods", async () => {
   const { calls, client, result } = createClient()
+  client.getSymbolFilters = async (input) => {
+    calls.push(["getSymbolFilters", input])
+    return {
+      ok: true,
+      data: {
+        symbol: "BTCUSDT",
+        baseAsset: "BTC",
+        quoteAsset: "USDT",
+        tickSize: "0.01",
+        stepSize: "0.00001",
+        minQuantity: "0.0001",
+        minNotional: "5",
+        supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+      },
+    }
+  }
   const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
 
   assert.equal(await broker.cancelOrder({ symbol: "BTCUSDT", orderId: 7 }), result)
   assert.equal(await broker.getOpenOrders({ symbol: "BTCUSDT" }), result)
   assert.equal(await broker.getFills({ symbol: "BTCUSDT", limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
-  assert.equal(await broker.getSymbolFilters({ symbol: "BTCUSDT" }), result)
+  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  assert.equal(marketMetadata.ok, true)
+  assert.ok(marketMetadata.data.market instanceof Market)
+  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
+  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
 
   assert.deepEqual(calls, [
