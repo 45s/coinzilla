@@ -2,12 +2,16 @@ import { toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { createMarketPrice } from "../domain/market-price.js"
 
-export function makeProcessMarketPrice({ strategy } = {}) {
-  if (strategy === null || typeof strategy?.evaluate !== "function") {
-    throw new TypeError("makeProcessMarketPrice requires a strategy with evaluate()")
+/**
+ * Create the market-price workflow with its policy supplied explicitly.
+ * The use case validates and coordinates; the strategy function decides.
+ */
+export function makeProcessMarketPrice({ evaluateStrategy } = {}) {
+  if (typeof evaluateStrategy !== "function") {
+    throw new TypeError("makeProcessMarketPrice requires an evaluateStrategy function")
   }
 
-  return async function processMarketPrice({
+  return function processMarketPrice({
     symbol,
     priceEvent,
     pairConfig,
@@ -32,7 +36,7 @@ export function makeProcessMarketPrice({ strategy } = {}) {
         throw new TypeError("processMarketPrice requires a Portfolio")
       }
 
-      const decision = await strategy.evaluate({ marketPrice, pairConfig, settings, portfolio })
+      const decision = evaluateStrategy({ marketPrice, pairConfig, settings, portfolio })
       return toResult({ data: { marketPrice, decision } })
     } catch (error) {
       return toResult({ error })
