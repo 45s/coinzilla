@@ -88,6 +88,47 @@ function validateCallback(callback, name) {
   }
 }
 
+function logSafely(logger, level, ...args) {
+  try {
+    logger?.[level]?.(...args)
+  } catch {
+    // Logging failures must not interrupt event delivery.
+  }
+}
+
+function notifySafely(onStatus, status, logger) {
+  if (typeof onStatus !== "function") return
+  try {
+    onStatus(status)
+  } catch (error) {
+    logSafely(logger, "error", "Binance user-data status callback failed", error)
+  }
+}
+
+function forwardSafely(onEvent, onStatus, event, logger) {
+  try {
+    const result = onEvent({ event })
+    if (result && typeof result.then === "function") {
+      Promise.resolve(result).catch((error) => {
+        notifySafely(onStatus, {
+          type: "eventHandlerFailed",
+          recoveryRequired: true,
+          error,
+        }, logger)
+        logSafely(logger, "error", "Binance user-data event handler failed", error)
+      })
+    }
+  } catch (error) {
+    notifySafely(onStatus, {
+      type: "eventHandlerFailed",
+      recoveryRequired: true,
+      error,
+    }, logger)
+    logSafely(logger, "error", "Binance user-data event handler failed", error)
+  }
+}
+
+
 export class BinanceWebSocketBroker extends CoreBroker {
   constructor(input = {}, {
     apiClientFactory = createApiClient,
@@ -602,25 +643,16 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
       const forwardEvent = ({ event } = {}) => {
         if (event?.eventType !== "executionReport") {
-          Promise.resolve()
-            .then(() => onEvent({ event }))
-            .catch((error) => {
-              onStatus?.({
-                type: "eventHandlerFailed",
-                recoveryRequired: true,
-                error,
-              })
-              this.logger.error?.("Binance user-data event handler failed", error)
-            })
+          forwardSafely(onEvent, onStatus, event, this.logger)
           return
         }
 
         const isTrade = event.executionType === "TRADE"
-        onStatus?.({
+        notifySafely(onStatus, {
           type: isTrade ? "executionPending" : "orderUpdatePending",
           executionPending: isTrade,
           orderUpdatePending: !isTrade,
-        })
+        }, this.logger)
 
         Promise.resolve()
           .then(async () => {
@@ -672,12 +704,12 @@ export class BinanceWebSocketBroker extends CoreBroker {
             })
           })
           .catch((error) => {
-            onStatus?.({
+            notifySafely(onStatus, {
               type: "executionNormalizationFailed",
               recoveryRequired: true,
               error,
-            })
-            this.logger.error?.("Unable to normalize Binance user-data execution", error)
+            }, this.logger)
+            logSafely(this.logger, "error", "Unable to normalize Binance user-data execution", error)
           })
       }
 
