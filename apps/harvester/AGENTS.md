@@ -37,12 +37,56 @@ These instructions apply to all work in `apps/harvester/` and take precedence ov
 - Do not run destructive commands, modify production systems, or change access controls without explicit authorization.
 
 
+## Required domain implementation style: classes and pure functions
+
+This section is mandatory for all new Harvester code and materially changed code. It makes the repository-wide pure-function extraction standard explicit for this application.
+
+### Plain pure functions are the default for domain logic
+
+**Deterministic calculations and decisions MUST be implemented as plain pure functions.** A pure function:
+- receives every input it needs through its arguments;
+- returns its result from those inputs alone;
+- does not read or mutate instance state, shared mutable state, globals, process configuration, clocks, randomness, files, databases, networks, or other external systems;
+- does not perform observable side effects; and
+- produces the same result for the same inputs.
+
+This is a required design rule, not merely a preference. It applies to meaningful domain:
+- calculations and arithmetic;
+- trading decisions and policy evaluation;
+- validation and invariant checks that do not require state mutation;
+- parsing, normalization, mapping, and transformation;
+- comparisons, predicates, and formatting.
+
+A meaningful pure function MUST be extracted into a focused, cohesive module instead of being implemented as a class method, hidden inside a service/use case, or embedded in a large orchestration file. This applies even when there is only one caller. Keep trivial expressions and tightly context-dependent callbacks local when extracting them would make the code harder to understand; do not create artificial one-line modules.
+
+Pure domain functions must not import broker SDKs, perform I/O, read environment variables, or depend on application/bootstrap modules. Pass required facts explicitly as arguments. Follow Harvester's object-input/object-output convention and use the established `toResult` convention when a result can fail.
+
+### When to use classes
+
+Use a class when a domain concept must own state and protect state-related invariants across its lifecycle. Examples include `Fill`, `Position`, and `Portfolio`.
+
+- Keep owned state in private fields where appropriate.
+- Expose read access through getters or deliberate domain methods.
+- Make state transitions explicit through methods that enforce the object's invariants.
+- Preserve immutability where the domain model requires it.
+- Do not put independent calculations, validation, mapping, or trading decisions into class methods just because the class has the relevant data. Extract those as pure functions and pass the required values explicitly.
+
+A value object may use a class when construction must enforce an invariant and the object benefits from encapsulating meaningful domain behavior. Do not turn every data shape into a class. Use a plain immutable value when a class adds no meaningful protection or behavior.
+
+### Application workflows
+
+Use cases are focused dependency-injected functions. They coordinate pure domain functions, stateful domain objects, and explicit ports. They may perform or coordinate side effects through injected dependencies, but must not absorb deterministic domain calculations or decisions.
+
+Strategies decide through plain pure functions wherever the decision can be expressed from explicit market, configuration, and portfolio inputs. They must not submit broker orders or perform I/O.
+
+**Review rule:** If a calculation or decision can be computed from explicit inputs without side effects, it must be a plain pure function in a focused domain module—not a method added to a class for stylistic consistency.
+
 ## Required implementation style: use-case factories and explicit composition
 
 When implementing a Harvester capability, follow the dependency-injected, factory-based style described in [Architecture](./docs/architecture.md#implementation-pattern-for-use-cases). Treat this as a design guide, not a rigid folder or class template.
 
 - **Inspect before designing.** Trace the existing implementation, consumers, tests, and package contracts. Reuse the repository's existing entities and broker contracts (including canonical Order, Fill, Money/Quantity, broker capabilities, and result types where applicable). Do not create parallel domain models, ports, validators, or result wrappers just to imitate an example.
-- **Domain owns trading meaning.** Put invariants, value construction, validation, and deterministic trading decisions in domain modules. Prefer pure functions or small factories that expose a clear domain API. Domain code must not import exchange SDKs, read process configuration, access storage, or perform network I/O.
+- **Domain owns trading meaning.** Put trading invariants and state transitions in domain entities where state ownership requires them. All meaningful deterministic calculations, validation, transformations, predicates, and trading decisions MUST be plain pure functions in focused domain modules. Do not implement these as class methods or hide them inside use cases/services. Domain code must not import exchange SDKs, read process configuration, access storage, or perform network I/O.
 - **Use cases own application workflows.** Implement each application goal as a focused factory/function with dependencies supplied explicitly. Use object-shaped input and output, follow the established `toResult` convention, and coordinate domain behavior with ports. A use case must not know Binance request formats or other adapter-specific details.
 - **Adapters own external protocols.** Broker adapters translate application-level requests into exchange-specific calls and normalize responses/errors back into the shared contract. Validate untrusted external data at this boundary. Keep SDK objects and raw exchange payloads out of domain and strategy code.
 - **Bootstrap owns wiring.** Construct concrete adapters, repositories, clocks, loggers, and use cases in the composition/bootstrap layer. Pass dependencies into factories; do not hide construction in use cases or domain modules.
