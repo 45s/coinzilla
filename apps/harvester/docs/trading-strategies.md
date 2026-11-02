@@ -2,6 +2,10 @@
 
 Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. **Conservative (Free-Roll) is the first implementation priority and the default strategy for the first executable release. Aggressive is deferred until Conservative is proven end to end on TESTNET.** For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
 
+## Implementation priority
+
+Conservative is not merely the first policy to document: it is the first strategy that must actually produce and submit orders. The immediate deliverable is the complete market-price → Conservative decision → broker order → execution/fill → Portfolio update → next decision/order loop on TESTNET. See [Trading First](./TRADING_FIRST.md). Journal, durable recovery, comprehensive reconciliation, and Aggressive are deferred until this loop works; only minimum immediate execution safety may be added ahead of it.
+
 ## Strategy modes
 
 ### Conservative — Free-Roll
@@ -172,7 +176,7 @@ The following questions remain open and must be answered before implementation w
 6. What happens if the consolidated Conservative SELL cannot be placed, is partially filled, or is rejected? The fallback/resume behavior for those cases is not yet defined.
 8. How are shared quote assets and inventory coordinated across different pairs that use the same account asset?
 9. What is the exact reservation lifecycle for BUY and SELL orders, including partial fills, cancellation races, rejections, and uncertain exchange outcomes?
-10. What persistence, restart, and exchange-reconciliation guarantees are required before live operation?
+10. **Deferred until after the first working TESTNET cycle:** what persistence, restart, and comprehensive exchange-reconciliation guarantees are required before unattended/live operation?
 11. If strategy-specific performance attribution is required, how should it work without splitting the actual Position?
 
 Confirmed decisions: there is one Position per trading pair; Conservative and Aggressive share its inventory and complete accounting but only one controls it at a time; control switches to Conservative when actual executed BUY investment exceeds the configurable `conservativeTakeoverPercent` threshold (default 20%); open/unfilled BUY orders are excluded; Conservative keeps control until the full position is sold and the invested capital is recovered; when losing money, new BUY orders stop while existing SELL orders remain active, and a loss-making sale is never forced just to switch strategies; and third-asset commission fills are rejected as unsupported for now. See [Portfolio Domain](./domain/portfolio.md).
@@ -192,4 +196,4 @@ The user is making product decisions, not taking a trading terminology test. Con
 
 ## Current implementation status
 
-The default composed policy is now Aggressive and receives the latest in-memory Portfolio snapshot. It currently returns NO_ACTION with blocker codes rather than emitting order intents: the agreed grid depth, exact percentage-step calculation, maximum-price-drop formula, and SELL price/fee/rounding formula are not yet fully specified. This is a safe policy integration, not an executable or live Aggressive strategy. Portfolio fill transitions are implemented separately; live broker user-data normalization and delivery are still pending.
+The current code still contains an Aggressive policy composition that returns NO_ACTION with blocker codes; it is not an executable trading strategy. That existing placeholder must not dictate the product priority. The next implementation work is to connect the documented Conservative policy to the actual market-price → order-intent → safety validation → broker submission → order/fill event → Portfolio update → next decision workflow. Portfolio/accounting and broker foundations are not evidence that the app can trade. Journal integration, durable restart recovery, and comprehensive reconciliation remain secondary until the first complete Conservative TESTNET cycle succeeds.
