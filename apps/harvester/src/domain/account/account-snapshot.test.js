@@ -59,7 +59,7 @@ test("rejects invalid snapshots, duplicate assets, and negative balances", () =>
   assert.throws(() => new AccountSnapshot({
     balances: [balance({ asset: btc, free: "-1" })],
     sourceTime: 1,
-  }), /cannot be negative/)
+  }), /Quantity.amount must be non-negative/)
 })
 
 test("requires explicit balances for both assets of every enabled market", () => {
