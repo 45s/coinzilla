@@ -375,3 +375,26 @@ test("fails startup closed when user-data subscription cannot be established", a
   )
   assert.deepEqual(calls, ["connect", "disconnect"])
 })
+
+test("exposed broker port cannot bypass the user-data readiness gate", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataStatus({
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  const order = await result.broker.placeOrder({
+    order: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "60000" },
+  })
+
+  assert.equal(order.ok, false)
+  assert.match(order.errors[0].message, /user-data accounting is not ready/)
+  await result.stop()
+})
