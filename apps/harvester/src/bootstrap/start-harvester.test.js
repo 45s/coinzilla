@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { startHarvester } from "./start-harvester.js"
 
@@ -10,6 +10,31 @@ const tradingConfig = {
     BTCUSDT: { enabled: true, orderQuantity: 0.01, makerPercent: 0 },
     ETHUSDT: { enabled: false, orderQuantity: 0.1, makerPercent: 0 },
   },
+}
+const createMarketMetadata = (symbol) => {
+  const baseCode = symbol.replace(/USDT$/, "")
+  const baseAsset = new Asset({ id: "asset:" + baseCode, code: baseCode })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({
+    venue: "binance",
+    symbol,
+    baseAsset,
+    quoteAsset,
+  })
+  const tradingRules = new TradingRules({
+    market,
+    constraints: [
+      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
+      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
+      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.001", asset: baseAsset }) },
+      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+    ],
+  })
+  return {
+    market,
+    tradingRules,
+    supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+  }
 }
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
@@ -22,7 +47,10 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     getOpenOrders: async () => ({ ok: true }),
     getFills: async () => ({ ok: true }),
     getAccountSnapshot: async () => ({ ok: true }),
-    getSymbolFilters: async () => ({ ok: true }),
+    getSymbolFilters: async ({ symbol }) => {
+      calls.push("filters:" + symbol)
+      return { ok: true, data: createMarketMetadata(symbol) }
+    },
     getPrices: async () => ({ ok: true }),
     subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push("subscribe:" + symbol)
@@ -92,7 +120,9 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   })
   assert.equal(result.connected, true)
   assert.deepEqual(result.subscriptions, ["BTCUSDT"])
-  assert.deepEqual(calls, ["connect", "subscribe:user-data", "subscribe:BTCUSDT"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "subscribe:BTCUSDT"])
+  assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
+  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, true)
 
   await broker.emitPrice("BTCUSDT", {
@@ -115,6 +145,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   await result.stop()
   assert.deepEqual(calls, [
     "connect",
+    "filters:BTCUSDT",
     "subscribe:user-data",
     "subscribe:BTCUSDT",
     "unsubscribe:BTCUSDT",
@@ -183,7 +214,7 @@ test("disconnects when a market price subscription fails", async () => {
     }),
     /Unable to subscribe to market prices for BTCUSDT: stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "subscribe:user-data", "subscribe:BTCUSDT", "unsubscribe:user-data", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "subscribe:BTCUSDT", "unsubscribe:user-data", "disconnect"])
 })
 
 test("unsubscribes earlier markets when a later market subscription fails", async () => {
@@ -211,6 +242,8 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   )
   assert.deepEqual(calls, [
     "connect",
+    "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "subscribe:BTCUSDT",
     "subscribe:ETHUSDT",
@@ -242,7 +275,7 @@ test("disconnects after a failed broker connection", async () => {
     }),
     /connection failed/,
   )
-  assert.deepEqual(calls, ["connect", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
 
 test("accounts canonical execution events before allowing further order placement", async () => {
