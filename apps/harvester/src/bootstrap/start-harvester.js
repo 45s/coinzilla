@@ -7,6 +7,7 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
+import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -96,7 +97,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = evaluateConservativeStrategy,
+  evaluateStrategy = evaluateAggressiveStrategy,
   logger = defaultLogger,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.({
@@ -145,7 +146,8 @@ export async function startHarvester({
   if (brokerName !== "binance") {
     throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
   }
-  if (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production") {
+  const tradingEnabled = env.HARVESTER_ENABLE_TRADING === "true"
+  if (tradingEnabled && (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production")) {
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
@@ -397,44 +399,47 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    // A clean TESTNET account is the minimal starting point: no open orders and
-    // no pre-existing base inventory that could be mistaken for strategy coins.
     const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
-    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
-      if (!pairConfig.enabled) continue
-      const metadata = marketMetadata.get(symbol)
-      const openOrders = await broker.getOpenOrders({ symbol })
-      if (!openOrders?.ok || !Array.isArray(openOrders.data)) {
-        throw new Error("Unable to verify clean TESTNET open orders for " + symbol)
+    if (tradingEnabled) {
+      const enabledPairs = Object.entries(tradingConfig.pairs).filter(([, pairConfig]) => pairConfig.enabled)
+      if (enabledPairs.length !== 1) {
+        throw new Error("The first Conservative TESTNET trading cycle requires exactly one enabled pair")
       }
-      if (openOrders.data.length > 0) {
-        throw new Error("TESTNET account has pre-existing open orders for " + symbol + "; cancel or reconcile them before starting Harvester")
+      for (const [symbol] of enabledPairs) {
+        const metadata = marketMetadata.get(symbol)
+        const openOrders = await broker.getOpenOrders({ symbol })
+        if (!openOrders?.ok || !Array.isArray(openOrders.data)) {
+          throw new Error("Unable to verify clean TESTNET open orders for " + symbol)
+        }
+        if (openOrders.data.length > 0) {
+          throw new Error("TESTNET account has pre-existing open orders for " + symbol + "; cancel or reconcile them before starting Harvester")
+        }
+        const baseBalance = accountSnapshot.getBalance({ assetId: metadata.market.baseAsset.id })
+        if (!baseBalance || compareDecimal({ left: baseBalance.free.amount, right: "0" }) !== 0 ||
+            compareDecimal({ left: baseBalance.locked.amount, right: "0" }) !== 0) {
+          throw new Error("TESTNET account has pre-existing " + metadata.market.baseAsset.code + " inventory for " + symbol + "; clear it before starting Harvester")
+        }
       }
-      const baseBalance = accountSnapshot.getBalance({ assetId: metadata.market.baseAsset.id })
-      if (!baseBalance || compareDecimal({ left: baseBalance.free.amount, right: "0" }) !== 0 ||
-          compareDecimal({ left: baseBalance.locked.amount, right: "0" }) !== 0) {
-        throw new Error("TESTNET account has pre-existing " + metadata.market.baseAsset.code + " inventory for " + symbol + "; clear it before starting Harvester")
-      }
+      userDataRequiresReconciliation = false
+      userDataReady = true
+      userDataStatus = "READY"
+      tradingEngine = makeConservativeTradingEngine({
+        broker: guardedBroker,
+        tradingConfig,
+        getPortfolio,
+        getRecoveryLedger,
+        getMarketMetadata,
+        updateTradingAccounting,
+        completeRecoveryCycle,
+        canTrade: () => userDataReady,
+        onPause: async ({ symbol, reason, error }) => {
+          logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
+        },
+      })
+      processMarketPrice = tradingEngine.processMarketPrice
     }
-    userDataRequiresReconciliation = false
-    userDataReady = true
-    userDataStatus = "READY"
-    tradingEngine = makeConservativeTradingEngine({
-      broker: guardedBroker,
-      tradingConfig,
-      getPortfolio,
-      getRecoveryLedger,
-      getMarketMetadata,
-      updateTradingAccounting,
-      completeRecoveryCycle,
-      canTrade: () => userDataReady,
-      onPause: async ({ symbol, reason, error }) => {
-        logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
-      },
-    })
-    processMarketPrice = tradingEngine.processMarketPrice
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue

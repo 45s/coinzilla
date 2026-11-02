@@ -127,18 +127,19 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity and order execution are TESTNET-only. Set `HARVESTER_TRADING_MODE=testnet`; production mode and live trading are rejected.
+Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The first trading run requires exactly one enabled pair, no open orders, and zero pre-existing base inventory for that pair.
 
 ```sh
 HARVESTER_BROKER=binance
 HARVESTER_TRADING_MODE=testnet
+HARVESTER_ENABLE_TRADING=true
 BINANCE_API_KEY=...
 BINANCE_API_SECRET_KEY=...
 ```
 
 Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown unsubscribes market data before disconnecting.
 
-Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. The CLI composes the Conservative policy with the in-process trading engine. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The current startup requires a clean TESTNET account with no open orders or pre-existing base inventory for enabled pairs. Aggressive remains deferred.
+Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The current startup requires a clean TESTNET account with no open orders or pre-existing base inventory for enabled pairs. Aggressive remains deferred.
 
 Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is normalized into canonical order and Fill events. Harvester correlates order updates against its in-process registry and applies actual fills to Portfolio and RecoveryLedger. Reconnect recovery, durable restart state, reservation accounting, and complete TESTNET BUY → SELL → next-cycle proof remain unfinished.
 
