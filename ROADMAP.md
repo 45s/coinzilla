@@ -18,9 +18,9 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 ## 2. Protect main and improve change safety
 
-- [x] Protect `main`: require pull requests and passing required status checks; enable review requirements where appropriate.
+- [~] Protect `main`: require pull requests and passing release checks; the live ruleset still needs at least one required approving review and the full CI check set.
 
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires zero approvals, has no bypass actors, and blocks force pushes and deletions.
+  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It currently requires zero approvals, has no bypass actors, and blocks force pushes and deletions. It also omits `Workspace test coverage` and `actionlint`; both gaps must be corrected before the release gate matches the documented policy.
 - [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
 - [ ] Review dependency updates and GitHub Actions permissions for least privilege.
 
@@ -57,7 +57,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 
 - [~] Establish `develop` as the shared integration branch, with protected PR-only merges and required automated checks.
 
-  The branch was restored from the release merge commit after PR #339 was merged. The active `develop-core` ruleset requires PRs, up-to-date branches, and six CI contexts, with no bypass actors. **The ruleset currently does not include a deletion rule**, while repository auto-delete-on-merge is enabled. Therefore `develop` is protected against force-pushes but is not yet protected against deletion; this item remains in progress until the deletion rule is added and verified.
+  The branch was restored from the release merge commit after PR #339 was merged. The active `develop-core` ruleset requires PRs, up-to-date branches, six CI contexts, deletion protection, and no bypass actors. Repository auto-delete-on-merge is enabled, so merged task branches are cleaned up without weakening protection on `develop` itself.
 - [x] Keep `main` as the stable release branch; only milestone/release PRs from `develop` to `main` require the user's final approval.
 - [x] Require every AI agent to follow `AI_AGENT_WORKFLOW.md`, root `AGENTS.md`, and the owning domain's local instructions.
 - [x] Give each application/package its own roadmap and local agent instructions; keep domain ownership independent of Git branch lifetime.
@@ -66,7 +66,7 @@ Prioritize demonstrated engineering risks over checklist progress. Keep changes 
 - [x] Define cross-domain requests so consumer agents report needs and owning-domain agents implement shared package changes.
 - [~] Configure GitHub rulesets for `develop` and `main`; verify the exact required check names and auto-merge/agent merge permissions.
 
-  Both rulesets are active. The `main` ruleset blocks deletion and force-pushes. The `develop` ruleset blocks force-pushes and requires all six CI contexts, but currently lacks the deletion rule. Auto-merge is disabled. The GitHub connection available for this task can inspect rulesets but cannot update them, so adding and verifying the missing deletion rule remains an administrator-side configuration blocker.
+  Both rulesets are active. The `main` ruleset blocks deletion and force-pushes but currently requires zero approving reviews and only four status contexts (it omits `Workspace test coverage` and `actionlint`). The `develop` ruleset blocks deletion and force-pushes and requires all six CI contexts. Auto-merge is disabled. The main release-approval requirement remains an administrator-side configuration blocker.
 - [ ] Retire or migrate legacy long-lived feature branches and open PRs only after their work is safely preserved.
 
 The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is enforced by repository rulesets, not documentation alone.
