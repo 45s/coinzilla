@@ -41,7 +41,7 @@ if (result.status !== 0) {
   for (const [filename, minimumLineCoverage, minimumBranchCoverage] of coverageThresholds) {
     const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     const pattern = new RegExp(
-      `^\\s*#\\s+${escapedFilename}\\s+\\|\\s+([\\d.]+)\\s+\\|\\s+([\\d.]+)`,
+      `^\\s*(?:#|ℹ)\\s+${escapedFilename}\\s+\\|\\s+([\\d.]+)\\s+\\|\\s+([\\d.]+)`,
     )
     const matches = coverageLines
       .map((line) => line.match(pattern))
