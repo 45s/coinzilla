@@ -284,3 +284,10 @@ The tutorial's companion implementation is a pattern reference, not a source of 
 The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
 
 This is only a market-metadata readiness gate. It does not yet initialize account-wide available balances, reserve quote/base assets, reconcile open orders, or enforce all min/max constraints at the final order-submission boundary. Those are separate P0 execution-safety requirements.
+
+
+## Account balance snapshot
+
+After the user-data stream is established, bootstrap loads a canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The same validation is repeated after each accounted execution. A failed or stale refresh blocks further order placement. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
+
+This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
