@@ -250,6 +250,13 @@ export function makeConservativeTradingEngine({
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       state.prices.set(symbol, price)
+      if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatest({ symbol })
+      const metadata = getMarketMetadata({ symbol })
+      const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
+        .find((order) => order.side === "BUY")
+      if (activeBuy && state.trailingBuy.get(symbol) !== false) {
+        return maybeReplaceTrailingBuy({ symbol, marketPrice: price })
+      }
       return evaluateLatest({ symbol })
     } catch (error) {
       return toResult({ error })
@@ -302,6 +309,8 @@ export function makeConservativeTradingEngine({
           marketId: order.market.id,
         })
         if (!cancellation.ok) return cancellation
+        state.trailingBuy.set(symbol, false)
+        state.buyReferenceOverrides.delete(symbol)
         state.lastBuyPrices.set(symbol, order.limitPrice.amount)
       }
       if (order.status === "FILLED" && order.side === "SELL") {
@@ -314,6 +323,7 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle did not meet completion conditions")] })
         }
+        state.trailingBuy.set(symbol, true)
       }
       if (order.status === "REJECTED") {
         await pause({ symbol, reason: "ORDER_REJECTED" })
