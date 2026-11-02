@@ -146,3 +146,18 @@ test("waits for a partially filled order before advancing either side of the str
   assert.equal(decision.reason, "WAIT_FOR_ORDER_TO_FINISH_AFTER_PARTIAL_FILL")
   assert.deepEqual(decision.actions, [])
 })
+
+test("does not create another BUY when outstanding recovery plus the next order exceeds investment", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, investment: 15 },
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
+})

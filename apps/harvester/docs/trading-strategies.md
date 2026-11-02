@@ -28,7 +28,8 @@ The first connected policy behavior is:
   already active. Its reference is the last qualifying BUY price; before a
   last-buy reference exists, the current last traded price is used.
 - Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
-  intents on subsequent market events.
+  intents on subsequent market events. A new BUY is omitted when outstanding
+  recovery capital plus the new order notional would exceed the pair investment cap.
 - A strategy decision can therefore request both a BUY and a SELL. The policy
   does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
 

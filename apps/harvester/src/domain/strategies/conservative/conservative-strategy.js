@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, compareDecimal, roundDecimalToIncrement } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
@@ -98,13 +98,25 @@ export function evaluateConservativeStrategy({
     if (compareDecimal({ left: buyQuantity, right: "0" }) <= 0) {
       throw new RangeError("Configured BUY quantity is below the exchange quantity step")
     }
-    actions.push(Object.freeze({
-      side: "BUY",
-      type: marketMetadata.orderType,
-      price: buyPrice,
-      quantity: buyQuantity,
-      reason: position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
-    }))
+    const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
+    const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
+      left: "0",
+      right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
+    })
+    const investmentLimit = pairConfig.investment === undefined ? undefined : String(pairConfig.investment)
+    const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
+      left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
+      right: investmentLimit,
+    }) <= 0
+    if (withinInvestmentLimit) {
+      actions.push(Object.freeze({
+        side: "BUY",
+        type: marketMetadata.orderType,
+        price: buyPrice,
+        quantity: buyQuantity,
+        reason: position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
+      }))
+    }
   }
 
   if (!hasActiveSell && compareDecimal({ left: activeQuantity, right: "0" }) > 0) {
