@@ -181,9 +181,9 @@ These decisions define pair-level accounting and exclusive strategy control for 
 
 1. **Automatic-switch hysteresis:** the default takeover threshold and fill-only calculation are agreed, but it remains to be decided whether the switch-back threshold should differ from the takeover threshold to prevent rapid toggling.
 2. **Order reservation lifecycle:** when exactly is quantity reserved for a submitted BUY or SELL, and when is it released after rejection, cancellation, expiration, partial fill, or an uncertain exchange response? The shared Position must expose reserved and available inventory, but the lifecycle and race-handling contract still needs to be specified.
-2. **Cross-pair asset coordination:** how does the engine prevent separate pair positions from spending or selling the same underlying account balance? Pair-level positions do not by themselves solve account-wide balance contention.
-3. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide durable deduplication?
-4. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
-5. **Profit attribution:** if both strategies trade the same pair and share the same inventory, is strategy-specific performance reporting required, and if so, how should it be attributed without creating separate competing positions?
+3. **Cross-pair asset coordination:** how does the engine prevent separate pair positions from spending or selling the same underlying account balance? Pair-level positions do not by themselves solve account-wide balance contention.
+4. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide durable deduplication?
+5. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
+6. **Profit attribution:** if both strategies trade the same pair and share the same inventory, is strategy-specific performance reporting required, and if so, how should it be attributed without creating separate competing positions?
 
 Until these remaining decisions are closed, do not invent reservation timing, cross-pair allocation, recovery, or profit-attribution rules.
