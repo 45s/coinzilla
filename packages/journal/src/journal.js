@@ -189,7 +189,7 @@ export class Journal {
 
   /**
    * Read and validate all persisted sessions. Call before start or after close.
-   * @param {{ maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} options
+   * @param {{ maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} options
    */
   async read({ maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
     if (this.started || this.starting || this.closing) {
@@ -206,7 +206,7 @@ export class Journal {
 
   /**
    * Replay a fully validated snapshot in deterministic order.
-   * @param {{ handler: (input: { record: object }) => unknown, maxRecords?: number, maxBytes?: number, maxRecordBytes?: number }} options
+   * @param {{ handler: (input: { record: object }) => unknown, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} options
    */
   async replay({ handler, maxRecords, maxSessions, maxBytes, maxRecordBytes } = {}) {
     if (this.started || this.starting || this.closing) {
@@ -223,6 +223,10 @@ export class Journal {
   }
 
   async flush({} = {}) {
+    if (!this.started || !this.fileHandle || this.closing || this.closed) {
+      return toResult({ error: new Error("Journal must be started to flush durable records") })
+    }
+
     const errors = []
 
     try {

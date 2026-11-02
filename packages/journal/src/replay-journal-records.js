@@ -19,8 +19,11 @@ export async function replayJournalRecords({ handler, ...options } = {}) {
     try {
       const result = await handler({ record })
       if (result && result.ok === false) {
+        const errors = Array.isArray(result.errors) && result.errors.length > 0
+          ? result.errors
+          : [new Error(`Replay handler rejected record ${record.id}`)]
         return toResult({
-          errors: result.errors ?? [new Error(`Replay handler rejected record ${record.id}`)],
+          errors,
           replayed,
           failedRecordId: record.id,
         })

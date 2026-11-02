@@ -267,6 +267,36 @@ test("stops replay on handler failure and reports the last successful record", a
   }
 })
 
+test("requires an active writer before acknowledging a durable flush", async () => {
+  const { journal } = await createStoppedJournal()
+  try {
+    const result = await journal.flush()
+    assert.equal(result.ok, false)
+    assert.match(result.errors[0].message, /must be started/)
+  } finally {
+    await journal.eventBus.close()
+  }
+})
+
+test("treats a failed replay result without errors as a failure", async () => {
+  const { directory, journal } = await createStoppedJournal()
+  try {
+    await writeFile(
+      path.join(directory, "2026-01-01_00-00-00.jsonl"),
+      `${JSON.stringify(legacyEvent("failed"))}\n`,
+    )
+    const result = await journal.replay({
+      handler: async () => ({ ok: false, errors: [] }),
+    })
+    assert.equal(result.ok, false)
+    assert.equal(result.failedRecordId, "failed")
+    assert.equal(result.errors.length, 1)
+  } finally {
+    await journal.eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("rejects read and replay while the writer is active", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-active-read-"))
   const eventBus = new EventBus()
