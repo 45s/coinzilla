@@ -1,0 +1,136 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Portfolio } from "../../portfolio/portfolio.js"
+import { RecoveryLedger } from "./recovery-ledger.js"
+import { evaluateConservativeStrategy } from "./conservative-strategy.js"
+
+const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const marketMetadata = {
+  market,
+  orderType: "LIMIT_MAKER",
+  tradingRules: {
+    constraints: [
+      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
+      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "1" } },
+      { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "1" } },
+      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
+    ],
+  },
+}
+const pairConfig = {
+  priceStepPercent: 0.05,
+  orderQuantity: 100,
+  keepQuantity: 1,
+  makerPercent: 0,
+  takerPercent: 0.075,
+}
+const settings = { minProfit: 0.01 }
+const marketPrice = { symbol: "DOGEUSDT", price: "0.100", timestamp: 100 }
+
+function makeBoughtState() {
+  const fill = new Fill({
+    tradeId: "buy-1",
+    brokerOrderId: "order-1",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "0.1", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const portfolio = new Portfolio().applyFill({ fill }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market }).applyFill({ fill }).ledger
+  return { portfolio, recoveryLedger }
+}
+
+test("creates the initial BUY below last traded price and rounds down to tick", () => {
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: new Portfolio(),
+    marketMetadata,
+  })
+  assert.equal(decision.strategy, "CONSERVATIVE")
+  assert.equal(decision.action, "PLACE_ORDERS")
+  assert.deepEqual(decision.actions, [{
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    price: "0.099",
+    quantity: "100",
+    reason: "INITIAL_BUY",
+  }])
+})
+
+test("does not duplicate an already active BUY on repeated price events", () => {
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: new Portfolio(),
+    marketMetadata,
+    activeOrders: [{
+      market,
+      side: "BUY",
+      status: "OPEN",
+    }],
+  })
+  assert.equal(decision.action, "NO_ACTION")
+  assert.deepEqual(decision.actions, [])
+})
+
+test("creates a recovery SELL and the next standing BUY from actual filled inventory", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+  assert.equal(decision.actions.length, 2)
+  assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
+    side, price, quantity,
+  })), [
+    { side: "BUY", price: "0.099", quantity: "100" },
+    { side: "SELL", price: "0.102", quantity: "99" },
+  ])
+})
+
+test("does not create a second SELL while a recovery SELL is active", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    activeOrders: [{ market, side: "SELL", status: "PARTIALLY_FILLED" }],
+  })
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
+})
+
+test("rejects missing exchange increments and invalid strategy context", () => {
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: new Portfolio(),
+    marketMetadata: { ...marketMetadata, tradingRules: { constraints: [] } },
+  }), /PRICE_INCREMENT/)
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: {},
+    marketMetadata,
+  }), /requires a Portfolio/)
+})

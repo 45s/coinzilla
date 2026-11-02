@@ -37,15 +37,15 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [x] Select Conservative (Free-Roll) as the first strategy. Its source of truth is `apps/bot-free-roll/README.md` v0.014; Aggressive is deferred to P1.
 - [~] Port the Free-Roll business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
-- [ ] Define the minimal first-cycle order intent and strategy context (last traded price, pair config, active Position/recovery ledger, active orders, reservations, balances, exchange filters).
+- [x] Define the first Conservative order-intent contract and pure strategy evaluation context (last traded price, pair config, active Position/recovery ledger, active orders, and exchange filters). The policy emits initial/standing BUY and recovery SELL intents without broker I/O.
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
-- [ ] Preserve standing-order behavior: after a qualifying BUY fill, maintain both a profitable recovery SELL and the next standing BUY when state and available funds permit.
+- [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
 - [~] Preserve fee rules: actual fill commission rates are calculated from canonical fills; the configured maker/taker ceiling is activated only after a non-zero actual commission is observed; base/quote fees are supported; third-asset or incomplete commission data is rejected. The fee policy and calculation are implemented as pure domain functions but are not yet wired into strategy evaluation.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
-- [ ] Ensure all deterministic strategy calculations and decisions are plain pure functions; strategy policies never call the broker or perform I/O.
+- [x] Ensure all deterministic strategy calculations and decisions are plain pure functions; the Conservative policy is a broker-independent pure function and never calls the broker or performs I/O.
 - [ ] Record any unresolved Free-Roll requirements as explicit blockers; do not invent financial behavior.
 
 ### P0.2 — Trading rules, account state, and startup readiness
@@ -113,7 +113,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### P0.7 — First strategy end-to-end verification
 
-- [ ] Build deterministic broker-port fakes/simulator scenarios for market updates, acknowledgements, partial fills, commissions, cancellations, rejections, disconnects, and recovery.
+- [~] Add deterministic offline strategy-policy scenarios for initial BUY, duplicate suppression, combined standing BUY/recovery SELL intents, and missing exchange rules. Full broker-port lifecycle simulator scenarios remain.
 - [ ] Add opt-in Binance TESTNET integration tests that place and cancel small, bounded test orders only when explicitly enabled.
 - [ ] Verify a complete buy → partial/full fill → position update → sell decision → sell fill → next cycle.
 - [ ] For the first end-to-end proof, use one explicitly enabled TESTNET pair and verify its configured investment/balance limits. Add multi-pair shared-asset allocation after this first cycle works.

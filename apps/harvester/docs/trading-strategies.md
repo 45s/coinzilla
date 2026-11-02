@@ -10,6 +10,33 @@ Conservative is not merely the first policy to document: it is the first strateg
 
 ### Conservative — Free-Roll
 
+This policy is implemented as a broker-independent pure function in
+`src/domain/strategies/conservative/conservative-strategy.js`. It emits order
+intents only; the application engine validates and submits them.
+
+The first connected policy behavior is:
+
+- With no active strategy inventory and no active BUY, create one BUY at the
+  last traded price reduced by `priceStepPercent`, rounded down to the
+  exchange price tick. Quantity is `orderQuantity`, rounded down to the
+  exchange quantity step.
+- With active inventory, create a recovery SELL when no SELL is already active.
+  The existing exact-decimal recovery planner preserves `keepQuantity`, covers
+  cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
+  proceeds, and rounds the SELL price up to the exchange tick.
+- When inventory exists, also maintain the next standing BUY unless one is
+  already active. Its reference is the last qualifying BUY price; before a
+  last-buy reference exists, the current last traded price is used.
+- Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
+  intents on subsequent market events.
+- A strategy decision can therefore request both a BUY and a SELL. The policy
+  does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
+
+This is the domain-policy contract, not proof of a complete live execution
+lifecycle. Order submission, owned-order correlation, fill-driven reevaluation,
+and cycle completion are tracked separately in the roadmap.
+
+
 This mode is based on the existing `apps/bot-free-roll` strategy.
 
 Its defining objective is to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
