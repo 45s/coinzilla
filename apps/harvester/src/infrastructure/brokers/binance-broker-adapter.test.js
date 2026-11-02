@@ -68,10 +68,12 @@ test("forwards connection and subscription lifecycle methods", async () => {
   await broker.subscribeForUserData({ onEvent, onStatus })
   await broker.disconnect()
 
-  assert.deepEqual(calls, [
+  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
+  assert.equal(userDataCall[1].onStatus, onStatus)
+  assert.equal(typeof userDataCall[1].onEvent, "function")
+  assert.deepEqual(calls.filter(([method]) => method !== "subscribeForUserData"), [
     ["connect"],
     ["subscribeForPrices", { symbol: "BTCUSDT", onPrice }],
-    ["subscribeForUserData", { onEvent, onStatus }],
     ["disconnect"],
   ])
   assert.equal(result.ok, true)
@@ -89,4 +91,86 @@ test("rejects missing credentials and incomplete broker implementations", () => 
     }),
     /missing methods/,
   )
+})
+
+test("normalizes execution reports into canonical Fill values at the adapter boundary", async () => {
+  const { calls, client } = createClient()
+  client.getSymbolFilters = async ({ symbol }) => ({
+    ok: true,
+    data: {
+      symbol,
+      baseAsset: "BTC",
+      quoteAsset: "USDT",
+      tickSize: "0.01",
+      stepSize: "0.00001",
+      supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    },
+  })
+  let receiveEvent
+  const broker = createBinanceBrokerAdapter({
+    config,
+    brokerFactory: () => client,
+  })
+  await broker.subscribeForUserData({
+    onEvent: ({ event }) => { receiveEvent = event },
+  })
+
+  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
+  userDataCall[1].onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: { clientOrderId: "client-7" },
+      fill: {
+        id: "77",
+        orderId: "88",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        price: "65000",
+        quantity: "0.01",
+        quoteQuantity: "650",
+        commissionAmount: "0.00001",
+        commissionAsset: "BTC",
+        isMaker: true,
+        time: 123,
+      },
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.ok(receiveEvent.fill instanceof (await import("@coinzilla/entities")).Fill)
+  assert.equal(receiveEvent.fill.id, "binance:BTCUSDT:77")
+  assert.equal(receiveEvent.fill.quantity.amount, "0.01")
+  assert.equal(receiveEvent.fill.commissions[0].amount.asset.code, "BTC")
+})
+
+test("fails closed and requests reconciliation when execution normalization fails", async () => {
+  const { calls, client } = createClient()
+  client.getSymbolFilters = async () => ({
+    ok: false,
+    errors: [new Error("metadata unavailable")],
+  })
+  const statuses = []
+  const broker = createBinanceBrokerAdapter({
+    config,
+    brokerFactory: () => client,
+  })
+  await broker.subscribeForUserData({
+    onEvent: () => assert.fail("invalid execution must not be forwarded"),
+    onStatus: (status) => statuses.push(status),
+  })
+
+  const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
+  userDataCall[1].onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      fill: { symbol: "BTCUSDT" },
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(statuses.length, 1)
+  assert.equal(statuses[0].type, "executionNormalizationFailed")
+  assert.equal(statuses[0].recoveryRequired, true)
 })
