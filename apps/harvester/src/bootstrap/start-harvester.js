@@ -99,7 +99,9 @@ export async function startHarvester({
       subscriptions: [],
       processMarketPrice,
       updatePortfolio,
+      updateTradingAccounting,
       get portfolio() { return getPortfolio() },
+      getRecoveryLedger,
       stop: async () => {},
     })
   }
