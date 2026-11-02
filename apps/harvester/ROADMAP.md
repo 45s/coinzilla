@@ -60,8 +60,8 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### P0.3 — Order intent, safety checks, and reservations
 
-- [ ] Define canonical Harvester order intent/command contracts using existing `@coinzilla/entities` types wherever suitable.
-- [ ] Implement pure order construction and validation functions for price/quantity precision, tick/step rounding, min/max quantity, min notional, and post-only constraints.
+- [~] Define canonical Harvester order intent/command contracts using existing `@coinzilla/entities` types wherever suitable. `createPendingCanonicalOrder` builds immutable PENDING canonical orders; the complete engine command contract and lifecycle integration remain.
+- [~] Implement pure order construction and validation functions for price/quantity precision, tick/step rounding, min/max quantity, min/max notional, and post-only constraints. `validateOrderAgainstTradingRules` now enforces exchange increments and supported price/quantity/notional bounds with exact decimal arithmetic. Post-only crossing validation, complete order construction wiring, and runtime enforcement remain.
 - [ ] Implement shared pre-trade safety checks: enabled pair, READY state, fresh price, available quote/base balance, investment cap, per-pair risk cap, account-wide asset availability, and strategy takeover state.
 - [ ] Define and implement BUY quote and SELL base reservation rules before submission.
 - [ ] Define reservation states and transitions for created/submitted/acknowledged/partially-filled/filled/cancel-pending/cancelled/rejected/expired/unknown outcomes.
