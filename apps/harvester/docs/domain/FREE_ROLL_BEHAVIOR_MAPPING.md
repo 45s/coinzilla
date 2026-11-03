@@ -89,7 +89,7 @@ The existing [`docs/domain/portfolio.md`](https://github.com/45s/coinzilla/blob/
 | Subsequent BUY uses last BUY price minus step | `calculateBuyThresholdExact` + `#placeNextBuy` | `lastBuyPrice` input | Broadly implemented; lifecycle contract not complete |
 | Next BUY can coexist with recovery SELL | `#handleBuyFilled` submits SELL then BUY | Strategy can emit both intents | Correct concept; order sequencing differs |
 | Recovery SELL before next BUY submission | `#handleBuyFilled` awaits `#replaceSell` before `#placeNextBuy` | Strategy action array appends BUY then SELL | Different / needs decision |
-| Investment cap | No equivalent in inspected Free-Roll policy/config | Optional `pairConfig.investment` | Harvester-only rule / needs approval |
+| Investment cap | No equivalent in inspected Free-Roll policy/config | Config validator requires positive `pairConfig.investment`; strategy checks outstanding recovery plus new BUY notional | Harvester-only rule / needs approval |
 | Actual fill-driven inventory and cost/proceeds | `reconcileExecutionFill` | Portfolio + RecoveryLedger | Correctly implemented in separate projections |
 | Multiple commission entries | Free-Roll converter rejects >1 | Harvester aggregates supported base/quote entries | Different input capability |
 | Third-asset commission | Rejected | Rejected | Correctly fail-closed |
