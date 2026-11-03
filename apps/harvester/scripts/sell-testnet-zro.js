@@ -2,6 +2,7 @@ import { createInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 
 import {
+  binanceTestnetPublicRequest,
   binanceTestnetRequest,
   getAccountBalances,
   getOpenOrders,
@@ -23,7 +24,7 @@ const getFreeZroBalance = ({ balances }) => {
 }
 
 const getSymbolInfo = async () => {
-  const { data } = await binanceTestnetRequest({
+  const { data } = await binanceTestnetPublicRequest({
     method: "GET",
     path: "/api/v3/exchangeInfo",
     params: { symbol: SYMBOL },
