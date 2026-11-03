@@ -13,6 +13,7 @@ const createClient = () => {
     cancelOrder: async (input) => { calls.push(["cancelOrder", input]); return result },
     getOpenOrders: async (input) => { calls.push(["getOpenOrders", input]); return result },
     getFills: async (input) => { calls.push(["getFills", input]); return result },
+    getCanonicalOrderHistory: async (input) => { calls.push(["getCanonicalOrderHistory", input]); return result },
     getAccountSnapshot: async () => { calls.push(["getAccountSnapshot"]); return result },
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
@@ -163,4 +164,18 @@ test("rejects invalid and unacknowledged cancellation identifiers before calling
   assert.equal(unsafe.ok, false)
   assert.equal(pending.ok, false)
   assert.equal(calls.some(([method]) => method === "cancelOrder"), false)
+})
+
+
+test("exposes canonical order history through the Harvester broker port", async () => {
+  const { calls, client, result } = createClient()
+  const input = { symbol: "BTCUSDT", orderId: "12345", limit: 1 }
+  client.getCanonicalOrderHistory = async (request) => {
+    calls.push(["getCanonicalOrderHistory", request])
+    return result
+  }
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+
+  assert.equal(await broker.getCanonicalOrderHistory(input), result)
+  assert.deepEqual(calls, [["getCanonicalOrderHistory", input]])
 })
