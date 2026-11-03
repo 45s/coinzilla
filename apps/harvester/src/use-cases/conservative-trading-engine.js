@@ -2,8 +2,6 @@ import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
-import { evaluateTrailingBuyRepricing } from "../domain/strategies/conservative/trailing-buy-repricing.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
@@ -26,9 +24,13 @@ import { validateCancellationEligibility } from "../domain/orders/validate-cance
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
-  broker, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
+  broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
 } = {}) {
+  if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
+      typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
+    throw new TypeError("strategyPolicy must provide evaluate and evaluateTrailingBuyRepricing functions")
+  }
   for (const [name, callback] of Object.entries({
     getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
     completeRecoveryCycle, canTrade, onPause, isStopping,
@@ -360,7 +362,7 @@ export function makeConservativeTradingEngine({
     if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatestTransition({ symbol })
 
     const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
-    const trigger = evaluateTrailingBuyRepricing({
+    const trigger = strategyPolicy.evaluateTrailingBuyRepricing({
       marketPrice: marketPrice.price,
       referencePrice,
       priceStepPercent: String(pairConfig.priceStepPercent),
@@ -400,7 +402,7 @@ export function makeConservativeTradingEngine({
     if (!marketPrice) return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
     try {
       const metadata = getMarketMetadata({ symbol })
-      const decision = evaluateConservativeStrategy({
+      const decision = strategyPolicy.evaluate({
         marketPrice,
         pairConfig: tradingConfig.pairs[symbol],
         settings: tradingConfig.settings,

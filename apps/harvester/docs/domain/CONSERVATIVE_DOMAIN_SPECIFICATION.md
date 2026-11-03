@@ -59,7 +59,7 @@ Portfolio and RecoveryLedger each guard their own projection against duplicate a
 
 ### Conservative strategy policy
 
-A pure policy evaluates validated current market price, configuration, Portfolio, RecoveryLedger, normalized trading increments/order type, and active order facts. It returns order intents or NO_ACTION. It does not submit, cancel, poll, or reconcile orders.
+A pure policy evaluates validated current market price, configuration, Portfolio, RecoveryLedger, normalized trading increments/order type, and active order facts. It returns order intents or NO_ACTION and owns pure strategy-specific repricing calculations. It does not submit, cancel, poll, or reconcile orders. The application engine receives the selected policy through bootstrap composition and coordinates its decisions without importing strategy calculators.
 
 ### Recovery SELL planning
 

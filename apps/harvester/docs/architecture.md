@@ -338,11 +338,15 @@ raw exchange response.
 
 ## In-process Conservative trading engine
 
-`makeConservativeTradingEngine` connects market-price events to the pure
-Conservative policy and validated order-submission use case. It owns the
-in-process order registry, latest market prices, last completed BUY reference
-prices, and pair pause flags. Portfolio and RecoveryLedger remain owned by the
-bootstrap domain workflow and are supplied through explicit callbacks.
+`makeConservativeTradingEngine` receives a broker-independent strategy policy
+from bootstrap and connects its decisions to the validated order-submission
+use case. The policy supplies pure decision evaluation and trailing-BUY
+repricing calculations; the engine does not import strategy calculators. The
+engine owns the in-process order registry, latest market prices, last completed
+BUY reference prices, and pair pause flags. Portfolio and RecoveryLedger
+remain owned by the bootstrap domain workflow and are supplied through
+explicit callbacks. Conservative-specific order lifecycle sequencing remains
+in this engine; full multi-strategy lifecycle separation is still outstanding.
 
 Only order updates matching a registered Harvester client order ID are
 accepted. TRADE events must contain a canonical Fill and are applied through

@@ -13,6 +13,7 @@ import {
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -141,7 +142,7 @@ function createHarness({ strategyPolicy, cancelWithFill = false, cancelOrderGate
   }
   const engine = makeConservativeTradingEngine({
     broker,
-    strategyPolicy,
+    strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     eventPublisher,
     tradingConfig,
     getPortfolio: () => initialPortfolio ?? new Portfolio(),
@@ -1687,4 +1688,29 @@ test("uses the injected strategy policy instead of a hard-coded Conservative eva
   assert.equal(result.ok, true)
   assert.equal(evaluations, 1)
   assert.equal(orders.length, 0)
+})
+
+
+test("uses the injected trailing repricing policy", async () => {
+  let repricingEvaluations = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluateTrailingBuyRepricing: () => {
+      repricingEvaluations += 1
+      return { shouldReplace: false, adjustmentThreshold: "100.05" }
+    },
+  }
+  const { engine, orders } = createHarness({ strategyPolicy })
+
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(repricingEvaluations, 1)
+  assert.equal(orders.length, 1)
 })

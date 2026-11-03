@@ -6,7 +6,7 @@ import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-acc
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
-import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
+import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -755,6 +755,7 @@ export async function startHarvester({
       logger.debug?.({ message: "Startup step: composing Conservative trading engine" })
       tradingEngine = makeConservativeTradingEngine({
         broker,
+        strategyPolicy: conservativeStrategyPolicy,
         eventPublisher,
         tradingConfig,
         getPortfolio,
