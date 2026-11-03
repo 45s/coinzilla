@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -720,7 +720,9 @@ export function makeConservativeTradingEngine({
       for (const symbol of symbols) {
         const result = await broker.getOpenOrders({ symbol })
         if (!result?.ok || !Array.isArray(result.data) ||
-            result.data.some((order) => !(order instanceof CanonicalOrder))) {
+            result.data.some((order) => !(order instanceof Order) ||
+              typeof order.id !== "string" || typeof order.symbol !== "string" ||
+              typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string")) {
           throw new Error("Open-order snapshot is incomplete or contains invalid canonical orders for " + symbol)
         }
         openOrdersBySymbol.set(symbol, result.data)
@@ -754,7 +756,7 @@ export function makeConservativeTradingEngine({
         }
 
         const matchingOpenOrders = openOrdersBySymbol.get(symbol).filter(
-          (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
+          (order) => order.id === ownedOrder.brokerOrderId,
         )
         if (matchingOpenOrders.length > 1) {
           throw new Error("Open-order snapshot contains duplicate owned order " + ownedOrder.brokerOrderId)
@@ -765,10 +767,11 @@ export function makeConservativeTradingEngine({
             throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
           }
           if (
-            openOrder.market.id !== ownedOrder.market.id ||
+            openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
             openOrder.side !== ownedOrder.side ||
-            openOrder.originalQuantity.amount !== ownedOrder.originalQuantity.amount ||
-            compareDecimal({ left: openOrder.executedQuantity.amount, right: historyOrder.executedQuantity.amount }) > 0
+            openOrder.type !== ownedOrder.type ||
+            openOrder.originalQuantity !== ownedOrder.originalQuantity.amount ||
+            compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
           ) {
             throw new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId)
           }
