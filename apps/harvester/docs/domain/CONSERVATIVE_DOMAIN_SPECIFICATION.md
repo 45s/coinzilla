@@ -167,6 +167,8 @@ On success:
 
 Conservative strategy places the next standing BUY after the BUY has fully reconciled and the recovery SELL has been successfully submitted (or the planner confirms there is no sellable quantity). It does **not** wait for the recovery SELL to finish. This means an active BUY and active SELL can coexist.
 
+The application submits the recovery SELL intent first. The next standing BUY is submitted only after the SELL receives a successful broker acknowledgement; if SELL submission fails or has an unknown outcome, the pair pauses and the BUY is not submitted. When no sellable quantity exists and no SELL intent is produced, the next BUY may be submitted directly.
+
 After a successful recovery SELL, the standing BUY remains eligible and trailing resumes. A failed/ineligible recovery completion pauses the pair; it does not authorize a new BUY.
 
 ## 5. Commission and financial formulas
