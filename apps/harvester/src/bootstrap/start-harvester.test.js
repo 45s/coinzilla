@@ -892,7 +892,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
   })
   await threeOrdersSubmitted
-  const secondBuyIntent = submittedOrders[1]
+  const secondBuyIntent = submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== clientOrderId)
   const canonicalSecondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
     brokerOrderId: "broker-" + secondBuyIntent.clientOrderId,
@@ -933,7 +933,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   })
   await fiveOrdersSubmitted
 
-  const replacementSell = submittedOrders[4]
+  const replacementSell = submittedOrders.filter((order) => order.side === "SELL").at(-1)
   assert.equal(replacementSell.side, "SELL")
   const canonicalSell = new CanonicalOrder({
     clientOrderId: replacementSell.clientOrderId,
