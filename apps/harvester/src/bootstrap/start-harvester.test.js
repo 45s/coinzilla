@@ -1094,3 +1094,64 @@ test("stops broker intake before draining queued user-data and disconnects after
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("queue:done"))
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("disconnect"))
 })
+
+
+test("logs safe correlation details when an execution report is not owned", async () => {
+  const broker = createBroker()
+  const errors = []
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      debug() {},
+      error: (entry) => errors.push(entry),
+    },
+  })
+  const metadata = createMarketMetadata("BTCUSDT")
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-client-id",
+    brokerOrderId: "987654",
+    market: metadata.market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "NEW",
+    executionId: 123456,
+    executedOrder: externalOrder,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const diagnostic = errors.find((entry) =>
+    entry.message === "Harvester rejected an unowned or invalid order event")
+  assert.ok(diagnostic)
+  assert.equal(diagnostic.symbol, "BTCUSDT")
+  assert.equal(diagnostic.brokerOrderId, "987654")
+  assert.equal(diagnostic.clientOrderId, "external-client-id")
+  assert.equal(diagnostic.side, "BUY")
+  assert.equal(diagnostic.executionType, "NEW")
+  assert.equal(diagnostic.orderStatus, "OPEN")
+  assert.equal(diagnostic.executionId, 123456)
+  assert.equal(diagnostic.registryMatchedByClientOrderId, false)
+  assert.equal(diagnostic.registryMatchedByBrokerOrderId, false)
+  assert.equal(diagnostic.clientIdMatchStatus, undefined)
+  assert.ok(Array.isArray(diagnostic.errors))
+
+  await result.stop()
+})
