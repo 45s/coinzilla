@@ -86,7 +86,7 @@ test("maps broker connection success and sanitizes sensitive error values", () =
   assert.match(result.data.error.message, /apiKey=\[REDACTED\]/)
   assert.match(result.data.error.message, /api_secret=\[REDACTED\]/)
   assert.match(result.data.error.message, /Bearer \[REDACTED\]/)
-  assert.match(result.data.error.message, /API key \\[REDACTED\\]/)
+  assert.match(result.data.error.message, /API key \[REDACTED\]/)
   assert.match(result.data.error.message, /https:\/\/\[REDACTED\]@host\.invalid/)
   assert.equal("stack" in result.data.error, false)
   assert.equal("cause" in result.data.error, false)
