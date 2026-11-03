@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url"
 import { EventBus } from "@coinzilla/event-bus"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
+import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 
@@ -28,10 +29,18 @@ export async function main({
   start = startHarvester,
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
+  createJournalService = prepareOptionalJournal,
+  env = process.env,
 } = {}) {
   try {
     const eventBus = createEventBus({ logger })
     const eventPublisher = makeEventPublisher({ eventBus, logger })
+    const journalService = createJournalService({
+      eventBus,
+      logger,
+      enabled: env.HARVESTER_JOURNAL_ENABLED?.toLowerCase() !== "false",
+      directory: env.HARVESTER_JOURNAL_DIRECTORY,
+    })
     logger.debug?.({ message: "Harvester process startup requested" })
     const runtime = await start({ eventPublisher })
     logger.debug?.({
@@ -66,6 +75,7 @@ export async function main({
       process.once("SIGINT", shutdown)
       process.once("SIGTERM", shutdown)
     }
+    return { runtime, journalService }
   } catch (error) {
     logger.error({
       message: "Harvester startup failed.",

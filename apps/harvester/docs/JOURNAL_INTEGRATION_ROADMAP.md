@@ -16,7 +16,7 @@ Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/
 - `@coinzilla/journal` already subscribes to EventBus, writes JSONL records through a serialized write queue, reports write failures, and drains/synchronizes on close.
 - No shared-package changes are currently justified.
 - Harvester already has suitable application boundaries: bootstrap lifecycle, the Conservative trading engine, order submission, sequential user-data processing, canonical Fill accounting, and Portfolio/RecoveryLedger transitions.
-- Harvester has an application EventBus boundary and initial Harvester-owned lifecycle event names/DTO mappings; no lifecycle events are published yet.
+- Harvester has an application EventBus boundary, stable lifecycle event names/DTO mappings, and an optional asynchronously started Journal service; no lifecycle events are published yet.
 - Initial lifecycle DTOs contain no financial amounts, so exact decimal-string preservation applies to later order/execution event mappings.
 - Bot-Free-Roll is a reference for composition and lifecycle ownership, not a template to copy. In particular, its Journal startup/initial flush can prevent trading startup; Harvester must not inherit that dependency.
 
@@ -127,20 +127,22 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 3 — Add optional, non-blocking Journal composition
 
+**Status:** [x] Optional Journal service composition, asynchronous startup, health reporting, and offline failure tests are included in this PR; CI is the merge gate.
+
 **Goal:** Connect the existing Journal to EventBus while keeping trading startup independent.
 
 **Likely files:** `apps/harvester/package.json`; focused Journal preparation/lifecycle helper; `src/index.js` or bootstrap composition; tests; README/operations docs; roadmap.
 
 **Work:**
 - Add `@coinzilla/journal` as a direct dependency.
-- Construct Journal with the shared EventBus, configured directory, and logger.
-- Start Journal independently of trading startup; do not await successful Journal startup before starting or continuing the trading runtime.
-- Expose a small health/status result so startup/write/close failures are observable.
-- Define and document the capture gap before Journal subscription becomes active. Do not claim earlier events were persisted.
+- Construct Journal with the shared EventBus, configured directory, and logger in `prepareOptionalJournal`.
+- Start Journal asynchronously and do not await successful Journal startup before starting or continuing the trading runtime.
+- Expose `ready`, `status`, and an explicit `close()` operation; report startup/write/close outcomes without allowing logger failures to escape.
+- The Journal subscribes only after its directory/session file is ready. Events published before that point are not captured; Steps 1–3 publish no application lifecycle events yet.
 - Journal initialization failure must not make Harvester startup fail.
-- Do not call Journal record/flush from trading callbacks.
+- Do not call Journal record/flush from trading callbacks. Coordinated process shutdown draining remains Step 7.
 
-**Tests:** Journal ready; invalid/unwritable directory; initialization rejection; trading runtime starts while Journal initialization is pending/failing; write failure after startup; safe logger failure.
+**Tests:** Journal ready/close; invalid directory; pending initialization; construction exception with failing logger; disabled mode; write failure reflected in health status; Harvester startup proceeds while Journal readiness is pending.
 
 **Acceptance:** With Journal unavailable, Harvester can still connect, process prices, evaluate strategy, submit orders, and process executions. No awaited dependency on Journal exists.
 
