@@ -1198,7 +1198,19 @@ test("reconciles the in-memory order registry before reopening trading after str
   })
   assert.equal(result.userDataReady, false)
 
-  broker.emitUserDataStatus({ type: "reconciled", recoveryRequired: false })
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: true,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(result.userDataReady, false)
+
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+  })
   await new Promise((resolve) => setImmediate(resolve))
 
   assert.equal(result.userDataReady, true)
