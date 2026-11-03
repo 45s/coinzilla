@@ -98,8 +98,8 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
-    { side: "BUY", price: "0.099", quantity: "100" },
     { side: "SELL", price: "0.102", quantity: "99" },
+    { side: "BUY", price: "0.099", quantity: "100" },
   ])
 })
 
