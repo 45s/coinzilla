@@ -602,10 +602,24 @@ export async function startHarvester({
           !userDataReconciliationQueued
         ) {
           userDataReconciliationQueued = true
-          const reconciliationTask = userDataEventQueue.then(async () => {
-            if (stopped) return
-            logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
-            const reconciliation = await tradingEngine.reconcileOwnedOrders()
+          logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
+          const reconciliationTask = tradingEngine.reconcileOwnedOrders({
+            beforeApply: async () => {
+              // REST reads do not hold the engine transition queue. Let every
+              // stream event received during those reads reach the engine
+              // before comparing REST execution IDs and applying missing fills.
+              while (true) {
+                const queuedEvents = userDataEventQueue
+                await queuedEvents
+                if (queuedEvents === userDataEventQueue) break
+              }
+            },
+          })
+          void reconciliationTask.then((reconciliation) => {
+            if (stopped) {
+              userDataReconciliationQueued = false
+              return
+            }
             if (!reconciliation?.ok) {
               userDataReady = false
               userDataRequiresReconciliation = true
@@ -618,9 +632,9 @@ export async function startHarvester({
               return
             }
 
-            // Events received while REST was being queried are already chained
-            // behind this task. Reopen the trading gate only after those events
-            // have passed through the same serialized queue.
+            // Stream callbacks received before this barrier are processed
+            // before readiness is reopened. Later callbacks are ordinary live
+            // events and still pass through the same serialized accounting path.
             const queuedEvents = userDataEventQueue
             const readinessTask = queuedEvents.then(async () => {
               if (stopped || userDataAccountingFailed) return
@@ -662,7 +676,6 @@ export async function startHarvester({
             userDataReconciliationQueued = false
             logger.error?.({ message: "Harvester REST/stream order reconciliation failed", error })
           })
-          userDataEventQueue = reconciliationTask
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
