@@ -181,9 +181,9 @@ Free-Roll completes a recovery cycle only after:
 2. Actual execution quantities reconcile exactly to the SELL order quantity.
 3. Actual active inventory is at least `keepQuantity`.
 4. Cumulative net SELL proceeds satisfy:
-   [
+   $$
    P \ge C+m
-   ]
+   $$
 
 If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Free-Roll pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
 
@@ -275,7 +275,7 @@ The Harvester sell-plan test uses active 100, keep 1, fee 0.001 and step 0.1, re
 
 ### Example E — proceeds already cover target, but SELL still has remaining quantity
 
-If partial confirmed proceeds already exceed (C+m), the planner's remaining required proceeds (R) is zero. The remaining recovery quantity is still planned at a positive valid limit price (at least one tick in Harvester) so the order can finish and the configured free quantity can be allocated only after the SELL order is fully filled. A positive zero-target order is not evidence of recovery completion.
+If partial confirmed proceeds already exceed `C + m`, the planner's remaining required proceeds `R` is zero. The remaining recovery quantity is still planned at a positive valid limit price (at least one tick in Harvester) so the order can finish and the configured free quantity can be allocated only after the SELL order is fully filled. A positive zero-target order is not evidence of recovery completion.
 
 ## 7. State transition model
 
