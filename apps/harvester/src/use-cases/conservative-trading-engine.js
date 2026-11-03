@@ -22,7 +22,7 @@ import {
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 
-/** Coordinate Conservative policy, in-process order ownership, and actual fills. */
+/** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
