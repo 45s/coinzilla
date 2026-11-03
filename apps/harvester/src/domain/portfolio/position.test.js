@@ -158,3 +158,33 @@ test("SELL fills cannot consume previously allocated free inventory", () => {
   assert.equal(sold.freeBaseQuantity.amount, "1")
   assert.equal(sold.totalBaseQuantity.amount, "1")
 })
+
+
+test("rejects base commission greater than SELL execution quantity", () => {
+  const funded = Position.empty({ market }).applyFill({
+    fill: makeFill({ quantity: "10", quoteQuantity: "1", tradeId: "funding-fill" }),
+  })
+  const sell = makeFill({
+    side: "SELL",
+    quantity: "2",
+    quoteQuantity: "0.2",
+    tradeId: "excessive-base-fee",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "2.1", asset: baseAsset }) }),
+    ],
+  })
+
+  assert.throws(() => funded.applyFill({ fill: sell }), /base commission exceeds executed base quantity/i)
+})
+
+test("rejects quote commission greater than BUY quote notional", () => {
+  const fill = makeFill({
+    quantity: "1",
+    quoteQuantity: "0.1",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.11", asset: quoteAsset }) }),
+    ],
+  })
+
+  assert.throws(() => Position.empty({ market }).applyFill({ fill }), /quote commission exceeds executed quote notional/i)
+})

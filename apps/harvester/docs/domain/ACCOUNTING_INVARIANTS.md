@@ -21,7 +21,7 @@ For each confirmed fill, define:
 - `c_b`: sum of commission amounts charged in base asset;
 - `c_q`: sum of commission amounts charged in quote asset.
 
-Zero commission is zero. Negative commissions, incomplete commission facts, unsupported third-asset commissions, non-positive execution quantity/notional, or commissions that exceed the corresponding fill amount are invalid under the current policy.
+Zero commission is zero. Negative commissions, incomplete commission facts, unsupported third-asset commissions, non-positive execution quantity/notional, or commissions that exceed the corresponding fill amount are invalid under the current policy. Base and quote commission limits apply to the aggregate of all commission entries in that asset: `c_b <= q` and `c_q <= v`. Reject before either accounting projection is committed.
 
 ### BUY
 

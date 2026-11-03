@@ -325,6 +325,9 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.equal(statuses[0].type, "executionPending")
     assert.equal(statuses[1].type, "executionNormalizationFailed")
     assert.equal(statuses[1].recoveryRequired, true)
+    assert.equal(statuses[1].symbol, "BTCUSDT")
+    assert.equal(statuses[1].brokerOrderId, "102")
+    assert.equal(statuses[1].executionId, "402")
     await result.data.disconnect()
   })
 

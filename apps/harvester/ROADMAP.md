@@ -144,7 +144,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [~] Normalize user-data order/execution events at the broker adapter boundary. Binance TRADE execution reports are now converted into canonical `Fill` entities using cached symbol metadata; non-trade order events remain normalized broker events.
 - [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and exchange-charged commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
-- [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
+- [~] Reject malformed, incomplete, or unsupported fills visibly; validate aggregate base/quote commission bounds and surface Binance normalization failures with an actionable pause reason.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
 - [~] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause the pair and are not accounted. Additional multi-symbol and duplicate/out-of-order event cases remain.
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
@@ -691,6 +691,6 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Confirm the same rule for Conservative and Aggressive: zero `makerPercent` means POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` means regular `LIMIT`.
 - [x] Confirm planning always uses `makerPercent`, regardless of `takerPercent` or the liquidity role reported by the exchange.
 - [x] Confirm accounting uses the actual commission amount/asset reported on each confirmed fill, including BUY commissions in the recovery SELL cost and SELL commissions in net proceeds.
-- [~] Remove combined observed commission-rate state and use configured `makerPercent` directly for Conservative recovery SELL planning. No MAKER/TAKER histories or maximum-observed-rate tracking.
+- [x] Remove combined observed commission-rate state and use configured `makerPercent` directly for Conservative recovery SELL planning. No MAKER/TAKER histories or maximum-observed-rate tracking. Merged in PR #489.
 - [x] Add focused offline tests for zero/non-zero `makerPercent`, independence from `takerPercent`, shared order-type selection, actual BUY-fee inclusion in recovery SELL planning, and cycle-reset deduplication. Existing actual SELL-fee accounting tests remain in place; Aggressive order planning is deferred while the strategy returns `NO_ACTION`.
 - [ ] Verify deterministic CI and update implementation status. No TESTNET verification is implied by this documentation decision.

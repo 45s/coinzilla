@@ -218,3 +218,47 @@ test("publishes market-price subscription failure and broker disconnect outcome"
   assert.equal(eventPublisher.events[3].data.stream, "market-price")
   assert.equal(eventPublisher.events[3].data.market, "BTCUSDT")
 })
+
+
+test("surfaces Binance fill-normalization failures as an actionable user-data pause", async () => {
+  const eventPublisher = createPublisher()
+  const logs = []
+  const broker = createBroker()
+  const runtime = await startHarvester({
+    loadConfig: async () => config,
+    env,
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    logger: {
+      debug() {},
+      info() {},
+      error(entry) { logs.push(entry) },
+    },
+  })
+
+  broker.emitStatus({
+    type: "executionNormalizationFailed",
+    recoveryRequired: true,
+    symbol: "BTCUSDT",
+    brokerOrderId: "102",
+    executionId: "402",
+    error: new TypeError("Binance fill is missing trade id"),
+  })
+
+  assert.equal(runtime.userDataStatus, "EXECUTION_NORMALIZATION_FAILED")
+  assert.equal(runtime.userDataReady, false)
+  const statusEvent = eventPublisher.events.find((event) =>
+    event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED &&
+    event.data.status === "executionNormalizationFailed"
+  )
+  assert.equal(statusEvent.data.error.message, "Binance fill is missing trade id")
+  assert.ok(logs.some((entry) =>
+    entry.message === "Binance execution normalization failed" &&
+    entry.symbol === "BTCUSDT" &&
+    entry.brokerOrderId === "102" &&
+    entry.executionId === "402" &&
+    entry.errorMessage === "Binance fill is missing trade id"
+  ))
+
+  await runtime.stop()
+})
