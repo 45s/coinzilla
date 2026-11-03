@@ -715,9 +715,11 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
 
+    let affectedSymbol = symbols[0]
     try {
       const openOrdersBySymbol = new Map()
       for (const symbol of symbols) {
+        affectedSymbol = symbol
         const result = await broker.getOpenOrders({ symbol })
         if (!result?.ok || !Array.isArray(result.data) ||
             result.data.some((order) => !(order instanceof Order) ||
@@ -732,6 +734,7 @@ export function makeConservativeTradingEngine({
       const snapshots = []
       for (const ownedOrder of ownedOrders) {
         const symbol = ownedOrder.market.symbol
+        affectedSymbol = symbol
         const historyResult = await broker.getCanonicalOrderHistory({
           symbol,
           orderId: ownedOrder.brokerOrderId,
@@ -883,8 +886,6 @@ export function makeConservativeTradingEngine({
       }
       return toResult({ data: { reconciled: snapshots.length, symbols } })
     } catch (error) {
-      const affectedSymbol = ownedOrders.find((order) =>
-        error.message.includes(order.brokerOrderId))?.market.symbol ?? symbols[0]
       await pause({ symbol: affectedSymbol, reason: "REST_STREAM_RECONCILIATION_FAILED", error })
       return toResult({ error })
     }
