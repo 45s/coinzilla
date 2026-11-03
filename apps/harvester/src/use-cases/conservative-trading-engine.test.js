@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -130,6 +130,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: async ({ fill }) => {
       accountedFills.push(fill)
+      if (accountingFailure) return { ok: false, errors: [new Error("unsupported commission asset")] }
       return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
     },
     completeRecoveryCycle: async () => ({ ok: true, data: { eligible: true } }),
@@ -607,7 +608,7 @@ function makePartialFill({ order }) {
   })
 }
 
-function makePartiallyFilledOrder({ order }) {
+function makePartiallyFilledOrder({ order, updatedAt = 2 }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -620,7 +621,7 @@ function makePartiallyFilledOrder({ order }) {
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
-    updatedAt: 2,
+    updatedAt,
   })
 }
 
@@ -717,4 +718,114 @@ test("Fill event publication failure cannot interrupt successful accounting", as
   })
   assert.equal(result.ok, true)
   assert.ok(accountedFills.includes(fill))
+})
+
+
+test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
+  const events = []
+  const { engine } = createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  const order = engine.getOrders()[0]
+  const executedOrder = makePartiallyFilledOrder({ order })
+  const missing = await engine.processUserDataEvent({
+    event: { executedOrder, executionType: "TRADE", rawExchangeMessage: { apiKey: "private" } },
+  })
+  assert.equal(missing.ok, false)
+  const missingEvent = events.find(({ name }) => name === "execution.invalid_fill")
+  assert.ok(missingEvent)
+  assert.equal(missingEvent.data.reason, "MISSING_FILL")
+  assert.equal("rawExchangeMessage" in missingEvent.data, false)
+
+  const wrongFill = new Fill({
+    tradeId: "mismatched-trade-1",
+    brokerOrderId: "different-broker-order",
+    clientOrderId: order.clientOrderId,
+    market,
+    side: order.side,
+    price: order.limitPrice,
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 3,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const mismatch = await engine.processUserDataEvent({
+    event: { executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }), executionType: "TRADE", fill: wrongFill },
+  })
+  assert.equal(mismatch.ok, false)
+  const mismatchEvent = events.find((event) =>
+    event.name === "execution.invalid_fill" && event.data.reason === "IDENTITY_MISMATCH")
+  assert.ok(mismatchEvent)
+  assert.equal(mismatchEvent.data.fillBrokerOrderId, "different-broker-order")
+})
+
+test("publishes unowned order updates with safe canonical identifiers", async () => {
+  const events = []
+  const { engine } = createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-client-order",
+    brokerOrderId: "external-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const result = await engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+  assert.equal(result.ok, false)
+  const unowned = events.find(({ name }) => name === "execution.unowned_order")
+  assert.ok(unowned)
+  assert.equal(unowned.data.clientOrderId, "external-client-order")
+  assert.equal(unowned.data.brokerOrderId, "external-broker-order")
+  assert.equal(unowned.data.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+})
+
+test("publishes accounting failures and preserves pair pause behavior", async () => {
+  const events = []
+  const { engine, pauses } = createHarness({
+    accountingFailure: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  const order = engine.getOrders()[0]
+  const result = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makePartiallyFilledOrder({ order }),
+      executionType: "TRADE",
+      fill: makePartialFill({ order }),
+    },
+  })
+  assert.equal(result.ok, false)
+  const failed = events.find(({ name }) => name === "execution.accounting_failed")
+  assert.ok(failed)
+  assert.equal(failed.data.error.message, "unsupported commission asset")
+  assert.ok(pauses.includes("EXECUTION_ACCOUNTING_FAILED"))
+})
+
+test("EventBus failure cannot interrupt accounting failure pause handling", async () => {
+  const { engine, pauses } = createHarness({
+    accountingFailure: true,
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+  })
+  await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  const order = engine.getOrders()[0]
+  const result = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makePartiallyFilledOrder({ order }),
+      executionType: "TRADE",
+      fill: makePartialFill({ order }),
+    },
+  })
+  assert.equal(result.ok, false)
+  assert.ok(pauses.includes("EXECUTION_ACCOUNTING_FAILED"))
 })

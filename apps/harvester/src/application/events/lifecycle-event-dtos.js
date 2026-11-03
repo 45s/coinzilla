@@ -1,4 +1,4 @@
-import { Fill } from "@coinzilla/entities"
+import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
@@ -359,3 +359,59 @@ export const mapFillAppliedData = (input = {}) =>
       commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
     }
   })
+
+
+const requireExecutionOrderFacts = ({ order }) => {
+  if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
+  if (order.side !== "BUY" && order.side !== "SELL") throw new TypeError("order.side must be BUY or SELL")
+  return {
+    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+      ? { brokerOrderId: order.brokerOrderId.trim() }
+      : {}),
+    symbol: requireString({ value: order.market?.symbol, field: "symbol" }),
+    side: order.side,
+    status: requireString({ value: order.status, field: "status" }),
+  }
+}
+
+const requireExecutionFillFacts = ({ fill }) => {
+  if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+  return {
+    fillId: requireString({ value: fill.id, field: "fillId" }),
+    fillBrokerOrderId: requireString({ value: fill.brokerOrderId, field: "fillBrokerOrderId" }),
+    fillSymbol: requireString({ value: fill.market?.symbol, field: "fillSymbol" }),
+    fillSide: fill.side === "BUY" || fill.side === "SELL"
+      ? fill.side
+      : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
+  }
+}
+
+/** Map an order update that cannot be associated with a Harvester-owned order. */
+export const mapExecutionUnownedOrderData = (input = {}) =>
+  mapData(input, "Execution-unowned-order event mapping", ({ order }) => ({
+    ...requireExecutionOrderFacts({ order }),
+    reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+  }))
+
+/** Map a missing or identity-mismatched Fill without exposing the raw event. */
+export const mapExecutionInvalidFillData = (input = {}) =>
+  mapData(input, "Execution-invalid-Fill event mapping", ({ order, fill, reason, error }) => {
+    if (!["MISSING_FILL", "IDENTITY_MISMATCH"].includes(reason)) {
+      throw new TypeError("reason must be MISSING_FILL or IDENTITY_MISMATCH")
+    }
+    return {
+      ...requireExecutionOrderFacts({ order }),
+      reason,
+      ...(fill === undefined ? {} : requireExecutionFillFacts({ fill })),
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+/** Map accounting failure after the canonical Fill has been validated. */
+export const mapExecutionAccountingFailedData = (input = {}) =>
+  mapData(input, "Execution-accounting-failed event mapping", ({ order, fill, error }) => ({
+    ...requireExecutionOrderFacts({ order }),
+    ...requireExecutionFillFacts({ fill }),
+    error: safeError({ error }),
+  }))

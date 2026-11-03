@@ -227,14 +227,14 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6b — Invalid execution and accounting failure diagnostics
 
-**Status:** Not started; begin only after Step 6a is merged.
+**Status:** In progress on branch `feature/harvester/execution-failure-events`.
 
 - Publish invalid/missing Fill and unowned-order execution facts with safe identifiers.
 - Publish accounting failures after the existing accounting workflow returns failure.
 - Preserve existing pause behavior, serialized user-data ordering, and accounting authority.
 - Do not publish duplicate-fill or recovery-completion events in this PR; those are Step 6c.
 
-**Tests:** Missing/invalid Fill; fill/order identity mismatch; unowned order; unsupported commission; accounting failure; publisher failure isolation.
+**Tests:** Missing/invalid Fill; fill/order identity mismatch after a distinct order update; unowned order; unsupported commission; accounting failure; publisher failure isolation.
 
 **PR boundary:** Invalid/unowned execution and accounting failures only.
 

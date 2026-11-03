@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { EventBus } from "@coinzilla/event-bus"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "./event-names.js"
 import {
   mapBrokerConnectedData,
@@ -18,6 +18,9 @@ import {
   mapOrderCancelFailedData,
   mapOrderCancelledData,
   mapFillAppliedData,
+  mapExecutionAccountingFailedData,
+  mapExecutionInvalidFillData,
+  mapExecutionUnownedOrderData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapStrategyDecisionData,
@@ -51,6 +54,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     ORDER_CANCELLED: "order.cancelled",
     ORDER_CANCEL_FAILED: "order.cancel_failed",
     FILL_APPLIED: "execution.fill_applied",
+    EXECUTION_UNOWNED_ORDER: "execution.unowned_order",
+    EXECUTION_INVALID_FILL: "execution.invalid_fill",
+    EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -473,4 +479,59 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     },
   })
   assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
+})
+
+
+test("maps invalid, unowned, and accounting-failed execution facts safely", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const order = new CanonicalOrder({
+    clientOrderId: "harvester-client-1",
+    brokerOrderId: "broker-order-1",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99.95", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+  })
+  const fill = new Fill({
+    tradeId: "trade-1",
+    brokerOrderId: "broker-order-1",
+    clientOrderId: "harvester-client-1",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "99.95", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 2,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  assert.equal(mapExecutionUnownedOrderData({ order, apiSecret: "private" }).data.reason,
+    "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+  assert.deepEqual(mapExecutionInvalidFillData({
+    order, fill, reason: "IDENTITY_MISMATCH", error: new Error("token=private"),
+  }).data, {
+    clientOrderId: "harvester-client-1",
+    brokerOrderId: "broker-order-1",
+    symbol: "DOGEUSDT",
+    side: "BUY",
+    status: "PARTIALLY_FILLED",
+    reason: "IDENTITY_MISMATCH",
+    fillId: fill.id,
+    fillBrokerOrderId: "broker-order-1",
+    fillSymbol: "DOGEUSDT",
+    fillSide: "BUY",
+    error: { name: "Error", message: "token=[REDACTED]" },
+  })
+  assert.equal(mapExecutionAccountingFailedData({
+    order, fill, error: new Error("commission rejected"),
+  }).data.fillId, fill.id)
 })
