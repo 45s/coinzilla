@@ -79,7 +79,7 @@ Its defining objective is to recover invested quote capital while accumulating f
 
 Key characteristics:
 
-- Maintain cumulative BUY cost, net SELL proceeds, actual commissions, minimum profit, and retained base inventory.
+- Maintain cumulative BUY cost, net SELL proceeds, exchange-charged commissions, minimum profit, and retained base inventory.
 - Sell only when the required net-profit condition is satisfied.
 - Keep the configured reserve/free quantity out of subsequent invested-position calculations.
 - Use actual fills and commissions for accounting.
