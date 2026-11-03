@@ -175,7 +175,7 @@ This step is split into two independently reviewable PRs to keep instrumentation
 
 #### Step 5a — Actionable decisions and order submission
 
-**Status:** PR #460 open on branch `feature/harvester/strategy-order-event-intent`; CI is running.
+**Status:** Implementation and documentation complete in PR #460; all CI checks passed, merge pending.
 
 - Publish only actionable Conservative decisions after balance filtering; omit repeated NO_ACTION evaluations.
 - Publish `order.submission_requested` after local PENDING registration and immediately before broker I/O.
@@ -294,7 +294,7 @@ Every implementation PR must:
 - [x] Step 2: event contracts and DTOs (PR #455).
 - [x] Step 3: optional Journal composition (PR #456).
 - [x] Step 4: lifecycle events (PR #458).
-- [ ] Step 5a: actionable strategy decisions and order submission.
+- [x] Step 5a: actionable strategy decisions and order submission (PR #460; CI passed, merge pending).
 - [ ] Step 5b: pause/resume and cancellation transitions.
 - [ ] Step 5: strategy/order events (complete after 5a and 5b).
 - [ ] Step 6: execution/accounting events.

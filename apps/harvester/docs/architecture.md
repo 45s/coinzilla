@@ -406,8 +406,11 @@ The order-request event is published after the local PENDING canonical order
 has been registered and immediately before broker I/O. The submitted event is
 published only after the broker returns a canonical acknowledgement with the
 matching client order ID and the local order registry accepts it. Rejected or
-unknown outcomes are distinguished and include only safe identifiers plus a
-sanitized error name/message. Price and quantity remain exact decimal strings.
+unknown outcomes include only safe identifiers plus a sanitized error
+name/message. The current broker result contract reports failed results as
+`REJECTED_OR_UNKNOWN`; transport exceptions and acknowledgement-registration
+failures are `UNKNOWN`. Do not claim a definitive exchange rejection unless the
+broker port later exposes that distinction. Price and quantity remain exact decimal strings.
 
 These events are emitted through the existing best-effort publisher. The engine
 does not await subscriber delivery or Journal persistence, and publication

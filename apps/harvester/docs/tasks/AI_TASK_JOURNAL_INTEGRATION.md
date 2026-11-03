@@ -43,11 +43,11 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 - Merge only after required CI checks pass. If a check is failing, investigate and fix it; never bypass or weaken it.
 - Delete the short-lived source branch after successful merge, following repository workflow.
 
-## Current implementation assignment
+## Current implementation status
 
-Steps 1–4 are already merged into `develop` (PRs #453, #455, #456, #458). Do not repeat them. The next work is **Step 5a — Actionable strategy decisions and order submission events**, on a short-lived branch from the latest `develop`, targeting `develop`.
+Steps 1–4 are merged into `develop` (PRs #453, #455, #456, #458). Step 5a is implemented and all CI checks pass in PR #460; do not repeat it. After PR #460 is merged, the next work is **Step 5b — Pause/resume and cancellation transitions**, on a short-lived branch from the latest `develop`, targeting `develop`.
 
-### Scope
+### Completed Step 5a scope
 
 - Publish `strategy.decision` only for actionable Conservative decisions, after balance filtering. Do not publish NO_ACTION or every market-price update.
 - Publish `order.submission_requested` after local PENDING registration and immediately before broker I/O.
@@ -77,9 +77,9 @@ Run the Harvester unit and coverage commands plus relevant workspace checks. If 
 
 Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Step 5b (pause/resume and cancellation) remains separate.
 
-## Subsequent milestones
+## Next assignment after PR #460 merges
 
-- Step 5b: actual pause/resume transitions and confirmed/failed cancellation events.
+Implement Step 5b: actual pause/resume transitions and confirmed/failed cancellation events.
 - Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.
 - Step 8: final event inventory, operational documentation, and verification.
