@@ -115,31 +115,15 @@ Other repository instructions and task checklists should link to this section ra
 - Avoid overengineering, speculative generality, unnecessary dependencies, and abstraction layers without a concrete benefit.
 - Refactor when it improves understanding, testability, or change safety—not solely to make files shorter.
 
-### 7.1 Mandatory pure-function extraction and file-size discipline
+### 7.1 Modularity
 
-This section is a required design and code-review standard for all new code and materially changed code.
+Follow the single [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md) for pure-function extraction, module boundaries, and file-size review. This standard is mandatory; do not copy its detailed rules into local agent instructions.
 
-- **A meaningful pure function belongs in a separate module.** When a function can produce its result from explicit inputs alone, without reading or mutating instance state, shared mutable state, globals, or external systems, extract it from a class/service or large feature file into a focused module. Do this even if there is only one current caller; independent testability and clear responsibility are sufficient reasons.
-- Keep pure logic separate from effectful orchestration. Validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions are common extraction candidates. Leave network, filesystem, database, clock, randomness, and process-environment access at explicit adapter/service boundaries.
-- A module may contain several closely related pure functions. Group by domain and reason to change, not by the fact that each function is technically pure. Use a focused feature-local `helpers/` or domain-named module for internal logic; reserve shared `utils/` for genuinely generic functions used across domains.
-- The owning class/service should retain only the state and orchestration it needs. It should import and compose extracted functions rather than implementing unrelated validation, transformation, formatting, and calculation details inline.
-- Keep modules independently testable. Add focused unit tests for extracted pure behavior and test the class/service's observable orchestration at its boundary. Avoid mocking internal pure functions just to test their callers.
-- **Do not create artificial fragmentation.** Trivial one-line expressions, tiny local callbacks whose meaning depends on their immediate context, and tightly coupled implementation details may remain local when extraction would obscure the flow. Do not create one-function files mechanically or introduce circular dependencies.
-- **Do not allow god files to grow.** Treat approximately 300 lines as a prompt for a modularity review, not an automatic failure. A file exceeding 500 lines must be split where cohesive responsibilities can be extracted; if it genuinely cannot be split without harming correctness or cohesion, document the reason in the PR. Generated files, declarative registries, schemas, and similarly constrained files may need explicit exceptions.
-- Line count is a warning signal, not the design goal. A short file with several unrelated responsibilities is still poorly structured; a longer cohesive file may be justified. The required outcome is clear ownership, low coupling, independent testability, and maintainable change boundaries.
 
-**Example — Telegram notifier:** Keep `TelegramNotifier` responsible for sending the request and validating the external API response. Move independent option validation, message validation, and safe error-message sanitization into focused modules such as `telegram-options.js`, `telegram-message.js`, and `safe-error-message.js` (or group closely related functions where that is more cohesive). Keep Telegram-specific constants near the feature or in a dedicated constants module. Do not put these unrelated pure operations into a generic catch-all `utils.js`.
+### 7.2 Shared utilities
 
-### 7.2 Shared utilities: search and reuse before implementation
+Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_POLICY.md) for search-first reuse, utility ownership, logging, and generic-helper decisions. Do not duplicate that procedure in other policy documents.
 
-This rule is mandatory for every contributor and AI agent. Before implementing a helper or cross-cutting capability, search packages/utils/src/, its tests, and public exports first; then search the entire monorepo for equivalent behavior and consumers. Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) and follow its classification and migration rules.
-
-- Reuse an existing public @coinzilla/utils API when its contract fits. Do not import private files from another package.
-- If a genuinely generic capability is missing, extend packages/utils through the Utilities domain, with documented contracts, deterministic boundary/failure tests, and meaningful line/branch coverage.
-- Do not move business policy, domain invariants, or protocol-specific behavior into shared utilities. Pure does not automatically mean generic.
-- Do not create a duplicate generic helper because the existing API has a different name or because the agent did not search. Document intentional duplication and its domain boundary.
-- Use Logger or defaultLogger from @coinzilla/utils for application/package diagnostics. Direct console calls are limited to the logger implementation and intentional CLI stdout/stderr output; other exceptions require an explicit reason.
-- For exact financial arithmetic, do not use the legacy Number-based NH helpers. Use an exact decimal-string API; until a shared exact decimal API is approved and exported, keep the current domain implementation and track consolidation through the Utilities roadmap.
 
 ### 8. Security and external boundaries
 

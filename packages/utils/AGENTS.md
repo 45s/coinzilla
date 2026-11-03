@@ -24,41 +24,16 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 
 ## Workflow
 
-- Create a short-lived task branch from the latest `develop`, using `feature/utils/<task>` or `fix/utils/<task>`.
-- Open task PRs against `develop`; do not use permanent domain branches.
-- Run the relevant package test: `pnpm --filter @coinzilla/utils test` (verify the package script exists before relying on it), followed by applicable workspace checks.
-- The responsible agent may merge into `develop` only after required CI and target-freshness checks pass. No routine human approval is expected for `develop`.
-- Never merge task work into `main`. Only the user approves the final release PR from `develop` to `main`.
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
+
+## Required package check
+
+- Run `pnpm --filter @coinzilla/utils test` (verify the package script exists before relying on it), followed by applicable workspace checks.
 
 ## Domain-specific constraints
 
-Before implementing anything that looks like a generic helper, search all existing packages/utils/src modules, tests, and public exports first, then search the monorepo for equivalent implementations and consumers. Follow [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). A missing helper should be added here only when it is domain-neutral; business rules and protocol-specific behavior stay with their owning domain.
-
-
-Only add utilities that are genuinely generic and reused or clearly reusable across domains. Do not move strategy, broker, entity, event-bus, or journal business rules into utils. Prefer pure functions and deterministic node:test coverage.
-
-
-## Repository-wide modularity rule (mandatory)
-
-The pure-function extraction and file-size requirements in the root `ENGINEERING_STANDARDS.md` and `AGENTS.md` apply to every change in this package. They are mandatory, not optional style suggestions.
-
-- **Extract meaningful, non-trivial pure functions into focused separate modules, even when there is only one caller.** A function is a pure extraction candidate when its result depends only on explicit inputs and it does not read or mutate instance state, shared mutable state, globals, or external systems.
-- Keep validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions outside large classes/services whenever they can be expressed as pure functions. Classes/services should own state and coordinate side effects, not become containers for unrelated implementation details.
-- Group related pure functions by domain and responsibility. Use package/feature-local helpers for internal logic; use shared `utils` only for genuinely generic behavior. Do not create a miscellaneous catch-all module.
-- Keep pure logic independently testable. Add focused unit tests where they add confidence, and test orchestration through observable behavior. Keep I/O, network, filesystem, database, clock, randomness, logging, and process-environment access at explicit boundaries.
-- Avoid god files. Review files approaching 300 lines for cohesive extraction opportunities. Files exceeding 500 lines require a refactoring plan or a concrete technical justification in the PR. These are review triggers, not arbitrary limits.
-- Do not fragment trivial expressions, tiny context-dependent callbacks, or tightly coupled logic merely to reduce line count. The goal is cohesion, low coupling, readability, and independent testability—not the maximum number of files.
-
-When modifying an existing large file, improve its structure as part of the task when the extraction is relevant and safe. Do not expand an already fragmented architecture or undertake unrelated mass refactoring.
-
+This package owns only domain-neutral reusable capabilities. Follow the [Shared Utilities Policy](../../docs/engineering/SHARED_UTILITIES_POLICY.md) for search-first reuse, API ownership, logging, and utility classification.
 
 ## JavaScript and JSDoc
 
-Follow the repository's [JavaScript and JSDoc standard](../../docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md).
-
-- Keep this package implemented in JavaScript and preserve its existing Node.js ESM and native `node:test` conventions.
-- Add JSDoc to exported utilities when it clarifies the public contract, parameter object, return value, callback, or important edge case.
-- Do not add boilerplate comments to self-explanatory helpers or annotate every local variable.
-- Keep JSDoc accurate to actual defaults, validation, errors, and return values. Tests and runtime validation remain authoritative.
-- Do not add TypeScript declarations or enable TypeScript checking solely to silence an editor diagnostic in a JavaScript-only consumer.
-- Add documentation-generation tooling only if the package has an agreed requirement to publish generated API docs.
+Follow the [repository JavaScript and JSDoc standard](../../docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md). Preserve the package's Node.js ESM and native `node:test` conventions.
