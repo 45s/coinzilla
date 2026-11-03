@@ -7,9 +7,11 @@ import { calculateSellFeeRate } from "./sell-fee-rate.js"
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.
  *
- * A price event may produce both a standing BUY and a recovery SELL. Active
- * orders are supplied by the engine so repeated market events do not duplicate
- * either side. This function creates intents only; it never performs I/O.
+ * The policy is recovery-first: a standing BUY is eligible only when there is
+ * no active BUY, no active recovery SELL, and no outstanding recovery capital.
+ * A BUY fill therefore produces a recovery SELL intent, never a concurrent
+ * next BUY. Active orders are domain inputs supplied by the engine; this
+ * function creates intents only and never performs I/O.
  */
 export function evaluateConservativeStrategy({
   marketPrice,
