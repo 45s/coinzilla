@@ -744,13 +744,23 @@ export function makeConservativeTradingEngine({
           throw new Error("Canonical order history is incomplete for owned order " + ownedOrder.brokerOrderId)
         }
         const historyOrder = historyResult.data[0]
+        const limitPriceMatches = historyOrder.limitPrice === undefined
+          ? ownedOrder.limitPrice === undefined
+          : ownedOrder.limitPrice !== undefined &&
+            compareDecimal({
+              left: historyOrder.limitPrice.amount,
+              right: ownedOrder.limitPrice.amount,
+            }) === 0
         if (
           historyOrder.brokerOrderId !== ownedOrder.brokerOrderId ||
           historyOrder.market.id !== ownedOrder.market.id ||
           historyOrder.side !== ownedOrder.side ||
           historyOrder.type !== ownedOrder.type ||
-          historyOrder.originalQuantity.amount !== ownedOrder.originalQuantity.amount ||
-          historyOrder.limitPrice?.amount !== ownedOrder.limitPrice?.amount
+          compareDecimal({
+            left: historyOrder.originalQuantity.amount,
+            right: ownedOrder.originalQuantity.amount,
+          }) !== 0 ||
+          !limitPriceMatches
         ) {
           throw new Error("REST order history conflicts with the registered Harvester order " + ownedOrder.brokerOrderId)
         }
@@ -770,9 +780,9 @@ export function makeConservativeTradingEngine({
           openOrder.side !== ownedOrder.side ||
           openOrder.type !== ownedOrder.type ||
           !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
-          (openOrder.status === "NEW" && openOrder.executedQuantity !== "0") ||
-          (openOrder.status === "PARTIALLY_FILLED" && openOrder.executedQuantity === "0") ||
-          openOrder.originalQuantity !== ownedOrder.originalQuantity.amount ||
+          (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) !== 0) ||
+          (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) === 0) ||
+          compareDecimal({ left: openOrder.originalQuantity, right: ownedOrder.originalQuantity.amount }) !== 0 ||
           compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
         )) {
           throw new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId)
