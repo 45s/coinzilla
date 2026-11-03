@@ -90,10 +90,16 @@ export function evaluateConservativeStrategy({
     left: "0",
     right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
   })
+  // A zero outstanding amount can mean that SELL proceeds have recovered the
+  // principal but the completion workflow has not yet validated profit/keep
+  // quantity and reset the ledger. Only an empty/reset ledger starts a new cycle.
+  const hasUncompletedRecoveryCycle =
+    compareDecimal({ left: ledger.buyCost ?? "0", right: "0" }) > 0 ||
+    compareDecimal({ left: ledger.netSellProceeds ?? "0", right: "0" }) > 0
 
   // Free-Roll completes the current recovery cycle before starting another BUY.
-  // A live recovery SELL or any outstanding invested quote capital blocks BUYs.
-  if (!hasActiveBuy && !hasActiveSell &&
+  // A live recovery SELL, any invested capital, or an uncompleted cycle blocks BUYs.
+  if (!hasActiveBuy && !hasActiveSell && !hasUncompletedRecoveryCycle &&
       compareDecimal({ left: outstandingRecovery, right: "0" }) === 0) {
     const referencePrice = lastBuyPrice ?? marketPrice.price
     assertDecimalString({ value: referencePrice, field: "lastBuyPrice" })
