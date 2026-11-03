@@ -1598,3 +1598,64 @@ test("fails closed when REST fill IDs conflict with executions already processed
   assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
   assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
 })
+
+
+test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
+  let releaseFills
+  let signalFillsStarted
+  const fillsGate = { promise: new Promise((resolve) => { releaseFills = resolve }) }
+  const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const recoveredFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-during-rest-read",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const partialOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2",
+    updatedAt: 3,
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => {
+    signalFillsStarted()
+    await fillsGate.promise
+    return { ok: true, data: [recoveredFill] }
+  }
+
+  const reconciliation = engine.reconcileOwnedOrders()
+  await fillsStarted
+  const streamResult = await engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "PARTIALLY_FILLED",
+        executedQuantity: "0.2",
+        updatedAt: 2,
+      }),
+      fill: recoveredFill,
+    },
+  })
+  releaseFills()
+  const reconciled = await reconciliation
+
+  assert.equal(streamResult.ok, true)
+  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
+  assert.deepEqual(pauses, [])
+})
