@@ -78,7 +78,7 @@ test("maps broker connection success and sanitizes sensitive error values", () =
 
   const result = mapBrokerConnectionFailedData({
     broker: "binance",
-    error: new Error('connect failed apiKey="key-value" api_secret=secret-value API key plain-value Bearer abc.def'),
+    error: new Error('connect failed apiKey="key-value" api_secret=secret-value API key plain-value Bearer abc.def https://user:password@host.invalid/path'),
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.broker, "binance")
@@ -88,6 +88,7 @@ test("maps broker connection success and sanitizes sensitive error values", () =
   assert.match(result.data.error.message, /Bearer \[REDACTED\]/)
   assert.equal("stack" in result.data.error, false)
   assert.equal("cause" in result.data.error, false)
+  assert.ok(result.data.error.message.length <= 240)
 })
 
 test("maps broker disconnection outcome without retaining an Error instance", () => {
@@ -152,6 +153,7 @@ test("EventBus accepts mapped lifecycle DTOs and rejects unsupported payload obj
     data: mapped.data,
   })
   assert.equal(accepted.ok, true)
+  assert.doesNotThrow(() => JSON.stringify(mapped.data))
 
   const rejected = eventBus.publish({
     name: HARVESTER_EVENT_NAMES.STARTED,
