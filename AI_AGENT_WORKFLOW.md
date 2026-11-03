@@ -63,6 +63,10 @@ The authoritative domain/path/responsibility map is [DOMAIN_OWNERSHIP.md](docs/e
 
 Shared infrastructure is identified in the ownership document. Coordinate changes that cross ownership boundaries rather than silently modifying another domain.
 
+## 4. Cross-domain requests
+
+Use the authoritative [cross-domain request process](docs/engineering/CROSS_DOMAIN_REQUESTS.md) for bugs, capability gaps, and contract changes owned by another domain. The owning domain decides and implements its contract; consumers coordinate through linked requests and PRs.
+
 ## 5. Task PR requirements and automated integration
 
 A task PR targeting `develop` must:
@@ -197,10 +201,6 @@ CI is part of the repository's release safety boundary. Before changing a workfl
 6. Keep job permissions minimal and action references pinned to reviewed commit SHAs. Prefer built-in GitHub capabilities over adding dependencies.
 7. Update policy-script tests and `ROADMAP.md`; distinguish a configured workflow from a required branch-protection check.
 8. Verify the exact final commit SHA against every required check before merge. If the tools cannot run checks or read a required ruleset, stop before merge and report the blocker.
-
-### Standard task completion report
-
-Use the repository's [pull-request template](.github/PULL_REQUEST_TEMPLATE.md) for implementation, verification, review, and Git details. Mark a check complete only when the exact command or CI run actually passed.
 
 
 ## AI-agent communication rules
