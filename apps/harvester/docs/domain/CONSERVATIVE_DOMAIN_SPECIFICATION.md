@@ -100,7 +100,7 @@ For each BUY fill:
 
 Partial fills are accounted incrementally. A BUY order is considered complete for the lifecycle transition only when the order's actual fill quantities sum exactly to the order quantity and the broker reports FILLED. A FILLED status with incomplete aggregate fill history pauses; it does not trigger recovery completion/next-order transitions. The next-BUY reference is calculated as total executed quote notional divided by total executed base quantity across every fill in that BUY order. It is not the submitted limit price and is not simply the price of the final partial fill. The completed order’s fill quantity must reconcile exactly to its reported executed quantity and original quantity before the recovery SELL/next-BUY transition proceeds.
 
-### 4.3 Commission and order-type policy
+### Commission and order-type policy
 
 The same policy applies to Conservative and Aggressive for every configured pair:
 
