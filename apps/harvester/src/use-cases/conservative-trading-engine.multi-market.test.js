@@ -70,17 +70,18 @@ function createHarness() {
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
+      const market = marketsBySymbol.get(order.symbol)
       return {
         ok: true,
         data: new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: "broker-" + order.clientOrderId,
-          market: order.market,
+          market,
           side: order.side,
           type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
           status: "OPEN",
           createdAt: 1,
           acknowledgedAt: 1,
