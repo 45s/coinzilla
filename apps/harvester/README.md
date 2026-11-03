@@ -184,11 +184,13 @@ Harvester follows the working `apps/bot-free-roll` execution sequence: subscribe
    calculations.
 
 **Shutdown/restart warning:** stopping Harvester does not cancel exchange
-orders. Before restarting, inspect the TESTNET account, cancel any remaining
-orders, and clear any unexplained base inventory. The first-cycle startup gate
-will reject an account that is not clean. If Harvester pauses because an order
-outcome or fill history is uncertain, do not restart and blindly resubmit;
-inspect the account and reconcile it first.
+orders. Before restarting, inspect the TESTNET account and reconcile any
+outstanding Harvester orders or uncertain outcomes. External orders and
+pre-existing inventory are not adopted by Harvester; they may affect available
+balances but are not automatically sold. A clean account is recommended for a
+controlled first-cycle test, but it is not a startup requirement. If Harvester
+pauses because an order outcome or fill history is uncertain, do not restart
+and blindly resubmit; inspect the account and reconcile it first.
 
 This runbook is for TESTNET only. It does not enable live trading or claim
 durable restart recovery.
@@ -222,7 +224,7 @@ with documentation deferred to a later follow-up commit.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. P0.7 regression tests have been added but still require local execution. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. GitHub Actions passed on the current P0.7 branch (Harvester 298/298; broker 274/274; Free-Roll 313/313; 1,367 workspace tests total). Local Binance Spot TESTNET startup is confirmed through ZROUSDT price subscription; the process is awaiting its first validated price. The first BUY and complete TESTNET BUY → SELL → next-cycle run have not yet been observed. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
 
 
 ## Standalone Binance TESTNET order tools
