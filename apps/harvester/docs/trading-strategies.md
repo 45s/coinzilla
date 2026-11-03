@@ -1,6 +1,6 @@
 # Harvester Trading Strategies
 
-Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. **Conservative (Free-Roll) is the first implementation priority and the default strategy for the first executable release. Aggressive is deferred until Conservative is proven end to end on TESTNET.** For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
+Harvester is one independent trading process with a shared Trading Engine and multiple strategy modes. **Conservative is the first implementation priority and the default strategy for the first executable release. Aggressive is deferred until Conservative is proven end to end on TESTNET.** For each trading pair, exactly one strategy controls its shared Position at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). The engine switches from Aggressive to Conservative when actual executed BUY investment exceeds 20% of that pair's planned total quote budget. Unfilled/open BUY orders do not count. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; Aggressive does not resume merely because exposure falls below 20%.
 
 ## Implementation priority
 
@@ -8,7 +8,7 @@ Conservative is not merely the first policy to document: it is the first strateg
 
 ## Strategy modes
 
-### Conservative — Free-Roll
+### Conservative
 
 This policy is implemented as a broker-independent pure function in
 `src/domain/strategies/conservative/conservative-strategy.js`. It emits order
@@ -16,7 +16,7 @@ intents only; the application engine validates and submits them.
 
 The first connected policy behavior is:
 
-The initial standing BUY follows the Free-Roll trailing rule. While the strategy
+The initial BUY is placed one configured step below the first valid market price and trails upward until filled or safely replaced. While the strategy
 is in its trailing phase, if the last traded price rises by at least one full
 compounded `priceStepPercent` from the last BUY reference, cancel the current
 BUY and replace it below the new last trade by the configured percentage.
@@ -60,19 +60,19 @@ and free-inventory allocation. A real Binance TESTNET run is still required
 to verify the broker integration against the exchange.
 
 
-This mode is based on the existing `apps/bot-free-roll` strategy.
+This is Harvester's standing-order accumulation and capital-recovery strategy.
 
 Its defining objective is to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
 
 Key characteristics:
 
-- Maintain the Free-Roll capital-recovery accounting model.
+- Maintain cumulative BUY cost, net SELL proceeds, actual commissions, minimum profit, and retained base inventory.
 - Sell only when the required net-profit condition is satisfied.
 - Keep the configured reserve/free quantity out of subsequent invested-position calculations.
 - Use actual fills and commissions for accounting.
-- Preserve the existing Free-Roll order lifecycle and safety rules when adapting them to Harvester.
+- Preserve the order lifecycle and safety rules defined in the Conservative Domain Specification.
 
-The existing Free-Roll README is the detailed reference for its current strategy rules. Harvester's implementation must be reviewed against that document; copying its config does not implement the strategy.
+The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
 
 ### Aggressive — grid-style trading
 
