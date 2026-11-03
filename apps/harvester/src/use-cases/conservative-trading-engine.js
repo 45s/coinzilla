@@ -13,6 +13,8 @@ import {
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapFillAppliedData,
+  mapDuplicateFillData,
+  mapRecoveryCycleCompletedData,
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
@@ -426,6 +428,12 @@ export function makeConservativeTradingEngine({
             eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
             dataResult: mapFillAppliedData({ fill: event.fill }),
           })
+        } else if (accounting.data?.duplicate === true) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
+            dataResult: mapDuplicateFillData({ fill: event.fill }),
+          })
         }
       }
       if (order.status === "PARTIALLY_FILLED") {
@@ -459,6 +467,16 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle did not meet completion conditions")] })
         }
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+          dataResult: mapRecoveryCycleCompletedData({
+            symbol,
+            marketId: order.market.id,
+            freeQuantity: completion.data.freeQuantity,
+            realizedNetProfit: completion.data.realizedNetProfit,
+          }),
+        })
         state.trailingBuy.set(symbol, true)
       }
       if (order.status === "REJECTED") {

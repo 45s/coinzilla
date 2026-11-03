@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. The current assignment is **Step 6b — Invalid execution and accounting failure diagnostics**, on branch `feature/harvester/execution-failure-events`, targeting `develop`.
+Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 6a–6b are merged into `develop` (PRs #465 and #467). The current assignment is **Step 6c — Duplicate and recovery-cycle diagnostics**, on branch `feature/harvester/duplicate-recovery-events`, targeting `develop`.
 
 ### Completed Step 5a scope
 

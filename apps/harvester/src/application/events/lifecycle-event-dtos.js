@@ -415,3 +415,20 @@ export const mapExecutionAccountingFailedData = (input = {}) =>
     ...requireExecutionFillFacts({ fill }),
     error: safeError({ error }),
   }))
+
+
+/** Map an idempotent duplicate Fill without implying a second accounting application. */
+export const mapDuplicateFillData = (input = {}) => {
+  const fillResult = mapFillAppliedData(input)
+  if (!fillResult.ok) return fillResult
+  return toResult({ data: { ...fillResult.data, duplicate: true } })
+}
+
+/** Map a completed recovery cycle after the application has committed its reset. */
+export const mapRecoveryCycleCompletedData = (input = {}) =>
+  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, realizedNetProfit }) => ({
+    symbol: requireString({ value: symbol, field: "symbol" }),
+    marketId: requireString({ value: marketId, field: "marketId" }),
+    freeQuantity: requireDecimalString({ value: freeQuantity, field: "freeQuantity" }),
+    realizedNetProfit: requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" }),
+  }))

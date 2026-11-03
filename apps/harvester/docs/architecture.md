@@ -463,3 +463,18 @@ time, and commission status. It does not contain raw exchange messages,
 commission objects, account snapshots, credentials, or mutable domain values.
 Event publication is best-effort and is not awaited by the user-data queue.
 Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.
+
+
+### Duplicate Fill and recovery completion events
+
+Step 6c adds `execution.duplicate_fill` only when the accounting workflow
+explicitly reports `duplicate: true`; it does not re-apply or re-publish a
+duplicate as a newly applied Fill. It also adds `recovery.cycle_completed`
+only after the existing recovery completion workflow reports `eligible: true`
+and returns after committing the Portfolio free-quantity allocation and
+RecoveryLedger cycle reset.
+
+The recovery event contains only the market identifier, allocated free
+quantity, and realized net profit. It does not expose the full ledger or
+account snapshot. Both events are best-effort and are not awaited by trading
+or user-data workflows.

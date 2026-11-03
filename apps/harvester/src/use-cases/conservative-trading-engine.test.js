@@ -45,10 +45,11 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
+  const completedCycles = []
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -133,12 +134,15 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
       if (accountingFailure) return { ok: false, errors: [new Error("unsupported commission asset")] }
       return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
     },
-    completeRecoveryCycle: async () => ({ ok: true, data: { eligible: true } }),
+    completeRecoveryCycle: async ({ marketId }) => {
+      completedCycles.push(marketId)
+      return { ok: true, data: recoveryCompletion }
+    },
     canTrade: () => true,
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  return { engine, orders, pauses, accountedFills }
+  return { engine, orders, pauses, accountedFills, completedCycles }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
@@ -693,6 +697,9 @@ test("does not publish a Fill when accounting reports an idempotent duplicate", 
   })
   assert.equal(result.ok, true)
   assert.equal(events.some(({ name }) => name === "execution.fill_applied"), false)
+  const duplicate = events.find(({ name }) => name === "execution.duplicate_fill")
+  assert.ok(duplicate)
+  assert.equal(duplicate.data.duplicate, true)
 })
 
 test("Fill event publication failure cannot interrupt successful accounting", async () => {
@@ -828,4 +835,65 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
   })
   assert.equal(result.ok, false)
   assert.ok(pauses.includes("EXECUTION_ACCOUNTING_FAILED"))
+})
+
+
+test("publishes recovery completion only after the cycle reset succeeds", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const harness = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      if (event.name === "recovery.cycle_completed") {
+        assert.ok(harness.completedCycles.includes(market.id))
+      }
+      return { ok: true }
+    } },
+  })
+  const { engine, completedCycles } = harness
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(sellOrder)
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(completedCycles, [market.id])
+  const completed = events.find(({ name }) => name === "recovery.cycle_completed")
+  assert.ok(completed)
+  assert.deepEqual(completed.data, {
+    symbol: "DOGEUSDT",
+    marketId: market.id,
+    freeQuantity: "0.1",
+    realizedNetProfit: "1.5",
+  })
+})
+
+test("does not publish recovery completion when the cycle is ineligible", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    recoveryCompletion: { eligible: false, reason: "RECOVERY_SELL_NOT_FULLY_FILLED" },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
 })

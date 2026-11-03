@@ -18,6 +18,8 @@ import {
   mapOrderCancelFailedData,
   mapOrderCancelledData,
   mapFillAppliedData,
+  mapDuplicateFillData,
+  mapRecoveryCycleCompletedData,
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
@@ -57,6 +59,8 @@ test("exports stable names and source for the initial operational lifecycle cont
     EXECUTION_UNOWNED_ORDER: "execution.unowned_order",
     EXECUTION_INVALID_FILL: "execution.invalid_fill",
     EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
+    EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
+    RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -534,4 +538,44 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
   assert.equal(mapExecutionAccountingFailedData({
     order, fill, error: new Error("commission rejected"),
   }).data.fillId, fill.id)
+})
+
+
+test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const fill = new Fill({
+    tradeId: "duplicate-trade",
+    brokerOrderId: "broker-order",
+    clientOrderId: "harvester-order",
+    market,
+    side: "SELL",
+    price: new Money({ amount: "101.25", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.25", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "25.3125", asset: quoteAsset }),
+    liquidityRole: "TAKER",
+    executedAt: 124,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const duplicate = mapDuplicateFillData({ fill })
+  assert.equal(duplicate.ok, true)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.equal(duplicate.data.fillId, fill.id)
+  assert.deepEqual(mapRecoveryCycleCompletedData({
+    symbol: "DOGEUSDT",
+    marketId: market.id,
+    freeQuantity: "0.1",
+    realizedNetProfit: "1.2345",
+    apiKey: "not-copied",
+  }), {
+    ok: true,
+    data: {
+      symbol: "DOGEUSDT",
+      marketId: market.id,
+      freeQuantity: "0.1",
+      realizedNetProfit: "1.2345",
+    },
+  })
 })

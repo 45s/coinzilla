@@ -240,7 +240,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6c — Duplicate and recovery-cycle diagnostics
 
-**Status:** Not started; begin only after Step 6b is merged.
+**Status:** In progress on branch `feature/harvester/duplicate-recovery-events`.
 
 - Optionally publish idempotent duplicate-fill suppression when the accounting result explicitly reports `duplicate: true`.
 - Publish recovery completion only after the existing domain/application transition reports it eligible and commits the new cycle.
