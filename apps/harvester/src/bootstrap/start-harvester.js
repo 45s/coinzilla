@@ -391,7 +391,30 @@ export async function startHarvester({
             if (!processed.ok) {
               userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
-              logger.error?.({ message: "Harvester rejected an unowned or invalid order event", errors: processed.errors })
+              const rejectedOrder = event.executedOrder
+              const registeredOrders = tradingEngine.getOrders()
+              const clientIdMatch = registeredOrders.find((order) =>
+                order.clientOrderId === rejectedOrder?.clientOrderId)
+              const brokerIdMatch = registeredOrders.find((order) =>
+                rejectedOrder?.brokerOrderId !== undefined &&
+                order.brokerOrderId === rejectedOrder.brokerOrderId)
+              logger.error?.({
+                message: "Harvester rejected an unowned or invalid order event",
+                eventType: event.eventType ?? "UNKNOWN",
+                executionType: event.executionType,
+                symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
+                brokerOrderId: rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
+                clientOrderId: rejectedOrder?.clientOrderId ?? event.fill?.clientOrderId,
+                side: rejectedOrder?.side ?? event.fill?.side,
+                orderStatus: rejectedOrder?.status,
+                executionId: event.fill?.id ?? event.executionId,
+                registryMatchedByClientOrderId: Boolean(clientIdMatch),
+                registryMatchedByBrokerOrderId: Boolean(brokerIdMatch),
+                clientIdMatchStatus: clientIdMatch?.status,
+                clientIdMatchBrokerOrderId: clientIdMatch?.brokerOrderId,
+                brokerIdMatchClientOrderId: brokerIdMatch?.clientOrderId,
+                errors: processed.errors,
+              })
               return
             }
             if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
