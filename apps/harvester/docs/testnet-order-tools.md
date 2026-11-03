@@ -141,7 +141,7 @@ Run from the repository root:
 pnpm --filter @coinzilla/harvester testnet:history
 
 # Latest 50 orders for ZROUSDT
-pnpm --filter @coinzilla/harvester testnet:history -- ZROUSDT 50
+pnpm --filter @coinzilla/harvester testnet:history ZROUSDT 50
 
 # Latest 20 orders for another symbol
 pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
@@ -153,6 +153,11 @@ mixed-symbol account-wide history. The default symbol is `ZROUSDT`; the
 default limit is 20 and the accepted limit is 1-1000. Binance returns the
 most recent orders up to the requested limit; the script displays them
 newest-first.
+
+When passing arguments through `pnpm run`, do not insert an extra `--` before
+`SYMBOL` and `LIMIT`; that separator is forwarded to this script and becomes
+an unexpected first argument. For example, from `apps/harvester`, run
+`pnpm run testnet:history ZROUSDT 50`.
 
 The table includes exchange time, order ID, symbol, side, type, price,
 original quantity, executed quantity, cumulative quote quantity, status,
