@@ -320,7 +320,7 @@ stateDiagram-v2
 | Recovery SELL | Fee-reserved quantity, retained keep quantity, required net proceeds, quantity down / price up. | Same formula family. | Broadly aligned; exact base commission boundary needs validation. |
 | Minimum profit | Positive at planning/runtime; completed actual proceeds must cover cost + minProfit. Config validator currently allows zero. | Sell planner/completion require strictly positive minProfit. | Validation inconsistency in Conservative strategy; verify the intended validation boundary. |
 | Completion keep quantity | Conservative strategy accepts configured keepQuantity >= 0; completion requires actual inventory >= keep. | Harvester completion requires keepQuantity > 0. | Different boundary. |
-| Cycle reset | Resets cycle cost, proceeds and per-cycle observed actual commission rate; fill IDs remain in the runtime fill ledger. | `RecoveryLedger.resetCycle()` clears cost/proceeds but retains max observed fee rate and fill identities. | Different fee-history lifecycle. |
+| Cycle reset | Resets cycle cost and proceeds after successful recovery completion. | `RecoveryLedger.resetCycle()` clears cost/proceeds but currently retains the combined observed commission rate and fill identities. | Remove the combined observed-rate state; commission planning uses configured `makerPercent` only. |
 | Residual active inventory after allocation | Allocates exactly keep; any extra active inventory remains active. No immediate second recovery SELL is created by `#handleSellFilled`. | Completion helper allocates keep only; next strategy evaluation may propose a SELL for remaining active quantity even with a reset ledger. | Potential behavioral difference; needs explicit decision. |
 | SELL submission failure | Pair pauses; next standing BUY is not placed. | Domain returns intents only; submission sequencing/failure is application-owned. | Must be specified at integration boundary. |
 | FILLED status vs aggregate fills | Requires exact fill sum before completion; mismatch pauses. | Domain completion accepts boolean `sellOrderFullyFilled`; caller must provide trustworthy reconciled fact. | Requires clear adapter/application precondition. |
@@ -329,7 +329,7 @@ stateDiagram-v2
 
 - Strategy: initial BUY, active BUY de-duplication, BUY+SELL intents, active SELL de-duplication, missing increments, partial BUY wait, investment cap.
 - Portfolio/Position: immutable fill application, market isolation, dedupe/conflicting IDs, base/quote commissions, free allocation and oversell prevention.
-- RecoveryLedger: cumulative costs/net proceeds across multiple SELL fills, dedupe, market mismatch, conflicting identity, reset retains max fee rate and fill identities.
+- RecoveryLedger: cumulative costs/net proceeds across multiple SELL fills, dedupe, market mismatch, conflicting identity, reset clears cycle totals; fill identities remain available for deduplication.
 - Recovery accounting: quote/base commission behavior and unsupported commission cases.
 - SELL plan: keep quantity, partial proceeds, fee reserve, no sellable quantity, zero remaining proceeds, invalid inputs.
 - Completion: full-fill gate, minimum profit, sufficient keep inventory, exact free allocation.
