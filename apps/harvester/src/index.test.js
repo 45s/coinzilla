@@ -1,5 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main } from "./index.js"
@@ -494,5 +497,84 @@ test("closes observability after publishing startup failure", async () => {
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
+  }
+})
+
+
+test("disables the optional Journal from HARVESTER_JOURNAL_ENABLED", async () => {
+  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
+  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
+  const previousExitCode = process.exitCode
+  const parent = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-disabled-"))
+  const directory = path.join(parent, "disabled")
+  const handlers = {}
+  process.env.HARVESTER_JOURNAL_ENABLED = "false"
+  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
+  process.exitCode = 0
+  try {
+    const result = await main({
+      start: async () => ({ connected: false, stop: async () => {} }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    assert.equal(result.journalService.status.enabled, false)
+    await handlers.SIGTERM()
+    await assert.rejects(readdir(directory), { code: "ENOENT" })
+  } finally {
+    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
+    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
+    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
+    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
+    process.exitCode = previousExitCode
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY", async () => {
+  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
+  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
+  const previousExitCode = process.exitCode
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-session-"))
+  const handlers = {}
+  process.env.HARVESTER_JOURNAL_ENABLED = "true"
+  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
+  process.exitCode = 0
+  try {
+    const eventBus = new EventBus()
+    const result = await main({
+      createEventBus: () => eventBus,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    const ready = await result.journalService.ready
+    assert.equal(ready.ok, true)
+    assert.equal(result.journalService.status.state, "ready")
+
+    await handlers.SIGTERM()
+    assert.equal(result.journalService.status.state, "closed")
+    assert.equal(result.journalService.status.closed, true)
+
+    const files = await readdir(directory)
+    assert.equal(files.length, 1)
+    assert.match(files[0], /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?\.jsonl$/)
+    const content = await readFile(path.join(directory, files[0]), "utf8")
+    const records = content.trim().split("\n").map((line) => JSON.parse(line))
+    assert.ok(records.some((record) => record.name === "harvester.stopped"))
+    assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
+    assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
+  } finally {
+    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
+    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
+    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
+    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
+    process.exitCode = previousExitCode
+    await rm(directory, { recursive: true, force: true })
   }
 })

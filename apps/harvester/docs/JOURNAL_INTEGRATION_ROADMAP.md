@@ -283,7 +283,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7c — Cleanup failure isolation and bounded shutdown
 
-**Status:** In progress on branch `feature/harvester/shutdown-failure-isolation`.
+**Status:** Merged into `develop` by PR #472; all CI checks passed.
 
 - Isolate runtime stop, Journal close, and EventBus close failures so later cleanup still runs.
 - Coalesce repeated SIGINT/SIGTERM shutdown requests.
@@ -315,6 +315,8 @@ Split this work into three independently reviewable PRs; each must merge before 
 **Acceptance:** Normal shutdown drains accepted writes; broker cleanup still occurs when Journal fails; trading path never awaits storage; incomplete durability is reported honestly.
 
 ### Step 8 — Final documentation and operational verification
+
+**Status:** In progress on branch `fix/harvester/journal-env-config`.
 
 **Goal:** Close the feature with accurate docs and evidence.
 
