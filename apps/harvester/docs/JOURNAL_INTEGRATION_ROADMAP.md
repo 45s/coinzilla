@@ -297,26 +297,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 ### Step 8 — Final documentation and operational verification
 
-**Goal:** Ensure normal shutdown drains accepted event deliveries and journal writes without making trading depend on storage.
-
-**Likely files:** `src/index.js`; bootstrap runtime stop coordinator; focused lifecycle tests; operations documentation; roadmap.
-
-**Work:**
-- Preserve existing trading shutdown order: close order/trading gate, stop market intake, drain the user-data queue, then disconnect broker resources.
-- Publish final lifecycle events while EventBus and Journal are still available.
-- Flush EventBus, close Journal, then close EventBus in a controlled sequence.
-- Isolate each cleanup failure so one failed close does not skip later cleanup.
-- Document that abrupt process/machine termination and failed filesystem sync can still lose records.
-- Do not claim exactly-once delivery or unconditional durability.
-- Use bounded shutdown handling where the existing runtime contract supports it; a timeout must not be reported as a successful flush.
-
-**Tests:** Pending user-data work; pending EventBus delivery; pending Journal write; write failure; flush failure; Journal close failure; broker disconnect failure; repeated shutdown; no unhandled rejection.
-
-**Acceptance:** Normal shutdown drains accepted writes; broker cleanup still occurs when Journal fails; trading path never awaits storage; incomplete durability is reported honestly.
-
-### Step 8 — Final documentation and operational verification
-
-**Status:** In progress on branch `fix/harvester/journal-env-config`.
+**Status:** In progress on branch `docs/harvester/journal-operations-closeout`. PR #473 separately fixed the documented Journal environment settings.
 
 **Goal:** Close the feature with accurate docs and evidence.
 
@@ -377,5 +358,8 @@ Every implementation PR must:
 - [x] Step 6b: invalid execution and accounting failure diagnostics (merged PR #467).
 - [x] Step 6c: duplicate and recovery-cycle diagnostics (merged PR #468).
 - [x] Step 6: execution/accounting events (PRs #465, #467, #468).
-- [ ] Step 7: shutdown and failure isolation.
+- [x] Step 7a: stop intake, drain user-data, disconnect broker (PR #470).
+- [x] Step 7b: flush and close Journal/EventBus (PR #471).
+- [x] Step 7c: cleanup failure isolation and bounded shutdown (PR #472).
+- [x] Step 7: shutdown and failure isolation (PRs #470–#472).
 - [ ] Step 8: final documentation and verification.
