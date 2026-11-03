@@ -1,5 +1,17 @@
 # Harvester Roadmap
 
+> **Product direction — 2026-11-03 (mandatory): launch the trading app first, then improve it.**
+> Harvester must reproduce the working Conservative/Free-Roll trading behaviour before adding more infrastructure. Use `apps/bot-free-roll` as the behavioural reference and Harvester's DDD boundaries as the implementation structure. Do not redesign the trading lifecycle or add generic frameworks when the working sibling app already demonstrates the required behaviour.
+>
+> **The first loop is deliberately simple:** load/validate config → connect → subscribe to enabled-market prices → receive a usable price → evaluate Conservative → submit BUY/SELL → process Binance acknowledgements and execution reports → update state from actual fills → immediately evaluate the next required action. A running loop is the deliverable; architecture is in service of it.
+>
+> **Not first-loop prerequisites:** Journal/EventBus integration, durable persistence, restart recovery, comprehensive historical reconciliation, generic readiness/state machines, cross-pair allocation, dashboards, Aggressive, and broad reservation frameworks. Keep these deferred unless a specific failing order-flow case proves a narrowly scoped safeguard is required.
+>
+> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. The current implementation still contains stricter startup checks; the next implementation task must compare them with `bot-free-roll` and remove only the unnecessary gates without weakening order-level safety.
+>
+> **No speculative fixes:** reproduce the observed event sequence, inspect the working Free-Roll implementation and shared broker mapping, identify the exact incorrect transition, add a deterministic regression test, then make the smallest change. A readiness deferral is not a broker rejection; a locally registered PENDING order is not cancellable until broker acknowledgement supplies a valid broker order ID.
+
+
 ## Independent operational observability
 
 The trading-first priority governs trading implementation and does not make the separately approved staged EventBus/Journal observability work dependent on a TESTNET trading cycle. Follow [the Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) one small PR at a time. This work must remain optional and must not gate, delay, or change trading behavior.
@@ -279,6 +291,69 @@ unit tests, coverage, and audit. The root importer has been restored to the
 empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
 
+
+## P0.7 — Restore the simple Free-Roll execution lifecycle (NEXT)
+
+**Priority: immediate. This task is about making the existing app trade reliably, not adding another architecture layer.** The latest `develop` includes PR #462 (`fix(harvester): serialize order lifecycle and preserve diagnostics`). Continue from that state; do not repeat already-merged work.
+
+### Required working behaviour
+
+1. Load and validate the configured pair/strategy.
+2. Connect the broker and subscribe to enabled-market prices.
+3. On a usable price, evaluate Conservative and submit the initial BUY through the existing engine/broker port.
+4. Process Binance order acknowledgements and execution reports.
+5. Apply each actual fill exactly once to the in-process Portfolio/RecoveryLedger.
+6. When a BUY fill changes the recovery SELL target, reconcile the existing SELL safely: if it is still PENDING, wait for its submission acknowledgement; do not send cancellation without a valid broker order ID. Once acknowledged and cancellable, cancel it, process fills that raced with cancellation, then place the correctly recalculated SELL.
+7. Trigger the next strategy decision from the relevant order/fill transition; do not wait for an unrelated market tick.
+8. Keep running the strategy cycle.
+
+### Scope A — Remove unnecessary execution-readiness barriers
+
+- [ ] Trace why each execution report sets `userDataReady=false`, why a fresh account snapshot is fetched after each TRADE, and how readiness is restored.
+- [ ] Compare this flow directly with the working `apps/bot-free-roll` execution/fill lifecycle. Reuse its proven sequencing where compatible with Harvester's domain/application boundaries.
+- [ ] Do not fetch a full account snapshot after every fill by default. Portfolio/RecoveryLedger must be updated from canonical actual fills; broker balance refresh is reserved for a concrete need such as startup validation, reconnect, or unknown submission/cancellation outcome.
+- [ ] Do not turn an expected in-process event transition into a generic broker failure or pause. A local readiness deferral must remain distinguishable from a definite exchange rejection and from an unknown network outcome.
+- [ ] If a decision is temporarily deferred while an order/fill transition is being processed, retain the affected symbol and automatically reevaluate it when that transition completes. Do not lose the decision and do not require a new price tick.
+- [ ] Preserve essential checks immediately before each order: valid config/market rules, usable price, sufficient specific free balance, in-process position/commitment limits, order precision/notional, and no duplicate intent.
+- [ ] Reassess the startup requirement for a full account snapshot, no open orders, and zero base inventory. These are currently enforced for the first TESTNET run, but must not be expanded into a permanent prerequisite for the basic app loop. Keep a controlled clean-account TESTNET runbook; do not silently adopt external inventory/orders as Harvester-owned state.
+- [ ] Do not introduce a generic readiness framework, repeated polling, sleeps, or per-execution REST reconciliation.
+
+### Scope B — Reconcile recovery SELLs without cancelling PENDING orders
+
+- [ ] Trace the exact recovery SELL submission and BUY-fill replacement path, including order registry transitions and the broker acknowledgement callback.
+- [ ] Keep a PENDING SELL registered and tracked while `placeOrder` is unresolved. PENDING is neither OPEN nor cancellable.
+- [ ] When the broker acknowledges the order, store/validate the broker order ID and transition the order to its acknowledged state.
+- [ ] If a BUY fill requires replacing that SELL while it is PENDING, record/defer the replacement intent. After acknowledgement, cancel using the validated broker order ID, reconcile any fills received during cancellation, then calculate and submit the replacement SELL.
+- [ ] If submission outcome is unknown, do not blindly retry or cancel by a missing ID. Use the existing safe unknown-outcome path and only the minimum targeted status refresh needed to resolve it.
+- [ ] Keep cancellation eligibility validation strict. Do not weaken the validator or treat PENDING as cancellable.
+- [ ] Ensure multiple overlapping BUY fills/replacement requests coalesce or serialize without losing the newest required SELL quantity and without duplicate SELLs.
+
+### Scope C — Diagnostics and failure classification
+
+- [ ] Preserve the Error serialization improvements merged in PR #462. Verify nested native `Error` and `AggregateError` values remain readable in logs; do not regress the shared logger.
+- [ ] At each order boundary distinguish: local validation/precondition failure, expected readiness deferral, definite broker rejection, unknown submission/cancellation outcome, and invariant/ownership violation.
+- [ ] Log safe correlation fields: symbol, event type, execution type, side, client order ID, order status, broker order ID presence, operation, and relevant readiness/reconciliation state. Never log credentials, signed requests, or raw sensitive exchange payloads.
+- [ ] A readiness deferral must not be logged/classified as an exchange rejection when no broker request was sent.
+
+### Required tests
+
+- [ ] Deferred BUY/SELL `placeOrder` promise: a BUY fill arrives while recovery SELL is PENDING; assert no cancellation call occurs before acknowledgement.
+- [ ] Resolve the SELL acknowledgement; assert cancellation uses the exact acknowledged broker order ID, then replacement SELL uses the latest post-fill quantity.
+- [ ] Emit a fill during cancellation; assert it is accounted once and replacement quantity reflects it.
+- [ ] Emit multiple BUY fills while SELL acknowledgement/cancellation is pending; assert no duplicate SELL and latest intent is not lost.
+- [ ] Execute a fill while a strategy evaluation is deferred; assert automatic reevaluation after the transition without requiring a new price tick.
+- [ ] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
+- [ ] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
+- [ ] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
+- [ ] Run deterministic offline Harvester tests, relevant shared-utils tests, lint/syntax checks, and repository CI. TESTNET is a separate explicit opt-in verification; never claim it ran without credentials and observed evidence.
+
+### Out of scope for P0.7
+
+Do not add Journal/persistence/restart recovery, historical trade replay, a generic reconciliation subsystem, a generic event queue/framework, multi-pair allocation, Aggressive, dashboard/notification work, or unrelated refactors. Do not change Free-Roll financial rules unless a demonstrated mismatch is found and documented.
+
+### Acceptance
+
+The app starts with the documented TESTNET opt-in, receives a price, submits the first BUY, accounts Binance executions, safely handles a recovery SELL that is still PENDING, and continues the strategy cycle. No full account snapshot is required after every fill. All changed behavior has deterministic offline regression tests and same-commit documentation. The real TESTNET cycle remains explicitly unverified until actually run.
 
 ## P0.6 — Fix Binance order lifecycle race and diagnostic errors
 

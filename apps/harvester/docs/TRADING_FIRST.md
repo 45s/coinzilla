@@ -25,6 +25,18 @@ Agents MUST work in this order:
 
 The current branch has deterministic fake-broker coverage of the complete first recovery cycle and trailing/cancel-replace behavior. The first milestone is complete only when the application has demonstrably placed and managed orders and repeated the cycle on Binance TESTNET. A collection of pure calculators, entities, adapters, placeholders, NO_ACTION decisions, or disconnected use cases is not a working trading application.
 
+## Keep startup and execution simple
+
+The expected product workflow is the working `bot-free-roll` workflow expressed through Harvester's DDD boundaries. Do not add extra startup phases unless they prevent a specific unsafe first order.
+
+- A full account snapshot after every TRADE execution is **not** a default requirement. Actual canonical fills update the in-process Portfolio/RecoveryLedger.
+- A clean TESTNET account is recommended for a controlled first verification, but "no open orders / zero base inventory" must not become a permanent generic startup gate. Do not silently take ownership of external inventory or orders; report ambiguity and keep strategy ownership explicit.
+- Check the specific free quote/base balance and in-process commitments required for the order being submitted. Refresh account/order state when there is a concrete reason (startup facts needed by the current implementation, reconnect, or unknown outcome), not as a ritual after every fill.
+- If an evaluation is temporarily deferred while an event is processed, retain and resume it automatically after that transition. Do not wait for a new price event.
+- PENDING means the broker submission has not yet been acknowledged. Track it; do not cancel it or call cancellation with a missing broker order ID. After acknowledgement, validate the ID, cancel, reconcile fills that raced with cancellation, and only then replace.
+- Never classify a local readiness deferral as a Binance rejection. Keep definite rejection, unknown network outcome, expected deferral, and invariant failure distinct.
+- Before adding any mechanism, inspect the corresponding working `apps/bot-free-roll` path and explain the concrete failure it prevents.
+
 ## Minimum safety required for the first TESTNET cycle
 
 Trading first does not mean careless execution. Implement the smallest safety boundary that makes the TESTNET cycle controlled and testable:

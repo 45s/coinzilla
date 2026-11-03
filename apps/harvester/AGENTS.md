@@ -7,6 +7,17 @@ These instructions apply to all work in `apps/harvester/` and take precedence ov
 
 Before planning or editing, read [Trading First](./docs/TRADING_FIRST.md). This is the controlling priority for every Harvester task. **FIRST MAKE IT WORK. THEN MAKE IT BETTER.** Deliver the working Conservative TESTNET loop first: config → broker connection/price subscriptions → price event → strategy decision → validated order submission → order/execution updates → fill-driven state update → next decision/order. Do not prioritize Journal, durable state, comprehensive recovery/reconciliation, dashboards, optimization, or Aggressive while this loop is not working. These are secondary roadmap items, not prerequisites. Implement only a narrowly scoped safety control when you can identify the immediate TESTNET order-flow failure it prevents. Do not use broad claims about production readiness or architecture as reasons to postpone actual order placement. Update the roadmap after each completed step.
 
+## Mandatory reference-first simplification rule
+
+Before changing trading startup, order submission, execution reports, fill accounting, or cancellation:
+- Inspect the equivalent working `apps/bot-free-roll` implementation first and use it as the behavioural reference.
+- The product goal is to launch Harvester's Conservative trading loop first, then improve it through DDD. Do not add architecture or safety machinery that delays the first real TESTNET order without identifying a concrete immediate risk.
+- Do not require a full account snapshot after every ordinary execution report. Account refresh must have a specific reason; ordinary actual fills update in-process Portfolio/RecoveryLedger.
+- Do not make a clean-account/no-open-orders/zero-inventory startup gate permanent by default. Keep external inventory/orders unowned and explicit; retain only the minimum checks needed for the current controlled TESTNET order.
+- A PENDING order is tracked but is not cancellable until broker acknowledgement provides a validated broker order ID. Defer replacement intent until acknowledgement, then cancel/reconcile fills/replace.
+- Expected local readiness deferral is not an exchange rejection. Preserve distinct error outcomes and actionable structured diagnostics.
+- Do not introduce polling, sleeps, generic reconciliation, persistence, or a new framework for ordinary event sequencing. Add only a focused deterministic regression test for a reproduced failure.
+
 ## Before changing code
 - Read the relevant repository and app documentation, nearby implementation, tests, and configuration.
 - Identify the app's existing language, framework, package manager, architecture, and formatting/linting conventions. Do not introduce a new stack or dependency without a clear need.
