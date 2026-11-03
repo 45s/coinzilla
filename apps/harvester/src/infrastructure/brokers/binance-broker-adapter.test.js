@@ -13,6 +13,7 @@ const createClient = () => {
     cancelOrder: async (input) => { calls.push(["cancelOrder", input]); return result },
     getOpenOrders: async (input) => { calls.push(["getOpenOrders", input]); return result },
     getFills: async (input) => { calls.push(["getFills", input]); return result },
+    getCanonicalOrderHistory: async (input) => { calls.push(["getCanonicalOrderHistory", input]); return result },
     getAccountSnapshot: async () => { calls.push(["getAccountSnapshot"]); return result },
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
