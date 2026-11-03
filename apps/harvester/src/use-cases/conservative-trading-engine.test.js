@@ -608,7 +608,7 @@ function makePartialFill({ order }) {
   })
 }
 
-function makePartiallyFilledOrder({ order }) {
+function makePartiallyFilledOrder({ order, updatedAt = 2 }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -621,7 +621,7 @@ function makePartiallyFilledOrder({ order }) {
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,
-    updatedAt: 2,
+    updatedAt,
   })
 }
 
@@ -740,7 +740,7 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
 
   const wrongFill = new Fill({ ...makePartialFill({ order }), brokerOrderId: "different-broker-order" })
   const mismatch = await engine.processUserDataEvent({
-    event: { executedOrder, executionType: "TRADE", fill: wrongFill },
+    event: { executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }), executionType: "TRADE", fill: wrongFill },
   })
   assert.equal(mismatch.ok, false)
   const mismatchEvent = events.find((event) =>

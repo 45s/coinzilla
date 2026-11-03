@@ -234,7 +234,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 - Preserve existing pause behavior, serialized user-data ordering, and accounting authority.
 - Do not publish duplicate-fill or recovery-completion events in this PR; those are Step 6c.
 
-**Tests:** Missing/invalid Fill; fill/order identity mismatch; unowned order; unsupported commission; accounting failure; publisher failure isolation.
+**Tests:** Missing/invalid Fill; fill/order identity mismatch after a distinct order update; unowned order; unsupported commission; accounting failure; publisher failure isolation.
 
 **PR boundary:** Invalid/unowned execution and accounting failures only.
 
