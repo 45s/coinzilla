@@ -389,4 +389,6 @@ The decisions are intentionally not made by this document.
 | D-13 | Should `minProfit` be checked on cumulative cycle net proceeds only, or separately per SELL order/fill? | Current Free-Roll checks cumulative proceeds after each completed SELL order; partial fills contribute to the cumulative amount. |
 | D-14 | How should fills be ordered if multiple valid fills arrive out of execution-time order? | Accounting sums are commutative, but lifecycle/order completion and fee-rate observations may not be. Need deterministic policy and tests. |
 
+| D-15 | Should configured SELL fee reserve apply before the first actual commission is observed? | Free-Roll initializes `feeRate` to `configuredFeeRate`. Harvester currently returns zero until a non-zero actual fee is observed, then activates the configured ceiling. This can produce a smaller first recovery SELL reserve in Harvester. |
+
 **D0 exit gate:** obtain explicit approval for decisions that change strategy behavior or accounting. Do not start D1 by treating an unresolved row as a default.
