@@ -295,7 +295,7 @@ updated PR head before treating this repair as verified.
 
 ## P0.7 — Restore the simple Free-Roll execution lifecycle (IN PROGRESS)
 
-### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
+### P0.7 core-lifecycle implementation snapshot — historical CI and TESTNET startup evidence
 
 The working branch now contains the first implementation pass. It follows the
 existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
