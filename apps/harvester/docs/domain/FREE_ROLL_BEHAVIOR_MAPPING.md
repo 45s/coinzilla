@@ -10,7 +10,7 @@
 - PR #477 is merged and remains the infrastructure/order-ownership baseline.
 - PR #482 is merged and establishes the domain-first delivery plan.
 - PR #479 remains open as Draft and paused. It was inspected as reference material only; it was not merged, modified, or used as the D0 branch base.
-- D0 branch `feature/harvester/domain-first` was created from `develop` commit `9cbbc9fb1affee8fe671724112d9457c25900a27`.
+- D0 work was branched from `develop` commit `9cbbc9fb1affee8fe671724112d9457c25900a27`; the final review branch contains only the four requested domain documents.
 - No engine, application, bootstrap, broker, adapter, WebSocket, or TESTNET files were changed for D0.
 
 ## 2. Free-Roll source and tests inspected
