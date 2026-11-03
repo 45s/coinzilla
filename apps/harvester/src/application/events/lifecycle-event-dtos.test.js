@@ -78,7 +78,7 @@ test("maps broker connection success and sanitizes sensitive error values", () =
 
   const result = mapBrokerConnectionFailedData({
     broker: "binance",
-    error: new Error('connect failed apiKey="key-value" api_secret=secret-value Bearer abc.def'),
+    error: new Error('connect failed apiKey="key-value" api_secret=secret-value API key plain-value Bearer abc.def'),
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.broker, "binance")
@@ -160,4 +160,15 @@ test("EventBus accepts mapped lifecycle DTOs and rejects unsupported payload obj
   })
   assert.equal(rejected.ok, false)
   assert.ok(rejected.errors[0] instanceof TypeError)
+
+  class PrivateAccountSnapshot {
+    constructor() { this.balance = "private" }
+  }
+  const classInstanceResult = eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.STARTED,
+    source: HARVESTER_EVENT_SOURCE,
+    data: { account: new PrivateAccountSnapshot() },
+  })
+  assert.equal(classInstanceResult.ok, false)
+  assert.ok(classInstanceResult.errors[0] instanceof TypeError)
 })
