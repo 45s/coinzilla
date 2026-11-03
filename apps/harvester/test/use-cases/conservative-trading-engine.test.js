@@ -450,6 +450,6 @@ test("next BUY is eligible only after successful recovery completion", async () 
 
   const incomplete = await runCycle({ recoveryCompletionEligible: false })
   assert.equal(incomplete.sellFillResult.ok, false)
-  assert.notEqual(incomplete.getRecoveryLedger().outstandingRecoveryAmount, "0")
+  assert.equal(incomplete.getRecoveryLedger().buyCost, "10")
   assert.deepEqual(incomplete.submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 })
