@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { RecoveryLedger } from "./recovery-ledger.js"
 import { evaluateConservativeStrategy } from "./conservative-strategy.js"
@@ -30,7 +30,7 @@ const pairConfig = {
 const settings = { minProfit: 0.01 }
 const marketPrice = { symbol: "DOGEUSDT", price: "0.100", timestamp: 100 }
 
-function makeBoughtState() {
+function makeBoughtState({ quoteCommission = "0" } = {}) {
   const fill = new Fill({
     tradeId: "buy-1",
     brokerOrderId: "order-1",
@@ -39,7 +39,9 @@ function makeBoughtState() {
     price: new Money({ amount: "0.1", asset: quoteAsset }),
     quantity: new Quantity({ amount: "100", asset: baseAsset }),
     quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
-    commissions: [],
+    commissions: quoteCommission === "0" ? [] : [
+      new Commission({ amount: new Money({ amount: quoteCommission, asset: quoteAsset }) }),
+    ],
     commissionStatus: "COMPLETE",
   })
   const portfolio = new Portfolio().applyFill({ fill }).portfolio
@@ -178,4 +180,21 @@ test("plans recovery SELL commission from makerPercent only for fee-bearing LIMI
   assert.equal(sell.type, "LIMIT")
   assert.equal(sell.quantity, "98.9")
   assert.equal(sell.price, "0.102")
+})
+
+test("includes the actual BUY quote commission in the recovery SELL limit price", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState({ quoteCommission: "0.2" })
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(recoveryLedger.buyCost, "10.2")
+  assert.equal(sell.price, "0.104")
 })
