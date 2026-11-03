@@ -142,7 +142,7 @@ Bootstrap now selects the adapter only when `HARVESTER_BROKER=binance` is explic
 
 Preserve the behavior documented in `packages/brokers/README.md`:
 
-1. A `terminated` or `connectionClosed` user-data status means events may have been missed. On `recovered` with `reconciliationRequired: true`, reconcile durable Harvester state against account snapshot, open orders, and available trade/order history before acknowledging recovery.
+1. A `terminated` or `connectionClosed` user-data status means events may have been missed. After the broker emits its stream-level `reconciled` status, Harvester keeps the trading gate closed while it reconciles only the in-memory owned-order registry against `getOpenOrders()`, `getCanonicalOrderHistory()`, and canonical `getFills()`. Incomplete or conflicting state remains paused. Durable restart state and account-balance reconciliation are not part of this P0.4 workflow.
 2. A timeout or disconnect during place/cancel can mean the exchange accepted the operation but its response was lost. Treat the outcome as unknown; reconcile by client order ID, order status, open orders, and available history before retrying. Never blindly resubmit.
 3. Public market-stream reconnect is not user-data event replay.
 4. Only actual fills (including partial fills and actual commission assets) change Portfolio holdings. Acknowledgements, cancellations, rejections, expirations, and prices do not.
@@ -160,4 +160,4 @@ A user-data subscription exposes recovery acknowledgement through its returned s
 
 ## Implementation status
 
-Implemented: structural application broker port, Binance adapter, bootstrap composition, opt-in connection, graceful disconnect, and offline tests. Not implemented: Trading Engine, user-data reconciliation, Portfolio accounting, order lifecycle orchestration, and Conservative/Aggressive policies. Do not treat a connected broker as a readiness signal for trading.
+Implemented: application broker port and Binance adapter, Conservative Trading Engine, in-memory owned-order registry, canonical fill accounting, serialized user-data processing, and reconnect-time REST reconciliation for tracked orders/fills. The reconciliation is process-local and fail-closed; it does not restore state after restart, reconcile account balances, or adopt external orders. Do not treat a connected broker or stream-level recovery acknowledgement alone as application trading readiness.
