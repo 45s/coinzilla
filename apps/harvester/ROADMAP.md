@@ -151,12 +151,12 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Apply only incremental actual executions to shared Portfolio and Conservative RecoveryLedger in one immutable use-case transition; never apply requested order quantity or cumulative executed quantity twice.
 - [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
 - [ ] Ensure cancel/fill races, duplicate events, late events, and out-of-order events cannot double-count fills or release filled reservations.
-- [~] Feed successful fill/order transitions back into strategy evaluation. The engine triggers the next decision after a terminal full-fill update and deliberately waits after partial fills; live bootstrap callback composition remains.
-- [ ] Ensure the bot does not wait for a new market-price event when a fill/order-state transition itself requires an immediate strategy reaction.
+- [x] Feed successful fill/order transitions back into strategy evaluation. The engine emits a reevaluation outcome after a reconciled terminal full fill; bootstrap runs that evaluation from the serialized user-data event flow and deliberately waits after partial fills.
+- [x] Ensure a completed BUY transition immediately evaluates and submits required orders without waiting for another market-price event.
 
 ### P0.5 — Trading Engine orchestration
 
-- [~] Implement the first in-process Conservative trading workflow. `makeConservativeTradingEngine` now connects market prices to the pure policy, order registry, validated broker submission, canonical order updates, ownership checks, fill accounting, and immediate reevaluation after terminal order updates. Bootstrap composition, account readiness, reservations, and recovery-cycle completion remain.
+- [x] Implement the first in-process Conservative trading workflow. `makeConservativeTradingEngine` connects market prices to the pure policy, order registry, validated broker submission, canonical order updates, ownership checks, fill accounting, and immediate reevaluation after terminal order updates. Bootstrap composes the user-data callback and account-readiness gate; reservations and comprehensive restart/reconnect reconciliation remain separate work.
 - [ ] Keep strategy-specific policy out of the engine and broker adapter.
 - [ ] Ensure exactly one strategy controls each pair's shared Position at a time.
 - [ ] Serialize or otherwise consistently coordinate concurrent market, order, fill, and cancellation events.
@@ -663,3 +663,14 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [ ] Run the Harvester package tests and required CI checks on the task PR.
 - [ ] Verify this behavior in the bounded Binance TESTNET acceptance cycle. Offline tests do not prove exchange behavior.
 
+
+
+### Conservative BUY-completion submission ordering — 2026-11-03
+
+- [x] Reconcile the completed BUY's actual fills and VWAP before advancing.
+- [x] Cancel and reconcile any active recovery SELL before recalculating it.
+- [x] Submit the replacement recovery SELL first; submit the next standing BUY only after the SELL is acknowledged successfully. If no sellable quantity exists, the BUY may proceed without a SELL.
+- [x] Trigger the evaluation directly from the serialized user-data completion flow; no new market-price event is required.
+- [x] Preserve simultaneous active BUY and recovery SELL orders after both submissions succeed.
+- [x] Add policy and engine regression tests for intent/submission order and coexistence.
+- [ ] Verify the full behavior on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
