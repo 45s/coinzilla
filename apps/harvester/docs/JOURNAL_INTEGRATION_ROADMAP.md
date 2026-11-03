@@ -215,7 +215,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 **Work:**
 - Publish `execution.fill_applied` only when `updateTradingAccounting` reports `applied: true`, after the existing wrapper has committed both Portfolio and RecoveryLedger.
 - Use a small allowlisted DTO containing stable fill/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
-- Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6b.
+- Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6c.
 - Keep the sequential user-data queue and all current accounting invariants unchanged.
 - Do not await EventBus delivery or Journal in the user-data queue.
 
@@ -227,20 +227,20 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6b — Invalid execution and accounting failure diagnostics
 
-**Status:** Not started; begin only after Step 6a is merged.
+**Status:** Merged into `develop` by PR #467; all CI checks passed.
 
 - Publish invalid/missing Fill and unowned-order execution facts with safe identifiers.
 - Publish accounting failures after the existing accounting workflow returns failure.
 - Preserve existing pause behavior, serialized user-data ordering, and accounting authority.
 - Do not publish duplicate-fill or recovery-completion events in this PR; those are Step 6c.
 
-**Tests:** Missing/invalid Fill; fill/order identity mismatch; unowned order; unsupported commission; accounting failure; publisher failure isolation.
+**Tests:** Missing/invalid Fill; fill/order identity mismatch after a distinct order update; unowned order; unsupported commission; accounting failure; publisher failure isolation.
 
 **PR boundary:** Invalid/unowned execution and accounting failures only.
 
 #### Step 6c — Duplicate and recovery-cycle diagnostics
 
-**Status:** Not started; begin only after Step 6b is merged.
+**Status:** Merged into `develop` by PR #468; all CI checks passed.
 
 - Optionally publish idempotent duplicate-fill suppression when the accounting result explicitly reports `duplicate: true`.
 - Publish recovery completion only after the existing domain/application transition reports it eligible and commits the new cycle.
@@ -329,8 +329,8 @@ Every implementation PR must:
 - [x] Step 5c: recovery SELL cancellation transitions (merged PR #463).
 - [x] Step 5: strategy/order events (PRs #460, #461, #463).
 - [x] Step 6a: successful Fill application event (merged PR #465).
-- [ ] Step 6b: invalid execution and accounting failure diagnostics.
-- [ ] Step 6c: duplicate and recovery-cycle diagnostics.
-- [ ] Step 6: execution/accounting events (complete after 6a–6c).
+- [x] Step 6b: invalid execution and accounting failure diagnostics (merged PR #467).
+- [x] Step 6c: duplicate and recovery-cycle diagnostics (merged PR #468).
+- [x] Step 6: execution/accounting events (PRs #465, #467, #468).
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.

@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. The next assignment is **Step 6b — Invalid execution and accounting failure diagnostics**.
+Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 1–6 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465, #467, #468). Do not repeat them. The next assignment is **Step 7 — Shutdown draining and failure isolation**. Inspect the actual shutdown implementation and split this step into small PRs before changing code.
 
 ### Completed Step 5a scope
 
@@ -89,9 +89,11 @@ Run the Harvester unit and coverage commands plus relevant workspace checks. If 
 
 Add deterministic offline tests for partial Fill application, publication only after accounting commit, duplicate Fill suppression, DTO allowlisting and decimal preservation, and publisher failure isolation. Keep the existing accounting and queue tests intact.
 
-### Next Step 6b
+### Tests
 
-After Step 6a merges, handle invalid/unowned execution, accounting failures, duplicate-fill diagnostics, and recovery completion as a separate small PR.
+Add offline shutdown tests for pending user-data work, pending EventBus delivery, pending Journal write, write/flush/close failures, broker disconnect failure, repeated shutdown, and unhandled rejection isolation. Preserve the existing lifecycle tests.
+
+Inspect whether Step 7 should be split into separate PRs for shutdown ordering and failure isolation before implementation.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, use actual PR CI results as the verification gate and never claim unrun checks passed.
 
