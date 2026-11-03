@@ -595,7 +595,7 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 ### DDD-01 — Audit documentation reconciliation (documentation)
 
 - [x] Record the detailed audit, scorecard, evidence scope, and video reference in `docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md`.
-- [ ] Reconcile the architecture guide's historical implementation claims with the current source and roadmap; label historical snapshots explicitly.
+- [x] Label the known obsolete Aggressive-first implementation snapshot in the architecture guide as historical and point readers to the current roadmap/audit. (Other implementation claims should continue to be updated with code changes.)
 - [ ] Ensure current-state claims carry a revision/date and link to implementation evidence.
 - [ ] Keep unresolved design decisions separate from implemented guarantees.
 
