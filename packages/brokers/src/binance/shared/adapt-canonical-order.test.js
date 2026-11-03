@@ -43,9 +43,11 @@ test("adapts a Binance order to an immutable canonical order with exact values",
 
 test("maps terminal and unknown Binance lifecycle states safely", () => {
   for (const [rawStatus, expected] of [
+    ["NEW", "OPEN"],
     ["FILLED", "FILLED"],
     ["CANCELED", "CANCELED"],
     ["REJECTED", "REJECTED"],
+    ["EXPIRED", "EXPIRED"],
     ["EXPIRED_IN_MATCH", "EXPIRED"],
     ["PENDING_CANCEL", "UNKNOWN"],
   ]) {
