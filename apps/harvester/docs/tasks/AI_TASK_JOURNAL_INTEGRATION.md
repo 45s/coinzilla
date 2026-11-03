@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463). Do not repeat them. The next assignment is **Step 6a — Successful Fill application event**, on branch `feature/harvester/fill-applied-event`, targeting `develop`.
+Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. The next assignment is **Step 6b — Invalid execution and accounting failure diagnostics**.
 
 ### Completed Step 5a scope
 
@@ -74,7 +74,7 @@ Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, 
 - Do not change order selection or strategy policy.
 - EventBus publication must not be awaited and must not change cancellation or fill-reconciliation behavior.
 
-### Current Step 6a scope
+### Completed Step 6a scope
 
 - Publish `execution.fill_applied` only after `updateTradingAccounting` returns success with `applied: true`; the wrapper must already have committed both Portfolio and RecoveryLedger.
 - Use an allowlisted DTO with fill/order IDs, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
