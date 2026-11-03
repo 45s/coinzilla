@@ -119,7 +119,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 - No financial amounts occur in these lifecycle DTOs; later financial DTOs must preserve exact decimal strings.
 - Do not add event schemas for speculative events.
 
-**Tests:** Every selected event payload; decimal precision; missing identifiers; invalid values; class-instance/SDK-object rejection; no secrets.
+**Tests:** Every selected event payload; missing identifiers; invalid values; class-instance/unsupported-built-in rejection; secret omission/redaction; JSON serialization. Financial decimal precision is not applicable to this lifecycle-only contract and is required for later financial DTOs.
 
 **Acceptance:** Contract names and payload examples are documented and tested; no EventBus/Journal imports in domain policy modules.
 
