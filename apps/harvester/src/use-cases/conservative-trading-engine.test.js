@@ -1437,7 +1437,7 @@ function makeOpenOrder({ order, brokerOrderId = order.brokerOrderId, clientOrder
   })
   openOrder.originalQuantity = order.originalQuantity.amount
   openOrder.executedQuantity = executedQuantity
-  openOrder.status = executedQuantity === "0" ? "NEW" : "PARTIALLY_FILLED"
+  openOrder.status = Number(executedQuantity) === 0 ? "NEW" : "PARTIALLY_FILLED"
   return openOrder
 }
 
@@ -1478,7 +1478,7 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   const calls = []
   broker.getOpenOrders = async ({ symbol }) => {
     calls.push(["getOpenOrders", symbol])
-    return { ok: true, data: [externalOrder] }
+    return { ok: true, data: [externalOrder, makeOpenOrder({ order: buyOrder, executedQuantity: "0.00000000" })] }
   }
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(["getCanonicalOrderHistory", symbol, orderId])
