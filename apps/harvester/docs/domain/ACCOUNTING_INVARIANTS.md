@@ -1,6 +1,6 @@
 # Conservative Accounting Invariants
 
-**Phase:** D0 specification  
+**Phase:** Conservative domain specification  
 **Purpose:** Define accounting truths that D1 implementation and D2 tests must preserve.  
 **Status:** Proposed invariants; fee and strategy-policy decisions remain subject to approval in `CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
 
@@ -53,7 +53,7 @@ Base commission is additional base inventory consumed by the SELL. Quote commiss
 
 ### Third-asset commission
 
-Current Free-Roll and Harvester policies do not value a commission paid in a third asset. Such a fill must not be silently treated as fee-free. Reject it or pause at the appropriate boundary until a valuation rule is approved.
+Current Conservative strategy and Harvester policies do not value a commission paid in a third asset. Such a fill must not be silently treated as fee-free. Reject it or pause at the appropriate boundary until a valuation rule is approved.
 
 ## 3. Portfolio invariants
 
@@ -100,7 +100,7 @@ $$
 9. A duplicate fill does not change any amount or fee observation.
 10. A conflicting duplicate or wrong-market fill is rejected.
 11. Successful cycle reset clears only `buyCost` and `netSellProceeds`. Fill identities must survive reset so a late replay cannot be booked into the new cycle.
-12. Whether max observed commission rate also survives reset is unresolved (D-08). Current Harvester preserves it; current Free-Roll resets its per-cycle actual rate.
+12. Whether max observed commission rate also survives reset is unresolved (D-08). Current Harvester preserves it; current Conservative strategy resets its per-cycle actual rate.
 
 ## 5. Recovery SELL planning invariants
 
@@ -131,7 +131,7 @@ Required properties:
 - A plan with no sellable quantity produces no SELL intent.
 - Price/quantity increments must be valid positive normalized rules; the domain does not discover exchange rules.
 
-**Fee-boundary caution:** the formula is the existing Free-Roll/Harvester formula. The exact interpretation of base-asset commission relative to gross order quantity and exchange fee rounding must be approved and tested (D-05).
+**Fee-boundary caution:** the formula is the existing Conservative strategy/Harvester formula. The exact interpretation of base-asset commission relative to gross order quantity and exchange fee rounding must be approved and tested (D-05).
 
 ## 6. Recovery completion invariants
 
@@ -247,7 +247,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
 | Fee reserve | Zero fee, actual fee, configured ceiling, actual above ceiling | `sell-fee-rate.test.js` | Existing |
-| Fee reserve | Fee-history reset behavior | reset test documents preserve; differs from Free-Roll | Decision |
+| Fee reserve | Fee-history reset behavior | reset test documents preserve; differs from Conservative strategy | Decision |
 | SELL plan | Keep quantity and rounding | `recovery-sell-plan.test.js` | Existing |
 | SELL plan | Partial proceeds lower remaining required proceeds | sell-plan test | Existing |
 | SELL plan | Base commission + quantity step edge | current test does not assert actual remaining inventory after all fee rounding | Gap |
@@ -258,7 +258,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
 | Strategy | Recovery-first blocking alternative | PR #479 only; decision unresolved | Decision |
 | Strategy | Investment cap exact boundary and committed BUY amounts | one investment test | Partial |
-| Strategy | action ordering / SELL submission before next BUY | current action order is BUY then SELL; Free-Roll submits SELL then BUY | Decision |
+| Strategy | action ordering / SELL submission before next BUY | current action order is BUY then SELL; Conservative strategy submits SELL then BUY | Decision |
 | Completion | Partial/cancelled SELL not complete | `recovery-completion.test.js` | Existing |
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
