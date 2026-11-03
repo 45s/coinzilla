@@ -243,7 +243,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | Zero keep quantity policy | completion rejects zero; approval pending | Gap / decision |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
-| Fill identity | Changes in each fingerprint field reject | fingerprint tests needed for every field | Partial |
+| Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | no cross-projection transition test | Gap |
 | Recovery ledger | Multiple BUY fills accumulate actual cost | ledger test uses BUY then multiple sells; add multi-BUY explicit case | Partial |
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
@@ -273,7 +273,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Completion | Residual active inventory behavior after allocation | no strategy lifecycle test | Gap / decision |
 | Ordering | Out-of-order fills with deterministic execution-time policy | no explicit test | Gap |
 | Failure | Invalid fill quantity/notional/commission, unsupported asset, wrong market | several focused tests | Partial |
-| Failure | Cross-projection partial failure leaves neither projection committed | no test | Gap |
+| Failure | Cross-projection partial failure leaves neither projection committed | `update-trading-accounting.test.js` | Existing |
 | Lifecycle | Full BUY → partial fills → SELL partial/replacement → completion → next BUY | pieces exist; no end-to-end pure-domain contract test | Gap |
 
 ## 10. D2 exit criteria
