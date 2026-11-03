@@ -227,7 +227,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6b — Invalid execution and accounting failure diagnostics
 
-**Status:** Not started; begin only after Step 6a is merged.
+**Status:** In progress on branch `feature/harvester/execution-failure-events`.
 
 - Publish invalid/missing Fill and unowned-order execution facts with safe identifiers.
 - Publish accounting failures after the existing accounting workflow returns failure.
