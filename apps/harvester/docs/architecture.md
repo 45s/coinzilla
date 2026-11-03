@@ -364,3 +364,25 @@ cumulative execution quantity. If any quantity filled during cancellation,
 the fills are accounted and the pair pauses; it never submits a replacement
 from uncertain inventory. A clean zero-fill cancellation is followed by a
 new BUY below the current last trade, rounded down to the exchange tick.
+
+
+## Operational event journal
+
+**Current status:** Harvester does not currently compose `@coinzilla/event-bus` or `@coinzilla/journal`. This section records the intended boundary for the deferred integration; it must not be read as implemented behavior.
+
+After the first successful real Conservative TESTNET trading cycle, Harvester may add an application-level EventBus and an optional Journal subscriber. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
+
+The Journal is an observer, never a trading dependency:
+
+- Journal initialization must not gate application startup or trading readiness.
+- Strategy evaluation, market-price handling, order submission, execution accounting, and the serialized user-data queue must never await Journal I/O, flush, or close.
+- Event publication is best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into the trading workflow.
+- EventBus subscriber delivery and Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted.
+- Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
+- Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
+- On normal shutdown, stop trading intake and drain the existing user-data queue before publishing final lifecycle events, flushing EventBus, and closing Journal/EventBus. A failed Journal close must not skip broker/resource cleanup.
+- Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
+
+Bot-Free-Roll is a reference for package composition, event publication, and shutdown ordering, not a template for Harvester's startup policy or domain contracts. In particular, Harvester must not inherit a startup sequence in which Journal initialization failure prevents trading.
+
+The implementation is deliberately split into independently testable PRs. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
