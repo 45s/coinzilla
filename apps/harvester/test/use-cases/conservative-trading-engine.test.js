@@ -383,6 +383,81 @@ test("BUY fill submits one recovery SELL; pending and partial SELL states block 
   assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 })
 
+test("duplicate terminal cancellation for a replaced recovery SELL cannot disturb the current SELL", async () => {
+  const fixture = createFixture()
+  const { engine, market, submittedIntents, createTradeEvent } = fixture
+
+  await engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+  const buyIntent = submittedIntents[0]
+  const buyOrder = new CanonicalOrder({
+    clientOrderId: buyIntent.clientOrderId,
+    brokerOrderId: "1",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: buyIntent.price, asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: buyIntent.quantity, asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+  })
+  await engine.processUserDataEvent({
+    event: createTradeEvent({
+      acknowledgedOrder: buyOrder,
+      tradeId: "trade-1",
+      quantity: "10",
+      executedQuantity: "10",
+      status: "FILLED",
+    }),
+  })
+
+  await engine.evaluateLatest({ symbol: "ZROUSDT" })
+  const firstSellIntent = submittedIntents.find(({ side }) => side === "SELL")
+  assert.ok(firstSellIntent)
+  const canceledSellEvent = {
+    eventType: "executionReport",
+    executionType: "CANCELED",
+    executedOrder: new CanonicalOrder({
+      clientOrderId: firstSellIntent.clientOrderId,
+      brokerOrderId: "2",
+      market,
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({ amount: firstSellIntent.price, asset: market.quoteAsset }),
+      originalQuantity: new Quantity({ amount: firstSellIntent.quantity, asset: market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+      status: "CANCELED",
+    }),
+  }
+
+  const canceled = await engine.processUserDataEvent({ event: canceledSellEvent })
+  assert.equal(canceled.ok, true)
+  assert.equal(canceled.data.reevaluate, true)
+
+  await engine.evaluateLatest({ symbol: "ZROUSDT" })
+  assert.equal(submittedIntents.filter(({ side }) => side === "SELL").length, 2)
+  const currentSell = engine.getOrders().find((order) =>
+    order.side === "SELL" && order.status === "OPEN")
+  assert.ok(currentSell)
+  assert.notEqual(currentSell.clientOrderId, firstSellIntent.clientOrderId)
+
+  const duplicateCanceled = await engine.processUserDataEvent({ event: canceledSellEvent })
+  assert.equal(duplicateCanceled.ok, true)
+  assert.equal(duplicateCanceled.data.ignored, true)
+  assert.equal(submittedIntents.filter(({ side }) => side === "SELL").length, 2)
+  assert.equal(
+    engine.getOrders().find((order) => order.clientOrderId === currentSell.clientOrderId).status,
+    "OPEN",
+  )
+  assert.equal(
+    engine.getOrders().filter((order) => order.side === "SELL" &&
+      ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status)).length,
+    1,
+  )
+})
+
 test("next BUY is eligible only after successful recovery completion", async () => {
   const runCycle = async ({ recoveryCompletionEligible }) => {
     const fixture = createFixture({ recoveryCompletionEligible })
