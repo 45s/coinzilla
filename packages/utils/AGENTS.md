@@ -36,4 +36,4 @@ This package owns only domain-neutral reusable capabilities. Follow the [Shared 
 
 ## JavaScript and JSDoc
 
-Follow the repository's [JavaScript and JSDoc standard](../../docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md). Preserve this package's existing Node.js ESM and native `node:test` conventions.
+Follow the [repository JavaScript and JSDoc standard](../../docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md). Preserve the package's Node.js ESM and native `node:test` conventions.
