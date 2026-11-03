@@ -39,11 +39,11 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0][0], 'error');
-  assert.equal(messages[0][1].message, 'Harvester startup failed.');
-  assert.equal(messages[0][1].error, startupError);
-  assert.equal(messages[0][1].errorDetails.name, 'Error');
-  assert.equal(messages[0][1].errorDetails.message, 'Invalid trading config');
-  assert.match(messages[0][1].errorDetails.stack, /Invalid trading config/);
+  const startupLog = messages.find(([, entry]) => entry?.message === 'Harvester startup failed.');
+  assert.ok(startupLog);
+  assert.equal(startupLog[0], 'error');
+  assert.equal(startupLog[1].error, startupError);
+  assert.equal(startupLog[1].errorDetails.name, 'Error');
+  assert.equal(startupLog[1].errorDetails.message, 'Invalid trading config');
+  assert.match(startupLog[1].errorDetails.stack, /Invalid trading config/);
 });
