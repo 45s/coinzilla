@@ -102,7 +102,7 @@ Partial fills are accounted incrementally. A BUY order is considered complete fo
 
 ### Commission and order-type policy
 
-The same policy applies to Conservative and Aggressive for every configured pair:
+The same policy applies to Conservative and Aggressive for every configured pair. Market readiness is strategy-agnostic and selects the order type from `makerPercent`. Conservative currently has the executable recovery SELL planner; Aggressive still returns `NO_ACTION`, so its future order planner must use this same fee rule:
 
 - If `makerPercent = 0`, submit `LIMIT_MAKER` (POST-ONLY). If it would execute as taker, the exchange rejects it; do not fall back to a taker order.
 - If `makerPercent > 0`, submit regular `LIMIT`.
