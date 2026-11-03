@@ -146,19 +146,19 @@ Let:
 - (m) = required `minProfit`.
 
 Sell quantity:
-[
+$$
 Q = \operatorname{floorToStep}\left(\frac{\max(0,A-K)}{1+f},s\right)
-]
+$$
 
 Remaining net quote proceeds required:
-[
+$$
 R = \max(0,C+m-P)
-]
+$$
 
 If (Q le 0), no SELL is submitted. Otherwise minimum price:
-[
+$$
 p_{raw}=\frac{R}{Q(1-f)}
-]
+$$
 
 The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover (C+m), Free-Roll's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
