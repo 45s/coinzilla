@@ -100,7 +100,7 @@ $$
 9. A duplicate fill does not change any amount or fee observation.
 10. A conflicting duplicate or wrong-market fill is rejected.
 11. Successful cycle reset clears only `buyCost` and `netSellProceeds`. Fill identities must survive reset so a late replay cannot be booked into the new cycle.
-12. Whether max observed commission rate also survives reset is unresolved (D-08). Current Harvester preserves it; current Conservative strategy resets its per-cycle actual rate.
+12. Commission-rate history is not tracked or persisted. Fill identities survive cycle reset for duplicate protection; only `buyCost` and `netSellProceeds` are reset.
 
 ## 5. Recovery SELL planning invariants
 
@@ -120,6 +120,12 @@ MinimumPrice = \frac{RequiredNetProceeds}{Q(1-f)}
 $$
 
 When `Q > 0`, the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
+
+Planning fee policy:
+- `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER` and a zero planning fee reserve.
+- Non-zero `makerPercent` selects regular `LIMIT` and the planning reserve is `makerPercent / 100`.
+- `takerPercent`, observed maker/taker liquidity role, and historical commission rates never change the planning reserve.
+- The same order-type and planning rule is required for Conservative and Aggressive. Aggressive order planning remains deferred while its strategy returns `NO_ACTION`.
 
 Required properties:
 - `Q ≥ 0` and `Q` is an exact multiple of `s`.
