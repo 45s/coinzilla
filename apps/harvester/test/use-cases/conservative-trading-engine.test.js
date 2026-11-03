@@ -77,6 +77,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
   const pendingCancel = createDeferred()
   const cancelStarted = createDeferred()
   let deferCancel = deferCancellation
+  let recoveryCompletionCalls = 0
   const fillsByOrder = new Map()
   const submittedIntents = []
   const cancellations = []
@@ -154,6 +155,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
       return result
     },
     completeRecoveryCycle: ({} = {}) => {
+      recoveryCompletionCalls += 1
       if (!recoveryCompletionEligible) {
         return toResult({ data: { eligible: false, reason: "RECOVERY_COMPLETION_INELIGIBLE" } })
       }
@@ -218,6 +220,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     setReady: ({ value } = {}) => { ready = value },
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
+    getRecoveryCompletionCalls: () => recoveryCompletionCalls,
   }
 }
 
@@ -425,31 +428,41 @@ test("next BUY is eligible only after successful recovery completion", async () 
       executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
       status: "OPEN",
     })
-    const sellFillResult = await engine.processUserDataEvent({
-      event: createTradeEvent({
-        acknowledgedOrder: sellOrder,
-        tradeId: "trade-2",
-        quantity: sellIntent.quantity,
-        executedQuantity: sellIntent.quantity,
-        status: "FILLED",
-      }),
+    const sellTradeEvent = createTradeEvent({
+      acknowledgedOrder: sellOrder,
+      tradeId: "trade-2",
+      quantity: sellIntent.quantity,
+      executedQuantity: sellIntent.quantity,
+      status: "FILLED",
     })
+    const sellFillResult = await engine.processUserDataEvent({ event: sellTradeEvent })
+    const duplicateTerminalResult = await engine.processUserDataEvent({ event: sellTradeEvent })
 
     await engine.processMarketPrice({
       symbol: "ZROUSDT",
       priceEvent: { symbol: "ZROUSDT", price: "1.05", timestamp: 3 },
     })
 
-    return { submittedIntents, getRecoveryLedger, sellFillResult }
+    return {
+      submittedIntents,
+      getRecoveryLedger,
+      getRecoveryCompletionCalls: fixture.getRecoveryCompletionCalls,
+      sellFillResult,
+      duplicateTerminalResult,
+    }
   }
 
   const completed = await runCycle({ recoveryCompletionEligible: true })
   assert.equal(completed.sellFillResult.ok, true)
   assert.equal(completed.getRecoveryLedger().outstandingRecoveryAmount, "0")
+  assert.equal(completed.getRecoveryCompletionCalls(), 1)
+  assert.equal(completed.duplicateTerminalResult.data.ignored, true)
+  assert.equal(completed.getRecoveryCompletionCalls(), 1)
   assert.deepEqual(completed.submittedIntents.map(({ side }) => side), ["BUY", "SELL", "BUY"])
 
   const incomplete = await runCycle({ recoveryCompletionEligible: false })
   assert.equal(incomplete.sellFillResult.ok, false)
   assert.equal(incomplete.getRecoveryLedger().buyCost, "10")
+  assert.equal(incomplete.getRecoveryCompletionCalls(), 1)
   assert.deepEqual(incomplete.submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 })
