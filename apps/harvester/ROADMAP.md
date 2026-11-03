@@ -612,9 +612,10 @@ the existing successful recovery-completion workflow before a new BUY can be
 emitted. A zero `outstandingRecoveryAmount` alone is not enough: it can occur
 when SELL proceeds cover principal but the minimum-profit or keep-quantity
 checks have not yet completed. The direct domain regression covers that
-pre-reset state. The engine regression verifies completion is called once for
-a full SELL terminal transition and a duplicate terminal report cannot run it
-again.
+pre-reset state. The engine regressions verify completion is called once for
+a full SELL terminal transition, a duplicate terminal report cannot run it
+again, and a duplicate CANCELED report for a replaced recovery SELL cannot
+disturb the currently open replacement SELL.
 
 #### Latest TESTNET cancellation report: order 667975
 
