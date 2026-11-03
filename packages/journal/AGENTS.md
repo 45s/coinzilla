@@ -20,11 +20,12 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - Avoid new dependencies unless there is a concrete need.
 
 ## Workflow
-- Create a short-lived task branch from latest `develop`, such as `feature/journal/<task>` or `fix/journal/<task>`.
-- Open task PRs against `develop`; do not create a permanent domain branch.
+
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, roadmap status, branch cleanup, and releases.
+
+## Required package check
+
 - Run `pnpm --filter @coinzilla/journal test` after verifying the script exists, then applicable workspace checks.
-- The responsible agent may merge to `develop` only after required CI and target-freshness checks pass. No routine human approval is expected.
-- Never merge task work into `main`; the user approves only the final `develop` to `main` release PR.
-- Update this roadmap when work changes scope or status. Mark an item complete only after merge into `develop` and passing required checks.
+
 
 
