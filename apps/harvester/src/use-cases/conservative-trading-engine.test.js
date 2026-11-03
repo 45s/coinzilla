@@ -12,6 +12,7 @@ import {
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { multiplyDecimal } from "@coinzilla/utils"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -45,13 +46,14 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
   const accountedFillIds = new Set()
   const completedCycles = []
   const cancellationIds = []
+  const canceledOrders = new Map()
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -80,6 +82,9 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     },
     cancelOrder: async ({ order }) => {
       cancellationIds.push(order.brokerOrderId)
+      canceledOrders.set(order.brokerOrderId, order)
+      onCancelOrderStarted?.({ order })
+      if (cancelOrderGate) await cancelOrderGate.promise
       if (cancelThrow) throw new Error("cancel socket closed")
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       return {
@@ -104,22 +109,29 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
       }),
     }
     },
-    getFills: async ({ orderId }) => ({
-      ok: true,
-      data: cancelWithFill
-        ? [new Fill({
-            tradeId: "trailing-cancel-fill",
-            brokerOrderId: orderId,
-            market,
-            side: "BUY",
-            price: new Money({ amount: "99.95", asset: quoteAsset }),
-            quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-            quoteQuantity: new Money({ amount: "9.995", asset: quoteAsset }),
-            commissions: [],
-            commissionStatus: "COMPLETE",
-          })]
-        : [],
-    }),
+    getFills: async ({ orderId }) => {
+      const canceledOrder = canceledOrders.get(orderId)
+      return {
+        ok: true,
+        data: cancelWithFill && canceledOrder
+          ? [new Fill({
+              tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase(),
+              brokerOrderId: orderId,
+              clientOrderId: canceledOrder.clientOrderId,
+              market,
+              side: canceledOrder.side,
+              price: canceledOrder.limitPrice,
+              quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+              quoteQuantity: new Money({
+                amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
+                asset: quoteAsset,
+              }),
+              commissions: [],
+              commissionStatus: "COMPLETE",
+            })]
+          : [],
+      }
+    },
   }
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
