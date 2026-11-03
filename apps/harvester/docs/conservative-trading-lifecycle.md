@@ -70,8 +70,9 @@ No invested recovery capital
 The direct strategy tests are pure domain tests. Engine tests additionally
 verify that full SELL completion invokes the existing completion callback once,
 that a duplicate terminal report cannot complete/reset the cycle again, that a
-duplicate CANCELED report for a replaced recovery SELL leaves the current SELL
-open and owned, and that an ineligible completion leaves the cycle blocked.
+duplicate CANCELED report for a replaced recovery SELL—with Binance `c`
+differing from `C` and the local client ID—leaves the current SELL open and
+owned, and that an ineligible completion leaves the cycle blocked.
 
 These deterministic tests do not replace a bounded Binance Spot TESTNET run of
 BUY submission/fill, recovery SELL submission/fill, and the next BUY.
