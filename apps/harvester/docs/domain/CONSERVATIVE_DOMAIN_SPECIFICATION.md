@@ -47,7 +47,6 @@ One pooled recovery ledger per market contains:
 - `netSellProceeds`: cumulative executed SELL quote notional less quote-asset SELL commissions.
 - `outstandingRecoveryAmount = max(0, buyCost - netSellProceeds)`.
 - `realizedNetProfit = netSellProceeds - buyCost`.
-- Observed actual commission-rate history used only as a SELL planning reserve.
 - Applied fill IDs and fingerprints to make recovery accounting idempotent.
 
 The ledger is not an order ledger and does not contain open-order status, broker IDs, requested quantities, or market prices.
@@ -101,6 +100,20 @@ For each BUY fill:
 
 Partial fills are accounted incrementally. A BUY order is considered complete for the lifecycle transition only when the order's actual fill quantities sum exactly to the order quantity and the broker reports FILLED. A FILLED status with incomplete aggregate fill history pauses; it does not trigger recovery completion/next-order transitions. The next-BUY reference is calculated as total executed quote notional divided by total executed base quantity across every fill in that BUY order. It is not the submitted limit price and is not simply the price of the final partial fill. The completed order’s fill quantity must reconcile exactly to its reported executed quantity and original quantity before the recovery SELL/next-BUY transition proceeds.
 
+### 4.3 Commission and order-type policy
+
+The same policy applies to Conservative and Aggressive for every configured pair:
+
+- If `makerPercent = 0`, submit `LIMIT_MAKER` (POST-ONLY). If it would execute as taker, the exchange rejects it; do not fall back to a taker order.
+- If `makerPercent > 0`, submit regular `LIMIT`.
+- Always calculate the planning fee reserve from configured `makerPercent` only. A zero maker percentage means a zero planning reserve. A non-zero maker percentage is converted from percentage to decimal rate (for example, `0.1` means `0.001`).
+- `takerPercent`, the actual maker/taker liquidity role, and previously observed commission rates never change the planning estimate.
+- On every confirmed fill, use the actual commission amount and asset reported by the exchange for accounting. Never book the planning estimate as an actual expense.
+- Actual quote-asset BUY commissions are included in cumulative BUY cost, so the recovery SELL price must recover them. Actual quote-asset SELL commissions are deducted from net SELL proceeds. Base-asset commissions affect actual inventory quantities.
+- No commission-rate history is stored in the recovery ledger. Cycle resets clear cycle BUY cost and SELL proceeds but preserve fill identities for duplicate protection.
+
+Example: `makerPercent = 0`, `takerPercent = 0.1` means POST-ONLY with a zero planning reserve. `makerPercent = 0.1`, `takerPercent = 0.2` means regular LIMIT with a 0.1% planning reserve. In both cases, actual fill commissions—not the estimate—are used for accounting.
+
 ### 4.3 Recovery SELL planning
 
 Let:
@@ -130,7 +143,7 @@ $$
 
 The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover `C + m`, Conservative strategy's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
-The fee reserve is not a booked expense. Conservative strategy initializes the planning reserve to its configured SELL fee rate (zero when makerPercent is zero / post-only is selected), then raises it when a higher actual commission rate is observed. After a successful cycle it resets the per-cycle actual rate and restores the configured reserve. Harvester currently differs: calculateSellFeeRate returns zero while no non-zero actual commission has yet been observed; after an actual fee it uses the higher of the configured ceiling and observed rate (with a zero configured ceiling when makerPercent is zero). Actual commission rate is calculated from the actual commission asset and fill price/notional. This activation-timing difference should be verified as a focused implementation item.
+The planning reserve is always derived directly from configured `makerPercent`: convert the percentage to a decimal fraction and use that value for the SELL fee reserve. When `makerPercent` is zero, the reserve is zero. `takerPercent`, observed maker/taker execution role, and historical commission rates do not change the planning estimate. This is the same commission-planning policy for Conservative and Aggressive. The estimate is not booked as an expense.
 
 ### 4.4 SELL fill accounting
 
@@ -180,7 +193,7 @@ Let a canonical fill have gross base quantity `q`, gross quote notional `v`, bas
 
 A SELL is invalid if its total base consumption exceeds active strategy inventory. A commission in a third asset is not included in these formulas; the current policy rejects it.
 
-The effective actual commission rate for planning is the quote-equivalent value of the commission divided by executed quote notional. Base commission is valued at the actual fill price. Configured maker/taker rates are not actual costs.
+Configured `makerPercent` is used only as a planning estimate. It is never booked as an expense or inferred from observed fills. For accounting, use the actual commission amount and asset reported on each confirmed fill. Actual quote-asset BUY commissions increase `buyCost`; actual quote-asset SELL commissions reduce `netSellProceeds`. Base-asset commissions change actual base inventory.
 
 ## 6. Worked examples
 
@@ -307,7 +320,7 @@ stateDiagram-v2
 | Recovery SELL | Fee-reserved quantity, retained keep quantity, required net proceeds, quantity down / price up. | Same formula family. | Broadly aligned; exact base commission boundary needs validation. |
 | Minimum profit | Positive at planning/runtime; completed actual proceeds must cover cost + minProfit. Config validator currently allows zero. | Sell planner/completion require strictly positive minProfit. | Validation inconsistency in Conservative strategy; verify the intended validation boundary. |
 | Completion keep quantity | Conservative strategy accepts configured keepQuantity >= 0; completion requires actual inventory >= keep. | Harvester completion requires keepQuantity > 0. | Different boundary. |
-| Cycle reset | Resets cycle cost, proceeds and per-cycle observed actual commission rate; fill IDs remain in the runtime fill ledger. | `RecoveryLedger.resetCycle()` clears cost/proceeds but retains max observed fee rate and fill identities. | Different fee-history lifecycle. |
+| Cycle reset | Resets cycle cost and proceeds; execution identities remain available for deduplication. | `RecoveryLedger.resetCycle()` clears cost/proceeds and retains fill identities; no commission-rate history is kept. | Aligned after makerPercent-only planning change. |
 | Residual active inventory after allocation | Allocates exactly keep; any extra active inventory remains active. No immediate second recovery SELL is created by `#handleSellFilled`. | Completion helper allocates keep only; next strategy evaluation may propose a SELL for remaining active quantity even with a reset ledger. | Potential behavioral difference; needs explicit decision. |
 | SELL submission failure | Pair pauses; next standing BUY is not placed. | Domain returns intents only; submission sequencing/failure is application-owned. | Must be specified at integration boundary. |
 | FILLED status vs aggregate fills | Requires exact fill sum before completion; mismatch pauses. | Domain completion accepts boolean `sellOrderFullyFilled`; caller must provide trustworthy reconciled fact. | Requires clear adapter/application precondition. |
@@ -316,7 +329,7 @@ stateDiagram-v2
 
 - Strategy: initial BUY, active BUY de-duplication, BUY+SELL intents, active SELL de-duplication, missing increments, partial BUY wait, investment cap.
 - Portfolio/Position: immutable fill application, market isolation, dedupe/conflicting IDs, base/quote commissions, free allocation and oversell prevention.
-- RecoveryLedger: cumulative costs/net proceeds across multiple SELL fills, dedupe, market mismatch, conflicting identity, reset retains max fee rate and fill identities.
+- RecoveryLedger: cumulative costs/net proceeds across multiple SELL fills, dedupe, market mismatch, conflicting identity, reset clears cycle totals and retains fill identities.
 - Recovery accounting: quote/base commission behavior and unsupported commission cases.
 - SELL plan: keep quantity, partial proceeds, fee reserve, no sellable quantity, zero remaining proceeds, invalid inputs.
 - Completion: full-fill gate, minimum profit, sufficient keep inventory, exact free allocation.

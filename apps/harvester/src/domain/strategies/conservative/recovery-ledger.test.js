@@ -114,30 +114,26 @@ test("rejects a reused Fill ID when recovery execution facts differ", () => {
   )
 })
 
-test("retains the highest actual commission rate and fill identities across cycle reset", () => {
-  const withFee = RecoveryLedger.empty({ market }).applyFill({
+test("resets cycle totals while preserving fill identities for deduplication", () => {
+  const withBuy = RecoveryLedger.empty({ market }).applyFill({
+    fill: makeFill({ tradeId: "buy-before-reset" }),
+  }).ledger
+  const withSell = withBuy.applyFill({
     fill: makeFill({
-      tradeId: "buy-with-fee",
-      commissions: [
-        new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
-      ],
+      tradeId: "sell-before-reset",
+      side: "SELL",
+      quantity: "100",
+      quoteQuantity: "11",
     }),
   }).ledger
-  const reset = withFee.resetCycle()
+  const reset = withSell.resetCycle()
 
   assert.equal(reset.buyCost, "0")
   assert.equal(reset.netSellProceeds, "0")
-  assert.equal(reset.maxObservedCommissionRate, "0.001")
-  assert.equal(reset.appliedFillIds.length, 1)
+  assert.equal("maxObservedCommissionRate" in reset.value, false)
+  assert.equal(reset.appliedFillIds.length, 2)
   assert.equal(
-    reset.applyFill({
-      fill: makeFill({
-        tradeId: "buy-with-fee",
-        commissions: [
-          new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
-        ],
-      }),
-    }).duplicate,
+    reset.applyFill({ fill: makeFill({ tradeId: "buy-before-reset" }) }).duplicate,
     true,
   )
 })

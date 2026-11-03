@@ -1,68 +1,28 @@
 import {
   assertDecimalString,
   compareDecimal,
-  maxDecimal,
   percentageToRate,
 } from "@coinzilla/utils"
 
 /**
- * Resolve the Conservative strategy's planning fee reserve from configured
- * fee percentages and actual commission rates observed on this pair.
- *
- * Configured rates are not charged fees and are never booked as accounting.
- * The configured ceiling is activated only after an actual non-zero
- * commission has been observed, matching the Free-Roll specification.
+ * Convert configured makerPercent into the fee reserve used for recovery SELL
+ * planning. The estimate is always derived from makerPercent alone.
  *
  * @param {object} input
- * @param {string} input.makerPercent Human-readable percentage (0.075 = 0.075%).
- * @param {string} input.takerPercent Human-readable percentage (0.075 = 0.075%).
- * @param {string[]} input.observedCommissionRates Actual rates from reconciled fills.
- * @returns {{ feeRate: string }} Conservative decimal fraction for sell planning.
+ * @param {string} input.makerPercent Human-readable percentage (0.1 = 0.1%).
+ * @returns {{ feeRate: string }} Decimal fraction (0.001 = 0.1%).
  */
-export function calculateSellFeeRate({
-  makerPercent,
-  takerPercent,
-  observedCommissionRates = [],
-} = {}) {
+export function calculateSellFeeRate({ makerPercent } = {}) {
   assertDecimalString({ value: makerPercent, field: "makerPercent" })
-  assertDecimalString({ value: takerPercent, field: "takerPercent" })
 
   if (
     compareDecimal({ left: makerPercent, right: "0" }) < 0 ||
-    compareDecimal({ left: makerPercent, right: "100" }) >= 0 ||
-    compareDecimal({ left: takerPercent, right: "0" }) < 0 ||
-    compareDecimal({ left: takerPercent, right: "100" }) >= 0
+    compareDecimal({ left: makerPercent, right: "100" }) >= 0
   ) {
-    throw new RangeError("Maker and taker percentages must be from 0 inclusive to 100 exclusive")
+    throw new RangeError("Maker percentage must be from 0 inclusive to 100 exclusive")
   }
-  if (
-    !Array.isArray(observedCommissionRates) ||
-    observedCommissionRates.some((rate) => typeof rate !== "string")
-  ) {
-    throw new TypeError("observedCommissionRates must be an array of decimal strings")
-  }
-
-  let actualRate = "0"
-  for (const [index, rate] of observedCommissionRates.entries()) {
-    assertDecimalString({ value: rate, field: `observedCommissionRates[${index}]` })
-    if (compareDecimal({ left: rate, right: "0" }) < 0) {
-      throw new RangeError("Observed commission rates must be non-negative")
-    }
-    actualRate = maxDecimal({ left: actualRate, right: rate })
-  }
-
-  if (compareDecimal({ left: actualRate, right: "0" }) === 0) {
-    return Object.freeze({ feeRate: "0" })
-  }
-
-  const configuredCeiling = compareDecimal({ left: makerPercent, right: "0" }) === 0
-    ? "0"
-    : maxDecimal({
-      left: percentageToRate({ percent: makerPercent }),
-      right: percentageToRate({ percent: takerPercent }),
-    })
 
   return Object.freeze({
-    feeRate: maxDecimal({ left: configuredCeiling, right: actualRate }),
+    feeRate: percentageToRate({ percent: makerPercent }),
   })
 }

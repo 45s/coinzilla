@@ -63,7 +63,6 @@ export function evaluateConservativeStrategy({
   const ledger = recoveryLedger ?? {
     buyCost: "0",
     netSellProceeds: "0",
-    maxObservedCommissionRate: "0",
   }
   const orders = activeOrders.filter((order) => order?.market?.symbol === marketPrice.symbol)
   const hasActiveBuy = orders.some((order) =>
@@ -124,8 +123,6 @@ export function evaluateConservativeStrategy({
   if (!hasActiveSell && compareDecimal({ left: activeQuantity, right: "0" }) > 0) {
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
-      takerPercent: String(pairConfig.takerPercent),
-      observedCommissionRates: [ledger.maxObservedCommissionRate ?? "0"],
     }).feeRate
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,

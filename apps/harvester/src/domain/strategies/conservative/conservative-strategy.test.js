@@ -161,3 +161,21 @@ test("does not create another BUY when outstanding recovery plus the next order 
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
 })
+
+test("plans recovery SELL commission from makerPercent only for fee-bearing LIMIT pairs", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, makerPercent: 0.1, takerPercent: 0.2 },
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: { ...marketMetadata, orderType: "LIMIT" },
+    lastBuyPrice: "0.1",
+  })
+
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(sell.type, "LIMIT")
+  assert.equal(sell.quantity, "98.9")
+  assert.equal(sell.price, "0.102")
+})

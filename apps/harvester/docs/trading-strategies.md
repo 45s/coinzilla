@@ -77,6 +77,17 @@ Key characteristics:
 
 The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
 
+### Shared commission and order-type policy
+
+The same commission policy applies to Conservative and Aggressive:
+
+- `makerPercent = 0`: submit POST-ONLY `LIMIT_MAKER`; if it would take liquidity, the exchange rejects it. Never fall back to a taker order.
+- `makerPercent > 0`: submit regular `LIMIT`.
+- Estimate planning commission from configured `makerPercent` only. `takerPercent`, observed maker/taker execution role, and historical fees do not alter the estimate.
+- Use the actual commission amount and asset reported on each confirmed fill for accounting. The estimate is never booked as an expense.
+- Include actual BUY commissions in recovery BUY cost; subtract actual SELL commissions from net SELL proceeds. Base-asset fees affect actual inventory quantities.
+- Do not track historical commission rates in the recovery ledger.
+
 ### Aggressive — grid-style trading
 
 Aggressive is a higher-risk, grid-style strategy. It trades price movements using multiple active BUY and SELL orders. Unlike Conservative, it does not try to consolidate the whole position after every BUY; while it controls the pair, it can maintain several order opportunities and corresponding exits at the same time. It relinquishes control when actual executed BUY fills push the Position's quote investment above `conservativeTakeoverPercent` of the pair's planned total quote budget. Open/unfilled BUY orders are excluded from this strategy-switch calculation.

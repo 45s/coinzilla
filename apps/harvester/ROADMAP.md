@@ -106,7 +106,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [~] Preserve fee rules: actual fill commission rates are calculated from canonical fills; the configured maker/taker ceiling is activated only after a non-zero actual commission is observed; base/quote fees are supported; third-asset or incomplete commission data is rejected. The fee policy and calculation are implemented as pure domain functions but are not yet wired into strategy evaluation.
+- [~] Commission/order policy for both Conservative and Aggressive: `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`. Planning always uses configured `makerPercent` only; `takerPercent`, observed liquidity role, and historical fee rates do not alter the estimate. Actual exchange-reported commission amount/asset on each confirmed fill is authoritative for accounting: BUY fees are included in recovery cost, SELL fees reduce net proceeds, and base-asset fees adjust inventory. Runtime planning now uses makerPercent directly; focused regression coverage and CI are part of this task.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
@@ -663,3 +663,11 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [ ] Run the Harvester package tests and required CI checks on the task PR.
 - [ ] Verify this behavior in the bounded Binance TESTNET acceptance cycle. Offline tests do not prove exchange behavior.
 
+### Maker-percent commission planning — 2026-11-03
+
+- [x] Confirm order selection: zero `makerPercent` uses POST-ONLY `LIMIT_MAKER`; non-zero uses regular `LIMIT`.
+- [x] Confirm the same rule for Conservative and Aggressive.
+- [x] Confirm planning commission is always derived from configured `makerPercent` only; `takerPercent` and observed fill liquidity role do not change it.
+- [x] Confirm actual exchange-reported commission amounts/assets on each confirmed fill are authoritative for accounting, including BUY fees in recovery cost and SELL fees in net proceeds.
+- [~] Remove combined observed commission-rate state and use makerPercent-only planning throughout Harvester; validate with focused offline tests and required CI.
+- [ ] Merge the implementation into develop after all required checks pass. No TESTNET verification is claimed or required for this deterministic domain-policy change.
