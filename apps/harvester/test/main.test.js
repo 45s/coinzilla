@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { main } from '../src/index.js';
 
+const disabledJournalService = () => ({
+  ready: Promise.resolve({ ok: true, disabled: true }),
+  status: { state: 'disabled', enabled: false },
+  close: async () => ({ ok: true, closed: true, disabled: true }),
+});
+
 test('reports successful configuration startup without claiming a workflow ran', async () => {
   const messages = [];
   const logger = {
@@ -9,7 +15,7 @@ test('reports successful configuration startup without claiming a workflow ran',
     error: (...args) => messages.push(['error', ...args]),
   };
 
-  await main({ start: async () => ({}), logger });
+  await main({ createJournalService: disabledJournalService, start: async () => ({}), logger });
 
   assert.deepEqual(messages, [[
     'info',
@@ -32,6 +38,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
 
   process.exitCode = 0;
   await main({
+    createJournalService: disabledJournalService,
     start: async () => {
       throw startupError;
     },
@@ -39,11 +46,11 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  assert.equal(messages.length, 1);
-  assert.equal(messages[0][0], 'error');
-  assert.equal(messages[0][1].message, 'Harvester startup failed.');
-  assert.equal(messages[0][1].error, startupError);
-  assert.equal(messages[0][1].errorDetails.name, 'Error');
-  assert.equal(messages[0][1].errorDetails.message, 'Invalid trading config');
-  assert.match(messages[0][1].errorDetails.stack, /Invalid trading config/);
+  const startupLog = messages.find(([, entry]) => entry?.message === 'Harvester startup failed.');
+  assert.ok(startupLog);
+  assert.equal(startupLog[0], 'error');
+  assert.equal(startupLog[1].error, startupError);
+  assert.equal(startupLog[1].errorDetails.name, 'Error');
+  assert.equal(startupLog[1].errorDetails.message, 'Invalid trading config');
+  assert.match(startupLog[1].errorDetails.stack, /Invalid trading config/);
 });

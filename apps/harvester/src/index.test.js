@@ -1,5 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main } from "./index.js"
@@ -349,4 +352,229 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
     "journal.close",
     "eventBus.close",
   ])
+})
+
+
+test("continues EventBus cleanup when Journal close fails", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async (options) => {
+      operations.push("eventBus.close:" + options.timeoutMs)
+      return { ok: true, closed: true }
+    },
+  }
+  const journalService = {
+    close: async () => {
+      operations.push("journal.close")
+      throw new Error("journal fsync failed")
+    },
+  }
+  const handlers = {}
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => operations.push("runtime.stop"),
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    await handlers.SIGTERM()
+    assert.deepEqual(operations.slice(-2), ["journal.close", "eventBus.close:5000"])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("reports EventBus timeout and preserves Journal close result", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async (options) => {
+      operations.push("eventBus.close:" + options.timeoutMs)
+      return { ok: false, timedOut: true, errors: [new Error("EventBus close timed out")] }
+    },
+  }
+  const journalService = {
+    close: async () => {
+      operations.push("journal.close")
+      return { ok: true, closed: true, durable: true }
+    },
+  }
+  const handlers = {}
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => operations.push("runtime.stop"),
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    await handlers.SIGTERM()
+    assert.ok(operations.includes("journal.close"))
+    assert.ok(operations.includes("eventBus.close:5000"))
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("coalesces repeated shutdown signals into one cleanup operation", async () => {
+  const operations = []
+  const handlers = {}
+  let resolveStop
+  const stopGate = new Promise((resolve) => { resolveStop = resolve })
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async () => { operations.push("eventBus.close"); return { ok: true } },
+  }
+  const journalService = {
+    close: async () => { operations.push("journal.close"); return { ok: true } },
+  }
+  await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      stop: async () => { operations.push("runtime.stop"); await stopGate },
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+  const first = handlers.SIGINT()
+  const second = handlers.SIGTERM()
+  assert.equal(first, second)
+  resolveStop()
+  await Promise.all([first, second])
+  assert.equal(operations.filter((value) => value === "runtime.stop").length, 1)
+  assert.equal(operations.filter((value) => value === "journal.close").length, 1)
+  assert.equal(operations.filter((value) => value === "eventBus.close").length, 1)
+})
+
+test("closes observability after publishing startup failure", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async () => { operations.push("eventBus.close"); return { ok: true } },
+  }
+  const journalService = {
+    close: async () => { operations.push("journal.close"); return { ok: true } },
+  }
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => { throw new Error("bootstrap failed") },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    assert.deepEqual(operations, [
+      "publish:harvester.startup_failed",
+      "journal.close",
+      "eventBus.close",
+    ])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("disables the optional Journal from HARVESTER_JOURNAL_ENABLED", async () => {
+  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
+  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
+  const previousExitCode = process.exitCode
+  const parent = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-disabled-"))
+  const directory = path.join(parent, "disabled")
+  const handlers = {}
+  process.env.HARVESTER_JOURNAL_ENABLED = "false"
+  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
+  process.exitCode = 0
+  try {
+    const result = await main({
+      start: async () => ({ connected: false, stop: async () => {} }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    assert.equal(result.journalService.status.enabled, false)
+    await handlers.SIGTERM()
+    await assert.rejects(readdir(directory), { code: "ENOENT" })
+  } finally {
+    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
+    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
+    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
+    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
+    process.exitCode = previousExitCode
+    await rm(parent, { recursive: true, force: true })
+  }
+})
+
+test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY", async () => {
+  const previousEnabled = process.env.HARVESTER_JOURNAL_ENABLED
+  const previousDirectory = process.env.HARVESTER_JOURNAL_DIRECTORY
+  const previousExitCode = process.exitCode
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-session-"))
+  const handlers = {}
+  process.env.HARVESTER_JOURNAL_ENABLED = "true"
+  process.env.HARVESTER_JOURNAL_DIRECTORY = directory
+  process.exitCode = 0
+  try {
+    const eventBus = new EventBus()
+    const result = await main({
+      createEventBus: () => eventBus,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => {},
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    const ready = await result.journalService.ready
+    assert.equal(ready.ok, true)
+    assert.equal(result.journalService.status.state, "ready")
+
+    await handlers.SIGTERM()
+    assert.equal(result.journalService.status.state, "closed")
+    assert.equal(result.journalService.status.closed, true)
+
+    const files = await readdir(directory)
+    assert.equal(files.length, 1)
+    assert.match(files[0], /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{3})?\.jsonl$/)
+    const content = await readFile(path.join(directory, files[0]), "utf8")
+    const records = content.trim().split("\n").map((line) => JSON.parse(line))
+    assert.ok(records.some((record) => record.name === "harvester.stopped"))
+    assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
+    assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
+  } finally {
+    if (previousEnabled === undefined) delete process.env.HARVESTER_JOURNAL_ENABLED
+    else process.env.HARVESTER_JOURNAL_ENABLED = previousEnabled
+    if (previousDirectory === undefined) delete process.env.HARVESTER_JOURNAL_DIRECTORY
+    else process.env.HARVESTER_JOURNAL_DIRECTORY = previousDirectory
+    process.exitCode = previousExitCode
+    await rm(directory, { recursive: true, force: true })
+  }
 })

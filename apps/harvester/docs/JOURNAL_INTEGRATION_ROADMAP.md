@@ -270,7 +270,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7b — Flush and close Journal/EventBus
 
-**Status:** In progress on branch `feature/harvester/close-journal-event-bus`.
+**Status:** Merged into `develop` by PR #471; all CI checks passed.
 
 - Publish the final `harvester.stopped` event while Journal and EventBus are still available.
 - Close Journal after the final event so it can unsubscribe, drain accepted writes, and sync.
@@ -283,7 +283,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7c — Cleanup failure isolation and bounded shutdown
 
-**Status:** Not started; begin only after Step 7b is merged.
+**Status:** Merged into `develop` by PR #472; all CI checks passed.
 
 - Isolate runtime stop, Journal close, and EventBus close failures so later cleanup still runs.
 - Coalesce repeated SIGINT/SIGTERM shutdown requests.
@@ -291,7 +291,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 - Use the EventBus timeout contract; never report timeout as successful flush.
 - Set non-zero process exit status when shutdown is incomplete.
 
-**Tests:** Runtime stop failure; Journal close failure; EventBus flush/close timeout; repeated shutdown; startup failure; no unhandled rejection.
+**Tests:** Runtime stop failure; thrown/returned Journal close failure; EventBus close timeout; repeated shutdown; startup failure cleanup; no unhandled rejection.
 
 **PR boundary:** Failure isolation, timeout reporting, and shutdown idempotency only.
 
@@ -315,6 +315,8 @@ Split this work into three independently reviewable PRs; each must merge before 
 **Acceptance:** Normal shutdown drains accepted writes; broker cleanup still occurs when Journal fails; trading path never awaits storage; incomplete durability is reported honestly.
 
 ### Step 8 — Final documentation and operational verification
+
+**Status:** In progress on branch `fix/harvester/journal-env-config`.
 
 **Goal:** Close the feature with accurate docs and evidence.
 
