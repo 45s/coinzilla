@@ -507,10 +507,10 @@ The Conservative engine serializes its public market-price, user-data, and expli
 
 After the broker reports that its recovered user-data stream has completed
 stream-level reconciliation, bootstrap keeps the trading gate closed and
-queues Harvester reconciliation behind previously received user-data events.
-The trading gate is reopened only after the REST reconciliation succeeds and
-events already queued during the REST reads have passed through the same
-serialized event queue.
+starts REST reads without blocking normal stream-event processing. Before the
+REST snapshot is applied, bootstrap drains user-data events received during
+the reads; the engine then validates and applies the snapshot in its serialized
+transition queue. The trading gate is reopened only after both steps succeed.
 
 The Conservative engine reconciles only orders already present in its
 in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
@@ -524,8 +524,11 @@ the affected market paused and the application trading gate closed.
 
 REST fills are validated as a complete set before any are applied, deduplicated
 by stable `Fill.id` (market plus exchange trade ID), and ordered by execution
-time with trade ID as a deterministic fallback. Each recovered execution is
-then passed through the existing serialized user-data transition and paired
+time with trade ID as a deterministic fallback. The REST execution quantity
+must match the canonical order's cumulative executed quantity, must not lag the
+latest stream-updated order quantity, and must contain every execution ID
+already processed from the stream. Each recovered execution is then passed
+through the existing serialized user-data transition and paired
 Portfolio/RecoveryLedger accounting workflow; there is no second accounting
 path. Intermediate cumulative quantities are represented as partial order
 updates, and the final recovered fill carries the authoritative terminal
