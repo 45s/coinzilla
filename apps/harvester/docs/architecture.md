@@ -1,5 +1,10 @@
 # Harvester Architecture
 
+> **Audit companion:** See [DDD and Clean Architecture Audit](./DDD_CLEAN_ARCHITECTURE_AUDIT.md) for the source-based assessment, scorecard, current architectural risks, and sequenced follow-up roadmap. The audit is pinned to the source revision stated in that report; it is not a live status feed. The roadmap remains authoritative for delivery priority and implementation status.
+>
+> **Documentation rule:** this guide contains both stable architecture rules and implementation examples/snapshots. Treat claims about what is currently wired or not wired as time-sensitive; verify them against the current source and [Harvester Roadmap](../ROADMAP.md). Historical snapshots must not be used as current implementation instructions.
+
+
 ## Purpose
 
 Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative (Free-Roll) and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
@@ -135,7 +140,9 @@ Updated state available to the next strategy evaluation
 
 The diagram is a responsibility flow, not a mandated synchronous call sequence. Event delivery, serialization, persistence, and recovery contracts remain to be designed.
 
-### Implemented market-price and Portfolio flow
+### Historical implementation snapshot — superseded
+
+> **Historical note:** The following paragraphs describe an earlier Aggressive-first implementation snapshot. They are retained only as migration history and are not authoritative for current runtime behavior. In particular, statements below that the user-data stream is not normalized into canonical fills and that Aggressive is the only composed policy are obsolete. Use the [Harvester Roadmap](../ROADMAP.md) for current implementation status and the [DDD/Clean Architecture audit](./DDD_CLEAN_ARCHITECTURE_AUDIT.md) for the assessment and documentation follow-up.
 
 Bootstrap loads and validates trading-config.json, connects the selected broker, and subscribes only to enabled markets. The Binance adapter receives the broker package's normalized aggregate-trade stream; the application validates the symbol, decimal price string, and event timestamp before invoking the strategy. A failed subscription aborts startup and cleans up subscriptions already created. Shutdown unsubscribes before disconnecting.
 

@@ -584,3 +584,75 @@ Regression coverage added:
 - Registry rejects an event when its broker ID and client ID point to different registered orders.
 
 This is an intentional port of Free-Roll's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.
+
+
+## DDD and Clean Architecture audit follow-up
+
+The detailed source-code assessment is recorded in [DDD and Clean Architecture Audit](./docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md). It assesses the audited `develop` snapshot at `3ad32af9285db23f1f4e587e56f534f7871730aa`; re-check current code before implementing individual items. Overall architectural assessment: **7.5/10**. This is a qualitative design assessment, not a test, release-readiness, or runtime score.
+
+**Priority rule:** this work does not supersede [Trading First](./docs/TRADING_FIRST.md), the active P0 order-flow work, or the first real Conservative TESTNET acceptance. Documentation reconciliation can proceed now. Workflow refactoring should normally follow the first accepted TESTNET cycle unless a demonstrated correctness issue requires a targeted extraction.
+
+### DDD-01 — Audit documentation reconciliation (documentation)
+
+- [x] Record the detailed audit, scorecard, evidence scope, and video reference in `docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md`.
+- [x] Label the known obsolete Aggressive-first implementation snapshot in the architecture guide as historical and point readers to the current roadmap/audit. (Other implementation claims should continue to be updated with code changes.)
+- [ ] Ensure current-state claims carry a revision/date and link to implementation evidence.
+- [ ] Keep unresolved design decisions separate from implemented guarantees.
+
+**Acceptance:** a reader can distinguish stable architecture rules, verified implementation, future work, and unresolved decisions without contradictory claims.
+
+### DDD-02 — Harvester domain glossary and context map
+
+- [ ] Define Harvester-owned terms and distinguish them from shared canonical Entities contracts.
+- [ ] Document the Harvester / Entities / Brokers context relationship and dependency direction.
+- [ ] Document Journal/EventBus as optional observers, not trading-state authority.
+- [ ] Record contract ownership and consumer rules for shared concepts.
+
+**Acceptance:** ownership of each core concept and contract is explicit; no package split or public rename is required to complete this task.
+
+### DDD-03 — Portfolio / RecoveryLedger consistency contract
+
+- [ ] Document the distinct responsibility of Portfolio and RecoveryLedger.
+- [ ] Define canonical fill identity, duplicate and conflict behavior, and deduplication ownership.
+- [ ] Define the visibility/atomicity invariant when both projections are updated.
+- [ ] Specify behavior if one projection or workflow step fails.
+- [ ] Add deterministic tests proving no subsequent strategy evaluation sees a silently partial accounting transition.
+
+**Acceptance:** written invariant plus tests for normal, duplicate, conflicting, invalid, and partial-failure cases. Complete before durable persistence/restart recovery or broader concurrent-market expansion.
+
+### DDD-04 — Extract accounting/recovery workflows from bootstrap
+
+- [ ] Extract fill accounting coordination into a focused injected application workflow.
+- [ ] Extract recovery completion/free-inventory allocation and ledger reset if still implemented in bootstrap.
+- [ ] Keep bootstrap as composition root and process-lifecycle owner.
+- [ ] Preserve serialized event processing and add workflow/composition regression tests.
+
+**Acceptance:** accounting and recovery transitions can be tested without starting Harvester; bootstrap primarily wires dependencies and resources.
+
+### DDD-05 — Decompose Conservative Trading Engine incrementally
+
+- [ ] Map engine-owned mutable state to its responsible workflow or coordination boundary.
+- [ ] Extract cohesive submission/acknowledgement, cancellation/reconciliation, order-update, fill-processing, and post-transition evaluation workflows as evidence supports.
+- [ ] Keep transition serialization at the boundary that owns ordering.
+- [ ] Preserve fail-closed order ownership and actual-fill accounting.
+- [ ] Avoid class-per-event, callback-per-file, or broad rewrite.
+
+**Acceptance:** the engine becomes a focused orchestrator; existing lifecycle behavior is protected by deterministic regression tests.
+
+### DDD-06 — Executable architecture fitness checks
+
+- [ ] Enforce domain dependency rules in automated checks where practical.
+- [ ] Add/maintain broker adapter contract tests for canonical order and fill events.
+- [ ] Add coverage for accounting consistency and engine event sequencing.
+- [ ] Document process-local versus durable/cross-process guarantees.
+
+**Acceptance:** critical dependency rules and financial lifecycle invariants are tested, not only documented.
+
+### DDD-07 — Strategic boundary review (later, evidence-driven)
+
+- [ ] Review Harvester / Entities / Brokers ownership using actual change and dependency patterns.
+- [ ] Use an ADR for material aggregate, persistence-authority, or context-boundary changes.
+- [ ] Do not introduce microservices, CQRS, event sourcing, repositories, or a DI framework by default.
+
+**Acceptance:** any proposed boundary change includes rationale, consumer impact, migration plan, and tests.
+
