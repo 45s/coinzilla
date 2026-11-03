@@ -656,3 +656,10 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** any proposed boundary change includes rationale, consumer impact, migration plan, and tests.
 
+### Conservative next-BUY execution-price correction — 2026-11-03
+
+- [x] Use the actual volume-weighted average execution price of the completed BUY as the reference for the next standing BUY. Aggregate every canonical partial fill using executed quote notional / executed base quantity; never substitute the submitted limit price or the final partial-fill price.
+- [x] Require the observed BUY fill quantity to reconcile exactly with the broker's FILLED order quantities before advancing the recovery/next-BUY transition. Pause the pair when the fill history is incomplete or inconsistent.
+- [ ] Run the Harvester package tests and required CI checks on the task PR.
+- [ ] Verify this behavior in the bounded Binance TESTNET acceptance cycle. Offline tests do not prove exchange behavior.
+

@@ -516,6 +516,21 @@ const makeFilledOrder = ({ order }) => new CanonicalOrder({
   completedAt: 3,
 })
 
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({ amount: price, asset: quoteAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
 test("publishes recovery SELL cancellation only after broker confirmation and registry update", async () => {
   const events = []
   let engine
@@ -544,7 +559,11 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   assert.ok(sellOrder)
 
   const result = await engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
   })
   assert.equal(result.ok, true)
   const cancelled = events.find((event) =>
@@ -552,6 +571,55 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   assert.ok(cancelled)
   assert.equal(cancelled.data.side, "SELL")
   assert.equal(cancelled.data.status, "CANCELED")
+})
+
+test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
+  const { engine } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const firstFill = makeBuyFill({
+    order: buyOrder, tradeId: "buy-fill-1", price: "99.90", quantity: "0.4", quoteQuantity: "39.96",
+  })
+  const first = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.4" }),
+      fill: firstFill,
+    },
+  })
+  assert.equal(first.ok, true)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), undefined)
+
+  const secondFill = makeBuyFill({
+    order: buyOrder, tradeId: "buy-fill-2", price: "99.80", quantity: "0.6", quoteQuantity: "59.88",
+  })
+  const completed = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: secondFill,
+    },
+  })
+  assert.equal(completed.ok, true)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.84")
+})
+
+test("pauses instead of advancing when a filled BUY has incomplete execution-price history", async () => {
+  const { engine, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+  })
+  assert.equal(result.ok, false)
+  assert.ok(pauses.includes("BUY_FILL_RECONCILIATION_FAILED"))
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), undefined)
 })
 
 test("publishes recovery SELL cancellation failures and pauses the pair", async () => {
@@ -570,7 +638,11 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const result = await engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
   })
   assert.equal(result.ok, false)
   const failed = events.find((event) =>
@@ -597,7 +669,11 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const result = await engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({ order: buyOrder, tradeId: "completed-buy-fill", price: "99.95", quantity: "1", quoteQuantity: "99.95" }),
+    },
   })
   assert.equal(result.ok, false)
   const failed = events.find((event) =>
@@ -624,7 +700,7 @@ function makePartialFill({ order }) {
   })
 }
 
-function makePartiallyFilledOrder({ order, updatedAt = 2 }) {
+function makePartiallyFilledOrder({ order, updatedAt = 2, executedQuantity = "0.5" }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -633,7 +709,7 @@ function makePartiallyFilledOrder({ order, updatedAt = 2 }) {
     type: order.type,
     limitPrice: order.limitPrice,
     originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
     status: "PARTIALLY_FILLED",
     createdAt: order.createdAt,
     acknowledgedAt: order.acknowledgedAt,

@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -45,6 +45,7 @@ export function makeConservativeTradingEngine({
     registry: OrderRegistry.empty(),
     prices: new Map(),
     lastBuyPrices: new Map(),
+    buyExecutionTotals: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map(),
@@ -53,6 +54,34 @@ export function makeConservativeTradingEngine({
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(),
   }
+  const recordBuyExecutionFill = ({ fill }) => {
+    const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
+      quantity: "0",
+      quoteQuantity: "0",
+      fillIds: new Set(),
+    }
+    if (current.fillIds.has(fill.id)) return
+    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
+    current.quoteQuantity = addDecimal({ left: current.quoteQuantity, right: fill.quoteQuantity.amount })
+    current.fillIds.add(fill.id)
+    state.buyExecutionTotals.set(fill.brokerOrderId, current)
+  }
+
+  const getReconciledBuyExecutionPrice = ({ order }) => {
+    const totals = state.buyExecutionTotals.get(order.brokerOrderId)
+    if (!totals ||
+        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      throw new Error("Completed BUY execution history does not reconcile with the filled order quantity")
+    }
+    return divideDecimal({
+      left: totals.quoteQuantity,
+      right: totals.quantity,
+      scale: 18,
+      rounding: "half-up",
+    })
+  }
+
   const pause = async ({ symbol, reason, error }) => {
     const wasPaused = state.paused.has(symbol)
     state.paused.add(symbol)
@@ -526,6 +555,7 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
           return toResult({ errors: accounting?.errors ?? [error] })
         }
+        if (event.fill.side === "BUY") recordBuyExecutionFill({ fill: event.fill })
         if (accounting.data?.applied === true) {
           publishLifecycleEvent({
             eventPublisher,
@@ -594,6 +624,13 @@ export function makeConservativeTradingEngine({
       }
       if (order.status === "FILLED" && order.side === "BUY") {
         if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
+        let executionPrice
+        try {
+          executionPrice = getReconciledBuyExecutionPrice({ order })
+        } catch (error) {
+          await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
+          return toResult({ error })
+        }
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
           marketId: order.market.id,
@@ -601,7 +638,8 @@ export function makeConservativeTradingEngine({
         if (!cancellation.ok) return cancellation
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
-        state.lastBuyPrices.set(symbol, order.limitPrice.amount)
+        state.lastBuyPrices.set(symbol, executionPrice)
+        state.buyExecutionTotals.delete(order.brokerOrderId)
       }
       if (order.status === "FILLED" && order.side === "SELL") {
         state.replacementIntents.delete(symbol)

@@ -45,8 +45,11 @@ cross-pair shared-asset allocation is implemented.
   cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
   proceeds, and rounds the SELL price up to the exchange tick.
 - When inventory exists, also maintain the next standing BUY unless one is
-  already active. Its reference is the last qualifying BUY price; before a
-  last-buy reference exists, the current last traded price is used.
+  already active. Its reference is the volume-weighted average execution price
+  across all fills of the last completed BUY order (total executed quote
+  notional divided by total executed base quantity). Do not use the submitted
+  limit price or only the final partial fill. Before a completed BUY reference
+  exists, the current last traded price is used.
 - Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
   intents on subsequent market events. A new BUY is omitted when outstanding
   recovery capital plus the new order notional would exceed the pair investment cap.
