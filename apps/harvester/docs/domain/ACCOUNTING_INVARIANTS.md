@@ -25,29 +25,29 @@ Zero commission is zero. Negative commissions, incomplete commission facts, unsu
 
 ### BUY
 
-[
+$$
 \Delta ActiveBase = q-c_b
-]
-[
+$$
+$$
 \Delta QuoteCashFlow = -(v+c_q)
-]
-[
+$$
+$$
 \Delta BuyCost = v+c_q
-]
+$$
 
 Base commission reduces the base quantity actually received. Quote commission increases the cost of acquiring it.
 
 ### SELL
 
-[
+$$
 \Delta ActiveBase = -(q+c_b)
-]
-[
+$$
+$$
 \Delta QuoteCashFlow = v-c_q
-]
-[
+$$
+$$
 \Delta NetSellProceeds = v-c_q
-]
+$$
 
 Base commission is additional base inventory consumed by the SELL. Quote commission reduces proceeds.
 
@@ -76,20 +76,20 @@ Harvester implementation references: `Position.applyFill`, `Position.allocateFre
 
 For all unique accepted fills in a market:
 
-[
+$$
 BuyCost = \sum_{BUY}(v+c_q)
-]
-[
+$$
+$$
 NetSellProceeds = \sum_{SELL}(v-c_q)
-]
-[
+$$
+$$
 OutstandingRecovery = \max(0, BuyCost-NetSellProceeds)
-]
-[
+$$
+$$
 RealizedNetProfit = NetSellProceeds-BuyCost
-]
+$$
 
-1. BUY fills increase `buyCost`; SELL fills increase `netSellProceeds). A fill cannot change both.
+1. BUY fills increase `buyCost`; SELL fills increase `netSellProceeds`. A fill cannot change both.
 2. Base commission changes Portfolio inventory, not quote recovery cost/proceeds.
 3. Quote commission changes recovery cost/proceeds in the direction of the trade.
 4. `buyCost` and `netSellProceeds` are non-negative.
@@ -106,18 +106,18 @@ RealizedNetProfit = NetSellProceeds-BuyCost
 
 Let (A) be active base quantity, (K) keep quantity, (f) the approved fee reserve, (s) the quantity step, (t) the price tick, (C) BUY cost, (P) confirmed net SELL proceeds, and (m) minimum profit.
 
-[
+$$
 SellableBase = \max(0,A-K)
-]
-[
+$$
+$$
 Q = \operatorname{floorToStep}\left(\frac{SellableBase}{1+f},s\right)
-]
-[
+$$
+$$
 RequiredNetProceeds = \max(0,C+m-P)
-]
-[
+$$
+$$
 MinimumPrice = \frac{RequiredNetProceeds}{Q(1-f)}
-]
+$$
 
 When (Q>0), the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
 
@@ -144,7 +144,7 @@ A recovery cycle is eligible to complete only if all are true:
 5. Actual active base inventory is at least `keepQuantity`.
 
 On successful completion:
-- Allocate exactly `keepQuantity) from active to free inventory.
+- Allocate exactly `keepQuantity` from active to free inventory.
 - Do not alter total base quantity.
 - Reset the recovery ledger's cycle cost and proceeds exactly once.
 - Preserve all fill identity records across reset.
@@ -187,7 +187,7 @@ Then:
 - Net proceeds = 10.48.
 - Realized net profit = (10.48-10.02=0.46).
 - Outstanding recovery = 0.
-- If the final SELL order is fully reconciled and `minProfit <= 0.46), completion is eligible; 1 base can be allocated to free inventory.
+- If the final SELL order is fully reconciled and `minProfit <= 0.46`, completion is eligible; 1 base can be allocated to free inventory.
 
 ### B. Base-asset commissions
 
