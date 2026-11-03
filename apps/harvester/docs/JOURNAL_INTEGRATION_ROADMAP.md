@@ -202,23 +202,39 @@ This step is split into small independently reviewable PRs to keep instrumentati
 
 ### Step 6 — Publish execution and accounting facts
 
+Split this work into two independently reviewable PRs; Step 6a must merge before Step 6b begins.
+
+#### Step 6a — Successful Fill application
+
 **Goal:** Record actual executions without changing accounting authority.
 
 **Likely files:** `src/bootstrap/start-harvester.js`; `src/use-cases/update-trading-accounting.js`; focused DTO mappers; tests; event documentation; roadmap.
 
 **Work:**
-- Publish successful Fill application only after the existing accounting workflow succeeds.
+- Publish `execution.fill_applied` only when `updateTradingAccounting` reports `applied: true`, after the existing wrapper has committed both Portfolio and RecoveryLedger.
+- Use a small allowlisted DTO containing stable fill/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
+- Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6b.
+- Keep the sequential user-data queue and all current accounting invariants unchanged.
+- Do not await EventBus delivery or Journal in the user-data queue.
+
+**Tests:** Partial Fill; full Fill boundary where already covered; event only after accounting commit; duplicate Fill does not emit applied; malformed DTO; publisher failure while Portfolio/RecoveryLedger still update correctly.
+
+**Acceptance:** Only newly applied canonical fills produce `execution.fill_applied`; Journal failure cannot block valid execution processing or strategy reevaluation.
+
+**PR boundary:** Successful Fill application only.
+
+#### Step 6b — Execution and accounting failure diagnostics
+
+**Status:** Not started; begin only after Step 6a is merged.
+
 - Publish invalid/unowned execution and accounting failures with safe identifiers.
 - Optionally publish duplicate-fill suppression if it helps diagnose exchange delivery.
 - Publish recovery completion only from the actual domain transition.
-- Keep the sequential user-data queue and all current accounting invariants unchanged.
-- Do not await Journal in the user-data queue.
+- Preserve existing pause behavior, serialized user-data ordering, and accounting authority.
 
-**Tests:** Partial Fill; full Fill; duplicate Fill; invalid Fill; unowned order; unsupported commission; accounting failure; publication failure while Portfolio still updates correctly.
+**Tests:** Duplicate Fill; invalid Fill; unowned order; unsupported commission; accounting failure; recovery completion; publication failure isolation.
 
-**Acceptance:** Only actual canonical fills update Portfolio; Journal failure cannot block valid execution processing or strategy reevaluation.
-
-**PR boundary:** Execution/accounting events only.
+**PR boundary:** Failure, duplicate, and recovery-transition diagnostics only.
 
 ### Step 7 — Complete shutdown draining and end-to-end failure isolation
 
@@ -298,6 +314,8 @@ Every implementation PR must:
 - [x] Step 5b: pause and trailing BUY cancellation transitions (merged PR #461).
 - [x] Step 5c: recovery SELL cancellation transitions (merged PR #463).
 - [x] Step 5: strategy/order events (PRs #460, #461, #463).
-- [ ] Step 6: execution/accounting events.
+- [ ] Step 6a: successful Fill application event.
+- [ ] Step 6b: execution/accounting failure and recovery diagnostics.
+- [ ] Step 6: execution/accounting events (complete after 6a and 6b).
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.

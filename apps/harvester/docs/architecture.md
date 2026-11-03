@@ -447,3 +447,19 @@ non-CANCELED broker response are represented as safe failure outcomes.
 The existing recovery SELL fill reconciliation remains authoritative and runs
 unchanged after the cancellation response. Event publication does not wait for
 Journal delivery and cannot alter accounting or pause behavior.
+
+
+### Applied execution events
+
+Step 6a adds `execution.fill_applied`. The event is published only after the
+existing serialized accounting workflow succeeds and reports `applied: true`,
+which means both immutable Portfolio and RecoveryLedger projections have
+already been committed by the composition boundary. Duplicate/idempotent Fill
+deliveries do not emit a second applied event.
+
+The DTO contains only stable fill/order identifiers, market symbol, side,
+exact decimal price and quantity values, liquidity role, optional execution
+time, and commission status. It does not contain raw exchange messages,
+commission objects, account snapshots, credentials, or mutable domain values.
+Event publication is best-effort and is not awaited by the user-data queue.
+Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.

@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463). Do not repeat them. The next assignment is **Step 6 — Execution and accounting events**. Inspect its scope and split it into small independently testable PRs before implementation.
+Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463). Do not repeat them. The next assignment is **Step 6a — Successful Fill application event**, on branch `feature/harvester/fill-applied-event`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -74,14 +74,12 @@ Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, 
 - Do not change order selection or strategy policy.
 - EventBus publication must not be awaited and must not change cancellation or fill-reconciliation behavior.
 
-### Next Step 6 scope
+### Current Step 6a scope
 
-- Inspect the existing sequential user-data event queue and canonical Fill accounting workflow.
-- Publish a successful fill-applied event only after the existing accounting workflow returns success.
-- Publish safe invalid/unowned execution and accounting-failure facts where the existing boundaries expose them.
-- Consider duplicate-fill suppression and recovery-cycle completion only if they are distinct, useful transitions already present in the application flow.
-- Never publish raw exchange messages, SDK objects, credentials, full account snapshots, or mutable domain entities.
-- Preserve exact decimal strings in small allowlisted Harvester DTOs.
+- Publish `execution.fill_applied` only after `updateTradingAccounting` returns success with `applied: true`; the wrapper must already have committed both Portfolio and RecoveryLedger.
+- Use an allowlisted DTO with fill/order IDs, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
+- Do not publish idempotent duplicate fills in this PR; that is Step 6b.
+- Never publish raw exchange messages, SDK objects, credentials, full account snapshots, commission objects, or mutable domain entities.
 - Never await EventBus subscriber work or Journal persistence from the serialized user-data queue.
 - Do not change accounting authority, fill identity, order ownership, or strategy behavior.
 
@@ -89,7 +87,11 @@ Run the Harvester unit and coverage commands plus relevant workspace checks. If 
 
 ### Tests
 
-Add deterministic offline tests for successful Fill application, DTO allowlisting and decimal preservation, accounting failures, duplicate/unowned execution boundaries where applicable, and publisher failure isolation. Keep the existing accounting and queue tests intact.
+Add deterministic offline tests for partial Fill application, publication only after accounting commit, duplicate Fill suppression, DTO allowlisting and decimal preservation, and publisher failure isolation. Keep the existing accounting and queue tests intact.
+
+### Next Step 6b
+
+After Step 6a merges, handle invalid/unowned execution, accounting failures, duplicate-fill diagnostics, and recovery completion as a separate small PR.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, use actual PR CI results as the verification gate and never claim unrun checks passed.
 
