@@ -1,24 +1,7 @@
 # GitHub Copilot instructions
 
-Before proposing or making code changes, read the repository-root [AGENTS.md](../blob/main/AGENTS.md) and [ENGINEERING_STANDARDS.md](../blob/main/ENGINEERING_STANDARDS.md).
+Before planning or changing code, read the repository-root [AGENTS.md](../AGENTS.md), [ENGINEERING_STANDARDS.md](../ENGINEERING_STANDARDS.md), and [AI_AGENT_WORKFLOW.md](../AI_AGENT_WORKFLOW.md). Then read the closest domain `AGENTS.md` and `ROADMAP.md), and select the applicable checklist in [TASK_WORKFLOWS.md](../docs/engineering/TASK_WORKFLOWS.md).
 
-Treat ENGINEERING_STANDARDS.md as the project's engineering contract. Prefer clear names, cohesive functions, pure logic where practical, explicit side-effect boundaries, controlled mutation, meaningful tests, and simple designs. Do not force patterns or abstractions where they make the code worse.
-Treat ENGINEERING_STANDARDS.md as the project's engineering contract. Prefer clear names, cohesive functions, pure logic where practical, explicit side-effect boundaries, controlled mutation, meaningful tests, and simple designs. Do not force patterns or abstractions where they make the code worse.
+These linked documents are authoritative. This file intentionally contains no copied engineering, workflow, modularity, branch, testing, or communication policies. When instructions overlap, follow the canonical source identified by the root policy index.
 
-**Mandatory modularity rule:** Extract every meaningful, non-trivial pure function into a dedicated cohesive module, even if it currently has one caller. Do not bury validation, parsing, formatting, mapping, calculations, or business rules inside large classes/services. Keep classes/services focused on state and side-effect orchestration. Avoid god files; review files approaching 300 lines and require a concrete justification or refactoring plan for files over 500 lines. Do not fragment trivial expressions or tightly coupled logic just to reduce line counts. See the pure-function extraction and file-size guidance in `ENGINEERING_STANDARDS.md`.
-
-For every behavior change, add or update tests. Keep default tests deterministic and offline. Do not weaken tests or CI checks to get a green result. In the final summary, state which checks were actually run and whether they passed.
-
-
-**Reserved branch names:** Before creating, renaming, or pushing a task branch, follow the reserved branch-name protection in `AI_AGENT_WORKFLOW.md`. Never use `main` or `develop` as a task branch name or as a delimited token in a task branch name (case-insensitive), e.g. reject `feature/main/task`, `feature/develop/task`, `fix-main`, and `docs_develop_cleanup`. Choose a task-specific alternative before branch creation.
-
-## AI-agent communication rules
-
-- Never append a suggested continuation prompt or tell the user what prompt to send next. The user will ask when they want one.
-- Do not repeat information already provided; carry context forward.
-- Be concise by default: provide the shortest complete answer, summarize checks, and do not dump logs or produce unnecessarily long responses.
-- Do not add generic follow-up prompts, offers, or question lists. Ask only when a missing detail blocks safe or correct progress.
-
-## Mandatory repository workflow
-
-Before making changes, read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md`, then read the closest package/application `AGENTS.md`. Follow domain ownership, short-lived task branches from `develop`, target-aware synchronization, and the rule that only the user approves the final `develop` to `main` release PR. Do not ask the user to update branches manually.
+Do not invent repository conventions or duplicate existing APIs, utilities, entities, or documentation. Inspect the current implementation, consumers, tests, and public exports before designing a change.
