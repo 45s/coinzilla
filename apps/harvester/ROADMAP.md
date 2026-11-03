@@ -358,11 +358,23 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.6 implementation progress — engine transition serialization
 
-- [ ] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points have been wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. A deterministic concurrent market/user-data regression test uses an explicitly deferred SELL acknowledgement, then verifies cancellation waits while the PENDING order has no brokerOrderId (undefined), compares the recorded cancellation ID with the post-acknowledgement registry order, and does not double-account a duplicate fill. The harness options are wired into the broker fake. This work remains unverified until the Harvester test suite runs.
+- [x] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points are wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. The deterministic concurrent market/user-data regression test uses an explicitly deferred SELL acknowledgement, verifies no cancellation while the PENDING order has no brokerOrderId, compares the recorded cancellation ID with the post-acknowledgement registry order, and proves duplicate fill delivery is not double-accounted. Harvester suite passed 285/285 on commit a2728bd.
 - [ ] Re-entrant external callback behavior, cancellation eligibility and broker identifier validation, full CI, and TESTNET verification remain outstanding.
 
 
 ### P0.6 implementation progress — cancellation eligibility
 
-- [ ] Added a pure Harvester cancellation eligibility validator and applied it before recovery SELL and trailing BUY cancellation. The Binance adapter repeats eligibility checks for order-shaped requests and validates all forwarded IDs with the shared exported Binance normalizer. Added unit and adapter regression tests; execution remains pending CI.
+- [x] Added a pure Harvester cancellation eligibility validator and applied it before recovery SELL and trailing BUY cancellation. The Binance adapter repeats eligibility checks for order-shaped requests and validates all forwarded IDs with the shared exported Binance normalizer. Validator, adapter, and Binance ID tests passed in the full package test run on commit a2728bd.
 - [ ] Raw ID-only adapter calls receive Binance ID format validation but cannot prove order lifecycle state; Harvester application workflows must use order-shaped requests.
+
+
+### P0.6 verification snapshot — 2026-11-03
+
+- [x] Full workspace package tests passed on `a2728bd6d9925eb23c02ece7d1fe041e2060c3bd`: Harvester 285/285, shared utils 163/163, Free-Roll 313/313; workflow: https://github.com/45s/coinzilla/actions/runs/41606130252
+- [x] Shared utilities tests passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130302
+- [x] Workspace coverage passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130160
+- [x] JavaScript syntax and GitHub Actions lint passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130768
+- [x] Production dependency audit passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130085
+- [ ] Regression has not yet been run against the original pre-fix engine; only the fixed implementation's regression pass is confirmed.
+- [ ] A dedicated queue-rejection/re-entrant-callback test and Harvester logger-boundary diagnostics audit remain outstanding.
+- [ ] Bounded Binance Spot TESTNET verification remains outstanding. No production credentials or live orders were used.
