@@ -83,3 +83,39 @@ identified and understood that inventory.
 The script is under `scripts/`, outside the trading runtime. Its filtering
 logic is a plain pure function with deterministic offline tests. The API call
 reuses the shared TESTNET request helper and remains fixed to the TESTNET host.
+
+
+## Sell all free ZRO at market (destructive)
+
+Run from the repository root:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:sell-zro
+```
+
+The command is a standalone Binance Spot TESTNET operator tool, not part of
+Harvester's trading runtime. It is fixed to the TESTNET API host and the
+`ZROUSDT` market. The default run is a preview only. To submit, confirm the
+exact phrase `SELL ALL FREE ZRO ON TESTNET` when prompted.
+
+Before submission it reads the current free ZRO balance, loads the symbol's
+market quantity filters, rounds the quantity down using exact decimal
+arithmetic (preserving the maximum precision supplied by the balance and
+exchange filters), and displays the quantity that will be sold. It refuses to
+continue when the market is not trading, the available quantity is below
+the market minimum, or open orders exist for `ZROUSDT`. After confirmation
+it refreshes the balance and open orders; if the sellable quantity changed,
+it aborts and requires a new preview/confirmation.
+
+Only the free ZRO balance is eligible. ZRO locked in any order is not sold;
+cancel and inspect those orders separately if you intend to release it.
+The market order executes at the available market price and does not
+guarantee a particular execution price. The script does not cancel orders,
+transfer assets, or affect other symbols. Review the preview carefully:
+this command sells the entire displayed free ZRO quantity.
+
+The command is implemented by `scripts/sell-testnet-zro.js`; its exact
+quantity validation and step-size rounding live in the pure
+`scripts/testnet-sell-utils.js` module and are covered by
+`scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
+request helper. No live trading host or production mode is configurable.
