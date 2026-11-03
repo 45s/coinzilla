@@ -358,7 +358,7 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.6 implementation progress — engine transition serialization
 
-- [ ] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points have been wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. A deterministic concurrent market/user-data regression test uses an explicitly deferred SELL acknowledgement, then verifies cancellation waits while the PENDING order has no brokerOrderId (undefined), uses the acknowledged ID, and does not double-account a duplicate fill. The harness options are wired into the broker fake. This work remains unverified until the Harvester test suite runs.
+- [ ] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points have been wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. A deterministic concurrent market/user-data regression test uses an explicitly deferred SELL acknowledgement, then verifies cancellation waits while the PENDING order has no brokerOrderId (undefined), compares the recorded cancellation ID with the post-acknowledgement registry order, and does not double-account a duplicate fill. The harness options are wired into the broker fake. This work remains unverified until the Harvester test suite runs.
 - [ ] Re-entrant external callback behavior, cancellation eligibility and broker identifier validation, full CI, and TESTNET verification remain outstanding.
 
 
