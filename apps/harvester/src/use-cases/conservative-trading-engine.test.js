@@ -746,7 +746,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(buyOrder?.brokerOrderId)
   assert.equal(sellOrder?.status, "PENDING")
-  assert.equal(sellOrder?.brokerOrderId, null)
+  assert.equal(sellOrder?.brokerOrderId, undefined)
   const fill = new Fill({
     tradeId: "concurrent-buy-fill",
     brokerOrderId: buyOrder.brokerOrderId,
