@@ -344,3 +344,36 @@ test("ignores a stale OPEN acknowledgement that arrives after a newer fill event
   assert.equal(staleAcknowledgement.registry, partial)
   assert.equal(partial.getOrder({ clientOrderId: "harvester-1" }).status, "PARTIALLY_FILLED")
 })
+
+
+test("allows a late FILLED update after an EXPIRED order report", () => {
+  const registry = OrderRegistry.empty().registerPending({
+    order: makeOrder(),
+  }).registry
+  const expired = registry.applyUpdate({
+    order: makeOrder({
+      brokerOrderId: "9001",
+      status: "EXPIRED",
+      executedQuantity: "0",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+      completedAt: 102,
+    }),
+  }).registry
+  const filled = expired.applyUpdate({
+    order: makeOrder({
+      brokerOrderId: "9001",
+      status: "FILLED",
+      executedQuantity: "100",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 103,
+      completedAt: 103,
+    }),
+  })
+
+  assert.equal(filled.applied, true)
+  assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
+  assert.equal(filled.registry.getActiveOrders().length, 0)
+})

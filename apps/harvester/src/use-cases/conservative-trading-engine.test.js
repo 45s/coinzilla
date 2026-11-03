@@ -1248,3 +1248,89 @@ test("does not submit the next standing BUY when recovery SELL submission fails"
   assert.deepEqual(orders.map(({ side }) => side), ["SELL"])
   assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
 })
+
+
+function makeOrderStatusUpdate({ order, status, executedQuantity = "0", updatedAt = 2 }) {
+  const terminal = ["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(status)
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt,
+    ...(terminal ? { completedAt: updatedAt } : {}),
+  })
+}
+
+test("keeps UNKNOWN exchange order states active and waits for authoritative resolution", async () => {
+  const { engine, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const unknown = makeOrderStatusUpdate({ order: buyOrder, status: "UNKNOWN" })
+  const result = await engine.processUserDataEvent({ event: { executedOrder: unknown } })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.waitingForTerminalState, true)
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId).status, "UNKNOWN")
+  assert.deepEqual(pauses, [])
+})
+
+test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
+  for (const status of ["CANCELED", "EXPIRED"]) {
+    const { engine, pauses } = createHarness()
+    await engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+    const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+    const terminal = makeOrderStatusUpdate({ order: buyOrder, status })
+    const result = await engine.processUserDataEvent({ event: { executedOrder: terminal } })
+
+    assert.equal(result.ok, true, status)
+    assert.equal(result.data.reevaluate, true, status)
+    assert.deepEqual(pauses, [], status)
+  }
+})
+
+test("pauses when an EXPIRED order reports execution without reconciled fills", async () => {
+  const { engine, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const expired = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "EXPIRED",
+    executedQuantity: "0.1",
+  })
+  const result = await engine.processUserDataEvent({ event: { executedOrder: expired } })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(pauses, ["PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"])
+})
+
+test("pauses on an exchange REJECTED order update", async () => {
+  const { engine, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const rejected = makeOrderStatusUpdate({ order: buyOrder, status: "REJECTED" })
+  const result = await engine.processUserDataEvent({ event: { executedOrder: rejected } })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.paused, true)
+  assert.deepEqual(pauses, ["ORDER_REJECTED"])
+})
