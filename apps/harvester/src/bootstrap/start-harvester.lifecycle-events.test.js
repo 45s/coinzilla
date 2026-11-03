@@ -51,6 +51,7 @@ function createBroker({
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
