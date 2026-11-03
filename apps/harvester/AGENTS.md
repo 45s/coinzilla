@@ -59,49 +59,9 @@ state that explicitly in the commit/PR summary.
 - Do not run destructive commands, modify production systems, or change access controls without explicit authorization.
 
 
-## Required domain implementation style: classes and pure functions
+## Domain implementation style
 
-This section is mandatory for all new Harvester code and materially changed code. It makes the repository-wide pure-function extraction standard explicit for this application.
-
-### Plain pure functions are the default for domain logic
-
-**Deterministic calculations and decisions MUST be implemented as plain pure functions.** A pure function:
-- receives every input it needs through its arguments;
-- returns its result from those inputs alone;
-- does not read or mutate instance state, shared mutable state, globals, process configuration, clocks, randomness, files, databases, networks, or other external systems;
-- does not perform observable side effects; and
-- produces the same result for the same inputs.
-
-This is a required design rule, not merely a preference. It applies to meaningful domain:
-- calculations and arithmetic;
-- trading decisions and policy evaluation;
-- validation and invariant checks that do not require state mutation;
-- parsing, normalization, mapping, and transformation;
-- comparisons, predicates, and formatting.
-
-A meaningful pure function MUST be extracted into a focused, cohesive module instead of being implemented as a class method, hidden inside a service/use case, or embedded in a large orchestration file. This applies even when there is only one caller. Keep trivial expressions and tightly context-dependent callbacks local when extracting them would make the code harder to understand; do not create artificial one-line modules.
-
-Pure domain functions must not import broker SDKs, perform I/O, read environment variables, or depend on application/bootstrap modules. Pass required facts explicitly as arguments. Follow Harvester's object-input/object-output convention and use the established `toResult` convention when a result can fail.
-
-### When to use classes
-
-Use a class when a domain concept must own state and protect state-related invariants across its lifecycle. Examples include `Fill`, `Position`, and `Portfolio`.
-
-- Keep owned state in private fields where appropriate.
-- Expose read access through getters or deliberate domain methods.
-- Make state transitions explicit through methods that enforce the object's invariants.
-- Preserve immutability where the domain model requires it.
-- Do not put independent calculations, validation, mapping, or trading decisions into class methods just because the class has the relevant data. Extract those as pure functions and pass the required values explicitly.
-
-A value object may use a class when construction must enforce an invariant and the object benefits from encapsulating meaningful domain behavior. Do not turn every data shape into a class. Use a plain immutable value when a class adds no meaningful protection or behavior.
-
-### Application workflows
-
-Use cases are focused dependency-injected functions. They coordinate pure domain functions, stateful domain objects, and explicit ports. They may perform or coordinate side effects through injected dependencies, but must not absorb deterministic domain calculations or decisions.
-
-Strategies decide through plain pure functions wherever the decision can be expressed from explicit market, configuration, and portfolio inputs. They must not submit broker orders or perform I/O.
-
-**Review rule:** If a calculation or decision can be computed from explicit inputs without side effects, it must be a plain pure function in a focused domain module—not a method added to a class for stylistic consistency.
+Follow the repository [modularity standard](../../docs/engineering/MODULARITY_STANDARD.md). Harvester-specific requirements: deterministic trading calculations and strategy decisions are plain pure functions; classes own state and enforce lifecycle invariants; use cases coordinate workflows through injected ports. See [Architecture](./docs/architecture.md#implementation-pattern-for-use-cases) for the established factory/composition pattern.
 
 ## Required implementation style: use-case factories and explicit composition
 
@@ -129,11 +89,3 @@ Before implementing a use case, document its input, output, dependencies/ports, 
 - The shared logger accepts one data argument per method. Use a structured object such as `logger.error({ message, symbol, error })` when context is needed; do not pass metadata as a second argument.
 - The shared logger implementation in `packages/utils` is the only place where console output is expected.
 
-
-## Mandatory continuation prompt after every completed Harvester job or PR
-
-After every completed Harvester job and every PR closeout, the agent MUST finish its user-facing response with a complete, copy-paste-ready AI continuation prompt. This applies even when the job is only one milestone within a larger PR, or when the PR is still open and another agent must continue it.
-
-The prompt must state the exact PR status (number, URL, title, source/target branches, draft/open/merged/closed, and whether merged), latest commit message, concrete work completed, relevant files/docs/roadmap updates, exact CI/test results with links and pending/cancelled/not-run checks clearly identified, all remaining work and known blockers, and the next implementation steps in dependency order. It must repeat Harvester's critical constraints: pure functions for deterministic calculations/decisions, object-shaped inputs/outputs, shared decimal utilities, broker-independent strategy policies, no global console logging, deterministic offline tests, TESTNET-only integration verification, and live trading disabled by default.
-
-Before writing the prompt, re-check the current PR, branch, latest commit message, and CI status. Do not claim a feature is complete when only its foundations or placeholders exist. The prompt must direct the next agent to inspect the latest state and continue the existing PR/branch rather than starting duplicate work. It must end the response; a summary without this prompt is an incomplete handoff.
