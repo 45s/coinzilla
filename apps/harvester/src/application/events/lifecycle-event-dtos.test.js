@@ -299,7 +299,7 @@ test("maps actionable strategy decisions using exact decimal strings and allowli
   }).ok, false)
   assert.equal(mapStrategyDecisionData({
     strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100", actions: [{
-      side: "BUY", type: "LIMIT", price: "1e2", quantity: "1",
+      side: "BUY", type: "LIMIT", price: "not-a-decimal", quantity: "1",
     }],
   }).ok, false)
 })

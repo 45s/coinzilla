@@ -184,7 +184,7 @@ This step is split into two independently reviewable PRs to keep instrumentation
 - Keep all payloads allowlisted and preserve exact decimal strings.
 - Event publication remains synchronous best-effort admission only; never await subscriber or Journal work.
 
-**Tests:** DTO allowlisting/redaction and decimal preservation; event ordering around broker I/O; no-action filtering; rejected and unknown outcomes; publisher throw and never-resolving promise do not block broker submission.
+**Tests:** DTO allowlisting/redaction and exact decimal preservation; malformed decimal rejection; event ordering around broker I/O; no-action filtering; rejected and unknown outcomes; publisher throw and never-resolving promise do not block broker submission.
 
 **PR boundary:** Actionable strategy decision + submission request/acknowledgement/failure only. No pause/resume, cancellation, execution, or accounting events.
 
