@@ -1,5 +1,5 @@
 /**
- * Stable Harvester-owned names for operational lifecycle events.
+ * Stable Harvester-owned names for operational lifecycle and strategy/order events.
  *
  * EventBus owns the envelope, generated ID, timestamp, and payload snapshot.
  */
