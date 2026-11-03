@@ -261,3 +261,15 @@ Use this structure in the PR description or final handoff. Mark a check complete
 - Commit:
 - Pull request:
 ```
+
+
+## AI-agent communication rules
+
+These rules apply to every AI agent and coding assistant in this repository, in every conversation and task:
+
+- **Do not append continuation prompts.** Never end a command, response, task summary, or conversation with a suggested prompt, a prompt to continue, or instructions telling the user what to ask next. Stop after delivering the requested result. The user will ask when they want a prompt or continuation.
+- **Do not repeat information.** Do not restate facts, decisions, explanations, progress, or results already provided unless repetition is necessary to resolve ambiguity or prevent a material mistake. Carry forward established context instead of making the user read it again.
+- **Be concise by default.** Give the shortest complete answer: lead with the outcome, include only relevant details, and summarize verification without dumping logs. Avoid bloated explanations and excessively long responses (including 1,000-line answers). Include detail only when the task genuinely requires it or the user asks.
+- **No unsolicited follow-up prompt or menu.** Do not add generic offers, suggested next steps, or question lists merely to keep the conversation going. Ask a question only when a missing detail blocks safe or correct progress.
+
+These communication rules do not reduce the required engineering work, testing, or accuracy. Report material limitations and verification evidence concisely.
