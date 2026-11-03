@@ -99,22 +99,42 @@ export function makeConservativeTradingEngine({
     const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
     for (const order of activeSells) {
       if (order.status === "UNKNOWN") {
+        const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
+        publishOrderCancelFailed({ order, outcome: "ORDER_STATE_UNKNOWN", error })
         await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
-        return toResult({ error: new Error("Cannot safely cancel a recovery SELL with unknown status") })
+        return toResult({ error })
       }
-      const cancelResult = await broker.cancelOrder({ order })
+      let cancelResult
+      try {
+        cancelResult = await broker.cancelOrder({ order })
+      } catch (error) {
+        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error })
+        throw error
+      }
       if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
         const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
+        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error: errors[0] })
         await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED", error: errors[0] })
         return toResult({ errors })
       }
       const canceledOrder = cancelResult.data
       const update = state.registry.applyUpdate({ order: canceledOrder })
       if (update.unknown) {
+        const error = new Error("Canceled recovery SELL is not registered by Harvester")
+        publishOrderCancelFailed({ order, outcome: "NOT_REGISTERED", error })
         await pause({ symbol, reason: "CANCELED_ORDER_NOT_REGISTERED" })
-        return toResult({ error: new Error("Canceled recovery SELL is not registered by Harvester") })
+        return toResult({ error })
       }
       state.registry = update.registry
+      if (canceledOrder.status === "CANCELED") {
+        publishOrderCancelled({ order: canceledOrder })
+      } else {
+        publishOrderCancelFailed({
+          order: canceledOrder,
+          outcome: "NOT_CANCELED",
+          error: new Error("Recovery SELL completed instead of being canceled"),
+        })
+      }
 
       const fillsResult = await broker.getFills({
         symbol,

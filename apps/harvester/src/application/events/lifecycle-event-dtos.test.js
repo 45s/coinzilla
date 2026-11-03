@@ -416,3 +416,14 @@ test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
   })
   assert.equal(mapOrderCancelledData({ order: canonicalOrderFacts }).ok, false)
 })
+
+
+test("maps an unknown recovery SELL cancellation state safely", () => {
+  const result = mapOrderCancelFailedData({
+    order: canonicalOrderFacts,
+    outcome: "ORDER_STATE_UNKNOWN",
+    error: new Error("order state unavailable"),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.outcome, "ORDER_STATE_UNKNOWN")
+})

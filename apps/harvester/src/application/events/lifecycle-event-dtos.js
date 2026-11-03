@@ -318,7 +318,7 @@ export const mapOrderCancelledData = (input = {}) =>
 /** Map a cancellation that was not confirmed without retaining raw broker data. */
 export const mapOrderCancelFailedData = (input = {}) =>
   mapData(input, "Order-cancel-failed event mapping", ({ order, outcome, error }) => {
-    if (!["UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"].includes(outcome)) {
+    if (!["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"].includes(outcome)) {
       throw new TypeError("outcome must describe an unconfirmed or unsuccessful cancellation")
     }
     return {
