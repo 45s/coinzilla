@@ -146,7 +146,7 @@ async function startBothMarkets(engine) {
       symbol: market.symbol,
       priceEvent: { symbol: market.symbol, price: "100", timestamp: 1 },
     })
-    assert.equal(result.ok, true)
+    assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; ") ?? "Market evaluation failed")
   }
 }
 
