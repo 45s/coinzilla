@@ -227,7 +227,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6b — Invalid execution and accounting failure diagnostics
 
-**Status:** In progress on branch `feature/harvester/execution-failure-events`.
+**Status:** Merged into `develop` by PR #467; all CI checks passed.
 
 - Publish invalid/missing Fill and unowned-order execution facts with safe identifiers.
 - Publish accounting failures after the existing accounting workflow returns failure.
@@ -240,7 +240,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6c — Duplicate and recovery-cycle diagnostics
 
-**Status:** In progress on branch `feature/harvester/duplicate-recovery-events`.
+**Status:** Merged into `develop` by PR #468; all CI checks passed.
 
 - Optionally publish idempotent duplicate-fill suppression when the accounting result explicitly reports `duplicate: true`.
 - Publish recovery completion only after the existing domain/application transition reports it eligible and commits the new cycle.
@@ -329,8 +329,8 @@ Every implementation PR must:
 - [x] Step 5c: recovery SELL cancellation transitions (merged PR #463).
 - [x] Step 5: strategy/order events (PRs #460, #461, #463).
 - [x] Step 6a: successful Fill application event (merged PR #465).
-- [ ] Step 6b: invalid execution and accounting failure diagnostics.
-- [ ] Step 6c: duplicate and recovery-cycle diagnostics.
-- [ ] Step 6: execution/accounting events (complete after 6a–6c).
+- [x] Step 6b: invalid execution and accounting failure diagnostics (merged PR #467).
+- [x] Step 6c: duplicate and recovery-cycle diagnostics (merged PR #468).
+- [x] Step 6: execution/accounting events (PRs #465, #467, #468).
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.
