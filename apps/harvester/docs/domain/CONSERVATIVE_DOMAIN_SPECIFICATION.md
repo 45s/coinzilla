@@ -11,7 +11,7 @@ The Conservative strategy is a **standing-order accumulation strategy**. It main
 
 The initial BUY is submitted on the first valid price, one configured step below it. That initial order trails upward. After a BUY fills, the next standing BUY is fixed one step below the last BUY fill; trailing resumes after successful recovery completion.
 
-Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Conservative strategy's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Conservative strategy pair settings, and still has a combined MAKER/TAKER fee-history implementation where the agreed contract requires separate persistent rates. These differences are listed rather than silently normalized.
+Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Conservative strategy's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Conservative strategy pair settings, and still needs to align order selection and commission planning with the agreed makerPercent-only policy. These differences are listed rather than silently normalized.
 
 ## 2. Source of truth and scope
 
@@ -47,7 +47,6 @@ One pooled recovery ledger per market contains:
 - `netSellProceeds`: cumulative executed SELL quote notional less quote-asset SELL commissions.
 - `outstandingRecoveryAmount = max(0, buyCost - netSellProceeds)`.
 - `realizedNetProfit = netSellProceeds - buyCost`.
-- Highest exchange-charged MAKER and TAKER commission rates observed on this market, tracked separately and retained across successful recovery cycles.
 - Applied fill IDs and fingerprints to make recovery accounting idempotent.
 
 The ledger is not an order ledger and does not contain open-order status, broker IDs, requested quantities, or market prices.
@@ -130,16 +129,18 @@ $$
 
 The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover `C + m`, Conservative strategy's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
-The fee reserve is not a booked expense. `makerPercent` and `takerPercent` are configured percentage rates (for example, `0.1` means 0.1%). For each execution type, maintain a separate highest exchange-charged rate observed from confirmed fills:
+## Commission and order-type policy
 
-- `effectiveMakerRate = max(configured makerPercent converted to a decimal rate, highest exchange-charged MAKER rate observed)`.
-- `effectiveTakerRate = max(configured takerPercent converted to a decimal rate, highest exchange-charged TAKER rate observed)`.
+The same commission policy applies to Conservative and Aggressive.
 
-The configured rate is the minimum planning rate; an exchange charge can raise it but never lower it. A MAKER fill updates only the MAKER history. A TAKER fill updates only the TAKER history. Never combine the two histories, and never reset either history after a successful recovery cycle. This policy is identical for Conservative and Aggressive; strategy name does not determine the fee, the execution's MAKER/TAKER liquidity role does.
+- If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
+- If `makerPercent` is non-zero, submit a regular `LIMIT` order.
+- Use configured `makerPercent` as the commission estimate for planning in both cases. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
+- The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
+- Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
+- Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
 
-For a post-only `LIMIT_MAKER` order, use the effective MAKER rate for planning. For a `LIMIT` order that may execute as either maker or taker, reserve the higher of the effective MAKER and TAKER rates. For accounting, always use the commission charged on each confirmed fill, not the planning reserve. Calculate the fill's rate as the quote-equivalent value of the exchange commission divided by executed quote notional; value base-asset commission at the fill price. Third-asset or incomplete commission data remains unsupported and fails closed.
-
-**Implementation gap:** the current Harvester implementation keeps one combined `maxObservedCommissionRate`, combines the configured maker/taker ceiling, and returns a zero planning reserve until a non-zero commission is observed. It does not yet implement separate persistent MAKER/TAKER histories or the configured-rate minimum from the start. Track this as a focused follow-up; do not treat this specification update as proof that runtime behavior is already aligned.
+Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
 
 ### 4.4 SELL fill accounting
 
@@ -169,7 +170,7 @@ On success:
 - Allocate exactly `K` from active to free inventory.
 - Keep any additional active inventory in the active bucket.
 - Reset cycle BUY cost and SELL proceeds to zero.
-- Preserve the highest observed MAKER and TAKER commission rates across cycles; only cycle BUY cost and SELL proceeds reset.
+- Reset cycle BUY cost and SELL proceeds only after successful recovery completion; no commission-rate history is maintained.
 - Preserve free inventory outside future sellable quantity.
 - Re-enable trailing behavior for the next standing BUY.
 
@@ -192,7 +193,7 @@ Let a canonical fill have gross base quantity `q`, gross quote notional `v`, bas
 
 A SELL is invalid if its total base consumption exceeds active strategy inventory. A commission in a third asset is not included in these formulas; the current policy rejects it.
 
-For each confirmed fill, calculate the exchange-charged rate as the quote-equivalent commission value divided by executed quote notional; value base-asset commission at the fill price. Classify the rate using that fill's MAKER or TAKER liquidity role and update only the matching persistent rate history. Configured rates are planning minimums, not booked expenses. Portfolio and RecoveryLedger accounting always use the commission amount charged on the fill.
+For each confirmed fill, Portfolio and RecoveryLedger accounting use the commission amount and asset actually charged by the exchange. BUY commissions increase recovery BUY cost when charged in quote; base-asset BUY commissions reduce received inventory. SELL commissions reduce net SELL proceeds or sellable base inventory according to the commission asset. No commission-rate history is inferred or maintained.
 
 ## 6. Worked examples
 
