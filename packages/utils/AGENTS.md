@@ -32,11 +32,7 @@ Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch 
 
 ## Domain-specific constraints
 
-Before implementing anything that looks like a generic helper, search all existing packages/utils/src modules, tests, and public exports first, then search the monorepo for equivalent implementations and consumers. Follow [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). A missing helper should be added here only when it is domain-neutral; business rules and protocol-specific behavior stay with their owning domain.
-
-
-Only add utilities that are genuinely generic and reused or clearly reusable across domains. Do not move strategy, broker, entity, event-bus, or journal business rules into utils. Prefer pure functions and deterministic node:test coverage.
-
+This package owns only domain-neutral reusable capabilities. Follow the [Shared Utilities Policy](../../docs/engineering/SHARED_UTILITIES_POLICY.md) for search-first reuse, API ownership, logging, and utility classification.
 
 ## JavaScript and JSDoc
 
