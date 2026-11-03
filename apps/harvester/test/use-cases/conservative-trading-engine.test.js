@@ -419,8 +419,11 @@ test("duplicate terminal cancellation for a replaced recovery SELL cannot distur
   const canceledSellEvent = {
     eventType: "executionReport",
     executionType: "CANCELED",
+    originalClientOrderId: firstSellIntent.clientOrderId,
     executedOrder: new CanonicalOrder({
-      clientOrderId: firstSellIntent.clientOrderId,
+      // Binance c may differ from the locally submitted ID; brokerOrderId is
+      // the acknowledged ownership key, while C remains diagnostic metadata.
+      clientOrderId: "byuUoUY8oV0tD0h5adcqnq",
       brokerOrderId: "2",
       market,
       side: "SELL",
