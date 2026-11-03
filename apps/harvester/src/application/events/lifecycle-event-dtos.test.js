@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { EventBus } from "@coinzilla/event-bus"
+import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "./event-names.js"
 import {
   mapBrokerConnectedData,
@@ -16,6 +17,7 @@ import {
   mapOrderSubmissionFailedData,
   mapOrderCancelFailedData,
   mapOrderCancelledData,
+  mapFillAppliedData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapStrategyDecisionData,
@@ -48,6 +50,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     STRATEGY_PAUSED: "strategy.paused",
     ORDER_CANCELLED: "order.cancelled",
     ORDER_CANCEL_FAILED: "order.cancel_failed",
+    FILL_APPLIED: "execution.fill_applied",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -426,4 +429,48 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.outcome, "ORDER_STATE_UNKNOWN")
+})
+
+
+test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
+  const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+  const fill = new Fill({
+    tradeId: "trade-42",
+    brokerOrderId: "broker-order-42",
+    clientOrderId: "harvester-order-42",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "99.9500", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "0.500", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.97500", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 123,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const result = mapFillAppliedData({
+    fill,
+    apiSecret: "must-not-be-copied",
+    accountSnapshot: { balance: "private" },
+  })
+
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      fillId: fill.id,
+      brokerOrderId: "broker-order-42",
+      clientOrderId: "harvester-order-42",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      price: "99.95",
+      quantity: "0.5",
+      quoteQuantity: "49.975",
+      liquidityRole: "MAKER",
+      executedAt: 123,
+      commissionStatus: "COMPLETE",
+    },
+  })
+  assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
 })
