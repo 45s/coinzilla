@@ -23,4 +23,5 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   STRATEGY_PAUSED: "strategy.paused",
   ORDER_CANCELLED: "order.cancelled",
   ORDER_CANCEL_FAILED: "order.cancel_failed",
+  FILL_APPLIED: "execution.fill_applied",
 })

@@ -1,3 +1,4 @@
+import { Fill } from "@coinzilla/entities"
 import { assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
@@ -332,5 +333,29 @@ export const mapOrderCancelFailedData = (input = {}) =>
         : {}),
       outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+
+/** Map a canonical Fill only after both accounting projections were committed. */
+export const mapFillAppliedData = (input = {}) =>
+  mapData(input, "Fill-applied event mapping", ({ fill }) => {
+    if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
+    return {
+      fillId: requireString({ value: fill.id, field: "fillId" }),
+      brokerOrderId: requireString({ value: fill.brokerOrderId, field: "brokerOrderId" }),
+      ...(fill.clientOrderId === undefined ? {} : {
+        clientOrderId: requireString({ value: fill.clientOrderId, field: "clientOrderId" }),
+      }),
+      symbol: requireString({ value: fill.market.symbol, field: "symbol" }),
+      side: fill.side === "BUY" || fill.side === "SELL"
+        ? fill.side
+        : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
+      price: requireDecimalString({ value: fill.price?.amount, field: "price" }),
+      quantity: requireDecimalString({ value: fill.quantity?.amount, field: "quantity" }),
+      quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount, field: "quoteQuantity" }),
+      liquidityRole: requireString({ value: fill.liquidityRole, field: "liquidityRole" }),
+      ...(fill.executedAt === undefined ? {} : { executedAt: fill.executedAt }),
+      commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
     }
   })
