@@ -19,6 +19,7 @@ import {
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapStrategyDecisionData,
+  mapStrategyPausedData,
 } from "./lifecycle-event-dtos.js"
 
 const validLifecycle = {
@@ -44,6 +45,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_SUBMISSION_FAILED: "order.submission_failed",
+    STRATEGY_PAUSED: "strategy.paused",
+    ORDER_CANCELLED: "order.cancelled",
+    ORDER_CANCEL_FAILED: "order.cancel_failed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
