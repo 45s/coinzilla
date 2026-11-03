@@ -13,7 +13,7 @@ test('accepts complete, unique ownership maps', () => {
   assert.deepEqual(findOwnershipGaps([directory], ownershipRow(directory), workflowRow(directory)), []);
 });
 
-test('reports missing ownership and workflow entries independently', () => {
+test('reports missing ownership entries', () => {
   assert.deepEqual(findOwnershipGaps(['packages/new-domain'], '', ''), [
     'packages/new-domain missing from DOMAIN_OWNERSHIP.md',
     'packages/new-domain missing from AI_AGENT_WORKFLOW.md',
