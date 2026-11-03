@@ -100,7 +100,8 @@ exact phrase `SELL ALL FREE ZRO ON TESTNET` when prompted.
 
 Before submission it reads the current free ZRO balance, loads the symbol's
 market quantity filters, rounds the quantity down using exact decimal
-arithmetic, and displays the quantity that will be sold. It refuses to
+arithmetic (preserving the maximum precision supplied by the balance and
+exchange filters), and displays the quantity that will be sold. It refuses to
 continue when the market is not trading, the available quantity is below
 the market minimum, or open orders exist for `ZROUSDT`. After confirmation
 it refreshes the balance and open orders; if the sellable quantity changed,
