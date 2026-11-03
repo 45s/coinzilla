@@ -283,6 +283,7 @@ export async function startHarvester({
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
+  let userDataReconciliationQueued = false
   let stopped = false
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
@@ -589,6 +590,77 @@ export async function startHarvester({
         } else if (!initialAccountSnapshotReady) {
           userDataReady = false
           userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+        }
+        if (
+          status.type === "reconciled" &&
+          tradingEngine &&
+          initialAccountSnapshotReady &&
+          userDataRequiresReconciliation &&
+          !userDataAccountingFailed &&
+          !userDataReconciliationQueued
+        ) {
+          userDataReconciliationQueued = true
+          const reconciliationTask = userDataEventQueue.then(async () => {
+            if (stopped) return
+            logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
+            const reconciliation = await tradingEngine.reconcileOwnedOrders()
+            if (!reconciliation?.ok) {
+              userDataReady = false
+              userDataRequiresReconciliation = true
+              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+              logger.error?.({
+                message: "Harvester REST/stream order reconciliation failed; trading remains paused",
+                errors: reconciliation?.errors,
+              })
+              userDataReconciliationQueued = false
+              return
+            }
+
+            // Events received while REST was being queried are already chained
+            // behind this task. Reopen the trading gate only after those events
+            // have passed through the same serialized queue.
+            const queuedEvents = userDataEventQueue
+            const readinessTask = queuedEvents.then(async () => {
+              if (stopped || userDataAccountingFailed) return
+              userDataRequiresReconciliation = false
+              userDataReady = true
+              userDataStatus = "READY"
+              for (const symbol of reconciliation.data?.symbols ?? []) {
+                const evaluated = await tradingEngine.evaluateLatest({ symbol })
+                if (!evaluated?.ok) {
+                  userDataReady = false
+                  userDataRequiresReconciliation = true
+                  userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+                  logger.error?.({
+                    message: "Harvester strategy reevaluation failed after REST/stream reconciliation",
+                    symbol,
+                    errors: evaluated?.errors,
+                  })
+                  return
+                }
+              }
+              logger.info?.({
+                message: "Harvester REST/stream order reconciliation completed",
+                reconciledOrders: reconciliation.data?.reconciled ?? 0,
+              })
+              resumeDeferredStrategyEvaluations()
+            }).catch((error) => {
+              userDataReady = false
+              userDataRequiresReconciliation = true
+              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+              logger.error?.({ message: "Harvester readiness transition after reconciliation failed", error })
+            }).finally(() => {
+              userDataReconciliationQueued = false
+            })
+            userDataEventQueue = readinessTask
+          }).catch((error) => {
+            userDataReady = false
+            userDataRequiresReconciliation = true
+            userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+            userDataReconciliationQueued = false
+            logger.error?.({ message: "Harvester REST/stream order reconciliation failed", error })
+          })
+          userDataEventQueue = reconciliationTask
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
