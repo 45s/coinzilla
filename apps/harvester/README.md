@@ -45,9 +45,9 @@ The engine must not contain Conservative- or Aggressive-specific policy. Strateg
 
 See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
 
-### Operational event journal (deferred)
+### Operational event journal (planned)
 
-Harvester does not currently integrate EventBus or Journal. After the first real Conservative TESTNET cycle is demonstrated, use the [staged Journal integration roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) and its [AI implementation task](./docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md). The Journal is an optional observer: its initialization, writes, and shutdown must never block trading.
+Harvester does not currently integrate EventBus or Journal. This observability work can proceed independently of trading and TESTNET progress. The initial goal is simple lifecycle records such as application started/stopped and broker connected/disconnected; it does not require placing orders or receiving fills. Follow the [staged Journal integration roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) and its [AI implementation task](./docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md). Journal is an optional observer: its initialization, writes, and shutdown must never block application startup, broker connectivity, or trading.
 
 ### Portfolio domain
 
