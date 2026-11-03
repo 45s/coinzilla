@@ -7,7 +7,7 @@
 >
 > **Not first-loop prerequisites:** Journal/EventBus integration, durable persistence, restart recovery, comprehensive historical reconciliation, generic readiness/state machines, cross-pair allocation, dashboards, Aggressive, and broad reservation frameworks. Keep these deferred unless a specific failing order-flow case proves a narrowly scoped safeguard is required.
 >
-> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. P0.7 source changes now remove the clean-account/open-order/base-inventory startup gate and per-TRADE snapshots. Local execution of the new regression tests and the full verification sequence is still pending.
+> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. P0.7 source changes now remove the clean-account/open-order/base-inventory startup gate and per-TRADE snapshots. GitHub Actions passed the P0.7 head (including the Harvester, broker, and workspace suites), and a local TESTNET startup has now completed through configuration validation, Binance connection, exchange-rule loading, user-data subscription, initial account snapshot acceptance, engine activation, and ZROUSDT price subscription. The process is currently waiting for its first validated market-price event; no BUY has yet been submitted and no end-to-end TESTNET cycle is claimed.
 >
 > **No speculative fixes:** reproduce the observed event sequence, inspect the working Free-Roll implementation and shared broker mapping, identify the exact incorrect transition, add a deterministic regression test, then make the smallest change. A readiness deferral is not a broker rejection; a locally registered PENDING order is not cancellable until broker acknowledgement supplies a valid broker order ID.
 
@@ -295,7 +295,7 @@ updated PR head before treating this repair as verified.
 
 ## P0.7 — Restore the simple Free-Roll execution lifecycle (IN PROGRESS)
 
-### P0.7 implementation progress — source prepared; local verification pending
+### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
 
 The working branch now contains the first implementation pass. It follows the
 existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
@@ -320,12 +320,9 @@ existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
   reconciliation during cancellation, duplicate fill delivery, replacement
   quantity from latest accounting, and no per-TRADE account snapshot.
 
-**Still required before acceptance:** run the focused Harvester tests and full
-workspace checks locally, fix every failure, inspect the final diff, and
-perform an explicitly bounded Spot TESTNET cycle if credentials are available.
-No local test, CI, or TESTNET success is claimed by this source-preparation
-pass. Native Error/cause/AggregateError serialization from PR #462 is retained
-without a new logging implementation.
+**Verification evidence so far:** all five GitHub Actions workflows passed on the current PR head; the workspace test workflow reported 1,367 passing tests, including Harvester 298/298, brokers 274/274, and Free-Roll 313/313. The operator has now confirmed a local Binance Spot TESTNET startup: configuration validated for ZROUSDT, broker connected, exchange rules validated, user-data subscription established, initial account snapshot accepted (517 balances), Conservative engine activated, and the ZROUSDT market-price subscription established. The process log ends in the expected waiting state for a validated market price and user-data readiness. No market-price event, BUY submission, acknowledgement, fill, SELL, or subsequent cycle is evidenced yet. Do not infer a trading failure merely because the market has not emitted a qualifying price; continue observing the running process.
+
+**Still required before acceptance:** observe the first validated price and initial BUY request/acknowledgement; then capture the actual Binance execution reports, Portfolio/RecoveryLedger updates, recovery SELL, SELL fill, and next BUY. Diagnose the first missing/failed transition from those logs only. Local offline test execution remains unreported by the operator; GitHub Actions evidence is recorded above. Inspect the final diff and keep the bounded TESTNET run on Spot TESTNET only. Native Error/cause/AggregateError serialization from PR #462 is retained without a new logging implementation.
 
 
 **Priority: immediate. This task is about making the existing app trade reliably, not adding another architecture layer.** The latest `develop` includes PR #462 (`fix(harvester): serialize order lifecycle and preserve diagnostics`). Continue from that state; do not repeat already-merged work.
@@ -379,7 +376,10 @@ without a new logging implementation.
 - [x] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
 - [x] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
 - [x] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
-- [ ] Run deterministic offline Harvester tests, relevant shared-utils tests, lint/syntax checks, and repository CI. TESTNET is a separate explicit opt-in verification; never claim it ran without credentials and observed evidence.
+- [x] GitHub Actions on the current PR head: workspace tests (Harvester 298/298, brokers 274/274, Free-Roll 313/313; 1,367 total workspace tests passed), shared-utils tests, coverage, JavaScript syntax/workflow lint, and production dependency audit all passed. Local offline test execution has not yet been reported.
+- [x] Operator-confirmed local TESTNET startup: config validated; Binance connected; ZROUSDT exchange rules validated; user-data subscription active; initial account snapshot accepted; Conservative engine activated; market-price subscription established.
+- [ ] Observe a validated market-price event and verify the initial BUY submission and broker acknowledgement from local logs.
+- [ ] Verify actual execution reports, fill accounting, recovery SELL submission/fill, and the next BUY on Spot TESTNET. TESTNET remains incomplete until the full cycle is observed; never claim it ran beyond the supplied evidence.
 
 ### Out of scope for P0.7
 
