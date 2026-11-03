@@ -79,18 +79,7 @@ Do not use "production readiness", "future recovery", "complete architecture", o
 
 ## Engineering standards still apply
 
-Trading-first changes must still follow repository and Harvester engineering standards:
-
-- Meaningful deterministic calculations, validations, and strategy decisions MUST be plain pure functions in focused cohesive modules.
-- Classes are for domain concepts that own state and enforce lifecycle invariants; use cases coordinate workflows and side effects.
-- Every function uses one object input and one object output.
-- Use the established `toResult` convention for fallible workflows.
-- Search and reuse `@coinzilla/utils` and existing `@coinzilla/entities` / broker contracts before adding generic helpers or parallel models.
-- Strategies remain broker-independent; the engine/use cases submit orders through injected broker ports.
-- Use structured `defaultLogger` / injected logger; no global `console` calls in Harvester.
-- Add deterministic offline tests for every changed behavior. TESTNET order tests are explicit opt-in only.
-- Keep changes focused on the next missing trading step. Update this document's linked roadmap and relevant implementation docs as progress changes.
-
+Follow the canonical [repository engineering standards](../../../ENGINEERING_STANDARDS.md) and [Harvester agent instructions](../AGENTS.md). This document defines Harvester's product priority and TESTNET execution sequence only.
 ## Current implementation status
 
 The Conservative policy and in-process TESTNET workflow are implemented and have deterministic fake-broker coverage for initial BUY, trailing replacement, BUY-driven SELL replacement, full recovery SELL, and free-inventory allocation. The remaining first-milestone proof is a real Binance TESTNET run. The committed default config enables only ZROUSDT. Use the [controlled TESTNET runbook](../README.md#controlled-testnet-runbook); do not use production credentials.
