@@ -11,7 +11,7 @@ The working Free-Roll implementation is a **standing-order accumulation strategy
 
 **Correction to an earlier investigation note:** on the first usable price, Free-Roll both establishes its reference price and immediately submits a BUY limit order one configured step below that price. It does not wait for a second tick before submitting the initial order. Later, the initial BUY is trailed upward; subsequent standing BUYs are fixed at the last BUY fill price minus one step until the next recovery SELL completes and trailing resumes.
 
-Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Free-Roll's initial BUY trailing behavior in this domain function, supports an optional investment cap absent from the corresponding Free-Roll pair settings, and has some different fee/reset/completion semantics. These differences are listed rather than silently normalized.
+Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Free-Roll's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Free-Roll pair settings, and has some different fee/reset/completion semantics. These differences are listed rather than silently normalized.
 
 ## 2. Source authority and evidence
 
@@ -332,7 +332,7 @@ stateDiagram-v2
 | Initial BUY trailing | Trails upward; cancel and reconcile before replacement. | No trailing state/decision in `evaluateConservativeStrategy`. | Missing from current domain. |
 | Subsequent BUY | Fixed at last BUY price minus one step; placed after recovery SELL submission. | Uses supplied `lastBuyPrice` and may emit BUY whenever no active BUY exists. | Price basis broadly aligned; sequencing requires approval. |
 | BUY/SELL coexistence | Yes; next standing BUY can coexist with recovery SELL. | Yes; can emit both actions in one evaluation. | Aligned in policy intent; action ordering differs. |
-| Investment cap | No corresponding per-pair cap in inspected Free-Roll path. | Optional `pairConfig.investment` checks outstanding recovery plus new BUY notional. | Harvester-only policy; approval needed. |
+| Investment cap | No corresponding per-pair cap in inspected Free-Roll path. | Current config validator requires positive `pairConfig.investment`; strategy checks outstanding recovery plus new BUY notional. | Harvester-only policy; approval needed. |
 | BUY quantity | Configured quantity rounded down to exchange step. | Same broad rule. | Aligned. |
 | Fill accounting | Base/quote commissions handled; third-asset/incomplete unsupported. | Position and RecoveryLedger handle multiple base/quote commission entries; reject third asset/incomplete. | Stronger multi-entry representation in Harvester; confirm canonical Fill invariants. |
 | Fill identity | Stable trade + order IDs and immutable fill ledger; identical replay ignored, conflict fails. | Canonical Fill ID/fingerprint; Portfolio and RecoveryLedger dedupe independently. | Aligned, but atomic application across both projections needs a contract. |
