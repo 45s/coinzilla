@@ -354,3 +354,10 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 - The logger fix is required because actionable diagnostics are necessary to validate this failure and future broker failures; it must remain a focused shared-utils improvement.
 - Use Harvester's required DDD boundaries, pure functions for deterministic validation, object-shaped inputs/outputs, shared decimal/ID utilities, dependency injection, and `toResult`.
 - Keep default tests deterministic/offline. Live exchange tests must be explicit, opt-in, and TESTNET-only.
+
+
+### P0.6 implementation progress — shared logger
+
+- [ ] Shared Error/AggregateError normalization implementation and regression tests have been authored on the existing lifecycle-race branch; they still require execution in a repository checkout before this item can be marked complete.
+- [ ] Harvester lifecycle transition serialization, cancellation eligibility validation, broker-boundary ID validation, Harvester diagnostic integration tests, full CI, and bounded TESTNET verification remain outstanding.
+- [ ] Do not treat a GitHub source commit as evidence that tests, regression-before-fix verification, CI, or TESTNET checks passed.
