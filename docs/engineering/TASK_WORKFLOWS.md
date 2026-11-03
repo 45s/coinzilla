@@ -44,9 +44,4 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's 
 
 ## Before merge
 
-- Synchronize with the latest actual PR target branch.
-- Inspect the complete diff and verify the documentation-impact policy is satisfied.
-- Wait for every required CI status check to complete successfully on the exact PR head SHA.
-- Confirm the target branch is up to date; do not bypass rules or merge with pending/failed checks.
-- Merge task PRs to develop without routine human approval; reserve user approval for the release PR to main.
-- Delete the source branch after successful merge and verify deletion.
+Follow the authoritative synchronization, CI-gate, merge, branch-cleanup, and release requirements in [AI_AGENT_WORKFLOW.md](../../AI_AGENT_WORKFLOW.md). This checklist does not restate those lifecycle rules.

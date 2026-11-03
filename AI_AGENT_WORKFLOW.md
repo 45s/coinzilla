@@ -5,13 +5,14 @@
 This document defines how independent AI workstreams collaborate in the Coinzilla monorepo. The goal is to keep domain ownership clear, integration safe, and human process overhead low. These rules are mandatory; do not invent a different workflow for an individual task.
 
 
-### Harvester priority override
 
-When the owning task is Harvester, the task order is governed by [Harvester Trading First](apps/harvester/docs/TRADING_FIRST.md). The first deliverable is an executable Conservative TESTNET trading loop (configuration → price subscription → strategy decision → broker order → execution updates/fills → state update → next order). Do not let Journal, durable persistence, comprehensive recovery/reconciliation, optional operations features, optimization, or Aggressive work delay this. Build only the minimum safety needed for the current TESTNET cycle, then resume the order workflow. This is a mandatory product priority, not an optional roadmap preference.
+## Harvester priority
+
+Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). Harvester agents must read and follow that document; do not duplicate its product priorities here.
 
 ## 1. The short version
 
-**Before implementing any helper or cross-cutting capability, search packages/utils first.** Read [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md), inspect the public exports/tests in packages/utils, and then search the rest of the monorepo. Reuse or extend a domain-neutral shared capability instead of reimplementing it. Keep business and protocol rules with their owning domain. This applies to logging: use Logger / defaultLogger from @coinzilla/utils, not ad-hoc console calls or app-local logger replacements.
+Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
 
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
@@ -58,36 +59,13 @@ This restriction exists because GitHub's automatic head-branch deletion is not g
 
 ## 3. Domain ownership
 
-| Domain | Owned paths | Local instructions / roadmap |
-| --- | --- | --- |
-| Free-Roll application | `apps/bot-free-roll/**` | `apps/bot-free-roll/AGENTS.md`, `apps/bot-free-roll/ROADMAP.md` |
-| Harvester application | `apps/harvester/**` | `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md` |
-| Market Simulator package | `packages/market-simulator/**` | `packages/market-simulator/AGENTS.md`, `packages/market-simulator/ROADMAP.md` |
-| Entities | `packages/entities/**` | `packages/entities/AGENTS.md`, `packages/entities/ROADMAP.md` |
-| Brokers | `packages/brokers/**` | `packages/brokers/AGENTS.md`, `packages/brokers/ROADMAP.md` |
-| Utilities | `packages/utils/**` | `packages/utils/AGENTS.md`, `packages/utils/ROADMAP.md` |
-| Event bus | `packages/event-bus/**` | `packages/event-bus/AGENTS.md`, `packages/event-bus/ROADMAP.md` |
-| Journal | `packages/journal/**` | `packages/journal/AGENTS.md`, `packages/journal/ROADMAP.md` |
-| Notifications | `packages/notifiers/**` | `packages/notifiers/AGENTS.md`, `packages/notifiers/ROADMAP.md` |
+The authoritative domain/path/responsibility map is [DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md). Each task must have one primary owning domain. Read that domain's local `AGENTS.md` and `ROADMAP.md`; local instructions add domain constraints but do not redefine repository-wide policy.
 
-Root-level manifests, lockfiles, CI workflows, repository rules, shared documentation, and cross-cutting architecture are shared infrastructure. A task that changes them must explain why and identify every affected domain. Do not claim ownership of shared infrastructure merely because your task depends on it.
+Shared infrastructure is identified in the ownership document. Coordinate changes that cross ownership boundaries rather than silently modifying another domain.
 
-An agent must not silently modify another domain's implementation, tests, or roadmap to make its own task easier. If a task genuinely requires coordinated changes, follow the cross-domain process below.
+## 4. Cross-domain requests
 
-## 4. Cross-domain requests: consumer asks, owner implements
-
-When a consumer finds a bug, missing capability, or contract gap in another domain:
-
-1. **Describe the need.** Create a GitHub issue using the owning domain label/prefix or link the request in the task PR. Include the consumer use case, observed behavior, expected contract, evidence/tests, urgency, and the consumer task blocked by it.
-2. **Identify the owner.** The owning domain agent reads the request and decides the API/contract and implementation approach. The consumer must not prescribe an implementation unless the contract requires it.
-3. **Track the work.** The owner adds the accepted item to its own roadmap and marks it blocked/in progress as appropriate.
-4. **Implement in the owner domain.** The owner creates a short-lived task branch from `develop`, adds package-level tests, and opens a PR to `develop`.
-5. **Integrate and consume.** After the owner PR is merged, the consumer synchronizes its task branch with `develop`, then changes only its own domain and adds consumer-level tests.
-6. **Link the chain.** Link the request, owner PR, and consumer PR so the reason for the dependency remains discoverable.
-
-A bug report should include a minimal reproduction and actual vs expected behavior. A capability request should describe the consumer outcome and contract needed, not an assumed internal implementation. A breaking contract change must identify all known consumers and include a migration plan.
-
-For urgent coordinated work, agents may work in parallel, but each domain still submits its own focused PR. Do not combine unrelated domain edits into one large PR just to save a PR number.
+Use the authoritative [cross-domain request process](docs/engineering/CROSS_DOMAIN_REQUESTS.md) for bugs, capability gaps, and contract changes owned by another domain. The owning domain decides and implements its contract; consumers coordinate through linked requests and PRs.
 
 ## 5. Task PR requirements and automated integration
 
@@ -169,6 +147,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require conversation resolution.
 - Require zero human approvals; agents may merge their own PRs only after every required check is green.
 - Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
+- Keep GitHub automatic head-branch deletion enabled.
 - Do not configure bypass actors or admin bypass for these gates.
 
 ### `main`
@@ -179,7 +158,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 
 Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
 
-After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The active `develop-core` ruleset must require **every CI workflow check** listed below, with strict up-to-date branches and zero approving reviews. A missing, pending, cancelled, skipped-required, or failed required check must block merging. Do not add bypass actors. The active `main` ruleset must require at least one approving review for the release PR; do not rely on prose saying the user approves while GitHub technically permits zero approvals. The repository's automatic head-branch deletion setting must remain enabled.
+After configuration, read back both live rulesets and verify they match the requirements above. Derive exact required-check context names from successful workflow runs; never assume a workflow name is its status context. Do not claim a rule is active until the live ruleset confirms it.
 
 ## 11. Exceptions
 
@@ -209,15 +188,7 @@ This rule applies to every AI agent, coding assistant, human contributor, and au
 
 ## 13. JavaScript-first and JSDoc policy
 
-Coinzilla remains JavaScript-first unless the user approves a specific TypeScript requirement. AI agents must read [the JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) before changing language tooling or public API documentation.
-
-- Write runtime source in JavaScript and follow the package's existing Node.js module conventions.
-- Add JSDoc selectively for public contracts and non-obvious types; do not blanket-comment every function or variable.
-- Do not introduce TypeScript source, `tsconfig.json`, `checkJs`, declaration files, declaration generation, or a JSDoc build dependency merely to improve editor hints.
-- JSDoc must match the implementation and must not replace runtime validation or tests.
-- Treat TypeScript declaration support as an explicit compatibility requirement. JSDoc alone does not resolve every TypeScript declaration error, including `TS7016`.
-- If a task genuinely requires TypeScript interoperability, state which consumers need it, add accurate declarations, and test the published/resolved package contract without changing the JavaScript-only default.
-
+Follow the authoritative [JavaScript and JSDoc standard](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md). Do not restate or fork its language/tooling rules in workflow instructions.
 
 ## 14. Safe CI and repository-automation changes
 
@@ -232,32 +203,14 @@ CI is part of the repository's release safety boundary. Before changing a workfl
 7. Update policy-script tests and `ROADMAP.md`; distinguish a configured workflow from a required branch-protection check.
 8. Verify the exact final commit SHA against every required check before merge. If the tools cannot run checks or read a required ruleset, stop before merge and report the blocker.
 
-### Standard task completion report
 
-Use this structure in the PR description or final handoff. Mark a check complete only when its exact command or CI run actually passed.
+## AI-agent communication rules
 
-```markdown
-## Implementation
-- Changes:
-- Files affected:
-- Roadmap item(s):
+These rules apply to every AI agent and coding assistant in this repository, in every conversation and task:
 
-## Verification
-- [ ] Focused tests:
-- [ ] Workspace tests:
-- [ ] Coverage:
-- [ ] Syntax and policy:
-- [ ] Workflow validation:
-- [ ] Required CI on exact head SHA:
+- **Do not append continuation prompts.** Never end a command, response, task summary, or conversation with a suggested prompt, a prompt to continue, or instructions telling the user what to ask next. Stop after delivering the requested result. The user will ask when they want a prompt or continuation.
+- **Do not repeat information.** Do not restate facts, decisions, explanations, progress, or results already provided unless repetition is necessary to resolve ambiguity or prevent a material mistake. Carry forward established context instead of making the user read it again.
+- **Be concise by default.** Give the shortest complete answer: lead with the outcome, include only relevant details, and summarize verification without dumping logs. Avoid bloated explanations and excessively long responses (including 1,000-line answers). Include detail only when the task genuinely requires it or the user asks.
+- **No unsolicited follow-up prompt or menu.** Do not add generic offers, suggested next steps, or question lists merely to keep the conversation going. Ask a question only when a missing detail blocks safe or correct progress.
 
-## Review
-- Risks:
-- Known limitations:
-- Checks not executed:
-
-## Git
-- Target branch:
-- Source branch:
-- Commit:
-- Pull request:
-```
+These communication rules do not reduce the required engineering work, testing, or accuracy. Report material limitations and verification evidence concisely.

@@ -24,26 +24,11 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 
 ## Workflow
 
-- Create a short-lived task branch from the latest `develop`, using `feature/bot-free-roll/<task>` or `fix/bot-free-roll/<task>`.
-- Open task PRs against `develop`; do not use permanent domain branches.
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
 - Run the relevant package test: `pnpm --filter @coinzilla/bot-free-roll test` (verify the package script exists before relying on it), followed by applicable workspace checks.
-- The responsible agent may merge into `develop` only after required CI and target-freshness checks pass. No routine human approval is expected for `develop`.
-- Never merge task work into `main`. Only the user approves the final release PR from `develop` to `main`.
 
 ## Domain-specific constraints
 
 Do not import exchange SDKs or exchange-specific payloads into strategy/domain logic. Keep financial calculations exact and deterministic. Preserve all approved strategy invariants in README.md and ROADMAP.md. Do not change approved strategy policy without explicit user discussion.
 
 
-## Repository-wide modularity rule (mandatory)
-
-The pure-function extraction and file-size requirements in the root `ENGINEERING_STANDARDS.md` and `AGENTS.md` apply to every change in this package. They are mandatory, not optional style suggestions.
-
-- **Extract meaningful, non-trivial pure functions into focused separate modules, even when there is only one caller.** A function is a pure extraction candidate when its result depends only on explicit inputs and it does not read or mutate instance state, shared mutable state, globals, or external systems.
-- Keep validation, parsing, serialization, formatting, normalization, mapping, calculations, predicates, and business-rule decisions outside large classes/services whenever they can be expressed as pure functions. Classes/services should own state and coordinate side effects, not become containers for unrelated implementation details.
-- Group related pure functions by domain and responsibility. Use package/feature-local helpers for internal logic; use shared `utils` only for genuinely generic behavior. Do not create a miscellaneous catch-all module.
-- Keep pure logic independently testable. Add focused unit tests where they add confidence, and test orchestration through observable behavior. Keep I/O, network, filesystem, database, clock, randomness, logging, and process-environment access at explicit boundaries.
-- Avoid god files. Review files approaching 300 lines for cohesive extraction opportunities. Files exceeding 500 lines require a refactoring plan or a concrete technical justification in the PR. These are review triggers, not arbitrary limits.
-- Do not fragment trivial expressions, tiny context-dependent callbacks, or tightly coupled logic merely to reduce line count. The goal is cohesion, low coupling, readability, and independent testability—not the maximum number of files.
-
-When modifying an existing large file, improve its structure as part of the task when the extraction is relevant and safe. Do not expand an already fragmented architecture or undertake unrelated mass refactoring.
