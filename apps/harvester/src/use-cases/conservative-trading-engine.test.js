@@ -1070,3 +1070,44 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   assert.equal(accountedFills.length, 1)
   assert.equal(orders.length, 2)
 })
+
+
+test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, cancellationIds, pauses } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+  })
+
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const previousSell = engine.getOrders().find((order) => order.side === "SELL")
+  const completedBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(previousSell)
+  assert.ok(completedBuy)
+
+  const transition = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: completedBuy }),
+      fill: makeBuyFill({
+        order: completedBuy,
+        tradeId: "next-buy-completion-ordering",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+
+  assert.equal(transition.ok, true)
+  assert.deepEqual(cancellationIds, [previousSell.brokerOrderId])
+  assert.deepEqual(orders.slice(-2).map(({ side }) => side), ["SELL", "BUY"])
+
+  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
+  assert.deepEqual(pauses, [])
+})
