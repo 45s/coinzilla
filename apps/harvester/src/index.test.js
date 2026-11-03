@@ -2,6 +2,17 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { main } from "./index.js"
 
+const disabledJournalService = () => ({
+  ready: Promise.resolve({ ok: true, disabled: true }),
+  status: { state: "disabled" },
+  close: async () => ({ ok: true, closed: true, disabled: true }),
+})
+
+const runMain = (options = {}) => main({
+  createJournalService: disabledJournalService,
+  ...options,
+})
+
 test("uses the injected logger when startup succeeds without a broker", async () => {
   const calls = []
   const logger = {
@@ -12,7 +23,7 @@ test("uses the injected logger when startup succeeds without a broker", async ()
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
-    await main({
+    await runMain({
       start: async () => ({ connected: false }),
       logger,
     })
@@ -38,7 +49,7 @@ test("logs startup failures as one structured logger argument", async () => {
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
-    await main({
+    await runMain({
       start: async () => { throw error },
       logger,
     })
@@ -59,7 +70,7 @@ test("logs startup failures as one structured logger argument", async () => {
 
 test("reports the actual Conservative TESTNET trading mode at startup", async () => {
   const messages = []
-  await main({
+  await runMain({
     start: async () => ({
       connected: true,
       tradingEnabled: true,
@@ -75,7 +86,7 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
 
 test("reports broker-connected read-only mode without claiming trading is blocked by unresolved rules", async () => {
   const messages = []
-  await main({
+  await runMain({
     start: async () => ({
       connected: true,
       tradingEnabled: false,
@@ -97,7 +108,7 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
-    await main({
+    await runMain({
       start: async () => { throw error },
       logger: {
         info() {},
@@ -127,7 +138,7 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
     },
   }
 
-  await main({
+  await runMain({
     createEventBus: ({ logger }) => {
       eventBusCreations += 1
       assert.ok(logger)
@@ -145,4 +156,28 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
   const event = { name: "harvester.test", source: "test", data: {} }
   assert.equal(startupInput.eventPublisher.publish(event).ok, true)
   assert.deepEqual(publishedEvents, [event])
+})
+
+test("does not wait for optional Journal initialization before starting Harvester", async () => {
+  let resolveReady
+  let runtimeStarted = false
+  const journalService = {
+    ready: new Promise((resolve) => { resolveReady = resolve }),
+    status: { state: "starting" },
+    close: async () => ({ ok: true, closed: true }),
+  }
+
+  const result = await runMain({
+    createJournalService: () => journalService,
+    start: async () => {
+      runtimeStarted = true
+      return { connected: false }
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  assert.equal(runtimeStarted, true)
+  assert.equal(result.journalService, journalService)
+  assert.equal(result.journalService.status.state, "starting")
+  resolveReady({ ok: false, errors: [new Error("journal unavailable")] })
 })

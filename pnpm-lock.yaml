@@ -201,6 +201,9 @@ importers:
       '@coinzilla/event-bus':
         specifier: workspace:*
         version: link:../../packages/event-bus
+      '@coinzilla/journal':
+        specifier: workspace:*
+        version: link:../../packages/journal
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
