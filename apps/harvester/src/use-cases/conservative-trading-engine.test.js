@@ -1469,7 +1469,7 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
 
   const reconciled = await engine.reconcileOwnedOrders()
 
-  assert.equal(reconciled.ok, true)
+  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["rest-fill-1", "rest-fill-2"])
   assert.equal(
     engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).executedQuantity.amount,
