@@ -12,6 +12,13 @@ For every behavior change, add or update tests. Keep default tests deterministic
 
 **Reserved branch names:** Before creating, renaming, or pushing a task branch, follow the reserved branch-name protection in `AI_AGENT_WORKFLOW.md`. Never use `main` or `develop` as a task branch name or as a delimited token in a task branch name (case-insensitive), e.g. reject `feature/main/task`, `feature/develop/task`, `fix-main`, and `docs_develop_cleanup`. Choose a task-specific alternative before branch creation.
 
+## AI-agent communication rules
+
+- Never append a suggested continuation prompt or tell the user what prompt to send next. The user will ask when they want one.
+- Do not repeat information already provided; carry context forward.
+- Be concise by default: provide the shortest complete answer, summarize checks, and do not dump logs or produce unnecessarily long responses.
+- Do not add generic follow-up prompts, offers, or question lists. Ask only when a missing detail blocks safe or correct progress.
+
 ## Mandatory repository workflow
 
 Before making changes, read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md`, then read the closest package/application `AGENTS.md`. Follow domain ownership, short-lived task branches from `develop`, target-aware synchronization, and the rule that only the user approves the final `develop` to `main` release PR. Do not ask the user to update branches manually.
