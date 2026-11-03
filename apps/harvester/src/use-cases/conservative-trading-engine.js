@@ -22,6 +22,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
@@ -33,6 +34,12 @@ export function makeConservativeTradingEngine({
     completeRecoveryCycle, canTrade, onPause, isStopping,
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
+  }
+  let transitionTail = Promise.resolve()
+  const runTransition = ({ task } = {}) => {
+    const current = transitionTail.then(task)
+    transitionTail = current.catch(() => undefined)
+    return current
   }
   const state = {
     registry: OrderRegistry.empty(),
@@ -67,6 +74,15 @@ export function makeConservativeTradingEngine({
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
     dataResult: mapOrderCancelFailedData({ order, outcome, error }),
   })
+  const ensureCancellationEligible = async ({ symbol, order, reason }) => {
+    const result = validateCancellationEligibility({ order })
+    if (result.ok) return result
+    const error = result.errors[0]
+    publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
+    await pause({ symbol, reason, error })
+    return result
+  }
+
   const submit = makeExecuteStrategyDecision({
     broker,
     onPendingOrder: async ({ order }) => {
@@ -110,6 +126,12 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
         return toResult({ error })
       }
+      const eligibility = await ensureCancellationEligible({
+        symbol,
+        order,
+        reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
+      })
+      if (!eligibility.ok) return eligibility
       let cancelResult
       try {
         cancelResult = await broker.cancelOrder({ order })
@@ -182,6 +204,12 @@ export function makeConservativeTradingEngine({
   }
 
   const cancelAndReconcileTrailingBuy = async ({ symbol, order } = {}) => {
+    const eligibility = await ensureCancellationEligible({
+      symbol,
+      order,
+      reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
+    })
+    if (!eligibility.ok) return eligibility
     let cancelResult
     try {
       cancelResult = await broker.cancelOrder({ order })
@@ -254,7 +282,7 @@ export function makeConservativeTradingEngine({
     const pairConfig = tradingConfig.pairs[symbol]
     const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .find((order) => order.side === "BUY")
-    if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatest({ symbol })
+    if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatestTransition({ symbol })
 
     const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
     const trigger = evaluateTrailingBuyRepricing({
@@ -262,7 +290,7 @@ export function makeConservativeTradingEngine({
       referencePrice,
       priceStepPercent: String(pairConfig.priceStepPercent),
     })
-    if (!trigger.shouldReplace) return evaluateLatest({ symbol })
+    if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
     const cancellation = await cancelAndReconcileTrailingBuy({ symbol, order: activeBuy })
@@ -272,7 +300,7 @@ export function makeConservativeTradingEngine({
       return toResult({ data: { canceled: true, waitingForTradingReadiness: true } })
     }
 
-    const result = await evaluateLatest({ symbol })
+    const result = await evaluateLatestTransition({ symbol })
     if (!result.ok) return result
     return toResult({
       data: {
@@ -284,7 +312,7 @@ export function makeConservativeTradingEngine({
     })
   }
 
-  const evaluateLatest = async ({ symbol } = {}) => {
+  const evaluateLatestTransition = async ({ symbol } = {}) => {
     if (state.paused.has(symbol) || !canTrade({ symbol })) {
       return toResult({ data: { skipped: true, reason: state.paused.has(symbol) ? "PAIR_PAUSED" : "TRADING_NOT_READY" } })
     }
@@ -349,25 +377,25 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const processMarketPrice = async ({ symbol, priceEvent } = {}) => {
+  const processMarketPriceTransition = async ({ symbol, priceEvent } = {}) => {
     try {
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       state.prices.set(symbol, price)
-      if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatest({ symbol })
+      if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
       const metadata = getMarketMetadata({ symbol })
       const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .find((order) => order.side === "BUY")
       if (activeBuy && state.trailingBuy.get(symbol) !== false) {
         return maybeReplaceTrailingBuy({ symbol, marketPrice: price })
       }
-      return evaluateLatest({ symbol })
+      return evaluateLatestTransition({ symbol })
     } catch (error) {
       return toResult({ error })
     }
   }
 
-  const processUserDataEvent = async ({ event } = {}) => {
+  const processUserDataEventTransition = async ({ event } = {}) => {
     try {
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
@@ -488,6 +516,13 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
   }
+
+  const processMarketPrice = ({ symbol, priceEvent } = {}) =>
+    runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
+  const processUserDataEvent = ({ event } = {}) =>
+    runTransition({ task: () => processUserDataEventTransition({ event }) })
+  const evaluateLatest = ({ symbol } = {}) =>
+    runTransition({ task: () => evaluateLatestTransition({ symbol }) })
 
   return Object.freeze({
     processMarketPrice,

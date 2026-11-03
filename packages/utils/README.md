@@ -41,6 +41,15 @@ defaultLogger.info({
 
 Inject a logger into workflows/adapters when the dependency should be explicit or replaced in tests. Do not create an app-local logger just to wrap the shared implementation.
 
+### Structured error diagnostics
+
+Pass native `Error` and `AggregateError` instances as structured values; do not reduce them to `String(error)` or `error.message` at call sites. The shared formatter normalizes errors to JSON-compatible objects containing `name`, `message`, and `stack` when available, recursively includes `cause`, and includes `AggregateError.errors` as an array. This works for direct errors and errors nested in objects or arrays.
+
+Circular references on the active traversal path are represented as `[Circular]`; repeated non-circular references are serialized normally. The Logger therefore emits readable JSON containing the `[Circular]` marker for circular structured values, while unsupported JSON primitives such as BigInt still use the safe string fallback. Properties whose getters throw are represented as `[Unreadable property]`; hostile proxy enumeration is contained. Common sensitive field names continue to be redacted recursively, including inside normalized error causes. The formatter does not inspect secrets embedded in free-form messages or stack text, so callers must not place credentials or signed request data in those strings. If JSON serialization still fails (for example, because a structured value contains a BigInt), the existing safe string fallback is used.
+
+The normalized diagnostic shape intentionally allowlists standard Error diagnostics rather than copying arbitrary custom Error properties; it is intended for logs, not for reconstructing executable Error instances.
+
+
 ## Validation and compatibility
 
 Malformed validator tuples are rejected with a descriptive `TypeError`. Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point. `wait()` rejects invalid timer durations instead of allowing Node.js to silently clamp or reinterpret them.

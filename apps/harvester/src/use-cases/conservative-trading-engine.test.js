@@ -45,15 +45,18 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
   const completedCycles = []
+  const cancellationIds = []
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
       onPlaceOrder?.({ order })
+      onPlaceOrderStarted?.({ order })
+      if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
       if (placeOrderThrow) throw new Error("socket closed")
       if (placeOrderFailure) return { ok: false, errors: [new Error("broker rejected order")] }
       return {
@@ -75,6 +78,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
       }
     },
     cancelOrder: async ({ order }) => {
+      cancellationIds.push(order.brokerOrderId)
       if (cancelThrow) throw new Error("cancel socket closed")
       if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
       return {
@@ -142,7 +146,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  return { engine, orders, pauses, accountedFills, completedCycles }
+  return { engine, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
@@ -917,4 +921,68 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
   })
   assert.equal(result.ok, true)
   assert.deepEqual(harness.completedCycles, [market.id])
+})
+
+
+test("serializes market and user-data transitions until a pending SELL is acknowledged", async () => {
+  let resolveAcknowledgement
+  const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
+  let signalSellSubmission
+  const sellSubmissionStarted = new Promise((resolve) => { signalSellSubmission = resolve })
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, cancellationIds, accountedFills } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    placeOrderGate,
+    onPlaceOrderStarted: ({ order }) => { if (order.side === "SELL") signalSellSubmission() },
+  })
+  const initialDecision = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await sellSubmissionStarted
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buyOrder?.brokerOrderId)
+  assert.equal(sellOrder?.status, "PENDING")
+  assert.equal(sellOrder?.brokerOrderId, undefined)
+  const fill = new Fill({
+    tradeId: "concurrent-buy-fill",
+    brokerOrderId: buyOrder.brokerOrderId,
+    market,
+    side: "BUY",
+    price: buyOrder.limitPrice,
+    quantity: buyOrder.originalQuantity,
+    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const filledBuy = makeFilledOrder({ order: buyOrder })
+  const concurrentMarketTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
+  })
+  const userDataTransition = engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+  })
+  const duplicateFillTransition = engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+  })
+  assert.deepEqual(cancellationIds, [])
+  assert.equal(orders.length, 2)
+  resolveAcknowledgement()
+  const [initialResult, marketResult, userDataResult, duplicateResult] = await Promise.all([
+    initialDecision, concurrentMarketTransition, userDataTransition, duplicateFillTransition,
+  ])
+  assert.equal(initialResult.ok, true)
+  assert.equal(marketResult.ok, true)
+  assert.equal(userDataResult.ok, true)
+  assert.equal(duplicateResult.ok, true)
+  const acknowledgedSellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.equal(acknowledgedSellOrder.status, "CANCELED")
+  assert.ok(acknowledgedSellOrder.brokerOrderId)
+  assert.deepEqual(cancellationIds, [acknowledgedSellOrder.brokerOrderId])
+  assert.equal(accountedFills.length, 1)
+  assert.equal(orders.length, 2)
 })
