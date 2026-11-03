@@ -1,173 +1,63 @@
-# Harvester Domain-First Delivery Plan
+# Harvester Conservative Domain Delivery Plan
 
-**Status:** Active direction — 2026-11-03  
-**Applies to:** `apps/harvester`  
-**Reference implementation:** `apps/bot-free-roll`  
-**Paused integration work:** PR #479  
-**Merged baseline:** PR #477
+**Status:** Active  
+**Owner:** Harvester  
+**Strategy:** Conservative standing-order accumulation and capital recovery
 
-## 1. Decision
+## Direction
 
-Harvester work is now **domain-first**.
+Conservative is the strategy Harvester is intended to execute. Preserve its established behavior and express the rules in Harvester's own domain language. Documentation, implementation, and tests must not depend on a separate application remaining in the repository.
 
-We will not continue expanding the engine, application orchestration, broker adapter, or TESTNET workflow until the Conservative trading domain has been specified, implemented as broker-independent policy/accounting, independently tested, and documented.
+A difference in current Harvester code is an implementation gap by default—not a reason to redesign the strategy. Discuss only a concrete ambiguity that cannot be resolved from the behavior contract or would materially change financial exposure.
 
-This changes the order of delivery. It does not discard the existing Harvester infrastructure or the work preserved in PR #479.
+## Current state
 
-The goal is to make the business rules correct and demonstrably complete before wiring them into a live event/order lifecycle.
+- **D0 — Domain documentation:** the glossary, specification, accounting invariants, and behavior baseline are being aligned to this direction.
+- **Existing domain:** Portfolio, RecoveryLedger, fill identity, recovery planning, and completion logic already exist.
+- **Integration:** existing Harvester engine/application/broker work is preserved; do not rebuild it.
+- **TESTNET:** verify only after the specific strategy lifecycle is implemented and covered by offline tests.
 
-## 2. Source of truth and boundaries
+## Delivery steps
 
-- Treat the working `apps/bot-free-roll` implementation and its documented Conservative/Free-Roll behavior as the behavioral reference.
-- Inspect actual source and tests; do not infer behavior from README prose alone.
-- Harvester owns its domain model and business policy. Shared Entities/Brokers packages provide contracts/adapters, not strategy decisions.
-- Domain policy must not import or depend on Binance, broker SDKs, WebSockets, application services, timers, or runtime infrastructure.
-- PR #477 is the merged baseline for order ownership, broker event correlation, serialized processing, and fill-driven application accounting. Preserve it; do not reimplement it.
-- PR #479 is paused reference material. Reuse its useful guard/tests/docs only after checking them against the approved domain rules.
+### D0 — Document the behavior
 
-## 3. Delivery phases
+- [x] Define the Conservative glossary, accounting invariants, lifecycle, and behavior baseline.
+- [x] Remove historical application names and source paths from Harvester-owned documentation.
+- [x] Make the domain specification, roadmap, and strategy guide agree.
+- [x] Keep genuine unresolved questions narrow; no blanket list of decisions.
 
-### D0 — Discover and specify the Conservative domain
+### D1 — Align one behavior at a time
 
-**Deliverable:** an agreed, testable domain specification based on Free-Roll behavior.
+For each selected gap:
+1. State the current Harvester behavior.
+2. State the required Conservative behavior in plain language.
+3. Explain the practical consequence with a small example.
+4. Ask for confirmation only if the rule is genuinely ambiguous or materially changes risk/capital use.
+5. Implement the smallest change with focused tests.
+6. Update the domain docs if the approved rule changes.
 
-Inspect and map:
-- Pair/strategy configuration and validation rules.
-- Initial BUY eligibility and investment limits.
-- BUY intent, order quantity, precision/step constraints that belong to domain policy versus exchange adaptation.
-- Fill identity, partial fills, duplicate fills, and conflicting fills.
-- Portfolio versus RecoveryLedger responsibilities.
-- Recovery SELL quantity, retained `keepQuantity`, and inventory constraints.
-- Quote principal, gross proceeds, actual commissions, net proceeds, minimum profit, and recovery completion.
-- Conditions for allowing the next BUY.
-- Invalid, incomplete, failed, and out-of-order transitions.
-- Which facts are domain-owned versus supplied by the application/broker boundary.
+Do not bundle unrelated behavior changes into one PR.
 
-Produce:
-1. A domain glossary and responsibility map.
-2. A lifecycle/state-transition specification.
-3. Accounting invariants and worked examples, including partial/duplicate fills and commission cases.
-4. An explicit list of unresolved business decisions. Do not silently choose financial rules.
+### D2 — Prove the lifecycle
 
-No Harvester engine, broker adapter, Binance, WebSocket, TESTNET, or integration changes in this phase.
+- Test actual fill accounting, partial fills, duplicate/conflicting fills, commissions, and rounding.
+- Test initial BUY trailing and safe cancel/reconcile/replace.
+- Test BUY completion → recovery SELL submission → next standing BUY.
+- Test partial recovery SELL, replacement, completion, minimum profit, retained inventory, and reset.
+- Test failures and uncertain outcomes fail closed without losing accounting state.
+- Keep tests deterministic and offline by default.
 
-**Exit gate:** every strategy decision and accounting transition required by the Conservative cycle has an explicit rule and deterministic examples. Unknowns are resolved with the user before implementation.
+### D3 — Integrate and verify
 
-### D1 — Implement the pure domain
+- Preserve Harvester's existing DDD boundaries and infrastructure.
+- Keep broker I/O and order lifecycle orchestration outside pure domain policy.
+- Verify the full BUY → fill → recovery SELL → fill → next BUY cycle on TESTNET only after offline tests and CI pass.
+- Do not claim end-to-end acceptance from mocks, startup, connectivity, or order submission alone.
 
-Implement only the domain contracts/entities/policies needed by the approved specification.
+## Working rules
 
-Expected responsibilities may include:
-- Portfolio position and fill application.
-- Recovery ledger/cycle accounting.
-- Fill identity and idempotency rules.
-- Conservative strategy decision/evaluation.
-- Recovery SELL planning and eligibility.
-- Recovery completion validation and cycle reset eligibility.
-
-Keep the design minimal. Do not create a class/module for every noun or event. Do not move broker/application responsibilities into the domain.
-
-Engineering rules:
-- Every function accepts one object argument and returns one object/result.
-- Use `@coinzilla/utils` `toResult` for result-returning functions.
-- Prefer pure functions and immutable/explicit inputs where practical.
-- Use exact decimal-safe arithmetic and existing shared utilities; do not use floating-point arithmetic for financial calculations.
-- Keep public module APIs explicit through `index.js`; avoid circular dependencies.
-- No new dependencies without a demonstrated requirement.
-- Invalid external data must be rejected at the appropriate boundary; domain functions should receive validated domain-shaped values.
-
-**Exit gate:** domain behavior is executable without starting Harvester, connecting a broker, or constructing application services.
-
-### D2 — Prove the domain with tests and coverage
-
-Tests must be derived from the specification, not written merely to mirror implementation branches.
-
-Required areas:
-- Initial BUY allowed/blocked conditions.
-- Investment and quantity boundaries.
-- BUY fill, partial fill, multiple fills, duplicate fill, conflicting fill identity.
-- Recovery SELL planning and retained quantity.
-- Partial SELL and repeated SELL fills.
-- Gross versus net proceeds and commissions in supported fee scenarios.
-- Minimum-profit boundary and rounding behavior.
-- Recovery completion success and every failure/ineligible case.
-- Ledger reset exactly once and only after successful completion.
-- Next BUY remains blocked while any recovery obligation remains.
-- Invalid values, zero/negative quantities, precision boundaries, and overflow/rounding edges as applicable.
-- Property/invariant tests for conservation/accounting identities where useful.
-
-Coverage:
-- Add meaningful coverage thresholds for the domain modules, not a vanity whole-app percentage.
-- Ensure all domain tests run in normal CI.
-- Do not count mocked engine callbacks as proof of domain accounting.
-- Do not use TESTNET as a substitute for deterministic domain tests.
-
-**Exit gate:** all specified transitions and financial invariants have direct tests; CI passes; uncovered lines/branches are reviewed and justified.
-
-### D3 — Document and freeze the domain contract
-
-Update the domain docs with:
-- Glossary and ownership.
-- State-transition/lifecycle diagram.
-- Accounting formulas and worked examples.
-- Failure semantics and idempotency rules.
-- Public domain API and dependency rules.
-- Test matrix and actual coverage/CI evidence.
-- Explicit exclusions and unresolved future decisions.
-
-Conduct a domain review against the Free-Roll reference and the specification. Resolve discrepancies before integration.
-
-**Exit gate:** domain specification, implementation, tests, and docs agree. The domain contract is approved/frozen for the first integration pass.
-
-### I1 — Integrate the proven domain into Harvester
-
-Only after D0–D3 pass:
-- Wire domain decisions into existing application workflows/engine.
-- Keep orchestration, event sequencing, broker I/O, and exchange normalization outside domain policy.
-- Reuse PR #477's merged ownership and serialization behavior.
-- Reuse PR #479 only where it matches the frozen domain contract.
-- Add focused application/engine contract tests around domain calls and actual event ordering.
-- Avoid broad rewrites and new infrastructure.
-
-### I2 — TESTNET acceptance
-
-Only after the domain and integration gates pass:
-- Run a bounded single-pair TESTNET cycle.
-- Verify BUY acknowledgement/fill, recovery SELL acknowledgement/fill, actual commissions/net proceeds, successful completion, ledger reset, and next BUY eligibility.
-- Record evidence from the operator's real process and exchange history.
-- Never claim acceptance from mocks, unit tests, connectivity, or order submission alone.
-- Do not use automatic cancel-all/market-sell cleanup or adopt external orders.
-
-## 4. PR and branch policy
-
-- Keep PR #479 open as Draft and paused. Do not merge it or continue implementation there during D0–D3.
-- Do not close/delete its branch: it contains useful recovery-first logic, regression tests, and documentation to reassess after the domain contract is frozen.
-- The domain specification and pure-domain implementation should be developed in a new, focused branch/PR based on the current `develop` branch.
-- Keep the domain-first PR free of engine, bootstrap, broker, adapter, WebSocket, and TESTNET changes.
-- Prefer one coherent PR per phase/gate rather than mixing unfinished domain work with integration.
-- Before merging any PR, update its branch with the latest target branch and rerun required CI on the final head.
-- PR #477 stays merged and is the infrastructure baseline.
-
-## 5. Explicitly out of scope until domain approval
-
-- Further Harvester engine refactoring.
-- Binance/broker adapter changes unless a domain-independent contract defect blocks domain testing.
-- TESTNET trading attempts as a substitute for domain verification.
-- Durable persistence, restart recovery, broad reconciliation, cross-pair allocation, generic state machines, dashboards, Aggressive strategy, or new infrastructure.
-- Speculative abstractions or behavior not demonstrated by Free-Roll or explicitly approved in the domain specification.
-
-## 6. Definition of done for the domain-first task
-
-The domain phase is complete only when:
-- [ ] Free-Roll behavior has been inspected directly in source and tests.
-- [ ] Conservative business rules and accounting formulas are documented.
-- [ ] All unresolved financial/business decisions are explicitly resolved.
-- [ ] Pure domain implementation has no broker/application/runtime dependency.
-- [ ] Domain tests cover normal, boundary, duplicate, partial, conflicting, and failure paths.
-- [ ] Financial invariants and decimal/rounding behavior are tested.
-- [ ] Domain coverage gate passes in CI.
-- [ ] Docs, tests, and implementation describe the same behavior.
-- [ ] Review confirms the domain can be exercised independently of Harvester runtime.
-- [ ] No TESTNET or engine integration work was smuggled into the domain PR.
-
-Only then start I1.
+- One behavior per discussion and preferably one behavior per PR.
+- No endless questionnaires or speculative redesign.
+- No copying broker/runtime code into the domain.
+- No feature expansion, persistence, Journal, dashboards, or Aggressive work unless it is the explicit next task.
+- Update this plan after each completed step.
