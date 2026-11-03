@@ -48,6 +48,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true }),
     getFills: async () => ({ ok: true }),
+    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
       accountSnapshotTime += 1
@@ -760,6 +761,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       }),
     }),
     getFills: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => {
       snapshotTime += 1
       const balances = [
