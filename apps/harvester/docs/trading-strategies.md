@@ -89,11 +89,11 @@ The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATI
 
 ### Shared commission and order-type policy — Conservative and Aggressive
 
-The same commission policy applies to Conservative and Aggressive.
+The same commission and order-type policy applies to Conservative and Aggressive. Shared market readiness selects the order type from `makerPercent`. Aggressive currently returns `NO_ACTION`; when its order planner is implemented, it must use this same fee rule.
 
 - If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
 - If `makerPercent` is non-zero, submit a regular `LIMIT` order.
-- Use configured `makerPercent` as the commission estimate for planning in both cases. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
+- Use configured `makerPercent` as the commission estimate for planning in both cases. For recovery SELL planning, `f = makerPercent / 100` (for example, `0.1` means `0.001`); zero `makerPercent` means a zero reserve. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
 - The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
 - Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
 - Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.

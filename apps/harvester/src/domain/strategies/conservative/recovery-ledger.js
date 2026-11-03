@@ -1,14 +1,14 @@
 import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, subtractDecimal } from "@coinzilla/utils"
 import { Fill, Market } from "@coinzilla/entities"
 import { createFillFingerprint } from "../../fills/fill-fingerprint.js"
-import { calculateFillCommissionRate } from "./fill-commission-rate.js"
 import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 
 /**
  * Immutable strategy-specific pooled recovery ledger for one market.
  *
  * It tracks quote-denominated acquisition cost, confirmed net SELL proceeds,
- * observed actual commission rates, and execution identities. Position
+ * and execution identities. Commission amounts are accounted per fill; fee
+ * estimates are strategy-planning inputs, not ledger history. Position
  * separately tracks active/free base inventory and applies base-asset
  * commissions to quantity.
  */
@@ -16,7 +16,6 @@ export class RecoveryLedger {
   #market
   #buyCost
   #netSellProceeds
-  #maxObservedCommissionRate
   #appliedFillIds
   #appliedFillFingerprints
 
@@ -24,7 +23,6 @@ export class RecoveryLedger {
     market,
     buyCost = "0",
     netSellProceeds = "0",
-    maxObservedCommissionRate = "0",
     appliedFillIds = [],
     appliedFillFingerprints = [],
   } = {}) {
@@ -34,15 +32,11 @@ export class RecoveryLedger {
     for (const [field, value] of Object.entries({
       buyCost,
       netSellProceeds,
-      maxObservedCommissionRate,
     })) {
       assertDecimalString({ value, field })
       if (compareDecimal({ left: value, right: "0" }) < 0) {
         throw new RangeError("RecoveryLedger " + field + " must be non-negative")
       }
-    }
-    if (compareDecimal({ left: maxObservedCommissionRate, right: "1" }) >= 0) {
-      throw new RangeError("RecoveryLedger.maxObservedCommissionRate must be less than one")
     }
     if (
       !Array.isArray(appliedFillIds) ||
@@ -67,7 +61,6 @@ export class RecoveryLedger {
     this.#market = market
     this.#buyCost = buyCost
     this.#netSellProceeds = netSellProceeds
-    this.#maxObservedCommissionRate = maxObservedCommissionRate
     this.#appliedFillIds = Object.freeze([...appliedFillIds])
     this.#appliedFillFingerprints = Object.freeze(
       appliedFillFingerprints.map((item) => Object.freeze({ ...item })),
@@ -78,7 +71,6 @@ export class RecoveryLedger {
   get market() { return this.#market }
   get buyCost() { return this.#buyCost }
   get netSellProceeds() { return this.#netSellProceeds }
-  get maxObservedCommissionRate() { return this.#maxObservedCommissionRate }
   get outstandingRecoveryAmount() {
     return maxDecimal({
       left: "0",
@@ -122,20 +114,12 @@ export class RecoveryLedger {
       market: this.#market,
       fill,
     })
-    const commissionRate = calculateFillCommissionRate({
-      market: this.#market,
-      fill,
-    }).rate
     const ledger = new RecoveryLedger({
       market: this.#market,
       buyCost: addDecimal({ left: this.#buyCost, right: accounting.buyCost }),
       netSellProceeds: addDecimal({
         left: this.#netSellProceeds,
         right: accounting.netSellProceeds,
-      }),
-      maxObservedCommissionRate: maxDecimal({
-        left: this.#maxObservedCommissionRate,
-        right: commissionRate,
       }),
       appliedFillIds: [...this.#appliedFillIds, fill.id],
       appliedFillFingerprints: [
@@ -153,13 +137,12 @@ export class RecoveryLedger {
 
   /**
    * Start a new recovery cycle after successful completion. Execution identity
-   * and observed fee history survive so late duplicate events remain safe and
-   * later SELL plans retain the highest actual commission rate seen.
+   * survives so late duplicate events remain safe. Actual commissions are
+   * already included in cycle totals and are not converted into fee history.
    */
   resetCycle() {
     return new RecoveryLedger({
       market: this.#market,
-      maxObservedCommissionRate: this.#maxObservedCommissionRate,
       appliedFillIds: this.#appliedFillIds,
       appliedFillFingerprints: this.#appliedFillFingerprints,
     })
@@ -172,7 +155,6 @@ export class RecoveryLedger {
       netSellProceeds: this.#netSellProceeds,
       outstandingRecoveryAmount: this.outstandingRecoveryAmount,
       realizedNetProfit: this.realizedNetProfit,
-      maxObservedCommissionRate: this.#maxObservedCommissionRate,
       appliedFillIds: [...this.#appliedFillIds],
       appliedFillFingerprints: this.#appliedFillFingerprints.map((item) => ({ ...item })),
     })
