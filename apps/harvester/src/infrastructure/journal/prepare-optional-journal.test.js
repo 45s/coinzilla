@@ -79,6 +79,24 @@ test("returns immediately while Journal initialization is still pending", async 
   assert.equal((await service.close()).ok, true)
 })
 
+test("contains an asynchronous Journal initialization rejection", async () => {
+  const error = new Error("journal initialization rejected")
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => { throw error },
+      close: async () => ({ ok: true, closed: true }),
+    }),
+  })
+
+  const result = await service.ready
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], error)
+  assert.equal(service.status.state, "failed")
+})
+
 test("contains a Journal construction exception even when logger.error throws", async () => {
   const error = new Error("construction failed")
   const service = prepareOptionalJournal({
