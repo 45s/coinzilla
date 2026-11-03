@@ -593,6 +593,8 @@ export async function startHarvester({
         }
         if (
           status.type === "reconciled" &&
+          status.recoveryRequired !== true &&
+          status.reconciliationRequired !== true &&
           tradingEngine &&
           initialAccountSnapshotReady &&
           userDataRequiresReconciliation &&
