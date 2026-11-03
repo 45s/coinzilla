@@ -217,7 +217,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 - Keep the sequential user-data queue and all current accounting invariants unchanged.
 - Do not await EventBus delivery or Journal in the user-data queue.
 
-**Tests:** Partial Fill; full Fill boundary where already covered; event only after accounting commit; duplicate Fill does not emit applied; malformed DTO; publisher failure while Portfolio/RecoveryLedger still update correctly.
+**Tests:** Partial Fill; full Fill boundary where already covered; event only after accounting commit; duplicate Fill does not emit applied; malformed DTO; canonical decimal values remain unchanged; publisher failure while Portfolio/RecoveryLedger still update correctly.
 
 **Acceptance:** Only newly applied canonical fills produce `execution.fill_applied`; Journal failure cannot block valid execution processing or strategy reevaluation.
 
