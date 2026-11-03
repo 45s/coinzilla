@@ -465,11 +465,25 @@ Event publication is best-effort and is not awaited by the user-data queue.
 Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.
 
 
+### Duplicate Fill and recovery completion events
+
+Step 6c adds `execution.duplicate_fill` only when the accounting workflow
+explicitly reports `duplicate: true`; it does not re-apply or re-publish a
+duplicate as a newly applied Fill. It also adds `recovery.cycle_completed`
+only after the existing recovery completion workflow reports `eligible: true`
+and returns after committing the Portfolio free-quantity allocation and
+RecoveryLedger cycle reset.
+
+The recovery event contains only the market identifier, allocated free
+quantity, and realized net profit. It does not expose the full ledger or
+account snapshot. Both events are best-effort and are not awaited by trading
+or user-data workflows.
+
+
 ## In-process engine transition serialization
 
 The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.
 
-
 ## Cancellation preconditions
 
-Harvester validates cancellation eligibility before invoking the broker: only acknowledged `OPEN` and `PARTIALLY_FILLED` orders with a broker identifier are cancellable. `PENDING`, `UNKNOWN`, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package `normalizeBinanceId` utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
+Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.

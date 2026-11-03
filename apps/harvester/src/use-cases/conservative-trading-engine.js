@@ -13,6 +13,11 @@ import {
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapFillAppliedData,
+  mapDuplicateFillData,
+  mapRecoveryCycleCompletedData,
+  mapExecutionAccountingFailedData,
+  mapExecutionInvalidFillData,
+  mapExecutionUnownedOrderData,
   mapStrategyDecisionData,
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
@@ -400,6 +405,11 @@ export function makeConservativeTradingEngine({
       const symbol = order.market.symbol
       const update = state.registry.applyUpdate({ order })
       if (update.unknown) {
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
+          dataResult: mapExecutionUnownedOrderData({ order }),
+        })
         await pause({ symbol, reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT" })
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
@@ -407,22 +417,50 @@ export function makeConservativeTradingEngine({
       if (update.duplicate || update.stale) return toResult({ data: { ignored: true } })
 
       if (event.executionType === "TRADE") {
-        if (!(event.fill instanceof Fill)) throw new TypeError("TRADE event requires a canonical Fill")
+        if (!(event.fill instanceof Fill)) {
+          const error = new TypeError("TRADE event requires a canonical Fill")
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
+            dataResult: mapExecutionInvalidFillData({ order, reason: "MISSING_FILL", error }),
+          })
+          throw error
+        }
         if (event.fill.market.id !== order.market.id || event.fill.side !== order.side ||
             event.fill.brokerOrderId !== order.brokerOrderId) {
+          const error = new Error("Canonical Fill identity does not match its registered order")
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
+            dataResult: mapExecutionInvalidFillData({
+              order, fill: event.fill, reason: "IDENTITY_MISMATCH", error,
+            }),
+          })
           await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH" })
-          throw new Error("Canonical Fill identity does not match its registered order")
+          throw error
         }
         const accounting = await updateTradingAccounting({ fill: event.fill })
         if (!accounting?.ok) {
-          await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
-          return toResult({ errors: accounting?.errors ?? [new Error("Execution accounting failed")] })
+          const error = accounting?.errors?.[0] ?? new Error("Execution accounting failed")
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
+            dataResult: mapExecutionAccountingFailedData({ order, fill: event.fill, error }),
+          })
+          await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
+          return toResult({ errors: accounting?.errors ?? [error] })
         }
         if (accounting.data?.applied === true) {
           publishLifecycleEvent({
             eventPublisher,
             eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
             dataResult: mapFillAppliedData({ fill: event.fill }),
+          })
+        } else if (accounting.data?.duplicate === true) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
+            dataResult: mapDuplicateFillData({ fill: event.fill }),
           })
         }
       }
@@ -457,6 +495,16 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle did not meet completion conditions")] })
         }
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+          dataResult: mapRecoveryCycleCompletedData({
+            symbol,
+            marketId: order.market.id,
+            freeQuantity: completion.data.freeQuantity,
+            realizedNetProfit: completion.data.realizedNetProfit,
+          }),
+        })
         state.trailingBuy.set(symbol, true)
       }
       if (order.status === "REJECTED") {
