@@ -6,6 +6,9 @@ import {
   mapBrokerConnectedData,
   mapBrokerConnectionFailedData,
   mapBrokerDisconnectedData,
+  mapBrokerStatusChangedData,
+  mapBrokerSubscriptionEstablishedData,
+  mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
   mapHarvesterStartedData,
   mapHarvesterStartupFailedData,
@@ -28,6 +31,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_CONNECTED: "broker.connected",
     BROKER_CONNECTION_FAILED: "broker.connection_failed",
     BROKER_DISCONNECTED: "broker.disconnected",
+    BROKER_STATUS_CHANGED: "broker.status_changed",
+    BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
+    BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -175,4 +181,65 @@ test("EventBus accepts mapped lifecycle DTOs and rejects unsupported payload obj
   })
   assert.equal(classInstanceResult.ok, false)
   assert.ok(classInstanceResult.errors[0] instanceof TypeError)
+})
+
+test("maps subscription lifecycle facts without SDK objects", () => {
+  assert.deepEqual(mapBrokerSubscriptionEstablishedData({
+    broker: "binance",
+    stream: "market-price",
+    market: "BTCUSDT",
+    subscription: { id: "private-sdk-object" },
+  }), {
+    ok: true,
+    data: { broker: "binance", stream: "market-price", market: "BTCUSDT" },
+  })
+
+  const failed = mapBrokerSubscriptionFailedData({
+    broker: "binance",
+    stream: "user-data",
+    error: new Error("subscription failed token=private"),
+  })
+  assert.equal(failed.ok, true)
+  assert.deepEqual(failed.data, {
+    broker: "binance",
+    stream: "user-data",
+    error: { name: "Error", message: "subscription failed token=[REDACTED]" },
+  })
+})
+
+test("maps meaningful broker stream transitions and recovery metadata", () => {
+  const result = mapBrokerStatusChangedData({
+    broker: "binance",
+    stream: "user-data",
+    status: "recovered",
+    recoveryRequired: true,
+    attempt: 2,
+    subscriptionId: "private-sdk-id",
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      broker: "binance",
+      stream: "user-data",
+      status: "recovered",
+      recoveryRequired: true,
+      attempt: 2,
+    },
+  })
+  assert.equal(mapBrokerStatusChangedData({
+    broker: "binance",
+    stream: "user-data",
+    status: "connectionClosed",
+    recoveryRequired: true,
+    code: 1006,
+    error: new Error("socket closed"),
+  }).ok, true)
+})
+
+test("rejects invalid subscription and stream status DTOs", () => {
+  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance", stream: "unknown" }).ok, false)
+  assert.equal(mapBrokerSubscriptionEstablishedData({ broker: "binance", stream: "market-price" }).ok, false)
+  assert.equal(mapBrokerSubscriptionFailedData({ broker: "binance", stream: "user-data", error: "failure" }).ok, false)
+  assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: "true" }).ok, false)
+  assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true, attempt: -1 }).ok, false)
 })

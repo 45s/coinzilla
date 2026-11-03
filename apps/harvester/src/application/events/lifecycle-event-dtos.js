@@ -136,3 +136,76 @@ export const mapBrokerDisconnectedData = (input = {}) =>
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
   })
+
+const STREAM_KINDS = Object.freeze(["user-data", "market-price"])
+
+const requireStream = ({ value }) => {
+  if (!STREAM_KINDS.includes(value)) {
+    throw new TypeError("stream must be user-data or market-price")
+  }
+  return value
+}
+
+const optionalMarket = ({ value, stream }) => {
+  if (stream === "market-price") {
+    return requireString({ value, field: "market" })
+  }
+  if (value !== undefined) {
+    throw new TypeError("market is only valid for market-price streams")
+  }
+  return undefined
+}
+
+export const mapBrokerSubscriptionEstablishedData = (input = {}) =>
+  mapData(input, "Broker-subscription-established event mapping", ({ broker, stream, market }) => {
+    const normalizedStream = requireStream({ value: stream })
+    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
+    }
+  })
+
+export const mapBrokerSubscriptionFailedData = (input = {}) =>
+  mapData(input, "Broker-subscription-failed event mapping", ({ broker, stream, market, error }) => {
+    const normalizedStream = requireStream({ value: stream })
+    const normalizedMarket = optionalMarket({ value: market, stream: normalizedStream })
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      ...(normalizedMarket === undefined ? {} : { market: normalizedMarket }),
+      error: safeError({ error }),
+    }
+  })
+
+export const mapBrokerStatusChangedData = (input = {}) =>
+  mapData(input, "Broker-status-changed event mapping", ({
+    broker,
+    stream,
+    status,
+    recoveryRequired,
+    attempt,
+    code,
+    error,
+  }) => {
+    const normalizedStream = requireStream({ value: stream })
+    if (typeof recoveryRequired !== "boolean") {
+      throw new TypeError("recoveryRequired must be a boolean")
+    }
+    if (attempt !== undefined && (!Number.isSafeInteger(attempt) || attempt < 0)) {
+      throw new TypeError("attempt must be a non-negative safe integer")
+    }
+    if (code !== undefined && code !== null && !Number.isSafeInteger(code)) {
+      throw new TypeError("code must be a safe integer")
+    }
+    return {
+      broker: requireString({ value: broker, field: "broker" }),
+      stream: normalizedStream,
+      status: requireString({ value: status, field: "status" }),
+      recoveryRequired,
+      ...(attempt === undefined ? {} : { attempt }),
+      ...(code === undefined || code === null ? {} : { code }),
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })

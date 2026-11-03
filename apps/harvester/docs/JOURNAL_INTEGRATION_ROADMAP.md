@@ -16,7 +16,7 @@ Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/
 - `@coinzilla/journal` already subscribes to EventBus, writes JSONL records through a serialized write queue, reports write failures, and drains/synchronizes on close.
 - No shared-package changes are currently justified.
 - Harvester already has suitable application boundaries: bootstrap lifecycle, the Conservative trading engine, order submission, sequential user-data processing, canonical Fill accounting, and Portfolio/RecoveryLedger transitions.
-- Harvester has an application EventBus boundary, stable lifecycle event names/DTO mappings, and an optional asynchronously started Journal service; no lifecycle events are published yet.
+- Harvester has an application EventBus boundary, stable lifecycle event names/DTO mappings, an optional asynchronously started Journal service, and process/configuration/broker lifecycle publication.
 - Initial lifecycle DTOs contain no financial amounts, so exact decimal-string preservation applies to later order/execution event mappings.
 - Bot-Free-Roll is a reference for composition and lifecycle ownership, not a template to copy. In particular, its Journal startup/initial flush can prevent trading startup; Harvester must not inherit that dependency.
 
@@ -150,20 +150,22 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 4 — Publish configuration, process, and broker lifecycle events
 
+**Status:** [x] Process/configuration/broker lifecycle instrumentation and offline tests are included in this PR; CI is the merge gate.
+
 **Goal:** Make application startup and connectivity observable.
 
 **Likely files:** `src/index.js`; `src/bootstrap/start-harvester.js`; event contract/mapping modules; tests; README/operations docs; roadmap.
 
 **Work:**
-- Publish validated non-secret configuration facts.
-- Publish process startup/startup failure/shutdown outcomes.
-- Publish broker connect/disconnect and subscription outcomes.
-- Publish stream status only for meaningful transitions actually exposed by current broker callbacks.
-- Keep lifecycle ownership in the process/bootstrap layer; avoid duplicate started/stopped events.
+- Publish validated non-secret configuration facts after trading configuration validation.
+- Publish process startup/startup failure/shutdown outcomes from the process entry point.
+- Publish broker connect/disconnect and user-data/market-price subscription outcomes from bootstrap.
+- Publish only the broker user-data transitions exposed by the current broker callback: connectionClosed, recovering, recoveryFailed, recovered, reconciled, terminated, and rpcError. A recovered stream still requires Harvester's separate authoritative account/order reconciliation.
+- Keep lifecycle ownership in the process/bootstrap layer; avoid duplicate started/stopped events. Never publish market-price updates.
 
-**Tests:** Successful startup; invalid config; broker connect failure; subscription failure; read-only mode; normal shutdown; publication failure on every lifecycle branch.
+**Tests:** Validated configuration; successful read-only startup without broker; startup failure; broker connect failure/success; user-data and market-price subscription success/failure; connectionClosed/recovered status filtering; normal/failed shutdown; publication failure containment.
 
-**Acceptance:** One owner per lifecycle event; payloads contain no secrets; trading behavior is unchanged when publication fails.
+**Acceptance:** One owner per lifecycle event; payloads contain no credentials, raw exchange messages, SDK/domain objects, or account snapshots; trading behavior is unchanged when publication fails. Journal capture gaps before subscription activation are explicit.
 
 **PR boundary:** Lifecycle events only.
 

@@ -2,6 +2,9 @@ import { pathToFileURL } from "node:url"
 import { EventBus } from "@coinzilla/event-bus"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
+import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
+import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
+import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 
@@ -31,10 +34,12 @@ export async function main({
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = prepareOptionalJournal,
   env = process.env,
+  registerSignalHandler = (signal, handler) => process.once(signal, handler),
 } = {}) {
+  let eventPublisher
   try {
     const eventBus = createEventBus({ logger })
-    const eventPublisher = makeEventPublisher({ eventBus, logger })
+    eventPublisher = makeEventPublisher({ eventBus, logger })
     const journalService = createJournalService({
       eventBus,
       logger,
@@ -43,6 +48,21 @@ export async function main({
     })
     logger.debug?.({ message: "Harvester process startup requested" })
     const runtime = await start({ eventPublisher })
+    const enabledMarkets = runtime.tradingConfig?.pairs
+      ? Object.entries(runtime.tradingConfig.pairs)
+        .filter(([, pairConfig]) => pairConfig.enabled)
+        .map(([symbol]) => symbol)
+      : runtime.subscriptions ?? []
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.STARTED,
+      dataResult: mapHarvesterStartedData({
+        broker: runtime.connected ? (env.HARVESTER_BROKER || "unknown") : "none",
+        strategyMode: runtime.strategyMode ?? "read-only",
+        enabledMarkets,
+        tradingEnabled: runtime.tradingEnabled === true,
+      }),
+    })
     logger.debug?.({
       message: "Harvester bootstrap completed",
       connected: runtime.connected === true,
@@ -59,29 +79,53 @@ export async function main({
       : "Harvester configuration validated; broker connection and market data are disabled."
     logger.info(startupMessage)
 
-    if (runtime.connected && typeof runtime.stop === "function") {
+    if (typeof runtime.stop === "function") {
       let shuttingDown = false
-      const shutdown = async () => {
+      const shutdown = async (reason) => {
         if (shuttingDown) return
         shuttingDown = true
+        let shutdownError
         try {
           await runtime.stop()
-          logger.info("Harvester broker disconnected.")
+          logger.info("Harvester shutdown completed.")
         } catch (error) {
-          logger.error({ message: "Harvester shutdown failed.", error })
+          shutdownError = error
           process.exitCode = 1
+          try {
+            logger.error({ message: "Harvester shutdown failed.", error })
+          } catch {
+            // Logging failure must not prevent the shutdown event attempt.
+          }
         }
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.STOPPED,
+          dataResult: mapHarvesterStoppedData({
+            reason,
+            outcome: shutdownError ? "failed" : "success",
+            error: shutdownError,
+          }),
+        })
       }
-      process.once("SIGINT", shutdown)
-      process.once("SIGTERM", shutdown)
+      registerSignalHandler("SIGINT", () => shutdown("SIGINT"))
+      registerSignalHandler("SIGTERM", () => shutdown("SIGTERM"))
     }
     return { runtime, journalService }
   } catch (error) {
-    logger.error({
-      message: "Harvester startup failed.",
-      error,
-      errorDetails: describeError(error),
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
+      dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
     })
+    try {
+      logger.error({
+        message: "Harvester startup failed.",
+        error,
+        errorDetails: describeError(error),
+      })
+    } catch {
+      // Logging failure must not hide the original startup failure.
+    }
     process.exitCode = 1
   }
 }

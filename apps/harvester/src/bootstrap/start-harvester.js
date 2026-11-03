@@ -14,8 +14,19 @@ import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-br
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
 import { updateTradingAccounting as applyTradingAccounting } from "../use-cases/update-trading-accounting.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import {
+  mapBrokerConnectedData,
+  mapBrokerConnectionFailedData,
+  mapBrokerDisconnectedData,
+  mapBrokerStatusChangedData,
+  mapBrokerSubscriptionEstablishedData,
+  mapBrokerSubscriptionFailedData,
+  mapConfigValidatedData,
+} from "../application/events/lifecycle-event-dtos.js"
 
-async function cleanupBroker({ broker, subscriptions, userDataSubscription, logger = defaultLogger }) {
+async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger = defaultLogger }) {
   logger.debug?.({
     message: "Harvester cleanup started",
     marketSubscriptions: subscriptions.map(({ symbol }) => symbol),
@@ -42,6 +53,16 @@ async function cleanupBroker({ broker, subscriptions, userDataSubscription, logg
   const errors = [...unsubscribeResults, ...disconnectResult]
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
+  const brokerDisconnect = disconnectResult[0]
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
+    dataResult: mapBrokerDisconnectedData({
+      broker: brokerName,
+      outcome: brokerDisconnect.status === "fulfilled" ? "success" : "failed",
+      ...(brokerDisconnect.status === "rejected" ? { error: brokerDisconnect.reason } : {}),
+    }),
+  })
   logger.debug?.({
     message: "Harvester cleanup completed",
     errorCount: errors.length,
@@ -134,6 +155,21 @@ export async function startHarvester({
   const enabledSymbols = Object.entries(tradingConfig.pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
+  const brokerName = env.HARVESTER_BROKER
+  if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
+    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
+  }
+  const tradingEnabled = brokerName !== undefined && brokerName !== "" &&
+    env.HARVESTER_ENABLE_TRADING === "true"
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
+    dataResult: mapConfigValidatedData({
+      enabledMarkets: enabledSymbols,
+      strategyMode: tradingEnabled ? "conservative" : "read-only",
+      tradingEnabled,
+    }),
+  })
   logger.info?.({
     message: "Harvester trading configuration validated",
     enabledSymbols,
@@ -157,7 +193,6 @@ export async function startHarvester({
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const getAccountSnapshot = () => accountSnapshot
   let tradingEngine
-  const brokerName = env.HARVESTER_BROKER
 
   if (brokerName === undefined || brokerName === "") {
     logger.info?.({ message: "Harvester started without a broker; exchange connectivity is disabled" })
@@ -179,10 +214,6 @@ export async function startHarvester({
       stop: async () => {},
     })
   }
-  if (brokerName !== "binance") {
-    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
-  }
-  const tradingEnabled = env.HARVESTER_ENABLE_TRADING === "true"
   if (tradingEnabled && (env.HARVESTER_TRADING_MODE !== "testnet" || env.NODE_ENV === "production")) {
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
@@ -202,9 +233,19 @@ export async function startHarvester({
     logger.info?.({ message: "Connecting to Binance broker" })
     logger.debug?.({ message: "Startup step: opening Binance WebSocket connection" })
     await broker.connect()
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
+      dataResult: mapBrokerConnectedData({ broker: brokerName }),
+    })
     logger.info?.({ message: "Binance broker connected" })
     logger.debug?.({ message: "Startup step completed: Binance WebSocket connection established" })
   } catch (error) {
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
+    })
     logger.error?.({
       message: "Binance broker connection failed",
       errorName: error?.name,
@@ -310,7 +351,9 @@ export async function startHarvester({
 
     logger.info?.({ message: "Subscribing to Binance user-data events" })
     logger.debug?.({ message: "Startup step: opening user-data subscription" })
-    const userDataResult = await broker.subscribeForUserData({
+    let userDataResult
+    try {
+      userDataResult = await broker.subscribeForUserData({
       onEvent: ({ event } = {}) => {
         const isExecution = event?.eventType === "executionReport" &&
           event?.executionType === "TRADE"
@@ -424,6 +467,29 @@ export async function startHarvester({
         userDataEventQueue = task
       },
       onStatus: (status = {}) => {
+        if ([
+          "connectionClosed",
+          "recovering",
+          "recoveryFailed",
+          "recovered",
+          "reconciled",
+          "terminated",
+          "rpcError",
+        ].includes(status.type)) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED,
+            dataResult: mapBrokerStatusChangedData({
+              broker: brokerName,
+              stream: "user-data",
+              status: status.type,
+              recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
+              attempt: status.attempt,
+              code: status.code,
+              error: status.error,
+            }),
+          })
+        }
         logger.debug?.({
           message: "User-data stream status changed",
           statusType: status.type ?? "UNKNOWN",
@@ -471,14 +537,37 @@ export async function startHarvester({
           logger.error?.({ message: "Harvester user-data status handler failed", error })
         }
       },
-    })
+      })
+    } catch (error) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
+        dataResult: mapBrokerSubscriptionFailedData({
+          broker: brokerName,
+          stream: "user-data",
+          error,
+        }),
+      })
+      throw error
+    }
 
     if (!userDataResult?.ok || typeof userDataResult.data?.disconnect !== "function") {
       const details = userDataResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error(
+      const error = new Error(
         "Unable to subscribe to user data" + (details ? ": " + details : ""),
       )
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
+        dataResult: mapBrokerSubscriptionFailedData({ broker: brokerName, stream: "user-data", error }),
+      })
+      throw error
     }
+    publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+      dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
+    })
     userDataSubscription = userDataResult.data
     logger.info?.({ message: "Binance user-data subscription established" })
     logger.debug?.({ message: "Startup step completed: user-data subscription active" })
@@ -551,7 +640,9 @@ export async function startHarvester({
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       logger.debug?.({ message: "Startup step: subscribing to market prices", symbol })
-      const result = await broker.subscribeForPrices({
+      let result
+      try {
+        result = await broker.subscribeForPrices({
         symbol,
         onPrice: (priceEvent) => {
           logger.debug?.({
@@ -580,14 +671,47 @@ export async function startHarvester({
           return { ok: false, errors: [error] }
         })
         },
-      })
+        })
+      } catch (error) {
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
+          dataResult: mapBrokerSubscriptionFailedData({
+            broker: brokerName,
+            stream: "market-price",
+            market: symbol,
+            error,
+          }),
+        })
+        throw error
+      }
 
       if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
+        const error = new Error(
           "Unable to subscribe to market prices for " + symbol + (details ? ": " + details : ""),
         )
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
+          dataResult: mapBrokerSubscriptionFailedData({
+            broker: brokerName,
+            stream: "market-price",
+            market: symbol,
+            error,
+          }),
+        })
+        throw error
       }
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+        dataResult: mapBrokerSubscriptionEstablishedData({
+          broker: brokerName,
+          stream: "market-price",
+          market: symbol,
+        }),
+      })
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
       logger.debug?.({ message: "Startup step completed: market-price subscription active", symbol })
@@ -600,7 +724,7 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription, logger })
+    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
@@ -617,7 +741,7 @@ export async function startHarvester({
     userDataStatus = "STOPPED"
     logger.info?.({ message: "Harvester shutdown started" })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, subscriptions, userDataSubscription, logger })
+    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }
