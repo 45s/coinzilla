@@ -1435,28 +1435,42 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
     order: buyOrder,
     tradeId: "rest-fill-1",
     price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
     executedAt: 10,
   })
   const secondFill = makeBuyFill({
     order: buyOrder,
     tradeId: "rest-fill-2",
     price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
     executedAt: 20,
   })
   const historyOrder = makeOrderStatusUpdate({
     order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.4",
+    status: "FILLED",
+    executedQuantity: "1",
     updatedAt: 3,
+  })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "manual-client",
+    brokerOrderId: "manual-broker",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
   })
   const calls = []
   broker.getOpenOrders = async ({ symbol }) => {
     calls.push(["getOpenOrders", symbol])
-    return { ok: true, data: [historyOrder] }
+    return { ok: true, data: [externalOrder] }
   }
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(["getCanonicalOrderHistory", symbol, orderId])
@@ -1472,8 +1486,10 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["rest-fill-1", "rest-fill-2"])
   assert.equal(
-    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).executedQuantity.amount,
-    "0.4",
+    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).status,
+    "FILLED",
+  )
+  assert.equal(engine.getOrders().length, 1)
   )
   assert.deepEqual(calls, [
     ["getOpenOrders", "DOGEUSDT"],
@@ -1492,4 +1508,38 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
   assert.equal(overlappingStreamEvent.ok, true)
   assert.equal(accountedFills.length, 2)
   assert.deepEqual(pauses, [])
+})
+
+
+test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const partialFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "incomplete-rest-fill",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const historyOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.4",
+    updatedAt: 3,
+  })
+  broker.getOpenOrders = async () => ({ ok: true, data: [historyOrder] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => ({ ok: true, data: [partialFill] })
+
+  const result = await engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(accountedFills.length, 0)
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
+  assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
 })
