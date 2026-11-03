@@ -33,7 +33,7 @@ const makeMetadata = ({
   supportedOrderTypes,
 })
 
-const pairConfig = { makerPercent: 0 }
+const pairConfig = { makerPercent: 0, takerPercent: 0.1 }
 
 test("accepts a market with required increments, quantity/notional minimums and LIMIT_MAKER support", () => {
   const result = validateMarketTradingReadiness({
@@ -51,7 +51,7 @@ test("accepts a market with required increments, quantity/notional minimums and 
 test("selects regular LIMIT when configured maker commission is non-zero", () => {
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { makerPercent: 0.075 },
+    pairConfig: { makerPercent: 0.075, takerPercent: 0.2 },
     marketMetadata: makeMetadata({ supportedOrderTypes: ["LIMIT"] }),
   })
   assert.equal(result.orderType, "LIMIT")
