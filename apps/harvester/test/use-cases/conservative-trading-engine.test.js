@@ -282,17 +282,13 @@ test("deferred strategy evaluation resumes without another market-price tick", a
   assert.equal(submittedIntents.filter(({ side }) => side === "BUY").length, 1)
 })
 
-test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
-  const fixture = createFixture({ deferFirstSell: true, deferCancellation: true })
+test("BUY fill submits one recovery SELL; pending and partial SELL states block all further BUYs", async () => {
+  const fixture = createFixture({ deferFirstSell: true })
   const {
     engine,
     submittedIntents,
-    cancellations,
     pendingSell,
     pendingSellStarted,
-    pendingCancel,
-    cancelStarted,
-    setFillsForOrder,
     createTradeEvent,
     getPortfolio,
     getRecoveryLedger,
@@ -303,6 +299,7 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
   })
   const initialBuyIntent = submittedIntents[0]
+  assert.equal(initialBuyIntent.side, "BUY")
   const initialBuy = new CanonicalOrder({
     clientOrderId: initialBuyIntent.clientOrderId,
     brokerOrderId: "1",
@@ -325,91 +322,53 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     }),
   })
 
-  const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" })
+  const placingRecoverySell = engine.evaluateLatest({ symbol: "ZROUSDT" })
   const pendingSellOrder = await pendingSellStarted.promise
-  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
-  assert.ok(secondBuyIntent)
-  const secondBuy = new CanonicalOrder({
-    clientOrderId: secondBuyIntent.clientOrderId,
-    brokerOrderId: "2",
-    market: fixture.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price, asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity, asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  })
+  assert.equal(pendingSellOrder.side, "SELL")
+  assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 
-  const partialFill = engine.processUserDataEvent({
-    event: createTradeEvent({
-      acknowledgedOrder: secondBuy,
-      tradeId: "trade-2",
-      quantity: "5",
-      executedQuantity: "5",
-      status: "PARTIALLY_FILLED",
-    }),
+  // A market update queued while the recovery SELL is awaiting acknowledgement
+  // must not create another BUY or a duplicate recovery SELL.
+  const priceWhilePending = engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1.01", timestamp: 2 },
   })
-  const finalFill = engine.processUserDataEvent({
-    event: createTradeEvent({
-      acknowledgedOrder: secondBuy,
-      tradeId: "trade-3",
-      quantity: "5",
-      executedQuantity: "10",
-      status: "FILLED",
-    }),
-  })
-
-  assert.deepEqual(cancellations, [])
   pendingSell.resolve(toResult({ data: pendingSellOrder }))
-  await placingRecoveryOrders
-  await partialFill
-  await cancelStarted.promise
+  await placingRecoverySell
+  await priceWhilePending
 
-  const sellFillEvent = createTradeEvent({
+  assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
+  assert.equal(getRecoveryLedger().outstandingRecoveryAmount, "10")
+
+  const partialSellEvent = createTradeEvent({
     acknowledgedOrder: pendingSellOrder,
-    tradeId: "trade-4",
+    tradeId: "trade-2",
     quantity: "2",
     executedQuantity: "2",
     status: "PARTIALLY_FILLED",
   })
-  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId, fills: [sellFillEvent.fill] })
-  const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent })
-  pendingCancel.resolve(toResult({
-    data: new CanonicalOrder({
-      clientOrderId: pendingSellOrder.clientOrderId,
-      brokerOrderId: pendingSellOrder.brokerOrderId,
-      market: fixture.market,
-      side: "SELL",
-      type: pendingSellOrder.type,
-      limitPrice: pendingSellOrder.limitPrice,
-      originalQuantity: pendingSellOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: "2", asset: fixture.market.baseAsset }),
-      status: "CANCELED",
-    }),
-  }))
-  await finalFill
-  await delayedSellReport
+  await engine.processUserDataEvent({ event: partialSellEvent })
 
-  assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId])
-  assert.equal(getPortfolio().appliedFillIds.length, 4)
-  assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
-  assert.equal(getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length, 1)
+  assert.equal(getPortfolio().appliedFillIds.length, 2)
+  assert.equal(getRecoveryLedger().appliedFillIds.length, 2)
+  assert.equal(getRecoveryLedger().outstandingRecoveryAmount !== "0", true)
 
-  await engine.processUserDataEvent({
-    event: createTradeEvent({
-      acknowledgedOrder: secondBuy,
-      tradeId: "trade-3",
-      quantity: "5",
-      executedQuantity: "10",
-      status: "FILLED",
-    }),
+  await engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1.02", timestamp: 3 },
   })
-  assert.equal(getPortfolio().appliedFillIds.length, 4)
-  assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
+  await engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: { symbol: "ZROUSDT", price: "1.03", timestamp: 4 },
+  })
 
-  await engine.evaluateLatest({ symbol: "ZROUSDT" })
-  const sellIntents = submittedIntents.filter(({ side }) => side === "SELL")
-  assert.equal(sellIntents.length, 2)
-  assert.equal(sellIntents[1].quantity, "17")
+  assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
+  assert.equal(submittedIntents.filter(({ side }) => side === "BUY").length, 1)
+  assert.equal(submittedIntents.filter(({ side }) => side === "SELL").length, 1)
+
+  // Re-delivering the same execution report is idempotent.
+  await engine.processUserDataEvent({ event: partialSellEvent })
+  assert.equal(getPortfolio().appliedFillIds.length, 2)
+  assert.equal(getRecoveryLedger().appliedFillIds.length, 2)
+  assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 })
