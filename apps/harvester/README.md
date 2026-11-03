@@ -4,7 +4,7 @@ Harvester is an independent Node.js process for cryptocurrency trading, built in
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
-- **Conservative (Free-Roll):** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
+- **Conservative:** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
 
@@ -22,7 +22,7 @@ cp apps/harvester/.env.example apps/harvester/.env.development
 pnpm --filter @coinzilla/harvester dev
 ```
 
-Edit `.env.development` with your local credentials if needed. Keep this file local; do not commit it. The development script loads it using Node's native `--env-file` option, matching the Free-Roll app.
+Edit `.env.development` with your local credentials if needed. Keep this file local; do not commit it. The development script loads it using Node's native `--env-file` option.
 
 Tests:
 
@@ -151,7 +151,7 @@ BINANCE_API_SECRET_KEY=...
 
 ### Trading-first implementation direction
 
-Harvester follows the working `apps/bot-free-roll` execution sequence: subscribe to prices, submit the initial limit BUY, account canonical TRADE fills, and manage the recovery SELL from actual in-process accounting. The initial account snapshot supplies the starting free balances; subsequent order checks subtract net quote spent, add realized quote proceeds, and reserve outstanding in-process BUY/SELL commitments. SELL quantities are additionally capped by the active base inventory in Harvester's Portfolio, so external base inventory and its free/locked balances are never adopted as strategy-owned inventory. External open orders are not registered as Harvester orders; an execution report for an unowned order after engine activation remains an ownership violation and pauses the affected pair, while an order report received before the ownership registry is ready aborts trading startup. Read-only mode does not adopt external fills into Portfolio. Ordinary TRADE fills for registered Harvester orders update Portfolio and RecoveryLedger exactly once and do not trigger full account snapshots.
+Harvester implements the Conservative lifecycle: subscribe to prices, submit the initial limit BUY, account canonical TRADE fills, and manage the recovery SELL from actual in-process accounting. The initial account snapshot supplies the starting free balances; subsequent order checks subtract net quote spent, add realized quote proceeds, and reserve outstanding in-process BUY/SELL commitments. SELL quantities are additionally capped by the active base inventory in Harvester's Portfolio, so external base inventory and its free/locked balances are never adopted as strategy-owned inventory. External open orders are not registered as Harvester orders; an execution report for an unowned order after engine activation remains an ownership violation and pauses the affected pair, while an order report received before the ownership registry is ready aborts trading startup. Read-only mode does not adopt external fills into Portfolio. Ordinary TRADE fills for registered Harvester orders update Portfolio and RecoveryLedger exactly once and do not trigger full account snapshots.
 
 ## Controlled TESTNET runbook
 
@@ -224,7 +224,7 @@ with documentation deferred to a later follow-up commit.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. GitHub Actions passed on the current P0.7 branch (Harvester 298/298; broker 274/274; Free-Roll 313/313; 1,367 workspace tests total). Local Binance Spot TESTNET startup is confirmed through ZROUSDT price subscription; the process is awaiting its first validated price. The first BUY and complete TESTNET BUY → SELL → next-cycle run have not yet been observed. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. GitHub Actions passed on the current P0.7 branch (Harvester 298/298; broker 274/274; 1,367 workspace tests total). Local Binance Spot TESTNET startup is confirmed through ZROUSDT price subscription; the process is awaiting its first validated price. The first BUY and complete TESTNET BUY → SELL → next-cycle run have not yet been observed. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
 
 
 ## Standalone Binance TESTNET order tools

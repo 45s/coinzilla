@@ -7,7 +7,7 @@
 
 ## Purpose
 
-Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative (Free-Roll) and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
+Harvester uses one shared Trading Engine with multiple strategy policies. The engine coordinates trading workflows; a strategy decides what trading action should be taken. This lets Conservative and Aggressive use the same execution, broker, and portfolio capabilities without sharing their trading rules.
 
 This document records the current architectural direction. It does not define implementation APIs or settle the strategy and portfolio decisions listed in the roadmap.
 
@@ -20,7 +20,7 @@ For the first controlled TESTNET cycle, implement only the minimum execution saf
 
 ## Product rule: DDD must not delay the trading loop
 
-Harvester is being built by improving the already-working `apps/bot-free-roll` behaviour, not by inventing a more elaborate trading lifecycle. First make the Conservative app run end to end; then improve its internals incrementally.
+Harvester implements the Conservative strategy through its own domain, application, and infrastructure boundaries. Keep the lifecycle simple and improve it incrementally without changing approved financial behavior.
 
 The reference workflow is config → broker connection/price subscription → price → strategy decision → BUY/SELL submission → execution report → actual-fill accounting → next decision. DDD means pure strategy/domain rules, state-owning entities, injected use cases, broker adapters, and bootstrap composition. It does not mean adding a new layer, state machine, persistence store, or reconciliation process for every event.
 
@@ -28,7 +28,7 @@ The reference workflow is config → broker connection/price subscription → pr
 
 **Pending-order rule:** register PENDING before submission so events can be correlated, but keep it non-cancellable until broker acknowledgement provides a validated broker order ID. If a replacement is needed while submission is pending, defer that replacement intent; after acknowledgement, cancel and reconcile fills before placing the replacement.
 
-Before changing an execution path, compare it with the corresponding `apps/bot-free-roll` implementation. Keep only the minimum safeguards that prevent a demonstrated duplicate, oversell, double-accounting, or unknown-outcome hazard. Do not build generic polling, sleeps, or broad reconciliation to handle ordinary event ordering.
+Before changing an execution path, compare it with the approved Conservative Domain Specification and the current Harvester implementation. Keep only the minimum safeguards that prevent a demonstrated duplicate, oversell, double-accounting, or unknown-outcome hazard. Do not build generic polling, sleeps, or broad reconciliation to handle ordinary event ordering.
 
 ## Architectural roles
 
@@ -36,7 +36,7 @@ Before changing an execution path, compare it with the corresponding `apps/bot-f
 | --- | --- | --- |
 | Portfolio | Holds spot positions and applies fill-driven state changes | Domain entity |
 | Position | Tracks holdings and quote cash flow for its defined market scope | Domain entity |
-| Conservative strategy | Defines Free-Roll capital-recovery and free-asset rules | Domain policy |
+| Conservative strategy | Defines Conservative capital-recovery and retained-inventory rules | Domain policy |
 | Aggressive strategy | Defines rules for managing multiple BUY and SELL orders | Domain policy |
 | Trading Engine | Coordinates market updates, strategy evaluation, order workflows, and fill processing | Application layer / orchestrator |
 | Use case | Performs an application goal by coordinating domain objects and ports | Application layer |
@@ -183,7 +183,7 @@ This is a conceptual direction, not a request to create every directory immediat
 
 Both initial strategy modes use the same Trading Engine and Portfolio, but they do not control a pair simultaneously:
 
-- **Conservative (Free-Roll):** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
+- **Conservative:** aims to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
 - **Aggressive:** may maintain multiple active BUY and multiple active SELL orders while it controls the pair. Its exact order planning and risk rules remain partly undecided.
 
 There is exactly one Position per trading pair, shared by both strategies. The Trading Engine grants operational control to only one strategy at a time. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). It switches from Aggressive to Conservative when actual executed BUY investment exceeds that percentage of the pair's planned total quote budget; open/unfilled BUY orders and their reserved quote commitment are excluded. Conservative retains control until the entire position is sold and the invested quote capital has been recovered. If the position is losing money, the strategy must stop creating new BUY orders while keeping existing SELL orders active; it must never force a sale at a loss merely to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. During a handover, the outgoing strategy stops issuing new orders and the engine reconciles/cancels its outstanding orders before the incoming strategy acts. The exact reservation lifecycle and cross-pair account-balance coordination remain unresolved. See [Trading Strategies](./trading-strategies.md) for the behavior contract.
@@ -402,7 +402,7 @@ The Journal is an observer, never a trading dependency:
 - On normal shutdown, stop trading intake and drain the existing user-data queue before publishing final lifecycle events, flushing EventBus, and closing Journal/EventBus. A failed Journal close must not skip broker/resource cleanup.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
-Bot-Free-Roll is a reference for package composition, event publication, and shutdown ordering, not a template for Harvester's startup policy or domain contracts. In particular, Harvester must not inherit a startup sequence in which Journal initialization failure prevents trading.
+Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. In particular, Harvester must not inherit a startup sequence in which Journal initialization failure prevents trading.
 
 ### Initial lifecycle event contract
 

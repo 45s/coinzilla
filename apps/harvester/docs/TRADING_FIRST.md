@@ -17,7 +17,7 @@ Agents MUST work in this order:
 1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
 3. **Receive usable market prices.** Validate incoming prices and make the latest usable price available to the trading workflow. Handle missing/stale prices safely.
-4. **Evaluate the first strategy.** Conservative is the first executable policy. Its initial BUY trails upward by one configured step; after a BUY fills, the next standing BUY is fixed; trailing resumes after a profitable recovery SELL. Recovery SELLs cover cumulative actual BUY cost, actual commissions, and minProfit while retaining keepQuantity. A new BUY fill cancels and reconciles any old recovery SELL before replacement. Do not start Aggressive first or copy the old Free-Roll runtime/broker implementation.
+4. **Evaluate the first strategy.** Conservative is the first executable policy. Its initial BUY trails upward by one configured step; after a BUY fills, the next standing BUY is fixed; trailing resumes after a profitable recovery SELL. Recovery SELLs cover cumulative actual BUY cost, actual commissions, and minProfit while retaining keepQuantity. A new BUY fill cancels and reconciles any old recovery SELL before replacement. Do not start Aggressive first or place runtime/broker concerns inside the domain.
 5. **Create and submit orders.** Turn the strategy's decision into an order intent, apply the minimum necessary TESTNET execution checks and exchange filters, and submit a real TESTNET order through the broker.
 6. **Receive order updates and executions.** Process acknowledgements, partial fills, final fills, cancellations, and rejections. Update trading state only from actual executions; do not count a requested or acknowledged quantity as filled.
 7. **React and repeat.** Re-evaluate when a relevant price, order-state, or fill event arrives. Place the next required order without waiting for an unrelated new price event. Continue the strategy cycle.
@@ -27,7 +27,7 @@ The current branch has deterministic fake-broker coverage of the complete first 
 
 ## Keep startup and execution simple
 
-The expected product workflow is the working `bot-free-roll` workflow expressed through Harvester's DDD boundaries. Do not add extra startup phases unless they prevent a specific unsafe first order.
+The expected product workflow is the Conservative lifecycle defined in [Trading Strategies](./trading-strategies.md) and the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not add extra startup phases unless they prevent a specific unsafe first order.
 
 - A full account snapshot after every TRADE execution is **not** a default requirement. Actual canonical fills update the in-process Portfolio/RecoveryLedger.
 - A clean TESTNET account is recommended for a controlled first verification, but "no open orders / zero base inventory" must not become a permanent generic startup gate. Do not silently take ownership of external inventory or orders; report ambiguity and keep strategy ownership explicit.
@@ -35,7 +35,7 @@ The expected product workflow is the working `bot-free-roll` workflow expressed 
 - If an evaluation is temporarily deferred while an event is processed, retain and resume it automatically after that transition. Do not wait for a new price event.
 - PENDING means the broker submission has not yet been acknowledged. Track it; do not cancel it or call cancellation with a missing broker order ID. After acknowledgement, validate the ID, cancel, reconcile fills that raced with cancellation, and only then replace.
 - Never classify a local readiness deferral as a Binance rejection. Keep definite rejection, unknown network outcome, expected deferral, and invariant failure distinct.
-- Before adding any mechanism, inspect the corresponding working `apps/bot-free-roll` path and explain the concrete failure it prevents.
+- Before adding any mechanism, identify the concrete failure in Harvester's current workflow that it prevents.
 
 ## Minimum safety required for the first TESTNET cycle
 
