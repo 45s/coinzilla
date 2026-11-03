@@ -215,7 +215,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 **Work:**
 - Publish `execution.fill_applied` only when `updateTradingAccounting` reports `applied: true`, after the existing wrapper has committed both Portfolio and RecoveryLedger.
 - Use a small allowlisted DTO containing stable fill/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
-- Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6b.
+- Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6c.
 - Keep the sequential user-data queue and all current accounting invariants unchanged.
 - Do not await EventBus delivery or Journal in the user-data queue.
 
@@ -240,7 +240,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6c — Duplicate and recovery-cycle diagnostics
 
-**Status:** Not started; begin only after Step 6b is merged.
+**Status:** In progress on branch `feature/harvester/duplicate-recovery-events`.
 
 - Optionally publish idempotent duplicate-fill suppression when the accounting result explicitly reports `duplicate: true`.
 - Publish recovery completion only after the existing domain/application transition reports it eligible and commits the new cycle.
