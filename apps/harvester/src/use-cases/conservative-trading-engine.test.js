@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0" } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0" } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -55,7 +55,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
       orders.push(order)
       onPlaceOrder?.({ order })
       onPlaceOrderStarted?.({ order })
-      if (placeOrderGate) await placeOrderGate.promise
+      if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
       if (placeOrderThrow) throw new Error("socket closed")
       if (placeOrderFailure) return { ok: false, errors: [new Error("broker rejected order")] }
       return {
@@ -594,38 +594,75 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
 })
 
 
-test("serializes market transitions until broker acknowledgement before cancel/replace", async () => {
+test("serializes market and user-data transitions until a pending SELL is acknowledged", async () => {
   let resolveAcknowledgement
   const placeOrderGate = {
     promise: new Promise((resolve) => { resolveAcknowledgement = resolve }),
   }
-  let signalPlaceOrderStarted
-  const placeOrderStarted = new Promise((resolve) => { signalPlaceOrderStarted = resolve })
-  const { engine, orders, cancellationIds } = createHarness({
+  let signalSellSubmission
+  const sellSubmissionStarted = new Promise((resolve) => { signalSellSubmission = resolve })
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, cancellationIds, accountedFills } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
     placeOrderGate,
-    onPlaceOrderStarted: () => signalPlaceOrderStarted(),
+    onPlaceOrderStarted: ({ order }) => {
+      if (order.side === "SELL") signalSellSubmission()
+    },
   })
 
-  const initialPrice = engine.processMarketPrice({
+  const initialDecision = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  await placeOrderStarted
+  await sellSubmissionStarted
 
-  const risingPrice = engine.processMarketPrice({
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buyOrder?.brokerOrderId)
+  assert.equal(sellOrder?.status, "PENDING")
+  assert.equal(sellOrder?.brokerOrderId, null)
+
+  const fill = new Fill({
+    tradeId: "concurrent-buy-fill",
+    brokerOrderId: buyOrder.brokerOrderId,
+    market,
+    side: "BUY",
+    price: buyOrder.limitPrice,
+    quantity: buyOrder.originalQuantity,
+    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const filledBuy = makeFilledOrder({ order: buyOrder })
+  const userDataTransition = engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+  })
+  const duplicateFillTransition = engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+  })
+  const concurrentMarketTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+    priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
   })
 
-  assert.equal(orders.length, 1)
   assert.deepEqual(cancellationIds, [])
+  assert.equal(orders.length, 2)
 
   resolveAcknowledgement()
-  const [initialResult, replacementResult] = await Promise.all([initialPrice, risingPrice])
+  const [initialResult, userDataResult, duplicateResult, marketResult] = await Promise.all([
+    initialDecision,
+    userDataTransition,
+    duplicateFillTransition,
+    concurrentMarketTransition,
+  ])
 
   assert.equal(initialResult.ok, true)
-  assert.equal(replacementResult.ok, true)
-  assert.equal(cancellationIds.length, 1)
-  assert.equal(cancellationIds[0], "broker-h-DOGEUSDT-1")
+  assert.equal(userDataResult.ok, true)
+  assert.equal(duplicateResult.ok, true)
+  assert.equal(marketResult.ok, true)
+  assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
+  assert.equal(accountedFills.length, 1)
   assert.equal(orders.length, 2)
 })
