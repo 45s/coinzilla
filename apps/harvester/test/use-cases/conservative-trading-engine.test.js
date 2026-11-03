@@ -30,7 +30,7 @@ const createDeferred = () => {
   return { promise, resolve, reject }
 }
 
-const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCancellation = false } = {}) => {
+const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCancellation = false, recoveryCompletionEligible = true } = {}) => {
   const baseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
   const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
   const market = new Market({
@@ -153,7 +153,14 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
       }
       return result
     },
-    completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
+    completeRecoveryCycle: ({} = {}) => {
+      if (!recoveryCompletionEligible) {
+        return toResult({ data: { eligible: false, reason: "RECOVERY_COMPLETION_INELIGIBLE" } })
+      }
+      portfolio = portfolio.allocateFreeQuantity({ marketId: market.id, quantity: "1" })
+      recoveryLedger = recoveryLedger.resetCycle()
+      return toResult({ data: { eligible: true, freeQuantity: "1", realizedNetProfit: "0.017" } })
+    },
     canTrade: ({} = {}) => ready,
     onPause: async ({} = {}) => {},
     isStopping: ({} = {}) => false,
@@ -371,4 +378,78 @@ test("BUY fill submits one recovery SELL; pending and partial SELL states block 
   assert.equal(getPortfolio().appliedFillIds.length, 2)
   assert.equal(getRecoveryLedger().appliedFillIds.length, 2)
   assert.deepEqual(submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
+})
+
+test("next BUY is eligible only after successful recovery completion", async () => {
+  const runCycle = async ({ recoveryCompletionEligible }) => {
+    const fixture = createFixture({ recoveryCompletionEligible })
+    const { engine, submittedIntents, createTradeEvent, getRecoveryLedger } = fixture
+
+    await engine.processMarketPrice({
+      symbol: "ZROUSDT",
+      priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+    })
+    const buyIntent = submittedIntents[0]
+    const buyOrder = new CanonicalOrder({
+      clientOrderId: buyIntent.clientOrderId,
+      brokerOrderId: "1",
+      market: fixture.market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({ amount: buyIntent.price, asset: fixture.market.quoteAsset }),
+      originalQuantity: new Quantity({ amount: buyIntent.quantity, asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+      status: "OPEN",
+    })
+    await engine.processUserDataEvent({
+      event: createTradeEvent({
+        acknowledgedOrder: buyOrder,
+        tradeId: "trade-1",
+        quantity: "10",
+        executedQuantity: "10",
+        status: "FILLED",
+      }),
+    })
+
+    await engine.evaluateLatest({ symbol: "ZROUSDT" })
+    const sellIntent = submittedIntents.find(({ side }) => side === "SELL")
+    assert.ok(sellIntent)
+    const sellOrder = new CanonicalOrder({
+      clientOrderId: sellIntent.clientOrderId,
+      brokerOrderId: "2",
+      market: fixture.market,
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({ amount: sellIntent.price, asset: fixture.market.quoteAsset }),
+      originalQuantity: new Quantity({ amount: sellIntent.quantity, asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+      status: "OPEN",
+    })
+    const sellFillResult = await engine.processUserDataEvent({
+      event: createTradeEvent({
+        acknowledgedOrder: sellOrder,
+        tradeId: "trade-2",
+        quantity: sellIntent.quantity,
+        executedQuantity: sellIntent.quantity,
+        status: "FILLED",
+      }),
+    })
+
+    await engine.processMarketPrice({
+      symbol: "ZROUSDT",
+      priceEvent: { symbol: "ZROUSDT", price: "1.05", timestamp: 3 },
+    })
+
+    return { submittedIntents, getRecoveryLedger, sellFillResult }
+  }
+
+  const completed = await runCycle({ recoveryCompletionEligible: true })
+  assert.equal(completed.sellFillResult.ok, true)
+  assert.equal(completed.getRecoveryLedger().outstandingRecoveryAmount, "0")
+  assert.deepEqual(completed.submittedIntents.map(({ side }) => side), ["BUY", "SELL", "BUY"])
+
+  const incomplete = await runCycle({ recoveryCompletionEligible: false })
+  assert.equal(incomplete.sellFillResult.ok, false)
+  assert.notEqual(incomplete.getRecoveryLedger().outstandingRecoveryAmount, "0")
+  assert.deepEqual(incomplete.submittedIntents.map(({ side }) => side), ["BUY", "SELL"])
 })
