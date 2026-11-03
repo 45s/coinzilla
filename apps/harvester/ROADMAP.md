@@ -106,7 +106,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [~] Preserve fee rules: actual fill commission rates are calculated from canonical fills; the configured maker/taker ceiling is activated only after a non-zero actual commission is observed; base/quote fees are supported; third-asset or incomplete commission data is rejected. The fee policy and calculation are implemented as pure domain functions but are not yet wired into strategy evaluation.
+- [~] Shared commission policy for Conservative and Aggressive: track the highest exchange-charged MAKER and TAKER rates separately per market; each effective rate is the higher of its configured `makerPercent` / `takerPercent` and the highest rate charged by the exchange for that fill type. Keep both histories across recovery cycles. Fill accounting uses the commission charged; third-asset or incomplete commission data remains rejected. Current code still has one combined observed rate and configured ceiling; separate per-type tracking and strategy integration remain.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
@@ -684,3 +684,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Fail closed on missing or inconsistent SELL execution history; do not allocate free inventory, reset the recovery ledger, or reactivate BUY trailing.
 - [x] Add engine regressions for missing fills, incomplete fills, and multiple partial fills that reconcile to a complete SELL.
 - [ ] Verify the complete SELL-completion transition on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
+
+
+### Shared MAKER/TAKER commission policy clarification — 2026-11-03
+
+- [x] Agree one policy for Conservative and Aggressive: separate MAKER and TAKER rates; for each type use the higher of its configured rate and the highest rate the exchange has charged on a confirmed fill of that type.
+- [x] Keep the two rate histories separate and persistent across successful recovery cycles; cycle completion resets cycle cost/proceeds, not commission history.
+- [x] Clarify that the exchange-charged commission on each fill is used for accounting; the effective rate is only a planning reserve.
+- [ ] Implement per-market MAKER/TAKER rate histories and effective-rate calculation. Replace the current single combined observed rate; add tests for both types, configured minimums, higher exchange charges, and persistence across cycle reset.
+- [ ] Apply the shared policy to Conservative and Aggressive planning; for `LIMIT_MAKER` use MAKER reserve, and for `LIMIT` reserve the higher effective rate because either liquidity role may execute.
+- [ ] Verify deterministic CI and update implementation status. No TESTNET verification is implied by this documentation decision.
