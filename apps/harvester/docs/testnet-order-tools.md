@@ -208,24 +208,26 @@ registered order despite the different incoming `c` value. The TRADE event
 must still be verified through its accounting outcome; receipt-only logs are
 not proof of an applied fill.
 
-### New TESTNET finding — order ID matched, client ID conflicted
+### Historical TESTNET ownership finding — resolved by PR #477
 
-The 16:24:18 rejection record identifies:
+The 16:24 report for exchange order `666845` had an incoming client ID
+different from the locally registered `h-ZROUSDT-1`, while the exchange
+broker-order-ID lookup found the registered order. TESTNET history confirmed
+that 666845 belonged to `h-ZROUSDT-1`, was CANCELED, and had zero execution.
 
-- `brokerOrderId=666845`;
-- incoming `clientOrderId=CU5G5c9IZgepakVzo3Z3kw`;
-- matched registry order's client ID `h-ZROUSDT-1`;
-- lookup by broker ID succeeded, lookup by client ID failed.
+PR #477 resolved this mismatch by matching acknowledged reports by the
+exchange-assigned broker order ID, retaining the local canonical client ID,
+and preserving Binance `c` and `C` separately as event metadata. The adapter
+and registry have regression coverage for this behavior. The old instruction
+to defer forwarding `C` or to avoid the broker-ID-first correction is
+superseded. Unknown broker IDs and conflicting IDs that identify different
+registered orders remain fail-closed.
 
-This is not a simple unknown exchange order. It is a client-ID mismatch for an exchange order ID already in the Harvester registry. Do not resolve it by accepting broker-ID matches unconditionally.
-
-The Binance adapter currently reads raw execution-report `C` as `originalClientOrderId`, but the subsequent `adaptExecutedOrder()` does not forward that field. We therefore cannot yet tell whether `C` is the registered `h-ZROUSDT-1` or whether it carries another value. The next diagnostic update should preserve both raw identifiers `c` and `C` as event metadata and add adapter tests; it must not change canonical ownership decisions.
-
-**Read-only next check:** retrieve TESTNET order history for `ZROUSDT` and inspect the row for order ID `666845`. Compare its client order ID, status, executed quantity and update time with the Harvester acknowledgement. Also capture both `c` and `C` from the rejected CANCELED report and both IDs from the subsequent TRADE report.
-
-The 16:24:48 log `Trade execution received` is emitted before the event is queued for engine processing. It does not prove the fill was applied. Look for the subsequent successful fill-accounting/journal outcome or a rejection record for that exact TRADE report.
-
-
+The 16:24:48 `Trade execution received` message was emitted before engine
+processing; receipt alone did not prove accounting. Verify fill accounting
+through the later accepted/duplicate/rejected engine outcome and Portfolio /
+RecoveryLedger state.
+ 
 ### Free-Roll-compatible execution-report matching
 
 The working Free-Roll code in `apps/bot-free-roll/src/bot/bot-free-roll.js` does not match execution reports by client order ID. It tracks the exchange-assigned order ID returned by the broker and accepts reports only when `getOrderId(event.executedOrder)` is in `trackedOrderIds`. It then validates fill order ID, symbol, and side.
