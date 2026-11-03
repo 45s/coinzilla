@@ -4,7 +4,7 @@ Harvester is an independent Node.js process for cryptocurrency trading, built in
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
 
-- **Conservative (Free-Roll):** the first executable policy. It produces initial/standing BUY and recovery SELL intents from actual Portfolio and RecoveryLedger state. Aggressive is deferred.
+- **Conservative (Free-Roll):** the first executable policy. It follows a recovery-first cycle: BUY fill → recovery SELL → successful net-proceeds/minimum-profit/keep-quantity completion and ledger reset → next BUY. It uses actual Portfolio and RecoveryLedger fills; an active SELL or uncompleted recovery cycle blocks another BUY. Aggressive is deferred.
 
 These are strategy modes, not separate trading engines. Shared capabilities (market data, broker access, order lifecycle, fills, balances, accounting, and safety controls) should be implemented once where their contracts genuinely match. Strategy-specific decisions must remain isolated behind clear boundaries.
 
@@ -43,7 +43,7 @@ Use a ports-and-adapters architecture:
 
 The engine must not contain Conservative- or Aggressive-specific policy. Strategies must not depend on exchange SDKs. Broker responses and market data must be validated at infrastructure boundaries.
 
-See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
+See [Conservative trading lifecycle](./docs/conservative-trading-lifecycle.md) for the required recovery-first sequencing and verification status. See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
 
 ### Operational event journal
 
