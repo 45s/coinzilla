@@ -1,5 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { EventBus } from "@coinzilla/event-bus"
+import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main } from "./index.js"
 
 const disabledJournalService = () => ({
@@ -155,7 +157,14 @@ test("composes exactly one EventBus and injects the best-effort publisher into b
   assert.equal(typeof startupInput.eventPublisher.publish, "function")
   const event = { name: "harvester.test", source: "test", data: {} }
   assert.equal(startupInput.eventPublisher.publish(event).ok, true)
-  assert.deepEqual(publishedEvents, [event])
+  assert.deepEqual(publishedEvents, [
+    {
+      name: "harvester.started",
+      source: "harvester",
+      data: { broker: "none", strategyMode: "read-only", enabledMarkets: [], tradingEnabled: false },
+    },
+    event,
+  ])
 })
 
 test("does not wait for optional Journal initialization before starting Harvester", async () => {
@@ -180,4 +189,119 @@ test("does not wait for optional Journal initialization before starting Harveste
   assert.equal(result.journalService, journalService)
   assert.equal(result.journalService.status.state, "starting")
   resolveReady({ ok: false, errors: [new Error("journal unavailable")] })
+})
+
+test("publishes process started and stopped events for read-only startup without a broker", async () => {
+  const eventBus = new EventBus()
+  const events = []
+  const handlers = {}
+  const subscription = eventBus.subscribeAll({
+    handler: async (event) => { events.push(event) },
+  })
+  assert.equal(subscription.ok, true)
+
+  const result = await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => ({ status: { state: "disabled" } }),
+    env: {},
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      tradingConfig: { pairs: { BTCUSDT: { enabled: true } } },
+      stop: async () => {},
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  assert.ok(result)
+  await eventBus.flush()
+  assert.equal(events.length, 1)
+  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.STARTED)
+  assert.deepEqual(events[0].data, {
+    broker: "none",
+    strategyMode: "read-only",
+    enabledMarkets: ["BTCUSDT"],
+    tradingEnabled: false,
+  })
+
+  await handlers.SIGTERM()
+  await eventBus.flush()
+  assert.equal(events.length, 2)
+  assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STOPPED)
+  assert.deepEqual(events[1].data, { reason: "SIGTERM", outcome: "success" })
+
+  subscription.subscription.unsubscribe()
+  await eventBus.close()
+})
+
+test("publishes failed process shutdown outcome when runtime.stop rejects", async () => {
+  const eventBus = new EventBus()
+  const events = []
+  const handlers = {}
+  const subscription = eventBus.subscribeAll({
+    handler: async (event) => { events.push(event) },
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => ({ status: { state: "disabled" } }),
+      env: {},
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => { throw new Error("runtime stop failed") },
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+
+    await handlers.SIGINT()
+    await eventBus.flush()
+    assert.equal(process.exitCode, 1)
+    assert.equal(events.at(-1).name, HARVESTER_EVENT_NAMES.STOPPED)
+    assert.equal(events.at(-1).data.reason, "SIGINT")
+    assert.equal(events.at(-1).data.outcome, "failed")
+    assert.equal(events.at(-1).data.error.message, "runtime stop failed")
+  } finally {
+    process.exitCode = previousExitCode
+    subscription.subscription.unsubscribe()
+    await eventBus.close()
+  }
+})
+
+test("publishes a sanitized process startup-failed event", async () => {
+  const eventBus = new EventBus()
+  const events = []
+  const subscription = eventBus.subscribeAll({
+    handler: async (event) => { events.push(event) },
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => ({ status: { state: "disabled" } }),
+      env: {},
+      start: async () => { throw new Error("startup failed apiKey=private-value") },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    await eventBus.flush()
+
+    assert.equal(process.exitCode, 1)
+    assert.equal(events.length, 1)
+    assert.equal(events[0].name, HARVESTER_EVENT_NAMES.STARTUP_FAILED)
+    assert.equal(events[0].data.stage, "process-startup")
+    assert.equal(events[0].data.error.message, "startup failed apiKey=[REDACTED]")
+  } finally {
+    process.exitCode = previousExitCode
+    subscription.subscription.unsubscribe()
+    await eventBus.close()
+  }
 })

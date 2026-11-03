@@ -13,4 +13,7 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   BROKER_CONNECTED: "broker.connected",
   BROKER_CONNECTION_FAILED: "broker.connection_failed",
   BROKER_DISCONNECTED: "broker.disconnected",
+  BROKER_STATUS_CHANGED: "broker.status_changed",
+  BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
+  BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
 })
