@@ -254,3 +254,24 @@ pnpm --filter @coinzilla/harvester testnet:balances
 The command uses the local TESTNET credentials, displays exact exchange
 decimal strings, and does not place/cancel orders or change balances. See
 [Binance TESTNET operator scripts](./docs/testnet-order-tools.md).
+
+
+## Standalone Binance TESTNET ZRO market sell
+
+A separate operator script can sell the account's free ZRO balance using a
+market order on the fixed Binance Spot TESTNET `ZROUSDT` symbol:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:sell-zro
+```
+
+The default run is a preview. The script requires typing
+`SELL ALL FREE ZRO ON TESTNET` before placing an order, checks that no
+`ZROUSDT` orders are open, rounds down to the exchange market quantity step,
+and rechecks the free balance immediately before submission. Locked ZRO is
+not sold. A market order has no guaranteed execution price. This tool is
+destructive and must only be used after reviewing the displayed quantity.
+It is TESTNET-only and is not part of the Harvester runtime.
+
+See [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for the
+full behavior and safety constraints.
