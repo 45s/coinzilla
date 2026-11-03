@@ -49,7 +49,7 @@ describe('Logger', () => {
     assert.doesNotThrow(() => logger.info(circular))
     assert.doesNotThrow(() => logger.info({ amount: 1n }))
     assert.equal(calls.length, 2)
-    assert.equal(calls[0].includes('[Circular]'), true)
+    assert.equal(calls[0].some((value) => typeof value === 'string' && value.includes('[Circular]')), true)
     assert.equal(calls[1].includes('[object Object]'), true)
   })
 
