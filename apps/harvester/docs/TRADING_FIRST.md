@@ -123,4 +123,3 @@ At the end of each task, state:
 4. Why any secondary work was necessary to unblock that step.
 5. Exact tests/checks run and their outcomes.
 
-Every completed job/PR must also end with the complete continuation prompt required by the repository instructions.
