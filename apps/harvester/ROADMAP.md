@@ -20,7 +20,7 @@ The trading-first priority governs trading implementation and does not make the 
 
 **Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
-**First priority: implement Conservative (Conservative strategy) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing the established Conservative behavior is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
+**First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Aggressive is deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
 
 The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
@@ -100,7 +100,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### P0.1 — Freeze the first executable strategy scope: Conservative Conservative strategy
 
-- [x] Select Conservative (Conservative strategy) as the first strategy. Its source of truth is the established Conservative behavior v0.014; Aggressive is deferred to P1.
+- [x] Select Conservative as the first executable strategy; Aggressive remains deferred until Conservative is proven end to end on TESTNET.
 - [~] Port the Conservative strategy business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
 - [x] Define the first Conservative order-intent contract and pure strategy evaluation context (last traded price, pair config, active Position/recovery ledger, active orders, and exchange filters). The policy emits initial/standing BUY and recovery SELL intents without broker I/O.
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
@@ -341,7 +341,7 @@ existing Conservative strategy order sequence and keeps Harvester's DDD boundari
 ### Scope A — Remove unnecessary execution-readiness barriers
 
 - [x] Trace and remove the per-report readiness reset and per-TRADE account snapshot refresh.
-- [x] Compare directly with the working the established Conservative behavior lifecycle and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
+- [x] Verify the order lifecycle against the approved Conservative behavior contract and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
 - [x] Ordinary TRADE fills update Portfolio/RecoveryLedger without requesting a full account snapshot.
 - [x] Remove the broker readiness guard that misclassified local readiness as a broker rejection. `makeExecuteStrategyDecision` rechecks readiness immediately before broker I/O and removes a locally registered PENDING order if submission is deferred.
 - [x] Retain deferred symbols and resume their latest evaluation when readiness returns, without another market tick.
@@ -500,12 +500,12 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.7 ownership correlation comparison — 2026-11-03
 
-Inspection of the working Conservative strategy handler found a concrete behavioral difference: the established Conservative behavior registers exchange-assigned broker order IDs in trackedOrderIds and checks the execution report's exchange order ID in its order-event handler. Harvester's OrderRegistry currently locates an order only by clientOrderId, even though its CanonicalOrder also carries brokerOrderId. The Binance user-stream adapter maps Binance executionReport.c to clientOrderId and executionReport.i to brokerOrderId; the canonical conversion retains both values.
+A previous source audit identified the required ownership rule: execution reports are correlated using exchange-assigned broker order IDs recorded after broker acknowledgement. Harvester's OrderRegistry now implements this rule. Harvester's OrderRegistry currently locates an order only by clientOrderId, even though its CanonicalOrder also carries brokerOrderId. The Binance user-stream adapter maps Binance executionReport.c to clientOrderId and executionReport.i to brokerOrderId; the canonical conversion retains both values.
 
 This is an investigation finding, not a proven explanation for the reported unknown event. Do not change the registry's matching rules until the new TESTNET diagnostic captures the rejected event and demonstrates which identifier matches the owned order. Any future broker-ID correlation must still validate that client and broker identifiers refer to the same registered order; it must not adopt external orders.
 
 
-### Conservative strategy ownership audit — 2026-11-03
+### Order ownership audit — 2026-11-03
 
 A direct source comparison was completed against `develop` (not inferred from the README):
 
@@ -565,11 +565,11 @@ Next, inspect TESTNET order history for exchange order ID `666845` and capture t
 Only after this comparison can we distinguish a Binance cancel/replacement identifier case, an adapter normalization issue, an order-ID collision, or another source of the mismatch. Add a deterministic test from the confirmed event semantics before changing ownership validation.
 
 
-### Conservative strategy order identity alignment — 2026-11-03
+### Order identity alignment — 2026-11-03
 
 The working implementation was compared directly with Harvester:
 
-- the established Conservative behavior tracks the exchange-assigned order ID in `state.trackedOrderIds` after the broker acknowledgement.
+- The Conservative lifecycle records the exchange-assigned order ID after broker acknowledgement.
 - Its `#handleOrderEvent()` gets `getOrderId(event.executedOrder)` and accepts the event only when that exchange order ID is tracked. Fill identity is checked using exchange order ID, symbol, and side. It does **not** require the execution report's client order ID to equal the locally submitted client ID.
 - Harvester previously used `OrderRegistry.applyUpdate()` lookup by `clientOrderId` only. That was the behavioral mismatch behind the `666845` rejection: Binance's event `c` differed, although the exchange order ID was already registered.
 
