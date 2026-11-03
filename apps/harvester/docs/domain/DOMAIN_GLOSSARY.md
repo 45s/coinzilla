@@ -6,7 +6,7 @@
 
 ## Purpose and scope
 
-This glossary defines terms used by the Conservative (Conservative strategy) domain. It separates strategy-owned financial facts from exchange/order lifecycle facts. It does not prescribe broker integration or a runtime architecture.
+This glossary defines terms used by the Conservative domain. It separates strategy-owned financial facts from exchange/order lifecycle facts. It does not prescribe broker integration or a runtime architecture.
 
 ## Terms
 
