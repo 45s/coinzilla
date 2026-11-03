@@ -29,7 +29,10 @@
 | `apps/bot-free-roll/src/bot/helpers/accounting.js` | `getConfiguredSellFeeRateExact`, `calculateFillAccountingExact`, `calculateCommissionRateExact` | Configured fee reserve and actual base/quote commission conversion |
 | `apps/bot-free-roll/src/bot/helpers/order-planning.js` | `calculateSellPlanExact` | Recovery SELL quantity, required net proceeds, price and rounding |
 | `apps/bot-free-roll/src/bot/helpers/price.js` | `calculateBuyThresholdExact`, `roundPriceDown`, `roundPriceUp`, `roundQuantityDown` | Buy-step price and increments |
+| `apps/bot-free-roll/src/index.js` | Static JSON import of `../trading-config.json`; `validateTradingConfig` call before runtime preparation | Loads the configured strategy and validates it before constructing broker/bot runtime |
+| `apps/bot-free-roll/trading-config.json` | Strategy settings and pair entries | Actual configured values; no per-pair investment cap |
 | `apps/bot-free-roll/src/validate-config.js` | `validateTradingConfig` | Config shape, minProfit, pair values and precision validation |
+| `apps/bot-free-roll/src/validate-config.test.js` | Configuration validation tests | Deterministic config acceptance/rejection and validation boundaries |
 
 ### Free-Roll tests inspected
 
@@ -59,7 +62,7 @@
 | `domain/strategies/conservative/recovery-completion.js` | `evaluateRecoveryCompletion` | Pure completion eligibility; relies on caller to supply authoritative fully-reconciled order state |
 | `domain/strategies/conservative/fill-commission-rate.js` | `calculateFillCommissionRate` | Converts actual commission into quote-equivalent rate; aggregates base/quote commission entries |
 | `domain/strategies/conservative/sell-fee-rate.js` | `calculateSellFeeRate` | Resolves configured and observed fee reserve; differs from Free-Roll activation timing |
-| `domain/trading-config.js` | configuration model | Strategy input contract; not a broker fact |
+| `domain/trading-config.js` | `validateTradingConfig` | Requires positive per-pair investment; accepts non-negative minProfit/keepQuantity; strategy input contract, not a broker fact |
 
 ### Existing Harvester domain documentation
 
