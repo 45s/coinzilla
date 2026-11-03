@@ -61,6 +61,10 @@
 | `domain/strategies/conservative/sell-fee-rate.js` | `calculateSellFeeRate` | Resolves configured and observed fee reserve; differs from Free-Roll activation timing |
 | `domain/trading-config.js` | configuration model | Strategy input contract; not a broker fact |
 
+### Existing Harvester domain documentation
+
+The existing [`docs/domain/portfolio.md`](https://github.com/45s/coinzilla/blob/develop/apps/harvester/docs/domain/portfolio.md) describes additional Position capabilities (average entry cost, realized profit, order reservations, and shared Conservative/Aggressive inventory) that are not represented by the inspected current `Position` fields/methods. Current `Position` stores active base quantity, free base quantity, and quote net cash flow. Treat the older document as broader/historical design guidance, not evidence that those capabilities exist in the current domain implementation. D0 does not update that separate document because the requested deliverables are the four domain specification files; reconcile it after the domain contract is approved.
+
 ### Harvester tests inspected
 
 - `conservative-strategy.test.js`: initial BUY, active BUY guard, BUY+SELL generation, active SELL guard, invalid context, partial BUY wait, investment cap.
@@ -90,7 +94,7 @@
 | Partial fill accounting | Incremental; terminal status separately validated | Domain accepts one Fill at a time | Implemented; lifecycle composition needs proof |
 | SELL plan retains keep and rounds quantity down / price up | Exact planner | Exact planner | Broadly aligned; base-fee edge needs more proof |
 | Actual quote commissions affect recovery | Exact accounting | RecoveryFillAccounting | Correctly implemented |
-| Configured fee reserve before first actual fee | Free-Roll initializes `feeRate = configuredFeeRate` | Harvester returns zero while observed actual rate is zero | Different |
+
 | Configured fee reserve before first actual fee | Free-Roll initializes `feeRate = configuredFeeRate` | Harvester `calculateSellFeeRate` returns zero until an actual non-zero commission is observed | Different; Harvester may under-reserve first SELL |
 | Configured fee reserve after actual fee | Free-Roll max(configured, actual) | Harvester max(configured ceiling, actual) after observation, except maker=0 policy | Broadly aligned after observation |
 | Completion requires full SELL, profit, sufficient keep | `#handleSellFilled` | `evaluateRecoveryCompletion` | Correctly implemented as separate checks |
