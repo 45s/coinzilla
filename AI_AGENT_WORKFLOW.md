@@ -44,6 +44,18 @@ Examples:
 
 Every task branch must start from the latest `develop`. Every task PR targets `develop`. Only the final release PR targets `main`.
 
+### Reserved branch-name protection — mandatory
+
+AI agents and automated contributors MUST NOT create a task branch whose name is, or contains as a delimited token, either reserved branch name: `main` or `develop`. This applies case-insensitively and regardless of the branch prefix or task type.
+
+- Reject names matching `(^|[\\/._-])(main|develop)(?=$|[\\/._-])` (case-insensitive).
+- Examples that MUST NOT be created: `main`, `develop`, `feature/main/fix-login`, `feature/develop/task-123`, `fix-main`, and `docs_develop_cleanup`.
+- Use a task-specific name such as `feature/auth/fix-login`, `fix/brokers/order-retry`, or `docs/agent-branch-policy` instead.
+- The rule applies to local and remote branch creation, renaming, and pushing. Check the proposed name before creating the branch; if it matches, choose a compliant name. Never create a reserved-pattern branch and plan to rename or delete it later.
+- `main` and `develop` are existing protected integration branches, not task-branch names. PR destination is selected separately: routine task PRs target `develop`; only the final release PR targets `main`.
+
+This restriction exists because GitHub's automatic head-branch deletion is not guaranteed to remove branches whose names collide with or imitate the permanent integration branches. Treat the naming check as a hard precondition, not a preference.
+
 ## 3. Domain ownership
 
 | Domain | Owned paths | Local instructions / roadmap |
