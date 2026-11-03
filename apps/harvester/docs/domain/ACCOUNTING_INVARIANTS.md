@@ -19,7 +19,7 @@ For each confirmed fill, define:
 - `q`: gross executed base quantity;
 - `v`: gross executed quote notional (`Fill.quoteQuantity`);
 - `c_b`: sum of commission amounts charged in base asset;
-- (c_q): sum of commission amounts charged in quote asset.
+- `c_q`: sum of commission amounts charged in quote asset.
 
 Zero commission is zero. Negative commissions, incomplete commission facts, unsupported third-asset commissions, non-positive execution quantity/notional, or commissions that exceed the corresponding fill amount are invalid under the current policy.
 
@@ -122,7 +122,7 @@ $$
 When `Q > 0`, the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
 
 Required properties:
-- (0 \le Q\) and (Q) is an exact multiple of (s).
+- `Q ≥ 0` and `Q` is an exact multiple of `s`.
 - The plan never intentionally includes the configured keep quantity.
 - Quantity rounds down; price rounds up.
 - Prior confirmed net proceeds reduce the remaining required proceeds.
