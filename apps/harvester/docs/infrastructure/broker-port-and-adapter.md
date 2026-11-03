@@ -55,6 +55,7 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Cancel order | `cancelOrder({ symbol, orderId })` |
 | Read open orders | `getOpenOrders({ symbol })` |
 | Read fills | `getFills(input)` |
+| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
 | Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
@@ -83,6 +84,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
+    getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
     subscribeForPrices: ({ symbol, onPrice }) => client.subscribeForPrices({ symbol, onPrice }),
