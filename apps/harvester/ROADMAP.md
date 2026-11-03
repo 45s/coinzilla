@@ -70,7 +70,7 @@ when `HARVESTER_ENABLE_TRADING=true`:
 
 - Conservative pure policy: initial/standing BUY and recovery SELL intents,
   exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
-  configured pair-investment limit, actual commission-aware recovery planning.
+  configured pair-investment limit, exchange-fee-aware recovery planning.
 - Submission: local PENDING canonical order registration, exchange-rule
   validation, broker submission, canonical acknowledgement verification, and
   unknown-outcome pause behavior.
@@ -106,7 +106,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [~] Shared commission policy for Conservative and Aggressive: track the highest exchange-charged MAKER and TAKER rates separately per market; each effective rate is the higher of its configured `makerPercent` / `takerPercent` and the highest rate charged by the exchange for that fill type. Keep both histories across recovery cycles. Fill accounting uses the commission charged; third-asset or incomplete commission data remains rejected. Current code still has one combined observed rate and configured ceiling; separate per-type tracking and strategy integration remain.
+- [~] Shared commission policy for Conservative and Aggressive: track the highest exchange-charged MAKER and TAKER rates separately per configured pair; each effective rate is the higher of its configured `makerPercent` / `takerPercent` and the highest rate charged by the exchange for that fill type. Keep both histories across recovery cycles. Fill accounting uses the commission charged; third-asset or incomplete commission data remains rejected. Current code still has one combined observed rate and configured ceiling; separate per-type tracking and strategy integration remain.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
@@ -143,7 +143,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.4 — Live order and fill lifecycle
 
 - [~] Normalize user-data order/execution events at the broker adapter boundary. Binance TRADE execution reports are now converted into canonical `Fill` entities using cached symbol metadata; non-trade order events remain normalized broker events.
-- [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and actual commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
+- [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and exchange-charged commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
 - [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
 - [~] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause the pair and are not accounted. Additional multi-symbol and duplicate/out-of-order event cases remain.
@@ -257,7 +257,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [x] Use cases are dependency-injected functions; strategies decide and never perform broker I/O.
 - [x] Harvester owns its application-facing broker port and adapts `@coinzilla/brokers`.
 - [x] One shared Position per market; Conservative and Aggressive share accounting but only one controls the pair at a time.
-- [x] Actual canonical fills, including actual commissions, are the only source of Portfolio holdings changes.
+- [x] Confirmed canonical fills, including exchange-charged commissions, are the only source of Portfolio holdings changes.
 - [x] Third-asset commission fills are rejected for now; they must never be silently ignored.
 - [x] BUY prices round down and SELL prices round up to exchange tick rules.
 - [x] Live exchange tests are opt-in and TESTNET-only; default tests never need credentials or network access.
@@ -691,6 +691,6 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Agree one policy for Conservative and Aggressive: separate MAKER and TAKER rates; for each type use the higher of its configured rate and the highest rate the exchange has charged on a confirmed fill of that type.
 - [x] Keep the two rate histories separate and persistent across successful recovery cycles; cycle completion resets cycle cost/proceeds, not commission history.
 - [x] Clarify that the exchange-charged commission on each fill is used for accounting; the effective rate is only a planning reserve.
-- [ ] Implement per-market MAKER/TAKER rate histories and effective-rate calculation. Replace the current single combined observed rate; add tests for both types, configured minimums, higher exchange charges, and persistence across cycle reset.
+- [ ] Implement per-pair MAKER/TAKER rate histories and effective-rate calculation. Replace the current single combined observed rate; add tests for both types, configured minimums, higher exchange charges, and persistence across cycle reset.
 - [ ] Apply the shared policy to Conservative and Aggressive planning; for `LIMIT_MAKER` use MAKER reserve, and for `LIMIT` reserve the higher effective rate because either liquidity role may execute.
 - [ ] Verify deterministic CI and update implementation status. No TESTNET verification is implied by this documentation decision.
