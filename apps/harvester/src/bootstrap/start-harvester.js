@@ -26,13 +26,8 @@ import {
   mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
-async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger = defaultLogger }) {
-  logger.debug?.({
-    message: "Harvester cleanup started",
-    marketSubscriptions: subscriptions.map(({ symbol }) => symbol),
-    hasUserDataSubscription: typeof userDataSubscription?.disconnect === "function",
-  })
-  const unsubscribeResults = await Promise.allSettled([
+async function stopBrokerIntake({ subscriptions, userDataSubscription, logger = defaultLogger }) {
+  const results = await Promise.allSettled([
     ...subscriptions.map(({ symbol, unsubscribe }) => {
       logger.debug?.({ message: "Removing market-price subscription", symbol })
       return Promise.resolve().then(() => unsubscribe())
@@ -44,16 +39,19 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
       })]
       : []),
   ])
-  const disconnectResult = await Promise.allSettled([
+  return results
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
+}
+
+async function disconnectBroker({ broker, brokerName, eventPublisher, logger = defaultLogger }) {
+  const results = await Promise.allSettled([
     Promise.resolve().then(() => {
       logger.debug?.({ message: "Disconnecting broker" })
       return broker.disconnect()
     }),
   ])
-  const errors = [...unsubscribeResults, ...disconnectResult]
-    .filter((result) => result.status === "rejected")
-    .map((result) => result.reason)
-  const brokerDisconnect = disconnectResult[0]
+  const brokerDisconnect = results[0]
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
@@ -63,10 +61,21 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
       ...(brokerDisconnect.status === "rejected" ? { error: brokerDisconnect.reason } : {}),
     }),
   })
+  return results
+    .filter((result) => result.status === "rejected")
+    .map((result) => result.reason)
+}
+
+async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger = defaultLogger }) {
   logger.debug?.({
-    message: "Harvester cleanup completed",
-    errorCount: errors.length,
+    message: "Harvester cleanup started",
+    marketSubscriptions: subscriptions.map(({ symbol }) => symbol),
+    hasUserDataSubscription: typeof userDataSubscription?.disconnect === "function",
   })
+  const intakeErrors = await stopBrokerIntake({ subscriptions, userDataSubscription, logger })
+  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
+  const errors = [...intakeErrors, ...disconnectErrors]
+  logger.debug?.({ message: "Harvester cleanup completed", errorCount: errors.length })
   return errors
 }
 
@@ -355,6 +364,7 @@ export async function startHarvester({
     try {
       userDataResult = await broker.subscribeForUserData({
       onEvent: ({ event } = {}) => {
+        if (stopped) return
         const isExecution = event?.eventType === "executionReport" &&
           event?.executionType === "TRADE"
         const isOrderUpdate = event?.eventType === "executionReport"
@@ -467,6 +477,7 @@ export async function startHarvester({
         userDataEventQueue = task
       },
       onStatus: (status = {}) => {
+        if (stopped) return
         if ([
           "connectionClosed",
           "recovering",
@@ -646,6 +657,7 @@ export async function startHarvester({
         result = await broker.subscribeForPrices({
         symbol,
         onPrice: (priceEvent) => {
+          if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
           logger.debug?.({
             message: "Market price received",
             symbol,
@@ -739,10 +751,14 @@ export async function startHarvester({
     if (stopped) return
     stopped = true
     userDataReady = false
-    userDataStatus = "STOPPED"
+    userDataStatus = "STOPPING"
     logger.info?.({ message: "Harvester shutdown started" })
+
+    const intakeErrors = await stopBrokerIntake({ subscriptions, userDataSubscription, logger })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger })
+    userDataStatus = "STOPPED"
+    const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
+    const cleanupErrors = [...intakeErrors, ...disconnectErrors]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }

@@ -305,3 +305,48 @@ test("publishes a sanitized process startup-failed event", async () => {
     await eventBus.close()
   }
 })
+
+
+test("publishes stopped before closing Journal, then closes EventBus", async () => {
+  const operations = []
+  const eventBus = {
+    publish: (event) => {
+      operations.push("publish:" + event.name)
+      return { ok: true, event }
+    },
+    close: async () => {
+      operations.push("eventBus.close")
+      return { ok: true, closed: true }
+    },
+  }
+  const journalService = {
+    close: async () => {
+      operations.push("journal.close")
+      return { ok: true, closed: true, durable: true }
+    },
+  }
+  const handlers = {}
+
+  await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      stop: async () => { operations.push("runtime.stop") },
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await handlers.SIGTERM()
+  assert.deepEqual(operations, [
+    "publish:harvester.started",
+    "runtime.stop",
+    "publish:harvester.stopped",
+    "journal.close",
+    "eventBus.close",
+  ])
+})

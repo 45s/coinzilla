@@ -252,6 +252,51 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 ### Step 7 — Complete shutdown draining and end-to-end failure isolation
 
+Split this work into three independently reviewable PRs; each must merge before the next begins.
+
+#### Step 7a — Stop intake, drain user-data, disconnect broker
+
+**Status:** Merged into `develop` by PR #470; all CI checks passed.
+
+- Close the trading gate and stop market-price plus user-data intake before draining.
+- Ignore late callbacks after shutdown begins.
+- Await the already-accepted serialized user-data queue.
+- Disconnect the broker only after the queue drains.
+- Preserve startup-failure cleanup behavior.
+
+**Tests:** Pending user-data observer; both subscriptions removed before queue completion; broker remains connected while queue drains; broker disconnect occurs after drain; late user-data callbacks are ignored.
+
+**PR boundary:** Broker intake and user-data queue shutdown ordering only.
+
+#### Step 7b — Flush and close Journal/EventBus
+
+**Status:** In progress on branch `feature/harvester/close-journal-event-bus`.
+
+- Publish the final `harvester.stopped` event while Journal and EventBus are still available.
+- Close Journal after the final event so it can unsubscribe, drain accepted writes, and sync.
+- Close EventBus after Journal.
+- Do not await Journal during trading or user-data processing.
+
+**Tests:** Final event captured before Journal close; pending Journal write drained; Journal closed before EventBus.
+
+**PR boundary:** Normal observability shutdown ordering only.
+
+#### Step 7c — Cleanup failure isolation and bounded shutdown
+
+**Status:** Not started; begin only after Step 7b is merged.
+
+- Isolate runtime stop, Journal close, and EventBus close failures so later cleanup still runs.
+- Coalesce repeated SIGINT/SIGTERM shutdown requests.
+- Clean up observability after startup failure.
+- Use the EventBus timeout contract; never report timeout as successful flush.
+- Set non-zero process exit status when shutdown is incomplete.
+
+**Tests:** Runtime stop failure; Journal close failure; EventBus flush/close timeout; repeated shutdown; startup failure; no unhandled rejection.
+
+**PR boundary:** Failure isolation, timeout reporting, and shutdown idempotency only.
+
+### Step 8 — Final documentation and operational verification
+
 **Goal:** Ensure normal shutdown drains accepted event deliveries and journal writes without making trading depend on storage.
 
 **Likely files:** `src/index.js`; bootstrap runtime stop coordinator; focused lifecycle tests; operations documentation; roadmap.
@@ -268,8 +313,6 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 **Tests:** Pending user-data work; pending EventBus delivery; pending Journal write; write failure; flush failure; Journal close failure; broker disconnect failure; repeated shutdown; no unhandled rejection.
 
 **Acceptance:** Normal shutdown drains accepted writes; broker cleanup still occurs when Journal fails; trading path never awaits storage; incomplete durability is reported honestly.
-
-**PR boundary:** Lifecycle coordination and comprehensive failure tests only.
 
 ### Step 8 — Final documentation and operational verification
 
