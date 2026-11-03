@@ -113,6 +113,8 @@ guarantee a particular execution price. The script does not cancel orders,
 transfer assets, or affect other symbols. Review the preview carefully:
 this command sells the entire displayed free ZRO quantity.
 
-The command uses the shared signed TESTNET request helper, Node.js built-ins,
-and deterministic offline tests for quantity validation/step-size rounding.
-No live trading host or production mode is configurable.
+The command is implemented by `scripts/sell-testnet-zro.js`; its exact
+quantity validation and step-size rounding live in the pure
+`scripts/testnet-sell-utils.js` module and are covered by
+`scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
+request helper. No live trading host or production mode is configurable.
