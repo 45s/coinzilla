@@ -188,7 +188,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 ## P2 — Operational hardening and improvements
 
-- [ ] Add structured journal records for startup, readiness transitions, strategy decisions, order intent, submission, acknowledgement, cancellation, fills, reconciliation, pause/resume, and shutdown.
+- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). Follow its Gate 0 and implement exactly one small PR per step; Journal must never block trading.
 - [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
 - [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
 - [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
@@ -250,7 +250,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
 - [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [ ] **Deferred until after the first TESTNET trading cycle:** integrate Journal read/replay into Harvester state and implement durable restart recovery/reconciliation.
+- [ ] **Deferred until after the first successful real TESTNET trading cycle:** implement optional operational journaling and, separately, decide whether Journal read/replay should later participate in durable Harvester state/restart recovery. The staged operational event-journal plan does not implement replay or restart recovery.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 
