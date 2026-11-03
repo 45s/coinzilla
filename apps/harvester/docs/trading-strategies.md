@@ -79,7 +79,7 @@ The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATI
 
 ### Shared commission and order-type policy
 
-The same commission policy applies to Conservative and Aggressive:
+The same commission policy applies to Conservative and Aggressive. The shared market-readiness check already selects the order type from `makerPercent`. Aggressive currently returns `NO_ACTION`; when its order planner is implemented, it must use this same commission estimate:
 
 - `makerPercent = 0`: submit POST-ONLY `LIMIT_MAKER`; if it would take liquidity, the exchange rejects it. Never fall back to a taker order.
 - `makerPercent > 0`: submit regular `LIMIT`.
