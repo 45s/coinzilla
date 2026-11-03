@@ -190,27 +190,23 @@ If Harvester pauses a pair with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, capture the str
 Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Preserve the complete structured error entry (including native Error details) and compare its identifiers with the same-time order history and submission/acknowledgement journal entries. A client-ID match with a different exchange order ID is an identity mismatch, not proof that the event is owned. Unknown events must continue to pause the pair.
 
 
-### Ownership audit: what to capture on the next run
+### Historical ownership audit — superseded by PR #477
 
-The source comparison with the working `apps/bot-free-roll` implementation found an important difference:
+The earlier client-ID-only registry investigation below is historical and is
+superseded by the merged PR #477 fix. Harvester now matches acknowledged
+execution reports by exchange-assigned `brokerOrderId`, like Free-Roll's
+`trackedOrderIds`; it preserves the locally submitted canonical client ID,
+retains Binance `c` and `C` separately as event metadata, rejects conflicts
+when the two incoming identifiers point to different registered orders, and
+continues to reject unknown broker IDs. Do not reintroduce client-ID-only
+matching or weaken fail-closed ownership.
 
-- Free-Roll adds the exchange-assigned broker order ID to `trackedOrderIds` after the broker acknowledges the order. Incoming reports are accepted only when that exchange order ID is tracked. Fill identity is also checked against order ID, symbol, and side.
-- Harvester currently finds registry entries by `clientOrderId`. A `PENDING` entry has no broker order ID yet; the registry's immutable broker-ID check therefore cannot distinguish a same-client-ID report from a prior session until an acknowledged broker ID has been stored.
-- Harvester client IDs use a process-local counter and can repeat after restart. The supplied TESTNET history confirms reuse of `h-ZROUSDT-1` and `h-ZROUSDT-2` across sessions.
-
-This is a confirmed implementation difference and a plausible stale-report collision risk, **not a confirmed explanation** for the observed 15:47:17 rejection. That rejection reported no matching client ID; the actual rejected identifiers were not present in the original log. Do not change ownership matching or relax unknown-order rejection based only on the historical ID reuse.
-
-On the next diagnostic run, preserve the full structured log entry named **"Harvester rejected an unowned or invalid order event"**. In particular, do not omit:
-
-- `symbol`, `brokerOrderId`, and `clientOrderId`;
-- `side`, `orderStatus`, `executionType`, and `executionId`;
-- `registryMatchedByClientOrderId` and `registryMatchedByBrokerOrderId`;
-- `clientIdMatchStatus`, `clientIdMatchBrokerOrderId`, and `brokerIdMatchClientOrderId`.
-
-Then compare the exact IDs to the order submission and broker acknowledgement logs and to the TESTNET history row. Establish whether the report arrived before or after the matching acknowledgement. This separates a missing/wrong adapter identifier, a stale prior-session report, an event/acknowledgement race, and an external/manual order without guessing.
-
-**Do not run the destructive cancel-all or sell-ZRO scripts for this investigation.** The open-order and order-history commands are read-only; an empty open-order snapshot only describes the exchange state at the time of that query and cannot identify a previously rejected WebSocket event.
-
+The old 666845 report was subsequently reconciled with TESTNET history:
+exchange order 666845 belonged to `h-ZROUSDT-1`, was CANCELED, and had zero
+execution. The merged fix allows its known broker order ID to identify the
+registered order despite the different incoming `c` value. The TRADE event
+must still be verified through its accounting outcome; receipt-only logs are
+not proof of an applied fill.
 
 ### New TESTNET finding — order ID matched, client ID conflicted
 
@@ -244,3 +240,40 @@ The Binance adapter exposes the two execution-report identifiers separately:
 Harvester logs both values on event receipt and on rejection, along with exchange order ID, side, status, execution ID, registry match details, and structured error name/message/stack. A debug log records whether an event was accepted or ignored after engine processing. This preserves useful diagnostics without dumping raw exchange messages or account payloads.
 
 For the observed TESTNET event, order history confirms `666845` belongs to `h-ZROUSDT-1` and is CANCELED with zero execution. The event's different `c` value no longer prevents matching that already-registered exchange order ID. Do not reintroduce client-ID-only ownership matching or accept unknown broker order IDs.
+
+
+### Latest reported cancellation event — order 667975
+
+The reported event was `executionReport` / `CANCELED` for
+`ZROUSDT`, broker order ID `667975`, with incoming `clientOrderId`
+`byuUoUY8oV0tD0h5adcqnq` and `originalClientOrderId`
+`h-ZROUSDT-73`. Its processing outcome was `IGNORED`. A subsequent SELL
+`667976` with client ID `h-ZROUSDT-74` was reported as accepted/open.
+
+With the current broker-ID-first registry, the expected correlation key for
+667975 is its acknowledged exchange order ID. The incoming `c` value is not
+used to replace the registered local client ID; `C` is retained for
+diagnostics. For an execution report, an `IGNORED` outcome means the
+canonical registry update was duplicate or stale (the engine returns an
+ignored result for those cases). A repeated CANCELED report for an order
+already canceled is therefore expected to be harmless: it must not apply a
+fill, alter a replacement order, or complete a recovery cycle.
+
+The supplied excerpt does not include the registry entry/status/timestamp for
+667975 or the matching order-history row, so it cannot distinguish an exact
+duplicate terminal report from a stale terminal report. Nor does it prove
+667976's registry ownership without its submission and acknowledgement
+records. If this event is investigated further, correlate 667975's broker ID
+with the registry snapshot and TESTNET history, and verify 667976's
+acknowledgement before drawing a stronger conclusion. Unknown broker IDs must
+still fail closed.
+
+### Recovery-first full-cycle acceptance
+
+Connectivity, order submission, and execution-report delivery have been
+observed previously, and PR #477 fixed the confirmed 666845 ownership mismatch.
+Those facts do not prove a complete recovery-first cycle. Keep the bounded
+BUY fill → recovery SELL fill → successful net-profit/keep-quantity completion
+→ next BUY acceptance open until each transition, order ID, actual commission,
+and accounting result is recorded. Inspect balances and open orders first;
+never use cancel-all or market-sell scripts as automatic cleanup.
