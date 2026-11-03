@@ -84,7 +84,15 @@ export function evaluateConservativeStrategy({
     })
   }
 
-  if (!hasActiveBuy) {
+  const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
+    left: "0",
+    right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
+  })
+
+  // Free-Roll completes the current recovery cycle before starting another BUY.
+  // A live recovery SELL or any outstanding invested quote capital blocks BUYs.
+  if (!hasActiveBuy && !hasActiveSell &&
+      compareDecimal({ left: outstandingRecovery, right: "0" }) === 0) {
     const referencePrice = lastBuyPrice ?? marketPrice.price
     assertDecimalString({ value: referencePrice, field: "lastBuyPrice" })
     const buyPrice = calculateInitialBuyPrice({
@@ -101,10 +109,6 @@ export function evaluateConservativeStrategy({
       throw new RangeError("Configured BUY quantity is below the exchange quantity step")
     }
     const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
-    const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
-      left: "0",
-      right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
-    })
     const investmentLimit = pairConfig.investment === undefined ? undefined : String(pairConfig.investment)
     const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
       left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
