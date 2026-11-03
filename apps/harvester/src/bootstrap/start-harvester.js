@@ -377,6 +377,12 @@ export async function startHarvester({
           eventType: event.eventType ?? "UNKNOWN",
           executionType: event.executionType,
           symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
+          brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
+          clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
+          originalClientOrderId: event.originalClientOrderId,
+          side: event.executedOrder?.side ?? event.fill?.side,
+          orderStatus: event.executedOrder?.status,
+          executionId: event.fill?.id,
         })
         if (isExecution) {
           logger.info?.({
@@ -393,18 +399,21 @@ export async function startHarvester({
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
               const rejectedOrder = event.executedOrder
               const registeredOrders = tradingEngine.getOrders()
+              const incomingBrokerOrderId = rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId
+              const incomingClientOrderId = rejectedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId
               const clientIdMatch = registeredOrders.find((order) =>
-                order.clientOrderId === rejectedOrder?.clientOrderId)
+                order.clientOrderId === incomingClientOrderId)
               const brokerIdMatch = registeredOrders.find((order) =>
-                rejectedOrder?.brokerOrderId !== undefined &&
-                order.brokerOrderId === rejectedOrder.brokerOrderId)
+                incomingBrokerOrderId !== undefined &&
+                order.brokerOrderId === incomingBrokerOrderId)
               logger.error?.({
                 message: "Harvester rejected an unowned or invalid order event",
                 eventType: event.eventType ?? "UNKNOWN",
                 executionType: event.executionType,
                 symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-                brokerOrderId: rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
-                clientOrderId: rejectedOrder?.clientOrderId ?? event.fill?.clientOrderId,
+                brokerOrderId: incomingBrokerOrderId,
+                clientOrderId: incomingClientOrderId,
+                originalClientOrderId: event.originalClientOrderId,
                 side: rejectedOrder?.side ?? event.fill?.side,
                 orderStatus: rejectedOrder?.status,
                 executionId: event.fill?.id ?? event.executionId,
@@ -413,10 +422,29 @@ export async function startHarvester({
                 clientIdMatchStatus: clientIdMatch?.status,
                 clientIdMatchBrokerOrderId: clientIdMatch?.brokerOrderId,
                 brokerIdMatchClientOrderId: brokerIdMatch?.clientOrderId,
-                errors: processed.errors,
+                errors: (processed.errors ?? []).map((error) => ({
+                  name: error?.name ?? "Error",
+                  message: error?.message ?? String(error),
+                  stack: error?.stack,
+                })),
               })
               return
             }
+            logger.debug?.({
+              message: "Harvester order event processed",
+              eventType: event.eventType ?? "UNKNOWN",
+              executionType: event.executionType,
+              symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
+              brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
+              clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
+              originalClientOrderId: event.originalClientOrderId,
+              side: event.executedOrder?.side ?? event.fill?.side,
+              orderStatus: event.executedOrder?.status,
+              executionId: event.fill?.id,
+              outcome: processed.data?.ignored === true ? "IGNORED" : "ACCEPTED",
+              ignored: processed.data?.ignored === true,
+              fillApplied: event.executionType === "TRADE" && processed.data?.ignored !== true,
+            })
             if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
           } else if (isOrderUpdate && tradingEnabled) {
             userDataAccountingFailed = true
