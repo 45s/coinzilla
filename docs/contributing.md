@@ -40,12 +40,7 @@ For tests that need environment configuration, copy `packages/brokers/.env.examp
 
 ## Pull-request checklist
 
-- Keep each pull request focused on one change and explain the motivation and expected behavior.
-- Add or update tests when changing behavior; avoid relying on live services for ordinary unit tests.
-- Update documentation when commands, configuration, package interfaces, or operational procedures change.
-- Review the complete diff for accidental generated files, local environment files, secrets, and unrelated edits.
-- Confirm CI checks for the exact pull-request commit have completed successfully. A pending, cancelled, or skipped check is not evidence that the change passed.
-- If a check fails, inspect the failing step and fix the cause rather than assuming the failure is transient.
+Use the repository's [pull-request template](../.github/PULL_REQUEST_TEMPLATE.md) for the required summary, roadmap/invariant, verification, review, and ownership checklist. It is the single source for PR content requirements.
 
 ## Continuous integration
 
