@@ -46,6 +46,11 @@ const adaptExecutedOrder = (message) => {
   return {
     eventType: report.eventType,
     executionType: report.executionType,
+    // Preserve Binance execution-report identifiers separately:
+    // c is the current/new client order ID; C is the original client order ID.
+    // Ownership is correlated by the exchange-assigned order ID, as in Free-Roll.
+    clientOrderId: report.newClientOrderId,
+    originalClientOrderId: report.originalClientOrderId,
     executedOrder,
     ...(fill ? { fill } : {}),
   }
