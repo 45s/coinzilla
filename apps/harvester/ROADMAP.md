@@ -1,28 +1,17 @@
 # Harvester Roadmap
 
-> **UPDATED DELIVERY ORDER — 2026-11-03: DOMAIN FIRST, INTEGRATION SECOND.**
+> **CURRENT DIRECTION — 2026-11-03: CONSERVATIVE DOMAIN CONTRACT.**
 >
-> The previous trading-first implementation sequence is superseded for the current P0.7 work. Before continuing Harvester engine/application/broker integration, first specify the Conservative trading domain from the working `apps/bot-free-roll` behavior, implement it as broker-independent domain logic, prove its accounting and lifecycle invariants with direct tests/coverage, and document/freeze the contract. Only then resume integration and bounded TESTNET acceptance.
+> Harvester Conservative is the established standing-order accumulation and capital-recovery strategy. Its behavior is specified in Harvester-owned domain documentation; no other application or source tree is a permanent dependency or documentation authority.
 >
-> **Active plan:** [Harvester Domain-First Delivery Plan](./docs/DOMAIN_FIRST_DELIVERY_PLAN.md).
+> **Working rule:** preserve the established strategy behavior. When current Harvester code differs, treat that as an implementation gap by default. Discuss only a concrete ambiguity that cannot be resolved from the behavior contract or would materially change financial exposure. Resolve one item at a time; do not create a large questionnaire.
 >
-> **PR state:** PR #479 is intentionally open as Draft and paused; do not merge or continue it during domain phases D0–D3. It is retained as reference material. PR #477 remains the merged infrastructure/order-ownership baseline and must not be reimplemented.
+> **Next work:** review the Conservative Domain Specification, then address one verified implementation gap in a small PR with focused tests. Keep trading rules, accounting, and order lifecycle consistent across specification, code, and tests.
 >
-> Older roadmap sections below contain historical implementation status and previous sequencing instructions. Where they say to prioritize engine integration or TESTNET before domain completion, this notice and the Domain-First Delivery Plan take precedence. Keep historical evidence, but do not treat old task checklists as the current execution order.
-
-
-> **Product direction — 2026-11-03 (mandatory): launch the trading app first, then improve it.**
-> Harvester must reproduce the working Conservative/Free-Roll trading behaviour before adding more infrastructure. Use `apps/bot-free-roll` as the behavioural reference and Harvester's DDD boundaries as the implementation structure. Do not redesign the trading lifecycle or add generic frameworks when the working sibling app already demonstrates the required behaviour.
+> **Boundaries:** no strategy code changes in documentation-only work. Do not copy runtime, broker, adapter, or WebSocket implementation into the domain. Keep PR #479 paused unless a specific part is explicitly selected for review. Preserve merged infrastructure work; do not reimplement it.
 >
-> **The first loop is deliberately simple:** load/validate config → connect → subscribe to enabled-market prices → receive a usable price → evaluate Conservative → submit BUY/SELL → process Binance acknowledgements and execution reports → update state from actual fills → immediately evaluate the next required action. A running loop is the deliverable; architecture is in service of it.
+> Older sections below are historical implementation notes. Where they conflict with this direction, this notice and the current Conservative Domain Specification take precedence.
 >
-> **Not first-loop prerequisites:** Journal/EventBus integration, durable persistence, restart recovery, comprehensive historical reconciliation, generic readiness/state machines, cross-pair allocation, dashboards, Aggressive, and broad reservation frameworks. Keep these deferred unless a specific failing order-flow case proves a narrowly scoped safeguard is required.
->
-> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. P0.7 source changes remove the clean-account/open-order/base-inventory startup gate and per-TRADE snapshots. GitHub Actions passed the P0.7 implementation. Local Binance Spot TESTNET evidence now confirms validated ZROUSDT prices, order activity, and multiple BUY TRADE execution reports. The pair then paused at 15:47:17 with UNKNOWN_OR_EXTERNAL_ORDER_EVENT because a canonical execution report did not match an order in Harvester's in-memory OrderRegistry. The first BUY path is therefore active, but the run is not accepted: identify the exact unowned report using TESTNET order history and order identifiers, fix only the proven mismatch, then verify the recovery SELL and next BUY. The first history-inspection attempt did not reach Binance: the command was invoked with an extra `--`, which the script treated as the symbol and rejected with its usage message. This is a command-line invocation error, not evidence of an exchange/API or trading failure. Retry with `pnpm run testnet:history ZROUSDT 50` (no `--`). The corrected read-only history query subsequently succeeded. It shows seven orders in the failing run window: BUY orders `h-ZROUSDT-1` / exchange order `665873`, `h-ZROUSDT-2` / `665881`, `h-ZROUSDT-4` / `665891`, `h-ZROUSDT-6` / `665893`, and `h-ZROUSDT-7` / `665894`, each FILLED for 5 ZRO; SELL orders `h-ZROUSDT-3` / `665882` and `h-ZROUSDT-5` / `665892` were CANCELED with zero execution. The same client IDs `h-ZROUSDT-1` and `h-ZROUSDT-2` also occur in older history around 09:15 UTC, demonstrating client-ID reuse across sessions. This is a concrete issue to inspect, but it is not yet proven to be the rejected report's cause. The history does not identify which exact incoming report triggered the registry rejection; obtain the open-order snapshot and correlate the rejected event's exact `orderId` / `clientOrderId` with submission, acknowledgement, and journal records.
->
-> **No speculative fixes:** reproduce the observed event sequence, inspect the working Free-Roll implementation and shared broker mapping, identify the exact incorrect transition, add a deterministic regression test, then make the smallest change. A readiness deferral is not a broker rejection; a locally registered PENDING order is not cancellable until broker acknowledgement supplies a valid broker order ID.
-
-
 ## Independent operational observability
 
 The trading-first priority governs trading implementation and does not make the separately approved staged EventBus/Journal observability work dependent on a TESTNET trading cycle. Follow [the Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) one small PR at a time. This work must remain optional and must not gate, delay, or change trading behavior.
@@ -31,7 +20,7 @@ The trading-first priority governs trading implementation and does not make the 
 
 **Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
-**First priority: implement Conservative (Free-Roll) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing `apps/bot-free-roll/README.md` is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
+**First priority: implement Conservative (Conservative strategy) and make Harvester execute a complete, safe, repeatable trading cycle.** The existing the established Conservative behavior is the strategy source of truth. Harvester must implement that strategy using its own shared engine and domain model; do not copy the old app's broker/runtime implementation. Aggressive is explicitly deferred until Conservative is working end to end on TESTNET. Architecture expansion, optional features, and optimization come after that.
 
 The paragraph below was an earlier audit snapshot and is superseded by the current implementation status and checklist in this roadmap. On `develop`, Harvester now composes the Conservative trading engine when TESTNET trading is explicitly enabled, submits strategy intents through the engine, tracks owned orders, processes canonical fills, updates Portfolio/RecoveryLedger, and has fake-broker coverage for a complete recovery cycle. A real Binance TESTNET cycle is still unverified; do not treat the offline simulation as exchange proof.
 
@@ -109,10 +98,10 @@ real TESTNET cycle and required CI checks pass.
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
 
-### P0.1 — Freeze the first executable strategy scope: Conservative Free-Roll
+### P0.1 — Freeze the first executable strategy scope: Conservative Conservative strategy
 
-- [x] Select Conservative (Free-Roll) as the first strategy. Its source of truth is `apps/bot-free-roll/README.md` v0.014; Aggressive is deferred to P1.
-- [~] Port the Free-Roll business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
+- [x] Select Conservative (Conservative strategy) as the first strategy. Its source of truth is the established Conservative behavior v0.014; Aggressive is deferred to P1.
+- [~] Port the Conservative strategy business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
 - [x] Define the first Conservative order-intent contract and pure strategy evaluation context (last traded price, pair config, active Position/recovery ledger, active orders, and exchange filters). The policy emits initial/standing BUY and recovery SELL intents without broker I/O.
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
@@ -122,7 +111,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
 - [x] Ensure all deterministic strategy calculations and decisions are plain pure functions; the Conservative policy is a broker-independent pure function and never calls the broker or performs I/O.
-- [ ] Record any unresolved Free-Roll requirements as explicit blockers; do not invent financial behavior.
+- [ ] Record only behavior that cannot be inferred from the approved Conservative contract; discuss it one item at a time.
 
 ### P0.2 — Trading rules, account state, and startup readiness
 
@@ -304,12 +293,12 @@ empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
 
 
-## P0.7 — Restore the simple Free-Roll execution lifecycle (IN PROGRESS)
+## P0.7 — Restore the simple Conservative strategy execution lifecycle (IN PROGRESS)
 
 ### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
 
 The working branch now contains the first implementation pass. It follows the
-existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
+existing Conservative strategy order sequence and keeps Harvester's DDD boundaries:
 
 - Ordinary execution reports no longer close the global readiness gate, and
   TRADE fills no longer trigger a full account snapshot.
@@ -331,7 +320,7 @@ existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
   reconciliation during cancellation, duplicate fill delivery, replacement
   quantity from latest accounting, and no per-TRADE account snapshot.
 
-**Verification evidence so far:** all five GitHub Actions workflows passed on the current PR head; the workspace test workflow reported 1,367 passing tests, including Harvester 298/298, brokers 274/274, and Free-Roll 313/313. The operator has now confirmed a local Binance Spot TESTNET startup: configuration validated for ZROUSDT, broker connected, exchange rules validated, user-data subscription established, initial account snapshot accepted (517 balances), Conservative engine activated, and the ZROUSDT market-price subscription established. The process log ends in the expected waiting state for a validated market price and user-data readiness. No market-price event, BUY submission, acknowledgement, fill, SELL, or subsequent cycle is evidenced yet. Do not infer a trading failure merely because the market has not emitted a qualifying price; continue observing the running process.
+**Verification evidence so far:** all five GitHub Actions workflows passed on the current PR head; the workspace test workflow reported 1,367 passing tests, including Harvester 298/298, brokers 274/274, and Conservative strategy 313/313. The operator has now confirmed a local Binance Spot TESTNET startup: configuration validated for ZROUSDT, broker connected, exchange rules validated, user-data subscription established, initial account snapshot accepted (517 balances), Conservative engine activated, and the ZROUSDT market-price subscription established. The process log ends in the expected waiting state for a validated market price and user-data readiness. No market-price event, BUY submission, acknowledgement, fill, SELL, or subsequent cycle is evidenced yet. Do not infer a trading failure merely because the market has not emitted a qualifying price; continue observing the running process.
 
 **Still required before acceptance:** observe the first validated price and initial BUY request/acknowledgement; then capture the actual Binance execution reports, Portfolio/RecoveryLedger updates, recovery SELL, SELL fill, and next BUY. Diagnose the first missing/failed transition from those logs only. Local offline test execution remains unreported by the operator; GitHub Actions evidence is recorded above. Inspect the final diff and keep the bounded TESTNET run on Spot TESTNET only. Native Error/cause/AggregateError serialization from PR #462 is retained without a new logging implementation.
 
@@ -352,7 +341,7 @@ existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
 ### Scope A — Remove unnecessary execution-readiness barriers
 
 - [x] Trace and remove the per-report readiness reset and per-TRADE account snapshot refresh.
-- [x] Compare directly with the working `apps/bot-free-roll` lifecycle and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
+- [x] Compare directly with the working the established Conservative behavior lifecycle and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
 - [x] Ordinary TRADE fills update Portfolio/RecoveryLedger without requesting a full account snapshot.
 - [x] Remove the broker readiness guard that misclassified local readiness as a broker rejection. `makeExecuteStrategyDecision` rechecks readiness immediately before broker I/O and removes a locally registered PENDING order if submission is deferred.
 - [x] Retain deferred symbols and resume their latest evaluation when readiness returns, without another market tick.
@@ -387,7 +376,7 @@ existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
 - [x] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
 - [x] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
 - [x] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
-- [x] GitHub Actions on the current PR head: workspace tests (Harvester 298/298, brokers 274/274, Free-Roll 313/313; 1,367 total workspace tests passed), shared-utils tests, coverage, JavaScript syntax/workflow lint, and production dependency audit all passed. Local offline test execution has not yet been reported.
+- [x] GitHub Actions on the current PR head: workspace tests (Harvester 298/298, brokers 274/274, Conservative strategy 313/313; 1,367 total workspace tests passed), shared-utils tests, coverage, JavaScript syntax/workflow lint, and production dependency audit all passed. Local offline test execution has not yet been reported.
 - [x] Operator-confirmed local TESTNET startup: config validated; Binance connected; ZROUSDT exchange rules validated; user-data subscription active; initial account snapshot accepted; Conservative engine activated; market-price subscription established.
 - [x] Observe validated ZROUSDT market prices and BUY execution reports (`NEW` and `TRADE`) from the real TESTNET user-data stream.
 - [ ] Diagnose the 15:47:17 `UNKNOWN_OR_EXTERNAL_ORDER_EVENT` using exact Binance order IDs/client order IDs from recent order history and the Harvester order-submission journal/logs. Do not guess at broker mapping or weaken order ownership.
@@ -395,7 +384,7 @@ existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
 
 ### Out of scope for P0.7
 
-Do not add Journal/persistence/restart recovery, historical trade replay, a generic reconciliation subsystem, a generic event queue/framework, multi-pair allocation, Aggressive, dashboard/notification work, or unrelated refactors. Do not change Free-Roll financial rules unless a demonstrated mismatch is found and documented.
+Do not add Journal/persistence/restart recovery, historical trade replay, a generic reconciliation subsystem, a generic event queue/framework, multi-pair allocation, Aggressive, dashboard/notification work, or unrelated refactors. Do not change approved Conservative financial rules without discussing the specific proposed change.
 
 ### Acceptance
 
@@ -415,7 +404,7 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.6.1 — Reproduce and pin down the lifecycle ordering
 
-- [ ] Read the current engine, execution use case, order registry, bootstrap queues, broker port, Binance adapter, shared Binance broker, and working Free-Roll order submission/cancellation path before editing.
+- [ ] Read the current engine, execution use case, order registry, bootstrap queues, broker port, Binance adapter, shared Binance broker, and working Conservative strategy order submission/cancellation path before editing.
 - [ ] Add a deterministic fake-broker regression test that holds a `placeOrder()` promise unresolved after the PENDING callback, emits a BUY fill that would normally cancel a recovery SELL, and proves no cancellation is attempted without a broker acknowledgement.
 - [ ] Add a second ordering test for a market-price event racing with a user-data order/fill event; assert the final registry and submitted/canceled order sequence, not merely that promises resolve.
 - [ ] Capture the order lifecycle with safe diagnostic fields: symbol, side, clientOrderId, status, brokerOrderId-present flag, operation, and event/transition sequence. Never capture credentials, signed parameters, or unredacted raw exchange payloads.
@@ -435,7 +424,7 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 - [ ] Add a focused pure validation function for cancellation eligibility using object-shaped input/output and the established `toResult` convention. It must require a broker-acknowledged order in a cancellable state and a valid broker order identifier.
 - [ ] Reject PENDING, UNKNOWN, terminal, or otherwise non-cancellable orders before calling the broker. UNKNOWN must continue to pause/fail closed; it must not be treated as a cancellable order.
 - [ ] Validate the identifier at the Harvester broker-port boundary as well as at the engine call site, so future callers cannot forward `undefined`, `null`, empty strings, unsafe numeric IDs, or malformed identifiers to Binance.
-- [ ] Keep identifier normalization consistent with the shared Binance broker and the working Free-Roll `getOrderId` behavior. Do not duplicate or weaken the shared exact-integer/safe-ID validation.
+- [ ] Keep identifier normalization consistent with the shared Binance broker and the working Conservative strategy `getOrderId` behavior. Do not duplicate or weaken the shared exact-integer/safe-ID validation.
 - [ ] Apply the same protection to recovery SELL cancellation, trailing BUY cancel/replace, and any other cancellation path. Preserve the existing cancel-then-fetch-fills reconciliation and fill-during-cancel protections.
 - [ ] On an invalid lifecycle request, return a meaningful structured failure and pause the affected market where continuing could create duplicate or unsafe orders. Do not silently skip the cancellation and proceed as if it succeeded.
 
@@ -491,7 +480,7 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.6 verification snapshot — 2026-11-03
 
-- [x] Full workspace package tests passed on `a2728bd6d9925eb23c02ece7d1fe041e2060c3bd`: Harvester 285/285, shared utils 163/163, Free-Roll 313/313; workflow: https://github.com/45s/coinzilla/actions/runs/41606130252
+- [x] Full workspace package tests passed on `a2728bd6d9925eb23c02ece7d1fe041e2060c3bd`: Harvester 285/285, shared utils 163/163, Conservative strategy 313/313; workflow: https://github.com/45s/coinzilla/actions/runs/41606130252
 - [x] Shared utilities tests passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130302
 - [x] Workspace coverage passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130160
 - [x] JavaScript syntax and GitHub Actions lint passed; workflow: https://github.com/45s/coinzilla/actions/runs/41606130768
@@ -511,18 +500,18 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 ### P0.7 ownership correlation comparison — 2026-11-03
 
-Inspection of the working Free-Roll handler found a concrete behavioral difference: apps/bot-free-roll registers exchange-assigned broker order IDs in trackedOrderIds and checks the execution report's exchange order ID in its order-event handler. Harvester's OrderRegistry currently locates an order only by clientOrderId, even though its CanonicalOrder also carries brokerOrderId. The Binance user-stream adapter maps Binance executionReport.c to clientOrderId and executionReport.i to brokerOrderId; the canonical conversion retains both values.
+Inspection of the working Conservative strategy handler found a concrete behavioral difference: the established Conservative behavior registers exchange-assigned broker order IDs in trackedOrderIds and checks the execution report's exchange order ID in its order-event handler. Harvester's OrderRegistry currently locates an order only by clientOrderId, even though its CanonicalOrder also carries brokerOrderId. The Binance user-stream adapter maps Binance executionReport.c to clientOrderId and executionReport.i to brokerOrderId; the canonical conversion retains both values.
 
 This is an investigation finding, not a proven explanation for the reported unknown event. Do not change the registry's matching rules until the new TESTNET diagnostic captures the rejected event and demonstrates which identifier matches the owned order. Any future broker-ID correlation must still validate that client and broker identifiers refer to the same registered order; it must not adopt external orders.
 
 
-### Free-Roll ownership audit — 2026-11-03
+### Conservative strategy ownership audit — 2026-11-03
 
 A direct source comparison was completed against `develop` (not inferred from the README):
 
-- **Free-Roll ownership key:** `FreeRollBot.#handleOrderEvent()` obtains the exchange-assigned ID via `getOrderId(event.executedOrder)` and requires that ID to exist in the pair's `trackedOrderIds`. The BUY and SELL submission paths add that ID only after the broker response contains it. A fill is additionally checked against the same order ID, symbol, and side before accounting.
+- **Conservative strategy ownership key:** `ConservativeEngine.#handleOrderEvent()` obtains the exchange-assigned ID via `getOrderId(event.executedOrder)` and requires that ID to exist in the pair's `trackedOrderIds`. The BUY and SELL submission paths add that ID only after the broker response contains it. A fill is additionally checked against the same order ID, symbol, and side before accounting.
 - **Harvester ownership key:** `OrderRegistry.applyUpdate()` currently locates an order only by `clientOrderId`. It then checks the broker ID as an immutable field only when the registered order already has a broker ID. A locally registered `PENDING` order has no broker ID yet, so a report with the same client ID and same immutable order intent can supply the broker ID and advance that registry entry.
-- **Client-ID reuse is real:** Harvester currently generates IDs as `h-<symbol>-<process-local counter>`. The counter is initialized inside the decision executor, so it restarts with a new process. The supplied TESTNET history independently shows `h-ZROUSDT-1` and `h-ZROUSDT-2` reused in an older session. This makes client-ID-only correlation weaker than Free-Roll's exchange-order-ID ownership check.
+- **Client-ID reuse is real:** Harvester currently generates IDs as `h-<symbol>-<process-local counter>`. The counter is initialized inside the decision executor, so it restarts with a new process. The supplied TESTNET history independently shows `h-ZROUSDT-1` and `h-ZROUSDT-2` reused in an older session. This makes client-ID-only correlation weaker than Conservative strategy's exchange-order-ID ownership check.
 - **What this does and does not prove:** this is a concrete ownership/parity gap and a plausible stale-event collision risk. It is **not yet proven to be the cause** of the reported 15:47:17 rejection. That rejection was reported as a missing client-ID registry match; without its actual `clientOrderId`, `brokerOrderId`, and current registry snapshot, we cannot tell whether the report had a missing/wrong client ID, was from an old session, or was an unrelated order. The repeated historical client IDs alone do not identify that event.
 - **No code fix is included in this audit update.** Do not add a blind broker-ID fallback or accept an unknown event. The follow-up must reproduce the actual event and preserve fail-closed rejection of external orders.
 
@@ -533,7 +522,7 @@ A direct source comparison was completed against `develop` (not inferred from th
 1. A report for an acknowledged owned order is accepted only when its exchange order ID matches the registered broker order ID; client ID must also be consistent where supplied.
 2. An unknown exchange order ID is rejected even if its client ID collides with a locally registered order from a previous session.
 3. A report for an unacknowledged `PENDING` intent cannot silently establish ownership by supplying an arbitrary exchange order ID unless an observed, tested broker ordering contract explicitly requires this.
-4. A valid Free-Roll-style fill still updates accounting once, and an unrelated/manual order remains unowned.
+4. A valid Conservative strategy-style fill still updates accounting once, and an unrelated/manual order remains unowned.
 
 The acceptance target remains a real TESTNET sequence: BUY fill → recovery SELL submission and fill → next BUY. Offline tests and order-history snapshots do not substitute for that proof.
 
@@ -576,11 +565,11 @@ Next, inspect TESTNET order history for exchange order ID `666845` and capture t
 Only after this comparison can we distinguish a Binance cancel/replacement identifier case, an adapter normalization issue, an order-ID collision, or another source of the mismatch. Add a deterministic test from the confirmed event semantics before changing ownership validation.
 
 
-### Free-Roll order identity alignment — 2026-11-03
+### Conservative strategy order identity alignment — 2026-11-03
 
 The working implementation was compared directly with Harvester:
 
-- `apps/bot-free-roll/src/bot/bot-free-roll.js` tracks the exchange-assigned order ID in `state.trackedOrderIds` after the broker acknowledgement.
+- the established Conservative behavior tracks the exchange-assigned order ID in `state.trackedOrderIds` after the broker acknowledgement.
 - Its `#handleOrderEvent()` gets `getOrderId(event.executedOrder)` and accepts the event only when that exchange order ID is tracked. Fill identity is checked using exchange order ID, symbol, and side. It does **not** require the execution report's client order ID to equal the locally submitted client ID.
 - Harvester previously used `OrderRegistry.applyUpdate()` lookup by `clientOrderId` only. That was the behavioral mismatch behind the `666845` rejection: Binance's event `c` differed, although the exchange order ID was already registered.
 
@@ -594,7 +583,7 @@ Regression coverage added:
 - Registry accepts a report with a different client ID when its exchange order ID identifies the registered order, while retaining the submitted canonical client ID.
 - Registry rejects an event when its broker ID and client ID point to different registered orders.
 
-This is an intentional port of Free-Roll's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.
+This is an intentional port of Conservative strategy's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.
 
 
 ## DDD and Clean Architecture audit follow-up
