@@ -133,6 +133,38 @@ test("does not submit a BUY while recovery capital remains outstanding, even wit
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
 })
 
+test("does not start a new BUY when proceeds cover principal but recovery completion has not reset the ledger", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const sellFill = new Fill({
+    tradeId: "sell-1",
+    brokerOrderId: "order-2",
+    market,
+    side: "SELL",
+    price: new Money({ amount: "0.102", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "99", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10.098", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const nextPortfolio = portfolio.applyFill({ fill: sellFill }).portfolio
+  const nextLedger = recoveryLedger.applyFill({ fill: sellFill }).ledger
+
+  assert.equal(nextLedger.outstandingRecoveryAmount, "0")
+  assert.equal(nextLedger.buyCost, "10")
+  assert.equal(nextLedger.netSellProceeds, "10.098")
+
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: nextPortfolio,
+    recoveryLedger: nextLedger,
+    marketMetadata,
+  })
+
+  assert.deepEqual(decision.actions, [])
+})
+
 test("rejects missing exchange increments and invalid strategy context", () => {
   assert.throws(() => evaluateConservativeStrategy({
     marketPrice,
