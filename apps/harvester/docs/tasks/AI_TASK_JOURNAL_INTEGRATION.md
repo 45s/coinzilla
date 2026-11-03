@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5b are merged into `develop` (PRs #453, #455, #456, #458, #460, #461). Do not repeat them. The current assignment is **Step 5c — Recovery SELL cancellation transitions**, on branch `feature/harvester/recovery-sell-cancellation-events`, targeting `develop`.
+Steps 1–5 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463). Do not repeat them. The next assignment is **Step 6 — Execution and accounting events**. Inspect its scope and split it into small independently testable PRs before implementation.
 
 ### Completed Step 5a scope
 
@@ -66,7 +66,7 @@ Steps 1–5b are merged into `develop` (PRs #453, #455, #456, #458, #460, #461).
 - Keep cancellation fill reconciliation and existing pause behavior unchanged.
 - The current engine has no pair-resume transition; do not invent one solely for logging.
 
-### Current Step 5c scope
+### Completed Step 5c scope
 
 - Publish `order.cancelled` for recovery SELL cancellation only after canonical broker confirmation and local registry update.
 - Publish `order.cancel_failed` for unknown order state, unconfirmed cancellation, unregistered order, or a broker response that is not CANCELED.
@@ -74,16 +74,24 @@ Steps 1–5b are merged into `develop` (PRs #453, #455, #456, #458, #460, #461).
 - Do not change order selection or strategy policy.
 - EventBus publication must not be awaited and must not change cancellation or fill-reconciliation behavior.
 
-### Tests
+### Next Step 6 scope
 
-Add offline tests covering:
-1. Confirmed recovery SELL cancellation is published after local registry update.
-2. Broker-rejected and thrown recovery SELL cancellation outcomes publish safe failure DTOs.
-3. Unknown order state and unregistered cancellation are handled without exposing broker objects.
-4. EventBus throw cannot prevent cancellation handling, pause behavior, or fill reconciliation.
-5. Existing recovery BUY/SELL accounting and strategy tests continue to pass.
+- Inspect the existing sequential user-data event queue and canonical Fill accounting workflow.
+- Publish a successful fill-applied event only after the existing accounting workflow returns success.
+- Publish safe invalid/unowned execution and accounting-failure facts where the existing boundaries expose them.
+- Consider duplicate-fill suppression and recovery-cycle completion only if they are distinct, useful transitions already present in the application flow.
+- Never publish raw exchange messages, SDK objects, credentials, full account snapshots, or mutable domain entities.
+- Preserve exact decimal strings in small allowlisted Harvester DTOs.
+- Never await EventBus subscriber work or Journal persistence from the serialized user-data queue.
+- Do not change accounting authority, fill identity, order ownership, or strategy behavior.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, do not claim tests passed: open the PR and use its actual CI runs as the verification gate.
+
+### Tests
+
+Add deterministic offline tests for successful Fill application, DTO allowlisting and decimal preservation, accounting failures, duplicate/unowned execution boundaries where applicable, and publisher failure isolation. Keep the existing accounting and queue tests intact.
+
+Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, use actual PR CI results as the verification gate and never claim unrun checks passed.
 
 ### Documentation
 
@@ -91,8 +99,6 @@ Update the integration roadmap, architecture event inventory, and this task docu
 
 ## Subsequent milestones
 
-- Resume events remain deferred until the engine has a real, explicit pair-resume transition.
-- Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.
 - Step 8: final event inventory, operational documentation, and verification.
 

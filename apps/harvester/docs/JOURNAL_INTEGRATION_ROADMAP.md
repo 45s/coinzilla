@@ -296,8 +296,8 @@ Every implementation PR must:
 - [x] Step 4: lifecycle events (PR #458).
 - [x] Step 5a: actionable strategy decisions and order submission (merged PR #460).
 - [x] Step 5b: pause and trailing BUY cancellation transitions (merged PR #461).
-- [ ] Step 5c: recovery SELL cancellation transitions.
-- [ ] Step 5: strategy/order events (complete after 5a–5c).
+- [x] Step 5c: recovery SELL cancellation transitions (merged PR #463).
+- [x] Step 5: strategy/order events (PRs #460, #461, #463).
 - [ ] Step 6: execution/accounting events.
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.
