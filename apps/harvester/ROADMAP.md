@@ -150,6 +150,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
 - [~] Apply only incremental actual executions to shared Portfolio and Conservative RecoveryLedger in one immutable use-case transition; never apply requested order quantity or cumulative executed quantity twice.
 - [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
+- [x] Reconcile completed recovery SELL execution history before cycle completion: distinct actual fill quantities must equal both executed and original order quantity; missing/incomplete history pauses before free-inventory allocation or ledger reset.
 - [ ] Ensure cancel/fill races, duplicate events, late events, and out-of-order events cannot double-count fills or release filled reservations.
 - [x] Feed successful fill/order transitions back into strategy evaluation. The engine emits a reevaluation outcome after a reconciled terminal full fill; bootstrap runs that evaluation from the serialized user-data event flow and deliberately waits after partial fills.
 - [x] Ensure a completed BUY transition immediately evaluates and submits required orders without waiting for another market-price event.
@@ -674,3 +675,12 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Preserve simultaneous active BUY and recovery SELL orders after both submissions succeed.
 - [x] Add policy and engine regression tests for intent/submission order and coexistence.
 - [ ] Verify the full behavior on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
+
+
+### Conservative recovery SELL completion reconciliation — 2026-11-03
+
+- [x] Track distinct actual SELL fill quantities per broker order.
+- [x] Require aggregate fill quantity to equal broker-reported executed quantity and original order quantity before recovery completion.
+- [x] Fail closed on missing or inconsistent SELL execution history; do not allocate free inventory, reset the recovery ledger, or reactivate BUY trailing.
+- [x] Add engine regressions for missing fills, incomplete fills, and multiple partial fills that reconcile to a complete SELL.
+- [ ] Verify the complete SELL-completion transition on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
