@@ -516,6 +516,21 @@ const makeFilledOrder = ({ order }) => new CanonicalOrder({
   completedAt: 3,
 })
 
+function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount, quoteQuantity = "100" }) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market,
+    side: "SELL",
+    price: order.limitPrice,
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
 function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
   return new Fill({
     tradeId,
@@ -949,7 +964,11 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(sellOrder)
   const result = await engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
+    },
   })
 
   assert.equal(result.ok, true)
@@ -980,7 +999,11 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   })
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   const result = await engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
+    },
   })
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
@@ -1001,7 +1024,11 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const result = await harness.engine.processUserDataEvent({
-    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: sellOrder }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "completed-recovery-sell" }),
+    },
   })
   assert.equal(result.ok, true)
   assert.deepEqual(harness.completedCycles, [market.id])
