@@ -53,8 +53,13 @@ cross-pair shared-asset allocation is implemented.
 - Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
   intents on subsequent market events. A new BUY is omitted when outstanding
   recovery capital plus the new order notional would exceed the pair investment cap.
-- A strategy decision can therefore request both a BUY and a SELL. The policy
-  does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
+- A strategy decision can therefore request both a BUY and a SELL. The recovery
+  SELL intent is first; the executor must receive its successful broker
+  acknowledgement before submitting the next standing BUY. A failed or unknown
+  SELL submission pauses the pair and prevents the BUY submission.
+- A fully reconciled BUY fill triggers a new evaluation immediately from the
+  serialized user-data event flow; no additional market-price event is required.
+  The policy does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
 
 The domain policy is composed by the Harvester trading engine. Offline
 bootstrap and engine tests cover BUY submission, trailing replacement,
