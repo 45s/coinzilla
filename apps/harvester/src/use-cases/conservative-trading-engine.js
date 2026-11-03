@@ -722,7 +722,8 @@ export function makeConservativeTradingEngine({
         if (!result?.ok || !Array.isArray(result.data) ||
             result.data.some((order) => !(order instanceof Order) ||
               typeof order.id !== "string" || typeof order.symbol !== "string" ||
-              typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string")) {
+              typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string" ||
+              !["NEW", "PARTIALLY_FILLED"].includes(order.status))) {
           throw new Error("Open-order snapshot is incomplete or contains invalid canonical orders for " + symbol)
         }
         openOrdersBySymbol.set(symbol, result.data)
@@ -770,6 +771,9 @@ export function makeConservativeTradingEngine({
             openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
             openOrder.side !== ownedOrder.side ||
             openOrder.type !== ownedOrder.type ||
+            !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
+            (openOrder.status === "NEW" && openOrder.executedQuantity !== "0") ||
+            (openOrder.status === "PARTIALLY_FILLED" && openOrder.executedQuantity === "0") ||
             openOrder.originalQuantity !== ownedOrder.originalQuantity.amount ||
             compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
           ) {
