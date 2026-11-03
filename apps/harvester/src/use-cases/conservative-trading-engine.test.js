@@ -6,6 +6,7 @@ import {
   Fill,
   Market,
   Money,
+  Order,
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
@@ -1424,6 +1425,22 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
 })
 
 
+function makeOpenOrder({ order, brokerOrderId = order.brokerOrderId, clientOrderId = order.clientOrderId, executedQuantity = "0" } = {}) {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(executedQuantity),
+    price: Number(order.limitPrice.amount),
+    id: brokerOrderId,
+    clientOrderId,
+  })
+  openOrder.originalQuantity = order.originalQuantity.amount
+  openOrder.executedQuantity = executedQuantity
+  openOrder.status = executedQuantity === "0" ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
+
 test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
   const { engine, broker, accountedFills, pauses } = createHarness()
   await engine.processMarketPrice({
@@ -1453,19 +1470,10 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
     executedQuantity: "1",
     updatedAt: 3,
   })
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "manual-client",
+  const externalOrder = makeOpenOrder({
+    order: buyOrder,
     brokerOrderId: "manual-broker",
-    market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
+    clientOrderId: "manual-client",
   })
   const calls = []
   broker.getOpenOrders = async ({ symbol }) => {
@@ -1531,7 +1539,7 @@ test("fails closed without applying partial REST fills when cumulative history i
     executedQuantity: "0.4",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({ ok: true, data: [historyOrder] })
+  broker.getOpenOrders = async () => ({ ok: true, data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })] })
   broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
   broker.getFills = async () => ({ ok: true, data: [partialFill] })
 
