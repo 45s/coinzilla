@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 1–6 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465, #467, #468). Do not repeat them. Steps 1–6 are complete and merged. Step 7a is merged into `develop` (PR #470). The current assignment is **Step 7b — Flush and close Journal/EventBus**, on branch `feature/harvester/close-journal-event-bus`, targeting `develop`.
+Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 1–6 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465, #467, #468). Do not repeat them. Steps 1–6 are complete and merged. Steps 7a–7b are merged into `develop` (PRs #470 and #471). The current assignment is **Step 7c — Cleanup failure isolation and bounded shutdown**, on branch `feature/harvester/shutdown-failure-isolation`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -93,7 +93,7 @@ Add deterministic offline tests for partial Fill application, publication only a
 
 Add deterministic offline tests for pending user-data work, stream unsubscribe ordering, late callback rejection, and broker disconnect after queue drain. Preserve the existing lifecycle tests.
 
-### Current Step 7b scope
+### Completed Step 7b scope
 
 - Publish `harvester.stopped` after runtime stop and broker disconnect have completed or reported failure.
 - Keep EventBus and Journal open while publishing the final lifecycle event.
@@ -101,9 +101,14 @@ Add deterministic offline tests for pending user-data work, stream unsubscribe o
 - Close EventBus only after Journal close returns.
 - Do not add cleanup failure isolation or timeout behavior in this PR; those are Step 7c.
 
-### Next Step 7c
+### Current Step 7c scope
 
-After Step 7b merges, add cleanup failure isolation, bounded EventBus close handling, startup-failure cleanup, and repeated-signal idempotency.
+- Isolate runtime stop, Journal close, and EventBus close failures so later cleanup still runs.
+- Coalesce repeated SIGINT/SIGTERM requests into one shutdown promise.
+- Close Journal and EventBus after startup failure as well as normal shutdown.
+- Use the EventBus close timeout contract (5 seconds); never report a timeout as a successful flush.
+- Set non-zero process exit status when any shutdown stage is incomplete.
+- Do not invent a Journal timeout; its current close contract has no timeout option.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, use actual PR CI results as the verification gate and never claim unrun checks passed.
 

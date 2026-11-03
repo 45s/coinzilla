@@ -350,3 +350,149 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
     "eventBus.close",
   ])
 })
+
+
+test("continues EventBus cleanup when Journal close fails", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async (options) => {
+      operations.push("eventBus.close:" + options.timeoutMs)
+      return { ok: true, closed: true }
+    },
+  }
+  const journalService = {
+    close: async () => {
+      operations.push("journal.close")
+      throw new Error("journal fsync failed")
+    },
+  }
+  const handlers = {}
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => operations.push("runtime.stop"),
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    await handlers.SIGTERM()
+    assert.deepEqual(operations.slice(-2), ["journal.close", "eventBus.close:5000"])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("reports EventBus timeout and preserves Journal close result", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async (options) => {
+      operations.push("eventBus.close:" + options.timeoutMs)
+      return { ok: false, timedOut: true, errors: [new Error("EventBus close timed out")] }
+    },
+  }
+  const journalService = {
+    close: async () => {
+      operations.push("journal.close")
+      return { ok: true, closed: true, durable: true }
+    },
+  }
+  const handlers = {}
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => ({
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => operations.push("runtime.stop"),
+      }),
+      registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    await handlers.SIGTERM()
+    assert.ok(operations.includes("journal.close"))
+    assert.ok(operations.includes("eventBus.close:5000"))
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("coalesces repeated shutdown signals into one cleanup operation", async () => {
+  const operations = []
+  const handlers = {}
+  let resolveStop
+  const stopGate = new Promise((resolve) => { resolveStop = resolve })
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async () => { operations.push("eventBus.close"); return { ok: true } },
+  }
+  const journalService = {
+    close: async () => { operations.push("journal.close"); return { ok: true } },
+  }
+  await main({
+    createEventBus: () => eventBus,
+    createJournalService: () => journalService,
+    start: async () => ({
+      connected: false,
+      tradingEnabled: false,
+      strategyMode: "read-only",
+      subscriptions: [],
+      stop: async () => { operations.push("runtime.stop"); await stopGate },
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+  const first = handlers.SIGINT()
+  const second = handlers.SIGTERM()
+  assert.equal(first, second)
+  resolveStop()
+  await Promise.all([first, second])
+  assert.equal(operations.filter((value) => value === "runtime.stop").length, 1)
+  assert.equal(operations.filter((value) => value === "journal.close").length, 1)
+  assert.equal(operations.filter((value) => value === "eventBus.close").length, 1)
+})
+
+test("closes observability after publishing startup failure", async () => {
+  const operations = []
+  const previousExitCode = process.exitCode
+  const eventBus = {
+    publish: (event) => { operations.push("publish:" + event.name); return { ok: true, event } },
+    close: async () => { operations.push("eventBus.close"); return { ok: true } },
+  }
+  const journalService = {
+    close: async () => { operations.push("journal.close"); return { ok: true } },
+  }
+  process.exitCode = 0
+  try {
+    await main({
+      createEventBus: () => eventBus,
+      createJournalService: () => journalService,
+      start: async () => { throw new Error("bootstrap failed") },
+      logger: { info() {}, debug() {}, error() {} },
+    })
+    assert.deepEqual(operations, [
+      "publish:harvester.startup_failed",
+      "journal.close",
+      "eventBus.close",
+    ])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
