@@ -636,15 +636,15 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     commissionStatus: "COMPLETE",
   })
   const filledBuy = makeFilledOrder({ order: buyOrder })
+  const concurrentMarketTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
+  })
   const userDataTransition = engine.processUserDataEvent({
     event: { executionType: "TRADE", executedOrder: filledBuy, fill },
   })
   const duplicateFillTransition = engine.processUserDataEvent({
     event: { executionType: "TRADE", executedOrder: filledBuy, fill },
-  })
-  const concurrentMarketTransition = engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
   })
 
   assert.deepEqual(cancellationIds, [])
