@@ -339,7 +339,7 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.ok(secondBuyIntent)
   const secondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
-    brokerOrderId: "2",
+    brokerOrderId: "3",
     market: fixture.market,
     side: "BUY",
     type: "LIMIT_MAKER",
