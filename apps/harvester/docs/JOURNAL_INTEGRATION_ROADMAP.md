@@ -1,0 +1,297 @@
+# Harvester Journal Integration Roadmap
+
+## Purpose and priority
+
+This roadmap plans a small, staged integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages into Harvester.
+
+**This work is secondary to the first successful Conservative Binance TESTNET trading cycle.** Follow [Trading First](./TRADING_FIRST.md) and the P0 roadmap first. Do not begin implementation while the real TESTNET cycle remains unverified, unless the user explicitly changes that priority.
+
+The Journal is an optional operational observer. It is not part of order execution, strategy evaluation, fill accounting, or trading readiness. **Harvester must continue trading when Journal is absent, uninitialized, slow, full, or unable to write.** An incomplete journal is preferable to delayed or blocked trading.
+
+This document is a plan, not a statement that any integration exists. The current Harvester does not instantiate EventBus or Journal.
+
+## Audit conclusions
+
+- `@coinzilla/event-bus` already provides in-memory asynchronous fan-out, subscriber isolation, bounded pending deliveries, diagnostics, `flush()`, and `close()`.
+- `@coinzilla/journal` already subscribes to EventBus, writes JSONL records through a serialized write queue, reports write failures, and drains/synchronizes on close.
+- No shared-package changes are currently justified.
+- Harvester already has suitable application boundaries: bootstrap lifecycle, the Conservative trading engine, order submission, sequential user-data processing, canonical Fill accounting, and Portfolio/RecoveryLedger transitions.
+- Harvester currently has no EventBus or Journal integration and no Harvester-owned application event contract.
+- Bot-Free-Roll is a reference for composition and lifecycle ownership, not a template to copy. In particular, its Journal startup/initial flush can prevent trading startup; Harvester must not inherit that dependency.
+
+See [Architecture — operational event journal](./architecture.md#operational-event-journal) and the [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md).
+
+## Hard constraints
+
+1. Do not start this roadmap before the first real Conservative TESTNET cycle is demonstrated, unless explicitly reprioritized by the user.
+2. Journal is optional. Journal initialization or write failure must never fail Harvester startup or trading.
+3. Never await Journal I/O, `journal.flush()`, or Journal shutdown from a market-price, strategy, order-submission, or execution-processing path.
+4. Do not put Journal calls in awaited order lifecycle callbacks or the serialized user-data queue.
+5. Event publication is best-effort. Catch both synchronous publication exceptions and failed `toResult` outcomes at the application boundary.
+6. Keep domain policies pure and broker-independent. Domain code must not import EventBus or Journal.
+7. Use object-shaped inputs and object-shaped results for functions. Use `toResult` for fallible workflows where appropriate.
+8. Map domain entities and broker messages to small, plain, serializable DTOs. Never publish class instances, SDK objects, secrets, or whole account snapshots.
+9. Do not journal every market-price update. Journal selected decisions and meaningful state transitions.
+10. Keep live trading disabled by default. Default tests remain offline and credential-free.
+11. Do not modify shared Journal/EventBus packages unless implementation reveals a reproducible, Harvester-blocking defect. Any such change needs a separate, explicitly justified cross-package task.
+12. Every implementation PR must be small, independently testable, and update the relevant documentation and this roadmap in the same PR.
+
+## Proposed event contract
+
+All events use the existing EventBus envelope: generated event ID and timestamp, event name, source, and plain-object data. Use Harvester-owned names and stable business identifiers. Exact field names must be verified against the current source contracts before implementation; examples below are conceptual, not existing APIs.
+
+| Event | Owner / publication point | Minimum useful data | Initial scope |
+|---|---|---|---|
+| `harvester.started` | Process entry point, after runtime startup | broker, mode, enabled markets, trading-enabled flag | Include |
+| `harvester.startup_failed` | Process entry point, when startup fails | safe error name/message, startup stage | Include |
+| `harvester.stopped` | Process entry point, after shutdown attempt | reason, shutdown outcome | Include |
+| `config.validated` | Bootstrap, after validation | non-secret effective settings and enabled markets | Include |
+| `broker.connected` / `broker.connection_failed` | Bootstrap around broker connection | broker identifier, outcome, safe error | Include |
+| `broker.disconnected` | Bootstrap after disconnect attempt | broker identifier, outcome | Include |
+| `broker.status_changed` | Broker/application boundary on meaningful stream transition | stream kind, status, safe reason | Include if source exposes transitions |
+| `broker.subscription_established` / `broker.subscription_failed` | Bootstrap around subscriptions | market or stream kind, outcome | Include |
+| `market.price_invalid` | Market-data boundary on rejected external data | market, validation reason, safe timestamp | Include |
+| `strategy.decision` | Trading engine after meaningful policy result | strategy, market, reference price, action summary, reason | Include |
+| `strategy.paused` / `strategy.resumed` | Trading engine on actual state transition | market, reason | Include if transition exists |
+| `order.submission_requested` | Order use case after local pending registration, before broker call | client order ID, market, side, type, price, quantity | Include |
+| `order.submitted` | Order use case after verified canonical acknowledgement | client/exchange order IDs, status | Include |
+| `order.submission_failed` | Order use case on rejected/unknown outcome | identifiers, classified outcome, safe error | Include |
+| `order.cancelled` / `order.cancel_failed` | Cancellation workflow after confirmed outcome | order IDs, final status, reason | Include |
+| `execution.fill_applied` | Accounting workflow after successful Fill application | stable fill ID, order ID, market, side, actual price/quantity/fees | Include |
+| `execution.rejected` / `execution.accounting_failed` | User-data/accounting boundary | safe identifiers and failure reason | Include |
+| `execution.duplicate_ignored` | Fill deduplication boundary | fill ID, order ID | Optional |
+| `portfolio.updated` / `position.opened` / `position.closed` | Portfolio transition boundary | market and compact resulting quantities/state | Defer unless a concrete operational question needs them |
+| `recovery.cycle_completed` | Conservative recovery completion boundary | market, cycle identifiers, actual realized figures | Include only if a stable transition is exposed |
+| `market.price_received` | Market-data boundary | price and market | Do not publish for every update; decision events already carry relevant price |
+
+### Payload rules
+
+- Preserve financial precision. Use canonical decimal strings for prices, quantities, fees, and monetary values.
+- Include stable exchange/client order IDs and execution IDs where available.
+- Distinguish requested, acknowledged, unknown, rejected, partially filled, and fully filled outcomes.
+- An order acknowledgement is not a Fill; only actual normalized Fill facts change Portfolio.
+- Do not serialize `Portfolio`, `Position`, `CanonicalOrder`, `Fill`, broker SDK objects, or raw exchange messages directly. Map the minimum required facts into plain DTOs.
+- Never include credentials, signed requests, environment variables, or unnecessary account data.
+- Avoid duplicate semantic events. If both an order-status transition and a fill are emitted, document their distinct meanings.
+
+## Delivery model: one small PR per step
+
+Do not combine the steps into one large PR. Each PR must contain only its milestone, focused tests, and the documentation/roadmap updates needed to describe the behavior that actually exists.
+
+### Gate 0 — Confirm the prerequisite
+
+**Goal:** Verify that the first real Conservative TESTNET cycle is complete before starting secondary observability work.
+
+**Files:** Normally none; update this roadmap only if the recorded milestone status has changed.
+
+**Work:**
+- Verify the controlled TESTNET runbook was followed.
+- Confirm an actual BUY → execution/fill → recovery SELL → execution/fill → next-cycle sequence.
+- Confirm live trading remains disabled.
+- Confirm required Harvester tests and CI pass on the relevant develop state.
+
+**Tests/evidence:** Link the real TESTNET run evidence and CI run; do not substitute fake-broker tests for exchange proof.
+
+**Acceptance:** The real TESTNET milestone is demonstrated and explicitly recorded. Otherwise stop here and continue the trading-first roadmap.
+
+### Step 1 — Add an application EventBus boundary
+
+**Goal:** Introduce EventBus without changing trading decisions or broker behavior.
+
+**Likely files:** `apps/harvester/package.json`; a focused application event publisher module; bootstrap composition; focused tests; this roadmap.
+
+**Work:**
+- Add `@coinzilla/event-bus` as a direct Harvester dependency.
+- Construct exactly one EventBus in application composition and inject it explicitly.
+- Implement a best-effort publisher that accepts one object argument and returns one object result.
+- Catch synchronous publish exceptions and handle failed `toResult` results.
+- Log publication failure once through the injected/default shared logger; logger failure must not escape into trading.
+- Do not yet add Journal or publish high-volume events.
+
+**Tests:** Accepted event; rejected result; synchronous throw; logger throw; malformed event; publisher never throws into its caller.
+
+**Acceptance:** EventBus is composed once; no global singleton; no domain dependency; no trading behavior change; all publication failure cases are isolated.
+
+**PR boundary:** EventBus dependency + publisher boundary + tests + minimal architecture/roadmap documentation only.
+
+### Step 2 — Define stable Harvester event names and DTO mappings
+
+**Goal:** Define the application-owned event contract independently of Journal.
+
+**Likely files:** `src/application/events/`; mapping helpers near the relevant application boundary; contract tests; architecture documentation; roadmap.
+
+**Work:**
+- Define event-name constants and focused DTO mapping functions.
+- Verify actual canonical entity and broker event fields before selecting payload fields.
+- Use one object input and one object output.
+- Keep meaningful deterministic mapping/validation as plain pure functions.
+- Validate plain serializable payloads at the publisher boundary.
+- Include safe business identifiers and exact decimal strings.
+- Do not add event schemas for speculative events.
+
+**Tests:** Every selected event payload; decimal precision; missing identifiers; invalid values; class-instance/SDK-object rejection; no secrets.
+
+**Acceptance:** Contract names and payload examples are documented and tested; no EventBus/Journal imports in domain policy modules.
+
+**PR boundary:** Event contract + DTO mapping + tests + documentation. No Journal lifecycle.
+
+### Step 3 — Add optional, non-blocking Journal composition
+
+**Goal:** Connect the existing Journal to EventBus while keeping trading startup independent.
+
+**Likely files:** `apps/harvester/package.json`; focused Journal preparation/lifecycle helper; `src/index.js` or bootstrap composition; tests; README/operations docs; roadmap.
+
+**Work:**
+- Add `@coinzilla/journal` as a direct dependency.
+- Construct Journal with the shared EventBus, configured directory, and logger.
+- Start Journal independently of trading startup; do not await successful Journal startup before starting or continuing the trading runtime.
+- Expose a small health/status result so startup/write/close failures are observable.
+- Define and document the capture gap before Journal subscription becomes active. Do not claim earlier events were persisted.
+- Journal initialization failure must not make Harvester startup fail.
+- Do not call Journal record/flush from trading callbacks.
+
+**Tests:** Journal ready; invalid/unwritable directory; initialization rejection; trading runtime starts while Journal initialization is pending/failing; write failure after startup; safe logger failure.
+
+**Acceptance:** With Journal unavailable, Harvester can still connect, process prices, evaluate strategy, submit orders, and process executions. No awaited dependency on Journal exists.
+
+**PR boundary:** Journal construction and optional lifecycle only; no broad event instrumentation.
+
+### Step 4 — Publish configuration, process, and broker lifecycle events
+
+**Goal:** Make application startup and connectivity observable.
+
+**Likely files:** `src/index.js`; `src/bootstrap/start-harvester.js`; event contract/mapping modules; tests; README/operations docs; roadmap.
+
+**Work:**
+- Publish validated non-secret configuration facts.
+- Publish process startup/startup failure/shutdown outcomes.
+- Publish broker connect/disconnect and subscription outcomes.
+- Publish stream status only for meaningful transitions actually exposed by current broker callbacks.
+- Keep lifecycle ownership in the process/bootstrap layer; avoid duplicate started/stopped events.
+
+**Tests:** Successful startup; invalid config; broker connect failure; subscription failure; read-only mode; normal shutdown; publication failure on every lifecycle branch.
+
+**Acceptance:** One owner per lifecycle event; payloads contain no secrets; trading behavior is unchanged when publication fails.
+
+**PR boundary:** Lifecycle events only.
+
+### Step 5 — Publish meaningful strategy and order lifecycle events
+
+**Goal:** Explain why Harvester acted and what happened to each order.
+
+**Likely files:** `src/use-cases/conservative-trading-engine.js`; `src/use-cases/execute-strategy-decision.js`; focused event mappers; tests; event documentation; roadmap.
+
+**Work:**
+- Publish selected strategy decisions and actual pause/resume transitions.
+- Publish order submission requested only after local pending registration and immediately before broker I/O.
+- Publish submitted only after canonical acknowledgement validation.
+- Distinguish rejected and unknown submission outcomes.
+- Publish confirmed cancellation and cancellation failure.
+- Do not publish every repeated NO_ACTION evaluation.
+- Never await event delivery or persistence in order callbacks.
+
+**Tests:** Actionable decision; no-action filtering; pending order; acknowledged order; explicit rejection; transport timeout/unknown outcome; cancellation/failure; EventBus unavailable while broker order still executes.
+
+**Acceptance:** Journal records accurately distinguish intent from exchange-confirmed outcome; no order path waits for Journal.
+
+**PR boundary:** Strategy/order events only.
+
+### Step 6 — Publish execution and accounting facts
+
+**Goal:** Record actual executions without changing accounting authority.
+
+**Likely files:** `src/bootstrap/start-harvester.js`; `src/use-cases/update-trading-accounting.js`; focused DTO mappers; tests; event documentation; roadmap.
+
+**Work:**
+- Publish successful Fill application only after the existing accounting workflow succeeds.
+- Publish invalid/unowned execution and accounting failures with safe identifiers.
+- Optionally publish duplicate-fill suppression if it helps diagnose exchange delivery.
+- Publish recovery completion only from the actual domain transition.
+- Keep the sequential user-data queue and all current accounting invariants unchanged.
+- Do not await Journal in the user-data queue.
+
+**Tests:** Partial Fill; full Fill; duplicate Fill; invalid Fill; unowned order; unsupported commission; accounting failure; publication failure while Portfolio still updates correctly.
+
+**Acceptance:** Only actual canonical fills update Portfolio; Journal failure cannot block valid execution processing or strategy reevaluation.
+
+**PR boundary:** Execution/accounting events only.
+
+### Step 7 — Complete shutdown draining and end-to-end failure isolation
+
+**Goal:** Ensure normal shutdown drains accepted event deliveries and journal writes without making trading depend on storage.
+
+**Likely files:** `src/index.js`; bootstrap runtime stop coordinator; focused lifecycle tests; operations documentation; roadmap.
+
+**Work:**
+- Preserve existing trading shutdown order: close order/trading gate, stop market intake, drain the user-data queue, then disconnect broker resources.
+- Publish final lifecycle events while EventBus and Journal are still available.
+- Flush EventBus, close Journal, then close EventBus in a controlled sequence.
+- Isolate each cleanup failure so one failed close does not skip later cleanup.
+- Document that abrupt process/machine termination and failed filesystem sync can still lose records.
+- Do not claim exactly-once delivery or unconditional durability.
+- Use bounded shutdown handling where the existing runtime contract supports it; a timeout must not be reported as a successful flush.
+
+**Tests:** Pending user-data work; pending EventBus delivery; pending Journal write; write failure; flush failure; Journal close failure; broker disconnect failure; repeated shutdown; no unhandled rejection.
+
+**Acceptance:** Normal shutdown drains accepted writes; broker cleanup still occurs when Journal fails; trading path never awaits storage; incomplete durability is reported honestly.
+
+**PR boundary:** Lifecycle coordination and comprehensive failure tests only.
+
+### Step 8 — Final documentation and operational verification
+
+**Goal:** Close the feature with accurate docs and evidence.
+
+**Likely files:** Harvester README, architecture, operations/journal documentation, roadmap, AI task closeout.
+
+**Work:**
+- Document event inventory and actual payloads.
+- Document journal path/configuration, file naming/session behavior, permissions, disk-full behavior, and retention/rotation limitations based on the actual Journal package.
+- Document how to diagnose Journal health and missing capture windows.
+- Verify no secrets are recorded.
+- Run the full Harvester suite, coverage, relevant shared-package tests, and repository CI.
+- Inspect actual JSONL records from an offline integration run.
+
+**Acceptance:** Documentation describes only shipped behavior; CI is green; tests prove failure isolation; no live credentials/network are needed for default tests.
+
+**PR boundary:** Documentation and final verification only, unless a specific defect is found (fix that in a separate focused PR).
+
+## Cross-step definition of done
+
+Every implementation PR must:
+- Be one small milestone; do not bundle future steps.
+- Update this roadmap and relevant docs in the same PR.
+- Add deterministic offline tests for success, failure, boundaries, and lifecycle behavior relevant to that step.
+- Preserve all existing Harvester tests and trading behavior.
+- Demonstrate that Journal is never awaited by the trading workflow.
+- Use existing `@coinzilla/utils` helpers and logger; do not duplicate generic helpers.
+- Use `toResult` for fallible workflows where appropriate.
+- Keep pure calculations, decisions, and deterministic mappings as plain pure functions.
+- Use one object argument and one object result for functions.
+- Keep strategy policies broker-independent.
+- Avoid global `console` usage.
+- Keep TESTNET tests opt-in and live trading disabled by default.
+- State exact tests/checks run; never claim unrun checks passed.
+
+## Explicit non-goals for this integration
+
+- Durable Portfolio/RecoveryLedger persistence or restart recovery.
+- Journal replay as a source of trading state.
+- Exactly-once delivery.
+- Database/outbox infrastructure.
+- Every-tick market data capture.
+- Notifications, dashboards, or operator control panels.
+- Refactoring working strategy/order/accounting code solely to make instrumentation cleaner.
+- Changes to shared Journal/EventBus packages without a separately justified defect.
+
+## Status
+
+- [x] Read-only source audit completed.
+- [ ] Gate 0: real Conservative TESTNET cycle demonstrated.
+- [ ] Step 1: EventBus boundary.
+- [ ] Step 2: event contracts and DTOs.
+- [ ] Step 3: optional Journal composition.
+- [ ] Step 4: lifecycle events.
+- [ ] Step 5: strategy/order events.
+- [ ] Step 6: execution/accounting events.
+- [ ] Step 7: shutdown and failure isolation.
+- [ ] Step 8: final documentation and verification.
