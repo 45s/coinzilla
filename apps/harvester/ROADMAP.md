@@ -563,3 +563,24 @@ The primary lead is now a conflict between the client ID in a Binance execution 
 Next, inspect TESTNET order history for exchange order ID `666845` and capture the full history row, including `clientOrderId`, status, executed quantity and update time. For the next run, preserve raw Binance execution-report `c` and `C` (redacting credentials and unrelated account data), plus both IDs for the later TRADE report. Correlate these with the Harvester submission and acknowledgement for order `666845`.
 
 Only after this comparison can we distinguish a Binance cancel/replacement identifier case, an adapter normalization issue, an order-ID collision, or another source of the mismatch. Add a deterministic test from the confirmed event semantics before changing ownership validation.
+
+
+### Free-Roll order identity alignment — 2026-11-03
+
+The working implementation was compared directly with Harvester:
+
+- `apps/bot-free-roll/src/bot/bot-free-roll.js` tracks the exchange-assigned order ID in `state.trackedOrderIds` after the broker acknowledgement.
+- Its `#handleOrderEvent()` gets `getOrderId(event.executedOrder)` and accepts the event only when that exchange order ID is tracked. Fill identity is checked using exchange order ID, symbol, and side. It does **not** require the execution report's client order ID to equal the locally submitted client ID.
+- Harvester previously used `OrderRegistry.applyUpdate()` lookup by `clientOrderId` only. That was the behavioral mismatch behind the `666845` rejection: Binance's event `c` differed, although the exchange order ID was already registered.
+
+Harvester is now aligned with that working behavior: acknowledged updates are located by `brokerOrderId` first; the registered client ID remains the canonical local ID; conflicting client and broker IDs that point to two different registered orders are still rejected. Unknown broker order IDs are not adopted. Binance's raw `c` and `C` are retained as event metadata for diagnostics.
+
+The bootstrap now logs both identifiers on receipt, logs accepted/ignored processing outcomes, and emits complete error name/message/stack fields for rejected events. This should make future adapter/identity mismatches diagnosable without changing normal logs to raw Binance payload dumps.
+
+Regression coverage added:
+
+- Binance adapter preserves `c` and `C` separately.
+- Registry accepts a report with a different client ID when its exchange order ID identifies the registered order, while retaining the submitted canonical client ID.
+- Registry rejects an event when its broker ID and client ID point to different registered orders.
+
+This is an intentional port of Free-Roll's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.
