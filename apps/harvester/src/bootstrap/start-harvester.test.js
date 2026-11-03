@@ -957,3 +957,82 @@ test("retains an explicitly injected application event publisher in configuratio
   assert.equal(result.eventPublisher, eventPublisher)
   await result.stop()
 })
+
+
+test("stops broker intake before draining queued user-data and disconnects afterward", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
+  let resolveMarketUnsubscribe
+  const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
+  broker.subscribeForPrices = async (input) => {
+    const result = await originalSubscribeForPrices(input)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        unsubscribe: async () => {
+          calls.push("unsubscribe:" + input.symbol)
+          resolveMarketUnsubscribe()
+          return result.data.unsubscribe()
+        },
+      },
+    }
+  }
+  const originalSubscribeForUserData = broker.subscribeForUserData.bind(broker)
+  let resolveUserDataUnsubscribe
+  const userDataUnsubscribed = new Promise((resolve) => { resolveUserDataUnsubscribe = resolve })
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await originalSubscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        disconnect: async () => {
+          calls.push("unsubscribe:user-data")
+          resolveUserDataUnsubscribe()
+          return result.data.disconnect()
+        },
+      },
+    }
+  }
+
+  let resolveQueue
+  const queueGate = new Promise((resolve) => { resolveQueue = resolve })
+  let signalQueueStarted
+  const queueStarted = new Promise((resolve) => { signalQueueStarted = resolve })
+  let queuedEvents = 0
+  const runtime = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    onUserDataEvent: async () => {
+      queuedEvents += 1
+      calls.push("queue:start")
+      signalQueueStarted()
+      await queueGate
+      calls.push("queue:done")
+    },
+  })
+
+  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+  await queueStarted
+  const stopPromise = runtime.stop()
+  await Promise.all([marketUnsubscribed, userDataUnsubscribed])
+
+  assert.ok(calls.includes("unsubscribe:BTCUSDT"))
+  assert.ok(calls.includes("unsubscribe:user-data"))
+  assert.equal(calls.includes("queue:done"), false)
+  assert.equal(calls.includes("disconnect"), false)
+
+  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+  await Promise.resolve()
+  assert.equal(queuedEvents, 1)
+
+  resolveQueue()
+  await stopPromise
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("queue:done"))
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("disconnect"))
+})
