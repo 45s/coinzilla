@@ -89,6 +89,8 @@ test("Conservative domain policy completes recovery before making the next BUY e
 
   const initial = evaluate()
   assert.deepEqual(initial.actions.map(({ side }) => side), ["BUY"])
+  const activeBuy = { market, side: "BUY", status: "OPEN" }
+  assert.deepEqual(evaluate({ activeOrders: [activeBuy] }).actions, [])
 
   applyFill({ side: "BUY", tradeId: "trade-1", quantity: "10", price: "1" })
   assert.equal(getRecoveryLedger().outstandingRecoveryAmount, "10")
