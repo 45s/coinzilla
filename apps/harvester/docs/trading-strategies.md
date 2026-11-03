@@ -87,21 +87,18 @@ Key characteristics:
 
 The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
 
-### Shared commission policy — Conservative and Aggressive
+### Shared commission and order-type policy — Conservative and Aggressive
 
-`makerPercent` and `takerPercent` are separate configured commission rates. For each pair, retain the highest commission rate the exchange has charged on a confirmed MAKER fill and the highest rate charged on a confirmed TAKER fill. Keep these histories separate and retain them across successful recovery cycles.
+The same commission policy applies to Conservative and Aggressive.
 
-- Effective MAKER rate = the higher of configured `makerPercent` and the highest exchange-charged MAKER rate observed.
-- Effective TAKER rate = the higher of configured `takerPercent` and the highest exchange-charged TAKER rate observed.
-- A MAKER fill updates only the MAKER rate; a TAKER fill updates only the TAKER rate.
-- The configured rate is the minimum planning assumption. An exchange charge may raise it, never lower it.
-- A `LIMIT_MAKER` order uses the MAKER rate for planning. A `LIMIT` order that may fill as either maker or taker reserves the higher of the two effective rates.
-- Both Conservative and Aggressive follow this same rule. The fee depends on how the exchange executes the fill, not on the strategy name.
-- Fill accounting uses the commission charged on each fill. The planning reserve is not booked as an expense.
+- If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
+- If `makerPercent` is non-zero, submit a regular `LIMIT` order.
+- Use configured `makerPercent` as the commission estimate for planning in both cases. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
+- The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
+- Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
+- Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
 
-Example: configured MAKER rate 0.1%, exchange charges 0.2% on a MAKER fill → effective MAKER rate is 0.2%. If it charges 0.05%, the effective rate stays 0.1%. If configured MAKER rate is zero and the exchange charges 0.05%, the effective rate is 0.05%. Apply the same comparisons independently to TAKER fills and `takerPercent`.
-
-**Implementation status:** the current Harvester code still has one combined observed rate and combined configured ceiling. Separate MAKER/TAKER history and the persistent per-type calculation are a follow-up implementation task; this documentation records the agreed contract, not a claim of completed runtime support.
+Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
 
 ### Aggressive — grid-style trading
 
