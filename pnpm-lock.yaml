@@ -198,6 +198,9 @@ importers:
       '@coinzilla/entities':
         specifier: workspace:*
         version: link:../../packages/entities
+      '@coinzilla/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils

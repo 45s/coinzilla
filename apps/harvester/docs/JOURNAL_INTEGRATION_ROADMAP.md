@@ -8,7 +8,7 @@ This roadmap plans a small, staged integration of the existing `@coinzilla/event
 
 The Journal is an optional operational observer. It is not part of order execution, strategy evaluation, fill accounting, or trading readiness. **Harvester must continue trading when Journal is absent, uninitialized, slow, full, or unable to write.** An incomplete journal is preferable to delayed or blocked trading.
 
-This document is a plan, not a statement that any integration exists. The current Harvester does not instantiate EventBus or Journal.
+Step 1 implementation is present on the current feature branch: the process entry point composes one EventBus and injects a best-effort publisher into bootstrap. No events are published and Journal is not initialized. Step 1 remains in progress until this PR passes CI and is merged into `develop`.
 
 ## Audit conclusions
 
@@ -79,6 +79,8 @@ All events use the existing EventBus envelope: generated event ID and timestamp,
 Do not combine the steps into one large PR. Each PR must contain only its milestone, focused tests, and the documentation/roadmap updates needed to describe the behavior that actually exists.
 
 ### Step 1 — Add an application EventBus boundary
+
+**Status:** [~] Implemented on the feature branch; pending PR verification and merge.
 
 **Goal:** Introduce EventBus without changing trading decisions or broker behavior.
 

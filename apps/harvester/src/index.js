@@ -1,4 +1,6 @@
 import { pathToFileURL } from "node:url"
+import { EventBus } from "@coinzilla/event-bus"
+import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
 
@@ -22,10 +24,16 @@ const describeError = (error) => {
   return { message: String(error) }
 }
 
-export async function main({ start = startHarvester, logger = defaultLogger } = {}) {
+export async function main({
+  start = startHarvester,
+  logger = defaultLogger,
+  createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
+} = {}) {
   try {
+    const eventBus = createEventBus({ logger })
+    const eventPublisher = makeEventPublisher({ eventBus, logger })
     logger.debug?.({ message: "Harvester process startup requested" })
-    const runtime = await start()
+    const runtime = await start({ eventPublisher })
     logger.debug?.({
       message: "Harvester bootstrap completed",
       connected: runtime.connected === true,

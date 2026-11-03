@@ -20,6 +20,7 @@
   "dependencies": {
     "@coinzilla/brokers": "workspace:*",
     "@coinzilla/entities": "workspace:*",
+    "@coinzilla/event-bus": "workspace:*",
     "@coinzilla/utils": "workspace:*"
   }
 }

@@ -115,3 +115,34 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
     process.exitCode = previousExitCode
   }
 })
+
+test("composes exactly one EventBus and injects the best-effort publisher into bootstrap", async () => {
+  let eventBusCreations = 0
+  let startupInput
+  const publishedEvents = []
+  const eventBus = {
+    publish: (event) => {
+      publishedEvents.push(event)
+      return { ok: true, event }
+    },
+  }
+
+  await main({
+    createEventBus: ({ logger }) => {
+      eventBusCreations += 1
+      assert.ok(logger)
+      return eventBus
+    },
+    start: async (input) => {
+      startupInput = input
+      return { connected: false }
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  assert.equal(eventBusCreations, 1)
+  assert.equal(typeof startupInput.eventPublisher.publish, "function")
+  const event = { name: "harvester.test", source: "test", data: {} }
+  assert.equal(startupInput.eventPublisher.publish(event).ok, true)
+  assert.deepEqual(publishedEvents, [event])
+})

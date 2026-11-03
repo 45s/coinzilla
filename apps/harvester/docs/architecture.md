@@ -368,7 +368,7 @@ new BUY below the current last trade, rounded down to the exchange tick.
 
 ## Operational event journal
 
-**Current status:** Harvester does not currently compose `@coinzilla/event-bus` or `@coinzilla/journal`. This section records the intended boundary; it must not be read as implemented behavior.
+**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js` and injects a best-effort application publisher into bootstrap. The publisher contains synchronous publication exceptions, failed EventBus results, and logger failures. No lifecycle events are emitted yet, and `@coinzilla/journal` is not composed. This is Step 1 only; later roadmap steps define contracts, add optional Journal composition, and publish selected lifecycle events.
 
 Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
 

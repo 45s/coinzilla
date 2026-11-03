@@ -945,3 +945,15 @@ test("logs each broker startup stage and key readiness actions", async () => {
 
   await result.stop()
 })
+
+test("retains an explicitly injected application event publisher in configuration-only runtime", async () => {
+  const eventPublisher = { publish: () => ({ ok: true }) }
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: {},
+    eventPublisher,
+  })
+
+  assert.equal(result.eventPublisher, eventPublisher)
+  await result.stop()
+})
