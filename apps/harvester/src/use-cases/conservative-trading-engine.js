@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -49,6 +49,9 @@ export function makeConservativeTradingEngine({
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map(),
     paused: new Set(),
+    replacementIntents: new Set(),
+    deferredEvaluations: new Set(),
+    completedOrderTransitions: new Set(),
   }
   const pause = async ({ symbol, reason, error }) => {
     const wasPaused = state.paused.has(symbol)
@@ -85,7 +88,16 @@ export function makeConservativeTradingEngine({
 
   const submit = makeExecuteStrategyDecision({
     broker,
-    onPendingOrder: async ({ order }) => {
+    canSubmit: ({ order } = {}) => canTrade({ symbol: order.market.symbol }),
+    onSubmissionDeferred: ({ order, registered } = {}) => {
+      if (registered) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (!removal.removed) throw new Error("Cannot remove a pending order deferred before broker submission")
+        state.registry = removal.registry
+      }
+      state.deferredEvaluations.add(order.market.symbol)
+    },
+    onPendingOrder: ({ order }) => {
       state.registry = state.registry.registerPending({ order }).registry
       publishLifecycleEvent({
         eventPublisher,
@@ -120,6 +132,10 @@ export function makeConservativeTradingEngine({
   const cancelAndReconcileRecoverySells = async ({ symbol, marketId } = {}) => {
     const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
     for (const order of activeSells) {
+      if (order.status === "PENDING") {
+        state.replacementIntents.add(symbol)
+        return toResult({ data: { deferred: true, reason: "RECOVERY_SELL_PENDING_ACKNOWLEDGEMENT" } })
+      }
       if (order.status === "UNKNOWN") {
         const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
         publishOrderCancelFailed({ order, outcome: "ORDER_STATE_UNKNOWN", error })
@@ -313,9 +329,14 @@ export function makeConservativeTradingEngine({
   }
 
   const evaluateLatestTransition = async ({ symbol } = {}) => {
-    if (state.paused.has(symbol) || !canTrade({ symbol })) {
-      return toResult({ data: { skipped: true, reason: state.paused.has(symbol) ? "PAIR_PAUSED" : "TRADING_NOT_READY" } })
+    if (state.paused.has(symbol)) {
+      return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
+    if (!canTrade({ symbol })) {
+      state.deferredEvaluations.add(symbol)
+      return toResult({ data: { skipped: true, reason: "TRADING_NOT_READY" } })
+    }
+    state.deferredEvaluations.delete(symbol)
     const marketPrice = state.prices.get(symbol)
     if (!marketPrice) return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
     try {
@@ -333,17 +354,63 @@ export function makeConservativeTradingEngine({
       if (decision.actions.length === 0) return toResult({ data: { decision, submittedOrders: [] } })
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
+      const position = getPortfolio().getPosition({ marketId: metadata.market.id })
+      const quoteCashFlow = position?.quoteNetCashFlow.amount ?? "0"
+      const activeOrders = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      const committedQuote = activeOrders
+        .filter((order) => order.side === "BUY")
+        .reduce((total, order) => {
+          const remaining = subtractDecimal({
+            left: order.originalQuantity.amount,
+            right: order.executedQuantity.amount,
+          })
+          const commitment = multiplyDecimal({
+            left: remaining,
+            right: order.limitPrice.amount,
+          })
+          return addDecimal({ left: total, right: commitment })
+        }, "0")
+      const committedBase = activeOrders
+        .filter((order) => order.side === "SELL")
+        .reduce((total, order) => addDecimal({
+          left: total,
+          right: subtractDecimal({
+            left: order.originalQuantity.amount,
+            right: order.executedQuantity.amount,
+          }),
+        }), "0")
       const executableActions = []
       for (const action of decision.actions) {
         const asset = action.side === "BUY" ? metadata.market.quoteAsset : metadata.market.baseAsset
-        const available = accountSnapshot.getFreeBalance({ assetId: asset.id })
-        if (!available) throw new Error("Available balance is missing for " + asset.code)
+        const snapshotBalance = accountSnapshot.getFreeBalance({ assetId: asset.id })
+        if (!snapshotBalance) throw new Error("Available balance is missing for " + asset.code)
+        const available = action.side === "BUY"
+          ? subtractDecimal({
+              left: addDecimal({ left: snapshotBalance.amount, right: quoteCashFlow }),
+              right: committedQuote,
+            })
+          : subtractDecimal({
+              left: addDecimal({
+                left: snapshotBalance.amount,
+                right: position?.baseQuantity.amount ?? "0",
+              }),
+              right: committedBase,
+            })
         const required = action.side === "BUY"
           ? multiplyDecimal({ left: action.price, right: action.quantity })
           : action.quantity
-        if (compareDecimal({ left: required, right: available.amount }) > 0) {
+        if (compareDecimal({ left: required, right: available }) > 0) {
           if (action.side === "BUY") continue
-          throw new Error("Strategy SELL quantity exceeds free " + asset.code + " balance")
+          throw new Error("Strategy SELL quantity exceeds Harvester-owned free " + asset.code + " balance")
+        }
+        if (action.side === "SELL" && compareDecimal({
+          left: action.quantity,
+          right: subtractDecimal({
+            left: position?.baseQuantity.amount ?? "0",
+            right: committedBase,
+          }),
+        }) > 0) {
+          throw new Error("Strategy SELL quantity exceeds Harvester-owned active inventory")
         }
         executableActions.push(action)
       }
@@ -363,6 +430,16 @@ export function makeConservativeTradingEngine({
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       if (!result.ok) return result
+      if (result.data?.deferred === true) {
+        return toResult({
+          data: {
+            decision,
+            submittedOrders: result.data.submittedOrders ?? [],
+            deferred: true,
+            reason: "TRADING_NOT_READY",
+          },
+        })
+      }
       if (result.data.submittedOrders.some((order) => order.side === "BUY")) {
         state.lastAdjustmentPrices.set(
           symbol,
@@ -414,7 +491,6 @@ export function makeConservativeTradingEngine({
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
       state.registry = update.registry
-      if (update.duplicate || update.stale) return toResult({ data: { ignored: true } })
 
       if (event.executionType === "TRADE") {
         if (!(event.fill instanceof Fill)) {
@@ -464,6 +540,48 @@ export function makeConservativeTradingEngine({
           })
         }
       }
+      if (update.duplicate || update.stale) {
+        const isUnprocessedFill = order.status === "FILLED" &&
+          !state.completedOrderTransitions.has(order.clientOrderId)
+        if (!isUnprocessedFill) {
+          if (order.side === "SELL" && order.status !== "FILLED" &&
+              order.brokerOrderId && state.replacementIntents.has(symbol)) {
+            const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
+            if (!cancellation.ok) return cancellation
+            if (cancellation.data?.deferred === true) {
+              return toResult({ data: { ignored: true, replacementDeferred: true } })
+            }
+            state.replacementIntents.delete(symbol)
+            const replacement = await evaluateLatestTransition({ symbol })
+            if (!replacement.ok) return replacement
+            return toResult({ data: { ignored: true, recoverySellReplaced: true, ...replacement.data } })
+          }
+          return toResult({ data: { ignored: true } })
+        }
+      }
+
+      if (order.status === "FILLED") {
+        if (state.completedOrderTransitions.has(order.clientOrderId)) {
+          return toResult({ data: { ignored: true } })
+        }
+        state.completedOrderTransitions.add(order.clientOrderId)
+      }
+
+      if (order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
+          state.replacementIntents.has(symbol)) {
+        const cancellation = await cancelAndReconcileRecoverySells({
+          symbol,
+          marketId: order.market.id,
+        })
+        if (!cancellation.ok) return cancellation
+        if (cancellation.data?.deferred === true) {
+          return toResult({ data: { order, replacementDeferred: true } })
+        }
+        state.replacementIntents.delete(symbol)
+        const replacement = await evaluateLatestTransition({ symbol })
+        if (!replacement.ok) return replacement
+        return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
+      }
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
@@ -486,6 +604,7 @@ export function makeConservativeTradingEngine({
         state.lastBuyPrices.set(symbol, order.limitPrice.amount)
       }
       if (order.status === "FILLED" && order.side === "SELL") {
+        state.replacementIntents.delete(symbol)
         const completion = await completeRecoveryCycle({
           marketId: order.market.id,
           keepQuantity: String(tradingConfig.pairs[symbol].keepQuantity),
@@ -523,11 +642,22 @@ export function makeConservativeTradingEngine({
     runTransition({ task: () => processUserDataEventTransition({ event }) })
   const evaluateLatest = ({ symbol } = {}) =>
     runTransition({ task: () => evaluateLatestTransition({ symbol }) })
+  const resumeDeferredEvaluations = ({} = {}) => runTransition({
+    task: async () => {
+      const results = []
+      for (const symbol of [...state.deferredEvaluations]) {
+        const result = await evaluateLatestTransition({ symbol })
+        results.push({ symbol, result })
+      }
+      return toResult({ data: { results } })
+    },
+  })
 
   return Object.freeze({
     processMarketPrice,
     processUserDataEvent,
     evaluateLatest,
+    resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
     getPausedMarkets: () => [...state.paused],
     getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),

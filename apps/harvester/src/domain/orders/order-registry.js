@@ -41,6 +41,18 @@ function isStaleOrderUpdate({ current, next }) {
   ) {
     return true
   }
+  if (
+    ["CANCELED", "EXPIRED"].includes(current.status) &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(next.status) &&
+    compareDecimal({
+      left: next.executedQuantity.amount,
+      right: current.executedQuantity.amount,
+    }) <= 0
+  ) {
+    // A delayed non-terminal report may arrive after the cancellation
+    // response. The cancellation snapshot and fill history remain authoritative.
+    return true
+  }
   return current.status !== "PENDING" &&
     next.status === "OPEN" &&
     current.status !== "OPEN"
@@ -120,6 +132,13 @@ export class OrderRegistry {
     return this.#orders.find((order) => order.clientOrderId === clientOrderId)
   }
 
+  getOrderByBrokerOrderId({ brokerOrderId } = {}) {
+    if (typeof brokerOrderId !== "string" || !brokerOrderId.trim()) {
+      throw new TypeError("OrderRegistry.getOrderByBrokerOrderId requires brokerOrderId")
+    }
+    return this.#orders.find((order) => order.brokerOrderId === brokerOrderId)
+  }
+
   getActiveOrders({ marketId } = {}) {
     return this.#orders.filter((order) =>
       ACTIVE_STATUSES.has(order.status) &&
@@ -155,11 +174,42 @@ export class OrderRegistry {
     })
   }
 
+  removePending({ clientOrderId } = {}) {
+    if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+      throw new TypeError("OrderRegistry.removePending requires clientOrderId")
+    }
+    const current = this.getOrder({ clientOrderId })
+    if (!current) {
+      return Object.freeze({ registry: this, removed: false })
+    }
+    if (current.status !== "PENDING") {
+      throw new Error("OrderRegistry can remove only a PENDING order")
+    }
+    return Object.freeze({
+      registry: new OrderRegistry({
+        orders: this.#orders.filter((order) => order.clientOrderId !== clientOrderId),
+      }),
+      removed: true,
+    })
+  }
+
   applyUpdate({ order } = {}) {
     if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
       throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
     }
-    const index = this.#orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+    // Match acknowledged exchange events by Binance's exchange-assigned order ID,
+    // exactly like Free-Roll's trackedOrderIds. Client order IDs are metadata and
+    // may differ in Binance cancel/replace execution reports (c versus C).
+    const brokerIdIndex = this.#orders.findIndex(
+      (item) => item.brokerOrderId === order.brokerOrderId,
+    )
+    const clientIdIndex = this.#orders.findIndex(
+      (item) => item.clientOrderId === order.clientOrderId,
+    )
+    if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
+      throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
+    }
+    const index = brokerIdIndex >= 0 ? brokerIdIndex : clientIdIndex
     if (index < 0) {
       return Object.freeze({
         registry: this,
@@ -171,9 +221,36 @@ export class OrderRegistry {
 
     const current = this.#orders[index]
     if (
-      sameOrderIntent({ current, next: order }) &&
-      (current.brokerOrderId === undefined || current.brokerOrderId === order.brokerOrderId) &&
-      isStaleOrderUpdate({ current, next: order })
+      current.brokerOrderId !== undefined &&
+      current.brokerOrderId !== order.brokerOrderId
+    ) {
+      throw new Error("Canonical order update changed brokerOrderId")
+    }
+
+    // Keep the locally submitted clientOrderId as the canonical identity.
+    // The raw Binance c/C values remain available on the event for diagnostics.
+    const nextOrder = current.clientOrderId === order.clientOrderId
+      ? order
+      : new CanonicalOrder({
+          clientOrderId: current.clientOrderId,
+          brokerOrderId: order.brokerOrderId,
+          market: order.market,
+          side: order.side,
+          type: order.type,
+          limitPrice: order.limitPrice,
+          originalQuantity: order.originalQuantity,
+          executedQuantity: order.executedQuantity,
+          status: order.status,
+          createdAt: order.createdAt,
+          acknowledgedAt: order.acknowledgedAt,
+          updatedAt: order.updatedAt,
+          completedAt: order.completedAt,
+        })
+
+    if (
+      sameOrderIntent({ current, next: nextOrder }) &&
+      (current.brokerOrderId === undefined || current.brokerOrderId === nextOrder.brokerOrderId) &&
+      isStaleOrderUpdate({ current, next: nextOrder })
     ) {
       return Object.freeze({
         registry: this,
@@ -183,8 +260,8 @@ export class OrderRegistry {
         unknown: false,
       })
     }
-    validateOrderUpdate({ current, next: order })
-    if (sameOrderState({ current, next: order })) {
+    validateOrderUpdate({ current, next: nextOrder })
+    if (sameOrderState({ current, next: nextOrder })) {
       return Object.freeze({
         registry: this,
         applied: false,
@@ -195,7 +272,7 @@ export class OrderRegistry {
     }
 
     const orders = this.#orders.map((item, itemIndex) =>
-      itemIndex === index ? order : item,
+      itemIndex === index ? nextOrder : item,
     )
     return Object.freeze({
       registry: new OrderRegistry({ orders }),

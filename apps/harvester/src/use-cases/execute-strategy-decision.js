@@ -13,6 +13,8 @@ export function makeExecuteStrategyDecision({
   onPendingOrder,
   onAcknowledgedOrder,
   onSubmissionFailure,
+  canSubmit = ({} = {}) => true,
+  onSubmissionDeferred = async ({} = {}) => {},
 } = {}) {
   if (typeof broker?.placeOrder !== "function") {
     throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")
@@ -21,6 +23,8 @@ export function makeExecuteStrategyDecision({
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
+    canSubmit,
+    onSubmissionDeferred,
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
@@ -57,7 +61,16 @@ export function makeExecuteStrategyDecision({
 
       const submittedOrders = []
       for (const { orderIntent, pendingOrder } of pendingOrders) {
-        await onPendingOrder({ order: pendingOrder })
+        if (!canSubmit({ order: pendingOrder })) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: false })
+          return toResult({ data: { deferred: true, submittedOrders } })
+        }
+        const pendingResult = onPendingOrder({ order: pendingOrder })
+        if (pendingResult && typeof pendingResult.then === "function") await pendingResult
+        if (!canSubmit({ order: pendingOrder })) {
+          await onSubmissionDeferred({ order: pendingOrder, registered: true })
+          return toResult({ data: { deferred: true, submittedOrders } })
+        }
         let brokerResult
         try {
           brokerResult = await broker.placeOrder({ order: orderIntent })

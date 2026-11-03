@@ -7,7 +7,7 @@
 >
 > **Not first-loop prerequisites:** Journal/EventBus integration, durable persistence, restart recovery, comprehensive historical reconciliation, generic readiness/state machines, cross-pair allocation, dashboards, Aggressive, and broad reservation frameworks. Keep these deferred unless a specific failing order-flow case proves a narrowly scoped safeguard is required.
 >
-> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. The current implementation still contains stricter startup checks; the next implementation task must compare them with `bot-free-roll` and remove only the unnecessary gates without weakening order-level safety.
+> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. P0.7 source changes remove the clean-account/open-order/base-inventory startup gate and per-TRADE snapshots. GitHub Actions passed the P0.7 implementation. Local Binance Spot TESTNET evidence now confirms validated ZROUSDT prices, order activity, and multiple BUY TRADE execution reports. The pair then paused at 15:47:17 with UNKNOWN_OR_EXTERNAL_ORDER_EVENT because a canonical execution report did not match an order in Harvester's in-memory OrderRegistry. The first BUY path is therefore active, but the run is not accepted: identify the exact unowned report using TESTNET order history and order identifiers, fix only the proven mismatch, then verify the recovery SELL and next BUY. The first history-inspection attempt did not reach Binance: the command was invoked with an extra `--`, which the script treated as the symbol and rejected with its usage message. This is a command-line invocation error, not evidence of an exchange/API or trading failure. Retry with `pnpm run testnet:history ZROUSDT 50` (no `--`). The corrected read-only history query subsequently succeeded. It shows seven orders in the failing run window: BUY orders `h-ZROUSDT-1` / exchange order `665873`, `h-ZROUSDT-2` / `665881`, `h-ZROUSDT-4` / `665891`, `h-ZROUSDT-6` / `665893`, and `h-ZROUSDT-7` / `665894`, each FILLED for 5 ZRO; SELL orders `h-ZROUSDT-3` / `665882` and `h-ZROUSDT-5` / `665892` were CANCELED with zero execution. The same client IDs `h-ZROUSDT-1` and `h-ZROUSDT-2` also occur in older history around 09:15 UTC, demonstrating client-ID reuse across sessions. This is a concrete issue to inspect, but it is not yet proven to be the rejected report's cause. The history does not identify which exact incoming report triggered the registry rejection; obtain the open-order snapshot and correlate the rejected event's exact `orderId` / `clientOrderId` with submission, acknowledgement, and journal records.
 >
 > **No speculative fixes:** reproduce the observed event sequence, inspect the working Free-Roll implementation and shared broker mapping, identify the exact incorrect transition, add a deterministic regression test, then make the smallest change. A readiness deferral is not a broker rejection; a locally registered PENDING order is not cancellable until broker acknowledgement supplies a valid broker order ID.
 
@@ -33,7 +33,7 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 1. Start from the documented command and load/validate configuration.
 2. Connect to the selected broker and establish market-data and user-data streams.
 3. Load account balances and exchange trading rules for every enabled pair.
-4. Establish the minimum safe TESTNET starting state: fresh balances and exchange filters for enabled pairs, a known price, and no unexplained pre-existing orders or strategy inventory. Comprehensive historical reconciliation and durable restart recovery are deferred.
+4. Establish the minimum safe TESTNET starting state: fresh balances and exchange filters for enabled pairs and a known price. External inventory and orders remain unowned and are not silently adopted; a clean account is recommended for a controlled first-cycle run but is not a startup prerequisite. Comprehensive historical reconciliation and durable restart recovery are deferred.
 5. Receive a valid market update and evaluate the selected executable strategy.
 6. Convert the strategy decision into a validated order intent.
 7. Apply shared risk, balance, reservation, precision, minimum-notional, and post-only checks.
@@ -81,9 +81,10 @@ when `HARVESTER_ENABLE_TRADING=true`:
   net-profit condition and leave at least `keepQuantity`; the retained amount
   moves to free inventory and the cycle ledger resets.
 - Startup: explicit TESTNET trading opt-in, exactly one enabled pair, a fresh
-  account snapshot, no open orders, and no pre-existing base inventory.
-  Per-order BUY/SELL quantities are checked against current free account
-  balances. The default config now enables only `ZROUSDT`.
+  initial canonical account snapshot. External open orders and pre-existing
+  inventory are not adopted; order checks use in-process cash flow, owned
+  position quantity, and outstanding commitments. The default config enables
+  only `ZROUSDT`.
 
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
@@ -119,9 +120,9 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Load account balances and distinguish free, locked, and total balances. A canonical free/locked account snapshot is loaded and checked for enabled-market assets; balance allocation and reconciliation against strategy-owned inventory/commitments remain.
 - [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
 - [ ] Seed market state with a current REST price/snapshot before relying on WebSocket trade events; define stale/missing-price behavior.
-- [~] Subscribe to user-data events and surface connection status. For the first controlled TESTNET cycle, use a fresh account snapshot, known enabled-pair filters, and a clean account with no unexplained pre-existing orders/inventory. Do not block the first cycle on full historical REST reconciliation or durable replay. On reconnect or an unknown order outcome, pause new submissions and refresh the affected balances/open orders/order status before resuming; comprehensive history reconciliation is deferred.
-- [~] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, exactly one enabled pair, active user-data stream, fresh account snapshot, empty open-order set, and zero pre-existing base inventory for that pair. Read-only broker mode remains available; reconnect still fails closed.
-- [~] Enable the first TESTNET order only after minimum checks: explicit `HARVESTER_TRADING_MODE=testnet`, non-production NODE_ENV, validated config, enabled-pair exchange filters, fresh account snapshot, active user-data stream, no open orders, and zero pre-existing base inventory. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional and SELL base quantity against the latest free account balances; an unaffordable BUY is deferred while a sellable recovery SELL may still proceed. Explicit reservation accounting remains.
+- [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
+- [x] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, exactly one enabled pair, active user-data stream, and a fresh account snapshot. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
+- [x] Enable the first TESTNET order only after explicit `HARVESTER_TRADING_MODE=testnet`, non-production NODE_ENV, validated config, enabled-pair exchange filters, fresh account snapshot, and active user-data stream. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
 - [ ] Validate environment/config combinations; require explicit TESTNET/live mode selection and explicit live-trading opt-in. Fail closed on ambiguous or missing production settings.
 - [ ] Validate enabled pair configuration against actual exchange assets/filters and fail startup with actionable diagnostics when incompatible.
 
@@ -292,7 +293,37 @@ empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
 
 
-## P0.7 — Restore the simple Free-Roll execution lifecycle (NEXT)
+## P0.7 — Restore the simple Free-Roll execution lifecycle (IN PROGRESS)
+
+### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
+
+The working branch now contains the first implementation pass. It follows the
+existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
+
+- Ordinary execution reports no longer close the global readiness gate, and
+  TRADE fills no longer trigger a full account snapshot.
+- Portfolio and RecoveryLedger remain the single in-process accounting source.
+  Order checks account for quote cash flow and active BUY commitments; SELL
+  quantities are capped by active Harvester-owned inventory and outstanding
+  SELL commitments.
+- Startup no longer requires zero base inventory or an empty external open-order
+  list. External inventory/orders are not adopted as Harvester-owned state.
+- Deferred strategy evaluations are retained and can be resumed when readiness
+  returns, without waiting for another market-price tick. Readiness is rechecked immediately before broker I/O; if it closes after local PENDING registration, OrderRegistry removes that local record and submission is returned as a deferral without contacting the broker.
+- A recovery SELL that is still PENDING is not cancellable. Replacement intent
+  is retained until acknowledgement; cancellation continues to require the
+  registered broker order ID. Fill history is reconciled after cancellation,
+  and delayed non-terminal reports after a confirmed cancellation are treated
+  as stale while their fills remain idempotently accounted.
+- Regression tests have been added for readiness deferral, pending SELL
+  acknowledgement ordering, exact cancellation identity, fill-history
+  reconciliation during cancellation, duplicate fill delivery, replacement
+  quantity from latest accounting, and no per-TRADE account snapshot.
+
+**Verification evidence so far:** all five GitHub Actions workflows passed on the current PR head; the workspace test workflow reported 1,367 passing tests, including Harvester 298/298, brokers 274/274, and Free-Roll 313/313. The operator has now confirmed a local Binance Spot TESTNET startup: configuration validated for ZROUSDT, broker connected, exchange rules validated, user-data subscription established, initial account snapshot accepted (517 balances), Conservative engine activated, and the ZROUSDT market-price subscription established. The process log ends in the expected waiting state for a validated market price and user-data readiness. No market-price event, BUY submission, acknowledgement, fill, SELL, or subsequent cycle is evidenced yet. Do not infer a trading failure merely because the market has not emitted a qualifying price; continue observing the running process.
+
+**Still required before acceptance:** observe the first validated price and initial BUY request/acknowledgement; then capture the actual Binance execution reports, Portfolio/RecoveryLedger updates, recovery SELL, SELL fill, and next BUY. Diagnose the first missing/failed transition from those logs only. Local offline test execution remains unreported by the operator; GitHub Actions evidence is recorded above. Inspect the final diff and keep the bounded TESTNET run on Spot TESTNET only. Native Error/cause/AggregateError serialization from PR #462 is retained without a new logging implementation.
+
 
 **Priority: immediate. This task is about making the existing app trade reliably, not adding another architecture layer.** The latest `develop` includes PR #462 (`fix(harvester): serialize order lifecycle and preserve diagnostics`). Continue from that state; do not repeat already-merged work.
 
@@ -309,24 +340,24 @@ updated PR head before treating this repair as verified.
 
 ### Scope A — Remove unnecessary execution-readiness barriers
 
-- [ ] Trace why each execution report sets `userDataReady=false`, why a fresh account snapshot is fetched after each TRADE, and how readiness is restored.
-- [ ] Compare this flow directly with the working `apps/bot-free-roll` execution/fill lifecycle. Reuse its proven sequencing where compatible with Harvester's domain/application boundaries.
-- [ ] Do not fetch a full account snapshot after every fill by default. Portfolio/RecoveryLedger must be updated from canonical actual fills; broker balance refresh is reserved for a concrete need such as startup validation, reconnect, or unknown submission/cancellation outcome.
-- [ ] Do not turn an expected in-process event transition into a generic broker failure or pause. A local readiness deferral must remain distinguishable from a definite exchange rejection and from an unknown network outcome.
-- [ ] If a decision is temporarily deferred while an order/fill transition is being processed, retain the affected symbol and automatically reevaluate it when that transition completes. Do not lose the decision and do not require a new price tick.
-- [ ] Preserve essential checks immediately before each order: valid config/market rules, usable price, sufficient specific free balance, in-process position/commitment limits, order precision/notional, and no duplicate intent.
-- [ ] Reassess the startup requirement for a full account snapshot, no open orders, and zero base inventory. These are currently enforced for the first TESTNET run, but must not be expanded into a permanent prerequisite for the basic app loop. Keep a controlled clean-account TESTNET runbook; do not silently adopt external inventory/orders as Harvester-owned state.
-- [ ] Do not introduce a generic readiness framework, repeated polling, sleeps, or per-execution REST reconciliation.
+- [x] Trace and remove the per-report readiness reset and per-TRADE account snapshot refresh.
+- [x] Compare directly with the working `apps/bot-free-roll` lifecycle and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
+- [x] Ordinary TRADE fills update Portfolio/RecoveryLedger without requesting a full account snapshot.
+- [x] Remove the broker readiness guard that misclassified local readiness as a broker rejection. `makeExecuteStrategyDecision` rechecks readiness immediately before broker I/O and removes a locally registered PENDING order if submission is deferred.
+- [x] Retain deferred symbols and resume their latest evaluation when readiness returns, without another market tick.
+- [x] Preserve exchange-rule validation and add free-balance calculations adjusted for actual cash flow, owned inventory, and active in-process order commitments.
+- [x] Remove the clean-account/open-order/base-inventory startup prerequisite. The initial canonical snapshot remains for free-balance validation; external inventory/orders remain unowned. Keep the clean-account TESTNET runbook as a controlled-test recommendation, not a runtime gate.
+- [x] Keep readiness and deferred evaluation local to the existing bootstrap/engine; no polling, sleeps, or per-TRADE REST reconciliation.
 
 ### Scope B — Reconcile recovery SELLs without cancelling PENDING orders
 
-- [ ] Trace the exact recovery SELL submission and BUY-fill replacement path, including order registry transitions and the broker acknowledgement callback.
-- [ ] Keep a PENDING SELL registered and tracked while `placeOrder` is unresolved. PENDING is neither OPEN nor cancellable.
-- [ ] When the broker acknowledges the order, store/validate the broker order ID and transition the order to its acknowledged state.
-- [ ] If a BUY fill requires replacing that SELL while it is PENDING, record/defer the replacement intent. After acknowledgement, cancel using the validated broker order ID, reconcile any fills received during cancellation, then calculate and submit the replacement SELL.
-- [ ] If submission outcome is unknown, do not blindly retry or cancel by a missing ID. Use the existing safe unknown-outcome path and only the minimum targeted status refresh needed to resolve it.
-- [ ] Keep cancellation eligibility validation strict. Do not weaken the validator or treat PENDING as cancellable.
-- [ ] Ensure multiple overlapping BUY fills/replacement requests coalesce or serialize without losing the newest required SELL quantity and without duplicate SELLs.
+- [x] Trace the recovery SELL submission, BUY-fill replacement path, registry transitions, and acknowledgement callback.
+- [x] Keep PENDING SELL orders registered; cancellation explicitly defers while submission is unresolved.
+- [x] Store the acknowledged canonical order in OrderRegistry and require its validated broker order ID for cancellation.
+- [x] Retain per-symbol replacement intent through PENDING acknowledgement; after acknowledgement, cancel by the registered ID, reconcile fills, and reevaluate from latest accounting.
+- [x] Preserve the existing fail-closed unknown submission/cancellation path; no automatic retry was added.
+- [x] Keep PENDING outside the cancellable status set; cancellation still requires a non-empty brokerOrderId.
+- [x] Coalesce replacement intent per symbol and serialize fills/cancellation; replacement sizing reads the latest Portfolio/RecoveryLedger state.
 
 ### Scope C — Diagnostics and failure classification
 
@@ -337,15 +368,19 @@ updated PR head before treating this repair as verified.
 
 ### Required tests
 
-- [ ] Deferred BUY/SELL `placeOrder` promise: a BUY fill arrives while recovery SELL is PENDING; assert no cancellation call occurs before acknowledgement.
-- [ ] Resolve the SELL acknowledgement; assert cancellation uses the exact acknowledged broker order ID, then replacement SELL uses the latest post-fill quantity.
-- [ ] Emit a fill during cancellation; assert it is accounted once and replacement quantity reflects it.
-- [ ] Emit multiple BUY fills while SELL acknowledgement/cancellation is pending; assert no duplicate SELL and latest intent is not lost.
-- [ ] Execute a fill while a strategy evaluation is deferred; assert automatic reevaluation after the transition without requiring a new price tick.
-- [ ] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
-- [ ] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
-- [ ] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
-- [ ] Run deterministic offline Harvester tests, relevant shared-utils tests, lint/syntax checks, and repository CI. TESTNET is a separate explicit opt-in verification; never claim it ran without credentials and observed evidence.
+- [x] Deferred BUY/SELL `placeOrder` promise: a BUY fill arrives while recovery SELL is PENDING; assert no cancellation call occurs before acknowledgement.
+- [x] Resolve the SELL acknowledgement; assert cancellation uses the exact acknowledged broker order ID, then replacement SELL uses the latest post-fill quantity.
+- [x] Emit a fill during cancellation; assert it is accounted once and replacement quantity reflects it.
+- [x] Emit multiple BUY fills while SELL acknowledgement/cancellation is pending; assert no duplicate SELL and latest intent is not lost.
+- [x] Execute a fill while a strategy evaluation is deferred; assert automatic reevaluation after the transition without requiring a new price tick.
+- [x] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
+- [x] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
+- [x] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
+- [x] GitHub Actions on the current PR head: workspace tests (Harvester 298/298, brokers 274/274, Free-Roll 313/313; 1,367 total workspace tests passed), shared-utils tests, coverage, JavaScript syntax/workflow lint, and production dependency audit all passed. Local offline test execution has not yet been reported.
+- [x] Operator-confirmed local TESTNET startup: config validated; Binance connected; ZROUSDT exchange rules validated; user-data subscription active; initial account snapshot accepted; Conservative engine activated; market-price subscription established.
+- [x] Observe validated ZROUSDT market prices and BUY execution reports (`NEW` and `TRADE`) from the real TESTNET user-data stream.
+- [ ] Diagnose the 15:47:17 `UNKNOWN_OR_EXTERNAL_ORDER_EVENT` using exact Binance order IDs/client order IDs from recent order history and the Harvester order-submission journal/logs. Do not guess at broker mapping or weaken order ownership.
+- [ ] Verify that every BUY fill is accounted exactly once, the recovery SELL is submitted and filled, and the next BUY starts a subsequent cycle on Spot TESTNET.
 
 ### Out of scope for P0.7
 
@@ -353,7 +388,7 @@ Do not add Journal/persistence/restart recovery, historical trade replay, a gene
 
 ### Acceptance
 
-The app starts with the documented TESTNET opt-in, receives a price, submits the first BUY, accounts Binance executions, safely handles a recovery SELL that is still PENDING, and continues the strategy cycle. No full account snapshot is required after every fill. All changed behavior has deterministic offline regression tests and same-commit documentation. The real TESTNET cycle remains explicitly unverified until actually run.
+The app starts with the documented TESTNET opt-in, receives prices, submits BUY orders, and receives real Binance BUY execution reports. Current live evidence also exposed an unowned-order correlation failure that pauses the pair. Acceptance therefore remains blocked until the exact event/order identity mismatch is fixed with a regression test, BUY fills are accounted exactly once, and a real recovery SELL → next BUY cycle is observed. No full account snapshot is required after every fill.
 
 ## P0.6 — Fix Binance order lifecycle race and diagnostic errors
 
@@ -453,3 +488,99 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 - [ ] Regression has not yet been run against the original pre-fix engine; only the fixed implementation's regression pass is confirmed.
 - [ ] A dedicated queue-rejection/re-entrant-callback test and Harvester logger-boundary diagnostics audit remain outstanding.
 - [ ] Bounded Binance Spot TESTNET verification remains outstanding. No production credentials or live orders were used.
+
+
+### P0.7 ownership-failure diagnostics — 2026-11-03
+
+- [x] Add a narrowly scoped structured diagnostic at the bootstrap boundary when the Conservative engine rejects an order event. It records the canonical symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and registry match results by both client and broker order IDs. If a client-ID match exists, its registered status and broker ID are included to distinguish pending from acknowledged ownership.
+- [x] Add a bootstrap regression test proving an unowned execution report is still rejected and paused while the safe correlation fields are logged.
+- [ ] The actual 15:47:17 rejected report remains unidentified. This diagnostic must be collected on the next bounded TESTNET run before attributing the failure to client-ID reuse, broker mapping, or external order activity.
+- [ ] No ownership rule, Binance mapping, or client-ID generation behavior is changed by this diagnostic-only step. Root-cause fix and its failure-reproducing regression test remain blocked on the exact rejected event identity.
+
+
+### P0.7 ownership correlation comparison — 2026-11-03
+
+Inspection of the working Free-Roll handler found a concrete behavioral difference: apps/bot-free-roll registers exchange-assigned broker order IDs in trackedOrderIds and checks the execution report's exchange order ID in its order-event handler. Harvester's OrderRegistry currently locates an order only by clientOrderId, even though its CanonicalOrder also carries brokerOrderId. The Binance user-stream adapter maps Binance executionReport.c to clientOrderId and executionReport.i to brokerOrderId; the canonical conversion retains both values.
+
+This is an investigation finding, not a proven explanation for the reported unknown event. Do not change the registry's matching rules until the new TESTNET diagnostic captures the rejected event and demonstrates which identifier matches the owned order. Any future broker-ID correlation must still validate that client and broker identifiers refer to the same registered order; it must not adopt external orders.
+
+
+### Free-Roll ownership audit — 2026-11-03
+
+A direct source comparison was completed against `develop` (not inferred from the README):
+
+- **Free-Roll ownership key:** `FreeRollBot.#handleOrderEvent()` obtains the exchange-assigned ID via `getOrderId(event.executedOrder)` and requires that ID to exist in the pair's `trackedOrderIds`. The BUY and SELL submission paths add that ID only after the broker response contains it. A fill is additionally checked against the same order ID, symbol, and side before accounting.
+- **Harvester ownership key:** `OrderRegistry.applyUpdate()` currently locates an order only by `clientOrderId`. It then checks the broker ID as an immutable field only when the registered order already has a broker ID. A locally registered `PENDING` order has no broker ID yet, so a report with the same client ID and same immutable order intent can supply the broker ID and advance that registry entry.
+- **Client-ID reuse is real:** Harvester currently generates IDs as `h-<symbol>-<process-local counter>`. The counter is initialized inside the decision executor, so it restarts with a new process. The supplied TESTNET history independently shows `h-ZROUSDT-1` and `h-ZROUSDT-2` reused in an older session. This makes client-ID-only correlation weaker than Free-Roll's exchange-order-ID ownership check.
+- **What this does and does not prove:** this is a concrete ownership/parity gap and a plausible stale-event collision risk. It is **not yet proven to be the cause** of the reported 15:47:17 rejection. That rejection was reported as a missing client-ID registry match; without its actual `clientOrderId`, `brokerOrderId`, and current registry snapshot, we cannot tell whether the report had a missing/wrong client ID, was from an old session, or was an unrelated order. The repeated historical client IDs alone do not identify that event.
+- **No code fix is included in this audit update.** Do not add a blind broker-ID fallback or accept an unknown event. The follow-up must reproduce the actual event and preserve fail-closed rejection of external orders.
+
+**Required next evidence:** run the diagnostic branch and retain the complete structured rejection record, including symbol, `brokerOrderId`, `clientOrderId`, side, status, execution type/ID, and both registry-match fields. Compare those identifiers to this process's order-submission/acknowledgement logs and the matching TESTNET history row. Also determine whether the report was received before or after the matching broker acknowledgement.
+
+**Deterministic regression cases required before changing ownership logic:**
+
+1. A report for an acknowledged owned order is accepted only when its exchange order ID matches the registered broker order ID; client ID must also be consistent where supplied.
+2. An unknown exchange order ID is rejected even if its client ID collides with a locally registered order from a previous session.
+3. A report for an unacknowledged `PENDING` intent cannot silently establish ownership by supplying an arbitrary exchange order ID unless an observed, tested broker ordering contract explicitly requires this.
+4. A valid Free-Roll-style fill still updates accounting once, and an unrelated/manual order remains unowned.
+
+The acceptance target remains a real TESTNET sequence: BUY fill → recovery SELL submission and fill → next BUY. Offline tests and order-history snapshots do not substitute for that proof.
+
+
+### TESTNET rejected-event evidence — 2026-11-03 16:24
+
+The operator supplied the previously missing structured rejection record:
+
+- Event: `executionReport`, execution type `CANCELED`.
+- Market/side/status: `ZROUSDT` / `BUY` / `CANCELED`.
+- Incoming exchange order ID: `666845`.
+- Incoming client order ID: `CU5G5c9IZgepakVzo3Z3kw`.
+- Registry lookup by client ID: no match.
+- Registry lookup by exchange order ID: **match found**.
+- The matched registered order's client ID: `h-ZROUSDT-1`.
+
+This proves the event is associated with an exchange order ID already present in Harvester's in-memory registry, while its incoming client ID conflicts with the client ID stored for that registered order. The earlier description of this as simply an unknown/untracked order was incomplete. It is an identifier-consistency rejection for an exchange-order-ID match.
+
+#### Additional adapter finding: Binance original client order ID is discarded
+
+Source inspection found the Binance user-data adapter maps raw execution-report fields:
+
+- `c` → `newClientOrderId`;
+- `C` → `originalClientOrderId`.
+
+The following `adaptExecutedOrder()` maps `newClientOrderId` into `executedOrder.clientOrderId`, but does not preserve `originalClientOrderId` on the forwarded event. The broker's later canonicalization preserves the incoming `clientOrderId` but cannot recover the discarded `C` field.
+
+Consequently, the current diagnostic still cannot determine whether Binance's `C` field equals the registered `h-ZROUSDT-1`, nor whether the incoming `c` is a replacement/new client ID or an unexpected value. This field must be preserved as event metadata in a follow-up diagnostic change, with adapter regression coverage. It must not be substituted for the canonical order client ID without understanding the Binance event semantics.
+
+#### 16:24:48 TRADE event
+
+The operator subsequently saw a BUY `TRADE` event and the informational log `Trade execution received`. In `start-harvester.js`, that informational log is emitted before the event is enqueued and before `processUserDataEventTransition()` completes. It proves receipt, not successful fill accounting. The supplied excerpt has no resulting `fill.applied`, accounting outcome, registry update, or rejected-event diagnostic for this TRADE report. Its exchange order ID and client ID are therefore still unknown.
+
+#### Updated diagnosis and required evidence
+
+The primary lead is now a conflict between the client ID in a Binance execution report and the client ID stored for the same exchange order ID. Do not add a broker-ID-only acceptance fallback: it would suppress a real identity conflict and could admit a mismatched event.
+
+Next, inspect TESTNET order history for exchange order ID `666845` and capture the full history row, including `clientOrderId`, status, executed quantity and update time. For the next run, preserve raw Binance execution-report `c` and `C` (redacting credentials and unrelated account data), plus both IDs for the later TRADE report. Correlate these with the Harvester submission and acknowledgement for order `666845`.
+
+Only after this comparison can we distinguish a Binance cancel/replacement identifier case, an adapter normalization issue, an order-ID collision, or another source of the mismatch. Add a deterministic test from the confirmed event semantics before changing ownership validation.
+
+
+### Free-Roll order identity alignment — 2026-11-03
+
+The working implementation was compared directly with Harvester:
+
+- `apps/bot-free-roll/src/bot/bot-free-roll.js` tracks the exchange-assigned order ID in `state.trackedOrderIds` after the broker acknowledgement.
+- Its `#handleOrderEvent()` gets `getOrderId(event.executedOrder)` and accepts the event only when that exchange order ID is tracked. Fill identity is checked using exchange order ID, symbol, and side. It does **not** require the execution report's client order ID to equal the locally submitted client ID.
+- Harvester previously used `OrderRegistry.applyUpdate()` lookup by `clientOrderId` only. That was the behavioral mismatch behind the `666845` rejection: Binance's event `c` differed, although the exchange order ID was already registered.
+
+Harvester is now aligned with that working behavior: acknowledged updates are located by `brokerOrderId` first; the registered client ID remains the canonical local ID; conflicting client and broker IDs that point to two different registered orders are still rejected. Unknown broker order IDs are not adopted. Binance's raw `c` and `C` are retained as event metadata for diagnostics.
+
+The bootstrap now logs both identifiers on receipt, logs accepted/ignored processing outcomes, and emits complete error name/message/stack fields for rejected events. This should make future adapter/identity mismatches diagnosable without changing normal logs to raw Binance payload dumps.
+
+Regression coverage added:
+
+- Binance adapter preserves `c` and `C` separately.
+- Registry accepts a report with a different client ID when its exchange order ID identifies the registered order, while retaining the submitted canonical client ID.
+- Registry rejects an event when its broker ID and client ID point to different registered orders.
+
+This is an intentional port of Free-Roll's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.

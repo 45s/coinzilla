@@ -102,6 +102,73 @@ test("applies broker acknowledgement and partial-fill updates immutably", () => 
   assert.equal(partiallyFilled.registry.getActiveOrders().length, 1)
 })
 
+test("matches an execution report by broker order ID when Binance client ID differs", () => {
+  const pending = makeOrder({ clientOrderId: "h-ZROUSDT-1" })
+  const acknowledged = makeOrder({
+    clientOrderId: "h-ZROUSDT-1",
+    brokerOrderId: "666845",
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+  const registry = OrderRegistry.empty()
+    .registerPending({ order: pending }).registry
+    .applyUpdate({ order: acknowledged }).registry
+
+  const canceledReport = makeOrder({
+    clientOrderId: "CU5G5c9IZgepakVzo3Z3kw",
+    brokerOrderId: "666845",
+    status: "CANCELED",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  })
+  const result = registry.applyUpdate({ order: canceledReport })
+
+  assert.equal(registry.getOrderByBrokerOrderId({ brokerOrderId: "666845" }).clientOrderId, "h-ZROUSDT-1")
+  assert.equal(result.unknown, false)
+  assert.equal(result.applied, true)
+  assert.equal(result.registry.getOrder({ clientOrderId: "h-ZROUSDT-1" }).status, "CANCELED")
+  assert.equal(result.registry.getOrder({ clientOrderId: "CU5G5c9IZgepakVzo3Z3kw" }), undefined)
+})
+
+test("rejects an event whose broker and client IDs point to different registered orders", () => {
+  const first = makeOrder({ clientOrderId: "harvester-1" })
+  const second = makeOrder({ clientOrderId: "harvester-2", side: "SELL" })
+  const registry = OrderRegistry.empty()
+    .registerPending({ order: first }).registry
+    .registerPending({ order: second }).registry
+    .applyUpdate({ order: makeOrder({
+      clientOrderId: "harvester-1",
+      brokerOrderId: "9001",
+      status: "OPEN",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 101,
+    }) }).registry
+    .applyUpdate({ order: makeOrder({
+      clientOrderId: "harvester-2",
+      brokerOrderId: "9002",
+      side: "SELL",
+      status: "OPEN",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 101,
+    }) }).registry
+
+  assert.throws(() => registry.applyUpdate({ order: makeOrder({
+    clientOrderId: "harvester-2",
+    brokerOrderId: "9001",
+    status: "CANCELED",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  }) }), /identify different registered orders/)
+})
+
 test("does not adopt exchange orders not registered by Harvester", () => {
   const registry = OrderRegistry.empty()
   const result = registry.applyUpdate({

@@ -141,7 +141,7 @@ Run from the repository root:
 pnpm --filter @coinzilla/harvester testnet:history
 
 # Latest 50 orders for ZROUSDT
-pnpm --filter @coinzilla/harvester testnet:history -- ZROUSDT 50
+pnpm --filter @coinzilla/harvester testnet:history ZROUSDT 50
 
 # Latest 20 orders for another symbol
 pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
@@ -153,6 +153,11 @@ mixed-symbol account-wide history. The default symbol is `ZROUSDT`; the
 default limit is 20 and the accepted limit is 1-1000. Binance returns the
 most recent orders up to the requested limit; the script displays them
 newest-first.
+
+When passing arguments through `pnpm run`, do not insert an extra `--` before
+`SYMBOL` and `LIMIT`; that separator is forwarded to this script and becomes
+an unexpected first argument. For example, from `apps/harvester`, run
+`pnpm run testnet:history ZROUSDT 50`.
 
 The table includes exchange time, order ID, symbol, side, type, price,
 original quantity, executed quantity, cumulative quote quantity, status,
@@ -176,3 +181,66 @@ normalization/sorting are plain pure functions in
 `scripts/testnet-order-history-utils.js`, with deterministic offline tests.
 It reuses the existing signed TESTNET request helper and does not add
 dependencies or connect to the trading runtime.
+
+
+## Diagnosing an unowned execution report
+
+If Harvester pauses a pair with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, capture the structured log entry named "Harvester rejected an unowned or invalid order event". It now includes safe correlation fields: symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and whether the current registry matched either identifier. When a match exists, the registered status and paired identifier are included.
+
+Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Preserve the complete structured error entry (including native Error details) and compare its identifiers with the same-time order history and submission/acknowledgement journal entries. A client-ID match with a different exchange order ID is an identity mismatch, not proof that the event is owned. Unknown events must continue to pause the pair.
+
+
+### Ownership audit: what to capture on the next run
+
+The source comparison with the working `apps/bot-free-roll` implementation found an important difference:
+
+- Free-Roll adds the exchange-assigned broker order ID to `trackedOrderIds` after the broker acknowledges the order. Incoming reports are accepted only when that exchange order ID is tracked. Fill identity is also checked against order ID, symbol, and side.
+- Harvester currently finds registry entries by `clientOrderId`. A `PENDING` entry has no broker order ID yet; the registry's immutable broker-ID check therefore cannot distinguish a same-client-ID report from a prior session until an acknowledged broker ID has been stored.
+- Harvester client IDs use a process-local counter and can repeat after restart. The supplied TESTNET history confirms reuse of `h-ZROUSDT-1` and `h-ZROUSDT-2` across sessions.
+
+This is a confirmed implementation difference and a plausible stale-report collision risk, **not a confirmed explanation** for the observed 15:47:17 rejection. That rejection reported no matching client ID; the actual rejected identifiers were not present in the original log. Do not change ownership matching or relax unknown-order rejection based only on the historical ID reuse.
+
+On the next diagnostic run, preserve the full structured log entry named **"Harvester rejected an unowned or invalid order event"**. In particular, do not omit:
+
+- `symbol`, `brokerOrderId`, and `clientOrderId`;
+- `side`, `orderStatus`, `executionType`, and `executionId`;
+- `registryMatchedByClientOrderId` and `registryMatchedByBrokerOrderId`;
+- `clientIdMatchStatus`, `clientIdMatchBrokerOrderId`, and `brokerIdMatchClientOrderId`.
+
+Then compare the exact IDs to the order submission and broker acknowledgement logs and to the TESTNET history row. Establish whether the report arrived before or after the matching acknowledgement. This separates a missing/wrong adapter identifier, a stale prior-session report, an event/acknowledgement race, and an external/manual order without guessing.
+
+**Do not run the destructive cancel-all or sell-ZRO scripts for this investigation.** The open-order and order-history commands are read-only; an empty open-order snapshot only describes the exchange state at the time of that query and cannot identify a previously rejected WebSocket event.
+
+
+### New TESTNET finding — order ID matched, client ID conflicted
+
+The 16:24:18 rejection record identifies:
+
+- `brokerOrderId=666845`;
+- incoming `clientOrderId=CU5G5c9IZgepakVzo3Z3kw`;
+- matched registry order's client ID `h-ZROUSDT-1`;
+- lookup by broker ID succeeded, lookup by client ID failed.
+
+This is not a simple unknown exchange order. It is a client-ID mismatch for an exchange order ID already in the Harvester registry. Do not resolve it by accepting broker-ID matches unconditionally.
+
+The Binance adapter currently reads raw execution-report `C` as `originalClientOrderId`, but the subsequent `adaptExecutedOrder()` does not forward that field. We therefore cannot yet tell whether `C` is the registered `h-ZROUSDT-1` or whether it carries another value. The next diagnostic update should preserve both raw identifiers `c` and `C` as event metadata and add adapter tests; it must not change canonical ownership decisions.
+
+**Read-only next check:** retrieve TESTNET order history for `ZROUSDT` and inspect the row for order ID `666845`. Compare its client order ID, status, executed quantity and update time with the Harvester acknowledgement. Also capture both `c` and `C` from the rejected CANCELED report and both IDs from the subsequent TRADE report.
+
+The 16:24:48 log `Trade execution received` is emitted before the event is queued for engine processing. It does not prove the fill was applied. Look for the subsequent successful fill-accounting/journal outcome or a rejection record for that exact TRADE report.
+
+
+### Free-Roll-compatible execution-report matching
+
+The working Free-Roll code in `apps/bot-free-roll/src/bot/bot-free-roll.js` does not match execution reports by client order ID. It tracks the exchange-assigned order ID returned by the broker and accepts reports only when `getOrderId(event.executedOrder)` is in `trackedOrderIds`. It then validates fill order ID, symbol, and side.
+
+Harvester now follows the same rule for acknowledged orders. `OrderRegistry.applyUpdate()` looks up the registered order by `brokerOrderId` first, retains the original submitted `clientOrderId` in canonical state, and rejects conflicting IDs if the incoming broker/client IDs identify two different registered orders. Unknown broker order IDs remain unowned and pause the pair.
+
+The Binance adapter exposes the two execution-report identifiers separately:
+
+- `clientOrderId` / raw `c`: current/new client order ID;
+- `originalClientOrderId` / raw `C`: original client order ID.
+
+Harvester logs both values on event receipt and on rejection, along with exchange order ID, side, status, execution ID, registry match details, and structured error name/message/stack. A debug log records whether an event was accepted or ignored after engine processing. This preserves useful diagnostics without dumping raw exchange messages or account payloads.
+
+For the observed TESTNET event, order history confirms `666845` belongs to `h-ZROUSDT-1` and is CANCELED with zero execution. The event's different `c` value no longer prevents matching that already-registered exchange order ID. Do not reintroduce client-ID-only ownership matching or accept unknown broker order IDs.
