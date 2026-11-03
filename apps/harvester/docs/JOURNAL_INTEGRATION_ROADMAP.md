@@ -256,7 +256,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7a — Stop intake, drain user-data, disconnect broker
 
-**Status:** In progress on branch `feature/harvester/stop-intake-drain-queue`.
+**Status:** Merged into `develop` by PR #470; all CI checks passed.
 
 - Close the trading gate and stop market-price plus user-data intake before draining.
 - Ignore late callbacks after shutdown begins.
@@ -270,7 +270,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7b — Flush and close Journal/EventBus
 
-**Status:** Not started; begin only after Step 7a is merged.
+**Status:** In progress on branch `feature/harvester/close-journal-event-bus`.
 
 - Publish the final `harvester.stopped` event while Journal and EventBus are still available.
 - Close Journal after the final event so it can unsubscribe, drain accepted writes, and sync.
