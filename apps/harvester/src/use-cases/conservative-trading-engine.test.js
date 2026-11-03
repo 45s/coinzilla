@@ -45,11 +45,12 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
   const completedCycles = []
+  const cancellationIds = []
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -145,7 +146,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  return { engine, orders, pauses, accountedFills, completedCycles }
+  return { engine, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
