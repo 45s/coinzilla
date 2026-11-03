@@ -172,7 +172,17 @@ test("plans recovery SELL commission from makerPercent only for fee-bearing LIMI
     settings,
     portfolio,
     recoveryLedger,
-    marketMetadata: { ...marketMetadata, orderType: "LIMIT" },
+    marketMetadata: {
+      ...marketMetadata,
+      orderType: "LIMIT",
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule,
+        ),
+      },
+    },
     lastBuyPrice: "0.1",
   })
 
