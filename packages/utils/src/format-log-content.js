@@ -46,72 +46,78 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
     return CIRCULAR_VALUE
   }
 
+  // Track only the active recursion path. Shared references are serialized
+  // normally; only references back into the current path are circular.
   seen.add(value)
 
-  let isError = false
   try {
-    isError = value instanceof Error
-  } catch {
-    return UNREADABLE_VALUE
-  }
-
-  if (isError) {
-    return normalizeError({
-      error: value,
-      seen,
-      normalize: ({ value: nestedValue, seen: nestedSeen }) =>
-        normalizeLogValue({ value: nestedValue, seen: nestedSeen }),
-    })
-  }
-
-  if (value instanceof Date) {
+    let isError = false
     try {
-      return value.toISOString()
+      isError = value instanceof Error
     } catch {
       return UNREADABLE_VALUE
     }
-  }
 
-  if (Array.isArray(value)) {
-    const normalized = []
-    for (let index = 0; index < value.length; index += 1) {
-      let item
+    if (isError) {
+      return normalizeError({
+        error: value,
+        seen,
+        normalize: ({ value: nestedValue, seen: nestedSeen }) =>
+          normalizeLogValue({ value: nestedValue, seen: nestedSeen }),
+      })
+    }
+
+    if (value instanceof Date) {
       try {
-        item = value[index]
+        return value.toISOString()
       } catch {
-        item = UNREADABLE_VALUE
+        return UNREADABLE_VALUE
       }
-      normalized.push(normalizeLogValue({ value: item, seen }))
-    }
-    return normalized
-  }
-
-  let keys
-  try {
-    keys = Object.keys(value)
-  } catch {
-    return UNREADABLE_VALUE
-  }
-
-  const normalized = {}
-  for (const key of keys) {
-    if (redactSensitiveLogField(key, undefined) === '[REDACTED]') {
-      normalized[key] = '[REDACTED]'
-      continue
     }
 
-    let propertyValue
+    if (Array.isArray(value)) {
+      const normalized = []
+      for (let index = 0; index < value.length; index += 1) {
+        let item
+        try {
+          item = value[index]
+        } catch {
+          item = UNREADABLE_VALUE
+        }
+        normalized.push(normalizeLogValue({ value: item, seen }))
+      }
+      return normalized
+    }
+
+    let keys
     try {
-      propertyValue = value[key]
+      keys = Object.keys(value)
     } catch {
-      normalized[key] = UNREADABLE_VALUE
-      continue
+      return UNREADABLE_VALUE
     }
 
-    normalized[key] = normalizeLogValue({ value: propertyValue, seen })
-  }
+    const normalized = {}
+    for (const key of keys) {
+      if (redactSensitiveLogField(key, undefined) === '[REDACTED]') {
+        normalized[key] = '[REDACTED]'
+        continue
+      }
 
-  return normalized
+      let propertyValue
+      try {
+        propertyValue = value[key]
+      } catch {
+        normalized[key] = UNREADABLE_VALUE
+        continue
+      }
+
+      normalized[key] = normalizeLogValue({ value: propertyValue, seen })
+    }
+
+    return normalized
+  } finally {
+    seen.delete(value)
+  }
 }
 
 /**
