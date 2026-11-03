@@ -1,62 +1,30 @@
 # Conservative Domain Specification
 
 **Phase:** D0 — discovery and specification only  
-**Reference:** current `apps/bot-free-roll` source/tests on `develop`  
+**Authority:** Harvester's Conservative strategy contract  
 **Comparison target:** current Harvester `src/domain` on `develop`  
 **Status:** Proposed contract for review. This is not approval to implement D1.
 
 ## 1. Executive summary
 
-The working Free-Roll implementation is a **standing-order accumulation strategy**. It maintains a BUY and a recovery SELL when the pair's state permits. A completed BUY is accounted from actual fills; Free-Roll then reconciles/replaces the recovery SELL and places the next standing BUY. Therefore a standing BUY may coexist with a recovery SELL. This is the actual current behavior; it is not the recovery-first rule proposed by paused PR #479.
+The Conservative strategy is a **standing-order accumulation strategy**. It maintains a BUY and a recovery SELL when the pair's state permits. A completed BUY is accounted from actual fills; Conservative strategy then reconciles/replaces the recovery SELL and places the next standing BUY. Therefore a standing BUY may coexist with a recovery SELL. This is the required strategy behavior.
 
-**Correction to an earlier investigation note:** on the first usable price, Free-Roll both establishes its reference price and immediately submits a BUY limit order one configured step below that price. It does not wait for a second tick before submitting the initial order. Later, the initial BUY is trailed upward; subsequent standing BUYs are fixed at the last BUY fill price minus one step until the next recovery SELL completes and trailing resumes.
+The initial BUY is submitted on the first valid price, one configured step below it. That initial order trails upward. After a BUY fills, the next standing BUY is fixed one step below the last BUY fill; trailing resumes after successful recovery completion.
 
-Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Free-Roll's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Free-Roll pair settings, and has some different fee/reset/completion semantics. These differences are listed rather than silently normalized.
+Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Conservative strategy's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Conservative strategy pair settings, and has some different fee/reset/completion semantics. These differences are listed rather than silently normalized.
 
-## 2. Source authority and evidence
+## 2. Source of truth and scope
 
-This specification gives priority to executable Free-Roll source and tests, not README claims. The references below are pinned to the inspected `develop` tree at commit `9cbbc9fb1affee8fe671724112d9457c25900a27` (after PR #482 merged).
+This document defines the Conservative strategy in Harvester's own domain language. Its rules describe the intended trading behavior, financial accounting, and lifecycle independently of any particular application, executable, or repository path.
 
-### Free-Roll source
+The existing working strategy behavior was inspected to establish the baseline. The behavior is now recorded here as a Harvester-owned contract; future changes must update this specification, implementation, and tests together.
 
-| Concern | Source |
-|---|---|
-| Per-pair state and configured fee/order setup | [bot-free-roll.js, initialization](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L130-L180) |
-| Price handling, initial reference, trailing and subsequent BUY thresholds | [bot-free-roll.js, price handler](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L650-L740) |
-| Actual execution event validation and order terminal handling | [bot-free-roll.js, order event handler](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L749-L855) |
-| BUY completion → recovery SELL → next BUY | [bot-free-roll.js, BUY completion](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L857-L940) |
-| SELL completion, minimum-profit check, keep allocation and cycle reset | [bot-free-roll.js, SELL completion](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L941-L1012) |
-| Actual fill application | [bot-free-roll.js, fill application](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L1014-L1042) |
-| BUY/SELL order quantity and price rounding, actual order submissions, cancel/reconcile | [order-execution.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/order-execution.js) |
-| Actual commission arithmetic | [helpers/accounting.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/helpers/accounting.js#L140-L253) |
-| Recovery SELL formula | [helpers/order-planning.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/helpers/order-planning.js#L69-L148) |
-| Canonical fill conversion, deduplication, inventory/cash accounting and history reconciliation | [fill-reconciliation.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-reconciliation.js#L31-L307) |
-| Immutable fill identity ledger | [fill-ledger.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-ledger.js) |
-| Strategy-owned versus unmanaged market inventory | [market-inventory-ledger.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/market-inventory-ledger.js) |
-| Permanent free-inventory allocation | [inventory-allocation.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/inventory-allocation.js) |
-| Configuration validation | [validate-config.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/validate-config.js) |
+The contract separates:
+- strategy decisions and financial facts, owned by the Harvester domain;
+- exchange order state and confirmed execution facts, supplied through application/broker boundaries;
+- runtime orchestration, which coordinates submissions, cancellations, acknowledgements, and reconciliation without redefining strategy rules.
 
-Important Free-Roll tests:
-- [bot-free-roll.test.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.test.js): duplicate BUY events (392), fee-bearing fills (490), partial SELL history and replay (667), partial BUY cancellation (1188), fill identity mismatch (1279), incomplete BUY/SELL aggregate fills (1913, 1974), below-minimum-profit completion (2039), base fee consuming keep quantity (2098), free allocation after base SELL fee (2496), oversell protection (2553), and terminal order failures (2367).
-- [fill-reconciliation.test.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-reconciliation.test.js): canonical fill conversion, partial/multiple fills, deduplication, conflicting facts, history backfill and mismatches, unsupported commissions and replay.
-- [helpers/accounting.test.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/helpers/accounting.test.js): base/quote commission effects, third-asset rejection, exact decimal arithmetic.
-- [helpers/planning.test.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/helpers/planning.test.js): quantity-down/price-up rounding and invalid boundaries.
-- [fill-ledger.test.js](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-ledger.test.js): immutable identities, equivalent decimal formatting, and conflicting duplicate facts.
-
-### Harvester source
-
-| Concern | Source |
-|---|---|
-| Strategy decisions and action generation | [conservative-strategy.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/conservative-strategy.js) |
-| Initial BUY price | [initial-buy-price.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/initial-buy-price.js) |
-| Portfolio and fill identity | [portfolio.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/portfolio/portfolio.js) |
-| Active/free base inventory and cash flow | [position.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/portfolio/position.js), [position-accounting.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/portfolio/position-accounting.js) |
-| Recovery quote accounting and reset | [recovery-ledger.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/recovery-ledger.js) |
-| Per-fill recovery accounting | [recovery-fill-accounting.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/recovery-fill-accounting.js) |
-| Recovery SELL sizing/price | [recovery-sell-plan.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.js) |
-| Completion eligibility | [recovery-completion.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/recovery-completion.js) |
-| Fill fingerprint | [fill-fingerprint.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/fills/fill-fingerprint.js) |
-| Observed/configured fee reserve | [sell-fee-rate.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/sell-fee-rate.js), [fill-commission-rate.js](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/fill-commission-rate.js) |
+This document is not a runtime implementation guide. Broker APIs, exchange SDK payloads, WebSockets, timers, and application services do not belong in the domain.
 
 ## 3. Proposed domain responsibilities
 
@@ -102,22 +70,22 @@ The policy calculates a price and quantity from active inventory, keep quantity,
 
 Completion is a decision over actual confirmed fills plus reconciled terminal order status. It returns eligibility and the amount of base inventory that may be moved into free inventory. It must not infer success from an order acknowledgement, requested quantity, market price, or unconfirmed cumulative order status.
 
-## 4. Business rules — behavioral baseline from Free-Roll
+## 4. Conservative strategy behavior
 
-The following describes what the current Free-Roll source does. It is a behavioral baseline, not approval of every legacy limitation.
+The following rules define the intended Conservative strategy behavior in Harvester.
 
 ### 4.1 BUY eligibility and intent
 
 1. A pair must be enabled and valid; the bot must be running, not recovering, and not paused.
 2. If an active BUY exists, do not create another BUY.
-3. On the first valid price, Free-Roll records the reference/highest price and immediately submits an initial BUY limit at `referencePrice × (1 - priceStepPercent / 100)`, rounded down to the price tick. Quantity is configured `orderQuantity`, rounded down to quantity step.
+3. On the first valid price, Conservative strategy records the reference/highest price and immediately submits an initial BUY limit at `referencePrice × (1 - priceStepPercent / 100)`, rounded down to the price tick. Quantity is configured `orderQuantity`, rounded down to quantity step.
 4. While the initial BUY is active, it trails upward: when market price reaches the adjustment threshold, cancel and reconcile the old order. Replace only after confirming zero fills; any partial/full fill during cancellation is reconciled and the pair pauses rather than submitting a replacement.
 5. After a BUY fills, the next standing BUY is fixed from `lastBuyPrice × (1 - priceStepPercent / 100)`. It is not trailed while recovery is outstanding. After a successful recovery SELL, trailing resumes for that standing BUY.
-6. Free-Roll has no explicit per-pair investment cap in the inspected configuration/decision path. Harvester's current validator requires a positive `investment` value and its strategy applies a cap. Do not assume an account balance or an investment limit is a Free-Roll strategy rule.
+6. The strategy baseline does not establish a separate per-pair investment cap; Harvester's configured investment limit is an additional safety constraint and must not silently alter recovery accounting. Harvester's current validator requires a positive `investment` value and its strategy applies a cap. Do not assume an account balance or an investment limit is a Conservative strategy strategy rule.
 
 **Blocked BUY conditions:** pair disabled; bot stopped or in user-data recovery; pair paused; an active BUY already exists; invalid/non-positive price or calculated threshold; invalid/zero quantity after step rounding; BUY submission failure; incomplete/ambiguous cancellation reconciliation; or the required recovery SELL submission failed before the next standing BUY could be placed.
 
-A standing BUY may coexist with a recovery SELL. Free-Roll's actual order is: complete BUY accounting → replace recovery SELL → place next BUY. If the SELL submission fails, the pair pauses and next BUY is not placed.
+A standing BUY may coexist with a recovery SELL. The required order is: complete BUY accounting → replace recovery SELL → place next BUY. If the SELL submission fails, the pair pauses and next BUY is not placed.
 
 ### 4.2 BUY fill accounting
 
@@ -127,7 +95,7 @@ For each BUY fill:
 - Gross base quantity is the executed quantity.
 - Base-asset commission reduces the base quantity received.
 - Quote-asset commission increases quote BUY cost.
-- Third-asset or incomplete commission data is unsupported and fails closed in the current Free-Roll conversion/accounting path.
+- Third-asset or incomplete commission data is unsupported and fails closed in the current Conservative strategy conversion/accounting path.
 - Add the resulting net base amount to active inventory.
 - Add executed quote notional plus quote commission to `buyCost`.
 
@@ -160,9 +128,9 @@ $$
 p_{raw}=\frac{R}{Q(1-f)}
 $$
 
-The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover `C + m`, Free-Roll's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
+The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover `C + m`, Conservative strategy's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
-The fee reserve is not a booked expense. Free-Roll initializes the planning reserve to its configured SELL fee rate (zero when makerPercent is zero / post-only is selected), then raises it when a higher actual commission rate is observed. After a successful cycle it resets the per-cycle actual rate and restores the configured reserve. Harvester currently differs: calculateSellFeeRate returns zero while no non-zero actual commission has yet been observed; after an actual fee it uses the higher of the configured ceiling and observed rate (with a zero configured ceiling when makerPercent is zero). Actual commission rate is calculated from the actual commission asset and fill price/notional. This activation-timing difference is D-15.
+The fee reserve is not a booked expense. Conservative strategy initializes the planning reserve to its configured SELL fee rate (zero when makerPercent is zero / post-only is selected), then raises it when a higher actual commission rate is observed. After a successful cycle it resets the per-cycle actual rate and restores the configured reserve. Harvester currently differs: calculateSellFeeRate returns zero while no non-zero actual commission has yet been observed; after an actual fee it uses the higher of the configured ceiling and observed rate (with a zero configured ceiling when makerPercent is zero). Actual commission rate is calculated from the actual commission asset and fill price/notional. This activation-timing difference should be verified as a focused implementation item.
 
 ### 4.4 SELL fill accounting
 
@@ -176,7 +144,7 @@ Partial SELL fills are applied incrementally while the SELL order remains active
 
 ### 4.5 Recovery completion
 
-Free-Roll completes a recovery cycle only after:
+Conservative strategy completes a recovery cycle only after:
 1. The recovery SELL order is terminal FILLED.
 2. Actual execution quantities reconcile exactly to the SELL order quantity.
 3. Actual active inventory is at least `keepQuantity`.
@@ -185,19 +153,19 @@ Free-Roll completes a recovery cycle only after:
    P \ge C+m
    $$
 
-If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Free-Roll pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
+If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Conservative strategy pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
 
 On success:
 - Allocate exactly `K` from active to free inventory.
 - Keep any additional active inventory in the active bucket.
 - Reset cycle BUY cost and SELL proceeds to zero.
-- Reset Free-Roll's per-cycle actual commission rate to zero and restore the configured fee reserve.
+- Reset Conservative strategy's per-cycle actual commission rate to zero and restore the configured fee reserve.
 - Preserve free inventory outside future sellable quantity.
 - Re-enable trailing behavior for the next standing BUY.
 
 ### 4.6 Next BUY eligibility
 
-Free-Roll places the next standing BUY after the BUY has fully reconciled and the recovery SELL has been successfully submitted (or the planner confirms there is no sellable quantity). It does **not** wait for the recovery SELL to finish. This means an active BUY and active SELL can coexist.
+Conservative strategy places the next standing BUY after the BUY has fully reconciled and the recovery SELL has been successfully submitted (or the planner confirms there is no sellable quantity). It does **not** wait for the recovery SELL to finish. This means an active BUY and active SELL can coexist.
 
 After a successful recovery SELL, the standing BUY remains eligible and trailing resumes. A failed/ineligible recovery completion pauses the pair; it does not authorize a new BUY.
 
@@ -210,7 +178,7 @@ Let a canonical fill have gross base quantity `q`, gross quote notional `v`, bas
 | BUY | `+(q-c_b)` | `buyCost += v+c_q` |
 | SELL | `-(q+c_b)` | `netSellProceeds += v-c_q` |
 
-A SELL is invalid if its total base consumption exceeds active strategy inventory. A commission in a third asset is not included in these formulas; current Free-Roll and Harvester policies reject it.
+A SELL is invalid if its total base consumption exceeds active strategy inventory. A commission in a third asset is not included in these formulas; the current policy rejects it.
 
 The effective actual commission rate for planning is the quote-equivalent value of the commission divided by executed quote notional. Base commission is valued at the actual fill price. Configured maker/taker rates are not actual costs.
 
@@ -271,7 +239,7 @@ The Harvester sell-plan test uses active 100, keep 1, fee 0.001 and step 0.1, re
 - Fully filled recovery SELL yields 10.05 USDT net.
 - Realized profit = 0.03 USDT, below minimum 0.10.
 - The order is filled, but recovery is unsuccessful.
-- Do not allocate free quantity, do not reset the ledger, and do not enable the next cycle. Current Free-Roll pauses and preserves the remaining position/ledger facts.
+- Do not allocate free quantity, do not reset the ledger, and do not enable the next cycle. Current Conservative strategy pauses and preserves the remaining position/ledger facts.
 
 ### Example E — proceeds already cover target, but SELL still has remaining quantity
 
@@ -299,18 +267,18 @@ stateDiagram-v2
     Paused --> [*]
 ```
 
-**Concurrency note:** after a fully filled BUY, Free-Roll submits the recovery SELL first and then the next standing BUY. The two orders can subsequently be active simultaneously. The state diagram represents their logical cycle, not a single mutually exclusive order state.
+**Concurrency note:** after a fully filled BUY, Conservative strategy submits the recovery SELL first and then the next standing BUY. The two orders can subsequently be active simultaneously. The state diagram represents their logical cycle, not a single mutually exclusive order state.
 
 ## 8. Failure, idempotency, and ordering semantics
 
-| Condition | Required behavior evidenced by Free-Roll | Domain contract recommendation |
+| Condition | Required Conservative behavior | Domain contract recommendation |
 |---|---|---|
 | Identical fill replay | Do not account twice. | Return unchanged state with `duplicate: true`. |
 | Same fill ID, changed facts | Treat as conflict; do not apply again; pause/fail closed. | Return a typed conflict result; never overwrite original facts. |
 | Missing/unstable fill ID or order ID | Reject before accounting. | Reject invalid identity at canonical fill boundary. |
 | Fill from another market/order/side | Reject; do not account. | Require matching market; application verifies order association. |
-| Incomplete commission facts | Free-Roll fails closed. | Reject; never infer zero commission. |
-| Unsupported third-asset commission | Free-Roll fails closed. | Reject until an approved valuation policy exists. |
+| Incomplete commission facts | Conservative strategy fails closed. | Reject; never infer zero commission. |
+| Unsupported third-asset commission | Conservative strategy fails closed. | Reject until an approved valuation policy exists. |
 | Partial fill | Apply incremental actual fill once; keep order active. | Account per fill; do not transition order lifecycle to complete. |
 | FILLED status but sum of fills differs from order quantity | Pause; do not advance lifecycle. | Require reconciled exact aggregate quantity. |
 | SELL exceeds active strategy inventory | Reject/pause; never allow negative inventory or consume free inventory. | Enforce active inventory only. |
@@ -320,25 +288,25 @@ stateDiagram-v2
 | Order cancellation/replacement | Reconcile fills before replacing; keep cumulative recovery accounting. | Order lifecycle stays outside domain; replacement itself never resets recovery ledger. |
 | SELL completed below target | Pause and preserve recovery accounting. | Completion ineligible; no free allocation/reset. |
 | SELL completed with active inventory below keep | Pause; no free allocation/reset. | Completion ineligible; no negative/free allocation. |
-| Unknown broker outcome / untracked order | Free-Roll pauses. | Application boundary pauses; domain only consumes trusted canonical facts. |
+| Unknown broker outcome / untracked order | Conservative strategy pauses. | Application boundary pauses; domain only consumes trusted canonical facts. |
 
-**Important limit:** current Free-Roll's event/order orchestration handles ordering, cancellation, history backfill and pair pausing. These are not all pure domain responsibilities. D1 must not copy the runtime implementation into the domain.
+**Important limit:** current Conservative strategy's event/order orchestration handles ordering, cancellation, history backfill and pair pausing. These are not all pure domain responsibilities. D1 must not copy the runtime implementation into the domain.
 
 ## 9. Harvester comparison and known discrepancies
 
-| Behavior | Free-Roll source behavior | Harvester current domain | D0 assessment |
+| Behavior | Conservative baseline behavior | Harvester current domain | D0 assessment |
 |---|---|---|---|
 | First BUY | First valid price establishes reference and immediately creates a BUY one step below it. | Creates a BUY one step below current price. | Broadly aligned. |
 | Initial BUY trailing | Trails upward; cancel and reconcile before replacement. | No trailing state/decision in `evaluateConservativeStrategy`. | Missing from current domain. |
 | Subsequent BUY | Fixed at last BUY price minus one step; placed after recovery SELL submission. | Uses supplied `lastBuyPrice` and may emit BUY whenever no active BUY exists. | Price basis broadly aligned; sequencing requires approval. |
 | BUY/SELL coexistence | Yes; next standing BUY can coexist with recovery SELL. | Yes; can emit both actions in one evaluation. | Aligned in policy intent; action ordering differs. |
-| Investment cap | No corresponding per-pair cap in inspected Free-Roll path. | Current config validator requires positive `pairConfig.investment`; strategy checks outstanding recovery plus new BUY notional. | Harvester-only policy; approval needed. |
+| Investment cap | No corresponding per-pair cap in inspected Conservative strategy path. | Current config validator requires positive `pairConfig.investment`; strategy checks outstanding recovery plus new BUY notional. | Harvester-only policy; approval needed. |
 | BUY quantity | Configured quantity rounded down to exchange step. | Same broad rule. | Aligned. |
 | Fill accounting | Base/quote commissions handled; third-asset/incomplete unsupported. | Position and RecoveryLedger handle multiple base/quote commission entries; reject third asset/incomplete. | Stronger multi-entry representation in Harvester; confirm canonical Fill invariants. |
 | Fill identity | Stable trade + order IDs and immutable fill ledger; identical replay ignored, conflict fails. | Canonical Fill ID/fingerprint; Portfolio and RecoveryLedger dedupe independently. | Aligned, but atomic application across both projections needs a contract. |
 | Recovery SELL | Fee-reserved quantity, retained keep quantity, required net proceeds, quantity down / price up. | Same formula family. | Broadly aligned; exact base commission boundary needs validation. |
-| Minimum profit | Positive at planning/runtime; completed actual proceeds must cover cost + minProfit. Config validator currently allows zero. | Sell planner/completion require strictly positive minProfit. | Validation inconsistency in Free-Roll; preserve as explicit decision. |
-| Completion keep quantity | Free-Roll accepts configured keepQuantity >= 0; completion requires actual inventory >= keep. | Harvester completion requires keepQuantity > 0. | Different boundary. |
+| Minimum profit | Positive at planning/runtime; completed actual proceeds must cover cost + minProfit. Config validator currently allows zero. | Sell planner/completion require strictly positive minProfit. | Validation inconsistency in Conservative strategy; verify the intended validation boundary. |
+| Completion keep quantity | Conservative strategy accepts configured keepQuantity >= 0; completion requires actual inventory >= keep. | Harvester completion requires keepQuantity > 0. | Different boundary. |
 | Cycle reset | Resets cycle cost, proceeds and per-cycle observed actual commission rate; fill IDs remain in the runtime fill ledger. | `RecoveryLedger.resetCycle()` clears cost/proceeds but retains max observed fee rate and fill identities. | Different fee-history lifecycle. |
 | Residual active inventory after allocation | Allocates exactly keep; any extra active inventory remains active. No immediate second recovery SELL is created by `#handleSellFilled`. | Completion helper allocates keep only; next strategy evaluation may propose a SELL for remaining active quantity even with a reset ledger. | Potential behavioral difference; needs explicit decision. |
 | SELL submission failure | Pair pauses; next standing BUY is not placed. | Domain returns intents only; submission sequencing/failure is application-owned. | Must be specified at integration boundary. |
@@ -368,27 +336,18 @@ This is a design constraint, not a list of approved implementation tasks:
 - No broker, Binance, WebSocket, application service, engine, timer, or runtime dependencies.
 - No new dependency without a demonstrated and approved requirement.
 
-## 11. Unresolved decisions requiring approval
+## 11. Implementation alignment — one item at a time
 
-The decisions are intentionally not made by this document.
+The established Conservative behavior is the default contract. A difference in current Harvester code is an implementation gap unless there is a clear product reason to change the strategy.
 
-| ID | Decision | Evidence / consequence |
-|---|---|---|
-| D-01 | Should Harvester reproduce Free-Roll's standing next BUY while a recovery SELL remains active, or adopt PR #479's recovery-first blocking rule? | Free-Roll and current Harvester domain permit coexistence; PR #479 blocks BUY until recovery completion. This changes strategy exposure and capital use. |
-| D-02 | Should Harvester retain its required per-pair `investment` cap? If yes, define exactly what is included (outstanding recovery, new BUY notional, fees, active BUY commitments, and whether it is a hard quote-currency cap). | Harvester's current config validator requires a positive investment value and the strategy compares outstanding recovery plus new BUY notional against it. No equivalent Free-Roll rule was found. |
-| D-03 | Should Harvester implement Free-Roll's initial BUY trailing behavior? | Free-Roll trails initial BUY upward; current Harvester domain does not model trailing/cancel eligibility. |
-| D-04 | When both BUY and SELL intents are produced, is action array order meaningful? Should SELL submission be required to succeed before next BUY is submitted? | Free-Roll submits SELL first and only then places next BUY. Harvester currently appends BUY before SELL. |
-| D-05 | Confirm exact SELL quantity treatment for base-asset commissions and fee reserve. | Current formula divides available sellable inventory by `1 + f`; verify against whether fee is charged on gross SELL quantity and actual exchange fee rounding. Existing tests do not fully demonstrate all commission/step boundaries. |
-| D-06 | Should `keepQuantity = 0` be valid? | Free-Roll config permits zero; Harvester completion currently rejects zero. |
-| D-07 | Should `minProfit = 0` be valid? | Free-Roll config validator permits zero, but exact sell planner requires strictly positive minProfit; Harvester also requires positive. This is an existing internal inconsistency. |
-| D-08 | Should max observed commission rate survive a successful cycle reset? | Free-Roll resets per-cycle actual rate; Harvester retains max observed rate forever. This affects later SELL reserve after fee changes/promotions. |
-| D-09 | What should happen to active inventory above `keepQuantity` after a successful SELL completion? | Free-Roll leaves surplus active and does not immediately place another SELL; Harvester can propose another SELL on next evaluation after ledger reset. |
-| D-10 | How should multiple commission entries be treated if a canonical Fill contains several base/quote commission entries? | Harvester aggregates them; Free-Roll's adapter conversion currently rejects more than one commission entry. Are multiple entries a supported canonical fact or should the boundary reject them? |
-| D-11 | Is a third-asset commission permanently unsupported, or should a future valuation source be allowed? | Both current paths fail closed; valuing it requires a timestamped FX price/source policy. |
-| D-12 | What exact fill/order status facts qualify as “fully reconciled”? | Domain completion currently accepts a boolean; the application/broker boundary must guarantee the fill sum and terminal state. |
-| D-13 | Should `minProfit` be checked on cumulative cycle net proceeds only, or separately per SELL order/fill? | Current Free-Roll checks cumulative proceeds after each completed SELL order; partial fills contribute to the cumulative amount. |
-| D-14 | How should fills be ordered if multiple valid fills arrive out of execution-time order? | Accounting sums are commutative, but lifecycle/order completion and fee-rate observations may not be. Need deterministic policy and tests. |
+Do not turn every difference into a new business decision. Work in this order:
 
-| D-15 | Should configured SELL fee reserve apply before the first actual commission is observed? | Free-Roll initializes `feeRate` to `configuredFeeRate`. Harvester currently returns zero until a non-zero actual fee is observed, then activates the configured ceiling. This can produce a smaller first recovery SELL reserve in Harvester. |
+1. Pick one concrete behavior that is not yet represented or is implemented differently.
+2. Explain the current Harvester behavior and the required behavior in plain language, with one small example where useful.
+3. Ask the user only if the difference cannot be resolved from the established strategy contract or would materially change financial exposure.
+4. Implement the smallest domain change and add focused deterministic tests.
+5. Update this specification only when the approved behavior itself changes.
 
-**D0 exit gate:** obtain explicit approval for decisions that change strategy behavior or accounting. Do not start D1 by treating an unresolved row as a default.
+Do not redesign the strategy, introduce a recovery-first restriction, or change order coexistence as an incidental refactor. A standing BUY and recovery SELL may coexist. After a BUY is fully reconciled, submit/replace the recovery SELL first; submit the next standing BUY only after that SELL submission succeeds. The recovery SELL need not finish before the next BUY becomes active.
+
+**D0 outcome:** the Conservative strategy contract is documented in Harvester terminology. D1 should now address the next single verified implementation gap, not reopen the entire strategy for approval all at once.
