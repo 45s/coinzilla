@@ -270,7 +270,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7b — Flush and close Journal/EventBus
 
-**Status:** In progress on branch `feature/harvester/close-journal-event-bus`.
+**Status:** Merged into `develop` by PR #471; all CI checks passed.
 
 - Publish the final `harvester.stopped` event while Journal and EventBus are still available.
 - Close Journal after the final event so it can unsubscribe, drain accepted writes, and sync.
@@ -283,7 +283,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 
 #### Step 7c — Cleanup failure isolation and bounded shutdown
 
-**Status:** Not started; begin only after Step 7b is merged.
+**Status:** In progress on branch `feature/harvester/shutdown-failure-isolation`.
 
 - Isolate runtime stop, Journal close, and EventBus close failures so later cleanup still runs.
 - Coalesce repeated SIGINT/SIGTERM shutdown requests.
