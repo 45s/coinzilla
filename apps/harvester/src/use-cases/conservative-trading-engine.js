@@ -5,11 +5,22 @@ import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
 import { evaluateTrailingBuyRepricing } from "../domain/strategies/conservative/trailing-buy-repricing.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import {
+  mapOrderCancelFailedData,
+  mapOrderCancelledData,
+  mapOrderSubmissionFailedData,
+  mapOrderSubmissionRequestedData,
+  mapOrderSubmittedData,
+  mapStrategyDecisionData,
+  mapStrategyPausedData,
+} from "../application/events/lifecycle-event-dtos.js"
+import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
-  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping,
+  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
 } = {}) {
   for (const [name, callback] of Object.entries({
     getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
@@ -33,20 +44,59 @@ export function makeConservativeTradingEngine({
     paused: new Set(),
   }
   const pause = async ({ symbol, reason, error }) => {
+    const wasPaused = state.paused.has(symbol)
     state.paused.add(symbol)
+    if (!wasPaused) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
+        dataResult: mapStrategyPausedData({ symbol, reason, error }),
+      })
+    }
     await onPause({ symbol, reason, error })
   }
+
+  const publishOrderCancelled = ({ order }) => publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
+    dataResult: mapOrderCancelledData({ order }),
+  })
+
+  const publishOrderCancelFailed = ({ order, outcome, error }) => publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
+    dataResult: mapOrderCancelFailedData({ order, outcome, error }),
+  })
   const submit = makeExecuteStrategyDecision({
     broker,
     onPendingOrder: async ({ order }) => {
       state.registry = state.registry.registerPending({ order }).registry
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+        dataResult: mapOrderSubmissionRequestedData({ order }),
+      })
     },
     onAcknowledgedOrder: async ({ order }) => {
       const update = state.registry.applyUpdate({ order })
       if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
       state.registry = update.registry
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+        dataResult: mapOrderSubmittedData({ order }),
+      })
     },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
+        dataResult: mapOrderSubmissionFailedData({
+          order,
+          outcome,
+          error: error ?? errors?.[0],
+        }),
+      })
       await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: error ?? errors?.[0] })
     },
   })
@@ -55,22 +105,42 @@ export function makeConservativeTradingEngine({
     const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
     for (const order of activeSells) {
       if (order.status === "UNKNOWN") {
+        const error = new Error("Cannot safely cancel a recovery SELL with unknown status")
+        publishOrderCancelFailed({ order, outcome: "ORDER_STATE_UNKNOWN", error })
         await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
-        return toResult({ error: new Error("Cannot safely cancel a recovery SELL with unknown status") })
+        return toResult({ error })
       }
-      const cancelResult = await broker.cancelOrder({ order })
+      let cancelResult
+      try {
+        cancelResult = await broker.cancelOrder({ order })
+      } catch (error) {
+        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error })
+        throw error
+      }
       if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
         const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
+        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error: errors[0] })
         await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED", error: errors[0] })
         return toResult({ errors })
       }
       const canceledOrder = cancelResult.data
       const update = state.registry.applyUpdate({ order: canceledOrder })
       if (update.unknown) {
+        const error = new Error("Canceled recovery SELL is not registered by Harvester")
+        publishOrderCancelFailed({ order, outcome: "NOT_REGISTERED", error })
         await pause({ symbol, reason: "CANCELED_ORDER_NOT_REGISTERED" })
-        return toResult({ error: new Error("Canceled recovery SELL is not registered by Harvester") })
+        return toResult({ error })
       }
       state.registry = update.registry
+      if (canceledOrder.status === "CANCELED") {
+        publishOrderCancelled({ order: canceledOrder })
+      } else {
+        publishOrderCancelFailed({
+          order: canceledOrder,
+          outcome: "NOT_CANCELED",
+          error: new Error("Recovery SELL completed instead of being canceled"),
+        })
+      }
 
       const fillsResult = await broker.getFills({
         symbol,
@@ -112,19 +182,37 @@ export function makeConservativeTradingEngine({
   }
 
   const cancelAndReconcileTrailingBuy = async ({ symbol, order } = {}) => {
-    const cancelResult = await broker.cancelOrder({ order })
+    let cancelResult
+    try {
+      cancelResult = await broker.cancelOrder({ order })
+    } catch (error) {
+      publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error })
+      throw error
+    }
     if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
       const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
+      publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error: errors[0] })
       await pause({ symbol, reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED", error: errors[0] })
       return toResult({ errors })
     }
     const canceledOrder = cancelResult.data
     const update = state.registry.applyUpdate({ order: canceledOrder })
     if (update.unknown) {
+      const error = new Error("Canceled trailing BUY is not registered by Harvester")
+      publishOrderCancelFailed({ order, outcome: "NOT_REGISTERED", error })
       await pause({ symbol, reason: "TRAILING_BUY_CANCELLATION_NOT_REGISTERED" })
-      return toResult({ error: new Error("Canceled trailing BUY is not registered by Harvester") })
+      return toResult({ error })
     }
     state.registry = update.registry
+    if (canceledOrder.status === "CANCELED") {
+      publishOrderCancelled({ order: canceledOrder })
+    } else {
+      publishOrderCancelFailed({
+        order: canceledOrder,
+        outcome: "NOT_CANCELED",
+        error: new Error("Trailing BUY completed instead of being canceled"),
+      })
+    }
 
     const fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
     if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
@@ -234,6 +322,16 @@ export function makeConservativeTradingEngine({
       if (executableActions.length === 0) {
         return toResult({ data: { decision, submittedOrders: [], waitingForAvailableQuoteBalance: true } })
       }
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.STRATEGY_DECISION,
+        dataResult: mapStrategyDecisionData({
+          strategy: decision.strategy,
+          symbol,
+          referencePrice: marketPrice.price,
+          actions: executableActions,
+        }),
+      })
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       if (!result.ok) return result

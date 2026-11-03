@@ -368,7 +368,7 @@ new BUY below the current last trade, rounded down to the exchange tick.
 
 ## Operational event journal
 
-**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Journal startup remains asynchronous; events published before its subscription becomes active are not captured. Initialization/write failures do not gate bootstrap. Coordinated shutdown draining remains Step 7.
+**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal startup remains asynchronous; events published before its subscription becomes active are not captured. Initialization/write failures do not gate bootstrap. Coordinated shutdown draining remains Step 7.
 
 Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
 
@@ -394,9 +394,59 @@ The application-owned event names are exported from `src/application/events/even
 The implementation is deliberately split into independently testable PRs and has no TESTNET prerequisite. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
 
 
-## Structured error logging
+### Strategy decision and order submission events
 
-Application and infrastructure boundaries should pass native Error instances as structured logger fields rather than converting them to strings. The shared `@coinzilla/utils` formatter is responsible for retaining error name, message, stack, recursive causes, and AggregateError members. The normalized diagnostic is JSON-compatible; circular references and unreadable properties are represented with explicit markers. Sensitive field-name redaction remains active throughout nested objects and error causes. This does not sanitize secrets embedded in arbitrary message or stack text, so callers must keep credentials and signed request material out of those strings.
+The Step 5a contract adds `strategy.decision`, `order.submission_requested`,
+`order.submitted`, and `order.submission_failed`. Only actionable decisions
+are published, after available-balance filtering; repeated NO_ACTION evaluations
+are omitted. The decision DTO contains the strategy, market symbol, reference
+price, and allowlisted order intents.
+
+The order-request event is published after the local PENDING canonical order
+has been registered and immediately before broker I/O. The submitted event is
+published only after the broker returns a canonical acknowledgement with the
+matching client order ID and the local order registry accepts it. Rejected or
+unknown outcomes include only safe identifiers plus a sanitized error
+name/message. The current broker result contract reports failed results as
+`REJECTED_OR_UNKNOWN`; transport exceptions and acknowledgement-registration
+failures are `UNKNOWN`. Do not claim a definitive exchange rejection unless the
+broker port later exposes that distinction. Price and quantity remain exact decimal strings.
+
+These events are emitted through the existing best-effort publisher. The engine
+does not await subscriber delivery or Journal persistence, and publication
+failure cannot prevent broker submission. Pair pause and trailing BUY
+cancellation events are Step 5b; recovery SELL cancellation is Step 5c.
+Execution and accounting facts remain Step 6.
+
+
+### Strategy pause and order cancellation events
+
+Step 5b adds `strategy.paused`, `order.cancelled`, and
+`order.cancel_failed`. A pause event is emitted only when a market first enters
+the paused set; repeated causes do not create duplicate transition events.
+The current engine has no pair-resume operation, so no resume event or new
+resume behavior is introduced.
+
+Trailing BUY cancellation success is published only after a canonical
+cancellation result has been accepted by the local order registry. Cancellation
+failure events contain stable order identifiers, a bounded outcome
+classification, and sanitized error details. A confirmed cancellation is still
+recorded even if subsequent fill reconciliation fails; that later failure
+remains represented by the existing pause/error behavior. Recovery SELL cancellation events are implemented separately in Step 5c, after the first pause and trailing BUY cancellation milestone. All event publication is best-effort
+and does not wait for subscriber delivery or Journal persistence.
+
+
+### Recovery SELL cancellation events
+
+Step 5c publishes the same `order.cancelled` and `order.cancel_failed`
+contracts for recovery SELL cancellation. Success is emitted only after the
+canonical broker response has been accepted by the local order registry.
+Unknown order state, unconfirmed cancellation, unregistered order, and a
+non-CANCELED broker response are represented as safe failure outcomes.
+
+The existing recovery SELL fill reconciliation remains authoritative and runs
+unchanged after the cancellation response. Event publication does not wait for
+Journal delivery and cannot alter accounting or pause behavior.
 
 
 ## In-process engine transition serialization

@@ -43,87 +43,60 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 - Merge only after required CI checks pass. If a check is failing, investigate and fix it; never bypass or weaken it.
 - Delete the short-lived source branch after successful merge, following repository workflow.
 
-## First implementation assignment
+## Current implementation status
 
-Start with **Step 1 — Add the application EventBus boundary** only.
+Steps 1–5b are merged into `develop` (PRs #453, #455, #456, #458, #460, #461). Do not repeat them. The current assignment is **Step 5c — Recovery SELL cancellation transitions**, on branch `feature/harvester/recovery-sell-cancellation-events`, targeting `develop`.
 
-Do not implement Journal initialization or publish lifecycle/trading events in this first PR. Keep this PR limited to the EventBus boundary and its tests.
+### Completed Step 5a scope
 
-### Step 1 objective
+- Publish `strategy.decision` only for actionable Conservative decisions, after balance filtering. Do not publish NO_ACTION or every market-price update.
+- Publish `order.submission_requested` after local PENDING registration and immediately before broker I/O.
+- Publish `order.submitted` only after canonical acknowledgement validation and successful local registry update.
+- Publish `order.submission_failed` for rejected/unknown outcomes.
+- Use small Harvester-owned allowlisted DTOs. Preserve exact decimal strings. Never include credentials, raw broker messages, SDK/domain instances, balances, or account snapshots.
+- Reuse the existing EventBus publisher and lifecycle publication boundary. Do not change shared packages.
+- Publication is best-effort and synchronous admission only. Never await EventBus subscriber work or Journal I/O from strategy/order workflows.
+- Keep strategy policies independent of EventBus/Journal. Instrument only the application engine/use-case boundary.
 
-Introduce the existing `@coinzilla/event-bus` package into Harvester at the application composition boundary and create a best-effort publisher whose failures cannot escape into trading.
+### Completed Step 5b scope
 
-### Before implementation
+- Publish `strategy.paused` only on the first transition into a pair's paused state; repeated pause causes do not emit duplicates.
+- Publish `order.cancelled` only after a trailing BUY has a canonical CANCELED acknowledgement and the local registry accepts the update.
+- Publish `order.cancel_failed` for unconfirmed, unregistered, or non-canceled trailing BUY outcomes, with safe identifiers and sanitized errors.
+- Keep cancellation fill reconciliation and existing pause behavior unchanged.
+- The current engine has no pair-resume transition; do not invent one solely for logging.
 
-Inspect the current versions of:
-- `apps/harvester/src/index.js`
-- `apps/harvester/src/bootstrap/start-harvester.js`
-- `apps/harvester/package.json`
-- `packages/event-bus`
-- `packages/utils` (especially `toResult` and logger contracts)
-- Relevant Harvester tests and workspace conventions.
+### Current Step 5c scope
 
-Verify the exact current EventBus API and result shape. Do not infer APIs from this prompt or copy Bot-Free-Roll blindly.
+- Publish `order.cancelled` for recovery SELL cancellation only after canonical broker confirmation and local registry update.
+- Publish `order.cancel_failed` for unknown order state, unconfirmed cancellation, unregistered order, or a broker response that is not CANCELED.
+- Preserve recovery fill reconciliation, accounting, and pair-pause behavior.
+- Do not change order selection or strategy policy.
+- EventBus publication must not be awaited and must not change cancellation or fill-reconciliation behavior.
 
-### Implementation constraints
+### Tests
 
-- Add `@coinzilla/event-bus` as a direct workspace dependency.
-- Construct one EventBus per Harvester process in the composition/bootstrap layer.
-- Inject it explicitly; no global singleton and no domain dependency.
-- Add a focused publisher module only if it improves cohesion and gives a useful test boundary.
-- Publisher functions accept one object argument and return one object result.
-- Catch synchronous `publish()` exceptions and handle failed `toResult` results according to the actual EventBus contract.
-- Log publication failures once using the injected/shared `defaultLogger` from `@coinzilla/utils`.
-- A logger failure must not escape into the trading caller.
-- Do not add Journal yet.
-- Do not publish events yet, except a narrowly scoped test proving the boundary if needed.
-- Do not alter strategy decisions, order callbacks, user-data queue behavior, broker contracts, trading configuration, or startup readiness.
-- Do not use global `console`.
-- Reuse existing utilities; do not add dependencies unnecessarily.
-- Do not create a generic event framework or speculative abstraction.
+Add offline tests covering:
+1. Confirmed recovery SELL cancellation is published after local registry update.
+2. Broker-rejected and thrown recovery SELL cancellation outcomes publish safe failure DTOs.
+3. Unknown order state and unregistered cancellation are handled without exposing broker objects.
+4. EventBus throw cannot prevent cancellation handling, pause behavior, or fill reconciliation.
+5. Existing recovery BUY/SELL accounting and strategy tests continue to pass.
 
-### Step 1 tests and acceptance
+Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, do not claim tests passed: open the PR and use its actual CI runs as the verification gate.
 
-Add deterministic offline tests for:
-1. EventBus accepts an event.
-2. EventBus returns a failed result.
-3. EventBus throws synchronously.
-4. The logger throws while reporting a publication failure.
-5. Invalid/non-serializable payload handling follows the actual package contract.
-6. Publisher caller always receives the documented result and never an uncaught publication/logging exception.
+### Documentation
 
-Also verify:
-- Exactly one EventBus is composed per process.
-- Existing startup and trading tests remain unchanged and pass.
-- No EventBus import is introduced into domain strategy modules.
-- No behavior in the trading workflow waits for a subscriber or disk I/O.
+Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Resume events remain deferred until a real pair-resume transition exists.
 
-Run the Harvester test and coverage commands, relevant EventBus tests, and applicable workspace checks. Report exact commands and outcomes.
+## Subsequent milestones
 
-### Step 1 documentation
+- Resume events remain deferred until the engine has a real, explicit pair-resume transition.
+- Step 6: canonical execution and accounting facts.
+- Step 7: orderly shutdown draining and failure isolation.
+- Step 8: final event inventory, operational documentation, and verification.
 
-Update:
-- `apps/harvester/docs/architecture.md` with the actual application event boundary and its current limited status.
-- `apps/harvester/ROADMAP.md` to link this staged roadmap and accurately mark Step 1 only when complete.
-- `apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP.md` status/checklist.
-
-Do not claim Journal is integrated or that any events are persisted.
-
-## Subsequent steps
-
-After Step 1 is merged, follow the roadmap in order:
-
-- Step 2: define the small lifecycle event contracts and plain DTO mappings.
-- Step 3: compose Journal as an optional, non-blocking service.
-- Step 4: publish process/configuration lifecycle events (started, startup failed, stopped, config validated).
-- Step 5: publish broker lifecycle events (connected, connection failed, disconnected, subscriptions).
-- Step 6: publish selected strategy/order events.
-- Step 7: publish actual execution/accounting facts and complete shutdown failure isolation.
-- Step 8: final documentation and operational verification.
-
-The first useful operational output is intentionally simple: application started and broker connected/disconnected. This must work in broker read-only mode; trading events are later optional instrumentation.
-
-Each step is a separate PR. Re-read the roadmap and current source before each step; do not assume the previous agent's implementation details are still current.
+No TESTNET orders, fills, credentials, or live exchange access are required for these lifecycle-observability milestones.
 
 ## Engineering standards
 
