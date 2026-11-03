@@ -59,7 +59,7 @@ describe('formatLogContent', () => {
     for (const secret of ['sensitive-token', 'sensitive-key', 'sensitive-password', 'sensitive-error-key']) {
       assert.equal(formatted.includes(secret), false)
     }
-    assert.equal(formatted.split('[REDACTED]').length - 1, 4)
+    assert.equal(formatted.split('[REDACTED]').length - 1, 3)
   })
 
   it('does not invoke or propagate hostile getters and proxies', () => {

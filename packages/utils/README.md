@@ -46,7 +46,7 @@ Pass native `Error` and `AggregateError` instances as structured values; do not 
 
 Circular references are represented as `[Circular]`. Properties whose getters throw are represented as `[Unreadable property]`; hostile proxy enumeration is contained. Common sensitive field names continue to be redacted recursively, including inside normalized error causes. The formatter does not inspect secrets embedded in free-form messages or stack text, so callers must not place credentials or signed request data in those strings. If JSON serialization still fails (for example, because a structured value contains a BigInt), the existing safe string fallback is used.
 
-The normalized diagnostic shape is intended for logs, not for reconstructing executable Error instances.
+The normalized diagnostic shape intentionally allowlists standard Error diagnostics rather than copying arbitrary custom Error properties; it is intended for logs, not for reconstructing executable Error instances.
 
 ## Validation and compatibility
 
