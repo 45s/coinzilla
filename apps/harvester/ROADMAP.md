@@ -488,3 +488,11 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 - [ ] Regression has not yet been run against the original pre-fix engine; only the fixed implementation's regression pass is confirmed.
 - [ ] A dedicated queue-rejection/re-entrant-callback test and Harvester logger-boundary diagnostics audit remain outstanding.
 - [ ] Bounded Binance Spot TESTNET verification remains outstanding. No production credentials or live orders were used.
+
+
+### P0.7 ownership-failure diagnostics — 2026-11-03
+
+- [x] Add a narrowly scoped structured diagnostic at the bootstrap boundary when the Conservative engine rejects an order event. It records the canonical symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and registry match results by both client and broker order IDs. If a client-ID match exists, its registered status and broker ID are included to distinguish pending from acknowledged ownership.
+- [x] Add a bootstrap regression test proving an unowned execution report is still rejected and paused while the safe correlation fields are logged.
+- [ ] The actual 15:47:17 rejected report remains unidentified. This diagnostic must be collected on the next bounded TESTNET run before attributing the failure to client-ID reuse, broker mapping, or external order activity.
+- [ ] No ownership rule, Binance mapping, or client-ID generation behavior is changed by this diagnostic-only step. Root-cause fix and its failure-reproducing regression test remain blocked on the exact rejected event identity.
