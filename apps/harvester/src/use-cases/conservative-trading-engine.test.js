@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, onPlaceOrder } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -73,7 +73,10 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
         }),
       }
     },
-    cancelOrder: async ({ order }) => ({
+    cancelOrder: async ({ order }) => {
+      if (cancelThrow) throw new Error("cancel socket closed")
+      if (cancelFailure) return { ok: false, errors: [new Error("cancel denied")] }
+      return {
       ok: true,
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -93,7 +96,8 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
         updatedAt: 2,
         completedAt: 2,
       }),
-    }),
+    }
+    },
     getFills: async ({ orderId }) => ({
       ok: true,
       data: cancelWithFill
@@ -286,6 +290,7 @@ test("publishes rejected submission outcome without blocking pair pause", async 
     "strategy.decision",
     "order.submission_requested",
     "order.submission_failed",
+    "strategy.paused",
   ])
   assert.equal(events[2].data.outcome, "REJECTED_OR_UNKNOWN")
   assert.equal(events[2].data.clientOrderId, "h-DOGEUSDT-1")
@@ -316,6 +321,145 @@ test("publishes unknown submission outcome after a transport exception", async (
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
-  assert.equal(events.at(-1).name, "order.submission_failed")
-  assert.equal(events.at(-1).data.outcome, "UNKNOWN")
+  const failed = events.find(({ name }) => name === "order.submission_failed")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNKNOWN")
+  assert.equal(events.at(-1).name, "strategy.paused")
+})
+
+
+test("publishes one pause transition even when the pair encounters repeated pause causes", async () => {
+  const events = []
+  const { engine } = createHarness({
+    placeOrderFailure: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-order",
+    brokerOrderId: "external-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "99", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  await engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
+
+  const pausedEvents = events.filter(({ name }) => name === "strategy.paused")
+  assert.equal(pausedEvents.length, 1)
+  assert.equal(pausedEvents[0].data.symbol, "DOGEUSDT")
+  assert.equal(pausedEvents[0].data.reason, "ORDER_SUBMISSION_REJECTED_OR_UNKNOWN")
+})
+
+test("publishes broker-confirmed trailing BUY cancellation after registry update", async () => {
+  const events = []
+  let engine
+  const harness = createHarness({
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      if (event.name === "order.cancelled") {
+        assert.equal(engine.getOrders()[0].status, "CANCELED")
+      }
+      return { ok: true }
+    } },
+  })
+  engine = harness.engine
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  const cancelled = events.find(({ name }) => name === "order.cancelled")
+  assert.ok(cancelled)
+  assert.equal(cancelled.data.clientOrderId, "h-DOGEUSDT-1")
+  assert.equal(cancelled.data.status, "CANCELED")
+  assert.equal(cancelled.data.executedQuantity, "0")
+})
+
+test("publishes an unconfirmed cancellation and pause without changing the order flow", async () => {
+  const events = []
+  const { engine, orders } = createHarness({
+    cancelFailure: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(orders.length, 1)
+  const failed = events.find(({ name }) => name === "order.cancel_failed")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNCONFIRMED")
+  assert.equal(events.filter(({ name }) => name === "strategy.paused").length, 1)
+})
+
+test("publishes thrown cancellation outcomes as unconfirmed", async () => {
+  const events = []
+  const { engine } = createHarness({
+    cancelThrow: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await assert.rejects(
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+    }),
+    /cancel socket closed/,
+  )
+  assert.equal(events.at(-1).name, "order.cancel_failed")
+  assert.equal(events.at(-1).data.outcome, "UNCONFIRMED")
+})
+
+
+test("cancellation event publication failure cannot prevent cancellation or reevaluation", async () => {
+  const { engine } = createHarness({
+    eventPublisher: { publish: () => { throw new Error("journal observer unavailable") } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.trailingBuyReplaced, true)
+})
+
+
+test("EventBus failure cannot prevent the pair pause callback", async () => {
+  const { engine, pauses } = createHarness({
+    placeOrderFailure: true,
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, false)
+  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
 })

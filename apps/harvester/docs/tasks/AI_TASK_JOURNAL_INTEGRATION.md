@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–4 are merged into `develop` (PRs #453, #455, #456, #458). Step 5a is implemented and all CI checks pass in PR #460; do not repeat it. After PR #460 is merged, the next work is **Step 5b — Pause/resume and cancellation transitions**, on a short-lived branch from the latest `develop`, targeting `develop`.
+Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do not repeat them. The current assignment is **Step 5b — Pause and trailing BUY cancellation transitions**, on branch `feature/harvester/pause-cancellation-events`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -57,29 +57,36 @@ Steps 1–4 are merged into `develop` (PRs #453, #455, #456, #458). Step 5a is i
 - Reuse the existing EventBus publisher and lifecycle publication boundary. Do not change shared packages.
 - Publication is best-effort and synchronous admission only. Never await EventBus subscriber work or Journal I/O from strategy/order workflows.
 - Keep strategy policies independent of EventBus/Journal. Instrument only the application engine/use-case boundary.
-- Do not add pause/resume, cancellation, execution, or accounting events in this PR; those are subsequent milestones.
+
+### Current Step 5b scope
+
+- Publish `strategy.paused` only on the first transition into a pair's paused state; repeated pause causes must not emit duplicates.
+- Publish `order.cancelled` only after a trailing BUY has a canonical CANCELED acknowledgement and the local registry accepts the update.
+- Publish `order.cancel_failed` for unconfirmed, unregistered, or non-canceled trailing BUY outcomes, with safe identifiers and sanitized errors.
+- Keep cancellation fill reconciliation and existing pause behavior unchanged.
+- Do not instrument recovery SELL cancellation (Step 5c), execution/accounting, or invent pair-resume behavior; the current engine has no pair-resume transition.
+- EventBus publication must not be awaited and must not change cancellation, pause, or reevaluation behavior.
 
 ### Tests
 
 Add offline tests covering:
-1. Actionable strategy decision DTO and event publication.
-2. Repeated NO_ACTION evaluations are not published.
-3. Pending request is published after local registration and before broker submission.
-4. Submitted is published only after canonical acknowledgement and registry update.
-5. Rejected and unknown outcomes publish the correct safe failure DTO.
-6. EventBus throw/rejected result cannot block a real fake-broker order or alter its result.
-7. Invalid DTO values are rejected; credentials and extra properties are never copied.
-8. Existing Harvester strategy/order tests continue to pass.
+1. A pair emits only one pause event across repeated pause causes.
+2. Confirmed trailing BUY cancellation is published after local registry update.
+3. Unconfirmed and thrown cancellation outcomes publish safe failure DTOs.
+4. EventBus throw cannot prevent cancellation, pause handling, or strategy reevaluation.
+5. Cancellation DTOs preserve exact decimal strings and exclude extra/sensitive fields.
+6. Existing Harvester strategy/order tests continue to pass.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, do not claim tests passed: open the PR and use its actual CI runs as the verification gate.
 
 ### Documentation
 
-Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Step 5b (pause/resume and cancellation) remains separate.
+Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Step 5c (recovery SELL cancellation) remains separate.
 
-## Next assignment after PR #460 merges
+## Subsequent milestones
 
-Implement Step 5b: actual pause/resume transitions and confirmed/failed cancellation events.
+- Step 5c: recovery SELL cancellation success/failure.
+- Resume events remain deferred until the engine has a real, explicit pair-resume transition.
 - Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.
 - Step 8: final event inventory, operational documentation, and verification.

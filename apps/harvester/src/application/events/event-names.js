@@ -1,5 +1,5 @@
 /**
- * Stable Harvester-owned names for operational lifecycle events.
+ * Stable Harvester-owned names for operational lifecycle and strategy/order events.
  *
  * EventBus owns the envelope, generated ID, timestamp, and payload snapshot.
  */
@@ -20,4 +20,7 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
   ORDER_SUBMITTED: "order.submitted",
   ORDER_SUBMISSION_FAILED: "order.submission_failed",
+  STRATEGY_PAUSED: "strategy.paused",
+  ORDER_CANCELLED: "order.cancelled",
+  ORDER_CANCEL_FAILED: "order.cancel_failed",
 })

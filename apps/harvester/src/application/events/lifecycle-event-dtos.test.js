@@ -14,9 +14,12 @@ import {
   mapHarvesterStartupFailedData,
   mapHarvesterStoppedData,
   mapOrderSubmissionFailedData,
+  mapOrderCancelFailedData,
+  mapOrderCancelledData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
   mapStrategyDecisionData,
+  mapStrategyPausedData,
 } from "./lifecycle-event-dtos.js"
 
 const validLifecycle = {
@@ -42,6 +45,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_SUBMISSION_FAILED: "order.submission_failed",
+    STRATEGY_PAUSED: "strategy.paused",
+    ORDER_CANCELLED: "order.cancelled",
+    ORDER_CANCEL_FAILED: "order.cancel_failed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -353,4 +359,60 @@ test("maps rejected and unknown order outcomes with sanitized errors only", () =
   assert.equal(mapOrderSubmissionFailedData({
     order: canonicalOrderFacts, outcome: "REJECTED", error: new Error("no"),
   }).ok, false)
+})
+
+
+test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
+  const paused = mapStrategyPausedData({
+    symbol: "DOGEUSDT",
+    reason: "ORDER_REJECTED",
+    error: new Error("password=private-value"),
+    apiKey: "not-copied",
+  })
+  assert.deepEqual(paused, {
+    ok: true,
+    data: {
+      symbol: "DOGEUSDT",
+      reason: "ORDER_REJECTED",
+      error: { name: "Error", message: "password=[REDACTED]" },
+    },
+  })
+
+  assert.deepEqual(mapOrderCancelledData({ order: {
+    ...canonicalOrderFacts,
+    status: "CANCELED",
+    executedQuantity: { amount: "0.25" },
+    account: { balance: "private" },
+  } }), {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      brokerOrderId: "broker-1",
+      executedQuantity: "0.25",
+      status: "CANCELED",
+    },
+  })
+
+  const failed = mapOrderCancelFailedData({
+    order: canonicalOrderFacts,
+    outcome: "UNCONFIRMED",
+    error: new Error("apiSecret=private-value"),
+  })
+  assert.deepEqual(failed, {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      brokerOrderId: "broker-1",
+      outcome: "UNCONFIRMED",
+      error: { name: "Error", message: "apiSecret=[REDACTED]" },
+    },
+  })
+  assert.equal(mapOrderCancelledData({ order: canonicalOrderFacts }).ok, false)
 })
