@@ -1334,3 +1334,78 @@ test("pauses on an exchange REJECTED order update", async () => {
   assert.equal(result.data.paused, true)
   assert.deepEqual(pauses, ["ORDER_REJECTED"])
 })
+
+
+test("accounts a recovery SELL fill during cancellation once when its late stream event is replayed", async () => {
+  let releaseCancel
+  let signalCancelStarted
+  const cancelOrderGate = { promise: new Promise((resolve) => { releaseCancel = resolve }) }
+  const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
+  const seeded = makeSeededRecoveryState()
+  const { engine, accountedFills, pauses, cancellationIds } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelWithFill: true,
+    cancelOrderGate,
+    onCancelOrderStarted: () => signalCancelStarted(),
+    accountingApplied: true,
+  })
+
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buyOrder)
+  assert.ok(sellOrder)
+
+  const buyTransition = engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "buy-triggering-recovery-sell-cancel",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+  await cancelStarted
+
+  const sellFill = makeSellFill({
+    order: sellOrder,
+    tradeId: "recovery-cancel-fill-sell",
+    quantity: "0.1",
+    quoteQuantity: multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.1" }),
+  })
+  const lateSellEvent = engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({
+        order: sellOrder,
+        executedQuantity: "0.1",
+        updatedAt: 2,
+      }),
+      fill: sellFill,
+    },
+  })
+
+  releaseCancel()
+  const [buyResult, lateResult] = await Promise.all([buyTransition, lateSellEvent])
+
+  assert.equal(buyResult.ok, true)
+  assert.equal(buyResult.data.reevaluate, true)
+  assert.equal(lateResult.ok, true)
+  assert.equal(lateResult.data.ignored, true)
+  assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
+  assert.equal(accountedFills.filter((fill) => fill.tradeId === "recovery-cancel-fill-sell").length, 1)
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
+    "buy-triggering-recovery-sell-cancel",
+    "recovery-cancel-fill-sell",
+  ])
+  assert.deepEqual(pauses, [])
+})
