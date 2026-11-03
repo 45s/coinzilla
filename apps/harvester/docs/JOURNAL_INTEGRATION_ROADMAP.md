@@ -16,7 +16,8 @@ Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/
 - `@coinzilla/journal` already subscribes to EventBus, writes JSONL records through a serialized write queue, reports write failures, and drains/synchronizes on close.
 - No shared-package changes are currently justified.
 - Harvester already has suitable application boundaries: bootstrap lifecycle, the Conservative trading engine, order submission, sequential user-data processing, canonical Fill accounting, and Portfolio/RecoveryLedger transitions.
-- Harvester currently has no EventBus or Journal integration and no Harvester-owned application event contract.
+- Harvester has an application EventBus boundary and initial Harvester-owned lifecycle event names/DTO mappings; no lifecycle events are published yet.
+- Initial lifecycle DTOs contain no financial amounts, so exact decimal-string preservation applies to later order/execution event mappings.
 - Bot-Free-Roll is a reference for composition and lifecycle ownership, not a template to copy. In particular, its Journal startup/initial flush can prevent trading startup; Harvester must not inherit that dependency.
 
 See [Architecture — operational event journal](./architecture.md#operational-event-journal) and the [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md).
@@ -102,20 +103,23 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 2 — Define stable Harvester event names and DTO mappings
 
+**Status:** [x] Contract constants, allowlisted lifecycle DTO mappings, and offline contract tests are included in this PR; CI is the merge gate.
+
 **Goal:** Define the application-owned event contract independently of Journal.
 
 **Likely files:** `src/application/events/`; mapping helpers near the relevant application boundary; contract tests; architecture documentation; roadmap.
 
 **Work:**
-- Define event-name constants and focused DTO mapping functions.
-- Verify actual canonical entity and broker event fields before selecting payload fields.
-- Use one object input and one object output.
-- Keep meaningful deterministic mapping/validation as plain pure functions.
-- Validate plain serializable payloads at the publisher boundary.
-- Include safe business identifiers and exact decimal strings.
+- Define stable event-name constants and focused DTO mapping functions for the initial process/configuration/broker lifecycle contract.
+- Verify current Harvester startup/configuration fields and broker identifier before selecting payload fields; no SDK or domain objects are required for these lifecycle DTOs.
+- Use one object input and one object result (`toResult({ data })`).
+- Keep deterministic mapping and validation as pure application functions.
+- Rely on the existing EventBus publisher boundary for plain-payload validation; EventBus rejects class instances and unsupported built-ins.
+- Include safe identifiers; failure DTOs omit stack/cause and redact common labelled secret/token/authorization values.
+- No financial amounts occur in these lifecycle DTOs; later financial DTOs must preserve exact decimal strings.
 - Do not add event schemas for speculative events.
 
-**Tests:** Every selected event payload; decimal precision; missing identifiers; invalid values; class-instance/SDK-object rejection; no secrets.
+**Tests:** Every selected event payload; missing identifiers; invalid values; class-instance/unsupported-built-in rejection; secret omission/redaction; JSON serialization. Financial decimal precision is not applicable to this lifecycle-only contract and is required for later financial DTOs.
 
 **Acceptance:** Contract names and payload examples are documented and tested; no EventBus/Journal imports in domain policy modules.
 
