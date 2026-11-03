@@ -13,6 +13,10 @@ import {
   mapHarvesterStartedData,
   mapHarvesterStartupFailedData,
   mapHarvesterStoppedData,
+  mapOrderSubmissionFailedData,
+  mapOrderSubmissionRequestedData,
+  mapOrderSubmittedData,
+  mapStrategyDecisionData,
 } from "./lifecycle-event-dtos.js"
 
 const validLifecycle = {
@@ -34,6 +38,10 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_STATUS_CHANGED: "broker.status_changed",
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
+    STRATEGY_DECISION: "strategy.decision",
+    ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
+    ORDER_SUBMITTED: "order.submitted",
+    ORDER_SUBMISSION_FAILED: "order.submission_failed",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -242,4 +250,107 @@ test("rejects invalid subscription and stream status DTOs", () => {
   assert.equal(mapBrokerSubscriptionFailedData({ broker: "binance", stream: "user-data", error: "failure" }).ok, false)
   assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: "true" }).ok, false)
   assert.equal(mapBrokerStatusChangedData({ broker: "binance", stream: "user-data", status: "recovered", recoveryRequired: true, attempt: -1 }).ok, false)
+})
+
+
+const canonicalOrderFacts = {
+  clientOrderId: "h-DOGEUSDT-1",
+  brokerOrderId: "broker-1",
+  market: { symbol: "DOGEUSDT" },
+  side: "BUY",
+  type: "LIMIT_MAKER",
+  limitPrice: { amount: "99.9500" },
+  originalQuantity: { amount: "1.00" },
+  status: "OPEN",
+}
+
+test("maps actionable strategy decisions using exact decimal strings and allowlisted fields", () => {
+  const result = mapStrategyDecisionData({
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100.000",
+    actions: [{
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      reason: "INITIAL_BUY",
+      apiKey: "must-not-be-copied",
+    }],
+    account: { balance: "private" },
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      strategy: "CONSERVATIVE",
+      symbol: "DOGEUSDT",
+      referencePrice: "100.000",
+      actions: [{
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "99.9500",
+        quantity: "1.00",
+        reason: "INITIAL_BUY",
+      }],
+    },
+  })
+  assert.equal(mapStrategyDecisionData({
+    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100", actions: [],
+  }).ok, false)
+  assert.equal(mapStrategyDecisionData({
+    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100", actions: [{
+      side: "BUY", type: "LIMIT", price: "1e2", quantity: "1",
+    }],
+  }).ok, false)
+})
+
+test("maps order request and acknowledgement without leaking extra order properties", () => {
+  assert.deepEqual(mapOrderSubmissionRequestedData({
+    order: { ...canonicalOrderFacts, apiSecret: "private", account: { balance: "private" } },
+  }), {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      status: "OPEN",
+    },
+  })
+  assert.deepEqual(mapOrderSubmittedData({ order: canonicalOrderFacts }), {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      brokerOrderId: "broker-1",
+      status: "OPEN",
+    },
+  })
+})
+
+test("maps rejected and unknown order outcomes with sanitized errors only", () => {
+  const result = mapOrderSubmissionFailedData({
+    order: canonicalOrderFacts,
+    outcome: "UNKNOWN",
+    error: new Error("request failed apiKey=private-value"),
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      outcome: "UNKNOWN",
+      error: { name: "Error", message: "request failed apiKey=[REDACTED]" },
+    },
+  })
+  assert.equal(mapOrderSubmissionFailedData({
+    order: canonicalOrderFacts, outcome: "REJECTED", error: new Error("no"),
+  }).ok, false)
 })

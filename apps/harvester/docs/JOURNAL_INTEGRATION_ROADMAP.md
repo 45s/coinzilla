@@ -175,7 +175,7 @@ This step is split into two independently reviewable PRs to keep instrumentation
 
 #### Step 5a — Actionable decisions and order submission
 
-**Status:** In progress on branch `feature/harvester/strategy-order-event-intent`.
+**Status:** PR #460 open on branch `feature/harvester/strategy-order-event-intent`; CI is running.
 
 - Publish only actionable Conservative decisions after balance filtering; omit repeated NO_ACTION evaluations.
 - Publish `order.submission_requested` after local PENDING registration and immediately before broker I/O.
@@ -184,7 +184,7 @@ This step is split into two independently reviewable PRs to keep instrumentation
 - Keep all payloads allowlisted and preserve exact decimal strings.
 - Event publication remains synchronous best-effort admission only; never await subscriber or Journal work.
 
-**Tests:** Event order and payload contract; no-action filtering; publication exception does not prevent broker submission; existing submission tests remain intact.
+**Tests:** DTO allowlisting/redaction and decimal preservation; event ordering around broker I/O; no-action filtering; rejected and unknown outcomes; publisher throw and never-resolving promise do not block broker submission.
 
 **PR boundary:** Actionable strategy decision + submission request/acknowledgement/failure only. No pause/resume, cancellation, execution, or accounting events.
 
@@ -199,27 +199,6 @@ This step is split into two independently reviewable PRs to keep instrumentation
 - Preserve current cancellation/fill reconciliation and pause behavior exactly.
 
 **PR boundary:** Pause/resume and cancellation only. Do not include execution/accounting events.
-
-### Step 6 — Publish execution and accounting facts
-
-**Goal:** Explain why Harvester acted and what happened to each order.
-
-**Likely files:** `src/use-cases/conservative-trading-engine.js`; `src/use-cases/execute-strategy-decision.js`; focused event mappers; tests; event documentation; roadmap.
-
-**Work:**
-- Publish selected strategy decisions and actual pause/resume transitions.
-- Publish order submission requested only after local pending registration and immediately before broker I/O.
-- Publish submitted only after canonical acknowledgement validation.
-- Distinguish rejected and unknown submission outcomes.
-- Publish confirmed cancellation and cancellation failure.
-- Do not publish every repeated NO_ACTION evaluation.
-- Never await event delivery or persistence in order callbacks.
-
-**Tests:** Actionable decision; no-action filtering; pending order; acknowledged order; explicit rejection; transport timeout/unknown outcome; cancellation/failure; EventBus unavailable while broker order still executes.
-
-**Acceptance:** Journal records accurately distinguish intent from exchange-confirmed outcome; no order path waits for Journal.
-
-**PR boundary:** Strategy/order events only.
 
 ### Step 6 — Publish execution and accounting facts
 
