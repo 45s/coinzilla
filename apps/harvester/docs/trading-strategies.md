@@ -44,6 +44,11 @@ cross-pair shared-asset allocation is implemented.
   The existing exact-decimal recovery planner preserves `keepQuantity`, covers
   cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
   proceeds, and rounds the SELL price up to the exchange tick.
+- A recovery SELL can complete a cycle only when distinct canonical SELL fill
+  quantities sum exactly to both the broker-reported executed quantity and
+  original order quantity. All fills must already be accounted. Missing or
+  inconsistent fill history pauses the pair without free-inventory allocation
+  or ledger reset.
 - When inventory exists, also maintain the next standing BUY unless one is
   already active. Its reference is the volume-weighted average execution price
   across all fills of the last completed BUY order (total executed quote
