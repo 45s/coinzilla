@@ -727,6 +727,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   let userDataHandlers
   let snapshotTime = 0
   let baseBalance = "0"
+  let signalRecoveryCompleted
+  const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
   let resolveThreeOrders
   let resolveFiveOrders
@@ -831,6 +833,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       BINANCE_API_SECRET_KEY: "test-secret",
     },
     brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "recovery.cycle_completed") signalRecoveryCompleted()
+        return { ok: true }
+      },
+    },
     logger: { info() {}, error() {} },
   })
   assert.equal(runtime.userDataReady, true)
@@ -965,12 +973,21 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill: sellFill,
     },
   })
+  await recoveryCompleted
+  await subscriptions.get("BTCUSDT")({
+    eventType: "aggTrade",
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp: 5,
+  })
+  assert.equal(submittedOrders.length, 6)
+  assert.equal(submittedOrders[5].side, "BUY")
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL", "BUY", "SELL"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL", "BUY", "SELL", "BUY"])
 })
 
 
