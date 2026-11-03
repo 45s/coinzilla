@@ -132,6 +132,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       return toResult({ data: [{ orderId: 'external-order' }] });
     },
     getFills: async () => toResult({ data: [] }),
+    getCanonicalOrderHistory: async () => toResult({ data: [] }),
     getAccountSnapshot: async () => {
       accountSnapshotCalls += 1;
       return toResult({ data: { balances, sourceTime: accountSnapshotCalls } });
