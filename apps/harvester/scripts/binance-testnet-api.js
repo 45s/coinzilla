@@ -135,3 +135,24 @@ export const getAccountBalances = async () => {
 
   return { balances: data.balances }
 }
+
+export const getOrderHistory = async ({ symbol, limit = 20 }) => {
+  if (typeof symbol !== "string" || !/^[A-Z0-9]{5,20}$/.test(symbol)) {
+    throw new TypeError("A valid uppercase Binance symbol is required for order history")
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
+    throw new RangeError("Order history limit must be an integer between 1 and 1000")
+  }
+
+  const { data } = await binanceTestnetRequest({
+    method: "GET",
+    path: "/api/v3/allOrders",
+    params: { symbol, limit },
+  })
+
+  if (!Array.isArray(data)) {
+    throw new Error("Binance TESTNET returned an invalid order-history response")
+  }
+
+  return { orders: data }
+}

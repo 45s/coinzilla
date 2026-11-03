@@ -130,3 +130,49 @@ as `timestamp`, `recvWindow`, or `signature`. Account, open-order, and order
 submission endpoints continue to use signed requests. The shared helper keeps
 these two request types separate and tests that public query construction
 does not add authentication parameters.
+
+
+## List recent order history (read-only)
+
+Run from the repository root:
+
+```sh
+# Latest 20 orders for the default ZROUSDT symbol
+pnpm --filter @coinzilla/harvester testnet:history
+
+# Latest 50 orders for ZROUSDT
+pnpm --filter @coinzilla/harvester testnet:history -- ZROUSDT 50
+
+# Latest 20 orders for another symbol
+pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
+```
+
+The command calls the signed Spot TESTNET endpoint `GET /api/v3/allOrders`.
+Binance requires one symbol per request, so this tool does not return a
+mixed-symbol account-wide history. The default symbol is `ZROUSDT`; the
+default limit is 20 and the accepted limit is 1-1000. Binance returns the
+most recent orders up to the requested limit; the script displays them
+newest-first.
+
+The table includes exchange time, order ID, symbol, side, type, price,
+original quantity, executed quantity, cumulative quote quantity, status,
+and client order ID. Decimal values are printed exactly as returned by
+Binance. Historical orders can have a negative cumulative quote quantity
+when Binance does not have that value available.
+
+The endpoint includes active, canceled, and filled orders, as well as other
+exchange-recorded terminal statuses such as rejected or expired orders.
+It is read-only and does not place, cancel, or modify orders.
+
+**Diagnostic limitation:** a submission rejected before Binance creates an
+order may not appear in order history. Preserve the original broker/API
+error code and message in Harvester diagnostics when investigating an
+order-submission failure. An empty order-history result does not prove that
+a failed submission was never attempted.
+
+The command is implemented by
+`scripts/list-testnet-order-history.js`. Its argument parsing and order
+normalization/sorting are plain pure functions in
+`scripts/testnet-order-history-utils.js`, with deterministic offline tests.
+It reuses the existing signed TESTNET request helper and does not add
+dependencies or connect to the trading runtime.
