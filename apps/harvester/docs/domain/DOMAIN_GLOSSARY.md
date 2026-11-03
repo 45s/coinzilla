@@ -14,7 +14,7 @@ This glossary defines terms used by the Conservative (Free-Roll) domain. It sepa
 |---|---|---|
 | Market | Canonical base/quote asset pair, with a stable market identity. | Shared entity supplied to domain |
 | Market price | Validated latest traded price used as a strategy input. It is not a fill price. | Application/boundary input |
-| Pair configuration | Strategy settings for one market: step percent, order quantity, keep quantity, configured maker/taker rates, optional investment limit. | Validated application input; semantics owned by strategy |
+| Pair configuration | Strategy settings for one market: step percent, order quantity, keep quantity, configured maker/taker rates, Harvester's current required per-pair investment limit. | Validated application input; semantics owned by strategy |
 | Strategy settings | Global Conservative settings, including quote-denominated `minProfit`. | Validated application input; semantics owned by strategy |
 | BUY intent | Pure proposal to submit a BUY limit order at a calculated price and quantity. It is not an accepted order or an execution. | Domain output |
 | SELL intent | Pure proposal to submit a recovery SELL. It is not proof of a sale or proceeds. | Domain output |
