@@ -16,9 +16,9 @@
 ## 2. Per-fill accounting
 
 For each confirmed fill, define:
-- (q): gross executed base quantity;
-- (v): gross executed quote notional (`Fill.quoteQuantity`);
-- (c_b): sum of commission amounts charged in base asset;
+- `q`: gross executed base quantity;
+- `v`: gross executed quote notional (`Fill.quoteQuantity`);
+- `c_b`: sum of commission amounts charged in base asset;
 - (c_q): sum of commission amounts charged in quote asset.
 
 Zero commission is zero. Negative commissions, incomplete commission facts, unsupported third-asset commissions, non-positive execution quantity/notional, or commissions that exceed the corresponding fill amount are invalid under the current policy.
@@ -104,7 +104,7 @@ $$
 
 ## 5. Recovery SELL planning invariants
 
-Let (A) be active base quantity, (K) keep quantity, (f) the approved fee reserve, (s) the quantity step, (t) the price tick, (C) BUY cost, (P) confirmed net SELL proceeds, and (m) minimum profit.
+Let `A` be active base quantity, `K` keep quantity, `f` the approved fee reserve, `s` the quantity step, `t` the price tick, `C` BUY cost, `P` confirmed net SELL proceeds, and `m` minimum profit.
 
 $$
 SellableBase = \max(0,A-K)
@@ -119,7 +119,7 @@ $$
 MinimumPrice = \frac{RequiredNetProceeds}{Q(1-f)}
 $$
 
-When (Q>0), the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
+When `Q > 0`, the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
 
 Required properties:
 - (0 \le Q\) and (Q) is an exact multiple of (s).
