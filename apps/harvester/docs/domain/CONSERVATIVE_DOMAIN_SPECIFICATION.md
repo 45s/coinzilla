@@ -1,6 +1,6 @@
 # Conservative Domain Specification
 
-**Phase:** D0 — discovery and specification only  
+**Phase:** D0 — specification and implementation alignment  
 **Authority:** Harvester's Conservative strategy contract  
 **Comparison target:** current Harvester `src/domain` on `develop`  
 **Status:** Working Conservative behavior contract; align implementation one behavior at a time.
@@ -99,7 +99,7 @@ For each BUY fill:
 - Add the resulting net base amount to active inventory.
 - Add executed quote notional plus quote commission to `buyCost`.
 
-Partial fills are accounted incrementally. A BUY order is considered complete for the lifecycle transition only when the order's actual fill quantities sum exactly to the order quantity and the broker reports FILLED. A FILLED status with incomplete aggregate fill history pauses; it does not trigger recovery completion/next-order transitions.
+Partial fills are accounted incrementally. A BUY order is considered complete for the lifecycle transition only when the order's actual fill quantities sum exactly to the order quantity and the broker reports FILLED. A FILLED status with incomplete aggregate fill history pauses; it does not trigger recovery completion/next-order transitions. The next-BUY reference is calculated as total executed quote notional divided by total executed base quantity across every fill in that BUY order. It is not the submitted limit price and is not simply the price of the final partial fill. The completed order’s fill quantity must reconcile exactly to its reported executed quantity and original quantity before the recovery SELL/next-BUY transition proceeds.
 
 ### 4.3 Recovery SELL planning
 
