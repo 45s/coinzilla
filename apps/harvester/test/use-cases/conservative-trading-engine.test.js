@@ -327,6 +327,14 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
 
   const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" })
   const pendingSellOrder = await pendingSellStarted.promise
+  assert.equal(
+    submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
+    false,
+  )
+
+  pendingSell.resolve(toResult({ data: pendingSellOrder }))
+  await placingRecoveryOrders
+
   const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
   assert.ok(secondBuyIntent)
   const secondBuy = new CanonicalOrder({
@@ -360,10 +368,9 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     }),
   })
 
-  assert.deepEqual(cancellations, [])
-  pendingSell.resolve(toResult({ data: pendingSellOrder }))
-  await placingRecoveryOrders
   await partialFill
+  assert.deepEqual(cancellations, [])
+  await finalFill
   await cancelStarted.promise
 
   const sellFillEvent = createTradeEvent({
