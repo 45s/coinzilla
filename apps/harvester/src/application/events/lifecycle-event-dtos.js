@@ -1,4 +1,4 @@
-import { assertObjectInput, toResult } from "@coinzilla/utils"
+import { assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
 const OUTCOMES = Object.freeze(["success", "failed"])
@@ -206,6 +206,86 @@ export const mapBrokerStatusChangedData = (input = {}) =>
       recoveryRequired,
       ...(attempt === undefined ? {} : { attempt }),
       ...(code === undefined || code === null ? {} : { code }),
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })
+
+
+const requireDecimalString = ({ value, field }) => {
+  if (typeof value !== "string") throw new TypeError(field + " must be a decimal string")
+  assertDecimalString({ value, field })
+  return value
+}
+
+const requireOrderFacts = ({ order }) => {
+  if (!order || typeof order !== "object" || !order.market?.symbol) {
+    throw new TypeError("order must contain canonical market facts")
+  }
+  return {
+    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    symbol: requireString({ value: order.market.symbol, field: "symbol" }),
+    side: order.side === "BUY" || order.side === "SELL"
+      ? order.side
+      : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+    type: requireString({ value: order.type, field: "type" }),
+    price: requireDecimalString({ value: order.limitPrice?.amount, field: "price" }),
+    quantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "quantity" }),
+  }
+}
+
+/** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
+export const mapStrategyDecisionData = (input = {}) =>
+  mapData(input, "Strategy-decision event mapping", ({ strategy, symbol, referencePrice, actions }) => {
+    if (strategy !== "CONSERVATIVE") throw new TypeError("strategy must be CONSERVATIVE")
+    if (!Array.isArray(actions) || actions.length === 0) {
+      throw new TypeError("strategy decision must contain at least one actionable order")
+    }
+    return {
+      strategy,
+      symbol: requireString({ value: symbol, field: "symbol" }),
+      referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
+      actions: actions.map((action, index) => ({
+        side: action?.side === "BUY" || action?.side === "SELL"
+          ? action.side
+          : (() => { throw new TypeError("actions[" + index + "].side must be BUY or SELL") })(),
+        type: requireString({ value: action?.type, field: "actions[" + index + "].type" }),
+        price: requireDecimalString({ value: action?.price, field: "actions[" + index + "].price" }),
+        quantity: requireDecimalString({ value: action?.quantity, field: "actions[" + index + "].quantity" }),
+        ...(action?.reason === undefined ? {} : {
+          reason: requireString({ value: action.reason, field: "actions[" + index + "].reason" }),
+        }),
+      })),
+    }
+  })
+
+/** Map the local pending order immediately before broker submission. */
+export const mapOrderSubmissionRequestedData = (input = {}) =>
+  mapData(input, "Order-submission-requested event mapping", ({ order }) => ({
+    ...requireOrderFacts({ order }),
+    status: requireString({ value: order.status, field: "order.status" }),
+  }))
+
+/** Map only a broker-acknowledged canonical order. */
+export const mapOrderSubmittedData = (input = {}) =>
+  mapData(input, "Order-submitted event mapping", ({ order }) => ({
+    ...requireOrderFacts({ order }),
+    brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+    status: requireString({ value: order.status, field: "order.status" }),
+  }))
+
+/** Map a rejected or unknown submission without retaining raw errors or SDK data. */
+export const mapOrderSubmissionFailedData = (input = {}) =>
+  mapData(input, "Order-submission-failed event mapping", ({ order, outcome, error }) => {
+    if (!["REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(outcome)) {
+      throw new TypeError("outcome must be REJECTED_OR_UNKNOWN or UNKNOWN")
+    }
+    return {
+      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      side: order?.side === "BUY" || order?.side === "SELL"
+        ? order.side
+        : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+      outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
   })

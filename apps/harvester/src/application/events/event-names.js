@@ -16,4 +16,8 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   BROKER_STATUS_CHANGED: "broker.status_changed",
   BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
   BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
+  STRATEGY_DECISION: "strategy.decision",
+  ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
+  ORDER_SUBMITTED: "order.submitted",
+  ORDER_SUBMISSION_FAILED: "order.submission_failed",
 })

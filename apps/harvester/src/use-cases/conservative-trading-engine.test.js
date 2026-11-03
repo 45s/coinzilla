@@ -45,13 +45,16 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, onPlaceOrder } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
+      onPlaceOrder?.({ order })
+      if (placeOrderThrow) throw new Error("socket closed")
+      if (placeOrderFailure) return { ok: false, errors: [new Error("broker rejected order")] }
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -115,6 +118,7 @@ function createHarness({ cancelWithFill = false } = {}) {
   }
   const engine = makeConservativeTradingEngine({
     broker,
+    eventPublisher,
     tradingConfig,
     getPortfolio: () => new Portfolio(),
     getRecoveryLedger: () => RecoveryLedger.empty({ market }),
@@ -177,4 +181,141 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
   assert.equal(orders.length, 1)
   assert.equal(accountedFills.length, 1)
   assert.ok(pauses.includes("TRAILING_BUY_FILLED_DURING_CANCEL"))
+})
+
+
+test("publishes actionable decisions and order submission facts around broker I/O", async () => {
+  const events = []
+  const timeline = []
+  let engine
+  const harness = createHarness({
+    onPlaceOrder: () => timeline.push("broker.placeOrder"),
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      timeline.push("event:" + event.name)
+      if (event.name === "order.submission_requested") {
+        assert.equal(engine.getOrders()[0].status, "PENDING")
+      }
+      if (event.name === "order.submitted") {
+        assert.equal(engine.getOrders()[0].status, "OPEN")
+      }
+      return { ok: true }
+    } },
+  })
+  engine = harness.engine
+  const orders = harness.orders
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(orders.length, 1)
+  assert.deepEqual(timeline, [
+    "event:strategy.decision",
+    "event:order.submission_requested",
+    "broker.placeOrder",
+    "event:order.submitted",
+  ])
+  assert.deepEqual(events.map(({ name }) => name), [
+    "strategy.decision",
+    "order.submission_requested",
+    "order.submitted",
+  ])
+  assert.deepEqual(events[0].data, {
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    actions: [{
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.95",
+      quantity: "1",
+      reason: "INITIAL_BUY",
+    }],
+  })
+  assert.equal(events[1].data.status, "PENDING")
+  assert.equal(events[1].data.clientOrderId, "h-DOGEUSDT-1")
+  assert.equal(events[2].data.status, "OPEN")
+  assert.equal(events[2].data.brokerOrderId, "broker-h-DOGEUSDT-1")
+})
+
+test("EventBus publication failure cannot prevent a broker order", async () => {
+  const { engine, orders } = createHarness({
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(orders.length, 1)
+})
+
+
+test("does not publish repeated NO_ACTION evaluations", async () => {
+  const events = []
+  const { engine } = createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const countAfterSubmission = events.length
+  const result = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.decision.action, "NO_ACTION")
+  assert.equal(events.length, countAfterSubmission)
+})
+
+test("publishes rejected submission outcome without blocking pair pause", async () => {
+  const events = []
+  const { engine, pauses } = createHarness({
+    placeOrderFailure: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(events.map(({ name }) => name), [
+    "strategy.decision",
+    "order.submission_requested",
+    "order.submission_failed",
+  ])
+  assert.equal(events[2].data.outcome, "REJECTED_OR_UNKNOWN")
+  assert.equal(events[2].data.clientOrderId, "h-DOGEUSDT-1")
+  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
+})
+
+
+test("does not await a pending EventBus publisher promise", async () => {
+  const { engine, orders } = createHarness({
+    eventPublisher: { publish: () => new Promise(() => {}) },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(orders.length, 1)
+})
+
+test("publishes unknown submission outcome after a transport exception", async () => {
+  const events = []
+  const { engine } = createHarness({
+    placeOrderThrow: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(events.at(-1).name, "order.submission_failed")
+  assert.equal(events.at(-1).data.outcome, "UNKNOWN")
 })

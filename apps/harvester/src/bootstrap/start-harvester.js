@@ -619,6 +619,7 @@ export async function startHarvester({
       logger.debug?.({ message: "Startup step: composing Conservative trading engine" })
       tradingEngine = makeConservativeTradingEngine({
         broker: guardedBroker,
+        eventPublisher,
         tradingConfig,
         getPortfolio,
         getRecoveryLedger,

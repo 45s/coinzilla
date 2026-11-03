@@ -368,7 +368,7 @@ new BUY below the current last trade, rounded down to the exchange tick.
 
 ## Operational event journal
 
-**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Journal startup remains asynchronous; events published before its subscription becomes active are not captured. Initialization/write failures do not gate bootstrap. Coordinated shutdown draining remains Step 7.
+**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal startup remains asynchronous; events published before its subscription becomes active are not captured. Initialization/write failures do not gate bootstrap. Coordinated shutdown draining remains Step 7.
 
 Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
 
@@ -392,3 +392,28 @@ The application-owned event names are exported from `src/application/events/even
 `src/application/events/lifecycle-event-dtos.js` maps explicit application facts into small allowlisted `toResult({ data })` DTOs. Startup/configuration DTOs contain the broker identifier, current strategy mode, enabled market symbols, and trading-enabled flag as applicable; they never copy the full trading config, credentials, or account snapshot. Failure DTOs contain a bounded error name/message only: stack and cause are omitted, and common labelled secret/token/authorization values and URL credentials are redacted. These mappings are published from the process and bootstrap lifecycle boundaries. `broker.status_changed` is limited to meaningful user-data transitions exposed by the broker callback; `recovered` means the remote stream is restored but does not prove Harvester account/order reconciliation. Journal persistence remains best-effort and can miss events published before its asynchronous subscription is active. No financial decimal values are part of these initial lifecycle DTOs; future financial event contracts must preserve canonical decimal strings.
 
 The implementation is deliberately split into independently testable PRs and has no TESTNET prerequisite. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
+
+
+### Strategy decision and order submission events
+
+The Step 5a contract adds `strategy.decision`, `order.submission_requested`,
+`order.submitted`, and `order.submission_failed`. Only actionable decisions
+are published, after available-balance filtering; repeated NO_ACTION evaluations
+are omitted. The decision DTO contains the strategy, market symbol, reference
+price, and allowlisted order intents.
+
+The order-request event is published after the local PENDING canonical order
+has been registered and immediately before broker I/O. The submitted event is
+published only after the broker returns a canonical acknowledgement with the
+matching client order ID and the local order registry accepts it. Rejected or
+unknown outcomes include only safe identifiers plus a sanitized error
+name/message. The current broker result contract reports failed results as
+`REJECTED_OR_UNKNOWN`; transport exceptions and acknowledgement-registration
+failures are `UNKNOWN`. Do not claim a definitive exchange rejection unless the
+broker port later exposes that distinction. Price and quantity remain exact decimal strings.
+
+These events are emitted through the existing best-effort publisher. The engine
+does not await subscriber delivery or Journal persistence, and publication
+failure cannot prevent broker submission. Pause/resume and cancellation events
+are deliberately deferred to Step 5b; execution and accounting facts remain
+Step 6.
