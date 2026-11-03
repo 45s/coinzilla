@@ -87,6 +87,22 @@ Key characteristics:
 
 The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
 
+### Shared commission policy — Conservative and Aggressive
+
+`makerPercent` and `takerPercent` are separate configured commission rates. For each pair, retain the highest commission rate the exchange has charged on a confirmed MAKER fill and the highest rate charged on a confirmed TAKER fill. Keep these histories separate and retain them across successful recovery cycles.
+
+- Effective MAKER rate = the higher of configured `makerPercent` and the highest exchange-charged MAKER rate observed.
+- Effective TAKER rate = the higher of configured `takerPercent` and the highest exchange-charged TAKER rate observed.
+- A MAKER fill updates only the MAKER rate; a TAKER fill updates only the TAKER rate.
+- The configured rate is the minimum planning assumption. An exchange charge may raise it, never lower it.
+- A `LIMIT_MAKER` order uses the MAKER rate for planning. A `LIMIT` order that may fill as either maker or taker reserves the higher of the two effective rates.
+- Both Conservative and Aggressive follow this same rule. The fee depends on how the exchange executes the fill, not on the strategy name.
+- Fill accounting uses the commission charged on each fill. The planning reserve is not booked as an expense.
+
+Example: configured MAKER rate 0.1%, exchange charges 0.2% on a MAKER fill → effective MAKER rate is 0.2%. If it charges 0.05%, the effective rate stays 0.1%. If configured MAKER rate is zero and the exchange charges 0.05%, the effective rate is 0.05%. Apply the same comparisons independently to TAKER fills and `takerPercent`.
+
+**Implementation status:** the current Harvester code still has one combined observed rate and combined configured ceiling. Separate MAKER/TAKER history and the persistent per-type calculation are a follow-up implementation task; this documentation records the agreed contract, not a claim of completed runtime support.
+
 ### Aggressive — grid-style trading
 
 Aggressive is a higher-risk, grid-style strategy. It trades price movements using multiple active BUY and SELL orders. Unlike Conservative, it does not try to consolidate the whole position after every BUY; while it controls the pair, it can maintain several order opportunities and corresponding exits at the same time. It relinquishes control when actual executed BUY fills push the Position's quote investment above `conservativeTakeoverPercent` of the pair's planned total quote budget. Open/unfilled BUY orders are excluded from this strategy-switch calculation.
