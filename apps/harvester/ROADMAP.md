@@ -1,5 +1,16 @@
 # Harvester Roadmap
 
+> **UPDATED DELIVERY ORDER — 2026-11-03: DOMAIN FIRST, INTEGRATION SECOND.**
+>
+> The previous trading-first implementation sequence is superseded for the current P0.7 work. Before continuing Harvester engine/application/broker integration, first specify the Conservative trading domain from the working `apps/bot-free-roll` behavior, implement it as broker-independent domain logic, prove its accounting and lifecycle invariants with direct tests/coverage, and document/freeze the contract. Only then resume integration and bounded TESTNET acceptance.
+>
+> **Active plan:** [Harvester Domain-First Delivery Plan](./docs/DOMAIN_FIRST_DELIVERY_PLAN.md).
+>
+> **PR state:** PR #479 is intentionally open as Draft and paused; do not merge or continue it during domain phases D0–D3. It is retained as reference material. PR #477 remains the merged infrastructure/order-ownership baseline and must not be reimplemented.
+>
+> Older roadmap sections below contain historical implementation status and previous sequencing instructions. Where they say to prioritize engine integration or TESTNET before domain completion, this notice and the Domain-First Delivery Plan take precedence. Keep historical evidence, but do not treat old task checklists as the current execution order.
+
+
 > **Product direction — 2026-11-03 (mandatory): launch the trading app first, then improve it.**
 > Harvester must reproduce the working Conservative/Free-Roll trading behaviour before adding more infrastructure. Use `apps/bot-free-roll` as the behavioural reference and Harvester's DDD boundaries as the implementation structure. Do not redesign the trading lifecycle or add generic frameworks when the working sibling app already demonstrates the required behaviour.
 >
