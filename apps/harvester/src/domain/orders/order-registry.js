@@ -41,6 +41,18 @@ function isStaleOrderUpdate({ current, next }) {
   ) {
     return true
   }
+  if (
+    ["CANCELED", "EXPIRED"].includes(current.status) &&
+    ["OPEN", "PARTIALLY_FILLED"].includes(next.status) &&
+    compareDecimal({
+      left: next.executedQuantity.amount,
+      right: current.executedQuantity.amount,
+    }) <= 0
+  ) {
+    // A delayed non-terminal report may arrive after the cancellation
+    // response. The cancellation snapshot and fill history remain authoritative.
+    return true
+  }
   return current.status !== "PENDING" &&
     next.status === "OPEN" &&
     current.status !== "OPEN"
@@ -152,6 +164,25 @@ export class OrderRegistry {
       registry: new OrderRegistry({ orders: [...this.#orders, order] }),
       applied: true,
       duplicate: false,
+    })
+  }
+
+  removePending({ clientOrderId } = {}) {
+    if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+      throw new TypeError("OrderRegistry.removePending requires clientOrderId")
+    }
+    const current = this.getOrder({ clientOrderId })
+    if (!current) {
+      return Object.freeze({ registry: this, removed: false })
+    }
+    if (current.status !== "PENDING") {
+      throw new Error("OrderRegistry can remove only a PENDING order")
+    }
+    return Object.freeze({
+      registry: new OrderRegistry({
+        orders: this.#orders.filter((order) => order.clientOrderId !== clientOrderId),
+      }),
+      removed: true,
     })
   }
 

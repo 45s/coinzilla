@@ -7,7 +7,7 @@
 >
 > **Not first-loop prerequisites:** Journal/EventBus integration, durable persistence, restart recovery, comprehensive historical reconciliation, generic readiness/state machines, cross-pair allocation, dashboards, Aggressive, and broad reservation frameworks. Keep these deferred unless a specific failing order-flow case proves a narrowly scoped safeguard is required.
 >
-> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. The current implementation still contains stricter startup checks; the next implementation task must compare them with `bot-free-roll` and remove only the unnecessary gates without weakening order-level safety.
+> **Startup/account clarification:** a clean TESTNET account is a useful controlled-test setup, not a product requirement that should permanently prevent the app from launching. Do not require a full account snapshot after every execution report. Use actual fills as the source of strategy accounting. Check the specific free balance and in-process commitments needed before submitting each order. Refresh broker state only when a concrete uncertainty/disconnect/unknown outcome requires it. P0.7 source changes now remove the clean-account/open-order/base-inventory startup gate and per-TRADE snapshots. Local execution of the new regression tests and the full verification sequence is still pending.
 >
 > **No speculative fixes:** reproduce the observed event sequence, inspect the working Free-Roll implementation and shared broker mapping, identify the exact incorrect transition, add a deterministic regression test, then make the smallest change. A readiness deferral is not a broker rejection; a locally registered PENDING order is not cancellable until broker acknowledgement supplies a valid broker order ID.
 
@@ -33,7 +33,7 @@ A first-trading release is not complete until a TESTNET end-to-end scenario demo
 1. Start from the documented command and load/validate configuration.
 2. Connect to the selected broker and establish market-data and user-data streams.
 3. Load account balances and exchange trading rules for every enabled pair.
-4. Establish the minimum safe TESTNET starting state: fresh balances and exchange filters for enabled pairs, a known price, and no unexplained pre-existing orders or strategy inventory. Comprehensive historical reconciliation and durable restart recovery are deferred.
+4. Establish the minimum safe TESTNET starting state: fresh balances and exchange filters for enabled pairs and a known price. External inventory and orders remain unowned and are not silently adopted; a clean account is recommended for a controlled first-cycle run but is not a startup prerequisite. Comprehensive historical reconciliation and durable restart recovery are deferred.
 5. Receive a valid market update and evaluate the selected executable strategy.
 6. Convert the strategy decision into a validated order intent.
 7. Apply shared risk, balance, reservation, precision, minimum-notional, and post-only checks.
@@ -81,9 +81,10 @@ when `HARVESTER_ENABLE_TRADING=true`:
   net-profit condition and leave at least `keepQuantity`; the retained amount
   moves to free inventory and the cycle ledger resets.
 - Startup: explicit TESTNET trading opt-in, exactly one enabled pair, a fresh
-  account snapshot, no open orders, and no pre-existing base inventory.
-  Per-order BUY/SELL quantities are checked against current free account
-  balances. The default config now enables only `ZROUSDT`.
+  initial canonical account snapshot. External open orders and pre-existing
+  inventory are not adopted; order checks use in-process cash flow, owned
+  position quantity, and outstanding commitments. The default config enables
+  only `ZROUSDT`.
 
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
@@ -119,9 +120,9 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Load account balances and distinguish free, locked, and total balances. A canonical free/locked account snapshot is loaded and checked for enabled-market assets; balance allocation and reconciliation against strategy-owned inventory/commitments remain.
 - [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
 - [ ] Seed market state with a current REST price/snapshot before relying on WebSocket trade events; define stale/missing-price behavior.
-- [~] Subscribe to user-data events and surface connection status. For the first controlled TESTNET cycle, use a fresh account snapshot, known enabled-pair filters, and a clean account with no unexplained pre-existing orders/inventory. Do not block the first cycle on full historical REST reconciliation or durable replay. On reconnect or an unknown order outcome, pause new submissions and refresh the affected balances/open orders/order status before resuming; comprehensive history reconciliation is deferred.
-- [~] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, exactly one enabled pair, active user-data stream, fresh account snapshot, empty open-order set, and zero pre-existing base inventory for that pair. Read-only broker mode remains available; reconnect still fails closed.
-- [~] Enable the first TESTNET order only after minimum checks: explicit `HARVESTER_TRADING_MODE=testnet`, non-production NODE_ENV, validated config, enabled-pair exchange filters, fresh account snapshot, active user-data stream, no open orders, and zero pre-existing base inventory. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional and SELL base quantity against the latest free account balances; an unaffordable BUY is deferred while a sellable recovery SELL may still proceed. Explicit reservation accounting remains.
+- [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
+- [x] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, exactly one enabled pair, active user-data stream, and a fresh account snapshot. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
+- [x] Enable the first TESTNET order only after explicit `HARVESTER_TRADING_MODE=testnet`, non-production NODE_ENV, validated config, enabled-pair exchange filters, fresh account snapshot, and active user-data stream. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
 - [ ] Validate environment/config combinations; require explicit TESTNET/live mode selection and explicit live-trading opt-in. Fail closed on ambiguous or missing production settings.
 - [ ] Validate enabled pair configuration against actual exchange assets/filters and fail startup with actionable diagnostics when incompatible.
 
@@ -292,7 +293,40 @@ empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
 
 
-## P0.7 — Restore the simple Free-Roll execution lifecycle (NEXT)
+## P0.7 — Restore the simple Free-Roll execution lifecycle (IN PROGRESS)
+
+### P0.7 implementation progress — source prepared; local verification pending
+
+The working branch now contains the first implementation pass. It follows the
+existing Free-Roll order sequence and keeps Harvester's DDD boundaries:
+
+- Ordinary execution reports no longer close the global readiness gate, and
+  TRADE fills no longer trigger a full account snapshot.
+- Portfolio and RecoveryLedger remain the single in-process accounting source.
+  Order checks account for quote cash flow and active BUY commitments; SELL
+  quantities are capped by active Harvester-owned inventory and outstanding
+  SELL commitments.
+- Startup no longer requires zero base inventory or an empty external open-order
+  list. External inventory/orders are not adopted as Harvester-owned state.
+- Deferred strategy evaluations are retained and can be resumed when readiness
+  returns, without waiting for another market-price tick. Readiness is rechecked immediately before broker I/O; if it closes after local PENDING registration, OrderRegistry removes that local record and submission is returned as a deferral without contacting the broker.
+- A recovery SELL that is still PENDING is not cancellable. Replacement intent
+  is retained until acknowledgement; cancellation continues to require the
+  registered broker order ID. Fill history is reconciled after cancellation,
+  and delayed non-terminal reports after a confirmed cancellation are treated
+  as stale while their fills remain idempotently accounted.
+- Regression tests have been added for readiness deferral, pending SELL
+  acknowledgement ordering, exact cancellation identity, fill-history
+  reconciliation during cancellation, duplicate fill delivery, replacement
+  quantity from latest accounting, and no per-TRADE account snapshot.
+
+**Still required before acceptance:** run the focused Harvester tests and full
+workspace checks locally, fix every failure, inspect the final diff, and
+perform an explicitly bounded Spot TESTNET cycle if credentials are available.
+No local test, CI, or TESTNET success is claimed by this source-preparation
+pass. Native Error/cause/AggregateError serialization from PR #462 is retained
+without a new logging implementation.
+
 
 **Priority: immediate. This task is about making the existing app trade reliably, not adding another architecture layer.** The latest `develop` includes PR #462 (`fix(harvester): serialize order lifecycle and preserve diagnostics`). Continue from that state; do not repeat already-merged work.
 
@@ -309,24 +343,24 @@ updated PR head before treating this repair as verified.
 
 ### Scope A — Remove unnecessary execution-readiness barriers
 
-- [ ] Trace why each execution report sets `userDataReady=false`, why a fresh account snapshot is fetched after each TRADE, and how readiness is restored.
-- [ ] Compare this flow directly with the working `apps/bot-free-roll` execution/fill lifecycle. Reuse its proven sequencing where compatible with Harvester's domain/application boundaries.
-- [ ] Do not fetch a full account snapshot after every fill by default. Portfolio/RecoveryLedger must be updated from canonical actual fills; broker balance refresh is reserved for a concrete need such as startup validation, reconnect, or unknown submission/cancellation outcome.
-- [ ] Do not turn an expected in-process event transition into a generic broker failure or pause. A local readiness deferral must remain distinguishable from a definite exchange rejection and from an unknown network outcome.
-- [ ] If a decision is temporarily deferred while an order/fill transition is being processed, retain the affected symbol and automatically reevaluate it when that transition completes. Do not lose the decision and do not require a new price tick.
-- [ ] Preserve essential checks immediately before each order: valid config/market rules, usable price, sufficient specific free balance, in-process position/commitment limits, order precision/notional, and no duplicate intent.
-- [ ] Reassess the startup requirement for a full account snapshot, no open orders, and zero base inventory. These are currently enforced for the first TESTNET run, but must not be expanded into a permanent prerequisite for the basic app loop. Keep a controlled clean-account TESTNET runbook; do not silently adopt external inventory/orders as Harvester-owned state.
-- [ ] Do not introduce a generic readiness framework, repeated polling, sleeps, or per-execution REST reconciliation.
+- [x] Trace and remove the per-report readiness reset and per-TRADE account snapshot refresh.
+- [x] Compare directly with the working `apps/bot-free-roll` lifecycle and retain Harvester's canonical Fill/Portfolio/RecoveryLedger boundaries.
+- [x] Ordinary TRADE fills update Portfolio/RecoveryLedger without requesting a full account snapshot.
+- [x] Remove the broker readiness guard that misclassified local readiness as a broker rejection. `makeExecuteStrategyDecision` rechecks readiness immediately before broker I/O and removes a locally registered PENDING order if submission is deferred.
+- [x] Retain deferred symbols and resume their latest evaluation when readiness returns, without another market tick.
+- [x] Preserve exchange-rule validation and add free-balance calculations adjusted for actual cash flow, owned inventory, and active in-process order commitments.
+- [x] Remove the clean-account/open-order/base-inventory startup prerequisite. The initial canonical snapshot remains for free-balance validation; external inventory/orders remain unowned. Keep the clean-account TESTNET runbook as a controlled-test recommendation, not a runtime gate.
+- [x] Keep readiness and deferred evaluation local to the existing bootstrap/engine; no polling, sleeps, or per-TRADE REST reconciliation.
 
 ### Scope B — Reconcile recovery SELLs without cancelling PENDING orders
 
-- [ ] Trace the exact recovery SELL submission and BUY-fill replacement path, including order registry transitions and the broker acknowledgement callback.
-- [ ] Keep a PENDING SELL registered and tracked while `placeOrder` is unresolved. PENDING is neither OPEN nor cancellable.
-- [ ] When the broker acknowledges the order, store/validate the broker order ID and transition the order to its acknowledged state.
-- [ ] If a BUY fill requires replacing that SELL while it is PENDING, record/defer the replacement intent. After acknowledgement, cancel using the validated broker order ID, reconcile any fills received during cancellation, then calculate and submit the replacement SELL.
-- [ ] If submission outcome is unknown, do not blindly retry or cancel by a missing ID. Use the existing safe unknown-outcome path and only the minimum targeted status refresh needed to resolve it.
-- [ ] Keep cancellation eligibility validation strict. Do not weaken the validator or treat PENDING as cancellable.
-- [ ] Ensure multiple overlapping BUY fills/replacement requests coalesce or serialize without losing the newest required SELL quantity and without duplicate SELLs.
+- [x] Trace the recovery SELL submission, BUY-fill replacement path, registry transitions, and acknowledgement callback.
+- [x] Keep PENDING SELL orders registered; cancellation explicitly defers while submission is unresolved.
+- [x] Store the acknowledged canonical order in OrderRegistry and require its validated broker order ID for cancellation.
+- [x] Retain per-symbol replacement intent through PENDING acknowledgement; after acknowledgement, cancel by the registered ID, reconcile fills, and reevaluate from latest accounting.
+- [x] Preserve the existing fail-closed unknown submission/cancellation path; no automatic retry was added.
+- [x] Keep PENDING outside the cancellable status set; cancellation still requires a non-empty brokerOrderId.
+- [x] Coalesce replacement intent per symbol and serialize fills/cancellation; replacement sizing reads the latest Portfolio/RecoveryLedger state.
 
 ### Scope C — Diagnostics and failure classification
 
@@ -337,14 +371,14 @@ updated PR head before treating this repair as verified.
 
 ### Required tests
 
-- [ ] Deferred BUY/SELL `placeOrder` promise: a BUY fill arrives while recovery SELL is PENDING; assert no cancellation call occurs before acknowledgement.
-- [ ] Resolve the SELL acknowledgement; assert cancellation uses the exact acknowledged broker order ID, then replacement SELL uses the latest post-fill quantity.
-- [ ] Emit a fill during cancellation; assert it is accounted once and replacement quantity reflects it.
-- [ ] Emit multiple BUY fills while SELL acknowledgement/cancellation is pending; assert no duplicate SELL and latest intent is not lost.
-- [ ] Execute a fill while a strategy evaluation is deferred; assert automatic reevaluation after the transition without requiring a new price tick.
-- [ ] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
-- [ ] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
-- [ ] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
+- [x] Deferred BUY/SELL `placeOrder` promise: a BUY fill arrives while recovery SELL is PENDING; assert no cancellation call occurs before acknowledgement.
+- [x] Resolve the SELL acknowledgement; assert cancellation uses the exact acknowledged broker order ID, then replacement SELL uses the latest post-fill quantity.
+- [x] Emit a fill during cancellation; assert it is accounted once and replacement quantity reflects it.
+- [x] Emit multiple BUY fills while SELL acknowledgement/cancellation is pending; assert no duplicate SELL and latest intent is not lost.
+- [x] Execute a fill while a strategy evaluation is deferred; assert automatic reevaluation after the transition without requiring a new price tick.
+- [x] Assert a local readiness deferral never calls the broker and is not classified as rejection/unknown submission.
+- [x] Assert no full account snapshot is fetched for every ordinary TRADE execution; retain targeted refresh tests for actual uncertainty/reconnect paths.
+- [x] Assert logs preserve Error message/stack/cause and safe event/order correlation fields.
 - [ ] Run deterministic offline Harvester tests, relevant shared-utils tests, lint/syntax checks, and repository CI. TESTNET is a separate explicit opt-in verification; never claim it ran without credentials and observed evidence.
 
 ### Out of scope for P0.7

@@ -1,5 +1,5 @@
 import { Fill } from "@coinzilla/entities"
-import { compareDecimal, defaultLogger, toResult } from "@coinzilla/utils"
+import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
@@ -275,27 +275,23 @@ export async function startHarvester({
   const subscriptions = []
   let userDataSubscription
   let userDataReady = false
-  // Startup permits only a clean, controlled TESTNET account. Reconnects still
-  // close the gate because in-memory state is not comprehensively reconciled.
-  let userDataRequiresReconciliation = true
+  let initialAccountSnapshotReady = false
+  // Startup loads an authoritative initial balance snapshot. Disconnects and
+  // explicit recovery requirements still close the gate because in-memory
+  // order/accounting state is not comprehensively reconciled across reconnects.
+  let userDataRequiresReconciliation = !tradingEnabled
   let userDataAccountingFailed = false
-  let pendingExecutionEvents = 0
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
   let stopped = false
-  const guardedBroker = Object.freeze({
-    ...broker,
-    placeOrder: async ({ order } = {}) => {
-      if (!userDataReady) {
-        return toResult({
-          error: new Error(
-            "Cannot place orders while Harvester user-data accounting is not ready: " + userDataStatus,
-          ),
-        })
-      }
-      return broker.placeOrder({ order })
-    },
-  })
+  const resumeDeferredStrategyEvaluations = ({} = {}) => {
+    if (!tradingEngine || !userDataReady || stopped) return
+    void tradingEngine.resumeDeferredEvaluations().then((result) => {
+      if (!result.ok) logger.error?.({ message: "Harvester deferred strategy evaluation failed", errors: result.errors })
+    }).catch((error) => {
+      logger.error?.({ message: "Harvester deferred strategy evaluation failed", error })
+    })
+  }
   const refreshAccountSnapshot = async () => {
     logger.debug?.({ message: "Account snapshot request started" })
     const result = await broker.getAccountSnapshot()
@@ -374,11 +370,6 @@ export async function startHarvester({
           userDataStatus = "INVALID_EVENT"
           return
         }
-        if (isOrderUpdate) {
-          pendingExecutionEvents += 1
-          userDataReady = false
-          userDataStatus = isExecution ? "EXECUTION_ACCOUNTING_PENDING" : "ORDER_UPDATE_PENDING"
-        }
         let reevaluateSymbol
 
         logger.debug?.({
@@ -404,25 +395,16 @@ export async function startHarvester({
               return
             }
             if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
-          } else if (isExecution) {
-            const accounting = await updateTradingAccounting({ fill: event.fill })
-            if (!accounting.ok) {
-              userDataAccountingFailed = true
-              userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
-              logger.error?.({ message: "Harvester could not account for a canonical execution", errors: accounting.errors })
-              return
-            }
-          }
-
-          if (isExecution) {
-            try {
-              await refreshAccountSnapshot()
-            } catch (error) {
-              userDataAccountingFailed = true
-              userDataStatus = "ACCOUNT_SNAPSHOT_REFRESH_FAILED"
-              logger.error?.({ message: "Harvester could not refresh exchange balances after an execution", error })
-              return
-            }
+          } else if (isOrderUpdate && tradingEnabled) {
+            userDataAccountingFailed = true
+            userDataReady = false
+            userDataStatus = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
+            logger.error?.({
+              message: "Harvester received an order report before its order-ownership registry was ready",
+              symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
+              brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
+            })
+            return
           }
 
           try {
@@ -450,14 +432,11 @@ export async function startHarvester({
           userDataStatus = "EVENT_QUEUE_FAILED"
           logger.error?.({ message: "Harvester user-data event queue failed", error })
         }).finally(async () => {
-          if (isOrderUpdate) pendingExecutionEvents -= 1
           if (stopped) {
             userDataReady = false
             userDataStatus = "STOPPED"
             return
           }
-          if (pendingExecutionEvents !== 0) return
-
           if (userDataAccountingFailed) {
             userDataReady = false
             return
@@ -467,12 +446,18 @@ export async function startHarvester({
             userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
             return
           }
+          if (!initialAccountSnapshotReady) {
+            userDataReady = false
+            userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+            return
+          }
           userDataReady = true
           userDataStatus = "READY"
           if (reevaluateSymbol && tradingEngine) {
             const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
             if (!reevaluated.ok) logger.error?.({ message: "Harvester next strategy evaluation failed", errors: reevaluated.errors })
           }
+          resumeDeferredStrategyEvaluations()
         })
         userDataEventQueue = task
       },
@@ -509,35 +494,32 @@ export async function startHarvester({
           orderUpdatePending: status.orderUpdatePending === true,
         })
         userDataStatus = status.type ?? "UNKNOWN"
-        if (status.executionPending === true || status.orderUpdatePending === true) {
-          userDataReady = false
-          userDataStatus = status.executionPending === true
-            ? "EXECUTION_ACCOUNTING_PENDING"
-            : "ORDER_UPDATE_PENDING"
-        }
-        if (status.recoveryRequired === true || status.reconciliationRequired === true) {
-          userDataRequiresReconciliation = true
-          userDataReady = false
-        } else if (status.type === "reconciled") {
-          // This status only acknowledges stream recovery. It is not evidence
-          // that exchange balances, open orders, execution history, strategy
-          // inventory, and outstanding commitments have been reconciled.
+        const connectionUnsafe = [
+          "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
+        ].includes(status.type)
+        if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
           userDataRequiresReconciliation = true
           userDataReady = false
           userDataStatus = userDataAccountingFailed
             ? "EXECUTION_ACCOUNTING_FAILED"
-            : pendingExecutionEvents > 0
-              ? "EXECUTION_ACCOUNTING_PENDING"
-              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+            : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         } else if (userDataRequiresReconciliation) {
-          // Informational stream statuses such as "ready" must not overwrite
-          // the application-level readiness state while reconciliation is open.
+          // A stream-level "reconciled" acknowledgement alone does not clear
+          // an application-level gate raised by a disconnect or recovery.
           userDataReady = false
           userDataStatus = userDataAccountingFailed
             ? "EXECUTION_ACCOUNTING_FAILED"
-            : pendingExecutionEvents > 0
-              ? "EXECUTION_ACCOUNTING_PENDING"
-              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+            : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+        } else if (userDataAccountingFailed) {
+          userDataReady = false
+          userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
+        } else if (initialAccountSnapshotReady && tradingEnabled) {
+          userDataReady = true
+          userDataStatus = "READY"
+          resumeDeferredStrategyEvaluations()
+        } else if (!initialAccountSnapshotReady) {
+          userDataReady = false
+          userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
@@ -591,45 +573,32 @@ export async function startHarvester({
     const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
+    initialAccountSnapshotReady = true
     logger.debug?.({ message: "Startup step completed: initial account snapshot ready" })
     if (tradingEnabled) {
-      logger.debug?.({ message: "Startup step: validating clean TESTNET account" })
+      if (userDataAccountingFailed) {
+        throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
+      }
+      if (userDataRequiresReconciliation) {
+        throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
+      }
+      logger.debug?.({ message: "Startup step: validating Conservative TESTNET pair scope" })
       const enabledPairs = Object.entries(tradingConfig.pairs).filter(([, pairConfig]) => pairConfig.enabled)
       if (enabledPairs.length !== 1) {
         throw new Error("The first Conservative TESTNET trading cycle requires exactly one enabled pair")
       }
-      for (const [symbol] of enabledPairs) {
-        const metadata = marketMetadata.get(symbol)
-        logger.debug?.({ message: "Checking for pre-existing open orders", symbol })
-        const openOrders = await broker.getOpenOrders({ symbol })
-        if (!openOrders?.ok || !Array.isArray(openOrders.data)) {
-          throw new Error("Unable to verify clean TESTNET open orders for " + symbol)
-        }
-        if (openOrders.data.length > 0) {
-          throw new Error("TESTNET account has pre-existing open orders for " + symbol + "; cancel or reconcile them before starting Harvester")
-        }
-        logger.debug?.({
-          message: "Checking initial base-asset inventory",
-          symbol,
-          asset: metadata.market.baseAsset.code,
-        })
-        const baseBalance = accountSnapshot.getBalance({ assetId: metadata.market.baseAsset.id })
-        if (!baseBalance || compareDecimal({ left: baseBalance.free.amount, right: "0" }) !== 0 ||
-            compareDecimal({ left: baseBalance.locked.amount, right: "0" }) !== 0) {
-          throw new Error("TESTNET account has pre-existing " + metadata.market.baseAsset.code + " inventory for " + symbol + "; clear it before starting Harvester")
-        }
-      }
+      const symbol = enabledPairs[0][0]
       logger.info?.({
-        message: "Clean TESTNET account checks passed",
-        symbol: enabledPairs[0][0],
-        openOrderCount: 0,
+        message: "Conservative TESTNET startup checks passed; external inventory and orders remain unowned",
+        symbol,
+        accountSnapshotSourceTime: accountSnapshot.sourceTime,
       })
       userDataRequiresReconciliation = false
       userDataReady = true
       userDataStatus = "READY"
       logger.debug?.({ message: "Startup step: composing Conservative trading engine" })
       tradingEngine = makeConservativeTradingEngine({
-        broker: guardedBroker,
+        broker,
         eventPublisher,
         tradingConfig,
         getPortfolio,

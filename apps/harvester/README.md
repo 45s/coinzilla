@@ -108,8 +108,8 @@ The configuration loader and validation are implemented. Conservative is the fir
 
 The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
 
-- `logger.debug({ message, ...context })` traces startup stages, broker operations, market metadata/rule validation, user-data subscription and status, account snapshot loading, open-order/base-inventory checks, market-price processing, and cleanup. A failed startup leaves the last completed/in-progress stage visible; debug output is suppressed when `NODE_ENV=production` by the shared logger.
-- `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, accepted account snapshot, clean TESTNET readiness, engine activation, active market subscriptions, and shutdown.
+- `logger.debug({ message, ...context })` traces startup stages, broker operations, market metadata/rule validation, user-data subscription and status, initial account snapshot loading, order ownership/commitment checks, market-price processing, and cleanup. A failed startup leaves the last completed/in-progress stage visible; debug output is suppressed when `NODE_ENV=production` by the shared logger.
+- `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, accepted initial account snapshot, trading readiness, engine activation, active market subscriptions, and shutdown.
 - `logger.error({ message, errorName, errorMessage, errorStack })` records actionable failures. The process entry point also emits normalized nested error details so `Error` and `AggregateError` messages/stacks remain visible in structured logs. Startup tests verify both the original error and its normalized diagnostic details.
 - Never log API keys, API secrets, signed requests, or raw exchange payloads. Market-price diagnostics include only the symbol, price, and event timestamp; user-data diagnostics include event type and relevant symbol/side metadata.
 
@@ -139,7 +139,7 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup enforces exactly one enabled pair, no open orders, and zero pre-existing base inventory for that pair. Enable additional pairs only after shared-asset allocation is implemented.
+Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
 
 ```sh
 HARVESTER_BROKER=binance
@@ -151,7 +151,7 @@ BINANCE_API_SECRET_KEY=...
 
 ### Trading-first implementation direction
 
-The clean-account checks described below are the **current implementation's temporary first-TESTNET restrictions**, not the intended permanent Harvester startup contract. The next P0.7 task in [ROADMAP.md](./ROADMAP.md) is to compare them with the working `bot-free-roll` workflow and remove unnecessary startup/account-snapshot barriers while preserving per-order balance checks, order ownership, duplicate prevention, and safe unknown-outcome handling. Ordinary execution reports should update in-process accounting; they should not trigger a full account snapshot by default. Until that implementation is merged, follow the existing runbook exactly because the current code still enforces its clean-account requirements.
+Harvester follows the working `apps/bot-free-roll` execution sequence: subscribe to prices, submit the initial limit BUY, account canonical TRADE fills, and manage the recovery SELL from actual in-process accounting. The initial account snapshot supplies the starting free balances; subsequent order checks subtract net quote spent, add realized quote proceeds, and reserve outstanding in-process BUY/SELL commitments. SELL quantities are additionally capped by the active base inventory in Harvester's Portfolio, so external base inventory and its free/locked balances are never adopted as strategy-owned inventory. External open orders are not registered as Harvester orders; an execution report for an unowned order after engine activation remains an ownership violation and pauses the affected pair, while an order report received before the ownership registry is ready aborts trading startup. Read-only mode does not adopt external fills into Portfolio. Ordinary TRADE fills for registered Harvester orders update Portfolio and RecoveryLedger exactly once and do not trigger full account snapshots.
 
 ## Controlled TESTNET runbook
 
@@ -162,10 +162,12 @@ The clean-account checks described below are the **current implementation's temp
    `HARVESTER_ENABLE_TRADING=true`. Keep `NODE_ENV=development`.
 3. Keep exactly one pair enabled. The committed default is `ZROUSDT`;
    `ZROFDUSD`, DOGEUSDT, and SOLFDUSD are disabled.
-4. In the TESTNET account, cancel every existing order for the enabled pair
-   and clear its base-asset balance. Leave sufficient free quote balance for
-   the configured investment. Startup deliberately refuses an ambiguous
-   account.
+4. For a controlled first-cycle test, inspect the TESTNET account and preferably
+   cancel existing orders for the enabled pair. External orders and pre-existing
+   base inventory are not adopted by Harvester and are not sold by its strategy;
+   they may still affect the exchange free balance. Leave sufficient free quote
+   balance for the configured investment. These clean-account steps are a
+   runbook precaution, not a startup prerequisite.
 5. Start the app with
    `pnpm --filter @coinzilla/harvester dev`.
 6. Confirm the broker connects, user-data readiness becomes READY, and the
@@ -193,7 +195,7 @@ durable restart recovery.
 
 Without `HARVESTER_BROKER=binance`, startup validates configuration but does not connect to an exchange. With it, bootstrap creates the Harvester broker port through the Binance infrastructure adapter, connects, and subscribes to price streams for every pair whose `enabled` flag is true. A failed connection or price subscription causes startup to fail; already-created subscriptions are removed and disconnect is attempted. Shutdown closes the trading gate first, drains queued user-data processing, and unsubscribes market data before disconnecting; queued fills cannot schedule new orders after shutdown begins.
 
-Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The first trading run is deliberately limited to one enabled pair and requires a clean TESTNET account with no open orders or pre-existing base inventory. Strategy BUY intents respect the configured pair investment cap; the engine checks each BUY against free quote balance and each SELL against free base balance. If quote funds are insufficient for the next BUY, a valid recovery SELL is still allowed to proceed. Aggressive remains deferred.
+Each normalized broker price event is validated by the `process-market-price` application use case, then passed to the injected strategy with its pair configuration and process-wide settings. When `HARVESTER_ENABLE_TRADING=true`, bootstrap composes the Conservative policy with the in-process trading engine. With trading disabled, the process remains read-only. Price events produce validated BUY/SELL intents, orders are registered before submission, and canonical user-data events update only Harvester-owned orders. The engine waits for full fills before advancing the strategy. The first trading run is deliberately limited to one enabled pair. Strategy BUY intents respect the configured pair investment cap; the engine checks each BUY against free quote balance after accounting for net quote cash flow and outstanding in-process BUY commitments. Each SELL is capped by active Harvester-owned base inventory and free base balance after outstanding SELL commitments. External inventory and orders remain unowned. If quote funds are insufficient for the next BUY, a valid recovery SELL is still allowed to proceed. Aggressive remains deferred.
 
 Price events are trade-price updates from the broker's aggregate-trade stream; Harvester does not currently seed the strategy with a REST ticker snapshot. The broker user-data stream is normalized into canonical order and Fill events. Harvester correlates order updates against its in-process registry and applies actual fills to Portfolio and RecoveryLedger. Reconnect recovery, durable restart state, reservation accounting, and complete TESTNET BUY → SELL → next-cycle proof remain unfinished.
 
@@ -205,7 +207,7 @@ readiness status, and `stop`). It deliberately does **not** expose the broker
 port or a standalone `placeOrder` function. All order submission must flow
 through the Conservative trading engine so strategy decisions, market rules,
 balance checks, order ownership, and fill lifecycle cannot be bypassed by
-runtime callers.
+runtime callers. Ordinary execution reports do not close the global trading readiness gate; actual accounting failures and disconnect/recovery conditions still do. Strategy evaluations deferred by a genuine readiness gate are retained and resumed when the gate becomes ready, without requiring another market-price tick.
 
 Startup logging reports the actual mode:
 - **Conservative TESTNET trading enabled:** the engine is composed and waits
@@ -220,7 +222,7 @@ with documentation deferred to a later follow-up commit.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, clean TESTNET startup checks, and graceful shutdown. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable recovery, reservations, comprehensive reconciliation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. P0.7 regression tests have been added but still require local execution. Not yet demonstrated: a complete TESTNET BUY → SELL → next-cycle run. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
 
 
 ## Standalone Binance TESTNET order tools

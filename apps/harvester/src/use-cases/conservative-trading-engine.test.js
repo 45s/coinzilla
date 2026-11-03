@@ -49,6 +49,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
   const orders = []
   const pauses = []
   const accountedFills = []
+  const accountedFillIds = new Set()
   const completedCycles = []
   const cancellationIds = []
   const broker = {
@@ -134,8 +135,15 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: async ({ fill }) => {
+      if (accountingFailure) {
+        accountedFills.push(fill)
+        return { ok: false, errors: [new Error("unsupported commission asset")] }
+      }
+      if (accountedFillIds.has(fill.id)) {
+        return { ok: true, data: { applied: false, duplicate: true } }
+      }
+      accountedFillIds.add(fill.id)
       accountedFills.push(fill)
-      if (accountingFailure) return { ok: false, errors: [new Error("unsupported commission asset")] }
       return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
     },
     completeRecoveryCycle: async ({ marketId }) => {
