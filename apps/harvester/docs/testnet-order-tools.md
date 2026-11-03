@@ -119,3 +119,14 @@ quantity validation and step-size rounding live in the pure
 `scripts/testnet-sell-utils.js` module and are covered by
 `scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
 request helper. No live trading host or production mode is configurable.
+
+
+### Exchange metadata request behavior
+
+The ZRO sell preview reads `GET /api/v3/exchangeInfo` using the public
+TESTNET market-data request path. This endpoint must receive only its supported
+parameters (here, `symbol`); it must not receive signed-account metadata such
+as `timestamp`, `recvWindow`, or `signature`. Account, open-order, and order
+submission endpoints continue to use signed requests. The shared helper keeps
+these two request types separate and tests that public query construction
+does not add authentication parameters.
