@@ -259,7 +259,11 @@ diagnostics. For an execution report, an `IGNORED` outcome means the
 canonical registry update was duplicate or stale (the engine returns an
 ignored result for those cases). A repeated CANCELED report for an order
 already canceled is therefore expected to be harmless: it must not apply a
-fill, alter a replacement order, or complete a recovery cycle.
+fill, alter a replacement order, or complete a recovery cycle. The
+engine regression now reproduces the mismatched Binance `c` / `C` identifiers
+for a canceled old recovery SELL, then replays that terminal report and proves
+the acknowledged replacement SELL remains OPEN and owned without a duplicate
+submission.
 
 The supplied excerpt does not include the registry entry/status/timestamp for
 667975 or the matching order-history row, so it cannot distinguish an exact
