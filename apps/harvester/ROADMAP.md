@@ -584,3 +584,44 @@ Regression coverage added:
 - Registry rejects an event when its broker ID and client ID point to different registered orders.
 
 This is an intentional port of Free-Roll's proven order matching rule, not a new ownership strategy. The real TESTNET acceptance target remains BUY fill → recovery SELL submission/fill → next BUY.
+
+### P0.7 trading-cycle sequencing correction — 2026-11-03
+
+The TESTNET run at approximately 17:00 showed repeated BUY fills while recovery
+SELL orders were being created and canceled. The supplied order sequence
+included BUY orders 667923–667926 filled within seconds, while recovery SELL
+orders were repeatedly canceled/replaced. Harvester was then shut down cleanly
+at 17:03:19. This is not an accepted trading cycle; do not restart until the
+correction is fetched and the outstanding TESTNET account state is inspected.
+
+Source comparison identified a strategy sequencing gap. The Conservative
+policy previously evaluated BUY and SELL independently: when no BUY was active,
+it could submit another BUY even while a recovery SELL was active or invested
+quote capital remained outstanding. This contradicted the required Free-Roll
+cycle sequence.
+
+The policy now enforces the recovery-first invariant:
+
+1. A BUY may be submitted only when there is no active BUY, no active recovery
+   SELL, and outstanding recovery capital is zero.
+2. Once a BUY fill creates outstanding recovery capital, the policy emits the
+   recovery SELL only; it does not submit the next BUY alongside it.
+3. While the recovery SELL is active, repeated market-price evaluations cannot
+   submit another BUY or duplicate the SELL.
+4. The next BUY becomes eligible only after a successful recovery SELL fill
+   completes the cycle and the recovery ledger is reset by the existing
+   completion workflow.
+5. Existing partial-fill waiting, order ownership, broker-ID matching, and
+   cancellation/fill reconciliation remain in force.
+
+Regression coverage changes the previous expectation of simultaneous BUY +
+SELL into SELL-only after a BUY fill, verifies an active SELL blocks BUY, and
+verifies outstanding recovery capital blocks BUY even if no active SELL is
+currently registered. This is an offline strategy-level regression; it does
+not prove a real TESTNET cycle.
+
+**Still required:** run Harvester and workspace tests/Actions on this updated
+PR head, inspect TESTNET open orders and balances without blindly canceling or
+selling anything, then perform a bounded TESTNET BUY → BUY fill → recovery
+SELL → SELL fill → next BUY run. Keep PR #477 Draft and do not merge until
+those checks and the real TESTNET cycle are complete.
