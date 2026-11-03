@@ -360,3 +360,9 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 - [ ] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points have been wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. A deterministic concurrent market/user-data regression test holds recovery SELL submission unresolved, then verifies cancellation waits while the PENDING order has no brokerOrderId (undefined), then uses the acknowledged ID, and does not double-account a duplicate fill. This work remains unverified until the Harvester test suite runs.
 - [ ] Re-entrant external callback behavior, cancellation eligibility and broker identifier validation, full CI, and TESTNET verification remain outstanding.
+
+
+### P0.6 implementation progress — cancellation eligibility
+
+- [ ] Added a pure Harvester cancellation eligibility validator and applied it before recovery SELL and trailing BUY cancellation. The Binance adapter repeats eligibility checks for order-shaped requests and validates all forwarded IDs with the shared exported Binance normalizer. Added unit and adapter regression tests; execution remains pending CI.
+- [ ] Raw ID-only adapter calls receive Binance ID format validation but cannot prove order lifecycle state; Harvester application workflows must use order-shaped requests.

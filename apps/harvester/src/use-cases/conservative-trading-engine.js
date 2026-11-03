@@ -17,6 +17,7 @@ import {
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
+import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
@@ -68,6 +69,15 @@ export function makeConservativeTradingEngine({
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
     dataResult: mapOrderCancelFailedData({ order, outcome, error }),
   })
+  const ensureCancellationEligible = async ({ symbol, order, reason }) => {
+    const result = validateCancellationEligibility({ order })
+    if (result.ok) return result
+    const error = result.errors[0]
+    publishOrderCancelFailed({ order, outcome: "INVALID_CANCELLATION_REQUEST", error })
+    await pause({ symbol, reason, error })
+    return result
+  }
+
   const submit = makeExecuteStrategyDecision({
     broker,
     onPendingOrder: async ({ order }) => {
@@ -111,6 +121,12 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "RECOVERY_SELL_ORDER_STATE_UNKNOWN" })
         return toResult({ error })
       }
+      const eligibility = await ensureCancellationEligible({
+        symbol,
+        order,
+        reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
+      })
+      if (!eligibility.ok) return eligibility
       let cancelResult
       try {
         cancelResult = await broker.cancelOrder({ order })
@@ -183,6 +199,12 @@ export function makeConservativeTradingEngine({
   }
 
   const cancelAndReconcileTrailingBuy = async ({ symbol, order } = {}) => {
+    const eligibility = await ensureCancellationEligible({
+      symbol,
+      order,
+      reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
+    })
+    if (!eligibility.ok) return eligibility
     let cancelResult
     try {
       cancelResult = await broker.cancelOrder({ order })
