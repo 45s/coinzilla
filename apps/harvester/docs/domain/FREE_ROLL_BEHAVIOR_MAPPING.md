@@ -91,6 +91,7 @@
 | SELL plan retains keep and rounds quantity down / price up | Exact planner | Exact planner | Broadly aligned; base-fee edge needs more proof |
 | Actual quote commissions affect recovery | Exact accounting | RecoveryFillAccounting | Correctly implemented |
 | Configured fee reserve before first actual fee | Free-Roll initializes `feeRate = configuredFeeRate` | Harvester returns zero while observed actual rate is zero | Different |
+| Configured fee reserve before first actual fee | Free-Roll initializes `feeRate = configuredFeeRate` | Harvester `calculateSellFeeRate` returns zero until an actual non-zero commission is observed | Different; Harvester may under-reserve first SELL |
 | Configured fee reserve after actual fee | Free-Roll max(configured, actual) | Harvester max(configured ceiling, actual) after observation, except maker=0 policy | Broadly aligned after observation |
 | Completion requires full SELL, profit, sufficient keep | `#handleSellFilled` | `evaluateRecoveryCompletion` | Correctly implemented as separate checks |
 | Completion/reset orchestration | Free-Roll performs allocation and reset in `#handleSellFilled` | Harvester helper returns eligibility; ledger has separate reset method | Decision exists, integration/cross-transition proof absent |
