@@ -279,3 +279,28 @@ It is TESTNET-only and is not part of the Harvester runtime.
 
 See [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for the
 full behavior and safety constraints.
+
+
+## Standalone Binance TESTNET order history
+
+Inspect the latest exchange-recorded orders for one symbol without changing
+the account:
+
+```sh
+# Latest 20 ZROUSDT orders (default)
+pnpm --filter @coinzilla/harvester testnet:history
+
+# Latest 50 ZROUSDT orders
+pnpm --filter @coinzilla/harvester testnet:history -- ZROUSDT 50
+
+# Latest 20 BTCUSDT orders
+pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
+```
+
+Binance requires a symbol for order history; the command cannot return a
+mixed-symbol account-wide list. The output includes order IDs, timestamps,
+side/type, original and executed quantities, cumulative quote quantity,
+status, and client order ID. It is read-only and defaults to the latest 20
+orders for `ZROUSDT`. See
+[Binance TESTNET order scripts](./docs/testnet-order-tools.md) for details
+and diagnostic limitations.

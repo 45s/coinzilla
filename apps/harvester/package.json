@@ -11,7 +11,8 @@
     "testnet:orders": "node --env-file=.env.development scripts/list-testnet-open-orders.js",
     "testnet:cancel-orders": "node --env-file=.env.development scripts/cancel-testnet-open-orders.js",
     "testnet:balances": "node --env-file=.env.development scripts/list-testnet-balances.js",
-    "testnet:sell-zro": "node --env-file=.env.development scripts/sell-testnet-zro.js"
+    "testnet:sell-zro": "node --env-file=.env.development scripts/sell-testnet-zro.js",
+    "testnet:history": "node --env-file=.env.development scripts/list-testnet-order-history.js"
   },
   "engines": {
     "node": ">=24"
