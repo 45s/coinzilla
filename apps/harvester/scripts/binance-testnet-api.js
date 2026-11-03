@@ -4,6 +4,10 @@ const TESTNET_BASE_URL = "https://testnet.binance.vision"
 const RECV_WINDOW = 5000
 const REQUEST_TIMEOUT_MS = 15000
 
+export const createPublicQuery = ({ params = {} }) => ({
+  query: new URLSearchParams(params).toString(),
+})
+
 export const createSignedQuery = ({ params = {}, timestamp, apiSecret }) => {
   if (!apiSecret) {
     throw new Error("Binance API secret is required to sign a TESTNET request")
@@ -37,25 +41,7 @@ const getCredentials = () => {
   return { apiKey, apiSecret }
 }
 
-export const binanceTestnetRequest = async ({
-  method,
-  path,
-  params = {},
-}) => {
-  const { apiKey, apiSecret } = getCredentials()
-  const { query } = createSignedQuery({
-    params,
-    timestamp: Date.now(),
-    apiSecret,
-  })
-
-  const url = `${TESTNET_BASE_URL}${path}?${query}`
-  const response = await fetch(url, {
-    method,
-    headers: { "X-MBX-APIKEY": apiKey },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
-
+const readResponse = async ({ response }) => {
   const responseText = await response.text()
   let data
 
@@ -74,6 +60,40 @@ export const binanceTestnetRequest = async ({
   }
 
   return { data }
+}
+
+export const binanceTestnetPublicRequest = async ({ method, path, params = {} }) => {
+  const { query } = createPublicQuery({ params })
+  const url = query
+    ? `${TESTNET_BASE_URL}${path}?${query}`
+    : `${TESTNET_BASE_URL}${path}`
+  const response = await fetch(url, {
+    method,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+
+  return readResponse({ response })
+}
+
+export const binanceTestnetRequest = async ({
+  method,
+  path,
+  params = {},
+}) => {
+  const { apiKey, apiSecret } = getCredentials()
+  const { query } = createSignedQuery({
+    params,
+    timestamp: Date.now(),
+    apiSecret,
+  })
+
+  const response = await fetch(`${TESTNET_BASE_URL}${path}?${query}`, {
+    method,
+    headers: { "X-MBX-APIKEY": apiKey },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
+
+  return readResponse({ response })
 }
 
 export const getOpenOrders = async () => {
