@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -115,6 +115,7 @@ function createHarness({ cancelWithFill = false } = {}) {
   }
   const engine = makeConservativeTradingEngine({
     broker,
+    eventPublisher,
     tradingConfig,
     getPortfolio: () => new Portfolio(),
     getRecoveryLedger: () => RecoveryLedger.empty({ market }),
@@ -177,4 +178,52 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
   assert.equal(orders.length, 1)
   assert.equal(accountedFills.length, 1)
   assert.ok(pauses.includes("TRAILING_BUY_FILLED_DURING_CANCEL"))
+})
+
+
+test("publishes actionable decisions and order submission facts in execution order", async () => {
+  const events = []
+  const { engine, orders } = createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(orders.length, 1)
+  assert.deepEqual(events.map(({ name }) => name), [
+    "strategy.decision",
+    "order.submission_requested",
+    "order.submitted",
+  ])
+  assert.deepEqual(events[0].data, {
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    actions: [{
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.95",
+      quantity: "1",
+      reason: "INITIAL_BUY",
+    }],
+  })
+  assert.equal(events[1].data.status, "PENDING")
+  assert.equal(events[1].data.clientOrderId, "h-DOGEUSDT-1")
+  assert.equal(events[2].data.status, "OPEN")
+  assert.equal(events[2].data.brokerOrderId, "broker-h-DOGEUSDT-1")
+})
+
+test("EventBus publication failure cannot prevent a broker order", async () => {
+  const { engine, orders } = createHarness({
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(orders.length, 1)
 })

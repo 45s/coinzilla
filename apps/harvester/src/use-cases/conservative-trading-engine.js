@@ -5,11 +5,19 @@ import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
 import { evaluateTrailingBuyRepricing } from "../domain/strategies/conservative/trailing-buy-repricing.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import {
+  mapOrderSubmissionFailedData,
+  mapOrderSubmissionRequestedData,
+  mapOrderSubmittedData,
+  mapStrategyDecisionData,
+} from "../application/events/lifecycle-event-dtos.js"
+import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
 /** Coordinate Conservative policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
-  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping,
+  getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
 } = {}) {
   for (const [name, callback] of Object.entries({
     getPortfolio, getRecoveryLedger, getMarketMetadata, getAccountSnapshot, updateTradingAccounting,
@@ -34,13 +42,32 @@ export function makeConservativeTradingEngine({
     broker,
     onPendingOrder: async ({ order }) => {
       state.registry = state.registry.registerPending({ order }).registry
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+        dataResult: mapOrderSubmissionRequestedData({ order }),
+      })
     },
     onAcknowledgedOrder: async ({ order }) => {
       const update = state.registry.applyUpdate({ order })
       if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
       state.registry = update.registry
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+        dataResult: mapOrderSubmittedData({ order }),
+      })
     },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
+        dataResult: mapOrderSubmissionFailedData({
+          order,
+          outcome,
+          error: error ?? errors?.[0],
+        }),
+      })
       await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: error ?? errors?.[0] })
     },
   })
@@ -228,6 +255,16 @@ export function makeConservativeTradingEngine({
       if (executableActions.length === 0) {
         return toResult({ data: { decision, submittedOrders: [], waitingForAvailableQuoteBalance: true } })
       }
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.STRATEGY_DECISION,
+        dataResult: mapStrategyDecisionData({
+          strategy: decision.strategy,
+          symbol,
+          referencePrice: marketPrice.price,
+          actions: executableActions,
+        }),
+      })
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       if (!result.ok) return result

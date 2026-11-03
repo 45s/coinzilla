@@ -171,6 +171,37 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 5 — Publish meaningful strategy and order lifecycle events
 
+This step is split into two independently reviewable PRs to keep instrumentation narrow.
+
+#### Step 5a — Actionable decisions and order submission
+
+**Status:** In progress on branch `feature/harvester/strategy-order-event-intent`.
+
+- Publish only actionable Conservative decisions after balance filtering; omit repeated NO_ACTION evaluations.
+- Publish `order.submission_requested` after local PENDING registration and immediately before broker I/O.
+- Publish `order.submitted` only after canonical acknowledgement validation and local registry update.
+- Publish `order.submission_failed` for rejected/unknown outcomes with sanitized error details.
+- Keep all payloads allowlisted and preserve exact decimal strings.
+- Event publication remains synchronous best-effort admission only; never await subscriber or Journal work.
+
+**Tests:** Event order and payload contract; no-action filtering; publication exception does not prevent broker submission; existing submission tests remain intact.
+
+**PR boundary:** Actionable strategy decision + submission request/acknowledgement/failure only. No pause/resume, cancellation, execution, or accounting events.
+
+#### Step 5b — Pause/resume and cancellation transitions
+
+**Status:** Not started; begin only after Step 5a is merged.
+
+- Publish actual pair pause/resume state transitions, not repeated pause notifications.
+- Publish confirmed cancellation only after canonical broker confirmation and registry update.
+- Publish cancellation failure/unknown outcome with safe identifiers and bounded error details.
+- Cover recovery SELL cancellation and trailing BUY cancellation.
+- Preserve current cancellation/fill reconciliation and pause behavior exactly.
+
+**PR boundary:** Pause/resume and cancellation only. Do not include execution/accounting events.
+
+### Step 6 — Publish execution and accounting facts
+
 **Goal:** Explain why Harvester acted and what happened to each order.
 
 **Likely files:** `src/use-cases/conservative-trading-engine.js`; `src/use-cases/execute-strategy-decision.js`; focused event mappers; tests; event documentation; roadmap.
@@ -280,11 +311,13 @@ Every implementation PR must:
 ## Status
 
 - [x] Read-only source audit completed.
-- [ ] Step 1: EventBus boundary.
-- [ ] Step 2: event contracts and DTOs.
-- [ ] Step 3: optional Journal composition.
-- [ ] Step 4: lifecycle events.
-- [ ] Step 5: strategy/order events.
+- [x] Step 1: EventBus boundary (PR #453).
+- [x] Step 2: event contracts and DTOs (PR #455).
+- [x] Step 3: optional Journal composition (PR #456).
+- [x] Step 4: lifecycle events (PR #458).
+- [ ] Step 5a: actionable strategy decisions and order submission.
+- [ ] Step 5b: pause/resume and cancellation transitions.
+- [ ] Step 5: strategy/order events (complete after 5a and 5b).
 - [ ] Step 6: execution/accounting events.
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.
