@@ -2,7 +2,7 @@
 
 **Phase:** D0 discovery specification  
 **Authority:** Harvester's approved Conservative domain contract  
-**Status:** Proposed vocabulary; business decisions listed in the specification remain unapproved.
+**Status:** Harvester-owned vocabulary for the Conservative domain.
 
 ## Purpose and scope
 
