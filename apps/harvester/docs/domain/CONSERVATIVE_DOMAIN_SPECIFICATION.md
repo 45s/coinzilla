@@ -259,7 +259,7 @@ This example matches Harvester's existing RecoveryLedger test, which explicitly 
 - `keepQuantity` = 1 DOGE; `feeRate` = 0.001; quantity step = 0.1 DOGE.
 - Sellable quantity before fee reserve = 98.9 DOGE.
 - Planned quantity = floor-to-step(98.9 / 1.001) = 98.8 DOGE (98.8 × 1.001 = 98.898 DOGE consumed including the reserved base fee).
-- Remaining active quantity after a 0.1% base commission on the SELL is at least 1.002 DOGE, subject to actual exchange fee rounding.
+- Remaining active quantity after a 0.1% base commission on the SELL is 1.0012 DOGE before any exchange-specific fee rounding.
 - The exact observed commission is applied to the actual fill, not assumed from the reserve. Completion must check actual active quantity against keep quantity.
 
 The Harvester sell-plan test uses active 100, keep 1, fee 0.001 and step 0.1, resulting quantity 98.9; that test's current calculation treats `activeQuantity` as the pre-fee quantity and divides the sellable amount by (1+f). This exact boundary should be validated against actual base-fee semantics before D1 (Decision D-05).
