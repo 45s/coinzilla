@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do not repeat them. The current assignment is **Step 5b — Pause and cancellation transitions**, on branch `feature/harvester/pause-cancellation-events`, targeting `develop`.
+Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do not repeat them. The current assignment is **Step 5b — Pause and trailing BUY cancellation transitions**, on branch `feature/harvester/pause-cancellation-events`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -57,7 +57,7 @@ Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do no
 - Reuse the existing EventBus publisher and lifecycle publication boundary. Do not change shared packages.
 - Publication is best-effort and synchronous admission only. Never await EventBus subscriber work or Journal I/O from strategy/order workflows.
 - Keep strategy policies independent of EventBus/Journal. Instrument only the application engine/use-case boundary.
-- Do not add execution or accounting events in this PR. The current engine has no pair-resume transition; do not invent one solely for logging.
+- Implement only the first pause transition and trailing BUY cancellation success/failure. Do not instrument recovery SELL cancellation (Step 5c), execution/accounting, or invent pair-resume behavior; the current engine has no pair-resume transition.
 
 ### Tests
 
@@ -79,7 +79,8 @@ Update the integration roadmap, architecture event inventory, and this task docu
 
 ## Subsequent milestones
 
-- Step 5c: publish resume only if the engine gains a real, explicit pair-resume transition; do not add resume behavior solely for logging.
+- Step 5c: recovery SELL cancellation success/failure.
+- Resume events remain deferred until the engine has a real, explicit pair-resume transition.
 - Step 6: canonical execution and accounting facts.
 - Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.

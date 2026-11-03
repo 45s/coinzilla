@@ -359,9 +359,17 @@ test("publishes one pause transition even when the pair encounters repeated paus
 
 test("publishes broker-confirmed trailing BUY cancellation after registry update", async () => {
   const events = []
-  const { engine } = createHarness({
-    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  let engine
+  const harness = createHarness({
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      if (event.name === "order.cancelled") {
+        assert.equal(engine.getOrders()[0].status, "CANCELED")
+      }
+      return { ok: true }
+    } },
   })
+  engine = harness.engine
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -401,7 +409,7 @@ test("publishes an unconfirmed cancellation and pause without changing the order
   assert.equal(events.filter(({ name }) => name === "strategy.paused").length, 1)
 })
 
-test("publishes thrown cancellation outcomes without awaiting EventBus delivery", async () => {
+test("publishes thrown cancellation outcomes as unconfirmed", async () => {
   const events = []
   const { engine } = createHarness({
     cancelThrow: true,
@@ -419,4 +427,21 @@ test("publishes thrown cancellation outcomes without awaiting EventBus delivery"
   assert.equal(result.ok, false)
   assert.equal(events.at(-1).name, "order.cancel_failed")
   assert.equal(events.at(-1).data.outcome, "UNCONFIRMED")
+})
+
+
+test("cancellation event publication failure cannot prevent cancellation or reevaluation", async () => {
+  const { engine } = createHarness({
+    eventPublisher: { publish: () => { throw new Error("journal observer unavailable") } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.trailingBuyReplaced, true)
 })

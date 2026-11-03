@@ -171,7 +171,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 
 ### Step 5 — Publish meaningful strategy and order lifecycle events
 
-This step is split into two independently reviewable PRs to keep instrumentation narrow.
+This step is split into small independently reviewable PRs to keep instrumentation narrow.
 
 #### Step 5a — Actionable decisions and order submission
 
@@ -188,17 +188,17 @@ This step is split into two independently reviewable PRs to keep instrumentation
 
 **PR boundary:** Actionable strategy decision + submission request/acknowledgement/failure only. No pause/resume, cancellation, execution, or accounting events.
 
-#### Step 5b — Pause and cancellation transitions
+#### Step 5b — Pause and trailing BUY cancellation transitions
 
 **Status:** In progress on branch `feature/harvester/pause-cancellation-events`.
 
 - Publish the first actual pair-pause transition only; the current engine has no pair-resume transition, so do not invent one or emit a synthetic resume event.
-- Publish confirmed cancellation only after canonical broker confirmation and registry update.
-- Publish cancellation failure/unknown outcome with safe identifiers and bounded error details.
-- Cover recovery SELL cancellation and trailing BUY cancellation.
+- Publish confirmed trailing BUY cancellation only after canonical broker confirmation and registry update.
+- Publish trailing BUY cancellation failure/unknown outcome with safe identifiers and bounded error details.
+- Keep recovery SELL cancellation instrumentation separate as Step 5c.
 - Preserve current cancellation/fill reconciliation and pause behavior exactly.
 
-**PR boundary:** First pause transition and cancellation outcomes only. Resume events remain deferred until a real resume transition exists; do not include execution/accounting events.
+**PR boundary:** First pause transition and trailing BUY cancellation outcomes only. Recovery SELL cancellation is Step 5c. Resume events remain deferred until a real resume transition exists; do not include execution/accounting events.
 
 ### Step 6 — Publish execution and accounting facts
 
@@ -295,8 +295,9 @@ Every implementation PR must:
 - [x] Step 3: optional Journal composition (PR #456).
 - [x] Step 4: lifecycle events (PR #458).
 - [x] Step 5a: actionable strategy decisions and order submission (merged PR #460).
-- [ ] Step 5b: pause and cancellation transitions.
-- [ ] Step 5: strategy/order events (complete after 5a and 5b).
+- [ ] Step 5b: pause and trailing BUY cancellation transitions.
+- [ ] Step 5c: recovery SELL cancellation transitions.
+- [ ] Step 5: strategy/order events (complete after 5a–5c).
 - [ ] Step 6: execution/accounting events.
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.

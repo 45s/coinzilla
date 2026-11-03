@@ -427,10 +427,11 @@ the paused set; repeated causes do not create duplicate transition events.
 The current engine has no pair-resume operation, so no resume event or new
 resume behavior is introduced.
 
-Cancellation success is published only after a canonical cancellation result
-has been accepted by the local order registry. Cancellation failure events
-contain stable order identifiers, a bounded outcome classification, and
-sanitized error details. A confirmed cancellation is still recorded even if
-subsequent fill reconciliation fails; that later failure remains represented
-by the existing pause/error behavior. All event publication is best-effort
+Trailing BUY cancellation success is published only after a canonical
+cancellation result has been accepted by the local order registry. Cancellation
+failure events contain stable order identifiers, a bounded outcome
+classification, and sanitized error details. A confirmed cancellation is still
+recorded even if subsequent fill reconciliation fails; that later failure
+remains represented by the existing pause/error behavior. Recovery SELL
+cancellation events are deferred to Step 5c. All event publication is best-effort
 and does not wait for subscriber delivery or Journal persistence.
