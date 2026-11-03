@@ -4,7 +4,7 @@
 
 This roadmap plans a small, staged integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages into Harvester.
 
-**This work is secondary to the first successful Conservative Binance TESTNET trading cycle.** Follow [Trading First](./TRADING_FIRST.md) and the P0 roadmap first. Do not begin implementation while the real TESTNET cycle remains unverified, unless the user explicitly changes that priority.
+**This work does not depend on trading or TESTNET progress.** EventBus and Journal provide operational observability for ordinary application lifecycle events. Harvester can record configuration validation, process startup/shutdown, and broker connectivity in read-only mode; no order, fill, position, or completed trading cycle is required.
 
 The Journal is an optional operational observer. It is not part of order execution, strategy evaluation, fill accounting, or trading readiness. **Harvester must continue trading when Journal is absent, uninitialized, slow, full, or unable to write.** An incomplete journal is preferable to delayed or blocked trading.
 
@@ -23,15 +23,15 @@ See [Architecture — operational event journal](./architecture.md#operational-e
 
 ## Hard constraints
 
-1. Do not start this roadmap before the first real Conservative TESTNET cycle is demonstrated, unless explicitly reprioritized by the user.
-2. Journal is optional. Journal initialization or write failure must never fail Harvester startup or trading.
+1. No trading, TESTNET, exchange credentials, orders, or fills are prerequisites for this roadmap. Use offline tests and a read-only/fake broker where useful.
+2. Journal is optional. Journal initialization or write failure must never fail Harvester startup or broker connectivity.
 3. Never await Journal I/O, `journal.flush()`, or Journal shutdown from a market-price, strategy, order-submission, or execution-processing path.
 4. Do not put Journal calls in awaited order lifecycle callbacks or the serialized user-data queue.
 5. Event publication is best-effort. Catch both synchronous publication exceptions and failed `toResult` outcomes at the application boundary.
 6. Keep domain policies pure and broker-independent. Domain code must not import EventBus or Journal.
 7. Use object-shaped inputs and object-shaped results for functions. Use `toResult` for fallible workflows where appropriate.
-8. Map domain entities and broker messages to small, plain, serializable DTOs. Never publish class instances, SDK objects, secrets, or whole account snapshots.
-9. Do not journal every market-price update. Journal selected decisions and meaningful state transitions.
+8. Map application facts to small, plain, serializable DTOs. Never publish class instances, SDK objects, secrets, or whole account snapshots.
+9. Do not journal every market-price update. Start with process/configuration/broker lifecycle events; add selected trading events later.
 10. Keep live trading disabled by default. Default tests remain offline and credential-free.
 11. Do not modify shared Journal/EventBus packages unless implementation reveals a reproducible, Harvester-blocking defect. Any such change needs a separate, explicitly justified cross-package task.
 12. Every implementation PR must be small, independently testable, and update the relevant documentation and this roadmap in the same PR.
@@ -77,22 +77,6 @@ All events use the existing EventBus envelope: generated event ID and timestamp,
 ## Delivery model: one small PR per step
 
 Do not combine the steps into one large PR. Each PR must contain only its milestone, focused tests, and the documentation/roadmap updates needed to describe the behavior that actually exists.
-
-### Gate 0 — Confirm the prerequisite
-
-**Goal:** Verify that the first real Conservative TESTNET cycle is complete before starting secondary observability work.
-
-**Files:** Normally none; update this roadmap only if the recorded milestone status has changed.
-
-**Work:**
-- Verify the controlled TESTNET runbook was followed.
-- Confirm an actual BUY → execution/fill → recovery SELL → execution/fill → next-cycle sequence.
-- Confirm live trading remains disabled.
-- Confirm required Harvester tests and CI pass on the relevant develop state.
-
-**Tests/evidence:** Link the real TESTNET run evidence and CI run; do not substitute fake-broker tests for exchange proof.
-
-**Acceptance:** The real TESTNET milestone is demonstrated and explicitly recorded. Otherwise stop here and continue the trading-first roadmap.
 
 ### Step 1 — Add an application EventBus boundary
 
@@ -286,7 +270,6 @@ Every implementation PR must:
 ## Status
 
 - [x] Read-only source audit completed.
-- [ ] Gate 0: real Conservative TESTNET cycle demonstrated.
 - [ ] Step 1: EventBus boundary.
 - [ ] Step 2: event contracts and DTOs.
 - [ ] Step 3: optional Journal composition.

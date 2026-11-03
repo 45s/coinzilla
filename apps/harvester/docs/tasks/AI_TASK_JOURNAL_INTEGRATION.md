@@ -12,7 +12,7 @@ Follow:
 5. `apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP.md`.
 6. This task document.
 
-The roadmap is the implementation plan and source of truth for step order. The audit is complete; implementation is now allowed only when Gate 0 below is satisfied.
+The roadmap is the implementation plan and source of truth for step order. The audit is complete and implementation may begin immediately. **Do not require or wait for a real TESTNET trade.**
 
 ## Non-negotiable priority
 
@@ -24,14 +24,9 @@ Harvester exists to trade. Journal is an optional operational observer.
 - Do not refactor working trading logic to make instrumentation easier.
 - Keep live trading disabled by default.
 
-## Gate 0 — check before coding
+## Before coding
 
-Before changing any file:
-1. Inspect current `develop`, current Harvester status, open PRs, and the controlled TESTNET runbook.
-2. Verify whether a real Conservative Binance TESTNET cycle has been completed: BUY → actual fill → recovery SELL → actual fill → next cycle.
-3. Verify the relevant CI and tests on the current target branch.
-4. If the real TESTNET cycle is not evidenced, STOP implementation. Report that the roadmap remains deferred and return to the missing trading milestone. Do not substitute fake-broker tests for exchange proof.
-5. If the user has explicitly reprioritized Journal ahead of the real TESTNET proof, record that authorization and proceed.
+Inspect the latest `develop`, open PRs, Harvester startup/bootstrap, the EventBus and Journal package APIs, and relevant tests. This is an ordinary application-observability task: no exchange credentials, TESTNET session, orders, fills, or trading-cycle evidence are needed. Keep trading disabled and use offline tests.
 
 ## Delivery model: one PR per roadmap step
 
@@ -50,9 +45,9 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## First implementation assignment
 
-Start with **Step 1 — Add an application EventBus boundary** only.
+Start with **Step 1 — Add the application EventBus boundary** only.
 
-Do not implement Journal initialization, event contracts, lifecycle instrumentation, strategy/order events, execution events, or shutdown integration in this first PR.
+Do not implement Journal initialization or publish lifecycle/trading events in this first PR. Keep this PR limited to the EventBus boundary and its tests.
 
 ### Step 1 objective
 
@@ -118,13 +113,15 @@ Do not claim Journal is integrated or that any events are persisted.
 
 After Step 1 is merged, follow the roadmap in order:
 
-- Step 2: define Harvester event names and plain DTO mappings.
+- Step 2: define the small lifecycle event contracts and plain DTO mappings.
 - Step 3: compose Journal as an optional, non-blocking service.
-- Step 4: publish process/configuration/broker lifecycle events.
-- Step 5: publish meaningful strategy and order lifecycle events.
-- Step 6: publish actual execution/accounting facts.
-- Step 7: coordinate shutdown draining and prove failure isolation.
+- Step 4: publish process/configuration lifecycle events (started, startup failed, stopped, config validated).
+- Step 5: publish broker lifecycle events (connected, connection failed, disconnected, subscriptions).
+- Step 6: publish selected strategy/order events.
+- Step 7: publish actual execution/accounting facts and complete shutdown failure isolation.
 - Step 8: final documentation and operational verification.
+
+The first useful operational output is intentionally simple: application started and broker connected/disconnected. This must work in broker read-only mode; trading events are later optional instrumentation.
 
 Each step is a separate PR. Re-read the roadmap and current source before each step; do not assume the previous agent's implementation details are still current.
 
@@ -140,7 +137,7 @@ Each step is a separate PR. Re-read the roadmap and current source before each s
 - Validate external data at system boundaries.
 - Isolate consumer failures; one observer must not break unrelated consumers.
 - Default tests are deterministic, offline, and credential-free.
-- Exchange integration tests are opt-in and TESTNET-only.
+- Exchange integration tests are opt-in and TESTNET-only; they are unrelated to Journal integration.
 - Live trading remains disabled by default.
 - Do not weaken tests or CI.
 - Do not claim tests, CI, TESTNET behavior, or durability that was not actually verified.
