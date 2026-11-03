@@ -117,6 +117,7 @@ export async function startHarvester({
   brokerAdapterFactory = createBinanceBrokerAdapter,
   evaluateStrategy = evaluateAggressiveStrategy,
   logger = defaultLogger,
+  eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.({
       message: "Harvester market price processing failed",
@@ -162,6 +163,7 @@ export async function startHarvester({
     logger.info?.({ message: "Harvester started without a broker; exchange connectivity is disabled" })
     return Object.freeze({
       tradingConfig,
+      eventPublisher,
       broker: undefined,
       tradingEnabled: false,
       strategyMode: "read-only",
@@ -624,6 +626,7 @@ export async function startHarvester({
 
   return Object.freeze({
     tradingConfig,
+    eventPublisher,
     tradingEnabled,
     strategyMode: tradingEnabled ? "conservative" : "read-only",
     get userDataReady() { return userDataReady },
