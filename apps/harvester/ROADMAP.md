@@ -620,8 +620,30 @@ verifies outstanding recovery capital blocks BUY even if no active SELL is
 currently registered. This is an offline strategy-level regression; it does
 not prove a real TESTNET cycle.
 
-**Still required:** run Harvester and workspace tests/Actions on this updated
-PR head, inspect TESTNET open orders and balances without blindly canceling or
-selling anything, then perform a bounded TESTNET BUY → BUY fill → recovery
-SELL → SELL fill → next BUY run. Keep PR #477 Draft and do not merge until
-those checks and the real TESTNET cycle are complete.
+**Verification scope clarification — 2026-11-03**
+
+The recovery-first rule is domain policy and must be proven with deterministic,
+broker-independent domain tests. A TESTNET run is not a prerequisite for
+validating whether the strategy emits BUY/SELL intents correctly. Existing
+TESTNET logs already establish that Harvester can submit orders and receive
+execution reports; the runaway sequence is evidence of a strategy sequencing
+defect, not a reason to make exchange access part of the strategy test loop.
+
+The domain acceptance criteria are:
+
+- [x] Initial empty cycle emits BUY only.
+- [x] A BUY fill with outstanding recovery capital emits recovery SELL only.
+- [x] Active recovery SELL blocks BUY on repeated price evaluations.
+- [x] Partial recovery SELL fill does not make the next BUY eligible.
+- [x] The next BUY becomes eligible only after the existing recovery-completion
+  workflow succeeds and resets the cycle ledger.
+- [x] Engine-level regression covers pending SELL acknowledgement, repeated
+  market updates, partial SELL fill, and duplicate execution delivery without
+  creating another BUY or duplicate SELL.
+- [ ] Run the full Harvester test suite and relevant workspace tests on the
+  final PR head; record exact results and GitHub Actions status.
+
+Broker adapters, execution-report mapping, order ownership, and application
+coordination remain separate integration concerns. They must not leak into the
+Conservative domain strategy. Do not perform TESTNET trades merely to validate
+pure strategy decisions. Keep PR #477 Draft and do not merge.
