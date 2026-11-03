@@ -1174,3 +1174,46 @@ test("logs safe correlation details when an execution report is not owned", asyn
 
   await result.stop()
 })
+
+
+test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
+  const broker = createBroker()
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  assert.equal(result.userDataReady, true)
+  broker.emitUserDataStatus({
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  assert.equal(result.userDataReady, false)
+
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: true,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(result.userDataReady, false)
+
+  broker.emitUserDataStatus({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(result.userDataReady, true)
+  assert.equal(result.userDataStatus, "READY")
+  await result.stop()
+})

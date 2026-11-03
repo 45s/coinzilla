@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -47,6 +47,7 @@ export function makeConservativeTradingEngine({
     lastBuyPrices: new Map(),
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
+    processedFillIdsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map(),
@@ -55,13 +56,21 @@ export function makeConservativeTradingEngine({
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(),
   }
+  const rememberProcessedFill = ({ fill }) => {
+    const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
+    if (fillIds.has(fill.id)) return false
+    fillIds.add(fill.id)
+    state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
+    return true
+  }
+
   const recordBuyExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) return
     const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       quoteQuantity: "0",
       fillIds: new Set(),
     }
-    if (current.fillIds.has(fill.id)) return
     current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
     current.quoteQuantity = addDecimal({ left: current.quoteQuantity, right: fill.quoteQuantity.amount })
     current.fillIds.add(fill.id)
@@ -84,11 +93,11 @@ export function makeConservativeTradingEngine({
   }
 
   const recordSellExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) return
     const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       fillIds: new Set(),
     }
-    if (current.fillIds.has(fill.id)) return
     current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
     current.fillIds.add(fill.id)
     state.sellExecutionTotals.set(fill.brokerOrderId, current)
@@ -703,6 +712,273 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const collectOwnedOrderSnapshots = async ({ ownedOrders }) => {
+    const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
+    let affectedSymbol = symbols[0]
+    try {
+      const openOrdersBySymbol = new Map()
+      for (const symbol of symbols) {
+        affectedSymbol = symbol
+        const result = await broker.getOpenOrders({ symbol })
+        if (!result?.ok || !Array.isArray(result.data) ||
+            result.data.some((order) => !(order instanceof Order) ||
+              typeof order.id !== "string" || typeof order.symbol !== "string" ||
+              typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string" ||
+              !["NEW", "PARTIALLY_FILLED"].includes(order.status))) {
+          throw new Error("Open-order snapshot is incomplete or contains invalid Order records for " + symbol)
+        }
+        openOrdersBySymbol.set(symbol, result.data)
+      }
+
+      const snapshots = []
+      for (const ownedOrder of ownedOrders) {
+        const symbol = ownedOrder.market.symbol
+        affectedSymbol = symbol
+        const historyResult = await broker.getCanonicalOrderHistory({
+          symbol,
+          orderId: ownedOrder.brokerOrderId,
+        })
+        if (!historyResult?.ok || !Array.isArray(historyResult.data) ||
+            historyResult.data.length !== 1 ||
+            !(historyResult.data[0] instanceof CanonicalOrder)) {
+          throw new Error("Canonical order history is incomplete for owned order " + ownedOrder.brokerOrderId)
+        }
+        const historyOrder = historyResult.data[0]
+        const limitPriceMatches = historyOrder.limitPrice === undefined
+          ? ownedOrder.limitPrice === undefined
+          : ownedOrder.limitPrice !== undefined &&
+            compareDecimal({
+              left: historyOrder.limitPrice.amount,
+              right: ownedOrder.limitPrice.amount,
+            }) === 0
+        if (
+          historyOrder.brokerOrderId !== ownedOrder.brokerOrderId ||
+          historyOrder.market.id !== ownedOrder.market.id ||
+          historyOrder.side !== ownedOrder.side ||
+          historyOrder.type !== ownedOrder.type ||
+          compareDecimal({
+            left: historyOrder.originalQuantity.amount,
+            right: ownedOrder.originalQuantity.amount,
+          }) !== 0 ||
+          !limitPriceMatches
+        ) {
+          throw new Error("REST order history conflicts with the registered Harvester order " + ownedOrder.brokerOrderId)
+        }
+        if (historyOrder.status === "PENDING" || historyOrder.status === "UNKNOWN") {
+          throw new Error("REST order history does not establish an authoritative state for " + ownedOrder.brokerOrderId)
+        }
+
+        const matchingOpenOrders = openOrdersBySymbol.get(symbol).filter(
+          (order) => order.id === ownedOrder.brokerOrderId,
+        )
+        if (matchingOpenOrders.length > 1) {
+          throw new Error("Open-order snapshot contains duplicate owned order " + ownedOrder.brokerOrderId)
+        }
+        const openOrder = matchingOpenOrders[0]
+        if (openOrder && (
+          openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
+          openOrder.side !== ownedOrder.side ||
+          openOrder.type !== ownedOrder.type ||
+          !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
+          (openOrder.status === "NEW" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) !== 0) ||
+          (openOrder.status === "PARTIALLY_FILLED" && compareDecimal({ left: openOrder.executedQuantity, right: "0" }) === 0) ||
+          compareDecimal({ left: openOrder.originalQuantity, right: ownedOrder.originalQuantity.amount }) !== 0 ||
+          compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
+        )) {
+          throw new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId)
+        }
+        if (["OPEN", "PARTIALLY_FILLED"].includes(historyOrder.status) && !openOrder) {
+          throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
+        }
+
+        const fillsResult = await broker.getFills({
+          symbol,
+          orderId: ownedOrder.brokerOrderId,
+        })
+        if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
+            fillsResult.data.some((fill) => !(fill instanceof Fill))) {
+          throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
+        }
+        const fillsById = new Map()
+        for (const fill of fillsResult.data) {
+          if (
+            fill.market.id !== ownedOrder.market.id ||
+            fill.brokerOrderId !== ownedOrder.brokerOrderId ||
+            fill.side !== ownedOrder.side
+          ) {
+            throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+          }
+          const previous = fillsById.get(fill.id)
+          if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+            throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
+          }
+          fillsById.set(fill.id, fill)
+        }
+        const fills = [...fillsById.values()].sort((left, right) => {
+          if (left.executedAt !== undefined && right.executedAt !== undefined &&
+              left.executedAt !== right.executedAt) {
+            return left.executedAt - right.executedAt
+          }
+          return left.tradeId.localeCompare(right.tradeId)
+        })
+        const reconciledQuantity = fills.reduce(
+          (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+          "0",
+        )
+        if (compareDecimal({
+          left: reconciledQuantity,
+          right: historyOrder.executedQuantity.amount,
+        }) !== 0) {
+          throw new Error("REST fill quantity does not reconcile with cumulative executed quantity for " + ownedOrder.brokerOrderId)
+        }
+        snapshots.push({ ownedOrder, historyOrder, fills, fillIds: new Set(fillsById.keys()) })
+      }
+      return { snapshots, symbols }
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error(String(caught))
+      error.reconciliationSymbol = affectedSymbol
+      throw error
+    }
+  }
+
+  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols } = {}) => {
+    let affectedSymbol = symbols[0]
+    try {
+      // Validate the collected REST snapshot against stream facts processed
+      // while REST was being read. Do this for every order before applying
+      // any recovered execution.
+      const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
+      for (const currentOrder of state.registry.orders) {
+        if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
+          throw new Error("Order registry changed while REST reconciliation was in progress")
+        }
+      }
+      for (const { ownedOrder, historyOrder, fillIds } of snapshots) {
+        affectedSymbol = ownedOrder.market.symbol
+        const currentOrder = state.registry.orders.find(
+          (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
+        )
+        if (!currentOrder) {
+          throw new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId)
+        }
+        if (compareDecimal({
+          left: historyOrder.executedQuantity.amount,
+          right: currentOrder.executedQuantity.amount,
+        }) < 0) {
+          throw new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId)
+        }
+        const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
+        for (const fillId of previouslyProcessedFillIds) {
+          if (!fillIds.has(fillId)) {
+            throw new Error("REST fill history is missing previously processed execution ID " + fillId)
+          }
+        }
+      }
+
+      for (const { ownedOrder, historyOrder, fills } of snapshots) {
+        affectedSymbol = ownedOrder.market.symbol
+        let cumulativeQuantity = "0"
+        for (let index = 0; index < fills.length; index += 1) {
+          const fill = fills[index]
+          cumulativeQuantity = addDecimal({
+            left: cumulativeQuantity,
+            right: fill.quantity.amount,
+          })
+          const isFinalExecution = compareDecimal({
+            left: cumulativeQuantity,
+            right: historyOrder.executedQuantity.amount,
+          }) === 0
+          const status = isFinalExecution
+            ? historyOrder.status
+            : "PARTIALLY_FILLED"
+          const executionOrder = new CanonicalOrder({
+            clientOrderId: ownedOrder.clientOrderId,
+            brokerOrderId: ownedOrder.brokerOrderId,
+            market: historyOrder.market,
+            side: historyOrder.side,
+            type: historyOrder.type,
+            limitPrice: historyOrder.limitPrice,
+            originalQuantity: historyOrder.originalQuantity,
+            executedQuantity: new Quantity({
+              amount: cumulativeQuantity,
+              asset: historyOrder.market.baseAsset,
+            }),
+            status,
+            createdAt: historyOrder.createdAt,
+            acknowledgedAt: historyOrder.acknowledgedAt,
+            updatedAt: historyOrder.updatedAt,
+            ...(isFinalExecution && historyOrder.completedAt !== undefined
+              ? { completedAt: historyOrder.completedAt }
+              : {}),
+          })
+          const processed = await processUserDataEventTransition({
+            event: { executionType: "TRADE", executedOrder: executionOrder, fill },
+          })
+          if (!processed.ok) {
+            const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
+            await pause({ symbol: ownedOrder.market.symbol, reason: "REST_FILL_RECONCILIATION_FAILED", error })
+            return toResult({ errors: processed.errors ?? [error] })
+          }
+        }
+        if (fills.length === 0) {
+          const processed = await processUserDataEventTransition({
+            event: { executedOrder: historyOrder },
+          })
+          if (!processed.ok) {
+            const error = processed.errors?.[0] ?? new Error("Recovered order state could not be applied")
+            await pause({ symbol: ownedOrder.market.symbol, reason: "REST_ORDER_RECONCILIATION_FAILED", error })
+            return toResult({ errors: processed.errors ?? [error] })
+          }
+        }
+      }
+      return toResult({ data: { reconciled: snapshots.length, symbols } })
+    } catch (error) {
+      await pause({ symbol: affectedSymbol, reason: "REST_STREAM_RECONCILIATION_FAILED", error })
+      return toResult({ error })
+    }
+  }
+
+  const reconcileOwnedOrders = async ({ beforeApply } = {}) => {
+    const ownedOrdersResult = await runTransition({
+      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
+    })
+    if (!ownedOrdersResult?.ok) return ownedOrdersResult
+    const ownedOrders = ownedOrdersResult.data.ownedOrders
+    const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
+    if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
+
+    const pendingOrder = ownedOrders.find((order) => order.status === "PENDING" || !order.brokerOrderId)
+    if (pendingOrder) {
+      const error = new Error("Cannot reconcile a Harvester order without an acknowledged broker order ID")
+      return runTransition({
+        task: async () => {
+          await pause({ symbol: pendingOrder.market.symbol, reason: "RECONCILIATION_PENDING_ORDER_OUTCOME", error })
+          return toResult({ error })
+        },
+      })
+    }
+
+    let snapshots
+    try {
+      snapshots = await collectOwnedOrderSnapshots({ ownedOrders })
+      if (typeof beforeApply === "function") await beforeApply()
+    } catch (error) {
+      return runTransition({
+        task: async () => {
+          await pause({
+            symbol: error.reconciliationSymbol ?? symbols[0],
+            reason: "REST_STREAM_RECONCILIATION_FAILED",
+            error,
+          })
+          return toResult({ error })
+        },
+      })
+    }
+    return runTransition({
+      task: () => applyOwnedOrderSnapshotsTransition(snapshots),
+    })
+  }
+
   const processMarketPrice = ({ symbol, priceEvent } = {}) =>
     runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
   const processUserDataEvent = ({ event } = {}) =>
@@ -723,6 +999,7 @@ export function makeConservativeTradingEngine({
   return Object.freeze({
     processMarketPrice,
     processUserDataEvent,
+    reconcileOwnedOrders,
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,

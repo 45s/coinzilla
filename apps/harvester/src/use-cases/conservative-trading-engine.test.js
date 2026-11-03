@@ -6,6 +6,7 @@ import {
   Fill,
   Market,
   Money,
+  Order,
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
@@ -166,7 +167,7 @@ function createHarness({ cancelWithFill = false, cancelOrderGate, onCancelOrderS
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  return { engine, orders, pauses, accountedFills, completedCycles, cancellationIds }
+  return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
@@ -543,7 +544,7 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
   })
 }
 
-function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt }) {
   return new Fill({
     tradeId,
     brokerOrderId: order.brokerOrderId,
@@ -553,6 +554,7 @@ function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
     price: new Money({ amount: price, asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    ...(executedAt === undefined ? {} : { executedAt }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -1419,5 +1421,241 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
     "buy-triggering-recovery-sell-cancel",
     "recovery-cancel-fill-sell",
   ])
+  assert.deepEqual(pauses, [])
+})
+
+
+function makeOpenOrder({ order, brokerOrderId = order.brokerOrderId, clientOrderId = order.clientOrderId, executedQuantity = "0" } = {}) {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(executedQuantity),
+    price: Number(order.limitPrice.amount),
+    id: brokerOrderId,
+    clientOrderId,
+  })
+  openOrder.originalQuantity = order.originalQuantity.amount
+  openOrder.executedQuantity = executedQuantity
+  openOrder.status = Number(executedQuantity) === 0 ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
+
+test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const firstFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-fill-1",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    executedAt: 10,
+  })
+  const secondFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-fill-2",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    executedAt: 20,
+  })
+  const historyOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "FILLED",
+    executedQuantity: "1",
+    updatedAt: 3,
+  })
+  const externalOrder = makeOpenOrder({
+    order: buyOrder,
+    brokerOrderId: "manual-broker",
+    clientOrderId: "manual-client",
+  })
+  const calls = []
+  broker.getOpenOrders = async ({ symbol }) => {
+    calls.push(["getOpenOrders", symbol])
+    return { ok: true, data: [externalOrder, makeOpenOrder({ order: buyOrder, executedQuantity: "0.00000000" })] }
+  }
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(["getCanonicalOrderHistory", symbol, orderId])
+    return { ok: true, data: [historyOrder] }
+  }
+  broker.getFills = async ({ symbol, orderId }) => {
+    calls.push(["getFills", symbol, orderId])
+    return { ok: true, data: [secondFill, firstFill] }
+  }
+
+  const reconciled = await engine.reconcileOwnedOrders()
+
+  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["rest-fill-1", "rest-fill-2"])
+  assert.equal(
+    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).status,
+    "FILLED",
+  )
+  assert.equal(engine.getOrders().length, 1)
+  assert.deepEqual(calls, [
+    ["getOpenOrders", "DOGEUSDT"],
+    ["getCanonicalOrderHistory", "DOGEUSDT", buyOrder.brokerOrderId],
+    ["getFills", "DOGEUSDT", buyOrder.brokerOrderId],
+  ])
+
+  const overlappingStreamEvent = await engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.2",
+      updatedAt: 2,
+    }), fill: firstFill },
+  })
+  assert.equal(overlappingStreamEvent.ok, true)
+  assert.equal(accountedFills.length, 2)
+  assert.deepEqual(pauses, [])
+})
+
+
+test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const partialFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "incomplete-rest-fill",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const historyOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.4",
+    updatedAt: 3,
+  })
+  broker.getOpenOrders = async () => ({ ok: true, data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => ({ ok: true, data: [partialFill] })
+
+  const result = await engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(accountedFills.length, 0)
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
+  assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
+
+test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const streamFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-execution-id",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const restFillWithDifferentId = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-conflicting-execution-id",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const partialOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2",
+    updatedAt: 2,
+  })
+  const streamResult = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: partialOrder, fill: streamFill },
+  })
+  assert.equal(streamResult.ok, true)
+  assert.equal(accountedFills.length, 1)
+
+  broker.getOpenOrders = async () => ({ ok: true, data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => ({ ok: true, data: [restFillWithDifferentId] })
+
+  const result = await engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(accountedFills.length, 1)
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
+  assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
+
+test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
+  let releaseFills
+  let signalFillsStarted
+  const fillsGate = { promise: new Promise((resolve) => { releaseFills = resolve }) }
+  const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
+  const { engine, broker, accountedFills, pauses } = createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const recoveredFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-during-rest-read",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const partialOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2",
+    updatedAt: 3,
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => {
+    signalFillsStarted()
+    await fillsGate.promise
+    return { ok: true, data: [recoveredFill] }
+  }
+
+  const reconciliation = engine.reconcileOwnedOrders()
+  await fillsStarted
+  const streamResult = await engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "PARTIALLY_FILLED",
+        executedQuantity: "0.2",
+        updatedAt: 2,
+      }),
+      fill: recoveredFill,
+    },
+  })
+  releaseFills()
+  const reconciled = await reconciliation
+
+  assert.equal(streamResult.ok, true)
+  assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
   assert.deepEqual(pauses, [])
 })

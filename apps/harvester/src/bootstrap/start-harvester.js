@@ -283,6 +283,7 @@ export async function startHarvester({
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
+  let userDataReconciliationQueued = false
   let stopped = false
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
@@ -589,6 +590,92 @@ export async function startHarvester({
         } else if (!initialAccountSnapshotReady) {
           userDataReady = false
           userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+        }
+        if (
+          status.type === "reconciled" &&
+          status.recoveryRequired !== true &&
+          status.reconciliationRequired !== true &&
+          tradingEngine &&
+          initialAccountSnapshotReady &&
+          userDataRequiresReconciliation &&
+          !userDataAccountingFailed &&
+          !userDataReconciliationQueued
+        ) {
+          userDataReconciliationQueued = true
+          logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
+          const reconciliationTask = tradingEngine.reconcileOwnedOrders({
+            beforeApply: async () => {
+              // REST reads do not hold the engine transition queue. Let every
+              // stream event received during those reads reach the engine
+              // before comparing REST execution IDs and applying missing fills.
+              while (true) {
+                const queuedEvents = userDataEventQueue
+                await queuedEvents
+                if (queuedEvents === userDataEventQueue) break
+              }
+            },
+          })
+          void reconciliationTask.then((reconciliation) => {
+            if (stopped) {
+              userDataReconciliationQueued = false
+              return
+            }
+            if (!reconciliation?.ok) {
+              userDataReady = false
+              userDataRequiresReconciliation = true
+              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+              logger.error?.({
+                message: "Harvester REST/stream order reconciliation failed; trading remains paused",
+                errors: reconciliation?.errors,
+              })
+              userDataReconciliationQueued = false
+              return
+            }
+
+            // Stream callbacks received before this barrier are processed
+            // before readiness is reopened. Later callbacks are ordinary live
+            // events and still pass through the same serialized accounting path.
+            const queuedEvents = userDataEventQueue
+            const readinessTask = queuedEvents.then(async () => {
+              if (stopped || userDataAccountingFailed) return
+              userDataRequiresReconciliation = false
+              userDataReady = true
+              userDataStatus = "READY"
+              for (const symbol of reconciliation.data?.symbols ?? []) {
+                const evaluated = await tradingEngine.evaluateLatest({ symbol })
+                if (!evaluated?.ok) {
+                  userDataReady = false
+                  userDataRequiresReconciliation = true
+                  userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+                  logger.error?.({
+                    message: "Harvester strategy reevaluation failed after REST/stream reconciliation",
+                    symbol,
+                    errors: evaluated?.errors,
+                  })
+                  return
+                }
+              }
+              logger.info?.({
+                message: "Harvester REST/stream order reconciliation completed",
+                reconciledOrders: reconciliation.data?.reconciled ?? 0,
+              })
+              resumeDeferredStrategyEvaluations()
+            }).catch((error) => {
+              userDataReady = false
+              userDataRequiresReconciliation = true
+              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+              logger.error?.({ message: "Harvester readiness transition after reconciliation failed", error })
+            }).finally(() => {
+              userDataReconciliationQueued = false
+            })
+            userDataEventQueue = readinessTask
+          }).catch((error) => {
+            userDataReady = false
+            userDataRequiresReconciliation = true
+            userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+            userDataReconciliationQueued = false
+            logger.error?.({ message: "Harvester REST/stream order reconciliation failed", error })
+          })
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
