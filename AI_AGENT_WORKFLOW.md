@@ -147,6 +147,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require conversation resolution.
 - Require zero human approvals; agents may merge their own PRs only after every required check is green.
 - Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
+- Keep GitHub automatic head-branch deletion enabled.
 - Do not configure bypass actors or admin bypass for these gates.
 
 ### `main`
@@ -157,7 +158,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 
 Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
 
-After creating `develop`, configure its ruleset and verify the exact status-check context names from successful workflow runs. The active `develop-core` ruleset must require **every CI workflow check** listed below, with strict up-to-date branches and zero approving reviews. A missing, pending, cancelled, skipped-required, or failed required check must block merging. Do not add bypass actors. The active `main` ruleset must require at least one approving review for the release PR; do not rely on prose saying the user approves while GitHub technically permits zero approvals. The repository's automatic head-branch deletion setting must remain enabled.
+After configuration, read back both live rulesets and verify they match the requirements above. Derive exact required-check context names from successful workflow runs; never assume a workflow name is its status context. Do not claim a rule is active until the live ruleset confirms it.
 
 ## 11. Exceptions
 
