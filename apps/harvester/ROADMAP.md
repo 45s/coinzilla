@@ -640,6 +640,9 @@ The domain acceptance criteria are:
 - [x] Engine-level regression covers pending SELL acknowledgement, repeated
   market updates, partial SELL fill, and duplicate execution delivery without
   creating another BUY or duplicate SELL.
+- [x] Engine-level cycle regression proves the next BUY is submitted after
+  successful recovery completion and remains blocked when completion is
+  ineligible; domain tests separately verify cycle reset and retained inventory.
 - [ ] Run the full Harvester test suite and relevant workspace tests on the
   final PR head; record exact results and GitHub Actions status.
 
