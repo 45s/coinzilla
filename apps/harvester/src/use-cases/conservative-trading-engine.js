@@ -12,6 +12,7 @@ import {
   mapOrderSubmissionFailedData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
+  mapFillAppliedData,
   mapStrategyDecisionData,
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
@@ -394,6 +395,13 @@ export function makeConservativeTradingEngine({
         if (!accounting?.ok) {
           await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
           return toResult({ errors: accounting?.errors ?? [new Error("Execution accounting failed")] })
+        }
+        if (accounting.data?.applied === true) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+            dataResult: mapFillAppliedData({ fill: event.fill }),
+          })
         }
       }
       if (order.status === "PARTIALLY_FILLED") {

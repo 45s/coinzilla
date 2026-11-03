@@ -449,6 +449,22 @@ unchanged after the cancellation response. Event publication does not wait for
 Journal delivery and cannot alter accounting or pause behavior.
 
 
+### Applied execution events
+
+Step 6a adds `execution.fill_applied`. The event is published only after the
+existing serialized accounting workflow succeeds and reports `applied: true`,
+which means both immutable Portfolio and RecoveryLedger projections have
+already been committed by the composition boundary. Duplicate/idempotent Fill
+deliveries do not emit a second applied event.
+
+The DTO contains only stable fill/order identifiers, market symbol, side,
+exact decimal price and quantity values, liquidity role, optional execution
+time, and commission status. It does not contain raw exchange messages,
+commission objects, account snapshots, credentials, or mutable domain values.
+Event publication is best-effort and is not awaited by the user-data queue.
+Invalid/unowned execution and accounting-failure diagnostics remain Step 6b.
+
+
 ## In-process engine transition serialization
 
 The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.

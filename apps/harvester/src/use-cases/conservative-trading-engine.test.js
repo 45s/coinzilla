@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0" } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -134,7 +134,7 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: async ({ fill }) => {
       accountedFills.push(fill)
-      return { ok: true }
+      return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
     },
     completeRecoveryCycle: async () => ({ ok: true, data: { eligible: true } }),
     canTrade: () => true,
@@ -594,11 +594,139 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
 })
 
 
+function makePartialFill({ order }) {
+  return new Fill({
+    tradeId: "partial-trade-1",
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market,
+    side: order.side,
+    price: order.limitPrice,
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 2,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function makePartiallyFilledOrder({ order }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+  })
+}
+
+test("publishes a Fill only after the accounting workflow commits it", async () => {
+  const events = []
+  let fill
+  const harness = createHarness({
+    accountingApplied: true,
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      if (event.name === "execution.fill_applied") {
+        assert.ok(harness.accountedFills.includes(fill))
+      }
+      return { ok: true }
+    } },
+  })
+  const { engine, accountedFills } = harness
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const order = engine.getOrders()[0]
+  fill = makePartialFill({ order })
+  const result = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makePartiallyFilledOrder({ order }),
+      executionType: "TRADE",
+      fill,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.waitingForFullFill, true)
+  assert.ok(accountedFills.includes(fill))
+  const applied = events.find(({ name }) => name === "execution.fill_applied")
+  assert.ok(applied)
+  assert.deepEqual(applied.data, {
+    fillId: fill.id,
+    brokerOrderId: fill.brokerOrderId,
+    clientOrderId: fill.clientOrderId,
+    symbol: "DOGEUSDT",
+    side: "BUY",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    liquidityRole: "MAKER",
+    executedAt: 2,
+    commissionStatus: "COMPLETE",
+  })
+})
+
+test("does not publish a Fill when accounting reports an idempotent duplicate", async () => {
+  const events = []
+  const { engine } = createHarness({
+    accountingApplied: false,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const order = engine.getOrders()[0]
+  const result = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makePartiallyFilledOrder({ order }),
+      executionType: "TRADE",
+      fill: makePartialFill({ order }),
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(events.some(({ name }) => name === "execution.fill_applied"), false)
+})
+
+test("Fill event publication failure cannot interrupt successful accounting", async () => {
+  const { engine, accountedFills } = createHarness({
+    accountingApplied: true,
+    eventPublisher: { publish: (event) => {
+      if (event.name === "execution.fill_applied") throw new Error("journal unavailable")
+      return { ok: true }
+    } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const order = engine.getOrders()[0]
+  const fill = makePartialFill({ order })
+  const result = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makePartiallyFilledOrder({ order }),
+      executionType: "TRADE",
+      fill,
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.ok(accountedFills.includes(fill))
+})
+
+
 test("serializes market and user-data transitions until a pending SELL is acknowledged", async () => {
   let resolveAcknowledgement
-  const placeOrderGate = {
-    promise: new Promise((resolve) => { resolveAcknowledgement = resolve }),
-  }
+  const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
   let signalSellSubmission
   const sellSubmissionStarted = new Promise((resolve) => { signalSellSubmission = resolve })
   const seeded = makeSeededRecoveryState()
@@ -607,23 +735,18 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     placeOrderGate,
-    onPlaceOrderStarted: ({ order }) => {
-      if (order.side === "SELL") signalSellSubmission()
-    },
+    onPlaceOrderStarted: ({ order }) => { if (order.side === "SELL") signalSellSubmission() },
   })
-
   const initialDecision = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await sellSubmissionStarted
-
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
   const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
   assert.ok(buyOrder?.brokerOrderId)
   assert.equal(sellOrder?.status, "PENDING")
   assert.equal(sellOrder?.brokerOrderId, null)
-
   const fill = new Fill({
     tradeId: "concurrent-buy-fill",
     brokerOrderId: buyOrder.brokerOrderId,
@@ -646,22 +769,16 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   const duplicateFillTransition = engine.processUserDataEvent({
     event: { executionType: "TRADE", executedOrder: filledBuy, fill },
   })
-
   assert.deepEqual(cancellationIds, [])
   assert.equal(orders.length, 2)
-
   resolveAcknowledgement()
-  const [initialResult, userDataResult, duplicateResult, marketResult] = await Promise.all([
-    initialDecision,
-    userDataTransition,
-    duplicateFillTransition,
-    concurrentMarketTransition,
+  const [initialResult, marketResult, userDataResult, duplicateResult] = await Promise.all([
+    initialDecision, concurrentMarketTransition, userDataTransition, duplicateFillTransition,
   ])
-
   assert.equal(initialResult.ok, true)
+  assert.equal(marketResult.ok, true)
   assert.equal(userDataResult.ok, true)
   assert.equal(duplicateResult.ok, true)
-  assert.equal(marketResult.ok, true)
   assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
   assert.equal(accountedFills.length, 1)
   assert.equal(orders.length, 2)
