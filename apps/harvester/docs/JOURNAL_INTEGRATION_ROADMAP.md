@@ -190,7 +190,7 @@ This step is split into small independently reviewable PRs to keep instrumentati
 
 #### Step 5b — Pause and trailing BUY cancellation transitions
 
-**Status:** In progress on branch `feature/harvester/pause-cancellation-events`.
+**Status:** Merged into `develop` by PR #461; all CI checks passed.
 
 - Publish the first actual pair-pause transition only; the current engine has no pair-resume transition, so do not invent one or emit a synthetic resume event.
 - Publish confirmed trailing BUY cancellation only after canonical broker confirmation and registry update.
@@ -295,7 +295,7 @@ Every implementation PR must:
 - [x] Step 3: optional Journal composition (PR #456).
 - [x] Step 4: lifecycle events (PR #458).
 - [x] Step 5a: actionable strategy decisions and order submission (merged PR #460).
-- [ ] Step 5b: pause and trailing BUY cancellation transitions.
+- [x] Step 5b: pause and trailing BUY cancellation transitions (merged PR #461).
 - [ ] Step 5c: recovery SELL cancellation transitions.
 - [ ] Step 5: strategy/order events (complete after 5a–5c).
 - [ ] Step 6: execution/accounting events.

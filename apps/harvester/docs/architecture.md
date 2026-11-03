@@ -432,6 +432,18 @@ cancellation result has been accepted by the local order registry. Cancellation
 failure events contain stable order identifiers, a bounded outcome
 classification, and sanitized error details. A confirmed cancellation is still
 recorded even if subsequent fill reconciliation fails; that later failure
-remains represented by the existing pause/error behavior. Recovery SELL
-cancellation events are deferred to Step 5c. All event publication is best-effort
+remains represented by the existing pause/error behavior. Recovery SELL cancellation events are implemented separately in Step 5c, after the first pause and trailing BUY cancellation milestone. All event publication is best-effort
 and does not wait for subscriber delivery or Journal persistence.
+
+
+### Recovery SELL cancellation events
+
+Step 5c publishes the same `order.cancelled` and `order.cancel_failed`
+contracts for recovery SELL cancellation. Success is emitted only after the
+canonical broker response has been accepted by the local order registry.
+Unknown order state, unconfirmed cancellation, unregistered order, and a
+non-CANCELED broker response are represented as safe failure outcomes.
+
+The existing recovery SELL fill reconciliation remains authoritative and runs
+unchanged after the cancellation response. Event publication does not wait for
+Journal delivery and cannot alter accounting or pause behavior.

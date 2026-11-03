@@ -45,7 +45,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder } = {}) {
+function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0" } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -118,14 +118,14 @@ function createHarness({ cancelWithFill = false, eventPublisher, placeOrderFailu
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
       ? new Quantity({ amount: "1000", asset: quoteAsset })
-      : new Quantity({ amount: "0", asset: baseAsset }),
+      : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
   }
   const engine = makeConservativeTradingEngine({
     broker,
     eventPublisher,
     tradingConfig,
-    getPortfolio: () => new Portfolio(),
-    getRecoveryLedger: () => RecoveryLedger.empty({ market }),
+    getPortfolio: () => initialPortfolio ?? new Portfolio(),
+    getRecoveryLedger: () => initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: async ({ fill }) => {
@@ -462,4 +462,129 @@ test("EventBus failure cannot prevent the pair pause callback", async () => {
   })
   assert.equal(result.ok, false)
   assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
+})
+
+
+function makeSeededRecoveryState() {
+  const fill = new Fill({
+    tradeId: "seed-recovery-buy",
+    brokerOrderId: "seed-recovery-order",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    portfolio: new Portfolio().applyFill({ fill }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ fill }).ledger,
+  }
+}
+
+const makeFilledOrder = ({ order }) => new CanonicalOrder({
+  clientOrderId: order.clientOrderId,
+  brokerOrderId: order.brokerOrderId,
+  market,
+  side: order.side,
+  type: order.type,
+  limitPrice: order.limitPrice,
+  originalQuantity: order.originalQuantity,
+  executedQuantity: order.originalQuantity,
+  status: "FILLED",
+  createdAt: order.createdAt,
+  acknowledgedAt: order.acknowledgedAt,
+  updatedAt: 3,
+  completedAt: 3,
+})
+
+test("publishes recovery SELL cancellation only after broker confirmation and registry update", async () => {
+  const events = []
+  let engine
+  const seeded = makeSeededRecoveryState()
+  const harness = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      if (event.name === "order.cancelled") {
+        const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
+        assert.equal(registered.status, "CANCELED")
+      }
+      return { ok: true }
+    } },
+  })
+  engine = harness.engine
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buyOrder)
+  assert.ok(sellOrder)
+
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+  })
+  assert.equal(result.ok, true)
+  const cancelled = events.find((event) =>
+    event.name === "order.cancelled" && event.data.clientOrderId === sellOrder.clientOrderId)
+  assert.ok(cancelled)
+  assert.equal(cancelled.data.side, "SELL")
+  assert.equal(cancelled.data.status, "CANCELED")
+})
+
+test("publishes recovery SELL cancellation failures and pauses the pair", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelFailure: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+  })
+  assert.equal(result.ok, false)
+  const failed = events.find((event) =>
+    event.name === "order.cancel_failed" && event.data.side === "SELL")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNCONFIRMED")
+  assert.ok(events.some((event) => event.name === "strategy.paused"))
+})
+
+
+test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelThrow: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+  })
+  assert.equal(result.ok, false)
+  const failed = events.find((event) =>
+    event.name === "order.cancel_failed" && event.data.side === "SELL")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNCONFIRMED")
 })
