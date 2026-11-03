@@ -83,7 +83,7 @@ test("does not duplicate an already active BUY on repeated price events", () => 
   assert.deepEqual(decision.actions, [])
 })
 
-test("creates a recovery SELL and the next standing BUY from actual filled inventory", () => {
+test("submits only the recovery SELL after a BUY fill; the next BUY waits for cycle completion", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -94,11 +94,9 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
     marketMetadata,
     lastBuyPrice: "0.1",
   })
-  assert.equal(decision.actions.length, 2)
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
-    { side: "BUY", price: "0.099", quantity: "100" },
     { side: "SELL", price: "0.102", quantity: "99" },
   ])
 })
@@ -115,7 +113,24 @@ test("does not create a second SELL while a recovery SELL is active", () => {
     activeOrders: [{ market, side: "SELL", status: "PARTIALLY_FILLED" }],
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+})
+
+
+test("does not submit a BUY while recovery capital remains outstanding, even without an active SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    activeOrders: [],
+    lastBuyPrice: "0.1",
+  })
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
 })
 
 test("rejects missing exchange increments and invalid strategy context", () => {
