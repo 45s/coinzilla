@@ -291,7 +291,7 @@ Split this work into three independently reviewable PRs; each must merge before 
 - Use the EventBus timeout contract; never report timeout as successful flush.
 - Set non-zero process exit status when shutdown is incomplete.
 
-**Tests:** Runtime stop failure; Journal close failure; EventBus flush/close timeout; repeated shutdown; startup failure; no unhandled rejection.
+**Tests:** Runtime stop failure; thrown/returned Journal close failure; EventBus close timeout; repeated shutdown; startup failure cleanup; no unhandled rejection.
 
 **PR boundary:** Failure isolation, timeout reporting, and shutdown idempotency only.
 

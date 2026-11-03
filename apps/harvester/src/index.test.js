@@ -365,7 +365,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
   const journalService = {
     close: async () => {
       operations.push("journal.close")
-      return { ok: false, errors: [new Error("journal fsync failed")] }
+      throw new Error("journal fsync failed")
     },
   }
   const handlers = {}
