@@ -144,7 +144,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [x] Normalize user-data order/execution events at the broker adapter boundary. Binance TRADE execution reports are converted into canonical `Fill` entities using cached symbol metadata; non-trade order events remain normalized broker events. Normalization failures now include execution context and close the user-data trading gate.
 - [x] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and exchange-charged commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
-- [~] Reject malformed, incomplete, or unsupported fills visibly; validate aggregate base/quote commission bounds and surface Binance normalization failures with an actionable pause reason.
+- [x] Reject malformed, incomplete, or unsupported fills visibly; validate aggregate base/quote commission bounds and surface Binance normalization failures with an actionable pause reason.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
 - [~] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause the pair and are not accounted. Additional multi-symbol and duplicate/out-of-order event cases remain.
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.

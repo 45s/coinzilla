@@ -18,7 +18,7 @@ export function validateFillCommissions({ market, fill } = {}) {
     throw new TypeError("Fill market does not match commission validation market")
   }
   if (fill.commissionStatus !== "COMPLETE") {
-    throw new TypeError("Fill commission data is incomplete")
+    throw new TypeError("Fill requires complete commission data")
   }
   if (!Array.isArray(fill.commissions)) {
     throw new TypeError("Fill.commissions must be an array")
@@ -53,7 +53,8 @@ export function validateFillCommissions({ market, fill } = {}) {
     throw new RangeError("Base commission exceeds executed base quantity")
   }
   if (compareDecimal({ left: quoteCommission, right: fill.quoteQuantity.amount }) > 0) {
-    throw new RangeError("Quote commission exceeds executed quote notional")
+    const limit = fill.side === "SELL" ? "SELL quote proceeds" : "executed quote notional"
+    throw new RangeError("Quote commission exceeds " + limit)
   }
 
   return Object.freeze({ baseCommission, quoteCommission })
