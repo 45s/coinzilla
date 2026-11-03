@@ -210,3 +210,21 @@ On the next diagnostic run, preserve the full structured log entry named **"Harv
 Then compare the exact IDs to the order submission and broker acknowledgement logs and to the TESTNET history row. Establish whether the report arrived before or after the matching acknowledgement. This separates a missing/wrong adapter identifier, a stale prior-session report, an event/acknowledgement race, and an external/manual order without guessing.
 
 **Do not run the destructive cancel-all or sell-ZRO scripts for this investigation.** The open-order and order-history commands are read-only; an empty open-order snapshot only describes the exchange state at the time of that query and cannot identify a previously rejected WebSocket event.
+
+
+### New TESTNET finding — order ID matched, client ID conflicted
+
+The 16:24:18 rejection record identifies:
+
+- `brokerOrderId=666845`;
+- incoming `clientOrderId=CU5G5c9IZgepakVzo3Z3kw`;
+- matched registry order's client ID `h-ZROUSDT-1`;
+- lookup by broker ID succeeded, lookup by client ID failed.
+
+This is not a simple unknown exchange order. It is a client-ID mismatch for an exchange order ID already in the Harvester registry. Do not resolve it by accepting broker-ID matches unconditionally.
+
+The Binance adapter currently reads raw execution-report `C` as `originalClientOrderId`, but the subsequent `adaptExecutedOrder()` does not forward that field. We therefore cannot yet tell whether `C` is the registered `h-ZROUSDT-1` or whether it carries another value. The next diagnostic update should preserve both raw identifiers `c` and `C` as event metadata and add adapter tests; it must not change canonical ownership decisions.
+
+**Read-only next check:** retrieve TESTNET order history for `ZROUSDT` and inspect the row for order ID `666845`. Compare its client order ID, status, executed quantity and update time with the Harvester acknowledgement. Also capture both `c` and `C` from the rejected CANCELED report and both IDs from the subsequent TRADE report.
+
+The 16:24:48 log `Trade execution received` is emitted before the event is queued for engine processing. It does not prove the fill was applied. Look for the subsequent successful fill-accounting/journal outcome or a rejection record for that exact TRADE report.
