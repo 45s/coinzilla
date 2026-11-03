@@ -712,18 +712,8 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const reconcileOwnedOrdersTransition = async () => {
-    const ownedOrders = [...state.registry.orders]
+  const collectOwnedOrderSnapshots = async ({ ownedOrders }) => {
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
-    if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
-
-    const pendingOrder = ownedOrders.find((order) => order.status === "PENDING" || !order.brokerOrderId)
-    if (pendingOrder) {
-      const error = new Error("Cannot reconcile a Harvester order without an acknowledged broker order ID")
-      await pause({ symbol: pendingOrder.market.symbol, reason: "RECONCILIATION_PENDING_ORDER_OUTCOME", error })
-      return toResult({ error })
-    }
-
     let affectedSymbol = symbols[0]
     try {
       const openOrdersBySymbol = new Map()
@@ -814,18 +804,6 @@ export function makeConservativeTradingEngine({
           }
           fillsById.set(fill.id, fill)
         }
-        if (compareDecimal({
-          left: historyOrder.executedQuantity.amount,
-          right: ownedOrder.executedQuantity.amount,
-        }) < 0) {
-          throw new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId)
-        }
-        const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
-        for (const fillId of previouslyProcessedFillIds) {
-          if (!fillsById.has(fillId)) {
-            throw new Error("REST fill history is missing previously processed execution ID " + fillId)
-          }
-        }
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
               left.executedAt !== right.executedAt) {
@@ -843,12 +821,45 @@ export function makeConservativeTradingEngine({
         }) !== 0) {
           throw new Error("REST fill quantity does not reconcile with cumulative executed quantity for " + ownedOrder.brokerOrderId)
         }
-        snapshots.push({ ownedOrder, historyOrder, fills })
+        snapshots.push({ ownedOrder, historyOrder, fills, fillIds: new Set(fillsById.keys()) })
+      }
+      return { snapshots, symbols }
+    } catch (error) {
+      error.reconciliationSymbol = affectedSymbol
+      throw error
+    }
+  }
+
+  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols } = {}) => {
+    let affectedSymbol = symbols[0]
+    try {
+      // Validate the collected REST snapshot against stream facts processed
+      // while REST was being read. Do this for every order before applying
+      // any recovered execution.
+      for (const { ownedOrder, historyOrder, fillIds } of snapshots) {
+        affectedSymbol = ownedOrder.market.symbol
+        const currentOrder = state.registry.orders.find(
+          (order) => order.brokerOrderId === ownedOrder.brokerOrderId,
+        )
+        if (!currentOrder) {
+          throw new Error("Owned order disappeared from the registry during REST reconciliation: " + ownedOrder.brokerOrderId)
+        }
+        if (compareDecimal({
+          left: historyOrder.executedQuantity.amount,
+          right: currentOrder.executedQuantity.amount,
+        }) < 0) {
+          throw new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId)
+        }
+        const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
+        for (const fillId of previouslyProcessedFillIds) {
+          if (!fillIds.has(fillId)) {
+            throw new Error("REST fill history is missing previously processed execution ID " + fillId)
+          }
+        }
       }
 
-      // All REST sections are validated before any recovered execution is
-      // applied, so a later incomplete order cannot leave a partially trusted snapshot.
       for (const { ownedOrder, historyOrder, fills } of snapshots) {
+        affectedSymbol = ownedOrder.market.symbol
         let cumulativeQuantity = "0"
         for (let index = 0; index < fills.length; index += 1) {
           const fill = fills[index]
@@ -910,8 +921,46 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const reconcileOwnedOrders = ({} = {}) =>
-    runTransition({ task: reconcileOwnedOrdersTransition })
+  const reconcileOwnedOrders = async ({ beforeApply } = {}) => {
+    const ownedOrdersResult = await runTransition({
+      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
+    })
+    if (!ownedOrdersResult?.ok) return ownedOrdersResult
+    const ownedOrders = ownedOrdersResult.data.ownedOrders
+    const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
+    if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
+
+    const pendingOrder = ownedOrders.find((order) => order.status === "PENDING" || !order.brokerOrderId)
+    if (pendingOrder) {
+      const error = new Error("Cannot reconcile a Harvester order without an acknowledged broker order ID")
+      return runTransition({
+        task: async () => {
+          await pause({ symbol: pendingOrder.market.symbol, reason: "RECONCILIATION_PENDING_ORDER_OUTCOME", error })
+          return toResult({ error })
+        },
+      })
+    }
+
+    let snapshots
+    try {
+      snapshots = await collectOwnedOrderSnapshots({ ownedOrders })
+      if (typeof beforeApply === "function") await beforeApply()
+    } catch (error) {
+      return runTransition({
+        task: async () => {
+          await pause({
+            symbol: error.reconciliationSymbol ?? symbols[0],
+            reason: "REST_STREAM_RECONCILIATION_FAILED",
+            error,
+          })
+          return toResult({ error })
+        },
+      })
+    }
+    return runTransition({
+      task: () => applyOwnedOrderSnapshotsTransition(snapshots),
+    })
+  }
 
   const processMarketPrice = ({ symbol, priceEvent } = {}) =>
     runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
