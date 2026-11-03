@@ -1117,3 +1117,23 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
   assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
   assert.deepEqual(pauses, [])
 })
+
+
+test("does not submit the next standing BUY when recovery SELL submission fails", async () => {
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, pauses } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    placeOrderFailure: true,
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(orders.map(({ side }) => side), ["SELL"])
+  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
+})
