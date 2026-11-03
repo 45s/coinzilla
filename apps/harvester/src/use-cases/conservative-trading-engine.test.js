@@ -738,7 +738,20 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   assert.equal(missingEvent.data.reason, "MISSING_FILL")
   assert.equal("rawExchangeMessage" in missingEvent.data, false)
 
-  const wrongFill = new Fill({ ...makePartialFill({ order }), brokerOrderId: "different-broker-order" })
+  const wrongFill = new Fill({
+    tradeId: "mismatched-trade-1",
+    brokerOrderId: "different-broker-order",
+    clientOrderId: order.clientOrderId,
+    market,
+    side: order.side,
+    price: order.limitPrice,
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    executedAt: 3,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
   const mismatch = await engine.processUserDataEvent({
     event: { executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }), executionType: "TRADE", fill: wrongFill },
   })
