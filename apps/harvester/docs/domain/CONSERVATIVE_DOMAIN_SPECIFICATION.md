@@ -162,7 +162,7 @@ p_{raw}=\frac{R}{Q(1-f)}
 
 The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover (C+m), Free-Roll's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
-The fee reserve is not a booked expense. Free-Roll derives it from configured fee rates and actual commission observations. Zero-fee maker configuration selects a post-only order type and initially reserves zero SELL fee; if actual BUY commission is observed, the reserve can rise. Actual commission rate is calculated from the actual commission asset and fill price/notional.
+The fee reserve is not a booked expense. Free-Roll initializes the planning reserve to its configured SELL fee rate (zero when makerPercent is zero / post-only is selected), then raises it when a higher actual commission rate is observed. After a successful cycle it resets the per-cycle actual rate and restores the configured reserve. Harvester currently differs: calculateSellFeeRate returns zero while no non-zero actual commission has yet been observed; after an actual fee it uses the higher of the configured ceiling and observed rate (with a zero configured ceiling when makerPercent is zero). Actual commission rate is calculated from the actual commission asset and fill price/notional. This activation-timing difference is D-15.
 
 ### 4.4 SELL fill accounting
 
