@@ -1104,7 +1104,13 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
   })
 
   assert.equal(transition.ok, true)
+  assert.equal(transition.data.reevaluate, true)
   assert.deepEqual(cancellationIds, [previousSell.brokerOrderId])
+
+  // Bootstrap handles this reevaluation directly from the same serialized
+  // user-data callback; no new market-price event is needed.
+  const reevaluation = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
+  assert.equal(reevaluation.ok, true)
   assert.deepEqual(orders.slice(-2).map(({ side }) => side), ["SELL", "BUY"])
 
   const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
