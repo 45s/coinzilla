@@ -522,6 +522,7 @@ export async function startHarvester({
           "reconciled",
           "terminated",
           "rpcError",
+          "executionNormalizationFailed",
         ].includes(status.type)) {
           publishLifecycleEvent({
             eventPublisher,
@@ -545,15 +546,32 @@ export async function startHarvester({
           orderUpdatePending: status.orderUpdatePending === true,
         })
         userDataStatus = status.type ?? "UNKNOWN"
+        if (status.type === "executionNormalizationFailed") {
+          userDataAccountingFailed = true
+          userDataStatus = "EXECUTION_NORMALIZATION_FAILED"
+          logger.error?.({
+            message: "Binance execution normalization failed",
+            symbol: status.symbol,
+            brokerOrderId: status.brokerOrderId,
+            clientOrderId: status.clientOrderId,
+            executionId: status.executionId,
+            errorName: status.error?.name ?? "Error",
+            errorMessage: status.error?.message ?? String(status.error ?? "Unknown normalization error"),
+            errorStack: status.error?.stack,
+          })
+        }
         const connectionUnsafe = [
           "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
+          "executionNormalizationFailed",
         ].includes(status.type)
         if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
           userDataRequiresReconciliation = true
           userDataReady = false
-          userDataStatus = userDataAccountingFailed
-            ? "EXECUTION_ACCOUNTING_FAILED"
-            : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+          userDataStatus = status.type === "executionNormalizationFailed"
+            ? "EXECUTION_NORMALIZATION_FAILED"
+            : userDataAccountingFailed
+              ? "EXECUTION_ACCOUNTING_FAILED"
+              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         } else if (userDataRequiresReconciliation) {
           // A stream-level "reconciled" acknowledgement alone does not clear
           // an application-level gate raised by a disconnect or recovery.

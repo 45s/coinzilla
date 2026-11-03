@@ -170,7 +170,7 @@ Portfolio and RecoveryLedger are separate projections of the same canonical fill
 - Portfolio updates inventory/cash flow; RecoveryLedger updates quote recovery cost/proceeds.
 - The application transition must not commit one projection and silently discard a failure from the other.
 
-**D1 requirement:** specify an atomic pure transition that returns both updated values or a failure with neither accepted. Current separate `Portfolio.applyFill` and `RecoveryLedger.applyFill` methods do not by themselves prove this cross-projection atomicity.
+**Implemented application invariant:** `updateTradingAccounting` computes both immutable projections and returns them together only when both accept the same fill identity. The bootstrap commits both values in one serialized workflow step; any failure returns neither updated projection. Deterministic tests cover a failure after Portfolio can independently calculate an update but RecoveryLedger rejects the market.
 
 ## 8. Worked accounting examples
 
