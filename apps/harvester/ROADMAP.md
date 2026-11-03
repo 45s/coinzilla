@@ -361,3 +361,9 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 - [ ] Shared Error/AggregateError normalization implementation and regression tests have been authored on the existing lifecycle-race branch; they still require execution in a repository checkout before this item can be marked complete.
 - [ ] Harvester lifecycle transition serialization, cancellation eligibility validation, broker-boundary ID validation, Harvester diagnostic integration tests, full CI, and bounded TESTNET verification remain outstanding.
 - [ ] Do not treat a GitHub source commit as evidence that tests, regression-before-fix verification, CI, or TESTNET checks passed.
+
+
+### P0.6 implementation progress — engine transition serialization
+
+- [ ] The existing Conservative engine's public market-price, user-data, and explicit evaluation entry points have been wrapped in a process-local promise-tail coordinator, with internal workflow calls kept inside the held transition. A deterministic acknowledgement/cancel-replace regression test has been added. This work remains unverified until the Harvester test suite runs in a repository checkout.
+- [ ] Re-entrant external callback behavior, concurrent user-data/fill processing, cancellation eligibility and broker identifier validation, full CI, and TESTNET verification remain outstanding.

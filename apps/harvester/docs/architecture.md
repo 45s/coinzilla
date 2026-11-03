@@ -398,3 +398,7 @@ The implementation is deliberately split into independently testable PRs and has
 
 Application and infrastructure boundaries should pass native Error instances as structured logger fields rather than converting them to strings. The shared `@coinzilla/utils` formatter is responsible for retaining error name, message, stack, recursive causes, and AggregateError members. The normalized diagnostic is JSON-compatible; circular references and unreadable properties are represented with explicit markers. Sensitive field-name redaction remains active throughout nested objects and error causes. This does not sanitize secrets embedded in arbitrary message or stack text, so callers must keep credentials and signed request material out of those strings.
 
+
+## In-process engine transition serialization
+
+The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.

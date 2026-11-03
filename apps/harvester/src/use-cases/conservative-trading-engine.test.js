@@ -45,13 +45,16 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false } = {}) {
+function createHarness({ cancelWithFill = false, placeOrderGate, onPlaceOrderStarted } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
+  const cancellationIds = []
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
+      onPlaceOrderStarted?.({ order })
+      if (placeOrderGate) await placeOrderGate.promise
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -70,7 +73,9 @@ function createHarness({ cancelWithFill = false } = {}) {
         }),
       }
     },
-    cancelOrder: async ({ order }) => ({
+    cancelOrder: async ({ order }) => {
+      cancellationIds.push(order.brokerOrderId)
+      return {
       ok: true,
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -90,7 +95,8 @@ function createHarness({ cancelWithFill = false } = {}) {
         updatedAt: 2,
         completedAt: 2,
       }),
-    }),
+      }
+    },
     getFills: async ({ orderId }) => ({
       ok: true,
       data: cancelWithFill
@@ -129,7 +135,7 @@ function createHarness({ cancelWithFill = false } = {}) {
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  return { engine, orders, pauses, accountedFills }
+  return { engine, orders, pauses, accountedFills, cancellationIds }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
@@ -177,4 +183,41 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
   assert.equal(orders.length, 1)
   assert.equal(accountedFills.length, 1)
   assert.ok(pauses.includes("TRAILING_BUY_FILLED_DURING_CANCEL"))
+})
+
+
+test("serializes market transitions until broker acknowledgement before cancel/replace", async () => {
+  let resolveAcknowledgement
+  const placeOrderGate = {
+    promise: new Promise((resolve) => { resolveAcknowledgement = resolve }),
+  }
+  let signalPlaceOrderStarted
+  const placeOrderStarted = new Promise((resolve) => { signalPlaceOrderStarted = resolve })
+  const { engine, orders, cancellationIds } = createHarness({
+    placeOrderGate,
+    onPlaceOrderStarted: () => signalPlaceOrderStarted(),
+  })
+
+  const initialPrice = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await placeOrderStarted
+
+  const risingPrice = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(orders.length, 1)
+  assert.deepEqual(cancellationIds, [])
+
+  resolveAcknowledgement()
+  const [initialResult, replacementResult] = await Promise.all([initialPrice, risingPrice])
+
+  assert.equal(initialResult.ok, true)
+  assert.equal(replacementResult.ok, true)
+  assert.equal(cancellationIds.length, 1)
+  assert.equal(cancellationIds[0], "broker-h-DOGEUSDT-1")
+  assert.equal(orders.length, 2)
 })
