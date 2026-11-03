@@ -494,8 +494,8 @@ A second, independent diagnostic defect is confirmed by the logging implementati
 
 - [x] Add a narrowly scoped structured diagnostic at the bootstrap boundary when the Conservative engine rejects an order event. It records the canonical symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and registry match results by both client and broker order IDs. If a client-ID match exists, its registered status and broker ID are included to distinguish pending from acknowledged ownership.
 - [x] Add a bootstrap regression test proving an unowned execution report is still rejected and paused while the safe correlation fields are logged.
-- [ ] The actual 15:47:17 rejected report remains unidentified. This diagnostic must be collected on the next bounded TESTNET run before attributing the failure to client-ID reuse, broker mapping, or external order activity.
-- [ ] No ownership rule, Binance mapping, or client-ID generation behavior is changed by this diagnostic-only step. Root-cause fix and its failure-reproducing regression test remain blocked on the exact rejected event identity.
+- [x] The earlier 666845 ownership mismatch was resolved in merged PR #477 by matching acknowledged events by exchange broker order ID, preserving the locally registered client ID, and retaining Binance `c`/`C` metadata. This historical investigation is superseded by the Free-Roll alignment section below.
+- [x] The ownership correction and deterministic registry/adapter regressions were merged in PR #477. Unknown broker IDs and conflicting identifiers remain fail-closed.
 
 
 ### P0.7 ownership correlation comparison — 2026-11-03
@@ -649,4 +649,56 @@ The domain acceptance criteria are:
 Broker adapters, execution-report mapping, order ownership, and application
 coordination remain separate integration concerns. They must not leak into the
 Conservative domain strategy. Do not perform TESTNET trades merely to validate
-pure strategy decisions. Keep PR #477 Draft and do not merge.
+pure strategy decisions. Keep PR #479 Draft until its own CI and acceptance criteria are satisfied.
+
+
+### P0.7 recovery-first follow-up — PR #479
+
+The active follow-up is PR #479 on `fix/harvester/p07-recovery-first`, targeting
+`develop`. PR #477 is already merged and remains the baseline for order
+ownership and execution lifecycle behavior.
+
+A further domain guard requires the RecoveryLedger cycle totals to be reset by
+the existing successful recovery-completion workflow before a new BUY can be
+emitted. A zero `outstandingRecoveryAmount` alone is not enough: it can occur
+when SELL proceeds cover principal but the minimum-profit or keep-quantity
+checks have not yet completed. The direct domain regression covers that
+pre-reset state. The engine regression verifies completion is called once for
+a full SELL terminal transition and a duplicate terminal report cannot run it
+again.
+
+#### Latest TESTNET cancellation report: order 667975
+
+The reported event was an `executionReport` with `executionType=CANCELED`,
+`brokerOrderId=667975`, incoming `clientOrderId=byuUoUY8oV0tD0h5adcqnq`,
+`originalClientOrderId=h-ZROUSDT-73`, and processing outcome `IGNORED`.
+The subsequent SELL `667976` / `h-ZROUSDT-74` was accepted/opened.
+
+Current Harvester behavior is broker-ID-first, matching Free-Roll's
+acknowledged exchange-order-ID ownership rule. The incoming `c` value does not
+replace the locally registered canonical client ID; `C` is preserved as
+diagnostic event metadata. In the engine, an execution report is reported as
+`IGNORED` when the registry update is duplicate or stale (or when a
+non-execution event is intentionally ignored). Since this was an
+`executionReport`, the likely interpretation is a duplicate/stale update for
+an already known order, not an unknown-order ownership failure. A terminal
+cancellation report does not apply a fill or complete a recovery cycle.
+
+The available event excerpt does not include the in-memory registry snapshot,
+the current registered status/timestamp for broker order `667975`, or its
+TESTNET order-history row. Therefore it does **not** prove whether the report
+was an exact duplicate cancellation or an older terminal report. It also does
+not independently prove that the subsequent order `667976` is correctly
+registered; that requires its submission/acknowledgement record and registry
+entry. Do not change matching behavior based on this excerpt. Unknown broker
+IDs remain unowned and fail closed.
+
+#### Verification categories
+
+- [ ] Deterministic domain and engine suite on the final PR #479 head.
+- [ ] Required GitHub Actions workflows on the final PR #479 head.
+- [x] Earlier TESTNET connectivity, order submission, execution-report delivery,
+  and the 666845 ownership correction merged in PR #477.
+- [ ] Bounded full BUY fill → recovery SELL fill → successful completion → next
+  BUY TESTNET acceptance. This remains open until the complete evidence is
+  captured; no end-to-end cycle is claimed here.
