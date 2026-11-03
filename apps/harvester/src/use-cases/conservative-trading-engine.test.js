@@ -543,7 +543,7 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
   })
 }
 
-function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt }) {
   return new Fill({
     tradeId,
     brokerOrderId: order.brokerOrderId,
@@ -553,6 +553,7 @@ function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity }) {
     price: new Money({ amount: price, asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    ...(executedAt === undefined ? {} : { executedAt }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
