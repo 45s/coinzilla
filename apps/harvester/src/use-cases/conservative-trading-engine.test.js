@@ -897,3 +897,24 @@ test("does not publish recovery completion when the cycle is ineligible", async 
   assert.equal(result.ok, false)
   assert.equal(events.some(({ name }) => name === "recovery.cycle_completed"), false)
 })
+
+
+test("recovery completion publisher failure cannot interrupt the committed cycle", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    eventPublisher: { publish: () => { throw new Error("journal unavailable") } },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const result = await harness.engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: sellOrder }) },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.completedCycles, [market.id])
+})
