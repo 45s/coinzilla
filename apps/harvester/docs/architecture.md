@@ -368,9 +368,9 @@ new BUY below the current last trade, rounded down to the exchange tick.
 
 ## Operational event journal
 
-**Current status:** Harvester does not currently compose `@coinzilla/event-bus` or `@coinzilla/journal`. This section records the intended boundary for the deferred integration; it must not be read as implemented behavior.
+**Current status:** Harvester does not currently compose `@coinzilla/event-bus` or `@coinzilla/journal`. This section records the intended boundary; it must not be read as implemented behavior.
 
-After the first successful real Conservative TESTNET trading cycle, Harvester may add an application-level EventBus and an optional Journal subscriber. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
+Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
 
 The Journal is an observer, never a trading dependency:
 
@@ -385,4 +385,4 @@ The Journal is an observer, never a trading dependency:
 
 Bot-Free-Roll is a reference for package composition, event publication, and shutdown ordering, not a template for Harvester's startup policy or domain contracts. In particular, Harvester must not inherit a startup sequence in which Journal initialization failure prevents trading.
 
-The implementation is deliberately split into independently testable PRs. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
+The implementation is deliberately split into independently testable PRs and has no TESTNET prerequisite. Follow the [Journal Integration Roadmap](./JOURNAL_INTEGRATION_ROADMAP.md) and [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md). Do not implement replay, durable trading-state recovery, an outbox, or a database as part of the initial operational journaling work.
