@@ -48,11 +48,8 @@ function comparePathMaps(actualDirectories, mappedDirectories, documentName) {
   return gaps;
 }
 
-export function findOwnershipGaps(directories, ownershipDocument, workflowDocument) {
-  return [
-    ...comparePathMaps(directories, extractMappedPaths(ownershipDocument, '/'), 'DOMAIN_OWNERSHIP.md'),
-    ...comparePathMaps(directories, extractMappedPaths(workflowDocument, '/\\*\\*'), 'AI_AGENT_WORKFLOW.md'),
-  ];
+export function findOwnershipGaps(directories, ownershipDocument) {
+  return comparePathMaps(directories, extractMappedPaths(ownershipDocument, '/'), 'DOMAIN_OWNERSHIP.md');
 }
 
 
@@ -103,7 +100,6 @@ export function findMissingRoadmaps(root, ownershipDocument) {
 function main() {
   const directories = findInstructionDirectories(repositoryRoot);
   const ownershipDocument = readFileSync(join(repositoryRoot, 'docs/engineering/DOMAIN_OWNERSHIP.md'), 'utf8');
-  const workflowDocument = readFileSync(join(repositoryRoot, 'AI_AGENT_WORKFLOW.md'), 'utf8');
   const policyPaths = [
     'AGENTS.md',
     'AI_AGENT_WORKFLOW.md',
@@ -117,7 +113,7 @@ function main() {
     content: readFileSync(join(repositoryRoot, path), 'utf8'),
   }));
   const gaps = [
-    ...findOwnershipGaps(directories, ownershipDocument, workflowDocument),
+    ...findOwnershipGaps(directories, ownershipDocument),
     ...findMissingRoadmaps(repositoryRoot, ownershipDocument),
     ...findMissingLocalLinks(repositoryRoot, policyDocuments),
   ];

@@ -30,7 +30,7 @@ Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md` be
 
 ## Workflow
 
-- Target changes to `develop`.
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
 - Run package tests/coverage and applicable workspace CI.
 - Keep README and roadmap aligned with implemented behavior.
 - Do not claim checks passed unless they were executed.
