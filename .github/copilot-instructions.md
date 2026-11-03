@@ -10,6 +10,8 @@ Treat ENGINEERING_STANDARDS.md as the project's engineering contract. Prefer cle
 For every behavior change, add or update tests. Keep default tests deterministic and offline. Do not weaken tests or CI checks to get a green result. In the final summary, state which checks were actually run and whether they passed.
 
 
+**Reserved branch names:** Before creating, renaming, or pushing a task branch, follow the reserved branch-name protection in `AI_AGENT_WORKFLOW.md`. Never use `main` or `develop` as a task branch name or as a delimited token in a task branch name (case-insensitive), e.g. reject `feature/main/task`, `feature/develop/task`, `fix-main`, and `docs_develop_cleanup`. Choose a task-specific alternative before branch creation.
+
 ## Mandatory repository workflow
 
 Before making changes, read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md`, then read the closest package/application `AGENTS.md`. Follow domain ownership, short-lived task branches from `develop`, target-aware synchronization, and the rule that only the user approves the final `develop` to `main` release PR. Do not ask the user to update branches manually.
