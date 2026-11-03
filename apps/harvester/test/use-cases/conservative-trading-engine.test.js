@@ -370,7 +370,6 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
 
   await partialFill
   assert.deepEqual(cancellations, [])
-  await finalFill
   await cancelStarted.promise
 
   const sellFillEvent = createTradeEvent({
