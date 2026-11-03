@@ -115,3 +115,50 @@ test("rejects quote commission greater than SELL proceeds", () => {
     /exceeds SELL quote proceeds/,
   )
 })
+
+
+test("rejects base commission greater than SELL execution quantity", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: makeFill({
+        side: "SELL",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "100.01", asset: baseAsset }) }),
+        ],
+      }),
+    }),
+    /base commission exceeds executed base quantity/i,
+  )
+})
+
+test("rejects quote commission greater than BUY quote notional", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: makeFill({
+        quoteQuantity: "0.01",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+        ],
+      }),
+    }),
+    /quote commission exceeds executed quote notional/i,
+  )
+})
+
+test("checks aggregated commissions against the executed amount", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: makeFill({
+        quoteQuantity: "1",
+        commissions: [
+          new Commission({ amount: new Money({ amount: "0.6", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.6", asset: quoteAsset }) }),
+        ],
+      }),
+    }),
+    /quote commission exceeds executed quote notional/i,
+  )
+})

@@ -21,11 +21,12 @@ function makeFill({
   quoteQuantity = "10",
   commissions = [],
   commissionStatus = "COMPLETE",
+  fillMarket = market,
 } = {}) {
   return new Fill({
     tradeId,
     brokerOrderId: "order-" + tradeId,
-    market,
+    market: fillMarket,
     side,
     price: new Money({ amount: "0.1", asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
@@ -134,4 +135,25 @@ test("rejects invalid application inputs", () => {
     recoveryLedger: RecoveryLedger.empty({ market }),
     fill: {},
   }).ok, false)
+})
+
+
+test("rejects a wrong-market fill atomically when Portfolio accepts but RecoveryLedger rejects", () => {
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDC",
+    baseAsset,
+    quoteAsset,
+  })
+  const portfolio = new Portfolio()
+  const recoveryLedger = RecoveryLedger.empty({ market })
+  const fill = makeFill({ fillMarket: otherMarket })
+
+  assert.equal(portfolio.applyFill({ fill }).applied, true)
+  const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+
+  assert.equal(result.ok, false)
+  assert.equal(portfolio.positions.length, 0)
+  assert.equal(recoveryLedger.buyCost, "0")
+  assert.deepEqual(recoveryLedger.appliedFillIds, [])
 })

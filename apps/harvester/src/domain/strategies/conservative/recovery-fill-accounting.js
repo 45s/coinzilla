@@ -4,6 +4,7 @@ import {
   compareDecimal,
   subtractDecimal,
 } from "@coinzilla/utils"
+import { validateFillCommissions } from "../../fills/validate-fill-commissions.js"
 
 /**
  * Project one confirmed fill into Conservative's pooled quote-currency
@@ -23,9 +24,6 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
   if (fill.market?.id !== market.id) {
     throw new TypeError("Fill market does not match recovery accounting market")
   }
-  if (fill.commissionStatus !== "COMPLETE") {
-    throw new TypeError("Recovery accounting requires complete commission data")
-  }
   if (fill.side !== "BUY" && fill.side !== "SELL") {
     throw new TypeError("Fill side must be BUY or SELL")
   }
@@ -38,29 +36,7 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
   if (compareDecimal({ left: quoteQuantity.amount, right: "0" }) <= 0) {
     throw new RangeError("Fill quote quantity must be greater than zero")
   }
-  if (!Array.isArray(fill.commissions)) {
-    throw new TypeError("Fill.commissions must be an array")
-  }
-
-  let quoteCommission = "0"
-  for (const commission of fill.commissions) {
-    const amount = commission?.amount
-    assertDecimalString({ value: amount?.amount, field: "commission.amount" })
-    if (compareDecimal({ left: amount.amount, right: "0" }) < 0) {
-      throw new RangeError("Commission amount must be non-negative")
-    }
-    if (compareDecimal({ left: amount.amount, right: "0" }) === 0) continue
-
-    if (amount.asset?.id === market.quoteAsset.id) {
-      quoteCommission = addDecimal({ left: quoteCommission, right: amount.amount })
-      continue
-    }
-    if (amount.asset?.id === market.baseAsset.id) continue
-
-    throw new TypeError(
-      "Unsupported third-asset commission: " + String(amount.asset?.code ?? "unknown"),
-    )
-  }
+  const { quoteCommission } = validateFillCommissions({ market, fill })
 
   if (fill.side === "BUY") {
     return Object.freeze({
