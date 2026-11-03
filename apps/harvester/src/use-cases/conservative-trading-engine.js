@@ -824,7 +824,8 @@ export function makeConservativeTradingEngine({
         snapshots.push({ ownedOrder, historyOrder, fills, fillIds: new Set(fillsById.keys()) })
       }
       return { snapshots, symbols }
-    } catch (error) {
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error(String(caught))
       error.reconciliationSymbol = affectedSymbol
       throw error
     }
@@ -836,6 +837,12 @@ export function makeConservativeTradingEngine({
       // Validate the collected REST snapshot against stream facts processed
       // while REST was being read. Do this for every order before applying
       // any recovered execution.
+      const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
+      for (const currentOrder of state.registry.orders) {
+        if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
+          throw new Error("Order registry changed while REST reconciliation was in progress")
+        }
+      }
       for (const { ownedOrder, historyOrder, fillIds } of snapshots) {
         affectedSymbol = ownedOrder.market.symbol
         const currentOrder = state.registry.orders.find(
