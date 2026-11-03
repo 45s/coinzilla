@@ -47,6 +47,7 @@ export function makeConservativeTradingEngine({
     lastBuyPrices: new Map(),
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
+    processedFillIdsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map(),
@@ -55,13 +56,21 @@ export function makeConservativeTradingEngine({
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(),
   }
+  const rememberProcessedFill = ({ fill }) => {
+    const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
+    if (fillIds.has(fill.id)) return false
+    fillIds.add(fill.id)
+    state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
+    return true
+  }
+
   const recordBuyExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) return
     const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       quoteQuantity: "0",
       fillIds: new Set(),
     }
-    if (current.fillIds.has(fill.id)) return
     current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
     current.quoteQuantity = addDecimal({ left: current.quoteQuantity, right: fill.quoteQuantity.amount })
     current.fillIds.add(fill.id)
@@ -84,11 +93,11 @@ export function makeConservativeTradingEngine({
   }
 
   const recordSellExecutionFill = ({ fill }) => {
+    if (!rememberProcessedFill({ fill })) return
     const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
       quantity: "0",
       fillIds: new Set(),
     }
-    if (current.fillIds.has(fill.id)) return
     current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
     current.fillIds.add(fill.id)
     state.sellExecutionTotals.set(fill.brokerOrderId, current)
@@ -804,6 +813,18 @@ export function makeConservativeTradingEngine({
             throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
           }
           fillsById.set(fill.id, fill)
+        }
+        if (compareDecimal({
+          left: historyOrder.executedQuantity.amount,
+          right: ownedOrder.executedQuantity.amount,
+        }) < 0) {
+          throw new Error("REST order history is behind the registered cumulative execution quantity for " + ownedOrder.brokerOrderId)
+        }
+        const previouslyProcessedFillIds = state.processedFillIdsByOrder.get(ownedOrder.brokerOrderId) ?? new Set()
+        for (const fillId of previouslyProcessedFillIds) {
+          if (!fillsById.has(fillId)) {
+            throw new Error("REST fill history is missing previously processed execution ID " + fillId)
+          }
         }
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
