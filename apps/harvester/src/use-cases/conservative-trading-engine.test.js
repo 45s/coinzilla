@@ -290,6 +290,7 @@ test("publishes rejected submission outcome without blocking pair pause", async 
     "strategy.decision",
     "order.submission_requested",
     "order.submission_failed",
+    "strategy.paused",
   ])
   assert.equal(events[2].data.outcome, "REJECTED_OR_UNKNOWN")
   assert.equal(events[2].data.clientOrderId, "h-DOGEUSDT-1")
@@ -320,8 +321,10 @@ test("publishes unknown submission outcome after a transport exception", async (
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
-  assert.equal(events.at(-1).name, "order.submission_failed")
-  assert.equal(events.at(-1).data.outcome, "UNKNOWN")
+  const failed = events.find(({ name }) => name === "order.submission_failed")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNKNOWN")
+  assert.equal(events.at(-1).name, "strategy.paused")
 })
 
 
@@ -419,12 +422,13 @@ test("publishes thrown cancellation outcomes as unconfirmed", async () => {
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  const result = await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
-  })
-
-  assert.equal(result.ok, false)
+  await assert.rejects(
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+    }),
+    /cancel socket closed/,
+  )
   assert.equal(events.at(-1).name, "order.cancel_failed")
   assert.equal(events.at(-1).data.outcome, "UNCONFIRMED")
 })
@@ -444,4 +448,18 @@ test("cancellation event publication failure cannot prevent cancellation or reev
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.trailingBuyReplaced, true)
+})
+
+
+test("EventBus failure cannot prevent the pair pause callback", async () => {
+  const { engine, pauses } = createHarness({
+    placeOrderFailure: true,
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+  })
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, false)
+  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
 })
