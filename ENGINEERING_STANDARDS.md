@@ -8,6 +8,7 @@ A change is ready to merge only when:
 
 - [ ] The change solves the stated problem and handles expected edge cases.
 - [ ] Every new or changed behavior has meaningful automated test coverage, including relevant success, boundary, invalid-input, and failure scenarios.
+- [ ] For every behavior change, the test was written first, observed failing for the expected reason before implementation, then observed passing after the implementation (RED → GREEN → REFACTOR).
 - [ ] Every bug fix includes a regression test that reproduces the defect, unless a documented technical reason makes that impractical.
 - [ ] Tests are deterministic and do not depend on production services, credentials, or live exchange access.
 - [ ] The affected package's tests and coverage checks pass; applicable workspace and CI checks pass.
@@ -44,6 +45,14 @@ Other repository instructions and task checklists should link to this section ra
 
 ### 2. Test-first development and comprehensive coverage
 
+- **Strict TDD is mandatory for all code changes that introduce or alter behavior: tests first, implementation second.** Do not write or modify production implementation to satisfy a requirement until the corresponding test exists and has been run.
+- **RED:** write the smallest meaningful test that expresses the required observable behavior. Run it against the current implementation and confirm that it fails because the behavior is missing or incorrect—not because of a syntax error, broken fixture, invalid test, or unrelated setup failure. Record/inspect that failure before proceeding.
+- **GREEN:** only after the expected RED result, make the smallest production change that makes the test pass. Run the new test again and confirm it passes. Add further tests in the same test-first cycle for relevant boundaries, invalid inputs, failures, and interactions.
+- **REFACTOR:** only after GREEN, improve structure or remove duplication while preserving behavior. Re-run the relevant tests after each refactoring step; keep the suite green.
+- Repeat RED → GREEN → REFACTOR in small increments. Do not write a batch of implementation and add tests afterward. Do not treat a test that passes before the implementation as proof of RED; investigate whether the behavior already exists or the test is ineffective.
+- For a bug fix, first add a regression test that reproduces the defect and verify that it fails for the defect. Then implement the fix. A regression test added only after the fix does not satisfy this requirement.
+- If the test cannot be executed, the expected failure cannot be distinguished from an invalid test/setup, or the behavior cannot reasonably be tested automatically, stop before implementation and document the concrete blocker or narrowly scoped exception in the PR. Do not silently skip the RED step or claim it occurred.
+- For documentation-only, formatting-only, or other changes with no runtime behavior, use the applicable task checklist; do not invent meaningless tests. If a documentation change alters an executable contract or example, test that contract/example where practical.
 - **Every new or changed behavior must be tested.** Tests are a required part of implementation, not optional follow-up work.
 - For every bug fix, add a regression test that demonstrates the original defect and fails before the fix whenever practical.
 - Cover normal behavior, boundaries, malformed and adversarial input, exceptional conditions, rejected promises, concurrency/races, cleanup, and interactions with neighboring functionality as relevant to the risk.
@@ -154,6 +163,7 @@ Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_PO
 ### Expected — review requirement
 
 - Every changed behavior has meaningful tests, including regression coverage for bug fixes.
+- Strict TDD evidence is present for behavior changes: the test failed for the expected reason before implementation and passed afterward; refactoring preserved green tests.
 - Important edge cases, failure paths, and cleanup behavior are covered.
 - Logging and error handling provide actionable context without leaking sensitive data or creating noise.
 - Naming, module cohesion, single-responsibility boundaries, pure-function preference, controlled side effects, and explicit state ownership are respected.
