@@ -158,7 +158,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ### P0.5 — Trading Engine orchestration
 
-- [x] Implement the first in-process Conservative trading workflow. `makeConservativeTradingEngine` connects market prices to the pure policy, order registry, validated broker submission, canonical order updates, ownership checks, fill accounting, and immediate reevaluation after terminal order updates. Bootstrap composes the user-data callback and account-readiness gate; reservations and comprehensive restart/reconnect reconciliation remain separate work.
+- [x] Implement the first in-process Conservative trading workflow. `makeConservativeTradingEngine` connects market prices to the pure policy, order registry, validated broker submission, canonical order updates, ownership checks, fill accounting, and immediate reevaluation after terminal order updates. Bootstrap composes the user-data callback and account-readiness gate; reservations and durable restart/balance reconciliation remain separate work.
 - [ ] Keep strategy-specific policy out of the engine and broker adapter.
 - [ ] Ensure exactly one strategy controls each pair's shared Position at a time.
 - [ ] Serialize or otherwise consistently coordinate concurrent market, order, fill, and cancellation events.
