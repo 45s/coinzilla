@@ -472,8 +472,8 @@ function makeSeededRecoveryState() {
     market,
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10000", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -506,7 +506,7 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   const harness = createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
-    baseFreeBalance: "100",
+    baseFreeBalance: "1",
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "order.cancelled") {
@@ -543,7 +543,7 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
   const { engine } = createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
-    baseFreeBalance: "100",
+    baseFreeBalance: "1",
     cancelFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -561,4 +561,30 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
   assert.ok(failed)
   assert.equal(failed.data.outcome, "UNCONFIRMED")
   assert.ok(events.some((event) => event.name === "strategy.paused"))
+})
+
+
+test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", async () => {
+  const events = []
+  const seeded = makeSeededRecoveryState()
+  const { engine } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    cancelThrow: true,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const result = await engine.processUserDataEvent({
+    event: { executedOrder: makeFilledOrder({ order: buyOrder }) },
+  })
+  assert.equal(result.ok, false)
+  const failed = events.find((event) =>
+    event.name === "order.cancel_failed" && event.data.side === "SELL")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNCONFIRMED")
 })

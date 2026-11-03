@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do not repeat them. The current assignment is **Step 5b — Pause and trailing BUY cancellation transitions**, on branch `feature/harvester/pause-cancellation-events`, targeting `develop`.
+Steps 1–5b are merged into `develop` (PRs #453, #455, #456, #458, #460, #461). Do not repeat them. The current assignment is **Step 5c — Recovery SELL cancellation transitions**, on branch `feature/harvester/recovery-sell-cancellation-events`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -58,34 +58,39 @@ Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do no
 - Publication is best-effort and synchronous admission only. Never await EventBus subscriber work or Journal I/O from strategy/order workflows.
 - Keep strategy policies independent of EventBus/Journal. Instrument only the application engine/use-case boundary.
 
-### Current Step 5b scope
+### Completed Step 5b scope
 
-- Publish `strategy.paused` only on the first transition into a pair's paused state; repeated pause causes must not emit duplicates.
+- Publish `strategy.paused` only on the first transition into a pair's paused state; repeated pause causes do not emit duplicates.
 - Publish `order.cancelled` only after a trailing BUY has a canonical CANCELED acknowledgement and the local registry accepts the update.
 - Publish `order.cancel_failed` for unconfirmed, unregistered, or non-canceled trailing BUY outcomes, with safe identifiers and sanitized errors.
 - Keep cancellation fill reconciliation and existing pause behavior unchanged.
-- Do not instrument recovery SELL cancellation (Step 5c), execution/accounting, or invent pair-resume behavior; the current engine has no pair-resume transition.
-- EventBus publication must not be awaited and must not change cancellation, pause, or reevaluation behavior.
+- The current engine has no pair-resume transition; do not invent one solely for logging.
+
+### Current Step 5c scope
+
+- Publish `order.cancelled` for recovery SELL cancellation only after canonical broker confirmation and local registry update.
+- Publish `order.cancel_failed` for unknown order state, unconfirmed cancellation, unregistered order, or a broker response that is not CANCELED.
+- Preserve recovery fill reconciliation, accounting, and pair-pause behavior.
+- Do not change order selection or strategy policy.
+- EventBus publication must not be awaited and must not change cancellation or fill-reconciliation behavior.
 
 ### Tests
 
 Add offline tests covering:
-1. A pair emits only one pause event across repeated pause causes.
-2. Confirmed trailing BUY cancellation is published after local registry update.
-3. Unconfirmed and thrown cancellation outcomes publish safe failure DTOs.
-4. EventBus throw cannot prevent cancellation, pause handling, or strategy reevaluation.
-5. Cancellation DTOs preserve exact decimal strings and exclude extra/sensitive fields.
-6. Existing Harvester strategy/order tests continue to pass.
+1. Confirmed recovery SELL cancellation is published after local registry update.
+2. Broker-rejected and thrown recovery SELL cancellation outcomes publish safe failure DTOs.
+3. Unknown order state and unregistered cancellation are handled without exposing broker objects.
+4. EventBus throw cannot prevent cancellation handling, pause behavior, or fill reconciliation.
+5. Existing recovery BUY/SELL accounting and strategy tests continue to pass.
 
 Run the Harvester unit and coverage commands plus relevant workspace checks. If local execution is unavailable, do not claim tests passed: open the PR and use its actual CI runs as the verification gate.
 
 ### Documentation
 
-Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Step 5c (recovery SELL cancellation) remains separate.
+Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Resume events remain deferred until a real pair-resume transition exists.
 
 ## Subsequent milestones
 
-- Step 5c: recovery SELL cancellation success/failure.
 - Resume events remain deferred until the engine has a real, explicit pair-resume transition.
 - Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.
