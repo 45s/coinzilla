@@ -303,7 +303,7 @@ the account:
 pnpm --filter @coinzilla/harvester testnet:history
 
 # Latest 50 ZROUSDT orders
-pnpm --filter @coinzilla/harvester testnet:history -- ZROUSDT 50
+pnpm --filter @coinzilla/harvester testnet:history ZROUSDT 50
 
 # Latest 20 BTCUSDT orders
 pnpm --filter @coinzilla/harvester testnet:history -- BTCUSDT 20
