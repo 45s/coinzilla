@@ -1490,7 +1490,6 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
     "FILLED",
   )
   assert.equal(engine.getOrders().length, 1)
-  )
   assert.deepEqual(calls, [
     ["getOpenOrders", "DOGEUSDT"],
     ["getCanonicalOrderHistory", "DOGEUSDT", buyOrder.brokerOrderId],
