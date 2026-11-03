@@ -81,6 +81,13 @@ Before making changes, select the task-specific checklist in [docs/engineering/T
 - Do not bypass or weaken CI checks to make a change pass. Explain any justified exception to the engineering standards.
 
 
+## Reserved branch names (mandatory)
+
+- Before creating, renaming, or pushing any task branch, apply the reserved-name check in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#reserved-branch-name-protection--mandatory).
+- Never create a task branch named `main` or `develop`, or containing either token delimited by `/`, `.`, `_`, or `-` (case-insensitive). Examples prohibited include `feature/main/task`, `feature/develop/task`, `fix-main`, and `docs_develop_cleanup`.
+- If a proposed branch name matches, choose a task-specific alternative before creating it. This is a hard restriction for every AI agent and automated contributor.
+
+
 ## Task branch cleanup (mandatory)
 
 - Every task branch is short-lived and exists only while its PR/work is active.
