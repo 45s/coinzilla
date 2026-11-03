@@ -136,14 +136,14 @@ Partial fills are accounted incrementally. A BUY order is considered complete fo
 ### 4.3 Recovery SELL planning
 
 Let:
-- (A) = active base quantity before planning;
-- (K) = retained `keepQuantity`;
-- (f) = conservative SELL fee reserve as a decimal fraction;
-- (s) = quantity step;
-- (t) = price tick;
-- (C) = cumulative BUY cost;
-- (P) = cumulative confirmed net SELL proceeds;
-- (m) = required `minProfit`.
+- `A` = active base quantity before planning;
+- `K` = retained `keepQuantity`;
+- `f` = conservative SELL fee reserve as a decimal fraction;
+- `s` = quantity step;
+- `t` = price tick;
+- `C` = cumulative BUY cost;
+- `P` = cumulative confirmed net SELL proceeds;
+- `m` = required `minProfit`.
 
 Sell quantity:
 $$
@@ -155,12 +155,12 @@ $$
 R = \max(0,C+m-P)
 $$
 
-If (Q le 0), no SELL is submitted. Otherwise minimum price:
+If `Q ≤ 0`, no SELL is submitted. Otherwise minimum price:
 $$
 p_{raw}=\frac{R}{Q(1-f)}
 $$
 
-The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover (C+m), Free-Roll's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
+The submitted limit price is rounded **up** to the price tick. If earlier proceeds already cover `C + m`, Free-Roll's exact planner still requires a positive sell price; Harvester currently floors that case to at least one tick. Actual fees are authoritative for accounting; the fee reserve is only a planning assumption.
 
 The fee reserve is not a booked expense. Free-Roll initializes the planning reserve to its configured SELL fee rate (zero when makerPercent is zero / post-only is selected), then raises it when a higher actual commission rate is observed. After a successful cycle it resets the per-cycle actual rate and restores the configured reserve. Harvester currently differs: calculateSellFeeRate returns zero while no non-zero actual commission has yet been observed; after an actual fee it uses the higher of the configured ceiling and observed rate (with a zero configured ceiling when makerPercent is zero). Actual commission rate is calculated from the actual commission asset and fill price/notional. This activation-timing difference is D-15.
 
@@ -188,7 +188,7 @@ Free-Roll completes a recovery cycle only after:
 If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Free-Roll pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
 
 On success:
-- Allocate exactly (K) from active to free inventory.
+- Allocate exactly `K` from active to free inventory.
 - Keep any additional active inventory in the active bucket.
 - Reset cycle BUY cost and SELL proceeds to zero.
 - Reset Free-Roll's per-cycle actual commission rate to zero and restore the configured fee reserve.
@@ -203,12 +203,12 @@ After a successful recovery SELL, the standing BUY remains eligible and trailing
 
 ## 5. Commission and financial formulas
 
-Let a canonical fill have gross base quantity (q), gross quote notional (v), base commission (c_b), and quote commission (c_q). All quantities are non-negative decimal strings; zero commission may omit an asset.
+Let a canonical fill have gross base quantity `q`, gross quote notional `v`, base commission `c_b`, and quote commission `c_q`. All quantities are non-negative decimal strings; zero commission may omit an asset.
 
 | Fill | Active base inventory delta | Recovery quote accounting |
 |---|---:|---:|
-| BUY | (+(q-c_b)) | (buyCost += v+c_q) |
-| SELL | (-(q+c_b)) | (netSellProceeds += v-c_q) |
+| BUY | `+(q-c_b)` | `buyCost += v+c_q` |
+| SELL | `-(q+c_b)` | `netSellProceeds += v-c_q` |
 
 A SELL is invalid if its total base consumption exceeds active strategy inventory. A commission in a third asset is not included in these formulas; current Free-Roll and Harvester policies reject it.
 
@@ -222,11 +222,11 @@ All examples are quote-denominated in USDT and use exact arithmetic for the stat
 
 - BUY: 100 DOGE gross, 10.00 USDT quote notional, 0.02 USDT quote commission.
 - Active inventory: 100 DOGE.
-- Recovery BUY cost: (10.00+0.02=10.02).
+- Recovery BUY cost: `10.00 + 0.02 = 10.02`.
 - `keepQuantity`: 1 DOGE; `minProfit`: 0.10 USDT; fee reserve: 0.
 - SELL: 99 DOGE for 10.20 USDT gross; 0.02 USDT quote commission.
 - Net SELL proceeds: 10.18 USDT.
-- Profit: (10.18-10.02=0.16) USDT, which is at least 0.10.
+- Profit: `10.18 - 10.02 = 0.16` USDT, which is at least 0.10.
 - Active inventory after SELL: 1 DOGE.
 - Completion: eligible; allocate 1 DOGE to free inventory; active becomes 0; reset cycle cost/proceeds.
 
@@ -238,15 +238,15 @@ BUY order fills in two executions:
 
 Then:
 - Active inventory = 100 DOGE.
-- BUY cost = (4.00+0.01+6.00+0.01=10.02) USDT.
+- BUY cost = `4.00 + 0.01 + 6.00 + 0.01 = 10.02` USDT.
 
 Recovery SELL fills across two orders (the first is partially filled then cancelled/replaced):
 - SELL fill 1: 40 DOGE, 4.50 USDT gross, 0.01 USDT quote commission → 4.49 net.
 - Replacement SELL fill 2: 59 DOGE, 6.00 USDT gross, 0.01 USDT quote commission → 5.99 net.
 
 Cumulative:
-- Net proceeds = (4.49+5.99=10.48) USDT.
-- Realized net profit = (10.48-10.02=0.46) USDT.
+- Net proceeds = `4.49 + 5.99 = 10.48` USDT.
+- Realized net profit = `10.48 - 10.02 = 0.46` USDT.
 - Active inventory = 1 DOGE (assuming no base commission).
 - If the second SELL order is fully reconciled and `minProfit` is at most 0.46, recovery is eligible and 1 DOGE can be retained.
 
