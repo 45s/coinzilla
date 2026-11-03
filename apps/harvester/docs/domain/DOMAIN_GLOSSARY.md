@@ -1,12 +1,12 @@
 # Harvester Conservative Domain Glossary
 
 **Phase:** D0 discovery specification  
-**Behavioral reference:** `apps/bot-free-roll` source and tests on `develop`  
+**Authority:** Harvester's approved Conservative domain contract  
 **Status:** Proposed vocabulary; business decisions listed in the specification remain unapproved.
 
 ## Purpose and scope
 
-This glossary defines terms used by the Conservative (Free-Roll) domain. It separates strategy-owned financial facts from exchange/order lifecycle facts. It does not prescribe broker integration or a runtime architecture.
+This glossary defines terms used by the Conservative (Conservative strategy) domain. It separates strategy-owned financial facts from exchange/order lifecycle facts. It does not prescribe broker integration or a runtime architecture.
 
 ## Terms
 
@@ -31,7 +31,7 @@ This glossary defines terms used by the Conservative (Free-Roll) domain. It sepa
 | Net SELL proceeds | Gross SELL proceeds less applicable quote-asset SELL commission. | Domain-derived from fills |
 | Base commission | Commission charged in the market base asset. It changes actual base inventory, not quote recovery cost/proceeds. | Canonical fill fact, applied by domain |
 | Quote commission | Commission charged in the market quote asset. It changes recovery cost or net proceeds. | Canonical fill fact, applied by domain |
-| Third-asset commission | Commission charged in an asset other than the market base or quote asset. Current Free-Roll execution accounting rejects it; Harvester recovery accounting also rejects it. | Canonical fill fact; unsupported by current policy |
+| Third-asset commission | Commission charged in an asset other than the market base or quote asset. Current Conservative strategy execution accounting rejects it; Harvester recovery accounting also rejects it. | Canonical fill fact; unsupported by current policy |
 | Outstanding recovery amount | `max(0, buyCost - netSellProceeds)`. It is a quote-currency shortfall, not a base-quantity obligation. | Derived domain value |
 | Realized net profit | `netSellProceeds - buyCost`. | Derived domain value |
 | `minProfit` | Required minimum quote-currency profit for a completed recovery cycle. | Strategy setting |
@@ -68,21 +68,8 @@ The domain must not import Binance, broker SDKs, WebSockets, application service
 
 ## Source map
 
-### Free-Roll
+## Related domain documents
 
-- [FreeRollBot state initialization and stats](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/bot-free-roll.js#L130-L180)
-- [Free-Roll fill conversion and reconciliation](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-reconciliation.js#L31-L180)
-- [Fill identity ledger](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/fill-ledger.js)
-- [Inventory allocation](https://github.com/45s/coinzilla/blob/develop/apps/bot-free-roll/src/bot/inventory-allocation.js)
-
-### Harvester
-
-- [Portfolio](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/portfolio/portfolio.js)
-- [Position](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/portfolio/position.js)
-- [RecoveryLedger](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/recovery-ledger.js)
-- [Conservative strategy](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/strategies/conservative/conservative-strategy.js)
-- [Canonical fill fingerprint](https://github.com/45s/coinzilla/blob/develop/apps/harvester/src/domain/fills/fill-fingerprint.js)
-
-## Naming rule for future domain APIs
-
-Use the terms above consistently. In particular, do not use “invested”, “cost”, “proceeds”, “balance”, or “quantity” without identifying the asset/currency and whether the value is requested, executed, gross, net, active, or free.
+- [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md)
+- [Accounting Invariants](./ACCOUNTING_INVARIANTS.md)
+- [Conservative Behavior Baseline](./CONSERVATIVE_BEHAVIOR_BASELINE.md)
