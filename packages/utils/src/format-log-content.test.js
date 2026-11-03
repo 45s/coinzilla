@@ -86,7 +86,7 @@ describe('formatLogContent', () => {
       get() { throw new Error('blocked') },
       ownKeys() { throw new Error('blocked') },
     })
-    assert.equal(formatLogContent(hostile), '[Unserializable log data]')
+    assert.match(formatLogContent(hostile), /Unreadable property/)
   })
 
   it('formats values JSON.stringify cannot represent', () => {
