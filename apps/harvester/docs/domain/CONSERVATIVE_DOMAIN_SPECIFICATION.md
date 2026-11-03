@@ -146,14 +146,15 @@ Partial SELL fills are applied incrementally while the SELL order remains active
 
 Conservative strategy completes a recovery cycle only after:
 1. The recovery SELL order is terminal FILLED.
-2. Actual execution quantities reconcile exactly to the SELL order quantity.
-3. Actual active inventory is at least `keepQuantity`.
-4. Cumulative net SELL proceeds satisfy:
+2. The sum of all distinct canonical SELL fill quantities for that order equals both its broker-reported executed quantity and its original order quantity. A FILLED status or cumulative order quantity alone is not proof of execution.
+3. Every SELL fill has already been applied exactly once to Portfolio and RecoveryLedger, including actual commission effects.
+4. Actual active inventory is at least `keepQuantity`.
+5. Cumulative net SELL proceeds satisfy:
    $$
    P \ge C+m
    $$
 
-If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Conservative strategy pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
+If fill history is missing, duplicated with conflicting facts, or does not reconcile exactly, Conservative strategy pauses and does not allocate free inventory or reset the cycle. If inventory is below `keepQuantity`, or the completed SELL misses the profit target, Conservative strategy pauses and does not reset the cycle. If the SELL is only partial/open/cancelled, it is not a completed recovery cycle.
 
 On success:
 - Allocate exactly `K` from active to free inventory.
