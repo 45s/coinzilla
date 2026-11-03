@@ -3,7 +3,7 @@
 **Phase:** D0 — discovery and specification only  
 **Authority:** Harvester's Conservative strategy contract  
 **Comparison target:** current Harvester `src/domain` on `develop`  
-**Status:** Proposed contract for review. This is not approval to implement D1.
+**Status:** Working Conservative behavior contract; align implementation one behavior at a time.
 
 ## 1. Executive summary
 
