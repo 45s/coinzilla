@@ -10,6 +10,12 @@ import { startHarvester } from "./bootstrap/start-harvester.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
+function createDefaultJournalService({ eventBus, logger }) {
+  const enabled = process.env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() !== "false"
+  const directory = process.env.HARVESTER_JOURNAL_DIRECTORY
+  return prepareOptionalJournal({ eventBus, logger, enabled, directory })
+}
+
 async function closeObservability({ journalService, eventBus, logger }) {
   const errors = []
   if (typeof journalService?.close === "function") {
@@ -76,7 +82,7 @@ export async function main({
   start = startHarvester,
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
-  createJournalService = prepareOptionalJournal,
+  createJournalService = createDefaultJournalService,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
 } = {}) {

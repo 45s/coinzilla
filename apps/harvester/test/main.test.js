@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { main } from '../src/index.js';
 
+const disabledJournalService = () => ({
+  ready: Promise.resolve({ ok: true, disabled: true }),
+  status: { state: 'disabled', enabled: false },
+  close: async () => ({ ok: true, closed: true, disabled: true }),
+});
+
 test('reports successful configuration startup without claiming a workflow ran', async () => {
   const messages = [];
   const logger = {
@@ -9,7 +15,7 @@ test('reports successful configuration startup without claiming a workflow ran',
     error: (...args) => messages.push(['error', ...args]),
   };
 
-  await main({ start: async () => ({}), logger });
+  await main({ createJournalService: disabledJournalService, start: async () => ({}), logger });
 
   assert.deepEqual(messages, [[
     'info',
@@ -32,6 +38,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
 
   process.exitCode = 0;
   await main({
+    createJournalService: disabledJournalService,
     start: async () => {
       throw startupError;
     },
