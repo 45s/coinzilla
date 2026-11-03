@@ -181,3 +181,10 @@ normalization/sorting are plain pure functions in
 `scripts/testnet-order-history-utils.js`, with deterministic offline tests.
 It reuses the existing signed TESTNET request helper and does not add
 dependencies or connect to the trading runtime.
+
+
+## Diagnosing an unowned execution report
+
+If Harvester pauses a pair with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, capture the structured log entry named "Harvester rejected an unowned or invalid order event". It now includes safe correlation fields: symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and whether the current registry matched either identifier. When a match exists, the registered status and paired identifier are included.
+
+Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Preserve the complete structured error entry (including native Error details) and compare its identifiers with the same-time order history and submission/acknowledgement journal entries. A client-ID match with a different exchange order ID is an identity mismatch, not proof that the event is owned. Unknown events must continue to pause the pair.
