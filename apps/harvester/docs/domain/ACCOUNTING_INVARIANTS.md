@@ -259,19 +259,19 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Fee reserve | Fee-history reset behavior | reset test documents preserve; differs from Conservative strategy | Decision |
 | SELL plan | Keep quantity and rounding | `recovery-sell-plan.test.js` | Existing |
 | SELL plan | Partial proceeds lower remaining required proceeds | sell-plan test | Existing |
-| SELL plan | Base commission + quantity step edge | current test does not assert actual remaining inventory after all fee rounding | Gap |
-| SELL plan | Quote commission + price tick boundary at minProfit | current tests do not prove post-fill profit guarantee across tick edges | Gap |
+| SELL plan | Base commission + quantity step edge | `recovery-sell-plan-accounting.test.js` | Existing |
+| SELL plan | Quote commission + price tick boundary at minProfit | `recovery-sell-plan-accounting.test.js` | Existing |
 | SELL plan | Already recovered proceeds still require full SELL fill | planner test exists; lifecycle test needed | Partial |
 | Strategy | Initial BUY price and quantity boundaries | `conservative-strategy.test.js` | Partial |
-| Strategy | Initial BUY trailing decision/replacement eligibility | no pure-domain test | Gap |
+| Strategy | Initial BUY trailing decision/replacement eligibility | `trailing-buy-repricing.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
 | Strategy | Recovery-first blocking alternative | PR #479 only; decision unresolved | Decision |
 | Strategy | Investment cap exact boundary and committed BUY amounts | one investment test | Partial |
-| Strategy | action ordering / SELL submission before next BUY | current action order is BUY then SELL; Conservative strategy submits SELL then BUY | Decision |
+| Strategy | SELL submission before next BUY | `conservative-strategy.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Completion | Partial/cancelled SELL not complete | `recovery-completion.test.js` | Existing |
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
-| Completion | Exact minProfit equality passes | add explicit equality and one-unit-below cases | Gap |
+| Completion | Exact minProfit equality passes and one tick below fails | `recovery-sell-plan-accounting.test.js` | Existing |
 | Completion | Completion invoked exactly once and ledger reset only once | pure helper alone cannot prove caller orchestration | Gap |
 | Completion | Residual active inventory behavior after allocation | no strategy lifecycle test | Gap / decision |
 | Ordering | Out-of-order fills with deterministic execution-time policy | no explicit test | Gap |
