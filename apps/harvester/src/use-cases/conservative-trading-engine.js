@@ -726,7 +726,7 @@ export function makeConservativeTradingEngine({
               typeof order.id !== "string" || typeof order.symbol !== "string" ||
               typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string" ||
               !["NEW", "PARTIALLY_FILLED"].includes(order.status))) {
-          throw new Error("Open-order snapshot is incomplete or contains invalid canonical orders for " + symbol)
+          throw new Error("Open-order snapshot is incomplete or contains invalid Order records for " + symbol)
         }
         openOrdersBySymbol.set(symbol, result.data)
       }
@@ -765,23 +765,21 @@ export function makeConservativeTradingEngine({
         if (matchingOpenOrders.length > 1) {
           throw new Error("Open-order snapshot contains duplicate owned order " + ownedOrder.brokerOrderId)
         }
-        if (["OPEN", "PARTIALLY_FILLED"].includes(historyOrder.status)) {
-          const openOrder = matchingOpenOrders[0]
-          if (!openOrder) {
-            throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
-          }
-          if (
-            openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
-            openOrder.side !== ownedOrder.side ||
-            openOrder.type !== ownedOrder.type ||
-            !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
-            (openOrder.status === "NEW" && openOrder.executedQuantity !== "0") ||
-            (openOrder.status === "PARTIALLY_FILLED" && openOrder.executedQuantity === "0") ||
-            openOrder.originalQuantity !== ownedOrder.originalQuantity.amount ||
-            compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
-          ) {
-            throw new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId)
-          }
+        const openOrder = matchingOpenOrders[0]
+        if (openOrder && (
+          openOrder.symbol.toUpperCase() !== symbol.toUpperCase() ||
+          openOrder.side !== ownedOrder.side ||
+          openOrder.type !== ownedOrder.type ||
+          !["NEW", "PARTIALLY_FILLED"].includes(openOrder.status) ||
+          (openOrder.status === "NEW" && openOrder.executedQuantity !== "0") ||
+          (openOrder.status === "PARTIALLY_FILLED" && openOrder.executedQuantity === "0") ||
+          openOrder.originalQuantity !== ownedOrder.originalQuantity.amount ||
+          compareDecimal({ left: openOrder.executedQuantity, right: historyOrder.executedQuantity.amount }) > 0
+        )) {
+          throw new Error("Open-order snapshot conflicts with canonical history for " + ownedOrder.brokerOrderId)
+        }
+        if (["OPEN", "PARTIALLY_FILLED"].includes(historyOrder.status) && !openOrder) {
+          throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
         }
 
         const fillsResult = await broker.getFills({
