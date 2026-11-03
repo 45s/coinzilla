@@ -188,3 +188,25 @@ dependencies or connect to the trading runtime.
 If Harvester pauses a pair with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, capture the structured log entry named "Harvester rejected an unowned or invalid order event". It now includes safe correlation fields: symbol, exchange order ID, client order ID, side, execution type, order status, execution/trade ID when available, and whether the current registry matched either identifier. When a match exists, the registered status and paired identifier are included.
 
 Do not publish API credentials, signed requests, raw exchange messages, or full account payloads. Preserve the complete structured error entry (including native Error details) and compare its identifiers with the same-time order history and submission/acknowledgement journal entries. A client-ID match with a different exchange order ID is an identity mismatch, not proof that the event is owned. Unknown events must continue to pause the pair.
+
+
+### Ownership audit: what to capture on the next run
+
+The source comparison with the working `apps/bot-free-roll` implementation found an important difference:
+
+- Free-Roll adds the exchange-assigned broker order ID to `trackedOrderIds` after the broker acknowledges the order. Incoming reports are accepted only when that exchange order ID is tracked. Fill identity is also checked against order ID, symbol, and side.
+- Harvester currently finds registry entries by `clientOrderId`. A `PENDING` entry has no broker order ID yet; the registry's immutable broker-ID check therefore cannot distinguish a same-client-ID report from a prior session until an acknowledged broker ID has been stored.
+- Harvester client IDs use a process-local counter and can repeat after restart. The supplied TESTNET history confirms reuse of `h-ZROUSDT-1` and `h-ZROUSDT-2` across sessions.
+
+This is a confirmed implementation difference and a plausible stale-report collision risk, **not a confirmed explanation** for the observed 15:47:17 rejection. That rejection reported no matching client ID; the actual rejected identifiers were not present in the original log. Do not change ownership matching or relax unknown-order rejection based only on the historical ID reuse.
+
+On the next diagnostic run, preserve the full structured log entry named **"Harvester rejected an unowned or invalid order event"**. In particular, do not omit:
+
+- `symbol`, `brokerOrderId`, and `clientOrderId`;
+- `side`, `orderStatus`, `executionType`, and `executionId`;
+- `registryMatchedByClientOrderId` and `registryMatchedByBrokerOrderId`;
+- `clientIdMatchStatus`, `clientIdMatchBrokerOrderId`, and `brokerIdMatchClientOrderId`.
+
+Then compare the exact IDs to the order submission and broker acknowledgement logs and to the TESTNET history row. Establish whether the report arrived before or after the matching acknowledgement. This separates a missing/wrong adapter identifier, a stale prior-session report, an event/acknowledgement race, and an external/manual order without guessing.
+
+**Do not run the destructive cancel-all or sell-ZRO scripts for this investigation.** The open-order and order-history commands are read-only; an empty open-order snapshot only describes the exchange state at the time of that query and cannot identify a previously rejected WebSocket event.
