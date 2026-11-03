@@ -503,6 +503,40 @@ or user-data workflows.
 
 The Conservative engine serializes its public market-price, user-data, and explicit evaluation entry points through one in-process promise tail. Each transition holds the turn across strategy evaluation, pending-order registration, broker submission and acknowledgement, cancellation, fill-history reconciliation, and accounting callbacks. Internal workflow steps call their already-held transition functions directly; they must not enqueue themselves again. A rejected transition is isolated from the tail so later events can still run. This is process-local ordering only: it is not a cross-process lock, durable queue, exactly-once delivery guarantee, or restart-recovery mechanism.
 
+## In-memory REST/stream order reconciliation
+
+After the broker reports that its recovered user-data stream has completed
+stream-level reconciliation, bootstrap keeps the trading gate closed and
+queues Harvester reconciliation behind previously received user-data events.
+The trading gate is reopened only after the REST reconciliation succeeds and
+events already queued during the REST reads have passed through the same
+serialized event queue.
+
+The Conservative engine reconciles only orders already present in its
+in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
+for each acknowledged owned order it reads exactly one matching
+`getCanonicalOrderHistory()` record and the order's canonical `getFills()`.
+Unknown/manual open orders are ignored and never registered or accounted.
+A pending order without an exchange-assigned broker ID, a missing or
+conflicting order-history record, an invalid open-order response, or a fill
+quantity that does not equal the order's cumulative executed quantity keeps
+the affected market paused and the application trading gate closed.
+
+REST fills are validated as a complete set before any are applied, deduplicated
+by stable `Fill.id` (market plus exchange trade ID), and ordered by execution
+time with trade ID as a deterministic fallback. Each recovered execution is
+then passed through the existing serialized user-data transition and paired
+Portfolio/RecoveryLedger accounting workflow; there is no second accounting
+path. Intermediate cumulative quantities are represented as partial order
+updates, and the final recovered fill carries the authoritative terminal
+status. A later overlapping stream event therefore reaches the same
+idempotent accounting path and cannot account the execution twice.
+
+This is deliberately process-local reconciliation. It does not restore orders
+or accounting after a process restart, replay startup history, reconcile
+balances or external inventory, or adopt manual orders. It also does not claim
+durable exactly-once delivery. If REST state is incomplete or inconsistent,
+trading remains paused rather than guessing.
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
