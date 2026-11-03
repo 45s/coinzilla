@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 1–6 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465, #467, #468). Do not repeat them. Steps 1–6 are complete and merged. The current assignment is **Step 7a — Stop intake, drain user-data, disconnect broker**, on branch `feature/harvester/stop-intake-drain-queue`, targeting `develop`.
+Steps 1–5 and Step 6a are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465). Do not repeat them. Steps 1–6 are complete and merged into `develop` (PRs #453, #455, #456, #458, #460, #461, #463, #465, #467, #468). Do not repeat them. Steps 1–6 are complete and merged. Step 7a is merged into `develop` (PR #470). The current assignment is **Step 7b — Flush and close Journal/EventBus**, on branch `feature/harvester/close-journal-event-bus`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -93,9 +93,13 @@ Add deterministic offline tests for partial Fill application, publication only a
 
 Add deterministic offline tests for pending user-data work, stream unsubscribe ordering, late callback rejection, and broker disconnect after queue drain. Preserve the existing lifecycle tests.
 
-### Next Step 7b
+### Current Step 7b scope
 
-After Step 7a merges, implement final stopped-event publication followed by Journal close and EventBus close.
+- Publish `harvester.stopped` after runtime stop and broker disconnect have completed or reported failure.
+- Keep EventBus and Journal open while publishing the final lifecycle event.
+- Await Journal close so it can unsubscribe, drain accepted EventBus deliveries, drain writes, and sync.
+- Close EventBus only after Journal close returns.
+- Do not add cleanup failure isolation or timeout behavior in this PR; those are Step 7c.
 
 ### Next Step 7c
 

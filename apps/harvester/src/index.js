@@ -106,6 +106,12 @@ export async function main({
             error: shutdownError,
           }),
         })
+        if (typeof journalService?.close === "function") {
+          await journalService.close()
+        }
+        if (typeof eventBus?.close === "function") {
+          await eventBus.close()
+        }
       }
       registerSignalHandler("SIGINT", () => shutdown("SIGINT"))
       registerSignalHandler("SIGTERM", () => shutdown("SIGTERM"))
