@@ -244,7 +244,8 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
-| Fill identity | Same fill applied to Portfolio and ledger atomically | no cross-projection transition test | Gap |
+| Order ownership | Multi-market isolation; duplicate fills and stale out-of-order reports do not cross-account | `conservative-trading-engine.multi-market.test.js` | Existing |
+| Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |
 | Recovery ledger | Multiple BUY fills accumulate actual cost | ledger test uses BUY then multiple sells; add multi-BUY explicit case | Partial |
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
