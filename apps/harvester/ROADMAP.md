@@ -525,3 +525,41 @@ A direct source comparison was completed against `develop` (not inferred from th
 4. A valid Free-Roll-style fill still updates accounting once, and an unrelated/manual order remains unowned.
 
 The acceptance target remains a real TESTNET sequence: BUY fill → recovery SELL submission and fill → next BUY. Offline tests and order-history snapshots do not substitute for that proof.
+
+
+### TESTNET rejected-event evidence — 2026-11-03 16:24
+
+The operator supplied the previously missing structured rejection record:
+
+- Event: `executionReport`, execution type `CANCELED`.
+- Market/side/status: `ZROUSDT` / `BUY` / `CANCELED`.
+- Incoming exchange order ID: `666845`.
+- Incoming client order ID: `CU5G5c9IZgepakVzo3Z3kw`.
+- Registry lookup by client ID: no match.
+- Registry lookup by exchange order ID: **match found**.
+- The matched registered order's client ID: `h-ZROUSDT-1`.
+
+This proves the event is associated with an exchange order ID already present in Harvester's in-memory registry, while its incoming client ID conflicts with the client ID stored for that registered order. The earlier description of this as simply an unknown/untracked order was incomplete. It is an identifier-consistency rejection for an exchange-order-ID match.
+
+#### Additional adapter finding: Binance original client order ID is discarded
+
+Source inspection found the Binance user-data adapter maps raw execution-report fields:
+
+- `c` → `newClientOrderId`;
+- `C` → `originalClientOrderId`.
+
+The following `adaptExecutedOrder()` maps `newClientOrderId` into `executedOrder.clientOrderId`, but does not preserve `originalClientOrderId` on the forwarded event. The broker's later canonicalization preserves the incoming `clientOrderId` but cannot recover the discarded `C` field.
+
+Consequently, the current diagnostic still cannot determine whether Binance's `C` field equals the registered `h-ZROUSDT-1`, nor whether the incoming `c` is a replacement/new client ID or an unexpected value. This field must be preserved as event metadata in a follow-up diagnostic change, with adapter regression coverage. It must not be substituted for the canonical order client ID without understanding the Binance event semantics.
+
+#### 16:24:48 TRADE event
+
+The operator subsequently saw a BUY `TRADE` event and the informational log `Trade execution received`. In `start-harvester.js`, that informational log is emitted before the event is enqueued and before `processUserDataEventTransition()` completes. It proves receipt, not successful fill accounting. The supplied excerpt has no resulting `fill.applied`, accounting outcome, registry update, or rejected-event diagnostic for this TRADE report. Its exchange order ID and client ID are therefore still unknown.
+
+#### Updated diagnosis and required evidence
+
+The primary lead is now a conflict between the client ID in a Binance execution report and the client ID stored for the same exchange order ID. Do not add a broker-ID-only acceptance fallback: it would suppress a real identity conflict and could admit a mismatched event.
+
+Next, inspect TESTNET order history for exchange order ID `666845` and capture the full history row, including `clientOrderId`, status, executed quantity and update time. For the next run, preserve raw Binance execution-report `c` and `C` (redacting credentials and unrelated account data), plus both IDs for the later TRADE report. Correlate these with the Harvester submission and acknowledgement for order `666845`.
+
+Only after this comparison can we distinguish a Binance cancel/replacement identifier case, an adapter normalization issue, an order-ID collision, or another source of the mismatch. Add a deterministic test from the confirmed event semantics before changing ownership validation.
