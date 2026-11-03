@@ -24,11 +24,8 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 
 ## Workflow
 
-- Create a short-lived task branch from the latest `develop`, using `feature/bot-free-roll/<task>` or `fix/bot-free-roll/<task>`.
-- Open task PRs against `develop`; do not use permanent domain branches.
+Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
 - Run the relevant package test: `pnpm --filter @coinzilla/bot-free-roll test` (verify the package script exists before relying on it), followed by applicable workspace checks.
-- The responsible agent may merge into `develop` only after required CI and target-freshness checks pass. No routine human approval is expected for `develop`.
-- Never merge task work into `main`. Only the user approves the final release PR from `develop` to `main`.
 
 ## Domain-specific constraints
 
