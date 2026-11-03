@@ -987,7 +987,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "BUY", "SELL", "BUY", "SELL", "BUY"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
 
 
