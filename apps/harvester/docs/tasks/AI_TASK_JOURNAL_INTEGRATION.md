@@ -45,7 +45,7 @@ Implement exactly one unchecked step from `docs/JOURNAL_INTEGRATION_ROADMAP.md` 
 
 ## Current implementation status
 
-Steps 1–4 are merged into `develop` (PRs #453, #455, #456, #458). Step 5a is implemented and all CI checks pass in PR #460; do not repeat it. After PR #460 is merged, the next work is **Step 5b — Pause/resume and cancellation transitions**, on a short-lived branch from the latest `develop`, targeting `develop`.
+Steps 1–5a are merged into `develop` (PRs #453, #455, #456, #458, #460). Do not repeat them. The current assignment is **Step 5b — Pause and cancellation transitions**, on branch `feature/harvester/pause-cancellation-events`, targeting `develop`.
 
 ### Completed Step 5a scope
 
@@ -57,7 +57,7 @@ Steps 1–4 are merged into `develop` (PRs #453, #455, #456, #458). Step 5a is i
 - Reuse the existing EventBus publisher and lifecycle publication boundary. Do not change shared packages.
 - Publication is best-effort and synchronous admission only. Never await EventBus subscriber work or Journal I/O from strategy/order workflows.
 - Keep strategy policies independent of EventBus/Journal. Instrument only the application engine/use-case boundary.
-- Do not add pause/resume, cancellation, execution, or accounting events in this PR; those are subsequent milestones.
+- Do not add execution or accounting events in this PR. The current engine has no pair-resume transition; do not invent one solely for logging.
 
 ### Tests
 
@@ -77,9 +77,10 @@ Run the Harvester unit and coverage commands plus relevant workspace checks. If 
 
 Update the integration roadmap, architecture event inventory, and this task document in the same PR. Mark only completed behavior. Step 5b (pause/resume and cancellation) remains separate.
 
-## Next assignment after PR #460 merges
+## Subsequent milestones
 
-Implement Step 5b: actual pause/resume transitions and confirmed/failed cancellation events.
+- Step 5c: publish resume only if the engine gains a real, explicit pair-resume transition; do not add resume behavior solely for logging.
+- Step 6: canonical execution and accounting facts.
 - Step 6: canonical execution and accounting facts.
 - Step 7: orderly shutdown draining and failure isolation.
 - Step 8: final event inventory, operational documentation, and verification.

@@ -289,3 +289,48 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
   })
+
+
+/** Map the first transition of a strategy pair into its paused state. */
+export const mapStrategyPausedData = (input = {}) =>
+  mapData(input, "Strategy-paused event mapping", ({ symbol, reason, error }) => ({
+    symbol: requireString({ value: symbol, field: "symbol" }),
+    reason: requireString({ value: reason, field: "reason" }),
+    ...(error === undefined ? {} : { error: safeError({ error }) }),
+  }))
+
+/** Map a broker-confirmed cancellation after the local order registry is updated. */
+export const mapOrderCancelledData = (input = {}) =>
+  mapData(input, "Order-cancelled event mapping", ({ order }) => {
+    const facts = requireOrderFacts({ order })
+    if (order.status !== "CANCELED") throw new TypeError("order.status must be CANCELED")
+    return {
+      ...facts,
+      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      executedQuantity: requireDecimalString({
+        value: order.executedQuantity?.amount,
+        field: "executedQuantity",
+      }),
+      status: "CANCELED",
+    }
+  })
+
+/** Map a cancellation that was not confirmed without retaining raw broker data. */
+export const mapOrderCancelFailedData = (input = {}) =>
+  mapData(input, "Order-cancel-failed event mapping", ({ order, outcome, error }) => {
+    if (!["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"].includes(outcome)) {
+      throw new TypeError("outcome must describe an unconfirmed or unsuccessful cancellation")
+    }
+    return {
+      clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
+      symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
+      side: order?.side === "BUY" || order?.side === "SELL"
+        ? order.side
+        : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+      ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim()
+        ? { brokerOrderId: order.brokerOrderId.trim() }
+        : {}),
+      outcome,
+      ...(error === undefined ? {} : { error: safeError({ error }) }),
+    }
+  })

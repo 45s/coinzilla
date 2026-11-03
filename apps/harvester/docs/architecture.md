@@ -417,3 +417,20 @@ does not await subscriber delivery or Journal persistence, and publication
 failure cannot prevent broker submission. Pause/resume and cancellation events
 are deliberately deferred to Step 5b; execution and accounting facts remain
 Step 6.
+
+
+### Strategy pause and order cancellation events
+
+Step 5b adds `strategy.paused`, `order.cancelled`, and
+`order.cancel_failed`. A pause event is emitted only when a market first enters
+the paused set; repeated causes do not create duplicate transition events.
+The current engine has no pair-resume operation, so no resume event or new
+resume behavior is introduced.
+
+Cancellation success is published only after a canonical cancellation result
+has been accepted by the local order registry. Cancellation failure events
+contain stable order identifiers, a bounded outcome classification, and
+sanitized error details. A confirmed cancellation is still recorded even if
+subsequent fill reconciliation fails; that later failure remains represented
+by the existing pause/error behavior. All event publication is best-effort
+and does not wait for subscriber delivery or Journal persistence.
