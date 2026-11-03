@@ -206,6 +206,8 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 #### Step 6a — Successful Fill application
 
+**Status:** Merged into `develop` by PR #465; all CI checks passed.
+
 **Goal:** Record actual executions without changing accounting authority.
 
 **Likely files:** `src/bootstrap/start-harvester.js`; `src/use-cases/update-trading-accounting.js`; focused DTO mappers; tests; event documentation; roadmap.
@@ -223,18 +225,30 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 **PR boundary:** Successful Fill application only.
 
-#### Step 6b — Execution and accounting failure diagnostics
+#### Step 6b — Invalid execution and accounting failure diagnostics
 
 **Status:** Not started; begin only after Step 6a is merged.
 
-- Publish invalid/unowned execution and accounting failures with safe identifiers.
-- Optionally publish duplicate-fill suppression if it helps diagnose exchange delivery.
-- Publish recovery completion only from the actual domain transition.
+- Publish invalid/missing Fill and unowned-order execution facts with safe identifiers.
+- Publish accounting failures after the existing accounting workflow returns failure.
 - Preserve existing pause behavior, serialized user-data ordering, and accounting authority.
+- Do not publish duplicate-fill or recovery-completion events in this PR; those are Step 6c.
 
-**Tests:** Duplicate Fill; invalid Fill; unowned order; unsupported commission; accounting failure; recovery completion; publication failure isolation.
+**Tests:** Missing/invalid Fill; fill/order identity mismatch; unowned order; unsupported commission; accounting failure; publisher failure isolation.
 
-**PR boundary:** Failure, duplicate, and recovery-transition diagnostics only.
+**PR boundary:** Invalid/unowned execution and accounting failures only.
+
+#### Step 6c — Duplicate and recovery-cycle diagnostics
+
+**Status:** Not started; begin only after Step 6b is merged.
+
+- Optionally publish idempotent duplicate-fill suppression when the accounting result explicitly reports `duplicate: true`.
+- Publish recovery completion only after the existing domain/application transition reports it eligible and commits the new cycle.
+- Preserve existing accounting and strategy behavior.
+
+**Tests:** Duplicate Fill; successful recovery completion; ineligible/failed completion; publisher failure isolation.
+
+**PR boundary:** Duplicate and recovery-cycle transitions only.
 
 ### Step 7 — Complete shutdown draining and end-to-end failure isolation
 
@@ -314,8 +328,9 @@ Every implementation PR must:
 - [x] Step 5b: pause and trailing BUY cancellation transitions (merged PR #461).
 - [x] Step 5c: recovery SELL cancellation transitions (merged PR #463).
 - [x] Step 5: strategy/order events (PRs #460, #461, #463).
-- [ ] Step 6a: successful Fill application event.
-- [ ] Step 6b: execution/accounting failure and recovery diagnostics.
-- [ ] Step 6: execution/accounting events (complete after 6a and 6b).
+- [x] Step 6a: successful Fill application event (merged PR #465).
+- [ ] Step 6b: invalid execution and accounting failure diagnostics.
+- [ ] Step 6c: duplicate and recovery-cycle diagnostics.
+- [ ] Step 6: execution/accounting events (complete after 6a–6c).
 - [ ] Step 7: shutdown and failure isolation.
 - [ ] Step 8: final documentation and verification.
