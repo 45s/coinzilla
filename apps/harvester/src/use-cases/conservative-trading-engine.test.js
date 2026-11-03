@@ -13,6 +13,7 @@ import {
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -47,7 +48,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ strategyPolicy, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -141,6 +142,7 @@ function createHarness({ cancelWithFill = false, cancelOrderGate, onCancelOrderS
   }
   const engine = makeConservativeTradingEngine({
     broker,
+    strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     eventPublisher,
     tradingConfig,
     getPortfolio: () => initialPortfolio ?? new Portfolio(),
@@ -1658,4 +1660,57 @@ test("processes stream fills received during REST reads before applying the REST
   assert.equal(reconciled.ok, true, reconciled.errors?.[0]?.message)
   assert.equal(accountedFills.length, 1)
   assert.deepEqual(pauses, [])
+})
+
+
+test("uses the injected strategy policy instead of a hard-coded Conservative evaluator", async () => {
+  let evaluations = 0
+  const strategyPolicy = {
+    evaluate: ({ marketPrice }) => {
+      evaluations += 1
+      return Object.freeze({
+        strategy: "TEST_POLICY",
+        symbol: marketPrice.symbol,
+        action: "NO_ACTION",
+        actions: Object.freeze([]),
+        reason: "TEST_POLICY_NO_ACTION",
+      })
+    },
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const { engine, orders } = createHarness({ strategyPolicy })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(evaluations, 1)
+  assert.equal(orders.length, 0)
+})
+
+
+test("uses the injected trailing repricing policy", async () => {
+  let repricingEvaluations = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluateTrailingBuyRepricing: () => {
+      repricingEvaluations += 1
+      return { shouldReplace: false, adjustmentThreshold: "100.05" }
+    },
+  }
+  const { engine, orders } = createHarness({ strategyPolicy })
+
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(repricingEvaluations, 1)
+  assert.equal(orders.length, 1)
 })

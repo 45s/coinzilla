@@ -12,6 +12,7 @@ import {
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const dogeAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
@@ -111,6 +112,7 @@ function createHarness() {
   }
   const engine = makeConservativeTradingEngine({
     broker,
+    strategyPolicy: conservativeStrategyPolicy,
     tradingConfig,
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId }) => RecoveryLedger.empty({ market: marketsById.get(marketId) }),

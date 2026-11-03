@@ -14,6 +14,7 @@ import { toResult } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../src/domain/account/account-snapshot.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
+import { conservativeStrategyPolicy } from "../../src/domain/strategies/conservative/strategy-policy.js"
 import { OrderRegistry } from "../../src/domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "../../src/use-cases/execute-strategy-decision.js"
 import { makeConservativeTradingEngine } from "../../src/use-cases/conservative-trading-engine.js"
@@ -140,6 +141,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
   }
   const engine = makeConservativeTradingEngine({
     broker,
+    strategyPolicy: conservativeStrategyPolicy,
     tradingConfig,
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
