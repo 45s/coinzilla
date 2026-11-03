@@ -115,3 +115,8 @@ Both integration suites assert TESTNET WebSocket endpoints before connecting. Ne
 - On shutdown, stop accepting new work and await `broker.disconnect()`.
 - Treat state-changing RPC timeouts/disconnects as uncertain and reconcile before retrying.
 - Do not infer that unit tests prove live Binance protocol behavior. Record opt-in TESTNET results separately.
+
+
+## Binance order identifiers
+
+The public `normalizeBinanceId(value, name?)` helper validates Binance identifiers as exact non-negative integers and returns their string representation. Decimal strings are accepted only when they contain digits and fit within JavaScript's safe-integer range; numeric inputs must already be safe integers. Use this shared normalizer at Binance adapter boundaries rather than reimplementing exchange ID parsing.

@@ -68,7 +68,7 @@ test("maps object-shaped application inputs to the broker package methods", asyn
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
 
   assert.deepEqual(calls, [
-    ["cancelOrder", { symbol: "BTCUSDT", orderId: 7 }],
+    ["cancelOrder", { symbol: "BTCUSDT", orderId: "7" }],
     ["getOpenOrders", { symbol: "BTCUSDT" }],
     ["getFills", { symbol: "BTCUSDT", limit: 10 }],
     ["getAccountSnapshot"],
@@ -142,3 +142,25 @@ test("forwards broker-normalized user-data events without reinterpreting them", 
 })
 
 
+
+
+test("rejects invalid and unacknowledged cancellation identifiers before calling Binance", async () => {
+  const { calls, client } = createClient()
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+
+  const malformed = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "not-an-id" })
+  const missing = await broker.cancelOrder({ symbol: "BTCUSDT" })
+  const unsafe = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: Number.MAX_SAFE_INTEGER + 1,
+  })
+  const pending = await broker.cancelOrder({
+    order: { status: "PENDING", brokerOrderId: undefined },
+  })
+
+  assert.equal(malformed.ok, false)
+  assert.equal(missing.ok, false)
+  assert.equal(unsafe.ok, false)
+  assert.equal(pending.ok, false)
+  assert.equal(calls.some(([method]) => method === "cancelOrder"), false)
+})

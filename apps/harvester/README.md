@@ -149,6 +149,10 @@ BINANCE_API_KEY=...
 BINANCE_API_SECRET_KEY=...
 ```
 
+### Trading-first implementation direction
+
+The clean-account checks described below are the **current implementation's temporary first-TESTNET restrictions**, not the intended permanent Harvester startup contract. The next P0.7 task in [ROADMAP.md](./ROADMAP.md) is to compare them with the working `bot-free-roll` workflow and remove unnecessary startup/account-snapshot barriers while preserving per-order balance checks, order ownership, duplicate prevention, and safe unknown-outcome handling. Ordinary execution reports should update in-process accounting; they should not trigger a full account snapshot by default. Until that implementation is merged, follow the existing runbook exactly because the current code still enforces its clean-account requirements.
+
 ## Controlled TESTNET runbook
 
 1. Use Binance Spot TESTNET credentials only. Never place production keys in

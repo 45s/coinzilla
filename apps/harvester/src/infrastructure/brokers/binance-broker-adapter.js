@@ -1,5 +1,6 @@
 import { toResult } from "@coinzilla/utils"
-import { BinanceWebSocketBroker } from "@coinzilla/brokers"
+import { BinanceWebSocketBroker, normalizeBinanceId } from "@coinzilla/brokers"
+import { validateCancellationEligibility } from "../../domain/orders/validate-cancellation-eligibility.js"
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
@@ -91,7 +92,16 @@ export function createBinanceBrokerAdapter({
     },
     cancelOrder: async ({ order, symbol, orderId } = {}) => {
       const targetSymbol = order?.market?.symbol ?? symbol
-      const targetOrderId = order?.brokerOrderId ?? orderId
+      if (order) {
+        const eligibility = validateCancellationEligibility({ order })
+        if (!eligibility.ok) return eligibility
+      }
+      let targetOrderId
+      try {
+        targetOrderId = normalizeBinanceId(order?.brokerOrderId ?? orderId, "orderId")
+      } catch (error) {
+        return toResult({ error })
+      }
       const cancelResult = await client.cancelOrder({
         symbol: targetSymbol,
         orderId: targetOrderId,
