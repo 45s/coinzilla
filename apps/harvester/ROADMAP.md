@@ -70,7 +70,7 @@ when `HARVESTER_ENABLE_TRADING=true`:
 
 - Conservative pure policy: initial/standing BUY and recovery SELL intents,
   exact tick/step rounding, duplicate suppression, partial-fill wait behavior,
-  configured pair-investment limit, actual commission-aware recovery planning.
+  configured pair-investment limit, exchange-fee-aware recovery planning.
 - Submission: local PENDING canonical order registration, exchange-rule
   validation, broker submission, canonical acknowledgement verification, and
   unknown-outcome pause behavior.
@@ -106,7 +106,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [~] Preserve fee rules: actual fill commission rates are calculated from canonical fills; the configured maker/taker ceiling is activated only after a non-zero actual commission is observed; base/quote fees are supported; third-asset or incomplete commission data is rejected. The fee policy and calculation are implemented as pure domain functions but are not yet wired into strategy evaluation.
+- [~] Shared commission/order policy for Conservative and Aggressive: `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`. Planning always estimates commission from `makerPercent`, never `takerPercent` or observed liquidity role. Accounting uses the actual commission on each confirmed fill; actual BUY commissions are included in recovery SELL cost and actual SELL commissions reduce net proceeds. Runtime alignment remains a focused implementation task.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
@@ -143,13 +143,14 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.4 — Live order and fill lifecycle
 
 - [~] Normalize user-data order/execution events at the broker adapter boundary. Binance TRADE execution reports are now converted into canonical `Fill` entities using cached symbol metadata; non-trade order events remain normalized broker events.
-- [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and actual commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
+- [~] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and exchange-charged commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
 - [ ] Reject malformed, incomplete, or unsupported fills visibly; third-asset commissions remain unsupported and must not be silently ignored.
 - [~] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Durable deduplication remains.
 - [~] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause the pair and are not accounted. Additional multi-symbol and duplicate/out-of-order event cases remain.
 - [ ] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states.
 - [~] Apply only incremental actual executions to shared Portfolio and Conservative RecoveryLedger in one immutable use-case transition; never apply requested order quantity or cumulative executed quantity twice.
 - [ ] Reconcile REST trade history/open orders with stream events to cover disconnect gaps and out-of-order delivery.
+- [x] Reconcile completed recovery SELL execution history before cycle completion: distinct actual fill quantities must equal both executed and original order quantity; missing/incomplete history pauses before free-inventory allocation or ledger reset.
 - [ ] Ensure cancel/fill races, duplicate events, late events, and out-of-order events cannot double-count fills or release filled reservations.
 - [x] Feed successful fill/order transitions back into strategy evaluation. The engine emits a reevaluation outcome after a reconciled terminal full fill; bootstrap runs that evaluation from the serialized user-data event flow and deliberately waits after partial fills.
 - [x] Ensure a completed BUY transition immediately evaluates and submits required orders without waiting for another market-price event.
@@ -256,7 +257,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [x] Use cases are dependency-injected functions; strategies decide and never perform broker I/O.
 - [x] Harvester owns its application-facing broker port and adapts `@coinzilla/brokers`.
 - [x] One shared Position per market; Conservative and Aggressive share accounting but only one controls the pair at a time.
-- [x] Actual canonical fills, including actual commissions, are the only source of Portfolio holdings changes.
+- [x] Confirmed canonical fills, including exchange-charged commissions, are the only source of Portfolio holdings changes.
 - [x] Third-asset commission fills are rejected for now; they must never be silently ignored.
 - [x] BUY prices round down and SELL prices round up to exchange tick rules.
 - [x] Live exchange tests are opt-in and TESTNET-only; default tests never need credentials or network access.
@@ -674,3 +675,22 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Preserve simultaneous active BUY and recovery SELL orders after both submissions succeed.
 - [x] Add policy and engine regression tests for intent/submission order and coexistence.
 - [ ] Verify the full behavior on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
+
+
+### Conservative recovery SELL completion reconciliation — 2026-11-03
+
+- [x] Track distinct actual SELL fill quantities per broker order.
+- [x] Require aggregate fill quantity to equal broker-reported executed quantity and original order quantity before recovery completion.
+- [x] Fail closed on missing or inconsistent SELL execution history; do not allocate free inventory, reset the recovery ledger, or reactivate BUY trailing.
+- [x] Add engine regressions for missing fills, incomplete fills, and multiple partial fills that reconcile to a complete SELL.
+- [ ] Verify the complete SELL-completion transition on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
+
+
+### Commission and order-type policy clarification — 2026-11-03
+
+- [x] Confirm the same rule for Conservative and Aggressive: zero `makerPercent` means POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` means regular `LIMIT`.
+- [x] Confirm planning always uses `makerPercent`, regardless of `takerPercent` or the liquidity role reported by the exchange.
+- [x] Confirm accounting uses the actual commission amount/asset reported on each confirmed fill, including BUY commissions in the recovery SELL cost and SELL commissions in net proceeds.
+- [ ] Replace the current combined observed commission-rate calculation with the agreed `makerPercent`-only planning estimate; do not add MAKER/TAKER rate histories or maximum-observed-rate tracking.
+- [ ] Add focused tests for zero/non-zero `makerPercent`, independence from `takerPercent`, actual BUY-fee inclusion in recovery SELL planning, actual SELL-fee accounting, and identical behavior in Conservative and Aggressive.
+- [ ] Verify deterministic CI and update implementation status. No TESTNET verification is implied by this documentation decision.

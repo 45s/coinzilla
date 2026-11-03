@@ -46,6 +46,7 @@ export function makeConservativeTradingEngine({
     prices: new Map(),
     lastBuyPrices: new Map(),
     buyExecutionTotals: new Map(),
+    sellExecutionTotals: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map(),
@@ -80,6 +81,26 @@ export function makeConservativeTradingEngine({
       scale: 18,
       rounding: "half-up",
     })
+  }
+
+  const recordSellExecutionFill = ({ fill }) => {
+    const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
+      quantity: "0",
+      fillIds: new Set(),
+    }
+    if (current.fillIds.has(fill.id)) return
+    current.quantity = addDecimal({ left: current.quantity, right: fill.quantity.amount })
+    current.fillIds.add(fill.id)
+    state.sellExecutionTotals.set(fill.brokerOrderId, current)
+  }
+
+  const assertReconciledSellExecution = ({ order }) => {
+    const totals = state.sellExecutionTotals.get(order.brokerOrderId)
+    if (!totals ||
+        compareDecimal({ left: totals.quantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      throw new Error("Completed recovery SELL execution history does not reconcile with the filled order quantity")
+    }
   }
 
   const pause = async ({ symbol, reason, error }) => {
@@ -556,6 +577,7 @@ export function makeConservativeTradingEngine({
           return toResult({ errors: accounting?.errors ?? [error] })
         }
         if (event.fill.side === "BUY") recordBuyExecutionFill({ fill: event.fill })
+        if (event.fill.side === "SELL") recordSellExecutionFill({ fill: event.fill })
         if (accounting.data?.applied === true) {
           publishLifecycleEvent({
             eventPublisher,
@@ -643,6 +665,12 @@ export function makeConservativeTradingEngine({
       }
       if (order.status === "FILLED" && order.side === "SELL") {
         state.replacementIntents.delete(symbol)
+        try {
+          assertReconciledSellExecution({ order })
+        } catch (error) {
+          await pause({ symbol, reason: "SELL_FILL_RECONCILIATION_FAILED", error })
+          return toResult({ error })
+        }
         const completion = await completeRecoveryCycle({
           marketId: order.market.id,
           keepQuantity: String(tradingConfig.pairs[symbol].keepQuantity),
@@ -662,6 +690,7 @@ export function makeConservativeTradingEngine({
             realizedNetProfit: completion.data.realizedNetProfit,
           }),
         })
+        state.sellExecutionTotals.delete(order.brokerOrderId)
         state.trailingBuy.set(symbol, true)
       }
       if (order.status === "REJECTED") {
