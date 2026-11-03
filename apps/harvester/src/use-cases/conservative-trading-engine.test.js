@@ -1026,47 +1026,116 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   await sellSubmissionStarted
-  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const sellOrder = engine.getOrders().find((order) => order.side === "SELL")
-  assert.ok(buyOrder?.brokerOrderId)
-  assert.equal(sellOrder?.status, "PENDING")
-  assert.equal(sellOrder?.brokerOrderId, undefined)
-  const fill = new Fill({
-    tradeId: "concurrent-buy-fill",
-    brokerOrderId: buyOrder.brokerOrderId,
+  const pendingSell = engine.getOrders().find((order) => order.side === "SELL")
+  assert.equal(pendingSell?.status, "PENDING")
+  assert.equal(pendingSell?.brokerOrderId, undefined)
+  assert.equal(engine.getOrders().some((order) => order.side === "BUY"), false)
+
+  const acknowledgedSell = new CanonicalOrder({
+    clientOrderId: pendingSell.clientOrderId,
+    brokerOrderId: "broker-" + pendingSell.clientOrderId,
     market,
-    side: "BUY",
-    price: buyOrder.limitPrice,
-    quantity: buyOrder.originalQuantity,
-    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
+    side: "SELL",
+    type: pendingSell.type,
+    limitPrice: pendingSell.limitPrice,
+    originalQuantity: pendingSell.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: pendingSell.createdAt,
+    acknowledgedAt: 1,
+    updatedAt: 1,
   })
-  const filledBuy = makeFilledOrder({ order: buyOrder })
   const concurrentMarketTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 2 },
   })
   const userDataTransition = engine.processUserDataEvent({
-    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+    event: { executedOrder: acknowledgedSell },
   })
-  const duplicateFillTransition = engine.processUserDataEvent({
-    event: { executionType: "TRADE", executedOrder: filledBuy, fill },
+  const duplicateOrderTransition = engine.processUserDataEvent({
+    event: { executedOrder: acknowledgedSell },
   })
+
   assert.deepEqual(cancellationIds, [])
-  assert.equal(orders.length, 2)
+  assert.equal(orders.length, 1)
   resolveAcknowledgement()
   const [initialResult, marketResult, userDataResult, duplicateResult] = await Promise.all([
-    initialDecision, concurrentMarketTransition, userDataTransition, duplicateFillTransition,
+    initialDecision, concurrentMarketTransition, userDataTransition, duplicateOrderTransition,
   ])
   assert.equal(initialResult.ok, true)
   assert.equal(marketResult.ok, true)
   assert.equal(userDataResult.ok, true)
   assert.equal(duplicateResult.ok, true)
-  const acknowledgedSellOrder = engine.getOrders().find((order) => order.side === "SELL")
-  assert.equal(acknowledgedSellOrder.status, "CANCELED")
-  assert.ok(acknowledgedSellOrder.brokerOrderId)
-  assert.deepEqual(cancellationIds, [acknowledgedSellOrder.brokerOrderId])
-  assert.equal(accountedFills.length, 1)
-  assert.equal(orders.length, 2)
+  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
+  assert.deepEqual(cancellationIds, [])
+  assert.deepEqual(accountedFills, [])
+  assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
+})
+
+
+test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, cancellationIds, pauses } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+  })
+
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const previousSell = engine.getOrders().find((order) => order.side === "SELL")
+  const completedBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(previousSell)
+  assert.ok(completedBuy)
+
+  const transition = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: completedBuy }),
+      fill: makeBuyFill({
+        order: completedBuy,
+        tradeId: "next-buy-completion-ordering",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+
+  assert.equal(transition.ok, true)
+  assert.equal(transition.data.reevaluate, true)
+  assert.deepEqual(cancellationIds, [previousSell.brokerOrderId])
+
+  // Bootstrap handles this reevaluation directly from the same serialized
+  // user-data callback; no new market-price event is needed.
+  const reevaluation = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
+  assert.equal(reevaluation.ok, true)
+  assert.deepEqual(orders.slice(-2).map(({ side }) => side), ["SELL", "BUY"])
+
+  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
+  assert.deepEqual(pauses, [])
+})
+
+
+test("does not submit the next standing BUY when recovery SELL submission fails", async () => {
+  const seeded = makeSeededRecoveryState()
+  const { engine, orders, pauses } = createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    placeOrderFailure: true,
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(orders.map(({ side }) => side), ["SELL"])
+  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
 })

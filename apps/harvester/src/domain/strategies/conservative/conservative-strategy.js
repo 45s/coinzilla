@@ -84,6 +84,35 @@ export function evaluateConservativeStrategy({
     })
   }
 
+  // Submit recovery first. The executor processes intents in order and stops on failure.
+  if (!hasActiveSell && compareDecimal({ left: activeQuantity, right: "0" }) > 0) {
+    const feeRate = calculateSellFeeRate({
+      makerPercent: String(pairConfig.makerPercent),
+      takerPercent: String(pairConfig.takerPercent),
+      observedCommissionRates: [ledger.maxObservedCommissionRate ?? "0"],
+    }).feeRate
+    const sellPlan = calculateRecoverySellPlan({
+      activeQuantity,
+      keepQuantity: String(pairConfig.keepQuantity),
+      cycleCost: ledger.buyCost,
+      saleProceeds: ledger.netSellProceeds,
+      minProfit: String(settings.minProfit),
+      feeRate,
+      priceTickSize,
+      quantityStepSize,
+    })
+    if (compareDecimal({ left: sellPlan.quantity, right: "0" }) > 0) {
+      actions.push(Object.freeze({
+        side: "SELL",
+        type: marketMetadata.orderType,
+        price: sellPlan.price,
+        quantity: sellPlan.quantity,
+        reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
+        requiredNetProceeds: sellPlan.requiredNetProceeds,
+      }))
+    }
+  }
+
   if (!hasActiveBuy) {
     const referencePrice = lastBuyPrice ?? marketPrice.price
     assertDecimalString({ value: referencePrice, field: "lastBuyPrice" })
@@ -120,35 +149,6 @@ export function evaluateConservativeStrategy({
       }))
     }
   }
-
-  if (!hasActiveSell && compareDecimal({ left: activeQuantity, right: "0" }) > 0) {
-    const feeRate = calculateSellFeeRate({
-      makerPercent: String(pairConfig.makerPercent),
-      takerPercent: String(pairConfig.takerPercent),
-      observedCommissionRates: [ledger.maxObservedCommissionRate ?? "0"],
-    }).feeRate
-    const sellPlan = calculateRecoverySellPlan({
-      activeQuantity,
-      keepQuantity: String(pairConfig.keepQuantity),
-      cycleCost: ledger.buyCost,
-      saleProceeds: ledger.netSellProceeds,
-      minProfit: String(settings.minProfit),
-      feeRate,
-      priceTickSize,
-      quantityStepSize,
-    })
-    if (compareDecimal({ left: sellPlan.quantity, right: "0" }) > 0) {
-      actions.push(Object.freeze({
-        side: "SELL",
-        type: marketMetadata.orderType,
-        price: sellPlan.price,
-        quantity: sellPlan.quantity,
-        reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
-        requiredNetProceeds: sellPlan.requiredNetProceeds,
-      }))
-    }
-  }
-
   return Object.freeze({
     strategy: "CONSERVATIVE",
     symbol: marketPrice.symbol,
