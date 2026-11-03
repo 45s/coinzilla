@@ -44,6 +44,11 @@ cross-pair shared-asset allocation is implemented.
   The existing exact-decimal recovery planner preserves `keepQuantity`, covers
   cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
   proceeds, and rounds the SELL price up to the exchange tick.
+- A recovery SELL can complete a cycle only when distinct canonical SELL fill
+  quantities sum exactly to both the broker-reported executed quantity and
+  original order quantity. All fills must already be accounted. Missing or
+  inconsistent fill history pauses the pair without free-inventory allocation
+  or ledger reset.
 - When inventory exists, also maintain the next standing BUY unless one is
   already active. Its reference is the volume-weighted average execution price
   across all fills of the last completed BUY order (total executed quote
@@ -74,13 +79,26 @@ Its defining objective is to recover invested quote capital while accumulating f
 
 Key characteristics:
 
-- Maintain cumulative BUY cost, net SELL proceeds, actual commissions, minimum profit, and retained base inventory.
+- Maintain cumulative BUY cost, net SELL proceeds, exchange-charged commissions, minimum profit, and retained base inventory.
 - Sell only when the required net-profit condition is satisfied.
 - Keep the configured reserve/free quantity out of subsequent invested-position calculations.
 - Use actual fills and commissions for accounting.
 - Preserve the order lifecycle and safety rules defined in the Conservative Domain Specification.
 
 The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
+
+### Shared commission and order-type policy — Conservative and Aggressive
+
+The same commission policy applies to Conservative and Aggressive.
+
+- If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
+- If `makerPercent` is non-zero, submit a regular `LIMIT` order.
+- Use configured `makerPercent` as the commission estimate for planning in both cases. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
+- The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
+- Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
+- Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
+
+Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
 
 ### Aggressive — grid-style trading
 
