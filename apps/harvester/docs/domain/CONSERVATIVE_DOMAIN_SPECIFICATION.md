@@ -11,7 +11,7 @@ The Conservative strategy is a **standing-order accumulation strategy**. It main
 
 The initial BUY is submitted on the first valid price, one configured step below it. That initial order trails upward. After a BUY fills, the next standing BUY is fixed one step below the last BUY fill; trailing resumes after successful recovery completion.
 
-Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Conservative strategy's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Conservative strategy pair settings, and has some different fee/reset/completion semantics. These differences are listed rather than silently normalized.
+Harvester already contains useful broker-independent accounting and planning modules. Its current strategy is not yet an exact behavioral match: it creates a BUY from the current market price (or supplied last BUY price), does not implement Conservative strategy's initial BUY trailing behavior in this domain function, requires a per-pair investment cap in its current config validator, a rule absent from the corresponding Conservative strategy pair settings, and still has a combined MAKER/TAKER fee-history implementation where the agreed contract requires separate persistent rates. These differences are listed rather than silently normalized.
 
 ## 2. Source of truth and scope
 
