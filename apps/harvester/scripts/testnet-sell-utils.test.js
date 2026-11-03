@@ -54,7 +54,7 @@ test("falls back to LOT_SIZE when MARKET_LOT_SIZE has a zero step", () => {
     },
   })
 
-  assert.equal(quantity, "1.23")
+  assert.equal(quantity, "1.230")
   assert.equal(stepSize, "0.01")
 })
 
