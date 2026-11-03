@@ -188,7 +188,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 ## P2 — Operational hardening and improvements
 
-- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). Follow its Gate 0 and implement exactly one small PR per step; Journal must never block trading.
+- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). It can proceed independently of trading/TESTNET work; implement exactly one small PR per step. Journal must never block application startup, broker connectivity, or trading.
 - [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
 - [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
 - [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
@@ -250,7 +250,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
 - [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [ ] **Deferred until after the first successful real TESTNET trading cycle:** implement optional operational journaling and, separately, decide whether Journal read/replay should later participate in durable Harvester state/restart recovery. The staged operational event-journal plan does not implement replay or restart recovery.
+- [ ] Implement optional operational journaling as a separate observability task; no successful TESTNET cycle is required. Separately decide whether Journal read/replay should later participate in durable Harvester state/restart recovery. The staged operational event-journal plan does not implement replay or restart recovery.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
 
@@ -259,7 +259,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - Follow repository root guidance and `apps/harvester/AGENTS.md`.
 - Work from `develop` using a short-lived task branch and target PRs to `develop`; do not commit task work directly to `develop` or `main`.
 - **Mandatory:** follow [Trading First](./docs/TRADING_FIRST.md); implement the next missing step in the actual trading loop before any secondary infrastructure work.
-- Keep Journal, durable recovery, comprehensive reconciliation, optional architecture work, and optimization deferred until the first Conservative TESTNET cycle succeeds.
+- Keep durable recovery, comprehensive reconciliation, and optimization separate from operational observability. EventBus/Journal lifecycle logging may proceed without waiting for a Conservative TESTNET cycle.
 - Do not implement unresolved financial/risk behavior by assumption; close the decision first.
 - Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
 - Keep live trading disabled by default; TESTNET trading must be explicitly opt-in.
