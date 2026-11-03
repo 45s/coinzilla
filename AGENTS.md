@@ -1,6 +1,6 @@
 # Coding-agent entrypoint
 
-Before any task, read this file, the applicable task checklist, [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md), [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md), and the closest domain `AGENTS.md` and `ROADMAP.md). Inspect the relevant implementation, consumers, and tests before editing.
+Before any task, read this file, the applicable task checklist, [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md), [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md), and the closest domain `AGENTS.md` and `ROADMAP.md`. Inspect the relevant implementation, consumers, and tests before editing.
 
 Every AI agent and automated contributor must follow the canonical documents below. Do not copy their policy text into this file or local instructions.
 
