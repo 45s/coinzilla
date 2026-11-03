@@ -228,3 +228,19 @@ The Binance adapter currently reads raw execution-report `C` as `originalClientO
 **Read-only next check:** retrieve TESTNET order history for `ZROUSDT` and inspect the row for order ID `666845`. Compare its client order ID, status, executed quantity and update time with the Harvester acknowledgement. Also capture both `c` and `C` from the rejected CANCELED report and both IDs from the subsequent TRADE report.
 
 The 16:24:48 log `Trade execution received` is emitted before the event is queued for engine processing. It does not prove the fill was applied. Look for the subsequent successful fill-accounting/journal outcome or a rejection record for that exact TRADE report.
+
+
+### Free-Roll-compatible execution-report matching
+
+The working Free-Roll code in `apps/bot-free-roll/src/bot/bot-free-roll.js` does not match execution reports by client order ID. It tracks the exchange-assigned order ID returned by the broker and accepts reports only when `getOrderId(event.executedOrder)` is in `trackedOrderIds`. It then validates fill order ID, symbol, and side.
+
+Harvester now follows the same rule for acknowledged orders. `OrderRegistry.applyUpdate()` looks up the registered order by `brokerOrderId` first, retains the original submitted `clientOrderId` in canonical state, and rejects conflicting IDs if the incoming broker/client IDs identify two different registered orders. Unknown broker order IDs remain unowned and pause the pair.
+
+The Binance adapter exposes the two execution-report identifiers separately:
+
+- `clientOrderId` / raw `c`: current/new client order ID;
+- `originalClientOrderId` / raw `C`: original client order ID.
+
+Harvester logs both values on event receipt and on rejection, along with exchange order ID, side, status, execution ID, registry match details, and structured error name/message/stack. A debug log records whether an event was accepted or ignored after engine processing. This preserves useful diagnostics without dumping raw exchange messages or account payloads.
+
+For the observed TESTNET event, order history confirms `666845` belongs to `h-ZROUSDT-1` and is CANCELED with zero execution. The event's different `c` value no longer prevents matching that already-registered exchange order ID. Do not reintroduce client-ID-only ownership matching or accept unknown broker order IDs.
