@@ -1023,6 +1023,64 @@ describe("Binance user-data session recovery", () => {
     assert.equal(clients.length, 1)
   })
 
+  it("closes a replacement client when the final subscriber disconnects during reconnect setup", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    let finishReconnect
+    let markReconnectStarted
+    const reconnectStarted = new Promise((resolve) => {
+      markReconnectStarted = resolve
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": () => ({ subscriptionId: index * 100 + 10 }),
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        if (index > 0) {
+          client.connect = () => new Promise((resolve) => {
+            finishReconnect = () => {
+              client.state = "open"
+              resolve(client)
+            }
+            markReconnectStarted()
+          })
+        }
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    const recovery = scheduler.runNext()
+    await reconnectStarted
+
+    await subscription.data.disconnect()
+    assert.equal(scheduler.pendingCount, 0)
+    finishReconnect()
+    await recovery
+
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].state, "closed")
+    assert.equal(clients[1].calls.some((call) => call.method === "userDataStream.subscribe.signature"), false)
+    assert.equal(clients[1].listenerCount, 0)
+    assert.equal(clients[1].errorListenerCount, 0)
+    assert.equal(clients[1].closeListenerCount, 0)
+    await broker.disconnect()
+  })
+
   it("continues reconnecting after the warning threshold until the socket recovers", async () => {
     const scheduler = createScheduler()
     const clients = []
