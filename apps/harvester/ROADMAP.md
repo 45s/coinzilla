@@ -103,6 +103,17 @@ TESTNET acceptance cycle remain unfinished. Do not mark the first trading
 milestone complete until the incident fixes, reconciliation, and required CI
 checks pass.
 
+
+
+## Automated TESTNET startup account audit
+
+- [x] On every trading-enabled startup, fetch the full exchange account balance snapshot and durably journal the OPENING account event before the trading engine is activated.
+- [x] Fetch open orders account-wide (`getOpenOrders({})`, no symbol filter), normalize the complete order facts into an allowlisted Journal event, and durably flush it before market subscriptions.
+- [x] Fail closed if the open-order query is unavailable/malformed or any pre-existing open order is present. Do not adopt or cancel orders; restart ownership recovery is not implemented yet.
+- [x] Add DTO and bootstrap regressions for full order facts, empty-account READY, pre-existing-order BLOCKED, and no market subscription/order activation after a block.
+- [ ] Verify Harvester tests and repository CI on the feature branch.
+- [ ] After merge, the user only needs to start Harvester; no repeated manual balances/orders output is required. Inspect the Journal automatically for account baseline and open-order audit results.
+
 ## P0 — Deliver the first working trading cycle
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
