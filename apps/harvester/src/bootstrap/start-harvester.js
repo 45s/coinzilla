@@ -512,7 +512,7 @@ export async function startHarvester({
     return nextSnapshot
   }
 
-  const publishOpenOrdersSnapshot = async () => {
+  const publishOpenOrdersSnapshot = async ({ phase = "PREFLIGHT", blockOnExistingOrders = tradingEnabled } = {}) => {
     const result = await broker.getOpenOrders({})
     if (!result?.ok || !Array.isArray(result.data)) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -526,7 +526,7 @@ export async function startHarvester({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
       dataResult: mapAccountOpenOrdersCapturedData({
-        phase: "OPENING",
+        phase,
         observedAt: now(),
         orders,
         readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
@@ -543,8 +543,8 @@ export async function startHarvester({
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : ""))
       }
-    } else if (tradingEnabled) {
-      throw new Error("Conservative TESTNET trading requires a durable open-orders audit before trading")
+    } else {
+      throw new Error("Harvester startup requires a durable open-orders audit before market subscriptions")
     }
     logger.info?.({
       message: orders.length === 0
@@ -554,7 +554,7 @@ export async function startHarvester({
       readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
-    if (orders.length > 0) {
+    if (orders.length > 0 && blockOnExistingOrders) {
       throw new Error(
         "Conservative TESTNET startup blocked: account has " + orders.length +
         " pre-existing open order(s) with no restored Harvester ownership state; inspect account.open_orders_captured in Journal",
@@ -577,8 +577,8 @@ export async function startHarvester({
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
       }
-    } else if (tradingEnabled) {
-      throw new Error("Conservative TESTNET trading requires a durable Journal flush before trading")
+    } else {
+      throw new Error("Harvester startup requires a durable Journal flush before market subscriptions")
     }
     logger.info?.({
       message: "Account snapshot captured and durably journaled",
@@ -987,12 +987,12 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    const initialSnapshotTask = userDataEventQueue.then(() => tradingEnabled
-      ? publishAccountSnapshot({ phase: "OPENING" })
-      : refreshAccountSnapshot())
+    const initialSnapshotTask = userDataEventQueue.then(async () => {
+      await publishAccountSnapshot({ phase: "PREFLIGHT" })
+      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT", blockOnExistingOrders: tradingEnabled })
+    })
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
-    if (tradingEnabled) await publishOpenOrdersSnapshot()
     initialAccountSnapshotReady = true
 
     if (tradingEnabled) {
