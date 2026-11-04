@@ -613,3 +613,8 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
 - Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
 - Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the bot domain.
+
+
+## Accepted cross-domain capability — Harvester book ticker (#506)
+
+- [~] Expose Binance `bookTicker` through an additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method. Preserve the aggregate-trade `subscribeForPrices` contract. The Harvester consumer uses this stream for fresh best-bid/best-ask POST-ONLY crossing validation. The request is accepted; mark complete after this broker API, deterministic tests, documentation, and required CI are merged and verified.

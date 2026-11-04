@@ -88,6 +88,38 @@ function validateCallback(callback, name) {
   }
 }
 
+function adaptBookTickerMessage({ message, symbol }) {
+  if (!message || typeof message !== "object" || Array.isArray(message) ||
+      message.e !== "bookTicker") {
+    throw new TypeError("A Binance bookTicker event is required")
+  }
+  if (message.s !== symbol) {
+    throw new TypeError("Binance bookTicker symbol does not match the subscription")
+  }
+
+  const decimalFields = [
+    ["b", "best bid price"],
+    ["B", "best bid quantity"],
+    ["a", "best ask price"],
+    ["A", "best ask quantity"],
+  ]
+  for (const [field, name] of decimalFields) {
+    assertDecimalString({ value: message[field], field: name })
+    if (compareDecimal({ left: message[field], right: "0" }) <= 0) {
+      throw new RangeError("Binance bookTicker " + name + " must be positive")
+    }
+  }
+
+  return Object.freeze({
+    symbol,
+    bestBidPrice: message.b,
+    bestBidQuantity: message.B,
+    bestAskPrice: message.a,
+    bestAskQuantity: message.A,
+    timestamp: Date.now(),
+  })
+}
+
 function logSafely(logger, level, ...args) {
   try {
     logger?.[level]?.(...args)
@@ -631,6 +663,33 @@ export class BinanceWebSocketBroker extends CoreBroker {
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForPrices()", error })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  async subscribeForBookTicker({ symbol, onBookTicker } = {}) {
+    let stream
+    try {
+      validateCallback(onBookTicker, "onBookTicker")
+      if (!this.connected) throw new Error("Binance broker must be connected before subscribing to book ticker")
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("subscribeForBookTicker requires a symbol")
+      }
+      const normalizedSymbol = symbol.trim().toUpperCase()
+      stream = createStreamName("bookTicker", { symbol: normalizedSymbol })
+      const listener = (message) => {
+        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol }))
+      }
+      await this.marketConnection.subscribe(stream, listener)
+
+      return toResult({
+        data: {
+          stream,
+          unsubscribe: () => this.marketConnection.unsubscribe(stream, listener),
+        },
+      })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.subscribeForBookTicker()", error })
       return toResult({ errors: [error] })
     }
   }
