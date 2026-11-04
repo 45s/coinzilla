@@ -4,6 +4,14 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
 test("blocks every order mutation while the user-data stream is unavailable", async () => {
+  const timers = new Map()
+  let timerId = 0
+  const setTimeoutFn = (callback) => {
+    const id = ++timerId
+    timers.set(id, callback)
+    return id
+  }
+  const clearTimeoutFn = (id) => timers.delete(id)
   const rpc = createFakeRpcClient({
     "userDataStream.subscribe.signature": () => ({ subscriptionId: 71 }),
     "userDataStream.unsubscribe": () => ({}),
@@ -17,7 +25,7 @@ test("blocks every order mutation while the user-data stream is unavailable", as
     apiKey: "test-key",
     apiSecret: "test-secret",
     logger: { error() {}, info() {}, warn() {}, debug() {} },
-  }, { apiClientFactory: () => rpc })
+  }, { apiClientFactory: () => rpc, setTimeoutFn, clearTimeoutFn })
   broker.connected = true
 
   const subscription = await broker.subscribeForUserData({ onEvent() {} })
@@ -61,4 +69,5 @@ test("blocks every order mutation while the user-data stream is unavailable", as
   )
 
   await subscription.data.disconnect()
+  assert.equal(timers.size, 0)
 })
