@@ -45,7 +45,7 @@ Use the least privilege that supports the workload. The package cannot grant per
 
 ## Connection and subscription lifecycle
 
-`connect()` opens the WebSocket API connection. The public Streams connection is opened on demand when `subscribeForPrices()` is called.
+`connect()` opens the WebSocket API connection. The public Streams connection is opened on demand when `subscribeForPrices()` or `subscribeForBookTicker()` is called.
 
 `disconnect()` stops user-data recovery, disconnects both clients, and is safe to call during shutdown. Applications should await it during graceful shutdown.
 
@@ -80,6 +80,8 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 ## Public market-data streams
 
 `subscribeForPrices({ symbol, onPrice })` subscribes to the symbol's `aggTrade` stream and returns an unsubscribe function in its result data. The Streams client reconnects desired subscriptions after unexpected disconnection, paces control messages, limits a connection to 1,024 streams, batches subscribe/unsubscribe requests in groups of at most 200, and rotates a connection before the documented 24-hour connection lifetime.
+
+`subscribeForBookTicker({ symbol, onBookTicker })` subscribes to the symbol's `bookTicker` stream and returns an unsubscribe function. Its immutable callback payload contains `symbol`, `bestBidPrice`, `bestBidQuantity`, `bestAskPrice`, `bestAskQuantity` (all price/quantity values remain exact decimal strings), and a local receipt `timestamp`. Malformed events and events for a different symbol are rejected; the timestamp records local receipt time because Binance's bookTicker event does not include an event timestamp.
 
 These reconnect guarantees apply to the public stream subscription set; they do not imply user-data event replay or reconciliation.
 
