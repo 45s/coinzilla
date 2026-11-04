@@ -46,7 +46,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-function createHarness() {
+async function createHarness() {
   const orders = []
   const pauses = []
   const accountedTradeIds = new Set()
@@ -197,7 +197,7 @@ function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
 }
 
 test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
-  const { engine, pauses, accountedFills } = createHarness()
+  const { engine, pauses, accountedFills } = await createHarness()
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solMarket = marketsBySymbol.get("SOLUSDT")
