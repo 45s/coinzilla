@@ -12,6 +12,12 @@
 >
 > Older sections below are historical implementation notes. Where they conflict with this direction, this notice and the current Conservative Domain Specification take precedence.
 >
+## Strategy-scoped trading configuration
+
+- [~] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
+- [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
+- [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
+
 ## Independent operational observability
 
 The trading-first priority governs trading implementation and does not make the separately approved staged EventBus/Journal observability work dependent on a TESTNET trading cycle. Follow [the Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) one small PR at a time. This work must remain optional and must not gate, delay, or change trading behavior.

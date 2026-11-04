@@ -65,49 +65,49 @@ See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and 
 
 ## Configuration
 
-Harvester uses one `trading-config.json` for strategy availability, process-wide trading settings, and market-specific settings. The root contains:
+Harvester uses one `trading-config.json` with strategy-scoped configuration. The root contains a `strategies` object; each strategy owns its enabled flag, settings, and market pairs. The active strategy key is `CG_coinGrabber` (the former Free-Roll strategy name).
 
-- `strategies`: strategy availability. Keep `conservative.enabled` set to `true` and `aggressive.enabled` set to `false`; Aggressive is deferred until Conservative is proven on TESTNET.
-- `settings`: process-wide trading settings, currently `minProfit`.
-- `pairs`: market-specific settings keyed by symbol (for example, `ZROUSDT` or `ZROFDUSD`). Each pair has its own `enabled` flag, `investment` limit, order sizing, reserve quantity, price/quantity precision, and fee percentages.
+- `strategies.CG_coinGrabber.enabled`: enables the strategy.
+- `strategies.CG_coinGrabber.settings.minProfit`: minimum required net profit per completed recovery sale, in the pair's quote currency.
+- `strategies.CG_coinGrabber.settings.conservative.enabled`: must remain `true`; Conservative is the first executable mode.
+- `strategies.CG_coinGrabber.settings.aggressive.enabled`: must remain `false`; Aggressive is deferred until Conservative is proven on TESTNET.
+- `strategies.CG_coinGrabber.pairs`: market-specific settings keyed by symbol; each pair owns its enabled flag, investment limit, sizing, reserve, precision, and fee settings.
 
-Strategy availability is not configured through environment variables. The runtime currently requires Conservative enabled and rejects Aggressive enabled.
+All settings and pairs belong to their strategy. Future strategies can be sibling entries under `strategies`; they do not share this strategy's pairs. Strategy availability is not configured through environment variables.
 
-`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable. On startup, every enabled pair is checked against its exchange metadata: `orderQuantity` is rounded down using the actual base-asset quantity step and the effective quantity must satisfy supported minimum/maximum quantity filters; `investment` must be at least the quote-asset minimum notional. The exchange-reported base and quote assets are authoritative for these units. This startup check is an early configuration-feasibility guard, not a replacement for per-order validation: each actual order is still checked immediately before submission against its price tick, quantity step, price/quantity bounds, and notional bounds. `pricePrecision` and `quantityPrecision` never override the exchange's actual tick and step sizes.
+`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. On startup, enabled pairs are checked against exchange metadata and actual tick/step/notional filters. `pricePrecision` and `quantityPrecision` do not override exchange increments.
 
 Example:
 
 ```json
 {
-  "settings": {
-    "minProfit": 0.01
-  },
   "strategies": {
-    "conservative": { "enabled": true },
-    "aggressive": { "enabled": false }
-  },
-  "pairs": {
-    "ZROUSDT": {
+    "CG_coinGrabber": {
       "enabled": true,
-      "investment": 100,
-      "orderQuantity": 5,
-      "keepQuantity": 0.01,
-      "priceStepPercent": 0.05,
-      "pricePrecision": 3,
-      "quantityPrecision": 1,
-      "makerPercent": 0.075,
-      "takerPercent": 0.075
+      "settings": {
+        "minProfit": 0.01,
+        "conservative": { "enabled": true },
+        "aggressive": { "enabled": false }
+      },
+      "pairs": {
+        "ZROUSDT": {
+          "enabled": true,
+          "investment": 100,
+          "orderQuantity": 5,
+          "keepQuantity": 0.01,
+          "priceStepPercent": 0.05,
+          "pricePrecision": 3,
+          "quantityPrecision": 1,
+          "makerPercent": 0.075,
+          "takerPercent": 0.075
+        }
+      }
     }
   }
 }
 ```
 
-The configuration loader and structural validation live in:
-
-- `src/infrastructure/config/load-trading-config.js`
-- `src/domain/trading-config.js`
-
-The configuration loader and validation are implemented. Conservative is the first executable strategy and is composed with the in-process trading engine when TESTNET trading is explicitly enabled. The default remains read-only; see the TESTNET startup requirements above and the trading-strategy documentation for the implemented policy.
+The configuration loader and validation live in `src/infrastructure/config/load-trading-config.js` and `src/domain/trading-config.js`. Conservative is the first executable mode; the default process remains read-only unless TESTNET trading is explicitly enabled.
 
 ## Logging
 
