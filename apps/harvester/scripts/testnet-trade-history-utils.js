@@ -17,7 +17,7 @@ export const normalizeTradeHistory = ({ trades }) => {
     }
 
     for (const field of ["price", "qty", "quoteQty", "commission"]) {
-      if (typeof trade[field] !== "string" || !/^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(trade[field])) {
+      if (typeof trade[field] !== "string" || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(trade[field])) {
         throw new TypeError(`Binance trade history item ${index} has an invalid ${field}`)
       }
     }
