@@ -151,3 +151,8 @@ A further source-review hardening change in PR #513 rejects repeated fill IDs wh
 The trade-history retrieval is still pending operator execution. Harvester
 remains stopped; no further TESTNET orders are authorized until trade-level
 reconciliation, regression checks, and the incident gate are complete.
+
+
+### TESTNET commission setting — 2026-11-04
+
+Binance Spot TESTNET account settings previously showed **Commissions: None**. The operator changed the setting to **0.1% maker & taker**; the supplied follow-up screenshot shows that selection. The historical incident trade records still report zero commission and must be reconciled as historical zero-fee executions, not retroactively charged at 0.1%. Before the next controlled TESTNET run, verify the new setting is effective and record the timestamp. For each new execution, use the actual commission amount and asset returned by Binance trade history; never infer the realized fee solely from the UI setting. The setting is account-level and applies across the API keys shown on the page, not only Harvester's key. The new fee configuration changes expected economics and must be included in strategy profit/recovery calculations and regression fixtures before resuming trading.
