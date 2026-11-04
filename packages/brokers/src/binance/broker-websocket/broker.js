@@ -1,6 +1,6 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
+import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
 import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
