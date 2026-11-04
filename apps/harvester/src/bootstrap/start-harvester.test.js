@@ -1719,13 +1719,13 @@ test("journals account-wide open orders and blocks trading before engine activat
       ok: true,
       data: [{
         clientOrderId: "manual-zro-sell",
-        brokerOrderId: "699694",
-        market: { symbol: "ZROUSDT" },
+        id: "699694",
+        symbol: "ZROUSDT",
         side: "SELL",
         type: "LIMIT",
-        limitPrice: { amount: "1.828" },
-        originalQuantity: { amount: "4.98" },
-        executedQuantity: { amount: "0" },
+        originalPrice: "1.82800000",
+        originalQuantity: "4.98000000",
+        executedQuantity: "0.00000000",
         status: "NEW",
       }],
     }
