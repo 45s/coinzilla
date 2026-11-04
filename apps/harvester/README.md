@@ -341,3 +341,25 @@ and diagnostic limitations.
 ### 2026-11-04 TESTNET incident remediation
 
 PR #513 now contains source-level fixes for the two defects recorded in the incident report: FILLED broker acknowledgements are held behind complete execution-history retrieval/application before the serialized strategy transition can finish, and residual active inventory no longer creates a recovery SELL after the recovery ledger has been reset. Invalid strategy order validation now pauses the affected pair rather than allowing the same invalid decision to be retried on every market event. Deterministic regression tests cover delayed multi-fill acknowledgement reconciliation, incomplete-history fail-closed behavior, and residual inventory after cycle completion. The first CI attempts exposed two regression-test issues (terminal registry ordering and the canonical Fill ID format); both were corrected. The latest PR head passed the full workspace unit-test run, workspace coverage run and configured coverage thresholds, JavaScript syntax and agent-policy checks, workflow lint, and production dependency audit. This verifies the offline regression suite only; it does not authorize TESTNET restart. Keep Harvester stopped and do not submit TESTNET orders until the tests/CI pass and the exchange activity is reconciled as required by the incident gate.
+
+
+## Standalone Binance TESTNET trade history (read-only)
+
+Retrieve actual executions, including exchange trade IDs, order IDs, side,
+price, base/quote quantities, commission amount/asset, maker/taker role, and
+execution timestamp. This is the evidence needed to reconcile exchange fills
+with Harvester's journal and accounting.
+
+From the repository root, run this **single command** for the DOGEUSDT incident:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000
+```
+
+It loads `apps/harvester/.env.development` and calls Binance Spot TESTNET
+`GET /api/v3/myTrades`. The command is read-only; it does not create or
+cancel orders. It prints every returned trade. Binance limits a response to
+1,000 trades; this command retrieves one page only. If the incident spans more
+than 1,000 executions, paginate from the last returned trade ID before
+treating the result as complete. The local system clock must be synchronized
+because the signed endpoint validates request timestamps.
