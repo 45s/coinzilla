@@ -97,3 +97,38 @@ packages/brokers/
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
 The package entry point exports only `BinanceWebSocketBroker` and `BinanceWebSocketConfig`. Do not reintroduce the removed third-party SDK.
+
+## DDD responsibility map (current implementation and target boundaries)
+
+This package is an **exchange infrastructure adapter**, not the owner of trading strategy or portfolio policy. Align it with Harvester's domain/application/infrastructure separation without copying Harvester's directory tree mechanically.
+
+### Current responsibilities
+
+| Current module | Actual responsibility | DDD interpretation |
+|---|---|---|
+| `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Interface/composition boundary; keep thin |
+| `src/broker.core.js` | Shared broker base contract | Broker port/contract boundary |
+| `binance/broker-websocket/broker.js` | Implements broker operations, coordinates RPC/Streams clients and user-data lifecycle, maps Binance responses to shared Entities | Binance infrastructure adapter; currently also contains orchestration and several pure validation/mapping functions |
+| `binance/broker-websocket/methods/user-data-session.js` | Owns subscriber state, reconnect scheduling, remote subscription lifecycle, and reconciliation acknowledgement | Stateful application-style lifecycle coordinator; currently coupled to Binance RPC method names and client shape |
+| `binance/broker-websocket/helpers/` | Builds exchange request parameters, adapts Binance stream/event payloads, and deduplicates events | Anti-corruption/adaptation layer; pure helpers where possible, not trading-domain policy |
+| `binance/shared/` | Maps Binance order/fill/account DTOs into shared `@coinzilla/entities` values and normalizes Binance IDs | Infrastructure translation; canonical entity invariants remain owned by Entities |
+| `config/`, `constants/` | Validates Binance connection configuration and owns endpoint constants | Infrastructure configuration |
+| `utils/` | Native WebSocket transport, RPC, Streams protocol/client, signing, and Node runtime guard | Infrastructure protocol implementation |
+| `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, and broker contract tests | Test infrastructure; never public runtime API |
+
+### Target boundary rules
+
+1. **Domain:** do not add trading strategies, portfolio rules, order-selection policies, or a duplicate domain model here. Harvester owns those policies; `@coinzilla/entities` owns canonical shared values and entity invariants.
+2. **Application:** keep only coordination that expresses a broker capability lifecycle or workflow. The user-data recovery coordinator is stateful and belongs here conceptually, but its Binance RPC vocabulary should ultimately be hidden behind a narrow injected port if a tested vertical slice demonstrates that this reduces coupling.
+3. **Infrastructure:** keep Binance request names, signing, response envelopes, stream names, reconnect protocol, event DTOs, and Binance-to-Entities mapping here. These are not domain rules, even when implemented as pure functions.
+4. **Ports:** treat `CoreBroker` and the public broker method contract as the consumer-facing boundary. Add narrower internal ports only when they isolate a concrete orchestration responsibility; do not create generic exchange abstractions speculatively.
+5. **Composition:** the package entry point remains a thin export boundary. Do not create empty `domain/`, `application/`, or `infrastructure/` directories just to resemble Harvester.
+
+### First refactoring candidates (ordered by risk)
+
+- **Candidate A — pure broker helpers:** move the independent decimal-filter validators and book-ticker payload adaptation currently embedded in `broker-websocket/broker.js` into focused, colocated helper modules. Preserve decimal strings and timestamp semantics. Characterize through broker-facing tests before extraction.
+- **Candidate B — user-data port:** after recovery contract tests are complete, define the smallest internal user-data client port for subscribe/unsubscribe/subscription lookup and listener registration; keep Binance RPC method names in its adapter. Preserve uncertain-outcome verification and all-subscriber acknowledgement semantics.
+- **Candidate C — broker operation slices:** separate cohesive request/response adaptation from the facade one operation family at a time (account, orders, market metadata, trades), retaining the public result envelopes and method signatures.
+
+Do not start Candidate B or C until the relevant contract tests are green and the branch can execute the RED → GREEN → REFACTOR sequence. A structural move without a failing-first test is not evidence of behavior preservation.
+
