@@ -1,6 +1,6 @@
 # AI task — Harvester incident follow-up: lifecycle and account reconciliation
 
-> **Prerequisite:** merge the source remediation in PR #513 first. This follow-up branch was created from `develop` before #513 merged; rebase/update it onto the new `develop` after #513 lands and before implementation or merge.
+> **Branch state (2026-11-04):** PR #513 has been merged into `develop`. This follow-up branch has already been synchronized with that merge and is based on the resulting `develop` head. Do not repeat the prerequisite branch-update step unless `develop` advances again; before each push/merge, verify the branch is not behind `develop`.
 >
 > **Safety:** Harvester must remain stopped. Do not restart the process, submit/cancel TESTNET orders, change account settings, or perform any exchange write operation. This task is offline source investigation, deterministic tests, and read-only reconciliation only. A future TESTNET run requires a separate explicit operator authorization after all acceptance gates pass.
 
@@ -113,14 +113,14 @@ Do not execute this package in this PR. Prepare a safe runbook for a separately 
 
 ## First actions for the implementing agent
 
-1. Wait for PR #513 to merge, then update this branch onto the resulting `develop`.
+1. Verify PR #513 remains merged and this branch includes the current `develop` head; synchronize only if `develop` has advanced.
 2. Inspect the merged PR #513 diff and current Harvester source/docs. Confirm which fixes and tests actually landed.
 3. Build a concise evidence map from source functions to existing tests and identify only missing cases.
-4. Run the current focused Harvester test suite before edits to establish a baseline.
-5. Implement work packages in small, test-first slices. Re-run focused tests after each slice.
+4. Run the focused Harvester test suite before edits to establish a baseline. If local execution is unavailable, state that limitation and use a pushed, isolated CI run as the verification gate for each small commit.
+5. Implement work packages in small, test-first slices. Re-run focused tests after each slice; do not mark a slice complete until its exact commit's CI has passed.
 6. Update the roadmap with completed, failed, and still-open findings; keep the TESTNET gate closed.
 7. Run all required CI on the exact final head and report results with workflow names and conclusions.
 
 ## Handoff prompt
 
-Continue the Harvester incident follow-up in private GitHub repository `45s/coinzilla`, application `apps/harvester`, using branch `investigate/harvester-lifecycle-audit` and this task document. PR #513 is the prerequisite source-remediation PR; wait for it to merge, then update this branch onto the resulting `develop`. Do not recreate its fixes. Complete the deterministic lifecycle overlap matrix, end-to-end Portfolio/RecoveryLedger commission invariants, fee-policy caller audit, and OPENING/CLOSING balance-audit verification described above. Update README, ROADMAP, and `docs/TRADING_FIRST.md`, run focused and workspace tests plus all required CI, and provide a precise status of fixed/verified/unknown blockers. Harvester must remain stopped: do not restart it, submit/cancel TESTNET orders, or perform exchange write operations. Do not claim TESTNET readiness from offline CI alone.
+Continue the Harvester incident follow-up in private GitHub repository `45s/coinzilla`, application `apps/harvester`, using branch `investigate/harvester-lifecycle-audit` and this task document. PR #513 is already merged into `develop`, and the follow-up branch has already been synchronized with it; verify the current branch relationship rather than repeating the old prerequisite. Do not recreate PR #513 fixes. Complete the deterministic lifecycle overlap matrix, end-to-end Portfolio/RecoveryLedger commission invariants, fee-policy caller audit, and OPENING/CLOSING balance-audit verification described above. Update README, ROADMAP, and `docs/TRADING_FIRST.md`, and deliver small commits with tests and documentation. Run focused and workspace tests plus all required CI; if no local checkout is available, use exact-head CI as the verification gate and state this limitation. Provide a precise status of fixed/verified/unknown blockers. Harvester must remain stopped: do not restart it, submit/cancel TESTNET orders, or perform exchange write operations. Do not claim TESTNET readiness from offline CI alone.
