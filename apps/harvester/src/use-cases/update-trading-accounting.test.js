@@ -203,6 +203,72 @@ test("accounts base and quote commissions atomically across Portfolio and Recove
   assert.equal(sold.data.recoveryLedger.netSellProceeds, "5.98")
 })
 
+test("reconciles multiple commission-bearing fills exactly across Portfolio and RecoveryLedger", () => {
+  const fills = [
+    makeFill({
+      tradeId: "cycle-buy-1",
+      quantity: "100",
+      quoteQuantity: "10",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "cycle-buy-2",
+      quantity: "50",
+      quoteQuantity: "5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.005", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "cycle-sell-1",
+      side: "SELL",
+      quantity: "40",
+      quoteQuantity: "4.4",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.4", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.004", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "cycle-sell-2",
+      side: "SELL",
+      quantity: "50",
+      quoteQuantity: "5.5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.005", asset: quoteAsset }) }),
+      ],
+    }),
+  ]
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
+
+  for (const fill of fills) {
+    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    assert.equal(result.data.applied, true)
+    portfolio = result.data.portfolio
+    recoveryLedger = result.data.recoveryLedger
+  }
+
+  const position = portfolio.getPosition({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "57.6")
+  assert.equal(position.quoteNetCashFlow.amount, "-5.124")
+  assert.equal(recoveryLedger.buyCost, "15.015")
+  assert.equal(recoveryLedger.netSellProceeds, "9.891")
+  assert.equal(recoveryLedger.outstandingRecoveryAmount, "5.124")
+  assert.equal(
+    position.quoteNetCashFlow.amount,
+    "-" + recoveryLedger.outstandingRecoveryAmount,
+  )
+  assert.equal(portfolio.appliedFillIds.length, 4)
+  assert.equal(recoveryLedger.appliedFillIds.length, 4)
+})
+
 test("rejects unknown commission status without committing either accounting projection", () => {
   const portfolio = new Portfolio()
   const recoveryLedger = RecoveryLedger.empty({ market })
