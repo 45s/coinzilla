@@ -1107,6 +1107,7 @@ test("logs readiness at info and traces Conservative strategy input and decision
     env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    now: () => 123,
     logger: {
       debug: (data) => calls.push({ level: "debug", ...data }),
       info: (data) => calls.push({ level: "info", ...data }),
