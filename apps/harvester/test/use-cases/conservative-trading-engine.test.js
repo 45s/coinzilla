@@ -142,6 +142,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
         },
       },
     },
+    },
   }
   const engine = makeConservativeTradingEngine({
     broker,
