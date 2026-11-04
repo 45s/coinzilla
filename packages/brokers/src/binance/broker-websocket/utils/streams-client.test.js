@@ -493,3 +493,113 @@ test("keeps a local stream subscription when the server rejects unsubscribe", as
   assert.equal(events.length, 1)
   await client.disconnect()
 })
+
+test("validates Streams client configuration and public operation arguments", async () => {
+  const valid = {
+    url: "wss://stream.binance.com:9443/ws",
+    transportFactory: (options) => new FakeTransport(options),
+  }
+  assert.throws(() => new BinanceStreamsClient({ ...valid, url: "https://example.com" }), /valid WebSocket Streams URL/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, transportFactory: null }), /transportFactory must be a function/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, ackTimeout: 0 }), /ackTimeout must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, reconnectDelay: 0 }), /reconnectDelay must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, reconnectDelay: 10, maxReconnectDelay: 5 }), /maxReconnectDelay must be greater than or equal/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, rotationDelay: 0 }), /rotationDelay must be a positive integer/)
+  assert.throws(() => new BinanceStreamsClient({ ...valid, onError: null }), /onError must be a function/)
+
+  const client = new BinanceStreamsClient(valid)
+  await assert.rejects(client.connect(), /Subscribe to at least one stream/)
+  await assert.rejects(client.subscribe("btcusdt@aggTrade", null), /stream listener function/)
+  await assert.rejects(client.subscribe([], () => {}), /At least one stream/)
+  await assert.rejects(client.unsubscribe([], () => {}), /At least one stream/)
+  await assert.rejects(client.unsubscribe("btcusdt@aggTrade", null), /listener must be a function/)
+})
+
+test("matches raw Binance events across symbol, interval, depth, and all-market streams", async () => {
+  const cases = [
+    ["!miniTicker@arr", { e: "24hrMiniTicker", s: "OTHER" }, true],
+    ["!ticker@arr", { e: "24hrTicker", s: "OTHER" }, true],
+    ["!ticker_1h@arr", { e: "1hTicker", s: "OTHER" }, true],
+    ["!ticker_4h@arr", { e: "4hTicker", s: "OTHER" }, true],
+    ["btcusdt@aggTrade", { e: "aggTrade", s: "BTCUSDT" }, true],
+    ["ethusdt@trade", { e: "trade", s: "ETHUSDT" }, true],
+    ["bnbusdt@miniTicker", { e: "24hrMiniTicker", s: "BNBUSDT" }, true],
+    ["adausdt@ticker", { e: "24hrTicker", s: "ADAUSDT" }, true],
+    ["xrpusdt@bookTicker", { s: "XRPUSDT", u: 1, b: "1", B: "2", a: "3", A: "4" }, true],
+    ["dogeusdt@kline_1m", { e: "kline", s: "DOGEUSDT", k: { i: "1m" } }, true],
+    ["solusdt@ticker_1h", { e: "1hTicker", s: "SOLUSDT" }, true],
+    ["ltcusdt@depth5@100ms", { e: "depthUpdate", s: "LTCUSDT" }, true],
+    ["btcusdt@aggTrade", { e: "aggTrade", s: "ETHUSDT" }, false],
+    ["btcusdt@trade", { e: "aggTrade", s: "BTCUSDT" }, false],
+    ["dogeusdt@kline_1m", { e: "kline", s: "DOGEUSDT", k: { i: "5m" } }, false],
+    ["solusdt@ticker_1h", { e: "4hTicker", s: "SOLUSDT" }, false],
+  ]
+
+  for (const [stream, message, shouldMatch] of cases) {
+    const { client, transports } = createClient()
+    const received = []
+    const subscription = client.subscribe(stream, (event) => received.push(event))
+    await flush()
+    acknowledge(transports[0], 0, { result: [stream] })
+    await subscription
+
+    transports[0].receive(message)
+    assert.equal(received.length, shouldMatch ? 1 : 0, stream)
+    await client.disconnect()
+  }
+})
+
+test("rejects an invalid Streams transport before opening the connection", async () => {
+  const { client } = createClient({ transportFactory: () => ({}) })
+  await assert.rejects(
+    client.subscribe("btcusdt@aggTrade", () => {}),
+    /Streams transport must implement connect\(\)/,
+  )
+  assert.equal(client.state, "closed")
+})
+
+test("handles Binance serverShutdown events and cancels reconnect on manual disconnect", async () => {
+  const errors = []
+  const { client, transports, clock } = createClient({
+    onError: (error) => errors.push(error.message),
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  transports[0].receive({ e: "serverShutdown" })
+  assert.deepEqual(errors, ["Binance Streams server is shutting down"])
+  assert.equal(client.state, "closed")
+  await client.disconnect()
+  assert.equal(clock.pendingCount, 0)
+})
+
+test("reports transport-listener cleanup exceptions without interrupting disconnect", async () => {
+  const errors = []
+  const made = []
+  const { client } = createClient({
+    onError: (error) => errors.push(error.message),
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      const onMessage = transport.onMessage.bind(transport)
+      transport.onMessage = (listener) => {
+        const remove = onMessage(listener)
+        return () => {
+          remove()
+          throw new Error("message listener cleanup failed")
+        }
+      }
+      made.push(transport)
+      return transport
+    },
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(made[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  await client.disconnect()
+  assert.deepEqual(errors, ["message listener cleanup failed"])
+  assert.equal(client.state, "closed")
+})
