@@ -866,7 +866,7 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [x] Added per-fill accounting DEBUG records before and after applying an execution: trade/execution/order identity, side, price, base/quote quantity, actual commission asset/amount/status, prior Position and RecoveryLedger, applied/duplicate outcome, next Position and ledger, cumulative recovery/profit values. Rejected accounting records include errors and unchanged state.
 - [x] Added regression tests asserting per-fill accounting audit records and correlated market-event/strategy-evaluation traces.
 - [x] Add recovery-completion trace: exact eligibility inputs/result, free-quantity allocation, and pre/post reset state.
-- [ ] Verify actual logger DEBUG visibility/configuration in the local development run; test records prove emission to the injected logger, not that the operator's current logger configuration displays them.
+- [x] Added a full-cycle bootstrap regression asserting BUY/SELL accounting traces and eligible recovery-completion/allocation records. [ ] Verify actual logger DEBUG visibility/configuration in the local development run; injected-logger tests do not prove the operator's current logger configuration displays them.
 
 ### Remaining investigation — actual blockers
 
