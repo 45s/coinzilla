@@ -923,6 +923,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const fill = new Fill({
     tradeId: "testnet-buy-fill",
     brokerOrderId: canonicalBuy.brokerOrderId,
+    clientOrderId: canonicalBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
     price: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
@@ -968,6 +969,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const secondBuyFill = new Fill({
     tradeId: "testnet-second-buy-fill",
     brokerOrderId: canonicalSecondBuy.brokerOrderId,
+    clientOrderId: canonicalSecondBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
     price: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
