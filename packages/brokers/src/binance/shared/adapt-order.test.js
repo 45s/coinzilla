@@ -33,6 +33,7 @@ describe('adaptOrder', () => {
     assert.equal(result.type, mockedBinanceOrder.type)
     assert.equal(result.side, mockedBinanceOrder.side)
     assert.equal(result.price, Number(mockedBinanceOrder.price))
+    assert.equal(result.originalPrice, mockedBinanceOrder.price)
     assert.equal(result.quantity, 1)
     assert.equal(result.symbol, mockedBinanceOrder.symbol)
   })
@@ -44,14 +45,16 @@ describe('adaptOrder', () => {
     assert.equal('clientOrderId' in result.value, false)
   })
 
-  it('preserves exact original/executed quantities and order status', () => {
+  it('preserves exact original price, original/executed quantities and order status', () => {
     const result = adaptOrder({
       ...mockedBinanceOrder,
       origQty: '0.30000000',
       executedQty: '0.10000000',
+      price: '0.000000123456789012',
       status: 'PARTIALLY_FILLED',
     })
 
+    assert.equal(result.originalPrice, '0.000000123456789012')
     assert.equal(result.originalQuantity, '0.30000000')
     assert.equal(result.executedQuantity, '0.10000000')
     assert.equal(result.status, 'PARTIALLY_FILLED')
