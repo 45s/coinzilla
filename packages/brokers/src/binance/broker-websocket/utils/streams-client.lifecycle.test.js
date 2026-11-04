@@ -343,3 +343,146 @@ test("ignores a delayed close callback from a superseded Streams transport", asy
   assert.deepEqual(received, ["before-stale-close", "after-stale-close"])
   await client.disconnect()
 })
+
+
+test("connect reuses the open client when desired streams already exist", async () => {
+  const { client, transports } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  assert.strictEqual(await client.connect(), client)
+  assert.equal(transports.length, 1)
+  await client.disconnect()
+})
+
+test("closes a transport whose connect resolves after manual disconnect", async () => {
+  let finishConnect
+  const transports = []
+  const { client, clock } = createClient({
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      transport.connect = () => new Promise((resolve) => {
+        finishConnect = () => {
+          transport.state = "open"
+          resolve(transport)
+        }
+      })
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  assert.equal(transports.length, 1)
+  assert.equal(typeof finishConnect, "function")
+
+  await client.disconnect()
+  finishConnect()
+  await assert.rejects(subscription, /connection was superseded/)
+
+  assert.equal(transports[0].closeCalls.length, 2)
+  assert.equal(client.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+})
+
+test("rejects an initial subscription list that omits a desired stream", async () => {
+  const { client, transports } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["ethusdt@trade"] })
+
+  await assert.rejects(subscription, /did not confirm its initial subscriptions/)
+  assert.equal(client.state, "closed")
+  assert.deepEqual(client.subscriptions, [])
+  await client.disconnect()
+})
+
+test("builds a combined-stream URL beneath a custom base path", async () => {
+  const { client, transports } = createClient({ url: "wss://example.test/custom/" })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+
+  assert.match(transports[0].url, /^wss:\/\/example\.test\/custom\/stream\?streams=/)
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+  await client.disconnect()
+})
+
+test("closes the Streams connection when a serverShutdown event arrives in an array payload", async () => {
+  const errors = []
+  const { client, transports } = createClient({
+    onError: (error) => errors.push(error.message),
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  transports[0].receive([{ e: "serverShutdown" }])
+
+  assert.deepEqual(errors, ["Binance Streams server is shutting down"])
+  assert.equal(transports[0].closeCalls[0].code, 1012)
+  assert.equal(client.state, "closed")
+  await client.disconnect()
+})
+
+test("rejects pending control requests and clears acknowledgement timers on disconnect", async () => {
+  const { client, clock, transports } = createClient()
+  const first = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
+
+  const pending = client.subscribe("ethusdt@trade", () => {})
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+  assert.equal(transports[0].sent[1].method, "SUBSCRIBE")
+
+  await client.disconnect()
+  await assert.rejects(pending, /client disconnected/)
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(client.state, "closed")
+})
+
+test("reports transport close cleanup failures without replacing the connection error", async () => {
+  const errors = []
+  const { client, transports } = createClient({
+    onError: (error) => errors.push(error.message),
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      transport.close = async () => {
+        throw new Error("transport close cleanup failed")
+      }
+      transports.push(transport)
+      return transport
+    },
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["ethusdt@trade"] })
+
+  await assert.rejects(subscription, /did not confirm its initial subscriptions/)
+  assert.deepEqual(errors, ["transport close cleanup failed"])
+  assert.equal(client.state, "closed")
+  await client.disconnect()
+})
+
+test("isolates a throwing error observer from malformed stream messages", async () => {
+  const { client, transports } = createClient({
+    onError: () => {
+      throw new Error("error observer failed")
+    },
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  transports[0].receive("{")
+  assert.equal(client.state, "open")
+  await client.disconnect()
+})
