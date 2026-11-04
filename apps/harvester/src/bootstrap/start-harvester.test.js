@@ -1017,6 +1017,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const sellFill = new Fill({
     tradeId: "testnet-sell-fill",
     brokerOrderId: canonicalSell.brokerOrderId,
+    clientOrderId: canonicalSell.clientOrderId,
     market: marketMetadata.market,
     side: "SELL",
     price: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
