@@ -1483,3 +1483,51 @@ test("emits per-execution debug audit records with commission and before/after a
 
   await result.stop()
 })
+
+
+test("journals OPENING balances before trading and CLOSING balances before broker disconnect", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  const eventPublisher = {
+    publish: (event) => {
+      events.push(event)
+      calls.push("publish:" + event.name)
+      return { ok: true }
+    },
+    flush: async () => {
+      calls.push("journal:flush")
+      return { ok: true, durable: true }
+    },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
+  assert.equal(openingEvent.data.phase, "OPENING")
+  assert.equal(openingEvent.data.auditStatus, "COMPLETE")
+  assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
+  assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
+  const openingPublishIndex = calls.indexOf("publish:account.snapshot_captured")
+  const openingFlushIndex = calls.indexOf("journal:flush")
+  const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
+  assert.ok(openingPublishIndex >= 0)
+  assert.ok(openingFlushIndex > openingPublishIndex)
+  assert.ok(firstMarketSubscriptionIndex > openingFlushIndex)
+
+  await runtime.stop()
+
+  const snapshotEvents = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshotEvents.length, 2)
+  assert.equal(snapshotEvents[1].data.phase, "CLOSING")
+  assert.equal(snapshotEvents[1].data.auditStatus, "COMPLETE")
+  const closingFlushIndex = calls.lastIndexOf("journal:flush")
+  const disconnectIndex = calls.indexOf("disconnect")
+  assert.ok(closingFlushIndex >= 0)
+  assert.ok(disconnectIndex > closingFlushIndex)
+})
