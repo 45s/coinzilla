@@ -8,12 +8,14 @@ const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
 })
-const startHarvesterForTest = (input = {}) => startHarvester({
-  ...input,
-  eventPublisher: input.eventPublisher
-    ? { ...testEventPublisher, ...input.eventPublisher }
-    : testEventPublisher,
-})
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher
+    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
+      : input.eventPublisher
+    : testEventPublisher
+  return startHarvester({ ...input, eventPublisher })
+}
 
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 

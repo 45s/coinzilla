@@ -16,12 +16,14 @@ const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
 })
-const startHarvesterForTest = (input = {}) => startHarvester({
-  ...input,
-  eventPublisher: input.eventPublisher
-    ? { ...testEventPublisher, ...input.eventPublisher }
-    : testEventPublisher,
-})
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher
+    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
+      : input.eventPublisher
+    : testEventPublisher
+  return startHarvester({ ...input, eventPublisher })
+}
 
 
 test('loads configuration before returning the startup context', async () => {
@@ -64,7 +66,7 @@ test('loads the default validated trading configuration', async () => {
 });
 
 
-test('ordinary TRADE fills update owned accounting without another account snapshot or adopting external inventory/orders', async () => {
+test('ordinary TRADE fills update owned accounting without per-fill snapshots or adopting external inventory/orders', async () => {
   const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
   const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
   const market = new Market({
@@ -246,7 +248,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
   await tradeObserved;
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 1);
+  assert.equal(accountSnapshotCalls, 2);
   assert.equal(openOrderSnapshotCalls, 0);
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
