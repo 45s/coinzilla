@@ -54,7 +54,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -163,6 +163,8 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
       ? new Quantity({ amount: "1000", asset: quoteAsset })
       : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
   }
+  let currentPortfolio = initialPortfolio ?? new Portfolio()
+  let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
@@ -170,11 +172,11 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     isMarketBookFresh,
     eventPublisher,
     tradingConfig,
-    getPortfolio: () => initialPortfolio ?? new Portfolio(),
-    getRecoveryLedger: () => initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
+    getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
+    getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => accountSnapshot,
-    updateTradingAccounting: async ({ fill }) => {
+    updateTradingAccounting: updateTradingAccountingOverride ?? (async ({ fill }) => {
       if (accountingFailure) {
         accountedFills.push(fill)
         return { ok: false, errors: [new Error("unsupported commission asset")] }
@@ -185,11 +187,11 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
       accountedFillIds.add(fill.id)
       accountedFills.push(fill)
       return { ok: true, data: { applied: accountingApplied, duplicate: !accountingApplied } }
-    },
-    completeRecoveryCycle: async ({ marketId }) => {
+    }),
+    completeRecoveryCycle: completeRecoveryCycleOverride ?? (async ({ marketId }) => {
       completedCycles.push(marketId)
       return { ok: true, data: recoveryCompletion }
-    },
+    }),
     canTrade: () => true,
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
@@ -198,7 +200,13 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
     bestAskPrice: "1000", bestAskQuantity: "1", timestamp: 1,
   } : initialBook })
-  return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
+  return {
+    engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds,
+    getCurrentPortfolio: () => currentPortfolio,
+    getCurrentRecoveryLedger: () => currentRecoveryLedger,
+    setCurrentPortfolio: (next) => { currentPortfolio = next },
+    setCurrentRecoveryLedger: (next) => { currentRecoveryLedger = next },
+  }
 }
 
 test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
