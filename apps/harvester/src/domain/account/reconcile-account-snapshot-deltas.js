@@ -16,8 +16,15 @@ const validateSnapshot = ({ snapshot, phase }) => {
   if (!Number.isSafeInteger(snapshot.sourceTime) || !Array.isArray(snapshot.balances)) {
     throw new TypeError(phase + " snapshot requires sourceTime and balances")
   }
-  if (!Array.isArray(snapshot.auditReasons)) {
-    throw new TypeError(phase + " snapshot auditReasons must be an array")
+  if (!Array.isArray(snapshot.auditReasons) ||
+      snapshot.auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+    throw new TypeError(phase + " snapshot auditReasons must contain non-empty strings")
+  }
+  if (snapshot.auditStatus === "COMPLETE" && snapshot.auditReasons.length > 0) {
+    throw new TypeError(phase + " COMPLETE snapshot cannot contain auditReasons")
+  }
+  if (snapshot.auditStatus === "INCOMPLETE" && snapshot.auditReasons.length === 0) {
+    throw new TypeError(phase + " INCOMPLETE snapshot requires auditReasons")
   }
   const balances = new Map()
   for (const [index, balance] of snapshot.balances.entries()) {
