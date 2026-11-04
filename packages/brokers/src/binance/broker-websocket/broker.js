@@ -1,6 +1,7 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
+import { adaptOrderRequestParams } from "./helpers/adapters/order-request-params.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
 import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
@@ -355,19 +356,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
 
-      const { clientOrderId, ...orderInput } = input
-      const params = {
-        ...orderInput,
-        ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
-        side: input.side ?? "BUY",
-        type: input.type ?? "LIMIT",
-      }
-
-      if (params.type === "LIMIT_MAKER") {
-        delete params.timeInForce
-      } else {
-        params.timeInForce = input.timeInForce ?? "GTC"
-      }
+      const params = adaptOrderRequestParams({ input })
 
       const response = await this.tradingConnection.request(
         "order.place",
@@ -386,7 +375,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
-      const { symbol, clientOrderId, ...orderInput } = input
+      const { symbol, clientOrderId } = input
       if (typeof symbol !== "string" || !symbol.trim()) {
         throw new TypeError("createCanonicalOrder requires a symbol")
       }
@@ -394,18 +383,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new TypeError("createCanonicalOrder requires clientOrderId")
       }
 
-      const params = {
-        ...orderInput,
-        symbol,
-        newClientOrderId: clientOrderId,
-        side: input.side ?? "BUY",
-        type: input.type ?? "LIMIT",
-      }
-      if (params.type === "LIMIT_MAKER") {
-        delete params.timeInForce
-      } else {
-        params.timeInForce = input.timeInForce ?? "GTC"
-      }
+      const params = adaptOrderRequestParams({
+        input,
+        clientOrderId,
+        requireClientOrderId: true,
+      })
 
       const response = await this.tradingConnection.request(
         "order.place",
