@@ -11,12 +11,12 @@ const baseInput = {
   minProfit: "0.01",
 }
 
-test("allocates all remaining active inventory as free after a profitable recovery SELL", () => {
+test("allocates exactly keepQuantity after a profitable recovery SELL", () => {
   assert.deepEqual(evaluateRecoveryCompletion(baseInput), {
     eligible: true,
     pause: false,
     reason: null,
-    freeQuantity: "1.2",
+    freeQuantity: "1",
     realizedNetProfit: "0.01",
   })
 })
@@ -56,13 +56,13 @@ test("pauses when actual remaining inventory is below keepQuantity", () => {
   assert.equal(result.freeQuantity, "0")
 })
 
-test("allocates all residual inventory, including fee-reserve dust, after recovery", () => {
+test("does not allocate fee-reserve residual above keepQuantity as free inventory", () => {
   const result = evaluateRecoveryCompletion({
     ...baseInput,
     activeQuantity: "1.25",
     keepQuantity: "1",
   })
-  assert.equal(result.freeQuantity, "1.25")
+  assert.equal(result.freeQuantity, "1")
   assert.equal(result.eligible, true)
 })
 

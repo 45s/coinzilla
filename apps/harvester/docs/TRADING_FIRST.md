@@ -204,7 +204,7 @@ Do not restart Harvester or submit TESTNET orders until fee sizing, lifecycle co
 
 ## Mandatory account snapshot audit
 
-When a fully reconciled recovery SELL has recovered invested capital and met minimum net profit, ALL remaining active base inventory is allocated to free inventory. keepQuantity is a minimum retained amount, not a cap; any additional residual caused by conservative base-fee reserves or quantity-step rounding must not remain active and become part of the next cycle.
+When a fully reconciled recovery SELL has recovered invested capital and met minimum net profit, only the configured keepQuantity is allocated to free inventory. Additional active residual caused by conservative base-fee reserves or quantity-step rounding remains active inventory. It must not, by itself, create another recovery SELL after the RecoveryLedger is reset.
 
 Trading-enabled startup MUST NOT activate the Conservative engine unless the Journal has successfully started and exposes durable flush(). The full broker account snapshot is journaled as account.snapshot_captured / OPENING, including every asset and its exact free, locked, and total quantity; the event must be flushed before the first market subscription can trigger an order. Graceful shutdown drains accepted user-data events, reconciles owned orders, captures and flushes CLOSING while broker REST remains connected, and marks the audit INCOMPLETE if any owned order or accounting state is unresolved. Read-only mode may continue without Journal.
 

@@ -4,10 +4,10 @@ import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla
  * Decide whether a fully reconciled recovery SELL may complete the current
  * cycle and allocate the configured free quantity.
  *
- * This function does not mutate Position or RecoveryLedger. After recovery
- * obligations and minimum profit are satisfied, all remaining active inventory
- * becomes free inventory. keepQuantity is a minimum remainder, not a cap on
- * additional dust left by conservative fee and quantity-step reserves.
+ * This function does not mutate Position or RecoveryLedger. It allocates only
+ * the configured keepQuantity after recovery obligations and minimum profit
+ * are satisfied. Any additional active residual remains active inventory and
+ * must not become a new recovery obligation after the ledger is reset.
  *
  * @param {object} input
  * @param {boolean} input.sellOrderFullyFilled Final reconciled recovery SELL state.
@@ -85,7 +85,7 @@ export function evaluateRecoveryCompletion({
     eligible: true,
     pause: false,
     reason: null,
-    freeQuantity: activeQuantity,
+    freeQuantity: keepQuantity,
     realizedNetProfit,
   })
 }
