@@ -76,6 +76,7 @@ function createBroker({
         data: { disconnect: async () => {} },
       }
     },
+    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForPrices: async ({ onPrice }) => {
       priceHandler = onPrice
       if (priceError) throw priceError
