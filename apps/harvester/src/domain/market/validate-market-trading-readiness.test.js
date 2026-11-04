@@ -28,12 +28,13 @@ const makeMetadata = ({
       ...(omitRule === "MIN_NOTIONAL" ? [] : [
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
       ]),
+      { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "1000", asset: baseAsset }) },
     ],
   }),
   supportedOrderTypes,
 })
 
-const pairConfig = { makerPercent: 0, takerPercent: 0.1 }
+const pairConfig = { makerPercent: 0, takerPercent: 0.1, investment: 100, orderQuantity: 100 }
 
 test("accepts a market with required increments, quantity/notional minimums and LIMIT_MAKER support", () => {
   const result = validateMarketTradingReadiness({
@@ -51,7 +52,7 @@ test("accepts a market with required increments, quantity/notional minimums and 
 test("selects regular LIMIT when configured maker commission is non-zero", () => {
   const result = validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
-    pairConfig: { makerPercent: 0.075, takerPercent: 0.2 },
+    pairConfig: { ...pairConfig, makerPercent: 0.075, takerPercent: 0.2 },
     marketMetadata: makeMetadata({ supportedOrderTypes: ["LIMIT"] }),
   })
   assert.equal(result.orderType, "LIMIT")
@@ -106,4 +107,40 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
     pairConfig,
     marketMetadata: {},
   }), /canonical Market/)
+})
+
+test("rejects configured BUY quantity below the exchange minimum or above its maximum", () => {
+  for (const [orderQuantity, expectedRule] of [
+    [0.99, "MIN_QUANTITY"],
+    [1001, "MAX_QUANTITY"],
+  ]) {
+    assert.throws(
+      () => validateMarketTradingReadiness({
+        symbol: "DOGEUSDT",
+        pairConfig: { ...pairConfig, orderQuantity },
+        marketMetadata: makeMetadata(),
+      }),
+      new RegExp(expectedRule),
+    )
+  }
+})
+
+test("uses exact exchange increments when validating the effective configured BUY quantity", () => {
+  const result = validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, orderQuantity: 1000.9 },
+    marketMetadata: makeMetadata(),
+  })
+  assert.equal(result.market, market)
+})
+
+test("rejects quote investment limits below the exchange minimum notional", () => {
+  assert.throws(
+    () => validateMarketTradingReadiness({
+      symbol: "DOGEUSDT",
+      pairConfig: { ...pairConfig, investment: 4.999 },
+      marketMetadata: makeMetadata(),
+    }),
+    /investment.*MIN_NOTIONAL/,
+  )
 })
