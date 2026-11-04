@@ -2102,7 +2102,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
       return {
         strategy: "TEST_POLICY",
         symbol: "DOGEUSDT",
-        actions: [{ side: "BUY", type: "LIMIT_MAKER", price, quantity: "1" }],
+        actions: [{ side: "BUY", type: "LIMIT_MAKER", price, quantity: "0.1" }],
       }
     },
     evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
