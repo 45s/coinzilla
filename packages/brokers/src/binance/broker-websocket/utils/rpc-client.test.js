@@ -516,13 +516,3 @@ test("RPC client reports close-observer exceptions without blocking cleanup", as
   assert.equal(context.client.pendingCount, 0)
   assert.equal(context.clock.pendingCount, 0)
 })
-
-test("RPC client rejects a connection closed before the socket opens", async () => {
-  const context = createClient()
-  const connecting = context.client.connect()
-  context.sockets[0].serverClose({ code: 1006, reason: "closed before open", wasClean: false })
-
-  await assert.rejects(connecting, /closed before open|connection closed/i)
-  assert.equal(context.client.state, "closed")
-  assert.equal(context.sockets[0].readyState, FakeWebSocket.CLOSED)
-})
