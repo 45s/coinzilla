@@ -39,6 +39,8 @@ packages/brokers/
         broker.test.js
         broker.*.test.js
         broker.integration.js
+        testnet-integration-guards.js
+        testnet-integration-guards.test.js
         tests/
           *.test.js
         config/
