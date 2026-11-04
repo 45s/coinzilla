@@ -171,6 +171,8 @@ Harvester implements the Conservative lifecycle: subscribe to prices, submit the
 
 ## Controlled TESTNET runbook
 
+The detailed joint-session procedure, explicit limits, reconciliation requirements, abort conditions, and evidence checklist are maintained in [TESTNET validation runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md). That document is preparation only: execution requires an explicit joint session authorization. Harvester must remain stopped until then.
+
 1. Use Binance Spot TESTNET credentials only. Never place production keys in
    the Harvester environment file.
 2. Copy `.env.example` to `.env.development`. Set
