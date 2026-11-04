@@ -141,6 +141,17 @@ function createHarness() {
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
   })
 
+  for (const market of markets) {
+    await engine.processBookTicker({ symbol: market.symbol, bookTicker: {
+      symbol: market.symbol,
+      bestBidPrice: "0.01",
+      bestBidQuantity: "1",
+      bestAskPrice: "1000",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    } })
+  }
+
   return { engine, orders, pauses, accountedFills }
 }
 
