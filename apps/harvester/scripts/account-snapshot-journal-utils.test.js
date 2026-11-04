@@ -17,15 +17,21 @@ test("pairs snapshots by Journal session and computes exact asset deltas", () =>
     records: [
       record("session-a.jsonl", event("OPENING", 100, [balance("DOGE", "10.0001"), balance("USDT", "20")])),
       record("session-a.jsonl", { name: "bot.started", data: {} }),
+      record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.07808" } }),
+      record("session-a.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.03285" } }),
       record("session-a.jsonl", event("CLOSING", 200, [balance("DOGE", "10.1251"), balance("USDT", "19.5")])),
       record("session-b.jsonl", event("OPENING", 300, [balance("ZRO", "2")])),
+      record("session-b.jsonl", { name: "recovery.cycle_completed", data: { realizedNetProfit: "0.36335" } }),
       record("session-b.jsonl", event("CLOSING", 400, [balance("ZRO", "2.1")])),
     ],
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.sessionCount, 2)
   assert.deepEqual(result.data.reports[0].assetDeltas[0].delta.total, "0.125")
+  assert.equal(result.data.reports[0].recoveryCycleCount, 2)
+  assert.equal(result.data.reports[0].cumulativeRecoveryNetProfit, "0.11093")
   assert.equal(result.data.reports[1].assetDeltas[0].delta.total, "0.1")
+  assert.equal(result.data.reports[1].cumulativeRecoveryNetProfit, "0.36335")
   assert.equal(result.data.profitAssessment, "NOT_DETERMINABLE_FROM_BALANCE_DELTAS_ALONE")
 })
 

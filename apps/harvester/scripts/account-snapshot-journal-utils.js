@@ -1,7 +1,8 @@
-import { toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, toResult } from "@coinzilla/utils"
 import { reconcileAccountSnapshotDeltas } from "../src/domain/account/reconcile-account-snapshot-deltas.js"
 
 const SNAPSHOT_EVENT = "account.snapshot_captured"
+const RECOVERY_CYCLE_EVENT = "recovery.cycle_completed"
 
 /**
  * Reconcile OPENING/CLOSING snapshot event pairs independently per JSONL
@@ -13,12 +14,20 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
     const sessions = new Map()
     for (const record of records) {
       const event = record?.payload
-      if (event?.name !== SNAPSHOT_EVENT) continue
+      if (![SNAPSHOT_EVENT, RECOVERY_CYCLE_EVENT].includes(event?.name)) continue
       const fileName = record?.position?.fileName
       if (typeof fileName !== "string" || !fileName.trim()) {
-        throw new TypeError("Account snapshot Journal record requires a session file name")
+        throw new TypeError("Account audit Journal record requires a session file name")
       }
-      if (!sessions.has(fileName)) sessions.set(fileName, { opening: [], closing: [] })
+      if (!sessions.has(fileName)) {
+        sessions.set(fileName, { opening: [], closing: [], recoveryCycleProfits: [] })
+      }
+      if (event.name === RECOVERY_CYCLE_EVENT) {
+        const profit = event.data?.realizedNetProfit
+        assertDecimalString({ value: profit, field: "recovery.cycle_completed.realizedNetProfit" })
+        sessions.get(fileName).recoveryCycleProfits.push(profit)
+        continue
+      }
       const phase = event.data?.phase
       if (phase === "OPENING") sessions.get(fileName).opening.push(event.data)
       else if (phase === "CLOSING") sessions.get(fileName).closing.push(event.data)
@@ -31,8 +40,17 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
       const blockers = []
       if (pair.opening.length !== 1) blockers.push("OPENING_SNAPSHOT_COUNT:" + pair.opening.length)
       if (pair.closing.length !== 1) blockers.push("CLOSING_SNAPSHOT_COUNT:" + pair.closing.length)
+      const recoveryCycleProfits = pair.recoveryCycleProfits
+      const recoverySummary = {
+        recoveryCycleCount: recoveryCycleProfits.length,
+        recoveryCycleProfits: [...recoveryCycleProfits],
+        cumulativeRecoveryNetProfit: recoveryCycleProfits.reduce(
+          (total, profit) => addDecimal({ left: total, right: profit }),
+          "0",
+        ),
+      }
       if (blockers.length > 0) {
-        reports.push({ session, auditStatus: "INCOMPLETE", blockers, assetDeltas: [] })
+        reports.push({ session, auditStatus: "INCOMPLETE", blockers, assetDeltas: [], ...recoverySummary })
         errors.push(new Error(session + " has an incomplete account snapshot pair: " + blockers.join(", ")))
         continue
       }
@@ -46,7 +64,7 @@ export function reconcileJournalAccountSnapshotRecords({ records } = {}) {
         errors.push(...(result.errors ?? [new Error("Snapshot reconciliation failed for " + session)]))
         continue
       }
-      reports.push({ session, ...result.data })
+      reports.push({ session, ...result.data, ...recoverySummary })
       if (result.data.auditStatus !== "COMPLETE") {
         errors.push(new Error(session + " closing account snapshot is marked INCOMPLETE"))
       }
