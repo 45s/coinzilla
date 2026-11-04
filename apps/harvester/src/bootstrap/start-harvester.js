@@ -85,6 +85,18 @@ const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) =
   position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
 })
 
+function logMarketPriceEvaluation({ logger, symbol, processed }) {
+  if (!processed?.ok) return
+
+  const { marketPrice, decision } = processed.data ?? {}
+  logger.info?.({
+    message: "Market price evaluated",
+    symbol,
+    price: marketPrice?.price,
+    action: decision?.action ?? "UNKNOWN",
+  })
+}
+
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
   const recoveryLedgers = new Map()
@@ -834,7 +846,11 @@ export async function startHarvester({
             pairConfig,
             settings: tradingConfig.settings,
           })).then((processed) => {
-          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
+          if (!processed.ok) {
+            reportPriceError({ symbol, errors: processed.errors })
+          } else {
+            logMarketPriceEvaluation({ logger, symbol, processed })
+          }
 
           return processed
         }).catch((error) => {
@@ -912,19 +928,17 @@ export async function startHarvester({
           if (marketPrice.symbol !== symbol) {
             throw new Error("Initial ticker price symbol does not match enabled market " + symbol)
           }
-          logger.info?.({
-            message: "Initial market price loaded from Binance ticker snapshot",
-            symbol,
-            price: marketPrice.price,
-            timestamp: marketPrice.timestamp,
-          })
           const processed = await processMarketPrice({
             symbol,
             priceEvent,
             pairConfig,
             settings: tradingConfig.settings,
           })
-          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
+          if (!processed.ok) {
+            reportPriceError({ symbol, errors: processed.errors })
+          } else {
+            logMarketPriceEvaluation({ logger, symbol, processed })
+          }
         }
       }
     }
