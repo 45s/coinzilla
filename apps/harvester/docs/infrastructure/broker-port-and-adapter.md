@@ -163,3 +163,9 @@ A user-data subscription exposes recovery acknowledgement through its returned s
 ## Implementation status
 
 Implemented: application broker port and Binance adapter, Conservative Trading Engine, in-memory owned-order registry, canonical fill accounting, serialized user-data processing, and reconnect-time REST reconciliation for tracked orders/fills. The reconciliation is process-local and fail-closed; it does not restore state after restart, reconcile account balances, or adopt external orders. Do not treat a connected broker or stream-level recovery acknowledgement alone as application trading readiness.
+
+### Book ticker broker-port contract
+
+The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker })` alongside aggregate-trade price subscriptions. The callback receives normalized decimal strings for best bid/ask prices and quantities plus a local receipt timestamp in milliseconds. Bootstrap subscribes to this stream only when TESTNET trading is enabled, requires a successful unsubscribe handle, and removes the subscription during startup rollback and shutdown.
+
+The Conservative engine requires this fresh book snapshot for every `LIMIT_MAKER` order. BUY limits must be strictly below best ask; SELL limits must be strictly above best bid. Invalid/crossed book updates invalidate the cached snapshot. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.

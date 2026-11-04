@@ -4,6 +4,26 @@ import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingR
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+
+async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
+  let timeout
+  try {
+    await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(
+            label + " was not observed within " + timeoutMs + "ms; diagnostics: " +
+            JSON.stringify(getDiagnostics()),
+          ))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 const tradingConfig = {
   settings: { minProfit: 0.01 },
@@ -40,6 +60,7 @@ const createMarketMetadata = (symbol) => {
 }
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
+  const bookSubscriptions = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
@@ -78,6 +99,11 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) },
       }
     },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      calls.push("subscribe:book:" + symbol)
+      bookSubscriptions.set(symbol, onBookTicker)
+      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
+    },
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
       userDataHandlers = handlers
@@ -89,6 +115,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
     emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
+    emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
   }
 }
 const binanceEnv = {
@@ -735,15 +762,17 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
 })
 
 
-test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", async () => {
+test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", { timeout: 90_000 }, async () => {
   const calls = []
   const subscriptions = new Map()
+  const bookSubscriptions = new Map()
   let userDataHandlers
   let snapshotTime = 0
   let baseBalance = "0"
   let signalRecoveryCompleted
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
+  const runtimeErrors = []
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -796,6 +825,10 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     subscribeForPrices: async ({ symbol, onPrice }) => {
       subscriptions.set(symbol, onPrice)
       return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) } }
+    },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      bookSubscriptions.set(symbol, onBookTicker)
+      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
     },
     placeOrder: async ({ order }) => {
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
@@ -856,14 +889,22 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       },
     },
     now: () => 1000,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
+    },
   })
   assert.equal(runtime.userDataReady, true)
-  assert.equal(submittedOrders.length, 1, "the initial ticker snapshot should trigger the first BUY")
+  assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
+  await bookSubscriptions.get("BTCUSDT")({
+    symbol: "BTCUSDT", bestBidPrice: "60000", bestBidQuantity: "1",
+    bestAskPrice: "70000", bestAskQuantity: "1", timestamp: 1000,
+  })
+  assert.equal(submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
   assert.equal(submittedOrders[0].side, "BUY")
 
   const submitted = calls.find((call) => typeof call === "object")
-  const clientOrderId = "h-BTCUSDT-1"
+  const clientOrderId = submittedOrders[0].clientOrderId
   const canonicalBuy = new CanonicalOrder({
     clientOrderId,
     brokerOrderId: "broker-" + clientOrderId,
@@ -882,6 +923,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const fill = new Fill({
     tradeId: "testnet-buy-fill",
     brokerOrderId: canonicalBuy.brokerOrderId,
+    clientOrderId: canonicalBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
     price: new Money({ amount: submitted.price, asset: marketMetadata.market.quoteAsset }),
@@ -902,7 +944,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill,
     },
   })
-  await threeOrdersSubmitted
+  await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
   const secondBuyIntent = submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== clientOrderId)
   const canonicalSecondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
@@ -922,6 +969,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const secondBuyFill = new Fill({
     tradeId: "testnet-second-buy-fill",
     brokerOrderId: canonicalSecondBuy.brokerOrderId,
+    clientOrderId: canonicalSecondBuy.clientOrderId,
     market: marketMetadata.market,
     side: "BUY",
     price: new Money({ amount: secondBuyIntent.price, asset: marketMetadata.market.quoteAsset }),
@@ -942,7 +990,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill: secondBuyFill,
     },
   })
-  await fiveOrdersSubmitted
+  await waitForTestSignal(fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
 
   const replacementSell = submittedOrders.filter((order) => order.side === "SELL").at(-1)
   assert.equal(replacementSell.side, "SELL")
@@ -964,6 +1017,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const sellFill = new Fill({
     tradeId: "testnet-sell-fill",
     brokerOrderId: canonicalSell.brokerOrderId,
+    clientOrderId: canonicalSell.clientOrderId,
     market: marketMetadata.market,
     side: "SELL",
     price: new Money({ amount: replacementSell.price, asset: marketMetadata.market.quoteAsset }),
@@ -984,7 +1038,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill: sellFill,
     },
   })
-  await recoveryCompleted
+  await waitForTestSignal(recoveryCompleted, "recovery.cycle_completed after the SELL fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
   await subscriptions.get("BTCUSDT")({
     eventType: "aggTrade",
     symbol: "BTCUSDT",
@@ -1248,3 +1307,46 @@ test("fails closed when trading is explicitly enabled without selecting a broker
   )
   assert.equal(brokerFactoryCalled, false)
 })
+
+
+test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
+  const client = {
+    connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true }),
+    getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }),
+    getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
+    getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
+    subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
+  }
+  const broker = createBinanceBrokerAdapter({
+    config: { apiKey: "test-key", apiSecret: "test-secret" },
+    brokerFactory: () => client,
+  })
+  const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [rejection] })
+  const result = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(result.errors[0].code, "POST_ONLY_WOULD_TAKE")
+  const unrelated = Object.assign(new Error("insufficient balance"), { code: -2010 })
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [unrelated] })
+  const other = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(other.errors[0], unrelated)
+
+  const unknownOutcome = Object.assign(
+    new Error("Order would immediately match and take."),
+    { code: -2010, outcomeUnknown: true },
+  )
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [unknownOutcome] })
+  const unknown = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(unknown.errors[0], unknownOutcome)
+
+  let forwardedSubscription
+  const onBookTicker = () => {}
+  client.subscribeForBookTicker = async (input) => {
+    forwardedSubscription = input
+    return { ok: true, data: { unsubscribe: async () => {} } }
+  }
+  await broker.subscribeForBookTicker({ symbol: "BTCUSDT", onBookTicker })
+  assert.equal(forwardedSubscription.symbol, "BTCUSDT")
+  assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
+})
+

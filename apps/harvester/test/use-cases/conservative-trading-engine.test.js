@@ -158,6 +158,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: ({} = {}) => ready,
     isMarketPriceFresh: () => true,
+    isMarketBookFresh: () => true,
     onPause: async ({} = {}) => {},
     isStopping: ({} = {}) => false,
   })
@@ -279,6 +280,17 @@ test("deferred strategy evaluation resumes without another market-price tick", a
   assert.equal(submittedIntents.length, 0)
 
   setReady({ value: true })
+  await engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.5",
+      bestBidQuantity: "1",
+      bestAskPrice: "1.5",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
   const resumed = await engine.resumeDeferredEvaluations()
 
   assert.equal(resumed.ok, true)
@@ -301,6 +313,28 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     getRecoveryLedger,
   } = fixture
 
+  await engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.5",
+      bestBidQuantity: "1",
+      bestAskPrice: "1.5",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
+  await engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.5",
+      bestBidQuantity: "1",
+      bestAskPrice: "1.5",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },

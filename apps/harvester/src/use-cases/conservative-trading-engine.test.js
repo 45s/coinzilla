@@ -12,7 +12,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 
@@ -48,7 +48,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -56,6 +56,7 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
   const completedCycles = []
   const cancellationIds = []
   const canceledOrders = new Map()
+  let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -63,7 +64,10 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
       onPlaceOrderStarted?.({ order })
       if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
       if (placeOrderThrow) throw new Error("socket closed")
-      if (placeOrderFailure) return { ok: false, errors: [new Error("broker rejected order")] }
+      if (remainingPlaceOrderFailures > 0) {
+        if (Number.isFinite(remainingPlaceOrderFailures)) remainingPlaceOrderFailures -= 1
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
+      }
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -144,6 +148,7 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
     broker,
     strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     isMarketPriceFresh,
+    isMarketBookFresh,
     eventPublisher,
     tradingConfig,
     getPortfolio: () => initialPortfolio ?? new Portfolio(),
@@ -170,11 +175,15 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
+  if (initialBook) await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
+    symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
+    bestAskPrice: "1000", bestAskQuantity: "1", timestamp: 1,
+  } : initialBook })
   return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
-  const { engine, orders, pauses } = createHarness()
+  const { engine, orders, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -205,7 +214,7 @@ test("trails an initial BUY upward only after one full step and replaces it belo
 })
 
 test("reconciles and pauses when a BUY fills during trailing cancellation", async () => {
-  const { engine, orders, pauses, accountedFills } = createHarness({ cancelWithFill: true })
+  const { engine, orders, pauses, accountedFills } = await createHarness({ cancelWithFill: true })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -225,7 +234,7 @@ test("publishes actionable decisions and order submission facts around broker I/
   const events = []
   const timeline = []
   let engine
-  const harness = createHarness({
+  const harness = await createHarness({
     onPlaceOrder: () => timeline.push("broker.placeOrder"),
     eventPublisher: { publish: (event) => {
       events.push(event)
@@ -277,7 +286,7 @@ test("publishes actionable decisions and order submission facts around broker I/
 })
 
 test("EventBus publication failure cannot prevent a broker order", async () => {
-  const { engine, orders } = createHarness({
+  const { engine, orders } = await createHarness({
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
   const result = await engine.processMarketPrice({
@@ -292,7 +301,7 @@ test("EventBus publication failure cannot prevent a broker order", async () => {
 
 test("does not publish repeated NO_ACTION evaluations", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({
@@ -309,7 +318,7 @@ test("does not publish repeated NO_ACTION evaluations", async () => {
 
 test("publishes rejected submission outcome without blocking pair pause", async () => {
   const events = []
-  const { engine, pauses } = createHarness({
+  const { engine, pauses } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -332,7 +341,7 @@ test("publishes rejected submission outcome without blocking pair pause", async 
 
 
 test("does not await a pending EventBus publisher promise", async () => {
-  const { engine, orders } = createHarness({
+  const { engine, orders } = await createHarness({
     eventPublisher: { publish: () => new Promise(() => {}) },
   })
   const result = await engine.processMarketPrice({
@@ -345,7 +354,7 @@ test("does not await a pending EventBus publisher promise", async () => {
 
 test("publishes unknown submission outcome after a transport exception", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     placeOrderThrow: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -363,7 +372,7 @@ test("publishes unknown submission outcome after a transport exception", async (
 
 test("publishes one pause transition even when the pair encounters repeated pause causes", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -396,7 +405,7 @@ test("publishes one pause transition even when the pair encounters repeated paus
 test("publishes broker-confirmed trailing BUY cancellation after registry update", async () => {
   const events = []
   let engine
-  const harness = createHarness({
+  const harness = await createHarness({
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "order.cancelled") {
@@ -424,7 +433,7 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
 
 test("publishes an unconfirmed cancellation and pause without changing the order flow", async () => {
   const events = []
-  const { engine, orders } = createHarness({
+  const { engine, orders } = await createHarness({
     cancelFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -447,7 +456,7 @@ test("publishes an unconfirmed cancellation and pause without changing the order
 
 test("publishes thrown cancellation outcomes as unconfirmed", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     cancelThrow: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -468,7 +477,7 @@ test("publishes thrown cancellation outcomes as unconfirmed", async () => {
 
 
 test("cancellation event publication failure cannot prevent cancellation or reevaluation", async () => {
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     eventPublisher: { publish: () => { throw new Error("journal observer unavailable") } },
   })
   await engine.processMarketPrice({
@@ -485,7 +494,7 @@ test("cancellation event publication failure cannot prevent cancellation or reev
 
 
 test("EventBus failure cannot prevent the pair pause callback", async () => {
-  const { engine, pauses } = createHarness({
+  const { engine, pauses } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
@@ -567,7 +576,7 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   const events = []
   let engine
   const seeded = makeSeededRecoveryState()
-  const harness = createHarness({
+  const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -606,7 +615,7 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
 })
 
 test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
-  const { engine } = createHarness()
+  const { engine } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -640,7 +649,7 @@ test("uses the volume-weighted actual execution price for the next standing BUY 
 })
 
 test("pauses instead of advancing when a filled BUY has incomplete execution-price history", async () => {
-  const { engine, pauses } = createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -657,7 +666,7 @@ test("pauses instead of advancing when a filled BUY has incomplete execution-pri
 test("publishes recovery SELL cancellation failures and pauses the pair", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -688,7 +697,7 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
 test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -752,7 +761,7 @@ function makePartiallyFilledOrder({ order, updatedAt = 2, executedQuantity = "0.
 test("publishes a Fill only after the accounting workflow commits it", async () => {
   const events = []
   let fill
-  const harness = createHarness({
+  const harness = await createHarness({
     accountingApplied: true,
     eventPublisher: { publish: (event) => {
       events.push(event)
@@ -799,7 +808,7 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
 
 test("does not publish a Fill when accounting reports an idempotent duplicate", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     accountingApplied: false,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -823,7 +832,7 @@ test("does not publish a Fill when accounting reports an idempotent duplicate", 
 })
 
 test("Fill event publication failure cannot interrupt successful accounting", async () => {
-  const { engine, accountedFills } = createHarness({
+  const { engine, accountedFills } = await createHarness({
     accountingApplied: true,
     eventPublisher: { publish: (event) => {
       if (event.name === "execution.fill_applied") throw new Error("journal unavailable")
@@ -850,7 +859,7 @@ test("Fill event publication failure cannot interrupt successful accounting", as
 
 test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
@@ -891,7 +900,7 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
 
 test("publishes unowned order updates with safe canonical identifiers", async () => {
   const events = []
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
   const externalOrder = new CanonicalOrder({
@@ -919,7 +928,7 @@ test("publishes unowned order updates with safe canonical identifiers", async ()
 
 test("publishes accounting failures and preserves pair pause behavior", async () => {
   const events = []
-  const { engine, pauses } = createHarness({
+  const { engine, pauses } = await createHarness({
     accountingFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
@@ -940,7 +949,7 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
 })
 
 test("EventBus failure cannot interrupt accounting failure pause handling", async () => {
-  const { engine, pauses } = createHarness({
+  const { engine, pauses } = await createHarness({
     accountingFailure: true,
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
@@ -961,7 +970,7 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
 test("publishes recovery completion only after the cycle reset succeeds", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const harness = createHarness({
+  const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1003,7 +1012,7 @@ test("publishes recovery completion only after the cycle reset succeeds", async 
 
 test("does not complete recovery when a FILLED SELL has no reconciled execution fills", async () => {
   const seeded = makeSeededRecoveryState()
-  const { engine, completedCycles, pauses } = createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1024,7 +1033,7 @@ test("does not complete recovery when a FILLED SELL has no reconciled execution 
 
 test("does not complete recovery when SELL fills do not equal the original order quantity", async () => {
   const seeded = makeSeededRecoveryState()
-  const { engine, completedCycles, pauses } = createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1049,7 +1058,7 @@ test("does not complete recovery when SELL fills do not equal the original order
 
 test("reconciles multiple actual SELL fills before completing recovery", async () => {
   const seeded = makeSeededRecoveryState()
-  const { engine, completedCycles, pauses } = createHarness({
+  const { engine, completedCycles, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1085,7 +1094,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
 test("does not publish recovery completion when the cycle is ineligible", async () => {
   const events = []
   const seeded = makeSeededRecoveryState()
-  const { engine } = createHarness({
+  const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1111,7 +1120,7 @@ test("does not publish recovery completion when the cycle is ineligible", async 
 
 test("recovery completion publisher failure cannot interrupt the committed cycle", async () => {
   const seeded = makeSeededRecoveryState()
-  const harness = createHarness({
+  const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1140,7 +1149,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   let signalSellSubmission
   const sellSubmissionStarted = new Promise((resolve) => { signalSellSubmission = resolve })
   const seeded = makeSeededRecoveryState()
-  const { engine, orders, cancellationIds, accountedFills } = createHarness({
+  const { engine, orders, cancellationIds, accountedFills } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1202,7 +1211,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
 
 test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
   const seeded = makeSeededRecoveryState()
-  const { engine, orders, cancellationIds, pauses } = createHarness({
+  const { engine, orders, cancellationIds, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1249,7 +1258,7 @@ test("replaces the recovery SELL before submitting the next standing BUY after a
 
 test("does not submit the next standing BUY when recovery SELL submission fails", async () => {
   const seeded = makeSeededRecoveryState()
-  const { engine, orders, pauses } = createHarness({
+  const { engine, orders, pauses } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1287,7 +1296,7 @@ function makeOrderStatusUpdate({ order, status, executedQuantity = "0", updatedA
 }
 
 test("keeps UNKNOWN exchange order states active and waits for authoritative resolution", async () => {
-  const { engine, pauses } = createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1304,7 +1313,7 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
   for (const status of ["CANCELED", "EXPIRED"]) {
-    const { engine, pauses } = createHarness()
+    const { engine, pauses } = await createHarness()
     await engine.processMarketPrice({
       symbol: "DOGEUSDT",
       priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1320,7 +1329,7 @@ test("reevaluates after unfilled CANCELED and EXPIRED order states", async () =>
 })
 
 test("pauses when an EXPIRED order reports execution without reconciled fills", async () => {
-  const { engine, pauses } = createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1338,7 +1347,7 @@ test("pauses when an EXPIRED order reports execution without reconciled fills", 
 })
 
 test("pauses on an exchange REJECTED order update", async () => {
-  const { engine, pauses } = createHarness()
+  const { engine, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1359,7 +1368,7 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
   const cancelOrderGate = { promise: new Promise((resolve) => { releaseCancel = resolve }) }
   const cancelStarted = new Promise((resolve) => { signalCancelStarted = resolve })
   const seeded = makeSeededRecoveryState()
-  const { engine, accountedFills, pauses, cancellationIds } = createHarness({
+  const { engine, accountedFills, pauses, cancellationIds } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
@@ -1445,7 +1454,7 @@ function makeOpenOrder({ order, brokerOrderId = order.brokerOrderId, clientOrder
 }
 
 test("reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery", async () => {
-  const { engine, broker, accountedFills, pauses } = createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1522,7 +1531,7 @@ test("reconciles missing REST fills for an owned order and deduplicates overlapp
 
 
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
-  const { engine, broker, accountedFills, pauses } = createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1556,7 +1565,7 @@ test("fails closed without applying partial REST fills when cumulative history i
 
 
 test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
-  const { engine, broker, accountedFills, pauses } = createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1608,7 +1617,7 @@ test("processes stream fills received during REST reads before applying the REST
   let signalFillsStarted
   const fillsGate = { promise: new Promise((resolve) => { releaseFills = resolve }) }
   const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
-  const { engine, broker, accountedFills, pauses } = createHarness()
+  const { engine, broker, accountedFills, pauses } = await createHarness()
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1679,7 +1688,7 @@ test("uses the injected strategy policy instead of a hard-coded Conservative eva
     },
     evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
-  const { engine, orders } = createHarness({ strategyPolicy })
+  const { engine, orders } = await createHarness({ strategyPolicy })
 
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -1701,7 +1710,7 @@ test("uses the injected trailing repricing policy", async () => {
       return { shouldReplace: false, adjustmentThreshold: "100.05" }
     },
   }
-  const { engine, orders } = createHarness({ strategyPolicy })
+  const { engine, orders } = await createHarness({ strategyPolicy })
 
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -1718,7 +1727,7 @@ test("uses the injected trailing repricing policy", async () => {
 
 
 test("does not evaluate or submit from a stale market price", async () => {
-  const { engine, orders } = createHarness({ isMarketPriceFresh: () => false })
+  const { engine, orders } = await createHarness({ isMarketPriceFresh: () => false })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1732,7 +1741,7 @@ test("does not evaluate or submit from a stale market price", async () => {
 
 test("does not reuse a cached market price after it becomes stale", async () => {
   let isFresh = true
-  const { engine, orders } = createHarness({ isMarketPriceFresh: () => isFresh })
+  const { engine, orders } = await createHarness({ isMarketPriceFresh: () => isFresh })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
@@ -1758,7 +1767,7 @@ test("defers submission when the market price becomes stale during pending-order
       }
     },
   }
-  const { engine, orders } = createHarness({
+  const { engine, orders } = await createHarness({
     isMarketPriceFresh: () => isFresh,
     eventPublisher,
   })
@@ -1780,4 +1789,119 @@ test("defers submission when the market price becomes stale during pending-order
 
   assert.equal(next.ok, true)
   assert.equal(orders.length, 1, "a subsequent fresh price should allow the order")
+})
+
+
+test("validates exact-decimal books and detects BUY/SELL POST-ONLY crossing at equality", () => {
+  const book = createMarketBook({ bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 10,
+  } })
+  const order = (side, amount) => ({
+    type: "LIMIT_MAKER", side, market: { symbol: "DOGEUSDT" }, limitPrice: { amount },
+  })
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "99.99"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "100.00"), marketBook: book }), true)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.91"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.90"), marketBook: book }), true)
+  assert.throws(() => createMarketBook({ bookTicker: { symbol: "DOGEUSDT", bestBidPrice: "100", bestBidQuantity: "1", bestAskPrice: "100", bestAskQuantity: "1", timestamp: 10 } }), /best bid must be below best ask/)
+})
+
+test("defers a crossing POST-ONLY BUY and resumes on a fresh non-crossing book", async () => {
+  const { engine, orders } = await createHarness({ initialBook: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.95", bestAskQuantity: "1", timestamp: 1,
+  } })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("fails closed without a fresh book and resumes after a fresh book update", async () => {
+  let fresh = false
+  const { engine, orders } = await createHarness({ initialBook: false, isMarketBookFresh: () => fresh })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  fresh = true
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("rechecks book freshness after PENDING registration before broker I/O", async () => {
+  let fresh = true
+  let staleOnce = true
+  const { engine, orders } = await createHarness({
+    isMarketBookFresh: () => fresh,
+    eventPublisher: { publish: ({ name }) => {
+      if (name === "order.submission_requested" && staleOnce) {
+        fresh = false
+        staleOnce = false
+      }
+    } },
+  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  assert.equal(engine.getOrders().length, 0)
+  fresh = true
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("definite POST-ONLY rejection removes PENDING and waits for a fresh book without pausing", async () => {
+  const events = []
+  const rejection = Object.assign(new Error("known post-only rejection"), { code: "POST_ONLY_WOULD_TAKE" })
+  const { engine, orders, pauses } = await createHarness({
+    placeOrderFailureCount: 1,
+    placeOrderFailureError: rejection,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.ok, false)
+  assert.equal(orders.length, 1)
+  assert.deepEqual(pauses, [])
+  assert.equal(engine.getOrders().length, 0)
+  assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED")
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.94", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 3,
+  } })
+  assert.equal(orders.length, 2)
+  assert.deepEqual(pauses, [])
+})
+
+
+test("invalid book updates invalidate the cached book and fail closed", async () => {
+  const { engine, orders } = await createHarness({ initialBook: false })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 1,
+  } })
+  const invalid = await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "100.00", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(invalid.ok, false)
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
 })

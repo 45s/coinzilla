@@ -10,6 +10,7 @@ export const BROKER_PORT_METHODS = Object.freeze([
   "getSymbolFilters",
   "getPrices",
   "subscribeForPrices",
+  "subscribeForBookTicker",
   "subscribeForUserData",
 ])
 

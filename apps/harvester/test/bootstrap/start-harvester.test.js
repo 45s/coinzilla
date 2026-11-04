@@ -148,6 +148,17 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
     },
+    subscribeForBookTicker: async ({ onBookTicker } = {}) => {
+      await onBookTicker({
+        symbol: 'ZROUSDT',
+        bestBidPrice: '0.9',
+        bestBidQuantity: '1',
+        bestAskPrice: '1.1',
+        bestAskQuantity: '1',
+        timestamp: 10,
+      });
+      return toResult({ data: { unsubscribe: async () => {} } });
+    },
     subscribeForUserData: async ({ onEvent: callback } = {}) => {
       onUserDataEvent = callback;
       return toResult({ data: { disconnect: async () => {} } });
