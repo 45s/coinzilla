@@ -1514,6 +1514,15 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const calls = []
   const broker = createBroker(calls)
   const events = []
+  let releaseOpenOrders
+  let signalOpenOrdersStarted
+  const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
+  const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
+  broker.getOpenOrders = async () => {
+    signalOpenOrdersStarted()
+    await openOrdersGate
+    return { ok: true }
+  }
   broker.placeOrder = async ({ order }) => {
     calls.push("placeOrder:" + order.side)
     return {
@@ -1561,7 +1570,12 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   })
   assert.ok(calls.includes("placeOrder:BUY"))
 
-  await runtime.stop()
+  const stopPromise = runtime.stop()
+  await openOrdersStarted
+  assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
+  assert.equal(calls.includes("disconnect"), false)
+  releaseOpenOrders()
+  await stopPromise
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   assert.equal(snapshots.length, 2)
