@@ -238,6 +238,6 @@ test("rejects conflicting replayed execution facts without changing either proje
   assert.equal(conflicting.data, undefined)
   assert.equal(first.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "100")
   assert.equal(first.data.recoveryLedger.buyCost, "10")
-  assert.deepEqual(first.data.portfolio.appliedFillIds, ["replayed-execution"])
-  assert.deepEqual(first.data.recoveryLedger.appliedFillIds, ["replayed-execution"])
+  assert.deepEqual(first.data.portfolio.appliedFillIds, ["binance:DOGEUSDT:replayed-execution"])
+  assert.deepEqual(first.data.recoveryLedger.appliedFillIds, ["binance:DOGEUSDT:replayed-execution"])
 })
