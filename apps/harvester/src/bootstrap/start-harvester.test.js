@@ -1231,3 +1231,25 @@ test("reconciles the in-memory order registry before reopening trading after str
   assert.equal(result.userDataStatus, "READY")
   await result.stop()
 })
+
+
+test("fails closed when trading is explicitly enabled without selecting a broker", async () => {
+  let brokerFactoryCalled = false
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: {
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+      },
+      brokerAdapterFactory: () => {
+        brokerFactoryCalled = true
+        return createBroker()
+      },
+      logger: { info() {}, error() {} },
+    }),
+    /HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true/,
+  )
+  assert.equal(brokerFactoryCalled, false)
+})
