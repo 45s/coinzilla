@@ -26,13 +26,13 @@ import {
   mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
-async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
+async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const results = await Promise.allSettled([
-    ...bookSubscriptions.map(({ symbol, unsubscribe }) => {
+    ...bookSubscriptions.map(({ unsubscribe }) => {
 
       return Promise.resolve().then(() => unsubscribe())
     }),
-    ...subscriptions.map(({ symbol, unsubscribe }) => {
+    ...subscriptions.map(({ unsubscribe }) => {
 
       return Promise.resolve().then(() => unsubscribe())
     }),
@@ -48,7 +48,7 @@ async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDat
     .map((result) => result.reason)
 }
 
-async function disconnectBroker({ broker, brokerName, eventPublisher, logger = defaultLogger }) {
+async function disconnectBroker({ broker, brokerName, eventPublisher }) {
   const results = await Promise.allSettled([
     Promise.resolve().then(() => {
 
@@ -70,10 +70,10 @@ async function disconnectBroker({ broker, brokerName, eventPublisher, logger = d
     .map((result) => result.reason)
 }
 
-async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
+async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
 
-  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
-  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
+  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription })
+  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher })
   const errors = [...intakeErrors, ...disconnectErrors]
 
   return errors
@@ -246,8 +246,7 @@ export async function startHarvester({
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
-
-  const broker = assertBrokerPort({
+const broker = assertBrokerPort({
     broker: brokerAdapterFactory({
       config: {
         apiKey: env.BINANCE_API_KEY,
@@ -256,8 +255,7 @@ export async function startHarvester({
     }),
   })
 
-
-  try {
+try {
     logger.info?.({ message: "Connecting to Binance broker" })
 
     await broker.connect()
@@ -403,8 +401,7 @@ export async function startHarvester({
         }
         let reevaluateSymbol
 
-
-        if (isExecution) {
+if (isExecution) {
           logger.info?.({
             message: "Trade execution received",
             symbol: event.fill?.market?.symbol ?? event.executedOrder?.market?.symbol,
@@ -744,8 +741,7 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-
-    const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
+const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
@@ -850,9 +846,7 @@ export async function startHarvester({
             settings: tradingConfig.settings,
           })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
-          if (processed?.ok) {
-
-          }
+          
           return processed
         }).catch((error) => {
           reportPriceError({ symbol, error })
@@ -904,8 +898,7 @@ export async function startHarvester({
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
 
-
-      if (tradingEnabled) {
+if (tradingEnabled) {
 
         let tickerResult
         try {
@@ -957,7 +950,7 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription, logger })
+    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
