@@ -970,3 +970,14 @@ Harvester remains stopped. No TESTNET write operations have been performed as pa
 - [ ] After merge, record the merge commit/message and confirm Harvester remains stopped. The joint TESTNET session remains a separate, explicit operator/assistant authorization gate.
 
 **Safety:** No Harvester process was started. No TESTNET orders were submitted or canceled, no account settings were changed, and no exchange write operations were performed. Offline CI is not TESTNET acceptance.
+
+
+### Branch synchronization correction — 2026-11-04
+
+- [x] Branch synchronization completed by creating a real two-parent merge commit: `Merge latest develop into Harvester lifecycle audit`.
+- [x] Merge commit: `0d018d1f2992744d50040b6c7dce9352373169c1`; parents are feature head `6a083d3011cacd682688c520683067eae00ce83b` and then-current `develop` head `ed48e31bebee12c93652f8879171997a21102d4c`.
+- [x] Three-way tree comparison against the common ancestor found zero overlapping changed paths; the resulting PR comparison is `ahead` 58 / `behind` 0.
+- [x] The resulting PR diff contains 17 Harvester files only; the broker/coverage changes from `develop` are incorporated in the merge base and are not part of the PR diff.
+- [ ] Verify all five required workflows on the synchronized merge commit, then mark PR ready and merge only when every required check is green.
+
+**Correction:** Earlier entries in this roadmap stating that the GitHub connector could not synchronize the branch are superseded by this completed merge. No TESTNET operations were performed.
