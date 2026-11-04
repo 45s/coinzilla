@@ -135,3 +135,13 @@ Both integration suites assert TESTNET WebSocket endpoints before connecting. Ne
 ## Binance order identifiers
 
 The public `normalizeBinanceId(value, name?)` helper validates Binance identifiers as exact non-negative integers and returns their string representation. Decimal strings are accepted only when they contain digits and fit within JavaScript's safe-integer range; numeric inputs must already be safe integers. Use this shared normalizer at Binance adapter boundaries rather than reimplementing exchange ID parsing.
+
+## Canonical execution fills and duplicate delivery
+
+The getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? }) API returns canonical Fill entities from Binance myTrades. User-data executionReport TRADE events are normalized into the same canonical Fill contract.
+
+- Use Binance transaction time T as the canonical fill execution timestamp. E is event publication time and remains event/order-update metadata; it must not be substituted for transaction time.
+- REST myTrades records do not include a client order ID. The canonical Fill therefore does not carry one on either delivery path. Correlate ownership through the canonical order and broker-assigned order ID; do not fabricate or infer a client order ID from a trade response.
+- Both paths share adaptCanonicalFill. Keep trade/order IDs, symbol/market, side, price, base quantity, quote quantity, commission amount and asset, maker/taker role, and transaction time semantically identical.
+- A duplicate delivery of the same exchange trade must produce an identical canonical Fill regardless of whether REST or WebSocket arrives first. Consumer accounting must remain idempotent for identical facts and reject conflicting facts reusing the same Fill ID.
+- Regression tests must deliberately set E different from T and compare complete canonical Fill values across REST and WebSocket representations. Never weaken fingerprint fields or suppress accounting conflicts to make duplicate delivery pass.
