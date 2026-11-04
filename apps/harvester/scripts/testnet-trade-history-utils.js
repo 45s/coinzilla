@@ -54,8 +54,8 @@ export const normalizeTradeHistory = ({ trades }) => {
 }
 
 export const parseTradeHistoryArguments = ({ args = [] } = {}) => {
-  if (!Array.isArray(args) || args.length > 2) {
-    throw new TypeError("Usage: testnet:trades [SYMBOL] [LIMIT]")
+  if (!Array.isArray(args) || args.length > 3) {
+    throw new TypeError("Usage: testnet:trades [SYMBOL] [LIMIT] [FROM_ID]")
   }
 
   const symbol = String(args[0] ?? "DOGEUSDT").toUpperCase()
@@ -68,5 +68,10 @@ export const parseTradeHistoryArguments = ({ args = [] } = {}) => {
     throw new RangeError(`Limit must be an integer between 1 and ${MAX_TRADE_HISTORY_LIMIT}`)
   }
 
-  return { symbol, limit }
+  const fromId = args[2] === undefined ? undefined : Number(args[2])
+  if (fromId !== undefined && (!Number.isSafeInteger(fromId) || fromId < 0)) {
+    throw new RangeError("fromId must be a non-negative safe integer")
+  }
+
+  return { symbol, limit, ...(fromId === undefined ? {} : { fromId }) }
 }
