@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
+import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
 import { BinanceUserDataSession } from "./user-data-session.js"
 
