@@ -286,6 +286,39 @@ test("pauses an immediately FILLED acknowledged order when execution history is 
   assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE"))
 })
 
+test("pauses when FILLED acknowledgement history repeats a fill ID with conflicting data", async () => {
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    getAcknowledgedFills: ({ order }) => [
+      makeBuyFill({
+        order,
+        tradeId: "conflicting-ack-fill",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+        executedAt: 10,
+      }),
+      makeBuyFill({
+        order,
+        tradeId: "conflicting-ack-fill",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+        executedAt: 10,
+      }),
+    ],
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_CONFLICTING_DUPLICATE"))
+  assert.equal(harness.accountedFills.length, 0)
+})
+
 test("pauses after an invalid strategy order and does not reevaluate it on later market events", async () => {
   let evaluations = 0
   const strategyPolicy = {
