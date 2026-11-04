@@ -823,6 +823,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   }
   const config = {
     settings: { minProfit: 0.01 },
+    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
     pairs: {
       BTCUSDT: {
         enabled: true,
