@@ -815,7 +815,6 @@ export function makeConservativeTradingEngine({
       state.marketPriceEventIds.set(symbol, marketEventId)
       state.prices.set(symbol, price)
       if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
-      const metadata = getMarketMetadata({ symbol })
       const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .find((order) => order.side === "BUY")
       if (activeBuy && state.trailingBuy.get(symbol) !== false) {

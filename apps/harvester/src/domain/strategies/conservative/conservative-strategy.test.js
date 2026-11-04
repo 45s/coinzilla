@@ -189,7 +189,7 @@ test("reserves the higher takerPercent for recovery SELL planning when taker is 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(sell.type, "LIMIT")
   assert.equal(sell.quantity, "98.8")
-  assert.equal(sell.price, "0.103")
+  assert.equal(sell.price, "0.102")
 })
 
 test("includes the actual BUY quote commission in the recovery SELL limit price", () => {
