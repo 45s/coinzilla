@@ -175,9 +175,9 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMark
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
-  if (initialBook) engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
-    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
-    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 1,
+  if (initialBook) await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
+    symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
+    bestAskPrice: "1000", bestAskQuantity: "1", timestamp: 1,
   } : initialBook })
   return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
