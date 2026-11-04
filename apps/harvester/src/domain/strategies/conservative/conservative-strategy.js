@@ -83,9 +83,9 @@ export function evaluateConservativeStrategy({
     })
   }
 
-  // Residual active inventory alone is not a recovery obligation. After a
-  // completed cycle the ledger is reset; preserve that inventory for the next
-  // legitimate cycle instead of creating a new recovery SELL from it.
+  // Residual active inventory alone is not a recovery obligation. A
+  // completed cycle must already have moved all remaining base to free
+  // inventory; never turn an orphaned active remainder into a new SELL cycle.
   const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
     left: "0",
     right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
