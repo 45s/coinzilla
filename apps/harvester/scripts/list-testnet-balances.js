@@ -1,5 +1,5 @@
 import { getAccountBalances } from "./binance-testnet-api.js"
-import { getNonZeroBalances } from "./testnet-balance-utils.js"
+import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-utils.js"
 
 const main = async () => {
   const { balances: accountBalances } = await getAccountBalances()
