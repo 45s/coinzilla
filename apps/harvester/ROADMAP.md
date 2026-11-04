@@ -1100,3 +1100,5 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Feature branch synchronized with the latest `develop` head before final CI verification.
 
 - [x] Re-synchronized with `develop` after the Binance fill fix merged; final CI is running on the current PR head.
+
+- [x] Rechecked synchronization against the latest `develop` head immediately before final verification.
