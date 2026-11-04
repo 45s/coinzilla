@@ -95,10 +95,13 @@ when `HARVESTER_ENABLE_TRADING=true`:
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
 SELL fill → profit check → free-inventory allocation. This is a fake-broker
-simulation, not evidence of a real Binance TESTNET run. Reservations, stream
-reconnect reconciliation, restart recovery, and a real TESTNET execution
-remain unfinished. Do not mark the first trading milestone complete until the
-real TESTNET cycle and required CI checks pass.
+simulation, not evidence of exchange behavior by itself. Real Binance TESTNET
+executions have since been observed, including a completed recovery SELL, but
+the same run exposed rapid BUY re-submission and an invalid post-cycle
+MIN_NOTIONAL intent. Reservations, restart recovery, and the safe repeatable
+TESTNET acceptance cycle remain unfinished. Do not mark the first trading
+milestone complete until the incident fixes, reconciliation, and required CI
+checks pass.
 
 ## P0 — Deliver the first working trading cycle
 
@@ -711,9 +714,9 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Extend the bootstrap shutdown regression to run with Conservative TESTNET trading explicitly enabled and assert that the book-ticker subscription is removed before queued user-data processing drains and before broker disconnect. This closes a test-coverage gap introduced by the book-ticker intake added for POST-ONLY validation; runtime behavior is unchanged.
 
  
-## TESTNET live progress — 2026-11-04
+## TESTNET live progress — 2026-11-04 (initial partial snapshot; superseded by later incident record)
 
-This is the latest operator-provided Binance Spot TESTNET evidence and supersedes earlier roadmap/README statements that the process was still waiting for its first price or had not yet submitted a BUY. It records observations only; it does not change the acceptance criteria or claim a complete trading cycle.
+This section preserves the initial operator-provided snapshot from earlier in the run. Later evidence on the same date includes a full recovery SELL fill, cycle-completion event, rapid BUY burst, and post-cycle MIN_NOTIONAL failure; see [TESTNET incident and account snapshot](#testnet-incident-and-account-snapshot--2026-11-04-supersedes-earlier-partial-progress-status) for the current consolidated status. The observations below remain historically accurate for the earlier snapshot only and do not establish acceptance of a complete safe cycle.
 
 ### Runtime observations
 
