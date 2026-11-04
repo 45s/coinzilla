@@ -1066,7 +1066,7 @@ test("logs confirmed broker readiness at info level without debug output", async
   const broker = createBroker()
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
-    env: binanceEnv,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
