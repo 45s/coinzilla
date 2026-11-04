@@ -211,3 +211,5 @@ Trading-enabled startup MUST NOT activate the Conservative engine unless the Jou
 Account-level balance changes are a cross-check only. They cannot be labeled profit until executions, commission asset/amount, external deposits/withdrawals/transfers, and remaining inventory valuation are reconciled. Do not assign external balances to strategy Portfolio.
 
 Current blockers are tracked in ROADMAP: the historical 0.20730 USDT discrepancy, the twelve identical-price TAKER BUY decisions, the remaining lifecycle overlap matrix, and fresh current-head CI. No TESTNET restart or order submission is permitted until they are resolved.
+
+After a session has been stopped gracefully, use `pnpm run journal:balance-audit` from `apps/harvester` to compare its OPENING and CLOSING snapshots. The command reports exact per-asset quantity deltas and fails if either endpoint is absent or the closing audit is incomplete. It does not claim profit from balances alone.

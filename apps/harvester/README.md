@@ -400,3 +400,19 @@ The current PR #513 source now emits structured DEBUG traces for strategy evalua
 Every explicitly enabled Conservative TESTNET session records an OPENING snapshot before the trading engine can submit its first order and a CLOSING snapshot during graceful shutdown, before broker disconnect. The snapshot includes all broker-returned assets (including unrelated and third-asset balances) with exact free, locked, and total quantities. A closing snapshot is marked INCOMPLETE when owned-order reconciliation fails, an owned order remains non-terminal, intake fails, or user-data/accounting state is unresolved.
 
 The pure reconcileAccountSnapshotDeltas helper computes exact per-asset free/locked/total changes from OPENING and CLOSING events, including assets that appear or disappear, and propagates INCOMPLETE audit reasons. Balance deltas are an independent account-level cross-check, not a standalone proof of strategy profit. Reconcile every asset delta against executions and commissions, deposits/withdrawals/transfers, other account activity, and the valuation of remaining inventory in a common quote currency. Trade-level fill accounting remains authoritative for realized strategy PnL. Unknown external activity or open orders makes the account-level result incomplete.
+
+### Compare persisted opening and closing balances
+
+After a graceful shutdown, run the read-only Journal audit command from the Harvester app directory:
+
+```bash
+pnpm run journal:balance-audit
+```
+
+Pass a Journal directory as the first argument when using a non-default location:
+
+```bash
+pnpm run journal:balance-audit -- ./logs
+```
+
+The command groups records by JSONL session and reports exact per-asset free, locked, and total balance deltas. It exits non-zero if a session is missing either snapshot, has duplicate endpoints, or carries an INCOMPLETE closing audit. It deliberately does not convert these deltas into a profit figure; executions, commissions, external transfers, and remaining inventory valuation still require reconciliation.

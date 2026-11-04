@@ -905,3 +905,6 @@ Do not merge or restart TESTNET while any acceptance blocker remains open.
 - [ ] Conclusively classify the twelve distinct 400 DOGE @ 0.07598 TAKER BUYs within ~3 seconds using source trace and complete exchange history. Distinct IDs rule out ID collision, but do not alone prove whether identical pricing arose from stale transition state or independent decisions.
 - [ ] Complete streamed partial/final, duplicate/out-of-order, cancellation/fill, REST/stream overlap and shutdown reconciliation regression matrix.
 - [ ] Keep TESTNET stopped until all gates above and current-head CI are green. Do not submit orders as part of this PR work.
+
+- [x] Add a read-only Journal audit command that pairs OPENING/CLOSING snapshots per JSONL session and reports exact per-asset balance deltas, missing/duplicate endpoints, and INCOMPLETE audit reasons.
+- [ ] Run the Journal audit command against a real closed TESTNET session and reconcile its asset deltas with exchange trade/commission history and any external account activity.
