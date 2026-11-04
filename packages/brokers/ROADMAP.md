@@ -69,7 +69,7 @@ The migration is complete only when all of the following are true:
 
 The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
 
-- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #528 head `0996602050841d81161309168acb69edd4caff6f`: **83.20% lines, 85.79% branches, 80.55% functions**.
+- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #528 head `74ff70766228d9ec93cd16aa2ee276cd298c168f`: **83.20% lines, 85.79% branches, 80.55% functions**.
 - [x] Codify the architecture boundary in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md): brokers is an infrastructure adapter; Harvester owns portfolio/position domain policy, strategies, and application use cases. Do not create empty `domain/` or `application/` folders in brokers.
 - [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **344/344** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.47%/85.78%/81.03% (lines/branches/functions). PR #527 prevents late message/close callbacks from superseded Streams transports; PR #528 explicitly verifies that all four order mutation methods fail closed while user data is unavailable.
 - [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
