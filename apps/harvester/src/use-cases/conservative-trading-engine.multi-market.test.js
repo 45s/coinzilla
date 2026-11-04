@@ -137,6 +137,7 @@ async function createHarness() {
     }),
     canTrade: () => true,
     isMarketPriceFresh: () => true,
+    isMarketBookFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
   })
@@ -241,7 +242,7 @@ test("an unowned order in one market pauses only that market and cannot block an
 })
 
 test("duplicate fills and stale order updates do not double-account across markets", async () => {
-  const { engine, pauses, accountedFills } = createHarness()
+  const { engine, pauses, accountedFills } = await createHarness()
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
