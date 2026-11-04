@@ -143,7 +143,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       return toResult({ data: { balances, sourceTime: accountSnapshotCalls } });
     },
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
-    getPrices: async () => toResult({ data: [] }),
+    getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
       return toResult({ data: { unsubscribe: async () => {} } });
@@ -164,6 +164,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       BINANCE_API_KEY: 'test-key',
       BINANCE_API_SECRET_KEY: 'test-secret',
     },
+    now: () => 10,
     logger: { debug() {}, info() {}, error() {} },
     onUserDataEvent: async ({ event } = {}) => {
       if (event?.executionType === 'TRADE') observedTrade();
@@ -171,6 +172,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
   });
 
   assert.equal(context.userDataReady, true);
+  assert.ok(broker.lastOrder, 'the initial ticker snapshot should submit the first Conservative BUY');
   assert.equal(accountSnapshotCalls, 1);
   assert.equal(openOrderSnapshotCalls, 0);
   assert.equal(typeof onPrice, 'function');

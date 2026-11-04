@@ -157,6 +157,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     },
     completeRecoveryCycle: ({} = {}) => toResult({ data: { eligible: true, freeQuantity: "1" } }),
     canTrade: ({} = {}) => ready,
+    isMarketPriceFresh: () => true,
     onPause: async ({} = {}) => {},
     isStopping: ({} = {}) => false,
   })

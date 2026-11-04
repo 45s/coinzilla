@@ -136,6 +136,7 @@ function createHarness() {
       data: { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1" },
     }),
     canTrade: () => true,
+    isMarketPriceFresh: () => true,
     isStopping: () => false,
     onPause: async ({ symbol, reason }) => pauses.push({ symbol, reason }),
   })

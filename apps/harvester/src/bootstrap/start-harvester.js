@@ -1,4 +1,5 @@
 import { Fill } from "@coinzilla/entities"
+import { createMarketPrice } from "../domain/market-price.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
@@ -77,6 +78,9 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
   logger.debug?.({ message: "Harvester cleanup completed", errorCount: errors.length })
   return errors
 }
+
+const MAX_MARKET_PRICE_AGE_MS = 5_000
+const MAX_MARKET_PRICE_FUTURE_SKEW_MS = 1_000
 
 const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
   strategy: "CONSERVATIVE",
@@ -165,6 +169,7 @@ export async function startHarvester({
   },
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
+  now = Date.now,
 } = {}) {
   logger.debug?.({ message: "Startup step: loading and validating trading configuration" })
   const tradingConfig = await loadConfig(configSource)
@@ -337,6 +342,12 @@ export async function startHarvester({
     })
     logger.debug?.({ message: "Account snapshot validated and accepted" })
     return nextSnapshot
+  }
+  const isMarketPriceFresh = (marketPrice) => {
+    const ageMs = now() - marketPrice.timestamp
+    return Number.isSafeInteger(ageMs) &&
+      ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS &&
+      ageMs <= MAX_MARKET_PRICE_AGE_MS
   }
   const reportPriceError = (details) => {
     try {
@@ -781,6 +792,7 @@ export async function startHarvester({
         updateTradingAccounting,
         completeRecoveryCycle,
         canTrade: () => userDataReady,
+        isMarketPriceFresh,
         isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
@@ -794,6 +806,8 @@ export async function startHarvester({
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       logger.debug?.({ message: "Startup step: subscribing to market prices", symbol })
+      let hasFreshWebSocketPrice = false
+      let latestWebSocketPriceTask
       let result
       try {
         result = await broker.subscribeForPrices({
@@ -806,7 +820,14 @@ export async function startHarvester({
             price: priceEvent?.price,
             timestamp: priceEvent?.timestamp,
           })
-          return Promise.resolve().then(() => processMarketPrice({
+          try {
+            if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
+              hasFreshWebSocketPrice = true
+            }
+          } catch {
+            // The trading engine reports malformed events through its normal result.
+          }
+          latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
             symbol,
             priceEvent,
             pairConfig,
@@ -818,6 +839,8 @@ export async function startHarvester({
               message: "Market price processed",
               symbol,
               action: processed.data?.decision?.action ?? processed.data?.action,
+              skipped: processed.data?.skipped,
+              reason: processed.data?.reason,
             })
           }
           return processed
@@ -825,6 +848,7 @@ export async function startHarvester({
           reportPriceError({ symbol, error })
           return { ok: false, errors: [error] }
         })
+          return latestWebSocketPriceTask
         },
         })
       } catch (error) {
@@ -870,6 +894,50 @@ export async function startHarvester({
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
       logger.debug?.({ message: "Startup step completed: market-price subscription active", symbol })
+
+      if (tradingEnabled) {
+        logger.debug?.({ message: "Startup step: requesting initial ticker price", symbol })
+        let tickerResult
+        try {
+          tickerResult = await broker.getPrices({ symbol })
+        } catch (error) {
+          tickerResult = toResult({ error })
+        }
+        if (latestWebSocketPriceTask) await latestWebSocketPriceTask
+
+        if (!hasFreshWebSocketPrice) {
+          if (!tickerResult?.ok || !tickerResult.data) {
+            const details = tickerResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+            throw new Error(
+              "Unable to load initial market price for " + symbol + (details ? ": " + details : ""),
+            )
+          }
+          const priceEvent = {
+            symbol: tickerResult.data.symbol,
+            price: tickerResult.data.price,
+            timestamp: now(),
+          }
+          const marketPrice = createMarketPrice({ priceEvent })
+          if (marketPrice.symbol !== symbol) {
+            throw new Error("Initial ticker price symbol does not match enabled market " + symbol)
+          }
+          logger.info?.({
+            message: "Initial market price loaded from Binance ticker snapshot",
+            symbol,
+            price: marketPrice.price,
+            timestamp: marketPrice.timestamp,
+          })
+          const processed = await processMarketPrice({
+            symbol,
+            priceEvent,
+            pairConfig,
+            settings: tradingConfig.settings,
+          })
+          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
+        } else {
+          logger.debug?.({ message: "Initial ticker snapshot skipped; a fresh WebSocket price was already received", symbol })
+        }
+      }
     }
   } catch (error) {
     logger.error?.({
