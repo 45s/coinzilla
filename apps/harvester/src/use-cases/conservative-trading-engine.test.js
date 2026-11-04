@@ -53,7 +53,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -61,6 +61,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   const completedCycles = []
   const cancellationIds = []
   const canceledOrders = new Map()
+  const acknowledgedFillsByOrder = new Map()
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
@@ -73,23 +74,31 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
         if (Number.isFinite(remainingPlaceOrderFailures)) remainingPlaceOrderFailures -= 1
         return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
       }
-      return {
-        ok: true,
-        data: new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: "broker-" + order.clientOrderId,
-          market,
-          side: order.side,
-          type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-          status: "OPEN",
-          createdAt: 1,
-          acknowledgedAt: 1,
-          updatedAt: 1,
+      const acknowledgedOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "broker-" + order.clientOrderId,
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+        executedQuantity: new Quantity({
+          amount: immediateFilledAcknowledgement ? order.quantity : "0",
+          asset: baseAsset,
         }),
+        status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
+        createdAt: 1,
+        acknowledgedAt: 1,
+        updatedAt: 1,
+        ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
+      })
+      if (immediateFilledAcknowledgement) {
+        acknowledgedFillsByOrder.set(
+          acknowledgedOrder.brokerOrderId,
+          getAcknowledgedFills({ order: acknowledgedOrder }),
+        )
       }
+      return { ok: true, data: acknowledgedOrder }
     },
     cancelOrder: async ({ order }) => {
       cancellationIds.push(order.brokerOrderId)
@@ -121,6 +130,10 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     }
     },
     getFills: async ({ orderId }) => {
+      if (acknowledgedFillsByOrder.has(orderId)) {
+        if (acknowledgedFillsGate) await acknowledgedFillsGate.promise
+        return { ok: true, data: acknowledgedFillsByOrder.get(orderId) }
+      }
       const canceledOrder = canceledOrders.get(orderId)
       return {
         ok: true,
@@ -186,6 +199,82 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   } : initialBook })
   return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
+
+test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
+  let releaseFills
+  let signalFillsStarted
+  const acknowledgedFillsGate = {
+    promise: new Promise((resolve) => { releaseFills = resolve }),
+  }
+  const fillsStarted = new Promise((resolve) => { signalFillsStarted = resolve })
+  const strategyPolicy = {
+    evaluate: ({ lastBuyPrice }) => ({
+      strategy: "TEST_POLICY",
+      symbol: "DOGEUSDT",
+      action: lastBuyPrice ? "NO_ACTION" : "PLACE_ORDERS",
+      actions: lastBuyPrice ? [] : [{
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "99.95",
+        quantity: "1",
+      }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({
+    strategyPolicy,
+    immediateFilledAcknowledgement: true,
+    acknowledgedFillsGate,
+    getAcknowledgedFills: ({ order }) => {
+      signalFillsStarted()
+      return [makeBuyFill({
+        order,
+        tradeId: "immediate-ack-fill",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+        executedAt: 10,
+      })]
+    },
+  })
+
+  const firstPrice = harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await fillsStarted
+  const secondPrice = harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "101", timestamp: 2 },
+  })
+
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.accountedFills.length, 0)
+
+  releaseFills()
+  const [firstResult, secondResult] = await Promise.all([firstPrice, secondPrice])
+
+  assert.equal(firstResult.ok, true, firstResult.errors?.[0]?.message)
+  assert.equal(secondResult.ok, true, secondResult.errors?.[0]?.message)
+  assert.equal(harness.orders.length, 1)
+  assert.deepEqual(harness.accountedFills.map((fill) => fill.id), ["immediate-ack-fill"])
+  assert.equal(harness.engine.getPausedMarkets().length, 0)
+})
+
+test("pauses an immediately FILLED acknowledged order when execution history is incomplete", async () => {
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    getAcknowledgedFills: () => [],
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE"))
+})
 
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
   const { engine, orders, pauses } = await createHarness()
