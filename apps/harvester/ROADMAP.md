@@ -1040,3 +1040,9 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 
 
 - **CI regression refinement — 2026-11-04:** Broker-layer fixture verifies raw Binance `myTrades` fills have no clientOrderId. The engine intentionally enriches a reconciled fill with the known owned-order client ID before accounting/journaling; the engine-level assertion therefore verifies that enrichment rather than expecting the accounting event to remain without identity. Broker and registry tests passed in the latest run; this corrected expectation is being rerun.
+
+
+### Accounting and Journal regression follow-up — 2026-11-04
+
+- Added the exact two-fill ZROUSDT regression to the accounting use case: 9939 / 698704 and 9940 / 698746, 0.005 ZRO commission each, net 9.990 ZRO, quote cash flow -17.905 USDT, RecoveryLedger buy cost/outstanding recovery 17.905 USDT, zero sell proceeds, and two deduplicated execution IDs.
+- Added an engine event-publication regression proving two distinct reconciled executions produce exactly two `FILL_APPLIED` events with the corresponding canonical fill IDs, and a replay does not publish a third fill event. The Journal consumes the same EventBus stream; live Journal file contents still require inspection during the next joint TESTNET session.

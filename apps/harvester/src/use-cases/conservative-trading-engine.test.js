@@ -14,6 +14,7 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -2647,4 +2648,66 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
   })
   assert.equal(nextPrice.ok, true)
   assert.equal(orders.length, 1)
+})
+
+
+test("publishes one durable fill-applied event per reconciled execution and no duplicate event", async () => {
+  const events = []
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    eventPublisher: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    getAcknowledgedFills: ({ order }) => [
+      makeBuyFill({
+        order,
+        tradeId: "9939",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+        clientOrderId: undefined,
+      }),
+      makeBuyFill({
+        order,
+        tradeId: "9940",
+        price: "99.94",
+        quantity: "0.5",
+        quoteQuantity: "49.97",
+        clientOrderId: undefined,
+      }),
+    ],
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+
+  const applied = events.filter((event) => event.name === HARVESTER_EVENT_NAMES.FILL_APPLIED)
+  assert.equal(applied.length, 2)
+  assert.deepEqual(applied.map((event) => event.data.fillId), [
+    "binance:DOGEUSDT:9939",
+    "binance:DOGEUSDT:9940",
+  ])
+
+  await harness.engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: harness.engine.getOrders()[0] }),
+      fill: makeBuyFill({
+        order: harness.engine.getOrders()[0],
+        tradeId: "9939",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+      }),
+    },
+  })
+  assert.equal(events.filter((event) => event.name === HARVESTER_EVENT_NAMES.FILL_APPLIED).length, 2)
 })
