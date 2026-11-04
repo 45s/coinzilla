@@ -6,6 +6,25 @@ import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 
+async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
+  let timeout
+  try {
+    await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(
+            label + " was not observed within " + timeoutMs + "ms; diagnostics: " +
+            JSON.stringify(getDiagnostics()),
+          ))
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const tradingConfig = {
   settings: { minProfit: 0.01 },
   strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
@@ -743,7 +762,7 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
 })
 
 
-test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", async () => {
+test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", { timeout: 90_000 }, async () => {
   const calls = []
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
@@ -753,6 +772,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   let signalRecoveryCompleted
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
+  const runtimeErrors = []
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -869,7 +889,10 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       },
     },
     now: () => 1000,
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
+    },
   })
   assert.equal(runtime.userDataReady, true)
   assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
@@ -920,7 +943,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill,
     },
   })
-  await threeOrdersSubmitted
+  await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
   const secondBuyIntent = submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== clientOrderId)
   const canonicalSecondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
@@ -960,7 +988,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill: secondBuyFill,
     },
   })
-  await fiveOrdersSubmitted
+  await waitForTestSignal(fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
 
   const replacementSell = submittedOrders.filter((order) => order.side === "SELL").at(-1)
   assert.equal(replacementSell.side, "SELL")
@@ -1002,7 +1035,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill: sellFill,
     },
   })
-  await recoveryCompleted
+  await waitForTestSignal(recoveryCompleted, "recovery.cycle_completed after the SELL fill", () => ({
+    submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
+    userDataReady: runtime.userDataReady,
+    userDataStatus: runtime.userDataStatus,
+    errors: runtimeErrors,
+  }))
   await subscriptions.get("BTCUSDT")({
     eventType: "aggTrade",
     symbol: "BTCUSDT",
