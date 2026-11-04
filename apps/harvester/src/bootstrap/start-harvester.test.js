@@ -93,7 +93,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     disconnect: async () => calls.push("disconnect"),
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true }),
+    getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => {
@@ -1701,4 +1701,62 @@ test("fails startup before market subscriptions when OPENING account snapshot ca
   assert.ok(calls.includes("disconnect"))
   assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+})
+
+
+test("journals account-wide open orders and blocks trading before engine activation when any exist", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  broker.getOpenOrders = async (input = {}) => {
+    calls.push("open-orders:account-wide:" + String(input.symbol))
+    return {
+      ok: true,
+      data: [{
+        clientOrderId: "manual-zro-sell",
+        brokerOrderId: "699694",
+        market: { symbol: "ZROUSDT" },
+        side: "SELL",
+        type: "LIMIT",
+        limitPrice: { amount: "1.828" },
+        originalQuantity: { amount: "4.98" },
+        executedQuantity: { amount: "0" },
+        status: "NEW",
+      }],
+    }
+  }
+  const eventPublisher = {
+    publish: (event) => { events.push(event); return { ok: true } },
+    flush: async () => ({ ok: true, durable: true }),
+  }
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => ({
+      ...tradingConfig,
+      strategies: {
+        ...tradingConfig.strategies,
+        CG_coinGrabber: {
+          ...tradingConfig.strategies.CG_coinGrabber,
+          pairs: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs,
+            BTCUSDT: { ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, enabled: true },
+          },
+        },
+      },
+    }),
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    logger: { info() {}, error() {}, debug() {} },
+  }), /startup blocked: account has 1 pre-existing open order/)
+
+  const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
+  const openOrders = events.find((event) => event.name === "account.open_orders_captured")
+  assert.equal(openingBalances.data.phase, "OPENING")
+  assert.equal(openOrders.data.readiness, "BLOCKED")
+  assert.equal(openOrders.data.orderCount, 1)
+  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
+  assert.ok(calls.includes("open-orders:account-wide:undefined"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+  assert.ok(calls.includes("disconnect"))
 })
