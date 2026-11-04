@@ -1075,7 +1075,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
 })
 
 
-test("logs confirmed broker readiness at info level without debug output", async () => {
+test("logs readiness at info and traces Conservative strategy input and decision at debug level", async () => {
   const calls = []
   const broker = createBroker()
   const result = await startHarvester({
@@ -1114,7 +1114,20 @@ test("logs confirmed broker readiness at info level without debug output", async
   assert.ok(infoMessages.includes("Conservative TESTNET trading engine activated"))
   assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
   assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
-  assert.equal(calls.filter(({ level }) => level === "debug").length, 0)
+  const debugCalls = calls.filter(({ level }) => level === "debug")
+  const evaluationStarted = debugCalls.find(({ message }) =>
+    message === "Harvester Conservative evaluation started")
+  const evaluationDecided = debugCalls.find(({ message }) =>
+    message === "Harvester Conservative evaluation decided")
+  assert.ok(evaluationStarted)
+  assert.ok(evaluationDecided)
+  assert.equal(evaluationStarted.symbol, "BTCUSDT")
+  assert.equal(evaluationStarted.marketPrice.price, "65000.12")
+  assert.equal(evaluationStarted.lastBuyPrice, null)
+  assert.deepEqual(evaluationStarted.activeOrders, [])
+  assert.ok(Array.isArray(evaluationStarted.portfolio.positions))
+  assert.equal(evaluationDecided.evaluationId, evaluationStarted.evaluationId)
+  assert.ok(Array.isArray(evaluationDecided.actions))
 
   await result.stop()
 })
