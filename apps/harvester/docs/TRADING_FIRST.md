@@ -156,3 +156,11 @@ reconciliation, regression checks, and the incident gate are complete.
 ### TESTNET commission setting — 2026-11-04
 
 Binance Spot TESTNET account settings previously showed **Commissions: None**. The operator changed the setting to **0.1% maker & taker**; the supplied follow-up screenshot shows that selection. The historical incident trade records still report zero commission and must be reconciled as historical zero-fee executions, not retroactively charged at 0.1%. Before the next controlled TESTNET run, verify the new setting is effective and record the timestamp. For each new execution, use the actual commission amount and asset returned by Binance trade history; never infer the realized fee solely from the UI setting. The setting is account-level and applies across the API keys shown on the page, not only Harvester's key. The new fee configuration changes expected economics and must be included in strategy profit/recovery calculations and regression fixtures before resuming trading.
+
+### 2026-11-04 latest PR #513 review gates
+
+The latest PR head currently has no reported GitHub Actions runs, check runs, or commit status contexts. This is not a green CI result; earlier offline test/coverage passes refer to a prior head. Re-run the complete required CI after the next source changes and verify it covers the exact latest PR head.
+
+Source review found that recovery SELL fee reservation currently derives only from `makerPercent`, despite `takerPercent` being configured and the incident executions being classified as TAKER. Actual commissions are used by fill accounting, but pre-trade recovery sizing must also account for the applicable liquidity role or a conservative worst-case rate. Add maker/taker fee-sizing regression tests. The lifecycle regression suite also still needs explicit streamed partial/final, duplicate/out-of-order, cancel/fill race, and concurrent-market-update boundaries.
+
+Do not restart Harvester or submit TESTNET orders until fee sizing, lifecycle coverage, latest-head CI, and historical trade reconciliation are complete. The historical zero-commission records must remain zero; the later 0.1% account setting applies only to future executions.
