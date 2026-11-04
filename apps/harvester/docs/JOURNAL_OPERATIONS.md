@@ -58,6 +58,8 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
+| `account.snapshot_captured` | OPENING/CLOSING phase, audit status, exchange source timestamp, every returned asset with exact free/locked/total quantities, audit reasons |
+| `account.open_orders_captured` | observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
 A `strategy.decision` event is emitted only when the strategy produces at least one actionable order. NO_ACTION evaluations are not journaled. No event is emitted for every market-price update.
 
@@ -65,11 +67,7 @@ The broker status `recovered` means the remote user-data subscription has return
 
 ## Startup and capture gaps
 
-Journal initialization is asynchronous and is deliberately not awaited by process startup or trading. Check the startup logs for `Journal started` and its file path. Programmatic callers of `main()` can inspect the returned `journalService.ready` result and `journalService.status`.
-
-Because subscription setup is asynchronous, events published before the Journal subscription becomes active may be missed. A missing early event is not evidence that it was persisted elsewhere; no persistence guarantee is made for that window.
-
-If the Journal cannot start (for example, invalid path or permissions), Harvester continues without Journal persistence and reports the setup failure. Disabling the Journal also leaves EventBus publication in memory only.
+For trading-enabled startup, `main()` awaits Journal readiness before connecting the broker. Bootstrap then fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` (OPENING) and `account.open_orders_captured`, and durably flushes each audit before creating the trading engine or subscribing to market data. If the open-order query fails, any pre-existing open order is found, mapping fails, or either flush is not durable, startup fails closed. A pre-existing order is not adopted or canceled; it is preserved as external/unowned until restart recovery and explicit ownership reconciliation are implemented. Read-only operation retains the optional Journal behavior. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
 
 ## Write failures and durability
 
@@ -109,4 +107,4 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 ## Security
 
-Event DTOs do not include credentials, raw exchange messages, SDK objects, full account snapshots, or raw commission objects. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
+Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields; raw broker payloads and commission objects are not persisted. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
