@@ -1243,6 +1243,49 @@ test("does not complete recovery when SELL fills do not equal the original order
   assert.ok(pauses.includes("SELL_FILL_RECONCILIATION_FAILED"))
 })
 
+test("ignores an out-of-order OPEN update after the BUY has already filled", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const fill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "filled-before-stale-open",
+    price: "99.95",
+    quantity: "1",
+    quoteQuantity: "99.95",
+    executedAt: 10,
+  })
+  const completed = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill,
+    },
+  })
+  assert.equal(completed.ok, true)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+
+  const stale = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "OPEN",
+        executedQuantity: "0",
+        updatedAt: 1,
+      }),
+    },
+  })
+
+  assert.equal(stale.ok, true)
+  assert.equal(stale.data.ignored, true)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+  assert.deepEqual(pauses, [])
+})
+
 test("reconciles streamed BUY partial fills cumulatively before advancing the strategy", async () => {
   const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
