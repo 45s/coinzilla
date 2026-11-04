@@ -1,4 +1,5 @@
 import { Market, TradingRules } from "@coinzilla/entities"
+import { compareDecimal, roundDecimalToIncrement } from "@coinzilla/utils"
 
 const REQUIRED_RULE_TYPES = Object.freeze([
   "PRICE_INCREMENT",
@@ -45,6 +46,56 @@ export function validateMarketTradingReadiness({
     if (!constraint || constraint.status !== "SUPPORTED") {
       throw new Error("Required exchange trading rule is unavailable: " + type + " for " + symbol)
     }
+  }
+
+  if (typeof pairConfig.orderQuantity !== "number" ||
+      !Number.isFinite(pairConfig.orderQuantity) ||
+      pairConfig.orderQuantity <= 0) {
+    throw new TypeError("pairConfig.orderQuantity must be a positive finite number")
+  }
+  if (typeof pairConfig.investment !== "number" ||
+      !Number.isFinite(pairConfig.investment) ||
+      pairConfig.investment <= 0) {
+    throw new TypeError("pairConfig.investment must be a positive finite number")
+  }
+
+  const constraints = new Map(tradingRules.constraints.map((item) => [item.type, item]))
+  const quantityIncrement = constraints.get("QUANTITY_INCREMENT").value.amount
+  const effectiveOrderQuantity = roundDecimalToIncrement({
+    value: String(pairConfig.orderQuantity),
+    increment: quantityIncrement,
+    direction: "down",
+  })
+  if (compareDecimal({
+    left: effectiveOrderQuantity,
+    right: constraints.get("MIN_QUANTITY").value.amount,
+  }) < 0) {
+    throw new RangeError(
+      "Configured orderQuantity for " + symbol + " (" + market.baseAsset.code +
+      ") is below exchange MIN_QUANTITY after step rounding",
+    )
+  }
+
+  const maxQuantity = constraints.get("MAX_QUANTITY")
+  if (maxQuantity?.status === "SUPPORTED" &&
+      compareDecimal({
+        left: effectiveOrderQuantity,
+        right: maxQuantity.value.amount,
+      }) > 0) {
+    throw new RangeError(
+      "Configured orderQuantity for " + symbol + " (" + market.baseAsset.code +
+      ") exceeds exchange MAX_QUANTITY after step rounding",
+    )
+  }
+
+  if (compareDecimal({
+    left: String(pairConfig.investment),
+    right: constraints.get("MIN_NOTIONAL").value.amount,
+  }) < 0) {
+    throw new RangeError(
+      "Configured investment for " + symbol + " (" + market.quoteAsset.code +
+      ") is below exchange MIN_NOTIONAL",
+    )
   }
 
   if (typeof pairConfig.makerPercent !== "number" ||

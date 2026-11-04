@@ -309,7 +309,9 @@ The tutorial's companion implementation is a pattern reference, not a source of 
 
 The Binance infrastructure adapter converts raw exchange filters into canonical `Market` and `TradingRules` entities. Exact decimal strings are preserved; absent or disabled optional bounds are represented as `UNSUPPORTED`, never as guessed zero-valued limits. Required price/quantity increments, minimum quantity, minimum notional, and the configured order type are validated for every enabled pair before Harvester subscribes to account events or market prices.
 
-This is only a market-metadata readiness gate. It does not yet initialize account-wide available balances, reserve quote/base assets, reconcile open orders, or enforce all min/max constraints at the final order-submission boundary. Those are separate P0 execution-safety requirements.
+Startup readiness also checks configured pair values against the exchange-reported assets and filters: `orderQuantity` is rounded down by the actual base-asset quantity increment and the effective quantity must satisfy supported minimum/maximum quantity bounds; the quote-asset `investment` allocation must be at least the minimum notional. The market symbol must match the configured pair. This is an early configuration-feasibility check, not a substitute for validating concrete orders.
+
+Immediately before submission, `validateOrderAgainstTradingRules` independently checks each actual order's price and quantity increments and all supported minimum/maximum price, quantity, and notional bounds using exact decimal arithmetic. Account-wide available balances, quote/base reservations, and authoritative post-only crossing validation remain separate execution-safety requirements.
 
 
 ## Account balance snapshot

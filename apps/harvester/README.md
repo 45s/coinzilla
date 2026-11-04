@@ -73,7 +73,7 @@ Harvester uses one `trading-config.json` for strategy availability, process-wide
 
 Strategy availability is not configured through environment variables. The runtime currently requires Conservative enabled and rejects Aggressive enabled.
 
-`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable.
+`investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable. On startup, every enabled pair is checked against its exchange metadata: `orderQuantity` is rounded down using the actual base-asset quantity step and the effective quantity must satisfy supported minimum/maximum quantity filters; `investment` must be at least the quote-asset minimum notional. The exchange-reported base and quote assets are authoritative for these units. This startup check is an early configuration-feasibility guard, not a replacement for per-order validation: each actual order is still checked immediately before submission against its price tick, quantity step, price/quantity bounds, and notional bounds. `pricePrecision` and `quantityPrecision` never override the exchange's actual tick and step sizes.
 
 Example:
 
