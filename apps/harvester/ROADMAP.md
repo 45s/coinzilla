@@ -837,9 +837,9 @@ The operator inspected the Binance Spot TESTNET API Keys / Account settings page
 ## Latest PR #513 review — 2026-11-04
 
 - [ ] **Latest-head CI:** the current PR head reports zero GitHub Actions workflow runs, zero check runs, and zero commit status contexts. This is **not green**. The previously recorded offline unit/coverage pass is from an earlier source head; rerun and record checks against the exact updated head.
-- [ ] **Fee reserve policy:** source review found `evaluateConservativeStrategy` passes only `makerPercent` to `calculateSellFeeRate`. Pair configuration also defines `takerPercent`, and the incident execution evidence classifies the burst as TAKER. Actual per-fill commissions flow into accounting, but the recovery SELL price/quantity reserve currently does not select the applicable taker rate or a documented worst-case rate. Fix this and add maker/taker recovery-sizing tests before any controlled run.
+- [x] **Fee reserve policy:** recovery SELL sizing now reserves the greater of configured maker/taker rates; tests cover zero, maker-higher, taker-higher, equal, and invalid rates.
 - [ ] **Lifecycle coverage:** the new immediate-FILLED acknowledgement barrier covers delayed multi-fill history, incomplete history, and conflicting duplicate IDs. The remaining requested matrix still needs explicit regression coverage for streamed non-terminal → FILLED/TRADE ordering, multiple partial fills, duplicate/out-of-order updates, cancel/fill overlap, and concurrent price updates during those transitions.
-- [ ] **Historical reconciliation:** retain the historical zero commissions exactly as returned by Binance. The new 0.1% maker/taker setting applies only to future executions. The +0.57065 USDT gross exchange cash-flow difference versus +0.36335 USDT journal profit remains unexplained; the setting change is not an explanation.
+- [x] **Historical profit reconciliation:** the five cycle profits sum to the session-wide +0.57065 USDT cash flow; the prior four cycles explain the +0.20730 difference. Historical fills reported zero commission. The later 0.1% maker/taker setting applies only to future executions.
 
 Harvester remained stopped. No TESTNET restart or order submission occurred during this review. Keep the TESTNET gate closed until the above items and trade-history reconciliation are complete.
 
@@ -850,10 +850,10 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 
 ### Evidence established
 
-- Twelve distinct DOGEUSDT BUY orders/client IDs were observed, each for 400 DOGE at 0.07598 USDT, all reported as TAKER, filled within roughly three seconds. This is not an order-ID collision. A rapid burst during a dump can be legitimate, but identical pricing means we must prove each decision used the correct current state.
+- Twelve distinct DOGEUSDT BUYs were submitted: client IDs h-DOGEUSDT-32 through h-DOGEUSDT-43, broker order IDs 1197074 through 1197085, each 400 DOGE at 0.07598 USDT (30.392 USDT each), all TAKER. The Journal proves the race: all 12 FILLED acknowledgements were published before the first corresponding execution.fill_applied event. The last acknowledgement was at 14:46:17.482; the first fill was applied at 14:46:17.483 and the remaining fills only afterward. The strategy therefore reevaluated with stale lastBuyPrice/Portfolio state. This is a confirmed acknowledgement/fill reconciliation race, not 12 independent decisions or an ID collision.
 - A 5,595 DOGE recovery SELL exceeded that burst's 4,800 DOGE by 795 DOGE, so it necessarily included earlier accumulated inventory.
-- The reviewed historical exchange trade sample contains 21 BUYs (8,400 DOGE; 635.85200 USDT gross) and 5 SELLs (8,390 DOGE; 636.42265 USDT gross): +10 DOGE and +0.57065 USDT gross before commissions. This is not yet a complete account/strategy ledger.
-- The journal reported +0.36335 USDT. The 0.20730 USDT difference from gross exchange cash flow remains unreconciled. The prior journal records do not expose enough per-fill arithmetic to explain this amount; this is an observability defect, not a value we may hand-wave as fees.
+- The saved Harvester Journal contains 21 BUY fills (8,400 DOGE; 635.85200 USDT gross) and 8 SELL fills (8,390 DOGE; 636.42265 USDT gross): +10 DOGE and +0.57065 USDT net quote cash flow before commissions.
+- **Resolved: the 0.20730 USDT difference is a cycle/session scope mismatch, not missing PnL.** The five recovery-cycle profits are +0.07808, +0.03285, +0.06053, +0.03584, and +0.36335 USDT. Their exact sum is +0.57065 USDT. The previous four cycles sum to exactly +0.20730 USDT; +0.36335 is only the fifth/latest cycle. The fill cash flow between each RecoveryLedger reset matches its cycle-completion profit exactly.
 - Historical exchange fills report zero commissions. The TESTNET account commission setting was subsequently changed from None to 0.1% maker and 0.1% taker. Do not retroactively apply the new setting to historical fills. Future accounting must use actual commission amount and asset on each fill.
 - The account snapshot showed 12,321 free DOGE and 517 non-zero assets. Wallet balances are not Harvester-owned inventory and cannot be used as the strategy's opening position without explicit reconciliation.
 
@@ -870,8 +870,8 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 
 ### Remaining investigation — actual blockers
 
-1. **Explain the 0.20730 USDT discrepancy.** Reconstruct the complete journal calculation from individual trade IDs and compare each fill's gross quote, commission amount/asset, Portfolio cash-flow delta, RecoveryLedger delta, cycle reset, and journal aggregation. Determine whether the discrepancy is missing fills, double counting, cycle boundaries, rounding, or a journal projection bug. Do not declare resolved until every amount ties out.
-2. **Explain the twelve-BUY burst.** Trace each order from market event through serialized engine transition: input price/timestamp, Portfolio and RecoveryLedger versions, lastBuyPrice/reference override, active BUY registry, generated intent, validation, submission, acknowledgement, and fill reconciliation. Prove whether the burst was a valid sequence of independent strategy decisions or stale-state/race behavior.
+1. **Resolved — 0.20730 USDT discrepancy.** Five RecoveryLedger cycle profits sum exactly to +0.57065 USDT session quote cash flow. The +0.36335 event is the final cycle only; +0.20730 is the sum of the previous four. The Journal balance-audit command now sums cycle profits per JSONL session. Historical per-fill commission amount/asset fields were absent from the old Journal payload, so retain the zero-commission exchange result and use actual commission facts for future fills.
+2. **Resolved — twelve-BUY burst root cause.** The saved Journal shows all 12 FILLED acknowledgements before the first execution was applied. The current engine awaits canonical REST fill-history reconciliation and applies the fills before the serialized transition releases. Existing delayed-ack tests plus the new 12-fill real-Conservative-policy regression cover the ordering and verify each subsequent BUY price advances from the preceding reconciled fill.
 3. **Audit event/market interleaving.** Confirm a market event cannot evaluate against stale portfolio/order state while execution processing or REST reconciliation is pending. Add deterministic race tests where market updates overlap immediate FILLED acknowledgements, partial fills, cancel/fill races, duplicate/out-of-order executions, and reconciliation.
 4. **Complete accounting invariants.** Verify base-asset commission reduces received BUY inventory / SELL inventory consumption correctly; quote-asset commission affects quote cost/proceeds exactly once; third-asset or incomplete commission data pauses safely. Compare Portfolio signed cash flow and RecoveryLedger values per fill and per cycle.
 5. **Verify fee economics end-to-end.** Check all callers/config fixtures supply both makerPercent and takerPercent; test recovery quantity/price rounding and net-profit guarantee at both fee rates. Confirm Binance's effective 0.1% setting on a future controlled run and compare actual commissions, never estimates, after execution.
@@ -880,8 +880,8 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 
 ### Acceptance blockers before any TESTNET restart
 
-- [ ] Explain the 0.20730 USDT difference from a complete per-trade/per-journal reconciliation.
-- [ ] Explain all twelve BUY decisions from correlated market/strategy/order/fill traces; no unexplained repeated stale-state decisions.
+- [x] Explain the 0.20730 USDT difference: five cycle profits sum exactly to +0.57065 USDT; the last cycle alone was +0.36335 and the previous four total +0.20730.
+- [x] Explain the twelve BUYs: all 12 FILLED acknowledgements preceded the first applied fill; the stale-state race is fixed with an awaited reconciliation barrier and deterministic regression tests.
 - [ ] Complete recovery-completion logging and deterministic lifecycle/race tests.
 - [ ] Confirm maker/taker fee reserve tests and all affected strategy tests pass on the latest head.
 - [ ] Confirm CI green on the exact latest PR head.
@@ -899,10 +899,10 @@ Do not merge or restart TESTNET while any acceptance blocker remains open.
 - [x] During graceful shutdown, stop new intake and drain accepted user-data events; reconcile owned orders before capturing CLOSING balances and flushing while broker REST remains connected.
 - [x] Mark CLOSING snapshot INCOMPLETE with explicit reasons when reconciliation fails, owned orders remain non-terminal, intake fails, or user-data/accounting remains unsafe. A failed closing snapshot fails shutdown.
 - [x] Document account-vs-strategy ownership and that raw balance deltas do not prove PnL without execution, commission, external movement, and inventory valuation reconciliation.
-- [ ] Add an engine-level regression proving that after a completed SELL the ledger is reset, configured keepQuantity is allocated as free, extra residual remains active, and that residual alone cannot generate another recovery SELL. The pure Conservative policy already gates recovery SELL intents on positive outstandingRecoveryAmount.
+- [ ] Add/verify an engine-level regression proving that after a completed SELL the ledger is reset, exactly keepQuantity is allocated as free, extra residual remains active, and that residual alone cannot generate another recovery SELL. The pure Conservative policy already gates recovery SELL intents on positive outstandingRecoveryAmount; the new engine test exercises the real Portfolio, RecoveryLedger, and completion callback.
 - [ ] Run focused Harvester tests, full workspace tests/coverage, and latest PR CI after this change.
-- [ ] Reconcile the historical +0.57065 gross exchange cash-flow / +0.36335 journal profit gap (0.20730 USDT) against complete trade IDs, per-fill commission amount/asset, and external account activity.
-- [ ] Conclusively classify the twelve distinct 400 DOGE @ 0.07598 TAKER BUYs within ~3 seconds using source trace and complete exchange history. Distinct IDs rule out ID collision, but do not alone prove whether identical pricing arose from stale transition state or independent decisions.
+- [x] Reconcile the historical +0.57065 gross exchange cash flow / +0.36335 final-cycle profit gap: previous four cycles total +0.20730 and all five total +0.57065. Historical commission amount/asset remains absent from the old Journal event payload; exchange records report zero commissions.
+- [x] Classify the twelve distinct 400 DOGE @ 0.07598 TAKER BUYs: the Journal event ordering confirms the stale acknowledgement/fill race. Current code waits for canonical fill reconciliation; the delayed-ack and 12-fill real-policy tests cover it.
 - [ ] Complete streamed partial/final, duplicate/out-of-order, cancellation/fill, REST/stream overlap and shutdown reconciliation regression matrix.
 - [ ] Keep TESTNET stopped until all gates above and current-head CI are green. Do not submit orders as part of this PR work.
 
