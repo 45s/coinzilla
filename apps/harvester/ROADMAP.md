@@ -1084,3 +1084,5 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] WebSocket canonical fills now use transaction time while order-update metadata retains event publication time.
 - [x] Added full REST/WebSocket canonical Fill parity coverage with `E !== T`, plus Portfolio and RecoveryLedger duplicate-delivery tests for both arrival orders.
 - [ ] Merge only after all required CI workflows pass on the synchronized PR head. No TESTNET operations are authorized by this offline fix.
+
+- [x] Feature branch synchronized with the latest `develop` head before final CI verification.
