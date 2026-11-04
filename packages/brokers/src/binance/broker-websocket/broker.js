@@ -13,7 +13,7 @@ import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js
 import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
 import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
-import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
+import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -282,16 +282,9 @@ export class BinanceWebSocketBroker extends CoreBroker {
     try {
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
-      if (!Array.isArray(response.data)) {
-        throw new TypeError("Binance allOrders response should be an array")
-      }
-      for (const order of response.data) {
-        if (!order || typeof order !== "object" || Array.isArray(order)) {
-          throw new TypeError("Binance allOrders response contains an invalid order")
-        }
-        normalizeBinanceId(order.orderId, "order history cursor ID")
-      }
-      return toResult({ data: response.data })
+      const orders = requireOrderHistoryArray({ orders: response.data })
+      validateOrderHistoryCursorItems({ orders })
+      return toResult({ data: orders })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getOrderHistory()", error })
       return toResult({ errors: [error] })
@@ -302,10 +295,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
     try {
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
-      if (!Array.isArray(response.data)) {
-        throw new TypeError("Binance allOrders response should be an array")
-      }
-      if (response.data.length === 0) {
+      const orders = requireOrderHistoryArray({ orders: response.data })
+      if (orders.length === 0) {
         return toResult({ data: [] })
       }
 
@@ -313,16 +304,12 @@ export class BinanceWebSocketBroker extends CoreBroker {
         "exchangeInfo",
         { symbol: params.symbol },
       )
-      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
-        ? metadataResponse.data.symbols.filter((item) => item?.symbol === params.symbol)
-        : []
-      if (symbolMatches.length !== 1) {
-        throw new Error(`Binance market metadata is missing or ambiguous for ${params.symbol}`)
-      }
-
-      const market = createCanonicalMarket({ symbolInfo: symbolMatches[0] })
+      const market = createCanonicalOrderHistoryMarket({
+        symbol: params.symbol,
+        exchangeInfo: metadataResponse.data,
+      })
       return toResult({
-        data: response.data.map((order) => adaptCanonicalOrder({ order, market })),
+        data: adaptCanonicalOrderHistory({ orders, market }),
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()", error })
