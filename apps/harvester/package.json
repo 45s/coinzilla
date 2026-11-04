@@ -13,7 +13,8 @@
     "testnet:balances": "node --env-file=.env.development scripts/list-testnet-balances.js",
     "testnet:sell-zro": "node --env-file=.env.development scripts/sell-testnet-zro.js",
     "testnet:history": "node --env-file=.env.development scripts/list-testnet-order-history.js",
-    "testnet:trades": "node --env-file=.env.development scripts/list-testnet-trades.js"
+    "testnet:trades": "node --env-file=.env.development scripts/list-testnet-trades.js",
+    "journal:balance-audit": "node --env-file=.env.development scripts/reconcile-journal-account-balances.js"
   },
   "engines": {
     "node": ">=24"
