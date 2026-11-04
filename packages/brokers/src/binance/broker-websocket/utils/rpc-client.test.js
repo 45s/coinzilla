@@ -454,3 +454,75 @@ test("RPC connection failure preserves its original error when listener cleanup 
   ])
   assert.equal(client.state, "closed")
 })
+
+test("RPC client decodes ArrayBuffer and typed-array response frames", async () => {
+  const context = createClient()
+  await connectClient(context)
+
+  const first = context.client.request("ticker.price", {})
+  context.sockets[0].receive(new TextEncoder().encode(JSON.stringify({
+    id: "request-1", status: 200, result: { frame: "array-buffer" },
+  })).buffer)
+  assert.deepEqual((await first).data, { frame: "array-buffer" })
+
+  const second = context.client.request("ticker.price", {})
+  context.sockets[0].receive(new TextEncoder().encode(JSON.stringify({
+    id: "request-2", status: 200, result: { frame: "typed-array" },
+  })))
+  assert.deepEqual((await second).data, { frame: "typed-array" })
+})
+
+test("RPC client rejects invalid and throwing request ID factories without leaking timers", async () => {
+  const invalid = createClient({ idFactory: () => Number.NaN })
+  await connectClient(invalid)
+  await assert.rejects(invalid.client.request("ticker.price", {}), /request ID/)
+  assert.equal(invalid.client.pendingCount, 0)
+  assert.equal(invalid.clock.pendingCount, 0)
+
+  const failure = new Error("ID source unavailable")
+  const throwing = createClient({ idFactory: () => { throw failure } })
+  await connectClient(throwing)
+  await assert.rejects(throwing.client.request("ticker.price", {}), failure)
+  assert.equal(throwing.client.pendingCount, 0)
+  assert.equal(throwing.clock.pendingCount, 0)
+})
+
+test("RPC client isolates throwing event and error observers", async () => {
+  const context = createClient()
+  await connectClient(context)
+  const errors = []
+  context.client.onError((error) => errors.push(error.message))
+  context.client.onError(() => { throw new Error("error observer failed") })
+  context.client.onEvent(() => { throw new Error("event observer failed") })
+
+  context.sockets[0].receive(JSON.stringify({ e: "executionReport" }))
+
+  assert.deepEqual(errors, ["event observer failed"])
+  assert.equal(context.client.state, "open")
+  await context.client.disconnect()
+})
+
+test("RPC client reports close-observer exceptions without blocking cleanup", async () => {
+  const context = createClient()
+  await connectClient(context)
+  const errors = []
+  context.client.onError((error) => errors.push(error.message))
+  context.client.onClose(() => { throw new Error("close observer failed") })
+
+  context.sockets[0].serverClose({ code: 1006, reason: "unexpected close", wasClean: false })
+
+  assert.equal(context.client.state, "closed")
+  assert.deepEqual(errors, ["close observer failed"])
+  assert.equal(context.client.pendingCount, 0)
+  assert.equal(context.clock.pendingCount, 0)
+})
+
+test("RPC client rejects a connection closed before the socket opens", async () => {
+  const context = createClient()
+  const connecting = context.client.connect()
+  context.sockets[0].serverClose({ code: 1006, reason: "closed before open", wasClean: false })
+
+  await assert.rejects(connecting, /closed before open|connection closed/i)
+  assert.equal(context.client.state, "closed")
+  assert.equal(context.sockets[0].readyState, FakeWebSocket.CLOSED)
+})
