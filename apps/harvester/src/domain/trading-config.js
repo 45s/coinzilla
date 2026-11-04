@@ -2,10 +2,12 @@ const isRecord = (value) => value !== null && typeof value === 'object' && !Arra
 const fail = (path, expectation) => { throw new TypeError(`Invalid trading config at "${path}": expected ${expectation}`); };
 const requireRecord = (value, path) => { if (!isRecord(value)) fail(path, 'an object'); };
 const requireBoolean = (value, path) => { if (typeof value !== 'boolean') fail(path, 'a boolean'); };
-const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false } = {}) => {
+const requireNumber = (value, path, { min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false } = {}) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) fail(path, 'a finite number');
   const validMinimum = exclusiveMin ? value > min : value >= min;
   if (!validMinimum) fail(path, exclusiveMin ? `a finite number greater than ${min}` : `a finite number greater than or equal to ${min}`);
+  const validMaximum = exclusiveMax ? value < max : value <= max;
+  if (!validMaximum) fail(path, exclusiveMax ? `a finite number less than ${max}` : `a finite number less than or equal to ${max}`);
 };
 const requirePrecision = (value, path) => { if (!Number.isInteger(value) || value < 0) fail(path, 'a non-negative integer'); };
 
@@ -40,8 +42,8 @@ export function validateTradingConfig(config) {
     requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true });
     requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`);
     requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`);
-    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0 });
-    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0 });
+    requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0, max: 100, exclusiveMax: true });
+    requireNumber(pair.takerPercent, `${pairPath}.takerPercent`, { min: 0, max: 100, exclusiveMax: true });
   }
   return config;
 }
