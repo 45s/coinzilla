@@ -82,23 +82,23 @@ Do not use "production readiness", "future recovery", "complete architecture", o
 Follow the canonical [repository engineering standards](../../../ENGINEERING_STANDARDS.md) and [Harvester agent instructions](../AGENTS.md). This document defines Harvester's product priority and TESTNET execution sequence only.
 ## Current implementation status
 
-The Conservative policy and in-process TESTNET workflow are implemented and have deterministic fake-broker coverage for initial BUY, trailing replacement, BUY-driven SELL replacement, full recovery SELL, and free-inventory allocation. The remaining first-milestone proof is a real Binance TESTNET run. The committed default config enables only ZROUSDT. Use the [controlled TESTNET runbook](../README.md#controlled-testnet-runbook); do not use production credentials.
+The Conservative policy and in-process TESTNET workflow are implemented and have deterministic fake-broker coverage for initial BUY, trailing replacement, BUY-driven SELL replacement, full recovery SELL, and free-inventory allocation. A real Binance Spot TESTNET run has now demonstrated startup, validated DOGEUSDT price evaluation, BUY submission/acknowledgement, a BUY fill reported as applied, and subsequent SELL plus BUY submissions. A later open-orders snapshot confirms those two orders remain open with zero fills. The complete BUY → fill → SELL → fill → next-cycle sequence is not yet demonstrated; cancellation reconciliation and actual fill accounting/commission correctness also remain to be verified from complete evidence. The committed default config enables only ZROUSDT; DOGEUSDT was an operator-enabled TESTNET market for this observed run. Use the [controlled TESTNET runbook](../README.md#controlled-testnet-runbook); do not use production credentials. See the dated [TESTNET progress record](../ROADMAP.md#testnet-live-progress--2026-11-04).
 
 ## Definition of done for the first trading milestone
 
 All of the following must be demonstrated, not merely described:
 
-- [ ] App starts from documented instructions and loads/validates real configuration.
-- [ ] Enabled market price subscriptions connect and deliver validated prices.
-- [ ] Conservative strategy evaluates actual current context and produces actionable order intents.
-- [ ] Broker adapter submits actual bounded TESTNET orders.
-- [ ] Order acknowledgements and all execution updates are received and normalized.
+- [x] App starts from documented instructions and loads/validates real configuration (operator-confirmed TESTNET startup, 2026-11-04).
+- [x] Enabled market price subscriptions connect and deliver validated prices (DOGEUSDT market prices were evaluated on TESTNET, 2026-11-04).
+- [x] Conservative strategy evaluates actual current context and produces actionable order intents (`PLACE_ORDERS` observed on TESTNET, 2026-11-04).
+- [x] Broker adapter submits TESTNET orders and receives acknowledgements (BUY, SELL, and standing BUY orders observed, 2026-11-04).
+- [ ] Order acknowledgements and all execution updates are received and normalized. (Partial evidence only: NEW and TRADE events were observed; one CANCELED report was logged as IGNORED.)
 - [ ] Partial and final fills update Position/Portfolio correctly using actual commission facts.
-- [ ] The strategy reacts to fills/order transitions and submits the next required order.
+- [x] The strategy reacts to a BUY fill/order transition and submits the next required SELL plus standing BUY (both acknowledged on TESTNET, 2026-11-04).
 - [ ] At least one complete BUY → fill → SELL → fill → next-cycle sequence succeeds on TESTNET.
 - [ ] Disconnect/unknown-outcome behavior pauses new orders rather than blindly duplicating them.
 - [ ] Tests, CI, and a concise TESTNET runbook support the demonstrated behavior.
-- [ ] Live trading remains disabled.
+- [x] Live trading remains disabled; the evidence recorded here is Binance Spot TESTNET only.
 
 Only after this definition of done is met should the team move the main priority to durable Journal integration, restart recovery, comprehensive reconciliation, operational hardening, or Aggressive strategy work.
 
