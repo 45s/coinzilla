@@ -78,6 +78,13 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
   return errors
 }
 
+const evaluateReadOnlyConservativeStrategy = ({ marketPrice } = {}) => Object.freeze({
+  strategy: "CONSERVATIVE",
+  symbol: marketPrice?.symbol,
+  action: "NO_ACTION",
+  reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
+})
+
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
   const recoveryLedgers = new Map()
@@ -144,7 +151,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = conservativeStrategyPolicy.evaluate,
+  evaluateStrategy = evaluateReadOnlyConservativeStrategy,
   logger = defaultLogger,
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
