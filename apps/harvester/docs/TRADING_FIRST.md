@@ -179,27 +179,33 @@ Do not restart Harvester or submit TESTNET orders until fee sizing, lifecycle co
 - A bootstrap regression test verifies the per-fill accounting trace.
 - README and roadmap now record the incident findings, current fixes and explicit acceptance blockers.
 
-#### Open blockers — work in this order
+#### Incident findings and source status — 2026-11-04
 
-1. **Journal arithmetic / 0.20730 USDT:** Reconcile every historical exchange trade ID against Journal records and accounting projections. Explain why exchange gross cash flow is +0.57065 USDT while Journal reports +0.36335 USDT. Check missing/double-applied fills, commission treatment, signed cash flow, cycle resets, aggregation and rounding. Historical commission was zero; do not attribute the gap to the later 0.1% setting without evidence.
-2. **Twelve same-price BUYs:** Reconstruct each decision with the new traces. Follow market event → engine transition → lastBuyPrice/reference override → Portfolio/RecoveryLedger → active-order registry → intent → submission → acknowledgement → fills. Determine whether this was valid rapid strategy behavior or stale-state/race behavior.
-3. **Lifecycle interleaving:** Add deterministic tests for market updates overlapping fill processing and immediate FILLED acknowledgement; partial fill then cancel/fill race; duplicate and out-of-order execution; REST reconciliation overlapping stream updates; repeated same-price events while an order is pending/active.
-4. **Recovery completion observability:** Source now logs completion inputs (buy cost, net sell proceeds, realized profit, minimum profit, active quantity, keep quantity), eligibility/reason, free allocation, and pre/post Portfolio and ledger reset. Full-cycle bootstrap regression now asserts BUY/SELL accounting records and eligible recovery-completion/allocation records; rejected-path logging coverage remains open.
-5. **Accounting invariants:** Test base and quote commission effects exactly once, third-asset and incomplete commission fail-closed behavior, Portfolio vs RecoveryLedger per-fill deltas, and duplicate execution idempotency. Explain each journal total from source executions.
-6. **Fee policy integration:** Search every fee-calculator call site and every pair fixture/config. Ensure both makerPercent and takerPercent are supplied; verify quantity/price rounding and net-profit guarantee with 0.1% maker/taker.
-7. **Exact-head verification:** Run the full Harvester test/coverage and repository CI suite on the exact latest PR head. Do not cite earlier-head passes as current. Latest CI must be green before considering a controlled TESTNET run.
-8. **Account/trade ownership baseline:** Use the read-only trade-history diagnostic and supplied exchange evidence to separate Harvester-owned orders/trades from unrelated wallet inventory. The observed 12,321 free DOGE and 517 non-zero assets are not a strategy opening position. Verify the new commission setting is effective before any future controlled test.
+1. **The +0.20730 USDT difference is explained.** The historical Journal has 21 BUY fills (8,400 DOGE / 635.85200 USDT) and 8 SELL fills (8,390 DOGE / 636.42265 USDT), net +0.57065 USDT quote cash flow. The five recovery.cycle_completed profits are +0.07808, +0.03285, +0.06053, +0.03584, and +0.36335 USDT; they sum exactly to +0.57065. The previous four cycles sum to +0.20730. The +0.36335 value was the last cycle, not the session total.
+2. **The twelve BUYs were a confirmed stale-state race.** All 12 distinct 400-DOGE BUYs at 0.07598 USDT were acknowledged FILLED before the first execution fill was applied. The engine now awaits complete canonical fill-history retrieval and application before releasing the serialized transition. Tests cover delayed immediate-FILLED reconciliation and 12 sequential fills through the real Conservative policy, verifying that each next BUY uses the preceding reconciled lastBuyPrice.
+3. **Post-cycle residual inventory must remain correctly classified.** Recovery completion allocates exactly keepQuantity to free inventory; extra residual remains active. The Conservative policy now requires positive outstanding recovery before planning another recovery SELL, so residual active inventory alone cannot trigger a new SELL after ledger reset. Invalid strategy-order validation pauses the pair, preventing repeated invalid MIN_NOTIONAL decisions. Pure-policy and new engine-level regression tests cover this path; verify them on the current CI head.
+4. **Fee reserve:** recovery SELL sizing uses the greater of configured maker/taker rates. Tests cover zero, maker-higher, taker-higher, equal, and invalid inputs.
+5. **Account audit:** trading-enabled startup requires a ready, durably flushable Journal; OPENING all-asset balances are flushed before engine activation. Graceful shutdown reconciles owned orders and flushes CLOSING balances before broker disconnect. The read-only journal:balance-audit command reports per-asset balance deltas and sums per-cycle recovery profits per Journal session.
 
+#### Remaining blockers — work in this order
+
+1. **Exact-head CI:** run Harvester tests, coverage, workspace tests, syntax, workflow lint, security/dependency checks on the exact current PR head. Earlier passes do not validate later commits.
+2. **Lifecycle overlap matrix:** complete deterministic tests for streamed non-terminal → FILLED/TRADE ordering, multiple partial fills, duplicate/out-of-order reports, cancel/fill overlap, REST/stream reconciliation overlap, same-price market events while pending/active, and shutdown while reconciliation is pending.
+3. **Engine-level post-cycle regression:** run the newly added test that applies the recovery SELL to Portfolio/RecoveryLedger, resets the ledger, allocates exactly keepQuantity, preserves extra active residual, and proves no second recovery SELL is created. Run the invalid MIN_NOTIONAL pause/no-repeat test too.
+4. **New-session balance audit:** the historical incident Journal predates OPENING/CLOSING snapshots, so it cannot establish a wallet opening baseline. Run journal:balance-audit against a future closed TESTNET session and reconcile per-asset deltas with exchange trade/commission history and external account movements.
+5. **Ownership baseline:** the account is pre-funded (12,321 DOGE and 517 non-zero assets). Do not infer Harvester-owned inventory from wallet totals. Separate Harvester executions/orders from external balances/trades before any controlled run.
+6. **Commission verification:** historical executions reported zero commissions under the earlier account setting. The 0.1% maker/taker setting was changed later and must be verified effective before any future controlled execution. Future Journal fills record actual commission amount, asset, and status; never retroactively apply the new rate.
+7. **Controlled TESTNET gate:** keep the process stopped. No restart or order submission until exact-head CI and lifecycle tests pass, the new-session account baseline is understood, and an operator explicitly approves the controlled run.
 #### Current gate
 
-- Source fixes above: committed to PR #513.
-- Regression tests: added/updated, **not yet executed on the current head**.
-- Recovery-completion trace and full lifecycle race coverage: open.
-- 0.20730 USDT reconciliation: open.
-- Twelve-BUY causality: open.
-- Latest CI: must be checked on the exact current head; no green status may be claimed until observed.
+- Confirmed source fixes: committed to PR #513.
+- 0.20730 USDT cycle/session discrepancy: resolved exactly from the five Journal cycle events.
+- Twelve-BUY stale-state race: root cause confirmed; awaited fill-reconciliation barrier and deterministic regression coverage committed.
+- Post-cycle residual inventory / MIN_NOTIONAL behavior: policy guard, pair pause, and engine-level regressions committed; exact-head test result still pending.
+- Full lifecycle overlap matrix: incomplete.
+- New-session OPENING/CLOSING balance audit: implemented, but no post-fix session exists yet.
 - TESTNET: stopped; no restart/order submission.
-- Merge: not authorized until blockers close and operator approves.
+- Merge: not authorized until remaining tests/CI and operator approval.
 
 
 ## Mandatory account snapshot audit
