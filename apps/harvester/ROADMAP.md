@@ -1046,3 +1046,12 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 
 - Added the exact two-fill ZROUSDT regression to the accounting use case: 9939 / 698704 and 9940 / 698746, 0.005 ZRO commission each, net 9.990 ZRO, quote cash flow -17.905 USDT, RecoveryLedger buy cost/outstanding recovery 17.905 USDT, zero sell proceeds, and two deduplicated execution IDs.
 - Added an engine event-publication regression proving two distinct reconciled executions produce exactly two `FILL_APPLIED` events with the corresponding canonical fill IDs, and a replay does not publish a third fill event. The Journal consumes the same EventBus stream; live Journal file contents still require inspection during the next joint TESTNET session.
+
+
+### Post-review hardening — 2026-11-04
+
+- Canonical historical order adaptation now rejects a missing/mismatched symbol and a missing or unsupported exchange status. Optional timestamps and unrelated exchange metadata remain optional. Regression coverage includes missing order/client IDs, symbol, side, status, and execution quantities.
+- Added a delayed `myTrades` visibility regression: an empty history result cannot manufacture a fill or clear a pause; the acknowledged order remains UNKNOWN with zero reconciled quantity and its broker ID, then later REST history applies each exact execution once.
+- Added conflicting fill ownership cases for broker order ID, market, side, and client order ID. Added acknowledgement replay checks so an identical acknowledgement is idempotent but changed immutable order intent cannot bypass validation merely because the client/broker IDs match.
+- Current exact PR head `dcf2b63c98306dc149dde970c4710729f223d5f5` passed all five required workflows: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The branch remains synchronized with `develop`.
+- These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.
