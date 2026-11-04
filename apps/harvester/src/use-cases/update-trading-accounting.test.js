@@ -157,3 +157,87 @@ test("rejects a wrong-market fill atomically when Portfolio accepts but Recovery
   assert.equal(recoveryLedger.buyCost, "0")
   assert.deepEqual(recoveryLedger.appliedFillIds, [])
 })
+
+
+test("accounts base and quote commissions atomically across Portfolio and RecoveryLedger", () => {
+  const buy = makeFill({
+    tradeId: "buy-base-and-quote-fees",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+    ],
+  })
+  const bought = updateTradingAccounting({
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+    fill: buy,
+  })
+
+  assert.equal(bought.ok, true)
+  const positionAfterBuy = bought.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(positionAfterBuy.baseQuantity.amount, "99")
+  assert.equal(positionAfterBuy.quoteNetCashFlow.amount, "-10.01")
+  assert.equal(bought.data.recoveryLedger.buyCost, "10.01")
+
+  const sell = makeFill({
+    tradeId: "sell-base-and-quote-fees",
+    side: "SELL",
+    quantity: "50",
+    quoteQuantity: "6",
+    commissions: [
+      new Commission({ amount: new Money({ amount: "0.5", asset: baseAsset }) }),
+      new Commission({ amount: new Money({ amount: "0.02", asset: quoteAsset }) }),
+    ],
+  })
+  const sold = updateTradingAccounting({
+    portfolio: bought.data.portfolio,
+    recoveryLedger: bought.data.recoveryLedger,
+    fill: sell,
+  })
+
+  assert.equal(sold.ok, true)
+  const positionAfterSell = sold.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(positionAfterSell.baseQuantity.amount, "48.5")
+  assert.equal(positionAfterSell.quoteNetCashFlow.amount, "-4.03")
+  assert.equal(sold.data.recoveryLedger.buyCost, "10.01")
+  assert.equal(sold.data.recoveryLedger.netSellProceeds, "5.98")
+})
+
+test("rejects unknown commission status without committing either accounting projection", () => {
+  const portfolio = new Portfolio()
+  const recoveryLedger = RecoveryLedger.empty({ market })
+  const result = updateTradingAccounting({
+    portfolio,
+    recoveryLedger,
+    fill: makeFill({ commissionStatus: "UNKNOWN" }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(portfolio.positions.length, 0)
+  assert.deepEqual(portfolio.appliedFillIds, [])
+  assert.equal(recoveryLedger.buyCost, "0")
+  assert.equal(recoveryLedger.netSellProceeds, "0")
+  assert.deepEqual(recoveryLedger.appliedFillIds, [])
+})
+
+test("rejects conflicting replayed execution facts without changing either projection", () => {
+  const first = updateTradingAccounting({
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+    fill: makeFill({ tradeId: "replayed-execution", quantity: "100", quoteQuantity: "10" }),
+  })
+  assert.equal(first.ok, true)
+
+  const conflicting = updateTradingAccounting({
+    portfolio: first.data.portfolio,
+    recoveryLedger: first.data.recoveryLedger,
+    fill: makeFill({ tradeId: "replayed-execution", quantity: "99", quoteQuantity: "9.9" }),
+  })
+
+  assert.equal(conflicting.ok, false)
+  assert.equal(conflicting.data, undefined)
+  assert.equal(first.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "100")
+  assert.equal(first.data.recoveryLedger.buyCost, "10")
+  assert.deepEqual(first.data.portfolio.appliedFillIds, ["replayed-execution"])
+  assert.deepEqual(first.data.recoveryLedger.appliedFillIds, ["replayed-execution"])
+})
