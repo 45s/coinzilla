@@ -783,6 +783,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
   const runtimeErrors = []
+  const runtimeDebug = []
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -905,6 +906,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     now: () => 1000,
     logger: {
       info() {},
+      debug: (entry) => runtimeDebug.push(entry),
       error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
     },
   })
@@ -1058,6 +1060,14 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     userDataStatus: runtime.userDataStatus,
     errors: runtimeErrors,
   }))
+  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+    message === "Harvester accounting execution applied" && tradeId === "testnet-buy-fill"))
+  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+    message === "Harvester accounting execution applied" && tradeId === "testnet-sell-fill"))
+  assert.ok(runtimeDebug.some(({ message }) =>
+    message === "Harvester recovery completion evaluation input"))
+  assert.ok(runtimeDebug.some(({ message }) =>
+    message === "Harvester recovery cycle completed and inventory allocated"))
   await subscriptions.get("BTCUSDT")({
     eventType: "aggTrade",
     symbol: "BTCUSDT",
