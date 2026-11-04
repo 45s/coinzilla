@@ -65,18 +65,31 @@ The migration is complete only when all of the following are true:
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
 
+### DDD architecture modernization — first tranche complete; recovery hardening continues
+
+The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
+
+- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #522 implementation head `7163587568190a4ed4f2b23f08c792e41dd8e1c2`: **83.13% lines, 85.71% branches, 80.55% functions**.
+- [x] Codify the architecture boundary in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md): brokers is an infrastructure adapter; Harvester owns portfolio/position domain policy, strategies, and application use cases. Do not create empty `domain/` or `application/` folders in brokers.
+- [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **339/339** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.43%/85.37%/81.03% (lines/branches/functions).
+- [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
+- [x] Extract focused pure Binance adapters for symbol filters, canonical fills, order history, and order request parameters. Each new adapter has direct tests and 100% line/branch/function coverage.
+- [x] Follow RED → GREEN → REFACTOR for the vertical slices while preserving public exports, method signatures, result envelopes, decimal strings, event semantics, order-safety gates, and reconciliation acknowledgement behavior.
+- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#523 are merged.
+- [ ] Set risk-based package coverage thresholds only after the remaining critical recovery/operational branches have been reviewed. Do not impose a blanket percentage target.
+
+The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
+
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `674a3b10ed34fb444a9f2ef2179fc073c90b7827` (PR #365).
-2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
-3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
-4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
-5. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A successful socket connection or subscription is never proof that missed events have been reconciled.
-6. Phase 6 remains in progress until reconnect/reconciliation liveness tests and opt-in Binance TESTNET verification are complete. PR #343 removed fixed microtask-count polling from recovery race tests; the fake scheduler awaits async timer callbacks and tests use explicit recovery synchronization. Do not claim the broker can replay events missed during a disconnect.
+1. The source of truth is `develop`, currently at merge commit `18e84da3be2833115dceb9e97b315a2d95c0c472` (PR #523).
+2. The DDD/TDD first tranche is merged through PRs #516–#523: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
+3. Latest package verification: **339/339 broker tests passed**. The exact `pnpm --filter @coinzilla/brokers test:coverage` command passed with **83.13% lines, 85.71% branches, and 80.55% functions**. The new pure adapters report 100% line/branch/function coverage.
+4. Phase 6 remains in progress. Continue deterministic reconnect/reconciliation liveness tests, including repeated acknowledgement, superseded connections, and stale subscription cleanup. A connected socket or successful subscription is never proof that missed events have been reconciled.
+5. Phase 8 remains open for opt-in TESTNET verification and long-running recovery/soak validation. Do not claim replay of events missed during a disconnect unless that behavior is proven.
+6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
-8. PR #347 is merged: RPC connection-startup rejection now detaches all registered RPC transport listeners. PR #350 is merged: native transport listener registration failures now roll back partial setup and close the socket. PR #351 is merged: Streams startup exceptions now detach listeners and close the transport. PR #353 made user-data listener registration transactional, PR #354 made listener detachment exhaustive and idempotent, PR #355 detaches listeners immediately on RPC close, PR #357 verifies uncertain final-subscriber unsubscribe outcomes, PR #359 cleans up failed reconnect attempts, PR #361 applies verified unsubscribe handling to stale subscription responses, PR #362 rejects malformed subscription lookup state, PR #365 makes RPC listener removal exhaustive, and PR #366 makes native transport close finalization resilient. The next test-coverage pass verifies the existing fallback when the underlying socket's `close()` itself throws, including error reporting, close notification, timer cleanup, and idempotent completion.
-9. Bot strategy implementation remains owned by `apps/bot-free-roll`; broker changes must preserve the callback/recovery acknowledgement contract and must not edit bot runtime code without an explicit cross-domain task.
-
+8. The broker package must not implement bot strategy or portfolio policy. Those remain owned by Harvester/bot application domains; preserve the callback and reconciliation-acknowledgement contract.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 

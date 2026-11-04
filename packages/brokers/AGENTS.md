@@ -22,6 +22,20 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - Document public contract changes and consumer migration impact.
 - Update this domain's roadmap when work is accepted, blocked, deferred, or merged. Mark work complete only after it is merged into `develop` and required checks pass.
 
+## DDD responsibility boundaries
+
+Architecturally, `@coinzilla/brokers` is an **infrastructure adapter package**. The repository may group it under the Brokers ownership domain, but it is not the owner of portfolio, position, strategy, or trading-use-case domain logic.
+
+- `apps/harvester` owns portfolio/position domain models, strategy policy, trading orchestration, and application use cases. Keep those concepts out of broker adapters.
+- `broker-websocket/broker.js` is the Binance broker facade and composition root: preserve the public broker contract, coordinate injected clients, and enforce state-changing safety gates.
+- `methods/user-data-session.js` owns the stateful user-data subscription/recovery lifecycle and consumer reconciliation acknowledgement.
+- `helpers/adapters/` contains focused, deterministic Binance DTO/request/response mappers. Keep pure validation and mapping out of the broker facade when it forms a cohesive responsibility.
+- `utils/` owns native transport and RPC/Streams protocol clients; `shared/` owns canonical entity adapters; `test-helpers/` owns deterministic fakes.
+- Introduce a port when it creates a real side-effect boundary or allows a coordinator to be tested independently. Do not add a generic wrapper for every RPC method.
+- Do not create empty `domain/` or `application/` folders merely to imitate a template. Add them only if the broker package acquires a genuine package-owned domain concept or use case.
+
+Keep order-changing calls gated on user-data readiness/reconciliation and marked `stateChanging: true`. An uncertain timeout/disconnect is an unknown outcome; never blindly replay the operation.
+
 ## Workflow
 
 Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.

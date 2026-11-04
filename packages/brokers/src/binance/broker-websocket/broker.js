@@ -1,7 +1,7 @@
-import { Asset, Market } from "@coinzilla/entities"
-import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
+import { adaptOrderRequestParams } from "./helpers/adapters/order-request-params.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
 import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
@@ -10,7 +10,11 @@ import { BinanceStreamsClient } from "./utils/streams-client.js"
 import { NativeWebSocketTransport } from "./utils/transport.js"
 import { BinanceUserDataSession } from "./methods/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
-import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
+import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js"
+import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
+import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
+import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
+import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
 
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
@@ -28,34 +32,6 @@ function createMarketClient(config, logger) {
     maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
     onError: (error) => logger.error?.({ message: "Binance market stream error", error }),
   })
-}
-
-function validatePositiveDecimalFilter({ value, name, symbol }) {
-  if (value === undefined || value === null) {
-    throw new Error(`Binance ${name} missing for ${symbol}`)
-  }
-  try {
-    assertDecimalString({ value, field: name })
-  } catch (error) {
-    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
-  }
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
-    throw new Error(`Binance ${name} missing or non-positive for ${symbol}`)
-  }
-  return value
-}
-
-function readOptionalDecimalFilter({ value, name, symbol }) {
-  if (value === undefined || value === null) return undefined
-  try {
-    assertDecimalString({ value, field: name })
-  } catch (error) {
-    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
-  }
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
-    throw new RangeError(`Binance ${name} must be non-negative for ${symbol}`)
-  }
-  return value
 }
 
 async function getCanonicalMarket({ broker, symbol }) {
@@ -86,38 +62,6 @@ function validateCallback(callback, name) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
   }
-}
-
-function adaptBookTickerMessage({ message, symbol }) {
-  if (!message || typeof message !== "object" || Array.isArray(message) ||
-      (message.e !== undefined && message.e !== "bookTicker")) {
-    throw new TypeError("A Binance bookTicker event is required")
-  }
-  if (message.s !== symbol) {
-    throw new TypeError("Binance bookTicker symbol does not match the subscription")
-  }
-
-  const decimalFields = [
-    ["b", "best bid price"],
-    ["B", "best bid quantity"],
-    ["a", "best ask price"],
-    ["A", "best ask quantity"],
-  ]
-  for (const [field, name] of decimalFields) {
-    assertDecimalString({ value: message[field], field: name })
-    if (compareDecimal({ left: message[field], right: "0" }) <= 0) {
-      throw new RangeError("Binance bookTicker " + name + " must be positive")
-    }
-  }
-
-  return Object.freeze({
-    symbol,
-    bestBidPrice: message.b,
-    bestBidQuantity: message.B,
-    bestAskPrice: message.a,
-    bestAskQuantity: message.A,
-    timestamp: Date.now(),
-  })
 }
 
 function logSafely(logger, level, ...args) {
@@ -182,6 +126,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     this.userDataSession = new BinanceUserDataSession({
       getClient: () => this.tradingConnection,
       createClient: () => this.apiClientFactory(this.config),
+      createUserDataClientPort: createBinanceUserDataClientPort,
       setClient: (client) => { this.tradingConnection = client },
       setConnected: (connected) => { this.connected = connected },
       setUnavailable: (unavailable) => { this.userDataUnavailable = unavailable },
@@ -338,16 +283,9 @@ export class BinanceWebSocketBroker extends CoreBroker {
     try {
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
-      if (!Array.isArray(response.data)) {
-        throw new TypeError("Binance allOrders response should be an array")
-      }
-      for (const order of response.data) {
-        if (!order || typeof order !== "object" || Array.isArray(order)) {
-          throw new TypeError("Binance allOrders response contains an invalid order")
-        }
-        normalizeBinanceId(order.orderId, "order history cursor ID")
-      }
-      return toResult({ data: response.data })
+      const orders = requireOrderHistoryArray({ orders: response.data })
+      validateOrderHistoryCursorItems({ orders })
+      return toResult({ data: orders })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getOrderHistory()", error })
       return toResult({ errors: [error] })
@@ -358,10 +296,8 @@ export class BinanceWebSocketBroker extends CoreBroker {
     try {
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
-      if (!Array.isArray(response.data)) {
-        throw new TypeError("Binance allOrders response should be an array")
-      }
-      if (response.data.length === 0) {
+      const orders = requireOrderHistoryArray({ orders: response.data })
+      if (orders.length === 0) {
         return toResult({ data: [] })
       }
 
@@ -369,16 +305,12 @@ export class BinanceWebSocketBroker extends CoreBroker {
         "exchangeInfo",
         { symbol: params.symbol },
       )
-      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
-        ? metadataResponse.data.symbols.filter((item) => item?.symbol === params.symbol)
-        : []
-      if (symbolMatches.length !== 1) {
-        throw new Error(`Binance market metadata is missing or ambiguous for ${params.symbol}`)
-      }
-
-      const market = createCanonicalMarket({ symbolInfo: symbolMatches[0] })
+      const market = createCanonicalOrderHistoryMarket({
+        symbol: params.symbol,
+        exchangeInfo: metadataResponse.data,
+      })
       return toResult({
-        data: response.data.map((order) => adaptCanonicalOrder({ order, market })),
+        data: adaptCanonicalOrderHistory({ orders, market }),
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()", error })
@@ -406,38 +338,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const { symbol } = params
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
-        ? metadataResponse.data.symbols.filter((item) => item?.symbol === symbol)
-        : []
-      if (symbolMatches.length !== 1) {
-        throw new Error(`Binance market metadata is missing or ambiguous for ${symbol}`)
-      }
-      const [symbolInfo] = symbolMatches
-      if (
-        typeof symbolInfo.baseAsset !== "string" ||
-        !symbolInfo.baseAsset.trim() ||
-        typeof symbolInfo.quoteAsset !== "string" ||
-        !symbolInfo.quoteAsset.trim()
-      ) {
-        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
-      }
-
-      const baseCode = symbolInfo.baseAsset.trim().toUpperCase()
-      const quoteCode = symbolInfo.quoteAsset.trim().toUpperCase()
-      const market = new Market({
-        venue: "binance",
-        symbol: symbolInfo.symbol,
-        baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
-        quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
-      })
+      const market = createCanonicalFillMarket({ symbol, exchangeInfo: metadataResponse.data })
 
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
-      if (!Array.isArray(tradesResponse.data)) {
-        throw new TypeError("Binance myTrades response should be an array")
-      }
-
       return toResult({
-        data: tradesResponse.data.map((trade) => adaptCanonicalFill({ trade, market })),
+        data: adaptCanonicalFills({ trades: tradesResponse.data, market }),
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getFills()", error })
@@ -451,19 +356,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
 
-      const { clientOrderId, ...orderInput } = input
-      const params = {
-        ...orderInput,
-        ...(clientOrderId ? { newClientOrderId: clientOrderId } : {}),
-        side: input.side ?? "BUY",
-        type: input.type ?? "LIMIT",
-      }
-
-      if (params.type === "LIMIT_MAKER") {
-        delete params.timeInForce
-      } else {
-        params.timeInForce = input.timeInForce ?? "GTC"
-      }
+      const params = adaptOrderRequestParams({ input })
 
       const response = await this.tradingConnection.request(
         "order.place",
@@ -482,7 +375,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
-      const { symbol, clientOrderId, ...orderInput } = input
+      const { symbol, clientOrderId } = input
       if (typeof symbol !== "string" || !symbol.trim()) {
         throw new TypeError("createCanonicalOrder requires a symbol")
       }
@@ -490,18 +383,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
         throw new TypeError("createCanonicalOrder requires clientOrderId")
       }
 
-      const params = {
-        ...orderInput,
-        symbol,
-        newClientOrderId: clientOrderId,
-        side: input.side ?? "BUY",
-        type: input.type ?? "LIMIT",
-      }
-      if (params.type === "LIMIT_MAKER") {
-        delete params.timeInForce
-      } else {
-        params.timeInForce = input.timeInForce ?? "GTC"
-      }
+      const params = adaptOrderRequestParams({
+        input,
+        clientOrderId,
+        requireClientOrderId: true,
+      })
 
       const response = await this.tradingConnection.request(
         "order.place",
@@ -572,72 +458,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       }
 
       const response = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const symbolInfo = response.data?.symbols?.find((item) => item.symbol === symbol)
-      const filters = Array.isArray(symbolInfo?.filters) ? symbolInfo.filters : []
-      const priceFilter = filters.find((filter) => filter.filterType === "PRICE_FILTER")
-      const lotSizeFilter = filters.find((filter) => filter.filterType === "LOT_SIZE")
-      const notionalFilter = filters.find((filter) => filter.filterType === "NOTIONAL") ??
-        filters.find((filter) => filter.filterType === "MIN_NOTIONAL")
-
-      const tickSize = validatePositiveDecimalFilter({
-        value: priceFilter?.tickSize,
-        name: "PRICE_FILTER.tickSize",
-        symbol,
-      })
-      const stepSize = validatePositiveDecimalFilter({
-        value: lotSizeFilter?.stepSize,
-        name: "LOT_SIZE.stepSize",
-        symbol,
-      })
-      if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
-          !Array.isArray(symbolInfo.orderTypes) || symbolInfo.orderTypes.length === 0) {
-        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
-      }
-
-      const optionalFilters = {
-        minPrice: readOptionalDecimalFilter({
-          value: priceFilter?.minPrice,
-          name: "PRICE_FILTER.minPrice",
-          symbol,
-        }),
-        maxPrice: readOptionalDecimalFilter({
-          value: priceFilter?.maxPrice,
-          name: "PRICE_FILTER.maxPrice",
-          symbol,
-        }),
-        minQuantity: readOptionalDecimalFilter({
-          value: lotSizeFilter?.minQty,
-          name: "LOT_SIZE.minQty",
-          symbol,
-        }),
-        maxQuantity: readOptionalDecimalFilter({
-          value: lotSizeFilter?.maxQty,
-          name: "LOT_SIZE.maxQty",
-          symbol,
-        }),
-        minNotional: readOptionalDecimalFilter({
-          value: notionalFilter?.minNotional,
-          name: "NOTIONAL.minNotional",
-          symbol,
-        }),
-        maxNotional: readOptionalDecimalFilter({
-          value: notionalFilter?.maxNotional,
-          name: "NOTIONAL.maxNotional",
-          symbol,
-        }),
-      }
-
-      const data = {
-          symbol,
-          baseAsset: symbolInfo.baseAsset,
-          quoteAsset: symbolInfo.quoteAsset,
-          tickSize,
-          stepSize,
-          ...Object.fromEntries(
-            Object.entries(optionalFilters).filter(([, value]) => value !== undefined),
-          ),
-          supportedOrderTypes: symbolInfo.orderTypes,
-        }
+      const data = adaptSymbolFiltersResponse({ symbol, exchangeInfo: response.data })
       this.canonicalMarkets.set(symbol, createCanonicalMarket({ symbolInfo: data }))
       return toResult({ data })
     } catch (error) {
@@ -678,7 +499,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const normalizedSymbol = symbol.trim().toUpperCase()
       stream = createStreamName("bookTicker", { symbol: normalizedSymbol })
       const listener = (message) => {
-        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol }))
+        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol, timestamp: Date.now() }))
       }
       await this.marketConnection.subscribe(stream, listener)
 

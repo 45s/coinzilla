@@ -104,6 +104,72 @@ describe("Binance user-data session recovery", () => {
     }), RangeError)
   })
 
+  it("requires the client port factory after validating the existing retry policy", () => {
+    assert.throws(() => new BinanceUserDataSession({
+      getClient() {},
+      createClient() {},
+      setClient() {},
+      setConnected() {},
+      setUnavailable() {},
+    }), /client port factory/)
+  })
+
+  it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
+    const rawClient = {}
+    const calls = []
+    const listeners = { event: new Set(), error: new Set(), close: new Set() }
+    const port = {
+      state: "open",
+      async subscribe() {
+        calls.push(["subscribe"])
+        return { data: { subscriptionId: 17 } }
+      },
+      async listSubscriptions() {
+        calls.push(["listSubscriptions"])
+        return { data: [{ subscriptionId: 17 }] }
+      },
+      async unsubscribe(subscriptionId) {
+        calls.push(["unsubscribe", subscriptionId])
+        return { data: {} }
+      },
+      onEvent(listener) {
+        listeners.event.add(listener)
+        return () => listeners.event.delete(listener)
+      },
+      onError(listener) {
+        listeners.error.add(listener)
+        return () => listeners.error.delete(listener)
+      },
+      onClose(listener) {
+        listeners.close.add(listener)
+        return () => listeners.close.delete(listener)
+      },
+    }
+    const session = new BinanceUserDataSession({
+      getClient: () => rawClient,
+      createClient: () => rawClient,
+      createUserDataClientPort: (client) => {
+        assert.equal(client, rawClient)
+        return port
+      },
+      setClient() {},
+      setConnected() {},
+      setUnavailable() {},
+    })
+
+    session.start()
+    const subscription = await session.subscribe({ onEvent() {} })
+    assert.equal(subscription.data.subscriptionId, 17)
+    await subscription.data.disconnect()
+
+    assert.deepEqual(calls, [["subscribe"], ["unsubscribe", 17]])
+    assert.equal(listeners.event.size, 0)
+    assert.equal(listeners.error.size, 0)
+    assert.equal(listeners.close.size, 1)
+    await session.stop()
+    assert.equal(listeners.close.size, 0)
+  })
+
   it("retries when a subscribe response arrives after its socket has closed", async () => {
     const scheduler = createScheduler()
     const clients = []
