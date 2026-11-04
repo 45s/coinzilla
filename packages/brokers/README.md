@@ -137,3 +137,8 @@ Both integration suites assert TESTNET WebSocket endpoints before connecting. Ne
 ## Binance order identifiers
 
 The public `normalizeBinanceId(value, name?)` helper validates Binance identifiers as exact non-negative integers and returns their string representation. Decimal strings are accepted only when they contain digits and fit within JavaScript's safe-integer range; numeric inputs must already be safe integers. Use this shared normalizer at Binance adapter boundaries rather than reimplementing exchange ID parsing.
+
+
+## Canonical Binance execution fill timestamps
+
+For user-data `executionReport` TRADE events, canonical Fill execution time is Binance transaction time `T`. Event publication time `E` remains event/order-update metadata and must not be used as the execution timestamp. This matches REST `myTrades.time` so the same exchange trade has identical canonical facts regardless of whether REST or WebSocket delivers it first. Preserve strict duplicate-fill conflict detection: identical facts are idempotent; conflicting facts reusing a Fill ID remain errors.
