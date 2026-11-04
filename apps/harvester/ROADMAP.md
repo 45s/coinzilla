@@ -1076,3 +1076,11 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - Added conflicting fill ownership cases for broker order ID, market, side, and client order ID. Added acknowledgement replay checks so an identical acknowledgement is idempotent but changed immutable order intent cannot bypass validation merely because the client/broker IDs match.
 - Current exact PR head `dcf2b63c98306dc149dde970c4710729f223d5f5` passed all five required workflows: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The branch remains synchronized with `develop`.
 - These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.
+
+
+### Binance duplicate-fill timestamp parity — 2026-11-05
+
+- [x] Root cause: Binance WebSocket `executionReport` exposes event publication time `E` and transaction time `T`. REST `myTrades.time` uses transaction time; using `E` for WebSocket canonical fills caused a timestamp mismatch for the same trade identity.
+- [x] WebSocket canonical fills now use transaction time while order-update metadata retains event publication time.
+- [x] Added full REST/WebSocket canonical Fill parity coverage with `E !== T`, plus Portfolio and RecoveryLedger duplicate-delivery tests for both arrival orders.
+- [ ] Merge only after all required CI workflows pass on the synchronized PR head. No TESTNET operations are authorized by this offline fix.
