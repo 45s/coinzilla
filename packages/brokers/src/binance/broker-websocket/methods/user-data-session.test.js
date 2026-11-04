@@ -114,6 +114,54 @@ describe("Binance user-data session recovery", () => {
     }), /client port factory/)
   })
 
+  it("rejects invalid event and status callbacks before accessing the client port", async () => {
+    let portFactoryCalls = 0
+    const session = new BinanceUserDataSession({
+      getClient: () => null,
+      createClient: () => null,
+      createUserDataClientPort: () => {
+        portFactoryCalls += 1
+        return {}
+      },
+      setClient() {},
+      setConnected() {},
+      setUnavailable() {},
+    })
+
+    await assert.rejects(
+      session.subscribe({ onEvent: null }),
+      /onEvent callback must be a function/,
+    )
+    await assert.rejects(
+      session.subscribe({ onEvent() {}, onStatus: null }),
+      /onStatus callback must be a function/,
+    )
+    assert.equal(portFactoryCalls, 0)
+    await session.stop()
+  })
+
+  it("rejects a subscription when no API client exists without constructing a port", async () => {
+    let portFactoryCalls = 0
+    const session = new BinanceUserDataSession({
+      getClient: () => null,
+      createClient: () => null,
+      createUserDataClientPort: () => {
+        portFactoryCalls += 1
+        return {}
+      },
+      setClient() {},
+      setConnected() {},
+      setUnavailable() {},
+    })
+
+    await assert.rejects(
+      session.subscribe({ onEvent() {} }),
+      /Binance WebSocket API must be open before subscribing to user data/,
+    )
+    assert.equal(portFactoryCalls, 0)
+    await session.stop()
+  })
+
   it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
     const rawClient = {}
     const calls = []
