@@ -202,3 +202,35 @@ describe("canonical fill response ID precision", () => {
     }
   })
 })
+
+
+it("maps the observed ZROUSDT TESTNET myTrades without inventing client order IDs", async () => {
+  const zroMarket = { symbol: "ZROUSDT", baseAsset: "ZRO", quoteAsset: "USDT" }
+  const trades = [
+    { id: 9939, orderId: 698704, isBuyer: true, isMaker: true, price: "1.792", qty: "5", quoteQty: "8.96", commission: "0.005", commissionAsset: "ZRO", time: 1793820000000 },
+    { id: 9940, orderId: 698746, isBuyer: true, isMaker: false, price: "1.789", qty: "5", quoteQty: "8.945", commission: "0.005", commissionAsset: "ZRO", time: 1793820001000 },
+  ]
+  const broker = createBroker({
+    exchangeInfo: () => ({ symbols: [zroMarket] }),
+    myTrades: (params) => {
+      assert.deepEqual(params, { symbol: "ZROUSDT", limit: 1000 })
+      return trades
+    },
+  })
+
+  const result = await broker.getFills({ symbol: "ZROUSDT" })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.map((fill) => [fill.tradeId, fill.brokerOrderId, fill.clientOrderId]), [
+    ["9939", "698704", undefined],
+    ["9940", "698746", undefined],
+  ])
+  assert.deepEqual(result.data.map((fill) => [fill.quantity.amount, fill.price.amount, fill.quoteQuantity.amount]), [
+    ["5", "1.792", "8.96"],
+    ["5", "1.789", "8.945"],
+  ])
+  assert.deepEqual(result.data.map((fill) => [fill.commissions[0].amount.amount, fill.commissions[0].amount.asset.code]), [
+    ["0.005", "ZRO"],
+    ["0.005", "ZRO"],
+  ])
+})

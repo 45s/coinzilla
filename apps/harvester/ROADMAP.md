@@ -996,3 +996,62 @@ Harvester remains stopped. No TESTNET write operations have been performed as pa
 - [ ] Joint evidence review and explicit acceptance. Until then TESTNET validation remains NOT ACCEPTED and Harvester remains stopped.
 
 **Safety during preparation:** no Harvester process was started; no TESTNET orders were submitted/canceled; no account settings were changed; no exchange write operations were performed.
+
+
+## Live reconciliation incident follow-up — 2026-11-04
+
+### Findings and implementation status
+
+- **ACKNOWLEDGED_FILL_IDENTITY_MISMATCH — CONFIRMED cause; FIXED in PR #529.** Binance Spot `myTrades` records identify an execution by trade ID and exchange order ID; they do not carry a client order ID. The canonical Binance `Fill` adapter therefore correctly leaves `Fill.clientOrderId` undefined. The engine incorrectly required it to equal the acknowledged order's client ID. Reconciliation now accepts an absent fill client ID only when exchange order ID, market, and side match; a present but conflicting client ID still fails closed. Real TESTNET trade IDs 9939/9940 are added as broker-adapter fixtures.
+- **REST_STREAM_RECONCILIATION_FAILED for order 698704 — broker contract defect CONFIRMED; exact incident trigger NOT REPRODUCED from the supplied log; fix implemented in PR #529.** Binance `allOrders` uses `orderId` as a lower-bound cursor, not an exact order lookup. The broker previously returned the entire cursor page, while shutdown reconciliation required exactly one canonical order. With subsequent session orders 698745 and 698746, a query starting at 698704 can legitimately return multiple rows. The shutdown error is emitted when the result is not exactly one `CanonicalOrder` (or the broker result is unsuccessful); the supplied incident excerpt omits the raw response/cardinality, so it cannot prove which branch fired or establish a missing field. The broker now validates the cursor page and filters to the exact requested exchange order ID before adapting/returning canonical history. Shutdown reconciliation additionally verifies the historical client order ID. Missing target history remains incomplete; unrelated rows are not mistaken for the target.
+- **Submission-unknown after a FILLED acknowledgement — CONFIRMED gap; FIXED in PR #529.** Previously the engine left the local order PENDING without its already-known exchange order ID until fills had been reconciled. A failed history lookup therefore made later user-data events and shutdown reconciliation unable to correlate by broker ID. The registry now attaches the acknowledged broker order ID while retaining UNKNOWN / zero reconciled quantity; later canonical partial/final events or shutdown REST reconciliation can advance it safely. A pair pause remains sticky and is enforced at the final submission gate.
+- **Readiness status — FIXED in PR #529.** Structured market-event diagnostics distinguish `brokerReady` from effective `tradingReady`; the latter is false while the pair is paused. The submit gate independently rejects a paused pair.
+
+### SELL 698745 cancellation — strategy path CONFIRMED; raw event identifier NOT REPRODUCED
+
+After BUY 698746 is fully reconciled, the Conservative engine intentionally cancels every active recovery SELL for that market before it reevaluates recovery SELL sizing against the newly increased owned inventory. This is the `BUY_FILLED_RECALCULATE_RECOVERY_SELL` path, not evidence of an unsolicited exchange cancellation. A replacement SELL is not sent in the same user-data callback: the engine waits for a subsequent eligible market evaluation. The cancellation request now emits structured intent diagnostics. Binance execution reports expose both `c` (current client order ID) and `C` (original client order ID); the adapter preserves both and the registry correlates by exchange order ID while retaining Harvester's original local client ID. The supplied `IR2BlFAQOVPlsCtcQqq2A5` value alone does not establish whether it was `c`, `C`, or a cancel request identifier; raw execution-report fields are required to attribute it conclusively. Do not call it cancel/replace without that evidence.
+
+### Preserved accounting evidence
+
+- Trade 9939: BUY 5 ZRO at 1.792; gross quote cost 8.96 USDT; base commission 0.005 ZRO; net base 4.995 ZRO.
+- Trade 9940: BUY 5 ZRO at 1.789; gross quote cost 8.945 USDT; base commission 0.005 ZRO; net base 4.995 ZRO.
+- Combined: net base 9.990 ZRO; gross BUY cost / outstanding recovery 17.905 USDT; net SELL proceeds 0; realized net profit -17.905 USDT.
+- These values are exact regression expectations. The account-wide baseline remains external unless independently attributed; no wallet balance is adopted as Harvester inventory.
+
+### Remaining evidence / status
+
+- Source changes and regression fixtures are on `fix/harvester-live-reconciliation`. All five required CI workflows passed on PR head `4388fe596cff4eaeee22465510a4bb8373c79b78` after synchronization with `develop`. Subsequent offline review added strict canonical-history identity/status validation and regressions for conflicting fill ownership and delayed trade-history visibility; those additions require a fresh CI run.
+- Cancellation raw Binance `c/C` values and any actual replacement after the next market event: **NOT OBSERVED** in supplied evidence.
+- Live partial-fill, cancel/fill race, late-event and post-fix shutdown paths: **NOT OBSERVED**; no new TESTNET activity is authorized by this work.
+- Portfolio/RecoveryLedger/Journal live reconciliation for these two fills is supported by the supplied arithmetic, but no new Journal file was supplied for an independent event-by-event audit. Verify the Journal in the next joint session.
+- Harvester remains stopped. No order, cancellation, account-setting change, or exchange write was performed.
+
+
+### CI iteration — 2026-11-04
+
+- Initial draft PR CI confirmed JavaScript syntax, dependency audit, and utilities tests pass.
+- The first full broker test run exposed two newly introduced fixture issues (an existing cursor test used a nonmatching order ID after exact filtering was added; the new `get-fills` fixture used `test` instead of the file's imported `it`). Both are corrected in the follow-up commit; rerun all workflows on the updated and then develop-synchronized head.
+
+
+### Acknowledgement recovery domain-state correction — 2026-11-04
+
+- The first CI run showed that `CanonicalOrder` intentionally forbids a broker ID on `PENDING`. This invariant is preserved. The acknowledgement attachment now moves the registered order to `UNKNOWN` with the exchange broker ID and zero reconciled quantity. `UNKNOWN` is an existing active status that can transition to PARTIALLY_FILLED/FILLED when canonical stream or REST execution facts arrive. This represents an acknowledged but not yet reconciled execution state without inventing applied quantity.
+- Regression expectations now require UNKNOWN + brokerOrderId after a failed FILLED-ack reconciliation, then verify one-time application of a later stream fill while the pair remains paused.
+
+
+- **CI regression refinement — 2026-11-04:** Broker-layer fixture verifies raw Binance `myTrades` fills have no clientOrderId. The engine intentionally enriches a reconciled fill with the known owned-order client ID before accounting/journaling; the engine-level assertion therefore verifies that enrichment rather than expecting the accounting event to remain without identity. The corrected expectation passed the five-workflow run on head `4388fe5`.
+
+
+### Accounting and Journal regression follow-up — 2026-11-04
+
+- Added the exact two-fill ZROUSDT regression to the accounting use case: 9939 / 698704 and 9940 / 698746, 0.005 ZRO commission each, net 9.990 ZRO, quote cash flow -17.905 USDT, RecoveryLedger buy cost/outstanding recovery 17.905 USDT, zero sell proceeds, and two deduplicated execution IDs.
+- Added an engine event-publication regression proving two distinct reconciled executions produce exactly two `FILL_APPLIED` events with the corresponding canonical fill IDs, and a replay does not publish a third fill event. The Journal consumes the same EventBus stream; live Journal file contents still require inspection during the next joint TESTNET session.
+
+
+### Post-review hardening — 2026-11-04
+
+- Canonical historical order adaptation now rejects a missing/mismatched symbol and a missing or unsupported exchange status. Optional timestamps and unrelated exchange metadata remain optional. Regression coverage includes missing order/client IDs, symbol, side, status, and execution quantities.
+- Added a delayed `myTrades` visibility regression: an empty history result cannot manufacture a fill or clear a pause; the acknowledged order remains UNKNOWN with zero reconciled quantity and its broker ID, then later REST history applies each exact execution once.
+- Added conflicting fill ownership cases for broker order ID, market, side, and client order ID. Added acknowledgement replay checks so an identical acknowledgement is idempotent but changed immutable order intent cannot bypass validation merely because the client/broker IDs match.
+- Current exact PR head `dcf2b63c98306dc149dde970c4710729f223d5f5` passed all five required workflows: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The branch remains synchronized with `develop`.
+- These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.

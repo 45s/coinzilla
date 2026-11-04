@@ -370,3 +370,65 @@ test("rejects conflicting replayed execution facts without changing either proje
   assert.deepEqual(first.data.portfolio.appliedFillIds, ["binance:DOGEUSDT:replayed-execution"])
   assert.deepEqual(first.data.recoveryLedger.appliedFillIds, ["binance:DOGEUSDT:replayed-execution"])
 })
+
+
+test("reconciles the two observed ZROUSDT TESTNET executions exactly and deduplicates replays", () => {
+  const zroAsset = new Asset({ id: "zro", code: "ZRO" })
+  const usdtAsset = new Asset({ id: "usdt-zro-test", code: "USDT" })
+  const zroMarket = new Market({
+    venue: "binance",
+    symbol: "ZROUSDT",
+    baseAsset: zroAsset,
+    quoteAsset: usdtAsset,
+  })
+  const fills = [
+    new Fill({
+      tradeId: "9939",
+      brokerOrderId: "698704",
+      market: zroMarket,
+      side: "BUY",
+      price: new Money({ amount: "1.792", asset: usdtAsset }),
+      quantity: new Quantity({ amount: "5", asset: zroAsset }),
+      quoteQuantity: new Money({ amount: "8.96", asset: usdtAsset }),
+      commissions: [new Commission({ amount: new Money({ amount: "0.005", asset: zroAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+    new Fill({
+      tradeId: "9940",
+      brokerOrderId: "698746",
+      market: zroMarket,
+      side: "BUY",
+      price: new Money({ amount: "1.789", asset: usdtAsset }),
+      quantity: new Quantity({ amount: "5", asset: zroAsset }),
+      quoteQuantity: new Money({ amount: "8.945", asset: usdtAsset }),
+      commissions: [new Commission({ amount: new Money({ amount: "0.005", asset: zroAsset }) })],
+      commissionStatus: "COMPLETE",
+    }),
+  ]
+
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market: zroMarket })
+  for (const fill of fills) {
+    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    assert.equal(result.data.applied, true)
+    portfolio = result.data.portfolio
+    recoveryLedger = result.data.recoveryLedger
+  }
+
+  const position = portfolio.getPosition({ marketId: zroMarket.id })
+  assert.equal(position.baseQuantity.amount, "9.99")
+  assert.equal(position.quoteNetCashFlow.amount, "-17.905")
+  assert.equal(recoveryLedger.buyCost, "17.905")
+  assert.equal(recoveryLedger.netSellProceeds, "0")
+  assert.equal(recoveryLedger.outstandingRecoveryAmount, "17.905")
+  assert.equal(portfolio.appliedFillIds.length, 2)
+  assert.equal(recoveryLedger.appliedFillIds.length, 2)
+
+  const duplicate = updateTradingAccounting({ portfolio, recoveryLedger, fill: fills[1] })
+  assert.equal(duplicate.ok, true)
+  assert.equal(duplicate.data.applied, false)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.equal(duplicate.data.portfolio, portfolio)
+  assert.equal(duplicate.data.recoveryLedger, recoveryLedger)
+})

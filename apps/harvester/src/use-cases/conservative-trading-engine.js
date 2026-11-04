@@ -196,7 +196,7 @@ export function makeConservativeTradingEngine({
     for (const fill of fillsResult.data) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
-          fill.clientOrderId !== order.clientOrderId) {
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         const error = new Error("Execution history does not match the FILLED acknowledged order")
         await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH", error })
         return toResult({ error })
@@ -284,7 +284,7 @@ export function makeConservativeTradingEngine({
     canSubmit: ({ order } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)
-      if (!canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
+      if (state.paused.has(symbol) || !canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
       if (order.type !== "LIMIT_MAKER") return true
       const marketBook = state.books.get(symbol)
       return Boolean(marketBook && isMarketBookFresh(marketBook) &&
@@ -312,6 +312,7 @@ export function makeConservativeTradingEngine({
           (item) => item.clientOrderId === order.clientOrderId,
         )
         if (!registered) throw new Error("Broker acknowledged an unregistered Harvester order")
+        state.registry = state.registry.attachAcknowledgedBrokerOrderId({ order }).registry
       } else {
         const update = state.registry.applyUpdate({ order })
         if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
@@ -357,6 +358,13 @@ export function makeConservativeTradingEngine({
   const cancelAndReconcileRecoverySells = async ({ symbol, marketId } = {}) => {
     const activeSells = state.registry.getActiveOrders({ marketId }).filter((order) => order.side === "SELL")
     for (const order of activeSells) {
+      logger?.info?.({
+        message: "Harvester recovery SELL cancellation requested",
+        reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+        symbol,
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+      })
       if (order.status === "PENDING") {
         state.replacementIntents.add(symbol)
         return toResult({ data: { deferred: true, reason: "RECOVERY_SELL_PENDING_ACKNOWLEDGEMENT" } })
@@ -800,7 +808,8 @@ export function makeConservativeTradingEngine({
         portfolio: getPortfolio().value,
         recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id })?.value ?? null,
         paused: state.paused.has(symbol),
-        tradingReady: canTrade({ symbol }),
+        brokerReady: canTrade({ symbol }),
+        tradingReady: canTrade({ symbol }) && !state.paused.has(symbol),
       })
       if (!isMarketPriceFresh(price)) {
         logger?.debug?.({
@@ -1048,6 +1057,7 @@ export function makeConservativeTradingEngine({
             }) === 0
         if (
           historyOrder.brokerOrderId !== ownedOrder.brokerOrderId ||
+          historyOrder.clientOrderId !== ownedOrder.clientOrderId ||
           historyOrder.market.id !== ownedOrder.market.id ||
           historyOrder.side !== ownedOrder.side ||
           historyOrder.type !== ownedOrder.type ||
@@ -1242,7 +1252,7 @@ export function makeConservativeTradingEngine({
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
     if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
 
-    const pendingOrder = ownedOrders.find((order) => order.status === "PENDING" || !order.brokerOrderId)
+    const pendingOrder = ownedOrders.find((order) => !order.brokerOrderId)
     if (pendingOrder) {
       const error = new Error("Cannot reconcile a Harvester order without an acknowledged broker order ID")
       return runTransition({

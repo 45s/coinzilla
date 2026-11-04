@@ -193,6 +193,56 @@ export class OrderRegistry {
     })
   }
 
+  attachAcknowledgedBrokerOrderId({ order } = {}) {
+    if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
+        typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+      throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
+    }
+    const index = this.#orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+    if (index < 0) throw new Error("Acknowledged order is not registered by clientOrderId")
+    const current = this.#orders[index]
+    if (!sameOrderIntent({ current, next: order })) {
+      throw new Error("Broker acknowledgement changed immutable order intent")
+    }
+    if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
+      return Object.freeze({ registry: this, applied: false, duplicate: true })
+    }
+    if (current.status !== "PENDING") {
+      throw new Error("Only a PENDING order can receive its acknowledged brokerOrderId")
+    }
+    if (current.brokerOrderId !== undefined) {
+      if (current.brokerOrderId === order.brokerOrderId) {
+        return Object.freeze({ registry: this, applied: false, duplicate: true })
+      }
+      throw new Error("Acknowledged order changed brokerOrderId")
+    }
+    const existing = this.getOrderByBrokerOrderId({ brokerOrderId: order.brokerOrderId })
+    if (existing) throw new Error("Broker order ID is already owned by another Harvester order")
+    const attached = new CanonicalOrder({
+      clientOrderId: current.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market: current.market,
+      side: current.side,
+      type: current.type,
+      limitPrice: current.limitPrice,
+      originalQuantity: current.originalQuantity,
+      executedQuantity: current.executedQuantity,
+      // The exchange acknowledgement confirms existence, but execution facts
+      // are not yet reconciled. UNKNOWN is active and can advance to partial/FILLED
+      // when the stream or canonical REST history supplies the executions.
+      status: "UNKNOWN",
+      createdAt: order.createdAt ?? current.createdAt,
+      acknowledgedAt: order.acknowledgedAt,
+      updatedAt: order.updatedAt,
+    })
+    const orders = this.#orders.map((item, itemIndex) => itemIndex === index ? attached : item)
+    return Object.freeze({
+      registry: new OrderRegistry({ orders }),
+      applied: true,
+      duplicate: false,
+    })
+  }
+
   applyUpdate({ order } = {}) {
     if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
       throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")

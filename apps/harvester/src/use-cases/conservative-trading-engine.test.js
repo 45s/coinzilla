@@ -14,6 +14,7 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
@@ -64,6 +65,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   const cancellationIds = []
   const canceledOrders = new Map()
   const acknowledgedFillsByOrder = new Map()
+  const acknowledgedOrdersById = new Map()
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
@@ -95,6 +97,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
         ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
       })
       if (immediateFilledAcknowledgement) {
+        acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
         acknowledgedFillsByOrder.set(
           acknowledgedOrder.brokerOrderId,
           getAcknowledgedFills({ order: acknowledgedOrder }),
@@ -134,7 +137,8 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     getFills: async ({ orderId }) => {
       if (acknowledgedFillsByOrder.has(orderId)) {
         if (acknowledgedFillsGate) await acknowledgedFillsGate.promise
-        return { ok: true, data: acknowledgedFillsByOrder.get(orderId) }
+        const fills = acknowledgedFillsByOrder.get(orderId)
+        return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
       return {
@@ -158,6 +162,11 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
           : [],
       }
     },
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async ({ orderId }) => ({
+      ok: true,
+      data: acknowledgedOrdersById.has(orderId) ? [acknowledgedOrdersById.get(orderId)] : [],
+    }),
   }
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
@@ -742,13 +751,13 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
   })
 }
 
-function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt }) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt, clientOrderId = order.clientOrderId, brokerOrderId = order.brokerOrderId, market: fillMarket = market, side = "BUY" }) {
   return new Fill({
     tradeId,
-    brokerOrderId: order.brokerOrderId,
-    clientOrderId: order.clientOrderId,
-    market,
-    side: "BUY",
+    brokerOrderId,
+    ...(clientOrderId === undefined ? {} : { clientOrderId }),
+    market: fillMarket,
+    side,
     price: new Money({ amount: price, asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
@@ -2564,4 +2573,236 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
   assert.equal(evaluationCount, 1)
   assert.equal(harness.orders.length, 0)
   assert.equal(harness.engine.getPausedMarkets().length, 1)
+})
+
+
+test("reconciles a FILLED acknowledgement from Binance myTrades without a clientOrderId", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => [makeBuyFill({
+      order,
+      tradeId: "zro-rest-trade-without-client-id",
+      price: order.limitPrice.amount,
+      quantity: order.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: order.originalQuantity.amount,
+      }),
+      clientOrderId: undefined,
+    })],
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(accountedFills[0].clientOrderId, engine.getOrders()[0].clientOrderId)
+  assert.deepEqual(pauses, [])
+})
+
+test("retains acknowledged broker identity after conflicting REST fill metadata and reconciles a later stream fill without resuming", async () => {
+  const { engine, orders, accountedFills, pauses } = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => [makeBuyFill({
+      order,
+      tradeId: "conflicting-rest-client-id",
+      price: order.limitPrice.amount,
+      quantity: order.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: order.originalQuantity.amount,
+      }),
+      clientOrderId: "conflicting-client-id",
+    })],
+  })
+
+  const failed = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(failed.ok, false)
+  const tracked = engine.getOrders()[0]
+  assert.equal(tracked.status, "UNKNOWN")
+  assert.ok(tracked.brokerOrderId)
+  assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
+
+  const fill = makeBuyFill({
+    order: tracked,
+    tradeId: "late-stream-fill",
+    price: tracked.limitPrice.amount,
+    quantity: tracked.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: tracked.limitPrice.amount,
+      right: tracked.originalQuantity.amount,
+    }),
+    clientOrderId: undefined,
+  })
+  const filledOrder = makeFilledOrder({ order: tracked })
+  const streamed = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: filledOrder, fill },
+  })
+  assert.equal(streamed.ok, true, streamed.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(engine.getPausedMarkets().includes("DOGEUSDT"), true)
+
+  const nextPrice = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 3 },
+  })
+  assert.equal(nextPrice.ok, true)
+  assert.equal(orders.length, 1)
+})
+
+
+test("publishes one durable fill-applied event per reconciled execution and no duplicate event", async () => {
+  const events = []
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    eventPublisher: {
+      publish(event) {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+    getAcknowledgedFills: ({ order }) => [
+      makeBuyFill({
+        order,
+        tradeId: "9939",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+        clientOrderId: undefined,
+      }),
+      makeBuyFill({
+        order,
+        tradeId: "9940",
+        price: "99.94",
+        quantity: "0.5",
+        quoteQuantity: "49.97",
+        clientOrderId: undefined,
+      }),
+    ],
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+
+  const applied = events.filter((event) => event.name === HARVESTER_EVENT_NAMES.FILL_APPLIED)
+  assert.equal(applied.length, 2)
+  assert.deepEqual(applied.map((event) => event.data.fillId), [
+    "binance:DOGEUSDT:9939",
+    "binance:DOGEUSDT:9940",
+  ])
+
+  await harness.engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: harness.engine.getOrders()[0] }),
+      fill: makeBuyFill({
+        order: harness.engine.getOrders()[0],
+        tradeId: "9939",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+      }),
+    },
+  })
+  assert.equal(events.filter((event) => event.name === HARVESTER_EVENT_NAMES.FILL_APPLIED).length, 2)
+})
+
+
+test("rejects acknowledged REST fills with conflicting broker, market, or side ownership", async () => {
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "OTHERUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  const conflictingIdentity = [
+    { brokerOrderId: "another-broker-order-id" },
+    { market: otherMarket },
+    { side: "SELL" },
+  ]
+
+  for (const identity of conflictingIdentity) {
+    const harness = await createHarness({
+      immediateFilledAcknowledgement: true,
+      accountingApplied: true,
+      getAcknowledgedFills: ({ order }) => [makeBuyFill({
+        order,
+        tradeId: "conflicting-ownership-" + Object.keys(identity)[0],
+        price: order.limitPrice.amount,
+        quantity: order.originalQuantity.amount,
+        quoteQuantity: multiplyDecimal({
+          left: order.limitPrice.amount,
+          right: order.originalQuantity.amount,
+        }),
+        ...identity,
+      })],
+    })
+
+    const result = await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(harness.accountedFills.length, 0)
+    assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+    assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
+  }
+})
+
+test("recovers an acknowledged fill when Binance trade history becomes visible later", async () => {
+  let tradeHistoryVisible = false
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => () => tradeHistoryVisible
+      ? [makeBuyFill({
+          order,
+          tradeId: "delayed-visible-trade",
+          price: order.limitPrice.amount,
+          quantity: order.originalQuantity.amount,
+          quoteQuantity: multiplyDecimal({
+            left: order.limitPrice.amount,
+            right: order.originalQuantity.amount,
+          }),
+          clientOrderId: undefined,
+        })]
+      : [],
+  })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, false)
+  assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+  assert.ok(harness.engine.getOrders()[0].brokerOrderId)
+  assert.equal(harness.accountedFills.length, 0)
+  assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE"))
+
+  tradeHistoryVisible = true
+  const recovered = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(recovered.ok, true, recovered.errors?.[0]?.message)
+  assert.equal(harness.accountedFills.length, 1)
+  assert.equal(harness.accountedFills[0].id, "binance:DOGEUSDT:delayed-visible-trade")
+  assert.equal(harness.engine.getOrders()[0].status, "FILLED")
+  assert.equal(harness.engine.getPausedMarkets().includes("DOGEUSDT"), true)
+
+  const replayed = await harness.engine.reconcileOwnedOrders()
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(harness.accountedFills.length, 1)
 })

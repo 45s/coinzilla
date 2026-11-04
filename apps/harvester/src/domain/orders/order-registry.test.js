@@ -379,3 +379,112 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
   assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
   assert.equal(filled.registry.getActiveOrders().length, 0)
 })
+
+
+test("tracks a FILLED acknowledgement as UNKNOWN until execution quantity is reconciled", () => {
+  const pending = makeOrder({ clientOrderId: "h-ZROUSDT-ack" })
+  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const acknowledged = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "698746",
+    status: "FILLED",
+    executedQuantity: "100",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  })
+
+  const attached = registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
+  const trackedPending = attached.registry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.equal(attached.applied, true)
+  assert.equal(trackedPending.status, "UNKNOWN")
+  assert.equal(trackedPending.brokerOrderId, "698746")
+  assert.equal(trackedPending.executedQuantity.amount, "0")
+
+  const partial = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "698746",
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "40",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 103,
+  })
+  const updated = attached.registry.applyUpdate({ order: partial })
+  assert.equal(updated.applied, true)
+  assert.equal(updated.registry.getOrder({ clientOrderId: pending.clientOrderId }).executedQuantity.amount, "40")
+})
+
+
+test("deduplicates an identical acknowledgement but rejects changed intent on the same broker identity", () => {
+  const pending = makeOrder({ clientOrderId: "h-ack-replay" })
+  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const acknowledged = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "698746",
+    status: "FILLED",
+    executedQuantity: "100",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  })
+
+  const attached = registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
+  const duplicate = attached.registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
+  assert.equal(duplicate.duplicate, true)
+  assert.equal(duplicate.applied, false)
+  assert.equal(duplicate.registry, attached.registry)
+
+  assert.throws(
+    () => attached.registry.attachAcknowledgedBrokerOrderId({
+      order: makeOrder({
+        clientOrderId: pending.clientOrderId,
+        brokerOrderId: "698746",
+        quantity: "101",
+        status: "FILLED",
+        executedQuantity: "101",
+        createdAt: 100,
+        acknowledgedAt: 101,
+        updatedAt: 103,
+        completedAt: 103,
+      }),
+    }),
+    /changed immutable order intent/,
+  )
+})
+
+test("rejects an acknowledgement that reuses another Harvester order's broker ID", () => {
+  const first = makeOrder({ clientOrderId: "h-ack-first" })
+  const second = makeOrder({ clientOrderId: "h-ack-second", side: "SELL" })
+  const registry = OrderRegistry.empty()
+    .registerPending({ order: first }).registry
+    .registerPending({ order: second }).registry
+  const secondAcknowledgement = makeOrder({
+    clientOrderId: second.clientOrderId,
+    brokerOrderId: "698746",
+    side: "SELL",
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+  const owned = registry.attachAcknowledgedBrokerOrderId({ order: secondAcknowledgement }).registry
+
+  assert.throws(
+    () => owned.attachAcknowledgedBrokerOrderId({
+      order: makeOrder({
+        clientOrderId: first.clientOrderId,
+        brokerOrderId: "698746",
+        status: "FILLED",
+        executedQuantity: "100",
+        createdAt: 100,
+        acknowledgedAt: 101,
+        updatedAt: 102,
+        completedAt: 102,
+      }),
+    }),
+    /already owned by another Harvester order/,
+  )
+})
