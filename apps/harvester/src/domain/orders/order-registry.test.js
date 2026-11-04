@@ -379,3 +379,39 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
   assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
   assert.equal(filled.registry.getActiveOrders().length, 0)
 })
+
+
+test("attaches a FILLED acknowledgement broker ID without advancing unreconciled quantity", () => {
+  const pending = makeOrder({ clientOrderId: "h-ZROUSDT-ack" })
+  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
+  const acknowledged = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "698746",
+    status: "FILLED",
+    executedQuantity: "100",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  })
+
+  const attached = registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
+  const trackedPending = attached.registry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.equal(attached.applied, true)
+  assert.equal(trackedPending.status, "PENDING")
+  assert.equal(trackedPending.brokerOrderId, "698746")
+  assert.equal(trackedPending.executedQuantity.amount, "0")
+
+  const partial = makeOrder({
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: "698746",
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "40",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 103,
+  })
+  const updated = attached.registry.applyUpdate({ order: partial })
+  assert.equal(updated.applied, true)
+  assert.equal(updated.registry.getOrder({ clientOrderId: pending.clientOrderId }).executedQuantity.amount, "40")
+})

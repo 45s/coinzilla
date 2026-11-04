@@ -233,3 +233,12 @@ After a session has been stopped gracefully, use `pnpm run journal:balance-audit
 ### Post-PR #515 status correction — 2026-11-04
 
 This status supersedes older incident-handoff text in this document that describes PR #515 as pending or its lifecycle/accounting matrix as incomplete. PR #515 is merged; its offline acceptance matrix and exact-head CI are complete. The only remaining critical milestone is the separately authorized joint TESTNET validation and real opening/closing account reconciliation. No TESTNET write has been performed during this documentation preparation.
+
+
+### Latest ZROUSDT TESTNET reconciliation incident — 2026-11-04
+
+The follow-up branch addresses two broker/engine contract defects. Binance `myTrades` has no client order ID, so REST fills are correlated by exchange order ID, symbol/market and side; a present client ID remains a strict consistency check. Binance `allOrders.orderId` is a cursor lower bound, not an exact filter; the broker now returns only the exact requested order's canonical snapshot. The engine retains the acknowledged broker order ID while execution history is unresolved, allowing later user-data or shutdown reconciliation without releasing the pending order or resuming a paused pair.
+
+SELL 698745 cancellation follows the Conservative BUY-filled path: cancel the old recovery SELL, reconcile its fills, and wait for a subsequent eligible market event to evaluate a replacement against the new inventory. The cancellation event ID `IR2BlFAQOVPlsCtcQqq2A5` cannot be attributed to Binance `c` or `C` without raw execution-report evidence. Mark that attribution and any actual replacement as **NOT OBSERVED**, not confirmed cancel/replace behavior.
+
+Exact accounting baseline: trade 9939 = 5 ZRO at 1.792, 8.96 USDT gross, 0.005 ZRO fee; trade 9940 = 5 ZRO at 1.789, 8.945 USDT gross, 0.005 ZRO fee. Combined net 9.990 ZRO, invested/recovery 17.905 USDT, sell proceeds 0, realized net profit -17.905 USDT. No new TESTNET operation was performed. Offline CI and the next joint controlled TESTNET session remain separate gates.

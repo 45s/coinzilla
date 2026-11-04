@@ -111,3 +111,26 @@ test("getCanonicalOrderHistory rejects invalid history filters before RPC", asyn
   assert.equal(result.ok, false)
   assert.deepEqual(broker.tradingConnection.calls, [])
 })
+
+
+test("filters a Binance allOrders cursor page to the exact requested order ID", async () => {
+  const orders = [
+    { ...rawOrder, orderId: 698704, clientOrderId: "h-cda9ae9551e041288f6018-1", status: "FILLED", origQty: "5.00000000", executedQty: "5.00000000" },
+    { ...rawOrder, orderId: 698745, clientOrderId: "h-cda9ae9551e041288f6018-2", status: "CANCELED", origQty: "4.98000000", executedQty: "0.00000000" },
+    { ...rawOrder, orderId: 698746, clientOrderId: "h-cda9ae9551e041288f6018-3", status: "FILLED", origQty: "5.00000000", executedQty: "5.00000000" },
+  ]
+  const broker = createBroker({
+    allOrders(params) {
+      assert.deepEqual(params, { symbol: "DOGEFDUSD", limit: 100, orderId: 698704 })
+      return orders
+    },
+    exchangeInfo: () => ({ symbols: [symbolInfo] }),
+  })
+
+  const result = await broker.getCanonicalOrderHistory({ symbol: "DOGEFDUSD", orderId: 698704 })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].brokerOrderId, "698704")
+  assert.equal(result.data[0].clientOrderId, "h-cda9ae9551e041288f6018-1")
+})

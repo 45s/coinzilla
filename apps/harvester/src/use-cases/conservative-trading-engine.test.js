@@ -742,11 +742,11 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
   })
 }
 
-function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt }) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt, clientOrderId = order.clientOrderId }) {
   return new Fill({
     tradeId,
     brokerOrderId: order.brokerOrderId,
-    clientOrderId: order.clientOrderId,
+    ...(clientOrderId === undefined ? {} : { clientOrderId }),
     market,
     side: "BUY",
     price: new Money({ amount: price, asset: quoteAsset }),
@@ -2564,4 +2564,87 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
   assert.equal(evaluationCount, 1)
   assert.equal(harness.orders.length, 0)
   assert.equal(harness.engine.getPausedMarkets().length, 1)
+})
+
+
+test("reconciles a FILLED acknowledgement from Binance myTrades without a clientOrderId", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => [makeBuyFill({
+      order,
+      tradeId: "zro-rest-trade-without-client-id",
+      price: order.limitPrice.amount,
+      quantity: order.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: order.originalQuantity.amount,
+      }),
+      clientOrderId: undefined,
+    })],
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(accountedFills[0].clientOrderId, undefined)
+  assert.deepEqual(pauses, [])
+})
+
+test("retains acknowledged broker identity after conflicting REST fill metadata and reconciles a later stream fill without resuming", async () => {
+  const { engine, orders, accountedFills, pauses } = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => [makeBuyFill({
+      order,
+      tradeId: "conflicting-rest-client-id",
+      price: order.limitPrice.amount,
+      quantity: order.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: order.originalQuantity.amount,
+      }),
+      clientOrderId: "conflicting-client-id",
+    })],
+  })
+
+  const failed = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(failed.ok, false)
+  const tracked = engine.getOrders()[0]
+  assert.equal(tracked.status, "PENDING")
+  assert.ok(tracked.brokerOrderId)
+  assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
+
+  const fill = makeBuyFill({
+    order: tracked,
+    tradeId: "late-stream-fill",
+    price: tracked.limitPrice.amount,
+    quantity: tracked.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: tracked.limitPrice.amount,
+      right: tracked.originalQuantity.amount,
+    }),
+    clientOrderId: undefined,
+  })
+  const filledOrder = makeFilledOrder({ order: tracked })
+  const streamed = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: filledOrder, fill },
+  })
+  assert.equal(streamed.ok, true, streamed.errors?.[0]?.message)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(engine.getPausedMarkets().includes("DOGEUSDT"), true)
+
+  const nextPrice = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.1", timestamp: 3 },
+  })
+  assert.equal(nextPrice.ok, true)
+  assert.equal(orders.length, 1)
 })

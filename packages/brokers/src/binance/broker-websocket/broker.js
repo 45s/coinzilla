@@ -297,7 +297,13 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
       const orders = requireOrderHistoryArray({ orders: response.data })
-      if (orders.length === 0) {
+      validateOrderHistoryCursorItems({ orders })
+      // Binance allOrders.orderId is a lower-bound cursor, not an exact-ID filter.
+      // Filter the cursor page to the exact Harvester-owned order requested.
+      const matchingOrders = params.orderId === undefined
+        ? orders
+        : orders.filter((order) => String(order.orderId) === String(params.orderId))
+      if (matchingOrders.length === 0) {
         return toResult({ data: [] })
       }
 
@@ -310,7 +316,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
         exchangeInfo: metadataResponse.data,
       })
       return toResult({
-        data: adaptCanonicalOrderHistory({ orders, market }),
+        data: adaptCanonicalOrderHistory({ orders: matchingOrders, market }),
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()", error })
