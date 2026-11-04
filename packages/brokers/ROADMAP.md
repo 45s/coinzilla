@@ -79,6 +79,8 @@ The first DDD/TDD modernization tranche is merged into `develop`. It aligns the 
 - [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#525 are merged.
 - [ ] Set risk-based package coverage thresholds only after the remaining critical recovery/operational branches have been reviewed. Do not impose a blanket percentage target.
 
+  Coverage review on PR #539's exact CI head `c6c073ee07043b63e83f1d72863e768bc903df51`: broker facade 97.25% lines / 90.79% branches / 96.00% functions; user-data session 99.37% / 91.28% / 100.00%; RPC client 99.06% / 93.39% / 94.12%; Streams client 93.47% / 85.78% / 81.03%; native transport 93.84% / 79.10% / 92.31%. Transport constructor/observer/idle-close gaps are being covered before selecting an enforced threshold; integration suites and test helpers must be excluded from production-code thresholds.
+
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
 ### Large-file review and scoped refactoring plan
