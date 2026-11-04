@@ -1214,6 +1214,7 @@ test("does not complete recovery when SELL fills do not equal the original order
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
+    accountingApplied: true,
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -1239,6 +1240,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
+    accountingApplied: true,
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",

@@ -58,7 +58,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 });
 
 test('loads the default validated trading configuration', async () => {
-  const context = await startHarvester();
+  const context = await startHarvesterForTest();
 
   assert.ok(context.tradingConfig.strategies.CG_coinGrabber.pairs.ZROUSDT);
 });
