@@ -121,7 +121,18 @@ across 2026-10-28 and 2026-11-04. The 2026-11-04 subset contains 21 FILLED
 BUYs (8,400 DOGE; 635.85200 USDT gross quote) and 5 FILLED SELLs
 (8,390 DOGE; 636.42265 USDT gross quote). Bounded order-history arithmetic is
 therefore +10 DOGE and +0.57065 USDT before commissions. The twelve-order
-burst alone bought 4,800 DOGE for 364.704 USDT; the 5,595-DOGE recovery SELL
+burst consisted of twelve **distinct** exchange orders/client IDs, but every order
+had the same BUY price (0.07598 USDT), quantity (400 DOGE), and TAKER
+execution role; all filled within roughly three seconds. This is not a client-ID
+collision, and a burst of twelve orders can be legitimate during a sharp dump.
+The concern is that all twelve were independently submitted at the same price.
+The strategy computes each BUY from lastBuyPrice (or the current market price
+before the first fill) minus priceStepPercent; 0.05 means 0.05%, and after a
+fully reconciled BUY the next reference should be the actual weighted fill price.
+Identical repeated prices are therefore consistent with the engine evaluating
+multiple orders against stale/unreconciled fill state. The logs support the
+acknowledgement/fill race, but do not identify the exact trigger event for each
+submission. The 5,595-DOGE recovery SELL
 exceeded that burst by 795 DOGE and necessarily consumed earlier accumulated
 inventory too. These are gross exchange order totals, not reconciled Harvester
 PnL or a known free-inventory balance.
