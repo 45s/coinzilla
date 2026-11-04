@@ -370,7 +370,7 @@ test("maps rejected and unknown order outcomes with sanitized errors only", () =
     },
   })
   assert.equal(mapOrderSubmissionFailedData({
-    order: canonicalOrderFacts, outcome: "REJECTED", error: new Error("no"),
+    order: canonicalOrderFacts, outcome: "INVALID", error: new Error("no"),
   }).ok, false)
 })
 
