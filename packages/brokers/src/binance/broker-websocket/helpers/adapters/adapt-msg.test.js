@@ -37,3 +37,38 @@ test("preserves both Binance execution-report client order identifiers", () => {
   assert.equal(event.executedOrder.id, "666845")
   assert.equal(event.executedOrder.clientOrderId, "CU5G5c9IZgepakVzo3Z3kw")
 })
+
+ 
+test("uses Binance transaction time rather than event publication time for fills", () => {
+  const transactionTime = 1_793_829_102_377
+  const eventPublicationTime = transactionTime + 1
+  const event = adaptMsg({
+    e: "executionReport",
+    E: eventPublicationTime,
+    s: "ZROUSDT",
+    c: "h-harvester-1",
+    C: "",
+    S: "BUY",
+    o: "LIMIT",
+    f: "GTC",
+    q: "5",
+    p: "1.82",
+    x: "TRADE",
+    X: "FILLED",
+    i: 699693,
+    T: transactionTime,
+    l: "5",
+    z: "5",
+    L: "1.816",
+    n: "0.005",
+    N: "ZRO",
+    t: 10259,
+    m: false,
+    O: transactionTime - 10,
+    Z: "9.08",
+    Y: "9.08",
+  })
+
+  assert.equal(event.fill.time, transactionTime)
+  assert.notEqual(event.fill.time, eventPublicationTime)
+})

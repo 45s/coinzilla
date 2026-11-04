@@ -39,7 +39,9 @@ const adaptExecutedOrder = (message) => {
         commissionAmount: report.commission,
         commissionAsset: report.commissionAsset,
         isMaker: report.isMaker,
-        time: report.eventTime,
+        // Binance E is event publication time; T is transaction time.
+        // Canonical REST myTrades fills use the transaction timestamp.
+        time: report.orderTime,
       }
     : null
 
