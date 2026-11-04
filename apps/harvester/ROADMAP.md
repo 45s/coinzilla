@@ -1098,3 +1098,5 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [ ] Complete exact-head CI and merge the implementation PR. TESTNET remains stopped pending a separately controlled session.
 
 - [x] Feature branch synchronized with the latest `develop` head before final CI verification.
+
+- [x] Re-synchronized with `develop` after the Binance fill fix merged; final CI is running on the current PR head.
