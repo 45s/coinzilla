@@ -66,7 +66,7 @@ test('loads the default validated trading configuration', async () => {
 });
 
 
-test('ordinary TRADE fills update owned accounting without per-fill snapshots or adopting external inventory/orders', async () => {
+test('ordinary TRADE fills update owned accounting after the startup account audit', async () => {
   const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
   const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
   const market = new Market({
@@ -194,7 +194,7 @@ test('ordinary TRADE fills update owned accounting without per-fill snapshots or
   assert.equal(context.userDataReady, true);
   assert.ok(broker.lastOrder, 'the initial ticker snapshot should submit the first Conservative BUY');
   assert.equal(accountSnapshotCalls, 1);
-  assert.equal(openOrderSnapshotCalls, 2);
+  assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(typeof onPrice, 'function');
   assert.equal(typeof onUserDataEvent, 'function');
 
@@ -249,6 +249,6 @@ test('ordinary TRADE fills update owned accounting without per-fill snapshots or
   await context.stop();
 
   assert.equal(accountSnapshotCalls, 2);
-  assert.equal(openOrderSnapshotCalls, 1);
+  assert.equal(openOrderSnapshotCalls, 2);
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
