@@ -163,6 +163,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
         marketId: fill.market.id,
         symbol: fill.market.symbol,
         side: fill.side,
+        liquidityRole: fill.liquidityRole,
+        executedAt: fill.executedAt,
         price: fill.price?.amount,
         quantity: fill.quantity?.amount,
         quoteQuantity: fill.quoteQuantity?.amount,
