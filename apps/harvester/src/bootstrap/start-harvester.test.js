@@ -1536,7 +1536,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(flushCount, 2)
+  assert.equal(flushCount, 3)
   assert.equal(snapshots.length, 2)
   assert.equal(snapshots[0].data.phase, "OPENING")
   assert.equal(snapshots[1].data.phase, "CLOSING")
