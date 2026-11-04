@@ -5,10 +5,14 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
 
 const config = {
-  settings: { minProfit: 0.01 },
-  strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
-  pairs: {
-    BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
+  strategies: {
+    CG_coinGrabber: {
+      enabled: true,
+      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      pairs: {
+        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
+      },
+    },
   },
 }
 const env = {
