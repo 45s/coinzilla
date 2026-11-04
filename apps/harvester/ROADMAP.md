@@ -1,16 +1,18 @@
 # Harvester Roadmap
 
-> **CURRENT DIRECTION — 2026-11-03: CONSERVATIVE DOMAIN CONTRACT.**
+> **CURRENT DIRECTION — 2026-11-04: CONSERVATIVE DOMAIN CONTRACT + INCIDENT FOLLOW-UP.**
 >
-> Harvester Conservative is the established standing-order accumulation and capital-recovery strategy. Its behavior is specified in Harvester-owned domain documentation; no other application or source tree is a permanent dependency or documentation authority.
+> Harvester Conservative remains the established standing-order accumulation and capital-recovery strategy. Preserve its documented behavior and keep exchange-specific concerns behind the broker adapter.
 >
-> **Working rule:** preserve the established strategy behavior. When current Harvester code differs, treat that as an implementation gap by default. Discuss only a concrete ambiguity that cannot be resolved from the behavior contract or would materially change financial exposure. Resolve one item at a time; do not create a large questionnaire.
+> **PR #513 is merged into `develop`** (merge commit `d5a0b86df6c5e8a392017a29e233b98e3957c72c`). Its source remediation and exact-head CI are complete. The +0.20730 USDT discrepancy is a historical scope mismatch (+0.20730 across four prior cycles; +0.57065 across all five cycles), and the twelve BUYs were distinct exchange orders whose FILLED acknowledgements preceded application of their fills. The serialized reconciliation barrier, recovery-obligation guard, fail-closed invalid-order handling, worst-case maker/taker fee reservation, durable OPENING/CLOSING snapshots, and read-only per-session balance audit are merged.
 >
-> **Next work:** finish the 2026-11-04 TESTNET incident resolution in the existing [PR #513](https://github.com/45s/coinzilla/pull/513). The +0.20730 USDT scope mismatch and the twelve-BUY acknowledgement/fill race are now explained and source-remediated. Durable OPENING/CLOSING all-asset balance snapshots and a per-session Journal audit command are implemented. Remaining blockers are the engine-level post-cycle regression/CI verification, the full lifecycle overlap matrix, and a future closed-session opening-balance reconciliation. Keep Harvester stopped; do not restart or submit TESTNET orders.
+> **Current work is PR #515** on `investigate/harvester-lifecycle-audit`. Its branch has been updated onto the merged `develop`. Remaining acceptance work is the deterministic lifecycle/interleaving matrix, end-to-end Portfolio/RecoveryLedger commission and replay invariants, a complete fee-policy caller/rounding audit, and OPENING/CLOSING ordering and audit failure-mode verification. Update this roadmap only when evidence and executed tests support the status.
 >
-> **Boundaries:** keep this work in PR #513; do not create a parallel PR/branch for this same incident. Do not weaken exchange validation, silently skip rejected intents, or restart TESTNET trading before the regression fixes and reconciliation gates pass. Keep PR #479 paused unless a specific part is explicitly selected for review. Preserve merged infrastructure work; do not reimplement it.
+> **Hard safety gate:** Harvester remains stopped. Do not restart it, submit/cancel TESTNET orders, change account settings, or perform exchange write operations in this follow-up. Offline CI is not TESTNET readiness. A future controlled TESTNET run requires a separate explicit authorization after all offline acceptance gates and the ownership/balance audit runbook are complete.
 >
-> Older sections below are historical implementation notes. Where they conflict with this direction, this notice and the current Conservative Domain Specification take precedence.
+> **Historical findings are closed unless contradictory evidence appears.** Do not reopen the +0.20730 scope mismatch or twelve-BUY acknowledgement/fill race as unresolved without new evidence.
+>
+> Older sections below are historical implementation notes. Where they conflict with this incident status, follow this notice and the current Conservative Domain Specification.
 >
 ## Strategy-scoped trading configuration
 
