@@ -1838,9 +1838,15 @@ test("fails closed without a fresh book and resumes after a fresh book update", 
 
 test("rechecks book freshness after PENDING registration before broker I/O", async () => {
   let fresh = true
+  let staleOnce = true
   const { engine, orders } = createHarness({
     isMarketBookFresh: () => fresh,
-    eventPublisher: { publish: ({ name }) => { if (name === "order.submission_requested") fresh = false } },
+    eventPublisher: { publish: ({ name }) => {
+      if (name === "order.submission_requested" && staleOnce) {
+        fresh = false
+        staleOnce = false
+      }
+    } },
   })
   const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.data.deferred, true)
