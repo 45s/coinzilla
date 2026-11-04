@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
@@ -28,6 +29,7 @@ export function makeExecuteStrategyDecision({
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
+  const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
 
   return async function executeStrategyDecision({ decision, marketMetadata } = {}) {
@@ -40,7 +42,7 @@ export function makeExecuteStrategyDecision({
       }
 
       const pendingOrders = decision.actions.map((action) => {
-        const clientOrderId = "h-" + marketMetadata.market.symbol + "-" + (++orderSequence)
+        const clientOrderId = "h-" + orderIdNamespace + "-" + (++orderSequence)
         const orderIntent = {
           symbol: marketMetadata.market.symbol,
           side: action.side,
