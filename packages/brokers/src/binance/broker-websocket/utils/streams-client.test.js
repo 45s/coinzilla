@@ -381,3 +381,26 @@ test("transport listener setup failures remove earlier listeners and close the t
   assert.equal(transports[0].closeListener, null)
   await client.disconnect()
 })
+
+
+test("dispatches raw bookTicker payloads without an event type", async () => {
+  const { client, transports } = createClient()
+  const events = []
+  const subscription = client.subscribe("btcusdt@bookTicker", (event) => events.push(event))
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@bookTicker"] })
+  await subscription
+
+  const bookTicker = {
+    u: 400900217,
+    s: "BTCUSDT",
+    b: "25.35190000",
+    B: "31.21000000",
+    a: "25.36520000",
+    A: "40.66000000",
+  }
+  transports[0].receive(bookTicker)
+
+  assert.deepEqual(events, [bookTicker])
+  await client.disconnect()
+})
