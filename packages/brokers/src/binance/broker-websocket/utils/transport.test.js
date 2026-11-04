@@ -507,3 +507,95 @@ test("socket close exceptions still finalize transport shutdown and resolve clos
   assert.equal(clock.pendingCount, 0)
   assert.equal(await transport.close(), undefined)
 })
+
+
+test("validates transport URL, WebSocket constructor, and timeout configuration", () => {
+  assert.throws(() => new NativeWebSocketTransport({
+    url: "",
+    WebSocketCtor: FakeWebSocket,
+  }), /WebSocket URL is required/)
+
+  assert.throws(() => new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: null,
+  }), /does not provide the built-in WebSocket/)
+
+  assert.throws(() => new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: FakeWebSocket,
+    connectTimeout: 0,
+  }), /connectTimeout must be a positive integer/)
+
+  assert.throws(() => new NativeWebSocketTransport({
+    url: "wss://example.test/ws",
+    WebSocketCtor: FakeWebSocket,
+    closeTimeout: 0,
+  }), /closeTimeout must be a positive integer/)
+
+  if (typeof globalThis.WebSocket === "function") {
+    assert.doesNotThrow(() => new NativeWebSocketTransport({
+      url: "wss://example.test/ws",
+      WebSocketCtor: globalThis.WebSocket,
+    }))
+  }
+})
+
+test("readyState reflects the socket during connecting, open, and closed states", async () => {
+  const { transport, sockets } = createTransport()
+  assert.equal(transport.readyState, null)
+
+  const connecting = transport.connect()
+  assert.equal(transport.readyState, FakeWebSocket.CONNECTING)
+
+  sockets[0].open()
+  await connecting
+  assert.equal(transport.readyState, FakeWebSocket.OPEN)
+
+  const closing = transport.close()
+  sockets[0].serverClose({ code: 1000, reason: "finished", wasClean: true })
+  await closing
+  assert.equal(transport.readyState, FakeWebSocket.CLOSED)
+})
+
+test("closing an idle transport finalizes without creating a socket", async () => {
+  const { transport, sockets, clock } = createTransport()
+
+  const first = transport.close()
+  const second = transport.disconnect()
+
+  await Promise.all([first, second])
+
+  assert.equal(transport.state, "closed")
+  assert.equal(transport.readyState, null)
+  assert.equal(sockets.length, 0)
+  assert.equal(clock.pendingCount, 0)
+  await assert.rejects(transport.connect(), /Cannot connect WebSocket/)
+})
+
+test("validates observer callbacks and isolates message and error observer failures", async () => {
+  const { transport, sockets } = createTransport()
+  const errors = []
+
+  assert.throws(() => transport.onMessage(null), /listener must be a function/)
+  assert.throws(() => transport.onError(null), /listener must be a function/)
+  assert.throws(() => transport.onClose(null), /listener must be a function/)
+
+  transport.onError((error) => {
+    errors.push(error.message)
+    throw new Error("error observer failed")
+  })
+  transport.onMessage(() => {
+    throw new Error("message observer failed")
+  })
+
+  const connecting = transport.connect()
+  sockets[0].open()
+  await connecting
+  sockets[0].receive("message")
+
+  assert.deepEqual(errors, ["message observer failed"])
+  assert.equal(transport.state, "open")
+  const closing = transport.close()
+  sockets[0].serverClose()
+  await closing
+})
