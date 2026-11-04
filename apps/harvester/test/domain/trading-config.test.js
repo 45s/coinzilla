@@ -20,34 +20,34 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
 test('rejects enabling the deferred Aggressive mode', () => {
   const config = structuredClone(validConfig);
   strategy(config).settings.aggressive.enabled = true;
-  assert.throws(() => validateTradingConfig(config), /settings\\.aggressive\\.enabled.*Aggressive strategy is deferred/);
+  assert.throws(() => validateTradingConfig(config), /settings.*aggressive.*enabled.*Aggressive strategy is deferred/);
 });
 
 test('requires enabled CG_coinGrabber and Conservative mode', () => {
   const strategyDisabled = structuredClone(validConfig);
   strategy(strategyDisabled).enabled = false;
-  assert.throws(() => validateTradingConfig(strategyDisabled), /CG_coinGrabber\\.enabled.*must remain enabled/);
+  assert.throws(() => validateTradingConfig(strategyDisabled), /CG_coinGrabber.*enabled.*must remain enabled/);
   const conservativeDisabled = structuredClone(validConfig);
   strategy(conservativeDisabled).settings.conservative.enabled = false;
-  assert.throws(() => validateTradingConfig(conservativeDisabled), /settings\\.conservative\\.enabled.*Conservative must remain enabled/);
+  assert.throws(() => validateTradingConfig(conservativeDisabled), /settings.*conservative.*enabled.*Conservative must remain enabled/);
 });
 
 test('rejects legacy flat settings/pairs and missing strategy-owned objects', () => {
   assert.throws(() => validateTradingConfig({ settings: { minProfit: 0.01 }, pairs: {} }), /strategies.*expected an object/);
   const noSettings = structuredClone(validConfig); delete strategy(noSettings).settings;
-  assert.throws(() => validateTradingConfig(noSettings), /CG_coinGrabber\\.settings.*expected an object/);
+  assert.throws(() => validateTradingConfig(noSettings), /CG_coinGrabber.*settings.*expected an object/);
   const noPairs = structuredClone(validConfig); delete strategy(noPairs).pairs;
-  assert.throws(() => validateTradingConfig(noPairs), /CG_coinGrabber\\.pairs.*expected an object/);
+  assert.throws(() => validateTradingConfig(noPairs), /CG_coinGrabber.*pairs.*expected an object/);
 });
 
 test('rejects empty pairs', () => {
   const config = structuredClone(validConfig); strategy(config).pairs = {};
-  assert.throws(() => validateTradingConfig(config), /CG_coinGrabber\\.pairs.*at least one pair/);
+  assert.throws(() => validateTradingConfig(config), /CG_coinGrabber.*pairs.*at least one pair/);
 });
 
 test('rejects invalid pair enabled flags, amounts, fees, and precision', () => {
   const invalidEnabled = structuredClone(validConfig); strategy(invalidEnabled).pairs.DOGEUSDT.enabled = 'true';
-  assert.throws(() => validateTradingConfig(invalidEnabled), /pairs\\.DOGEUSDT\\.enabled.*expected a boolean/);
+  assert.throws(() => validateTradingConfig(invalidEnabled), /pairs.*DOGEUSDT.*enabled.*expected a boolean/);
   const invalidInvestment = structuredClone(validConfig); strategy(invalidInvestment).pairs.DOGEUSDT.investment = 0;
   assert.throws(() => validateTradingConfig(invalidInvestment), /investment.*greater than 0/);
   const invalidOrderQuantity = structuredClone(validConfig); strategy(invalidOrderQuantity).pairs.DOGEUSDT.orderQuantity = 0;
