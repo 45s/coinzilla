@@ -929,11 +929,32 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 - [x] Add fee-adjusted cycle reconciliation and verify Portfolio quote cash flow equals RecoveryLedger realized cycle profit and exact free keepQuantity.
 - [x] Add concurrent market-update coverage while initial BUY acknowledgement and trailing BUY cancellation are pending; queued updates do not create duplicate active BUY orders.
 - [x] Add out-of-order stale OPEN-after-FILLED event coverage.
-- [x] Latest exact-head CI passed: Harvester 386/386, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
-- [~] Lifecycle matrix: immediate-FILLED acknowledgement, streamed BUY/SELL partials, duplicate/conflicting fills, stale REST history, REST/stream overlap, cancel/fill overlap, pending BUY/SELL acknowledgements, concurrent market updates during acknowledgement/cancellation, and shutdown waiting are covered. Remaining out-of-order/conflicting order-event permutations and further cancellation/shutdown permutations still require explicit review.
-- [~] Accounting/fees: Portfolio/RecoveryLedger base/quote commission atomicity, unsupported third-asset/unknown commission failures, multi-fill totals, cycle profit, maker/taker selection, and price/quantity boundaries are covered. Remaining review is the complete production fee caller audit and the full per-session reconciliation evidence chain.
-- [~] Account audit: OPENING/CLOSING ordering, incomplete closing on reconciliation failure, CLOSING flush failure, duplicate endpoints, malformed session/phase/profit records, and per-session cycle-profit aggregation are covered. No eligible historical session has an OPENING snapshot; the historical incident Journal predates this feature.
+- [x] Latest exact-head CI passed: Harvester 387/387, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
+- [x] Lifecycle matrix complete offline: immediate-FILLED acknowledgement; streamed BUY/SELL partials; duplicate/conflicting fills; stale OPEN after FILLED; late PARTIALLY_FILLED after CANCELED; late FILLED after CANCELED/EXPIRED; stale REST history; REST/stream overlap; cancel/fill overlap; pending BUY/SELL acknowledgements; concurrent market updates during BUY acknowledgement and trailing cancellation; shutdown waiting for REST reconciliation; and CLOSING durability failure are covered by deterministic regression tests.
+- [x] Accounting and fee policy complete offline: Portfolio/RecoveryLedger base/quote commission atomicity, unsupported third-asset/unknown commission failures, conflicting replay, multi-fill totals, fee-adjusted cycle profit, per-session Journal aggregation, the single active production sell-fee caller, maker/taker selection, [0,100) config/readiness validation, and price/quantity boundaries are covered.
+- [x] Account-audit offline verification complete: OPENING/CLOSING ordering, OPENING and CLOSING durability failures, incomplete closing on reconciliation failure, duplicate endpoints, malformed session/phase/profit records, and per-session cycle-profit aggregation are covered. No eligible historical session has an OPENING snapshot; the historical incident Journal predates this feature, so actual balance-delta reconciliation remains a TESTNET-session task.
 - [ ] Branch synchronization: `develop` has advanced with unrelated broker-package refactoring and CI coverage commits after this branch's merge base. The branch must be updated before merge; the available GitHub connector does not expose the repository-tree read or PR branch-update operation needed to perform that merge here.
 - [ ] Historical account baseline: a future controlled session is required for an actual OPENING/CLOSING balance audit against exchange trades, commissions, and external account activity.
+
+
+### Deterministic lifecycle acceptance evidence
+
+| Race / lifecycle case | Regression evidence |
+|---|---|
+| Immediate FILLED acknowledgement waits for all execution history before strategy reevaluation | `waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event` |
+| Streamed partial BUYs reconcile cumulative quantity and VWAP | `reconciles streamed BUY partial fills cumulatively before advancing the strategy` |
+| Multiple SELL fills reconcile before recovery completion | `reconciles multiple actual SELL fills before completing recovery` |
+| Duplicate/conflicting fill facts do not double-apply accounting | Duplicate-fill engine test and conflicting replay accounting test |
+| Out-of-order OPEN after FILLED is ignored | `ignores an out-of-order OPEN update after the BUY has already filled` |
+| Late partial trade after terminal cancellation is rejected without mutation | `rejects a late PARTIALLY_FILLED trade update after terminal cancellation` |
+| Late FILLED after partial CANCELED/EXPIRED remains reconcilable | `allows a late terminal FILLED update after partial CANCELED or EXPIRED races` |
+| REST behind stream cumulative state is rejected | `rejects REST order history that is behind an already processed stream fill` |
+| REST/stream overlap, missing fills, incomplete history, conflicting IDs | Existing focused reconciliation regression tests |
+| Market updates while BUY/SELL acknowledgement is pending | BUY acknowledgement and pending SELL acknowledgement serialization tests |
+| Market updates while trailing cancellation is pending | `serializes concurrent market updates while a trailing BUY cancellation is pending` |
+| Shutdown while REST reconciliation is pending | CLOSING snapshot remains unpublished until reconciliation resolves; failure yields INCOMPLETE audit |
+| CLOSING snapshot durability failure | Shutdown reports incomplete but still disconnects broker |
+
+**Offline status:** the lifecycle, accounting, fee-policy, and account-audit implementation/test work is complete on the verified code head. Remaining gates are branch synchronization, a final exact-head CI run after documentation updates, and the separately authorized controlled TESTNET session.
 
 Harvester remains stopped. No TESTNET write operations have been performed as part of this follow-up.
