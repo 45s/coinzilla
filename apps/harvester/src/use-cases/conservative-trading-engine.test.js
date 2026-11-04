@@ -267,7 +267,7 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
   assert.equal(firstResult.ok, true, firstResult.errors?.[0]?.message)
   assert.equal(secondResult.ok, true, secondResult.errors?.[0]?.message)
   assert.equal(harness.orders.length, 1)
-  assert.deepEqual(harness.accountedFills.map((fill) => fill.id), ["immediate-ack-fill-1", "immediate-ack-fill-2"])
+  assert.deepEqual(harness.accountedFills.map((fill) => fill.tradeId), ["immediate-ack-fill-1", "immediate-ack-fill-2"])
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
 
