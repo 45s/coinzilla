@@ -94,3 +94,21 @@ test("rejects a reused Fill ID when execution facts differ", () => {
     /Conflicting execution facts reused Fill ID/,
   )
 })
+
+
+test("deduplicates equivalent REST and WebSocket fills in either delivery order", () => {
+  const restDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
+  const websocketDelivery = makeFill({ tradeId: "binance-trade-10259", quantity: "4.995" })
+
+  const restThenWebsocket = new Portfolio().applyFill({ fill: restDelivery }).portfolio
+  const duplicateWebsocket = restThenWebsocket.applyFill({ fill: websocketDelivery })
+  assert.equal(duplicateWebsocket.applied, false)
+  assert.equal(duplicateWebsocket.duplicate, true)
+  assert.equal(duplicateWebsocket.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
+
+  const websocketThenRest = new Portfolio().applyFill({ fill: websocketDelivery }).portfolio
+  const duplicateRest = websocketThenRest.applyFill({ fill: restDelivery })
+  assert.equal(duplicateRest.applied, false)
+  assert.equal(duplicateRest.duplicate, true)
+  assert.equal(duplicateRest.portfolio.getPosition({ symbol: "ETHUSDT" }).baseQuantity.amount, "4.995")
+})
