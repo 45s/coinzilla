@@ -1745,3 +1745,39 @@ test("does not reuse a cached market price after it becomes stale", async () => 
   assert.equal(result.data.reason, "STALE_MARKET_PRICE")
   assert.equal(orders.length, 1)
 })
+
+
+test("defers submission when the market price becomes stale during pending-order registration", async () => {
+  let isFresh = true
+  let staleAfterFirstPending = true
+  const eventPublisher = {
+    publish: ({ name }) => {
+      if (name === "order.submission_requested" && staleAfterFirstPending) {
+        isFresh = false
+        staleAfterFirstPending = false
+      }
+    },
+  }
+  const { engine, orders } = createHarness({
+    isMarketPriceFresh: () => isFresh,
+    eventPublisher,
+  })
+
+  const first = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(first.data.deferred, true)
+  assert.equal(orders.length, 0, "a stale price must not reach broker submission")
+
+  isFresh = true
+  const next = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
+  })
+
+  assert.equal(next.ok, true)
+  assert.equal(orders.length, 1, "a subsequent fresh price should allow the order")
+})
