@@ -1544,3 +1544,22 @@ test("journals OPENING balances before trading and CLOSING balances before broke
   assert.ok(closingFlushIndex >= 0)
   assert.ok(disconnectIndex > closingFlushIndex)
 })
+
+
+test("fails startup before market subscriptions when OPENING account snapshot cannot be durably flushed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  }), /Unable to durably persist OPENING account snapshot/)
+  assert.ok(calls.includes("disconnect"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+})
