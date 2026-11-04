@@ -1,12 +1,13 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { addDecimal } from "@coinzilla/utils"
 import { reconcileAccountSnapshotDeltas } from "./reconcile-account-snapshot-deltas.js"
 
 const snapshot = ({ phase, sourceTime, balances, auditStatus = "COMPLETE", auditReasons = [] }) => ({
   phase, sourceTime, balances, auditStatus, auditReasons,
 })
 const balance = (asset, free, locked = "0") => ({
-  asset, free, locked, total: String(Number(free) + Number(locked)),
+  asset, free, locked, total: addDecimal({ left: free, right: locked }),
 })
 
 test("reconciles exact per-asset wallet deltas and assets appearing/disappearing", () => {
