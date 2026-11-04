@@ -54,6 +54,9 @@ jobs:
 
           exit "$test_status"
 
+      - name: Enforce Brokers package coverage command
+        run: pnpm --filter @coinzilla/brokers test:coverage
+
       - name: Enforce Notifiers package coverage thresholds
         run: pnpm --filter @coinzilla/notifiers test:coverage
 

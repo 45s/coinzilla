@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "test:coverage": "node --experimental-test-coverage --test",
     "test:watch": "node --test --watch",
     "test:integration": "node --env-file-if-exists=.env.development --test \"src/**/*.integration.js\"",
     "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/binance/broker-websocket/methods/user-data-session.integration.js",

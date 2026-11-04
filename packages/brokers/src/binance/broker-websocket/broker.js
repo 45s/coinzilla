@@ -1,5 +1,5 @@
 import { Asset, Market } from "@coinzilla/entities"
-import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
@@ -10,6 +10,8 @@ import { BinanceStreamsClient } from "./utils/streams-client.js"
 import { NativeWebSocketTransport } from "./utils/transport.js"
 import { BinanceUserDataSession } from "./methods/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
+import { readOptionalDecimalFilter, validatePositiveDecimalFilter } from "./helpers/symbol-filter-adapters.js"
+import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
 import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
 
 function createApiClient(config) {
@@ -28,34 +30,6 @@ function createMarketClient(config, logger) {
     maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
     onError: (error) => logger.error?.({ message: "Binance market stream error", error }),
   })
-}
-
-function validatePositiveDecimalFilter({ value, name, symbol }) {
-  if (value === undefined || value === null) {
-    throw new Error(`Binance ${name} missing for ${symbol}`)
-  }
-  try {
-    assertDecimalString({ value, field: name })
-  } catch (error) {
-    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
-  }
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
-    throw new Error(`Binance ${name} missing or non-positive for ${symbol}`)
-  }
-  return value
-}
-
-function readOptionalDecimalFilter({ value, name, symbol }) {
-  if (value === undefined || value === null) return undefined
-  try {
-    assertDecimalString({ value, field: name })
-  } catch (error) {
-    throw new TypeError(`Binance ${name} is invalid for ${symbol}`, { cause: error })
-  }
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
-    throw new RangeError(`Binance ${name} must be non-negative for ${symbol}`)
-  }
-  return value
 }
 
 async function getCanonicalMarket({ broker, symbol }) {
@@ -86,38 +60,6 @@ function validateCallback(callback, name) {
   if (typeof callback !== "function") {
     throw new TypeError(`${name} callback must be a function`)
   }
-}
-
-function adaptBookTickerMessage({ message, symbol }) {
-  if (!message || typeof message !== "object" || Array.isArray(message) ||
-      (message.e !== undefined && message.e !== "bookTicker")) {
-    throw new TypeError("A Binance bookTicker event is required")
-  }
-  if (message.s !== symbol) {
-    throw new TypeError("Binance bookTicker symbol does not match the subscription")
-  }
-
-  const decimalFields = [
-    ["b", "best bid price"],
-    ["B", "best bid quantity"],
-    ["a", "best ask price"],
-    ["A", "best ask quantity"],
-  ]
-  for (const [field, name] of decimalFields) {
-    assertDecimalString({ value: message[field], field: name })
-    if (compareDecimal({ left: message[field], right: "0" }) <= 0) {
-      throw new RangeError("Binance bookTicker " + name + " must be positive")
-    }
-  }
-
-  return Object.freeze({
-    symbol,
-    bestBidPrice: message.b,
-    bestBidQuantity: message.B,
-    bestAskPrice: message.a,
-    bestAskQuantity: message.A,
-    timestamp: Date.now(),
-  })
 }
 
 function logSafely(logger, level, ...args) {
@@ -678,7 +620,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const normalizedSymbol = symbol.trim().toUpperCase()
       stream = createStreamName("bookTicker", { symbol: normalizedSymbol })
       const listener = (message) => {
-        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol }))
+        onBookTicker(adaptBookTickerMessage({ message, symbol: normalizedSymbol, timestamp: Date.now() }))
       }
       await this.marketConnection.subscribe(stream, listener)
 
