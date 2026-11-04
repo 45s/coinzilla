@@ -1514,6 +1514,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   const calls = []
   const broker = createBroker(calls)
   const events = []
+  const btcMarket = createMarketMetadata("BTCUSDT").market
   let releaseOpenOrders
   let signalOpenOrdersStarted
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
@@ -1530,12 +1531,12 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: "broker-" + order.clientOrderId,
-        market: order.market,
+        market: btcMarket,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+        limitPrice: new Money({ amount: order.price, asset: btcMarket.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: btcMarket.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: btcMarket.baseAsset }),
         status: "OPEN",
         createdAt: 1,
         acknowledgedAt: 1,
