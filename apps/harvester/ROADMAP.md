@@ -760,7 +760,7 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 - [x] Harvester recorded `execution.fill_applied` for that SELL and then `recovery.cycle_completed` with `freeQuantity: 1` and `realizedNetProfit: 0.36335`. These are journal-reported values; actual commission amount/asset is not present in the journal event, so independent net-PnL verification remains open.
 - [x] The journal records twelve distinct DOGEUSDT BUY orders, client IDs `h-DOGEUSDT-32` through `h-DOGEUSDT-43`, broker order IDs `1197074` through `1197085`. Each was `400 DOGE` at `0.07598 USDT`, and all twelve were FILLED as TAKER within roughly three seconds: `4,800 DOGE` total and `364.704 USDT` gross quote spend.
 - [x] The SELL and twelve BUYs are real exchange executions, not merely strategy intents. However, the BUY burst is not acceptable behavior and is a blocker to repeatable execution.
-- [x] The prior operator order-history summary showed gross BUY quantity `8,400 DOGE` and gross SELL quantity `8,390 DOGE` across the latest 50 DOGEUSDT orders, a net `+10 DOGE` before commissions. This is a bounded history window, not a complete account ledger.
+- [x] The operator-provided order-history output contained 102 rows total: 50 dated 2026-10-28 and 52 dated 2026-11-04. Within the 2026-11-04 subset, 21 FILLED BUYs total `8,400 DOGE` / `635.85200 USDT` gross quote and 5 FILLED SELLs total `8,390 DOGE` / `636.42265 USDT` gross quote. The net is `+10 DOGE` and `+0.57065 USDT` before commissions. This remains bounded order-history evidence, not a complete account ledger.
 - [x] A later read-only open-orders command reported no open orders. A separate latest read-only balance snapshot reports 517 non-zero assets; DOGE `12,321.00000000 free / 0 locked`, USDT `9,792.44855000 free / 0 locked`, and FDUSD `9,990.86500000 free / 0 locked`.
 
 
@@ -773,7 +773,8 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 - [ ] Execute the Harvester test suite and coverage locally or in CI; inspect and fix any failures.
 - [ ] Verify required workspace checks and CI are green.
 - [ ] Review duplicate/out-of-order stream overlap, cancellation/fill races, and complete recovery lifecycle regressions against the new barrier.
-- [ ] Reconcile complete exchange trade-level commission facts and establish the limits of the opening-balance baseline.
+- [ ] Run `pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000`; inspect pagination/completeness and reconcile every trade-level commission fact to order history and the journal.
+- [ ] Establish the limits of the opening-balance baseline; do not infer it from bounded order history.
 
 **Verification status:** the latest PR head passed the full workspace unit-test run, workspace test-coverage run and all configured coverage thresholds, JavaScript syntax and agent-policy checks, workflow lint, production dependency audit, and Utilities unit tests. Earlier CI attempts exposed a terminal registry ordering defect and a test assertion using Fill.id instead of tradeId; both were corrected before the passing run. Offline verification is green. Exchange trade-level reconciliation remains incomplete, so these results do not satisfy the TESTNET restart gate. Keep the process stopped.
 
@@ -799,7 +800,7 @@ The balance snapshot is account-wide and contains extensive non-zero pre-funded 
 - The incident segment arithmetic (12 BUYs: `+4,800 DOGE / -364.704 USDT`; recovery SELL: `-5,595 DOGE / +425.94735 USDT`) is `-795 DOGE / +61.24335 USDT` gross before fees. This is only a segment cash-flow delta; it is not standalone PnL because the SELL includes inventory accumulated outside those twelve BUYs.
 - The latest no-open-orders snapshot and zero locked balances establish no currently reported locked quantity at those snapshot times; they do not establish internal Portfolio correctness.
 
-To close reconciliation, obtain the complete DOGEUSDT trade list covering the run (trade ID, order ID, side, price, base qty, quote qty, commission amount, commission asset, timestamp), exact account balance snapshots immediately before and after the run if available, and correlate every trade to the Harvester journal. If an opening snapshot is unavailable, record the unresolvable baseline explicitly rather than inventing it.
+To close reconciliation, run the newly added read-only command `pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000` from the repository root. It calls Binance `GET /api/v3/myTrades` and prints trade ID, order ID, side, price, base/quote quantities, commission amount/asset, maker/taker role, and timestamp. Correlate every returned trade to order history and the Harvester journal. The command retrieves one page (up to 1,000 trades); if more than 1,000 executions exist, retrieve subsequent pages using `fromId` before claiming completeness. Also obtain exact account balance snapshots immediately before and after the run if available. If an opening snapshot is unavailable, record the unresolvable baseline explicitly rather than inventing it.
 
 ### Updated acceptance status and execution gate
 
@@ -808,7 +809,7 @@ To close reconciliation, obtain the complete DOGEUSDT trade list covering the ru
 - [ ] No duplicate/repeated BUY submission under rapid FILLED acknowledgement/fill races.
 - [ ] Post-cycle strategy evaluation does not create an invalid residual-inventory recovery SELL.
 - [ ] All execution reports, cancellation/replacement outcomes, and fills reconcile to complete exchange trade history.
-- [ ] Actual per-trade commission amount/asset reconciles to Portfolio, RecoveryLedger, free inventory, and net profit.
+- [ ] Actual per-trade commission amount/asset reconciles to Portfolio, RecoveryLedger, free inventory, and net profit. The order-history-only gross result is +10 DOGE / +0.57065 USDT before fees.
 - [ ] A safe next-cycle BUY occurs after recovery completion, and the full cycle repeats without duplicate orders or invalid intents.
 - [ ] Current exchange balances reconcile to a known opening baseline and Harvester-owned inventory.
 - [ ] Deterministic regression tests, Harvester tests, workspace checks, and required CI pass on PR #513.
