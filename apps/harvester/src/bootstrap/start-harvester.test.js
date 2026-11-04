@@ -1641,6 +1641,13 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
 test("journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect", async () => {
   const calls = []
   const broker = createBroker(calls)
+  let openOrderReads = 0
+  const getOpenOrders = broker.getOpenOrders
+  broker.getOpenOrders = async (input) => {
+    openOrderReads += 1
+    assert.deepEqual(input, {})
+    return getOpenOrders(input)
+  }
   const events = []
   const eventPublisher = {
     publish: (event) => {
@@ -1662,6 +1669,10 @@ test("journals PREFLIGHT balances and open orders before trading and CLOSING bal
   })
 
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
+  assert.equal(calls.filter((call) => call === "account:snapshot").length, 1)
+  assert.equal(openOrderReads, 1)
+  assert.equal(events.filter((event) => event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT").length, 1)
+  assert.equal(events.filter((event) => event.name === "account.open_orders_captured" && event.data.phase === "PREFLIGHT").length, 1)
   assert.equal(openingEvent.data.phase, "PREFLIGHT")
   const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
   assert.equal(openOrdersEvent.data.readiness, "READY")
@@ -1956,6 +1967,34 @@ test("blocks read-only startup when either PREFLIGHT audit event cannot be durab
     if (failedFlush === 2) {
       assert.equal(events.some((event) => event.name === "account.open_orders_captured"), true)
     }
+    assert.equal(calls.includes("disconnect"), true)
+    assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+  }
+})
+
+
+test("blocks read-only startup when either PREFLIGHT audit event publication fails", async () => {
+  for (const failedEvent of ["account.snapshot_captured", "account.open_orders_captured"]) {
+    const calls = []
+    const broker = createBroker(calls)
+    const events = []
+    await assert.rejects(startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      eventPublisher: {
+        publish: (event) => {
+          events.push(event)
+          return event.name === failedEvent
+            ? { ok: false, errors: [new Error("event publication rejected")] }
+            : { ok: true }
+        },
+        flush: async () => ({ ok: true, durable: true }),
+      },
+      logger: { info() {}, error() {}, debug() {} },
+    }), failedEvent === "account.snapshot_captured"
+      ? /Unable to publish PREFLIGHT account snapshot audit event/
+      : /Unable to publish account open-orders audit event/)
     assert.equal(calls.includes("disconnect"), true)
     assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
   }
