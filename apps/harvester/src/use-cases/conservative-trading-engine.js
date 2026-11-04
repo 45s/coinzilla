@@ -308,6 +308,13 @@ export function makeConservativeTradingEngine({
       const reconciliation = await reconcileFilledAcknowledgement({ order })
       if (!reconciliation.ok) throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
     },
+    onOrderValidationFailure: async ({ order, error }) => {
+      await pause({
+        symbol: order.market.symbol,
+        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
+        error,
+      })
+    },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
       const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
