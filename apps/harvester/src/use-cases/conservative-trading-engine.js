@@ -197,7 +197,13 @@ export function makeConservativeTradingEngine({
         await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH", error })
         return toResult({ error })
       }
-      if (!fillsById.has(fill.id)) fillsById.set(fill.id, fill)
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Execution history contains conflicting records for the same fill ID")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_HISTORY_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
     }
     const fills = [...fillsById.values()].sort((left, right) => {
       if (left.executedAt !== undefined && right.executedAt !== undefined &&
