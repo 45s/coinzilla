@@ -92,7 +92,7 @@ All of the following must be demonstrated, not merely described:
 - [x] Enabled market price subscriptions connect and deliver validated prices (DOGEUSDT market prices were evaluated on TESTNET, 2026-11-04).
 - [x] Conservative strategy evaluates actual current context and produces actionable order intents (`PLACE_ORDERS` observed on TESTNET, 2026-11-04).
 - [x] Broker adapter submits TESTNET orders and receives acknowledgements (BUY, SELL, and standing BUY orders observed, 2026-11-04).
-- [ ] Order acknowledgements and all execution updates are received and normalized. (Partial evidence only: NEW and TRADE events were observed; one CANCELED report was logged as IGNORED.)
+- [ ] Order acknowledgements and all execution updates are received and normalized. (NEW, FILLED, and TRADE events were observed, and fill-application records exist; at least one CANCELED report was logged as IGNORED, so complete cancellation/order-lifecycle reconciliation is not accepted.)
 - [ ] Partial and final fills update Position/Portfolio correctly using actual commission facts.
 - [x] The strategy reacts to a BUY fill/order transition and submits the next required SELL plus standing BUY (both acknowledged on TESTNET, 2026-11-04).
 - [ ] A safe, repeatable BUY → fill → SELL → fill → next-cycle sequence succeeds on TESTNET. (One recovery SELL and cycle-completion event are evidenced, but the run exposed a repeated-BUY race and a post-cycle MIN_NOTIONAL failure.)
