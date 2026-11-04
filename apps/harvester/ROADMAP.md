@@ -823,3 +823,8 @@ To close reconciliation, run the newly added read-only command `pnpm --filter @c
 - [x] Live trading remains disabled.
 
 **Current milestone status:** real exchange execution and one recovery completion are demonstrated, but the run exposed two material lifecycle defects. The first safe, repeatable Conservative TESTNET cycle is **not accepted**. The two source remediations are in PR #513, but the latest additions still require CI validation and the exchange activity remains unreconciled. Keep the Harvester process stopped; do not place new TESTNET orders until the latest code checks pass and the available exchange activity is reconciled. Continue all incident work in PR #513.
+
+
+### Follow-up source review — conflicting duplicate execution records
+
+A review of PR #513's immediate-FILLED acknowledgement reconciliation found one additional fail-closed gap: duplicate canonical fill IDs were deduplicated without verifying that repeated records carried identical payloads. A conflicting duplicate could be silently discarded, potentially hiding inconsistent exchange history. The engine now compares duplicate Fill.value payloads and pauses the affected pair with ACKNOWLEDGED_FILL_HISTORY_CONFLICTING_DUPLICATE if they differ. A deterministic engine regression test supplies the same fill ID with conflicting quantities and asserts that the pair pauses before accounting is applied. This is source-level hardening; it does not change the interpretation of the twelve distinct exchange BUY orders.
