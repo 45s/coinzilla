@@ -30,9 +30,10 @@ test('requires explicit Conservative and disabled Aggressive strategy settings',
   );
 });
 
-test('accepts the flat Harvester trading configuration', () => {
+test('accepts the Harvester trading configuration', () => {
   assert.equal(validateTradingConfig(validConfig), validConfig);
-  assert.equal('strategies' in validConfig, false);
+  assert.equal(validConfig.strategies.conservative.enabled, true);
+  assert.equal(validConfig.strategies.aggressive.enabled, false);
   assert.equal('free-roll' in validConfig, false);
 });
 
