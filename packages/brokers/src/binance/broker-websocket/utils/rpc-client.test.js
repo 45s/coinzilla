@@ -519,3 +519,90 @@ test("RPC client reports close-observer exceptions without blocking cleanup", as
   assert.equal(context.client.pendingCount, 0)
   assert.equal(context.clock.pendingCount, 0)
 })
+
+test("validates RPC client dependencies and observer callbacks", () => {
+  const context = createClient()
+  assert.throws(() => new BinanceWebSocketApiClient({ transport: {} }), /compatible native WebSocket transport/)
+  assert.throws(() => new BinanceWebSocketApiClient({
+    transport: context.transport,
+    requestTimeout: 0,
+  }), /requestTimeout must be a positive integer/)
+  assert.throws(() => new BinanceWebSocketApiClient({
+    transport: context.transport,
+    now: null,
+  }), /now and idFactory must be functions/)
+  assert.throws(() => new BinanceWebSocketApiClient({
+    transport: context.transport,
+    idFactory: null,
+  }), /now and idFactory must be functions/)
+
+  assert.throws(() => context.client.onEvent(null), /listener must be a function/)
+  assert.throws(() => context.client.onError(null), /listener must be a function/)
+  assert.throws(() => context.client.onClose(null), /listener must be a function/)
+})
+
+test("rejects disconnected requests and invalid per-request timeouts without pending work", async () => {
+  const context = createClient()
+  await assert.rejects(
+    context.client.request("ticker.price", {}),
+    /Cannot send "ticker.price" while Binance WebSocket API is idle/,
+  )
+  await connectClient(context)
+  await assert.rejects(
+    context.client.request("ticker.price", {}, { timeout: 0 }),
+    /request timeout must be a positive integer/,
+  )
+  assert.equal(context.client.pendingCount, 0)
+  assert.equal(context.clock.pendingCount, 0)
+  context.sockets[0].serverClose()
+})
+
+test("rejects non-text frames, non-object JSON, and malformed RPC response envelopes", async () => {
+  const context = createClient()
+  await connectClient(context)
+
+  const unsupportedFrame = context.client.request("ticker.price", {})
+  context.sockets[0].receive(42)
+  await assert.rejects(unsupportedFrame, /only supports text JSON messages/)
+
+  const scalarPayload = context.client.request("ticker.price", {})
+  context.sockets[0].receive("42")
+  await assert.rejects(scalarPayload, /message must be a JSON object/)
+
+  const malformedSuccess = context.client.request("ticker.price", {})
+  context.sockets[0].receive(JSON.stringify({ id: "request-3", status: 200 }))
+  await assert.rejects(malformedSuccess, /Successful Binance response must contain result only/)
+
+  const malformedFailure = context.client.request("ticker.price", {})
+  context.sockets[0].receive(JSON.stringify({
+    id: "request-4",
+    status: 500,
+    error: { code: 500 },
+  }))
+  await assert.rejects(malformedFailure, /Failed Binance response has a malformed error object/)
+
+  assert.equal(context.client.pendingCount, 0)
+  assert.equal(context.clock.pendingCount, 0)
+  context.sockets[0].serverClose()
+})
+
+test("rejects reconnect attempts after the RPC transport has closed", async () => {
+  const context = createClient()
+  await connectClient(context)
+  context.sockets[0].serverClose()
+
+  await assert.rejects(
+    context.client.connect(),
+    /Cannot connect RPC client in state: closed/,
+  )
+  assert.equal(context.client.state, "closed")
+})
+
+test("rejects an RPC connection closed before the socket opens", async () => {
+  const context = createClient()
+  const connecting = context.client.connect()
+  context.sockets[0].serverClose({ code: 1006, reason: "closed before open", wasClean: false })
+
+  await assert.rejects(connecting, /closed before opening/)
+  assert.equal(context.client.state, "closed")
+})
