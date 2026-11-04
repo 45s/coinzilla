@@ -26,8 +26,12 @@ import {
   mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
-async function stopBrokerIntake({ subscriptions, userDataSubscription, logger = defaultLogger }) {
+async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
   const results = await Promise.allSettled([
+    ...bookSubscriptions.map(({ symbol, unsubscribe }) => {
+      logger.debug?.({ message: "Removing book-ticker subscription", symbol })
+      return Promise.resolve().then(() => unsubscribe())
+    }),
     ...subscriptions.map(({ symbol, unsubscribe }) => {
       logger.debug?.({ message: "Removing market-price subscription", symbol })
       return Promise.resolve().then(() => unsubscribe())
@@ -66,13 +70,14 @@ async function disconnectBroker({ broker, brokerName, eventPublisher, logger = d
     .map((result) => result.reason)
 }
 
-async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger = defaultLogger }) {
+async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
   logger.debug?.({
     message: "Harvester cleanup started",
     marketSubscriptions: subscriptions.map(({ symbol }) => symbol),
+    bookSubscriptions: bookSubscriptions.map(({ symbol }) => symbol),
     hasUserDataSubscription: typeof userDataSubscription?.disconnect === "function",
   })
-  const intakeErrors = await stopBrokerIntake({ subscriptions, userDataSubscription, logger })
+  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
   const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
   const errors = [...intakeErrors, ...disconnectErrors]
   logger.debug?.({ message: "Harvester cleanup completed", errorCount: errors.length })
@@ -211,6 +216,7 @@ export async function startHarvester({
   })
   const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
   let processMarketPrice = portfolioWorkflow.processMarketPrice
+  let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
   const {
     updatePortfolio,
     updateTradingAccounting,
@@ -294,6 +300,7 @@ export async function startHarvester({
   }
 
   const subscriptions = []
+  const bookSubscriptions = []
   let userDataSubscription
   let userDataReady = false
   let initialAccountSnapshotReady = false
@@ -348,6 +355,10 @@ export async function startHarvester({
     return Number.isSafeInteger(ageMs) &&
       ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS &&
       ageMs <= MAX_MARKET_PRICE_AGE_MS
+  }
+  const isMarketBookFresh = (marketBook) => {
+    const ageMs = now() - marketBook.timestamp
+    return Number.isSafeInteger(ageMs) && ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS && ageMs <= MAX_MARKET_PRICE_AGE_MS
   }
   const reportPriceError = (details) => {
     try {
@@ -793,18 +804,47 @@ export async function startHarvester({
         completeRecoveryCycle,
         canTrade: () => userDataReady,
         isMarketPriceFresh,
+        isMarketBookFresh,
         isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
         },
       })
       processMarketPrice = tradingEngine.processMarketPrice
+      processMarketBook = tradingEngine.processBookTicker
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
       logger.debug?.({ message: "Startup step completed: Conservative trading engine ready" })
     }
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
+      if (tradingEnabled) {
+        logger.debug?.({ message: "Startup step: subscribing to book ticker", symbol })
+        let bookResult
+        try {
+          bookResult = await broker.subscribeForBookTicker({
+            symbol,
+            onBookTicker: (bookTicker) => {
+              if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+              return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
+                if (!processed.ok) logger.error?.({ message: "Harvester market book processing failed", symbol, errors: processed.errors })
+                return processed
+              }).catch((error) => {
+                logger.error?.({ message: "Harvester market book processing failed", symbol, error })
+                return toResult({ error })
+              })
+            },
+          })
+        } catch (error) {
+          bookResult = toResult({ error })
+        }
+        if (!bookResult?.ok || typeof bookResult.data?.unsubscribe !== "function") {
+          const details = bookResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+          throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
+        }
+        bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
+        logger.info?.({ message: "Harvester subscribed to book ticker", symbol })
+      }
       logger.debug?.({ message: "Startup step: subscribing to market prices", symbol })
       let hasFreshWebSocketPrice = false
       let latestWebSocketPriceTask
@@ -947,7 +987,7 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, userDataSubscription, logger })
+    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription, logger })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
@@ -964,7 +1004,7 @@ export async function startHarvester({
     userDataStatus = "STOPPING"
     logger.info?.({ message: "Harvester shutdown started" })
 
-    const intakeErrors = await stopBrokerIntake({ subscriptions, userDataSubscription, logger })
+    const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
     await userDataEventQueue
     userDataStatus = "STOPPED"
     const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })

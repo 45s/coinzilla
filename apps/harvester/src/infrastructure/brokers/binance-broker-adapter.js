@@ -4,6 +4,16 @@ import { validateCancellationEligibility } from "../../domain/orders/validate-ca
 import { assertBrokerPort } from "../../application/ports/broker.port.js"
 import { createBinanceMarketMetadata } from "./binance-market-metadata.js"
 
+const normalizePlaceOrderResult = (result) => {
+  if (result?.ok !== false || !Array.isArray(result.errors) || result.errors.length !== 1) return result
+  const [error] = result.errors
+  // Binance Spot's exact -2010 matching-engine response is a definite LIMIT_MAKER rejection.
+  if (error?.code !== -2010 || error.message !== "Order would immediately match and take.") return result
+  const normalizedError = new Error(error.message, { cause: error })
+  normalizedError.code = "POST_ONLY_WOULD_TAKE"
+  return { ...result, errors: [normalizedError] }
+}
+
 const createBroker = ({ config, logger }) =>
   new BinanceWebSocketBroker({
     apiKey: config.apiKey,
@@ -75,6 +85,7 @@ export function createBinanceBrokerAdapter({
     "getSymbolFilters",
     "getPrices",
     "subscribeForPrices",
+    "subscribeForBookTicker",
     "subscribeForUserData",
   ]
   const missingMethods = requiredMethods.filter(
@@ -87,9 +98,11 @@ export function createBinanceBrokerAdapter({
   const broker = Object.freeze({
     connect: () => client.connect(),
     disconnect: () => client.disconnect(),
-    placeOrder: ({ order }) => {
-      if (typeof client.createCanonicalOrder === "function") return client.createCanonicalOrder(order)
-      return client.createOrder(order)
+    placeOrder: async ({ order }) => {
+      const result = typeof client.createCanonicalOrder === "function"
+        ? await client.createCanonicalOrder(order)
+        : await client.createOrder(order)
+      return normalizePlaceOrderResult(result)
     },
     cancelOrder: async ({ order, symbol, orderId } = {}) => {
       const targetSymbol = order?.market?.symbol ?? symbol
@@ -146,6 +159,8 @@ export function createBinanceBrokerAdapter({
     getPrices: ({ symbol }) => client.getPrices({ symbol }),
     subscribeForPrices: ({ symbol, onPrice }) =>
       client.subscribeForPrices({ symbol, onPrice }),
+    subscribeForBookTicker: ({ symbol, onBookTicker }) =>
+      client.subscribeForBookTicker({ symbol, onBookTicker }),
     subscribeForUserData: ({ onEvent, onStatus }) =>
       client.subscribeForUserData({ onEvent, onStatus }),
   })

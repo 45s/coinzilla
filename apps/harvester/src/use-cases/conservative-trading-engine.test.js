@@ -12,7 +12,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 
@@ -48,7 +48,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -56,6 +56,7 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
   const completedCycles = []
   const cancellationIds = []
   const canceledOrders = new Map()
+  let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -63,7 +64,10 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
       onPlaceOrderStarted?.({ order })
       if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
       if (placeOrderThrow) throw new Error("socket closed")
-      if (placeOrderFailure) return { ok: false, errors: [new Error("broker rejected order")] }
+      if (remainingPlaceOrderFailures > 0) {
+        if (Number.isFinite(remainingPlaceOrderFailures)) remainingPlaceOrderFailures -= 1
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
+      }
       return {
         ok: true,
         data: new CanonicalOrder({
@@ -144,6 +148,7 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
     broker,
     strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     isMarketPriceFresh,
+    isMarketBookFresh,
     eventPublisher,
     tradingConfig,
     getPortfolio: () => initialPortfolio ?? new Portfolio(),
@@ -170,6 +175,10 @@ function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancel
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
   })
+  if (initialBook) engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 1,
+  } : initialBook })
   return { engine, broker, orders, pauses, accountedFills, completedCycles, cancellationIds }
 }
 
@@ -1780,4 +1789,88 @@ test("defers submission when the market price becomes stale during pending-order
 
   assert.equal(next.ok, true)
   assert.equal(orders.length, 1, "a subsequent fresh price should allow the order")
+})
+
+
+test("validates exact-decimal books and detects BUY/SELL POST-ONLY crossing at equality", () => {
+  const book = createMarketBook({ bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 10,
+  } })
+  const order = (side, amount) => ({
+    type: "LIMIT_MAKER", side, market: { symbol: "DOGEUSDT" }, limitPrice: { amount },
+  })
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "99.99"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("BUY", "100.00"), marketBook: book }), true)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.91"), marketBook: book }), false)
+  assert.equal(isPostOnlyOrderCrossing({ order: order("SELL", "99.90"), marketBook: book }), true)
+  assert.throws(() => createMarketBook({ bookTicker: { symbol: "DOGEUSDT", bestBidPrice: "100", bestBidQuantity: "1", bestAskPrice: "100", bestAskQuantity: "1", timestamp: 10 } }), /best bid must be below best ask/)
+})
+
+test("defers a crossing POST-ONLY BUY and resumes on a fresh non-crossing book", async () => {
+  const { engine, orders } = createHarness({ initialBook: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.95", bestAskQuantity: "1", timestamp: 1,
+  } })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("fails closed without a fresh book and resumes after a fresh book update", async () => {
+  let fresh = false
+  const { engine, orders } = createHarness({ initialBook: false, isMarketBookFresh: () => fresh })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  fresh = true
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("rechecks book freshness after PENDING registration before broker I/O", async () => {
+  let fresh = true
+  const { engine, orders } = createHarness({
+    isMarketBookFresh: () => fresh,
+    eventPublisher: { publish: ({ name }) => { if (name === "order.submission_requested") fresh = false } },
+  })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
+  assert.equal(engine.getOrders().length, 0)
+  fresh = true
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+})
+
+test("definite POST-ONLY rejection removes PENDING and waits for a fresh book without pausing", async () => {
+  const rejection = Object.assign(new Error("known post-only rejection"), { code: "POST_ONLY_WOULD_TAKE" })
+  const { engine, orders, pauses } = createHarness({ placeOrderFailureCount: 1, placeOrderFailureError: rejection })
+  const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
+  assert.equal(result.ok, false)
+  assert.equal(orders.length, 1)
+  assert.deepEqual(pauses, [])
+  assert.equal(engine.getOrders().length, 0)
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "99.94", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(orders.length, 1)
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 3,
+  } })
+  assert.equal(orders.length, 2)
+  assert.deepEqual(pauses, [])
 })

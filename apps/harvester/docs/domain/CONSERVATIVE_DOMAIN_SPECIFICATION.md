@@ -140,6 +140,14 @@ The same commission and order-type policy applies to Conservative and Aggressive
 - Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
 - Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
 
+### POST-ONLY crossing and definite rejection handling
+
+Every `LIMIT_MAKER` submission requires a fresh Binance best-bid/best-ask snapshot for the same symbol. A BUY limit must be strictly below the best ask; a SELL limit must be strictly above the best bid. Equality is marketable and is deferred. Missing, stale, malformed, crossed, or mismatched book data fails closed. The engine checks this before registering the local PENDING order and again after registration immediately before broker I/O. A new book event resumes a deferred evaluation; no timer or polling loop is introduced.
+
+The exchange remains the final POST-ONLY authority because the book can move after local validation. For Binance Spot, only error code `-2010` with the exact matching-engine message `Order would immediately match and take.` is normalized as a definite POST-ONLY rejection. Harvester removes that unacknowledged local PENDING record, invalidates the cached book, and waits for a new book-ticker event before reevaluating. It does not pause the pair for this one known rejection. Other `-2010` errors, other exchange errors, and transport/timeout outcomes are not reclassified; unknown outcomes remain fail-closed and pause the pair. No rejection is converted to a regular LIMIT order.
+
+See the [official Binance Spot API errors reference](https://github.com/binance/binance-spot-api-docs/blob/master/errors.md#messages-for--1010-error_msg_received--2010-new_order_rejected--2011-cancel_rejected-and--2038-order_amend_rejected).
+
 Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
 
 ### 4.4 SELL fill accounting

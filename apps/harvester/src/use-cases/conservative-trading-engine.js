@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
@@ -22,11 +22,50 @@ import {
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 
+export function createMarketBook({ bookTicker } = {}) {
+  if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
+    throw new TypeError("createMarketBook requires a normalized bookTicker object")
+  }
+  const { symbol, timestamp } = bookTicker
+  if (typeof symbol !== "string" || !/^[A-Z0-9]+$/.test(symbol)) {
+    throw new TypeError("Market book symbol must be a non-empty uppercase symbol")
+  }
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new TypeError("Market book timestamp must be a non-negative safe integer")
+  }
+  const positive = (value, field) => {
+    assertDecimalString({ value, field })
+    if (compareDecimal({ left: value, right: "0" }) <= 0) throw new RangeError(field + " must be positive")
+    return value
+  }
+  const bestBidPrice = positive(bookTicker.bestBidPrice, "bestBidPrice")
+  const bestBidQuantity = positive(bookTicker.bestBidQuantity, "bestBidQuantity")
+  const bestAskPrice = positive(bookTicker.bestAskPrice, "bestAskPrice")
+  const bestAskQuantity = positive(bookTicker.bestAskQuantity, "bestAskQuantity")
+  if (compareDecimal({ left: bestBidPrice, right: bestAskPrice }) >= 0) {
+    throw new RangeError("Market book best bid must be below best ask")
+  }
+  return Object.freeze({ symbol, bestBidPrice, bestBidQuantity, bestAskPrice, bestAskQuantity, timestamp })
+}
+
+export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {
+  if (order?.type !== "LIMIT_MAKER") return false
+  if (!marketBook || order.market?.symbol !== marketBook.symbol) {
+    throw new TypeError("Post-only order and market book must refer to the same symbol")
+  }
+  const price = order.limitPrice?.amount
+  assertDecimalString({ value: price, field: "post-only limit price" })
+  if (order.side === "BUY") return compareDecimal({ left: price, right: marketBook.bestAskPrice }) >= 0
+  if (order.side === "SELL") return compareDecimal({ left: price, right: marketBook.bestBidPrice }) <= 0
+  throw new TypeError("Post-only order side must be BUY or SELL")
+}
+
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   isMarketPriceFresh,
+  isMarketBookFresh = () => false,
 } = {}) {
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
@@ -39,6 +78,7 @@ export function makeConservativeTradingEngine({
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
+  if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
   let transitionTail = Promise.resolve()
   const runTransition = ({ task } = {}) => {
     const current = transitionTail.then(task)
@@ -48,6 +88,7 @@ export function makeConservativeTradingEngine({
   const state = {
     registry: OrderRegistry.empty(),
     prices: new Map(),
+    books: new Map(),
     lastBuyPrices: new Map(),
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
@@ -154,7 +195,11 @@ export function makeConservativeTradingEngine({
     canSubmit: ({ order } = {}) => {
       const symbol = order.market.symbol
       const marketPrice = state.prices.get(symbol)
-      return canTrade({ symbol }) && Boolean(marketPrice && isMarketPriceFresh(marketPrice))
+      if (!canTrade({ symbol }) || !marketPrice || !isMarketPriceFresh(marketPrice)) return false
+      if (order.type !== "LIMIT_MAKER") return true
+      const marketBook = state.books.get(symbol)
+      return Boolean(marketBook && isMarketBookFresh(marketBook) &&
+        !isPostOnlyOrderCrossing({ order, marketBook }))
     },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (registered) {
@@ -183,16 +228,23 @@ export function makeConservativeTradingEngine({
       })
     },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
+      const submissionError = error ?? errors?.[0]
+      const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
+        submissionError?.code === "POST_ONLY_WOULD_TAKE"
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
-        dataResult: mapOrderSubmissionFailedData({
-          order,
-          outcome,
-          error: error ?? errors?.[0],
-        }),
+        dataResult: mapOrderSubmissionFailedData({ order, outcome, error: submissionError }),
       })
-      await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: error ?? errors?.[0] })
+      if (definitePostOnlyRejection) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (!removal.removed) throw new Error("Cannot remove a definitively rejected POST-ONLY pending order")
+        state.registry = removal.registry
+        state.books.delete(order.market.symbol)
+        state.deferredEvaluations.add(order.market.symbol)
+        return
+      }
+      await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: submissionError })
     },
   })
 
@@ -520,6 +572,19 @@ export function makeConservativeTradingEngine({
       return toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
+      return toResult({ error })
+    }
+  }
+
+  const processMarketBookTransition = async ({ symbol, bookTicker } = {}) => {
+    try {
+      const marketBook = createMarketBook({ bookTicker })
+      if (marketBook.symbol !== symbol) throw new Error("Market book symbol does not match subscription")
+      if (!isMarketBookFresh(marketBook)) return toResult({ data: { skipped: true, reason: "STALE_MARKET_BOOK" } })
+      state.books.set(symbol, marketBook)
+      if (state.deferredEvaluations.has(symbol) && !state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
+      return toResult({ data: { updated: true } })
+    } catch (error) {
       return toResult({ error })
     }
   }
@@ -995,6 +1060,8 @@ export function makeConservativeTradingEngine({
 
   const processMarketPrice = ({ symbol, priceEvent } = {}) =>
     runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
+  const processBookTicker = ({ symbol, bookTicker } = {}) =>
+    runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
   const processUserDataEvent = ({ event } = {}) =>
     runTransition({ task: () => processUserDataEventTransition({ event }) })
   const evaluateLatest = ({ symbol } = {}) =>
@@ -1012,6 +1079,7 @@ export function makeConservativeTradingEngine({
 
   return Object.freeze({
     processMarketPrice,
+    processBookTicker,
     processUserDataEvent,
     reconcileOwnedOrders,
     evaluateLatest,

@@ -4,6 +4,7 @@ import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingR
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 
 const tradingConfig = {
   settings: { minProfit: 0.01 },
@@ -40,6 +41,7 @@ const createMarketMetadata = (symbol) => {
 }
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
+  const bookSubscriptions = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
@@ -78,6 +80,11 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) },
       }
     },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      calls.push("subscribe:book:" + symbol)
+      bookSubscriptions.set(symbol, onBookTicker)
+      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
+    },
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
       userDataHandlers = handlers
@@ -89,6 +96,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
     emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
+    emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
   }
 }
 const binanceEnv = {
@@ -738,6 +746,7 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
 test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", async () => {
   const calls = []
   const subscriptions = new Map()
+  const bookSubscriptions = new Map()
   let userDataHandlers
   let snapshotTime = 0
   let baseBalance = "0"
@@ -796,6 +805,10 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     subscribeForPrices: async ({ symbol, onPrice }) => {
       subscriptions.set(symbol, onPrice)
       return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:" + symbol) } }
+    },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      bookSubscriptions.set(symbol, onBookTicker)
+      return { ok: true, data: { unsubscribe: async () => calls.push("unsubscribe:book:" + symbol) } }
     },
     placeOrder: async ({ order }) => {
       calls.push({ side: order.side, price: order.price, quantity: order.quantity })
@@ -859,7 +872,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     logger: { info() {}, error() {} },
   })
   assert.equal(runtime.userDataReady, true)
-  assert.equal(submittedOrders.length, 1, "the initial ticker snapshot should trigger the first BUY")
+  assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
+  await bookSubscriptions.get("BTCUSDT")({
+    symbol: "BTCUSDT", bestBidPrice: "60000", bestBidQuantity: "1",
+    bestAskPrice: "70000", bestAskQuantity: "1", timestamp: 1000,
+  })
+  assert.equal(submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
   assert.equal(submittedOrders[0].side, "BUY")
 
   const submitted = calls.find((call) => typeof call === "object")
@@ -1247,4 +1265,28 @@ test("fails closed when trading is explicitly enabled without selecting a broker
     /HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true/,
   )
   assert.equal(brokerFactoryCalled, false)
+})
+
+
+test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
+  const client = {
+    connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true }),
+    getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }),
+    getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
+    getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
+    subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
+  }
+  const broker = createBinanceBrokerAdapter({
+    config: { apiKey: "test-key", apiSecret: "test-secret" },
+    brokerFactory: () => client,
+  })
+  const rejection = Object.assign(new Error("Order would immediately match and take."), { code: -2010 })
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [rejection] })
+  const result = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(result.errors[0].code, "POST_ONLY_WOULD_TAKE")
+  const unrelated = Object.assign(new Error("insufficient balance"), { code: -2010 })
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [unrelated] })
+  const other = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(other.errors[0], unrelated)
 })
