@@ -904,7 +904,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   assert.equal(submittedOrders[0].side, "BUY")
 
   const submitted = calls.find((call) => typeof call === "object")
-  const clientOrderId = "h-BTCUSDT-1"
+  const clientOrderId = submittedOrders[0].clientOrderId
   const canonicalBuy = new CanonicalOrder({
     clientOrderId,
     brokerOrderId: "broker-" + clientOrderId,
