@@ -66,6 +66,7 @@ export function makeConservativeTradingEngine({
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
+  logger,
 } = {}) {
   const strategyConfig = tradingConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
@@ -82,6 +83,8 @@ export function makeConservativeTradingEngine({
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
   let transitionTail = Promise.resolve()
+  let strategyEvaluationSequence = 0
+  let marketPriceEventSequence = 0
   const runTransition = ({ task } = {}) => {
     const current = transitionTail.then(task)
     transitionTail = current.catch(() => undefined)
@@ -102,6 +105,7 @@ export function makeConservativeTradingEngine({
     replacementIntents: new Set(),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(),
+    marketPriceEventIds: new Map(),
   }
   const rememberProcessedFill = ({ fill }) => {
     const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
@@ -172,6 +176,89 @@ export function makeConservativeTradingEngine({
     await onPause({ symbol, reason, error })
   }
 
+  // A FILLED submission acknowledgement is terminal exchange state, but it
+  // is not reconciled strategy state until every execution has been fetched
+  // and applied. Keep this inside the current serialized transition so market
+  // events cannot observe the acknowledgement/fill gap.
+  const reconcileFilledAcknowledgement = async ({ order } = {}) => {
+    if (order.status !== "FILLED") return toResult({ data: { reconciled: false } })
+    const fillsResult = await broker.getFills({
+      symbol: order.market.symbol,
+      orderId: order.brokerOrderId,
+    })
+    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+      const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve executions for FILLED acknowledgement")
+      await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_BUY_FILL_RECONCILIATION_FAILED", error })
+      return toResult({ error })
+    }
+
+    const fillsById = new Map()
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          fill.clientOrderId !== order.clientOrderId) {
+        const error = new Error("Execution history does not match the FILLED acknowledged order")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Execution history contains conflicting records for the same fill ID")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_HISTORY_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
+    }
+    const fills = [...fillsById.values()].sort((left, right) => {
+      if (left.executedAt !== undefined && right.executedAt !== undefined &&
+          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+      return left.tradeId.localeCompare(right.tradeId)
+    })
+    const reconciledQuantity = fills.reduce(
+      (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+      "0",
+    )
+    if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      const error = new Error("Execution history does not fully reconcile with the FILLED acknowledged order quantity")
+      await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE", error })
+      return toResult({ error })
+    }
+
+    let cumulativeQuantity = "0"
+    for (const fill of fills) {
+      cumulativeQuantity = addDecimal({ left: cumulativeQuantity, right: fill.quantity.amount })
+      const isFinalExecution = compareDecimal({
+        left: cumulativeQuantity,
+        right: order.executedQuantity.amount,
+      }) === 0
+      const executionOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: new Quantity({ amount: cumulativeQuantity, asset: order.market.baseAsset }),
+        status: isFinalExecution ? "FILLED" : "PARTIALLY_FILLED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: order.updatedAt,
+        ...(isFinalExecution && order.completedAt !== undefined ? { completedAt: order.completedAt } : {}),
+      })
+      const processed = await processUserDataEventTransition({
+        event: { eventType: "executionReport", executionType: "TRADE", executedOrder: executionOrder, fill },
+      })
+      if (!processed?.ok) {
+        const error = processed?.errors?.[0] ?? new Error("Acknowledged order execution could not be applied")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_APPLICATION_FAILED", error })
+        return toResult({ errors: processed?.errors ?? [error] })
+      }
+    }
+    return toResult({ data: { reconciled: true, fills: fills.length } })
+  }
+
   const publishOrderCancelled = ({ order }) => publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
@@ -220,13 +307,29 @@ export function makeConservativeTradingEngine({
       })
     },
     onAcknowledgedOrder: async ({ order }) => {
-      const update = state.registry.applyUpdate({ order })
-      if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
-      state.registry = update.registry
+      if (order.status === "FILLED") {
+        const registered = state.registry.orders.some(
+          (item) => item.clientOrderId === order.clientOrderId,
+        )
+        if (!registered) throw new Error("Broker acknowledged an unregistered Harvester order")
+      } else {
+        const update = state.registry.applyUpdate({ order })
+        if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
+        state.registry = update.registry
+      }
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
         dataResult: mapOrderSubmittedData({ order }),
+      })
+      const reconciliation = await reconcileFilledAcknowledgement({ order })
+      if (!reconciliation.ok) throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
+    },
+    onOrderValidationFailure: async ({ order, error }) => {
+      await pause({
+        symbol: order.market.symbol,
+        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
+        error,
       })
     },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
@@ -428,6 +531,19 @@ export function makeConservativeTradingEngine({
       referencePrice,
       priceStepPercent: String(pairConfig.priceStepPercent),
     })
+    logger?.debug?.({
+      message: "Harvester trailing BUY repricing evaluated",
+      marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
+      symbol,
+      activeBuy: activeBuy.value,
+      marketPrice: marketPrice.price,
+      referencePrice,
+      lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
+      buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+      lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+      priceStepPercent: String(pairConfig.priceStepPercent),
+      trigger,
+    })
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
@@ -466,17 +582,58 @@ export function makeConservativeTradingEngine({
     }
     try {
       const metadata = getMarketMetadata({ symbol })
-      const decision = strategyPolicy.evaluate({
+      const evaluationId = ++strategyEvaluationSequence
+      const portfolioBefore = getPortfolio()
+      const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
+      const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      const lastBuyPrice = state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
+      const evaluationInput = {
         marketPrice,
         pairConfig: pairs[symbol],
-        settings: settings,
-        portfolio: getPortfolio(),
-        recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id }),
+        settings,
+        portfolio: portfolioBefore,
+        recoveryLedger: recoveryLedgerBefore,
         marketMetadata: metadata,
-        activeOrders: state.registry.getActiveOrders({ marketId: metadata.market.id }),
-        lastBuyPrice: state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol),
+        activeOrders: activeOrdersBefore,
+        lastBuyPrice,
+      }
+      logger?.debug?.({
+        message: "Harvester Conservative evaluation started",
+        evaluationId,
+        marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
+        symbol,
+        marketPrice,
+        lastBuyPrice: lastBuyPrice ?? null,
+        buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+        lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+        activeOrders: activeOrdersBefore.map((order) => order.value),
+        portfolio: portfolioBefore.value,
+        recoveryLedger: recoveryLedgerBefore?.value ?? null,
+        pairConfig: pairs[symbol],
       })
-      if (decision.actions.length === 0) return toResult({ data: { decision, submittedOrders: [] } })
+      const decision = strategyPolicy.evaluate(evaluationInput)
+      logger?.debug?.({
+        message: "Harvester Conservative evaluation decided",
+        evaluationId,
+        marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
+        symbol,
+        action: decision.action,
+        reason: decision.reason,
+        actions: decision.actions,
+        position: decision.position,
+        portfolio: portfolioBefore.value,
+        recoveryLedger: recoveryLedgerBefore?.value ?? null,
+      })
+      if (decision.actions.length === 0) {
+        logger?.debug?.({
+          message: "Harvester Conservative evaluation submitted no orders",
+          evaluationId,
+          symbol,
+          reason: decision.reason,
+          activeOrders: activeOrdersBefore.map((order) => order.value),
+        })
+        return toResult({ data: { decision, submittedOrders: [] } })
+      }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
       const position = getPortfolio().getPosition({ marketId: metadata.market.id })
@@ -553,7 +710,35 @@ export function makeConservativeTradingEngine({
         }),
       })
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
+      logger?.debug?.({
+        message: "Harvester Conservative executable intents",
+        evaluationId,
+        symbol,
+        strategyActions: decision.actions,
+        executableActions,
+        accountSnapshot: {
+          sourceTime: accountSnapshot.sourceTime,
+          baseFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })?.amount ?? null,
+          quoteFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })?.amount ?? null,
+        },
+        quoteCashFlow,
+        committedQuote,
+        committedBase,
+      })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
+      logger?.debug?.({
+        message: "Harvester Conservative submission result",
+        evaluationId,
+        symbol,
+        ok: result.ok,
+        submittedOrders: result.data?.submittedOrders?.map((order) => order.value) ?? [],
+        errors: (result.errors ?? []).map((error) => ({
+          name: error?.name,
+          message: error?.message ?? String(error),
+        })),
+        lastBuyPriceAfter: state.lastBuyPrices.get(symbol) ?? null,
+        activeOrdersAfter: state.registry.getActiveOrders({ marketId: metadata.market.id }).map((order) => order.value),
+      })
       if (!result.ok) return result
       if (result.data?.deferred === true) {
         return toResult({
@@ -597,12 +782,39 @@ export function makeConservativeTradingEngine({
     try {
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
+      const marketEventId = ++marketPriceEventSequence
+      const previousPrice = state.prices.get(symbol)
+      const metadata = getMarketMetadata({ symbol })
+      const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      logger?.debug?.({
+        message: "Harvester market price event received",
+        marketEventId,
+        symbol,
+        price: price.price,
+        timestamp: price.timestamp,
+        previousPrice: previousPrice ?? null,
+        lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
+        buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+        lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+        activeOrders: activeOrdersBefore.map((order) => order.value),
+        portfolio: getPortfolio().value,
+        recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id })?.value ?? null,
+        paused: state.paused.has(symbol),
+        tradingReady: canTrade({ symbol }),
+      })
       if (!isMarketPriceFresh(price)) {
+        logger?.debug?.({
+          message: "Harvester market price event skipped",
+          marketEventId,
+          symbol,
+          reason: "STALE_MARKET_PRICE",
+          price,
+        })
         return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
       }
+      state.marketPriceEventIds.set(symbol, marketEventId)
       state.prices.set(symbol, price)
       if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
-      const metadata = getMarketMetadata({ symbol })
       const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
         .find((order) => order.side === "BUY")
       if (activeBuy && state.trailingBuy.get(symbol) !== false) {

@@ -12,6 +12,19 @@ import {
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
+const testEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+})
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher
+    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
+      : input.eventPublisher
+    : testEventPublisher
+  return startHarvester({ ...input, eventPublisher })
+}
+
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
@@ -20,7 +33,7 @@ test('loads configuration before returning the startup context', async () => {
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
 
-  const context = await startHarvester({
+  const context = await startHarvesterForTest({
     configSource,
     loadConfig: async (source) => {
       calls.push(source);
@@ -37,7 +50,7 @@ test('fails startup when configuration loading or validation fails', async () =>
   const startupError = new TypeError('Invalid trading config');
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => {
         throw startupError;
       },
@@ -47,13 +60,13 @@ test('fails startup when configuration loading or validation fails', async () =>
 });
 
 test('loads the default validated trading configuration', async () => {
-  const context = await startHarvester();
+  const context = await startHarvesterForTest();
 
   assert.ok(context.tradingConfig.strategies.CG_coinGrabber.pairs.ZROUSDT);
 });
 
 
-test('ordinary TRADE fills update owned accounting without another account snapshot or adopting external inventory/orders', async () => {
+test('ordinary TRADE fills update owned accounting without per-fill snapshots or adopting external inventory/orders', async () => {
   const baseAsset = new Asset({ id: 'asset-zro', code: 'ZRO' });
   const quoteAsset = new Asset({ id: 'asset-usdt', code: 'USDT' });
   const market = new Market({
@@ -160,7 +173,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       return toResult({ data: { disconnect: async () => {} } });
     },
   };
-  const context = await startHarvester({
+  const context = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     brokerAdapterFactory: () => broker,
     env: {
@@ -235,7 +248,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
   await tradeObserved;
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 1);
-  assert.equal(openOrderSnapshotCalls, 0);
+  assert.equal(accountSnapshotCalls, 2);
+  assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });

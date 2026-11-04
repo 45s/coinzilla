@@ -28,10 +28,9 @@ function resolveJournalDirectory({ directory }) {
 }
 
 /**
- * Compose and start an optional Journal without awaiting its filesystem work.
- * The returned ready promise always settles to a result. Trading workflows
- * must never await ready or close().
- */
+ * Compose and start the Journal without blocking read-only startup.
+ * Trading startup explicitly awaits ready and uses flush() before any order.
+ * */
 export function prepareOptionalJournal({
   eventBus,
   directory,
@@ -58,6 +57,7 @@ export function prepareOptionalJournal({
           closed: false,
         })
       },
+      flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
       close: async () => toResult({ closed: true, disabled: true }),
     })
   }
@@ -112,6 +112,24 @@ export function prepareOptionalJournal({
     })
   }
 
+  const flush = async () => {
+    const startResult = await ready
+    if (!startResult.ok || !journal) return startResult
+    if (typeof journal.flush !== "function") {
+      return toResult({ error: new TypeError("Journal implementation must provide flush() for durable account audits") })
+    }
+    try {
+      const result = await journal.flush()
+      if (result?.ok !== true) state = "degraded"
+      return result?.ok === true ? result : result?.ok === false ? result
+        : toResult({ error: new TypeError("Journal flush returned an invalid result") })
+    } catch (error) {
+      state = "degraded"
+      reportFailure({ error })
+      return toResult({ error })
+    }
+  }
+
   const close = async () => {
     const startResult = await ready
     if (!startResult.ok || !journal) return startResult
@@ -136,6 +154,7 @@ export function prepareOptionalJournal({
     get status() {
       return getStatus()
     },
+    flush,
     close,
   })
 }

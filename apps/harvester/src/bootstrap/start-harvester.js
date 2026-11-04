@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
@@ -24,6 +24,7 @@ import {
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
+  mapAccountSnapshotCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
@@ -101,19 +102,79 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
-const createPortfolioWorkflow = ({ evaluateStrategy }) => {
+const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
   let portfolio = new Portfolio()
   const recoveryLedgers = new Map()
   let updateQueue = Promise.resolve()
-  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy })
+
+  const tracedEvaluateStrategy = (input = {}) => {
+    const marketId = input.marketMetadata?.market?.id
+    const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
+    logger.debug?.({
+      message: "Harvester strategy evaluation input",
+      symbol: input.marketPrice?.symbol,
+      marketPrice: input.marketPrice,
+      lastBuyPrice: input.lastBuyPrice,
+      activeOrders: input.activeOrders,
+      pairConfig: input.pairConfig,
+      settings: input.settings,
+      portfolio: portfolio.value,
+      recoveryLedger: recoveryLedger?.value ?? null,
+    })
+    const decision = evaluateStrategy(input)
+    logger.debug?.({
+      message: "Harvester strategy evaluation result",
+      symbol: input.marketPrice?.symbol,
+      action: decision?.action,
+      reason: decision?.reason,
+      actions: decision?.actions,
+      position: decision?.position,
+      recoveryLedger: recoveryLedger?.value ?? null,
+    })
+    return decision
+  }
+  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
 
   const updateTradingAccounting = ({ fill } = {}) => {
     const task = updateQueue.then(() => {
       if (!(fill instanceof Fill)) {
+        logger.error?.({
+          message: "Harvester accounting rejected non-canonical fill",
+          fillType: fill?.constructor?.name ?? typeof fill,
+        })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
       }
+
+      const previousPortfolio = portfolio
       const currentLedger = recoveryLedgers.get(fill.market.id) ??
         RecoveryLedger.empty({ market: fill.market })
+      const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id })
+      const commissionFacts = (fill.commissions ?? []).map(({ amount } = {}) => ({
+        amount: amount?.amount,
+        asset: amount?.asset?.code,
+        assetId: amount?.asset?.id,
+      }))
+
+      logger.debug?.({
+        message: "Harvester accounting execution received",
+        executionId: fill.id,
+        tradeId: fill.tradeId,
+        brokerOrderId: fill.brokerOrderId,
+        clientOrderId: fill.clientOrderId,
+        marketId: fill.market.id,
+        symbol: fill.market.symbol,
+        side: fill.side,
+        liquidityRole: fill.liquidityRole,
+        executedAt: fill.executedAt,
+        price: fill.price?.amount,
+        quantity: fill.quantity?.amount,
+        quoteQuantity: fill.quoteQuantity?.amount,
+        commissionStatus: fill.commissionStatus,
+        commissions: commissionFacts,
+        previousPosition: previousPosition?.value ?? null,
+        previousRecoveryLedger: currentLedger.value,
+      })
+
       const result = applyTradingAccounting({
         portfolio,
         recoveryLedger: currentLedger,
@@ -122,6 +183,62 @@ const createPortfolioWorkflow = ({ evaluateStrategy }) => {
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+        const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
+        const nextLedger = result.data.recoveryLedger
+        logger.debug?.({
+          message: "Harvester accounting execution applied",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          applied: result.data.applied,
+          duplicate: result.data.duplicate,
+          nextPosition: nextPosition?.value ?? null,
+          nextRecoveryLedger: nextLedger.value,
+          accountingDelta: {
+            portfolioActiveBase: subtractDecimal({
+              left: nextPosition?.baseQuantity.amount ?? "0",
+              right: previousPosition?.baseQuantity.amount ?? "0",
+            }),
+            portfolioFreeBase: subtractDecimal({
+              left: nextPosition?.freeBaseQuantity.amount ?? "0",
+              right: previousPosition?.freeBaseQuantity.amount ?? "0",
+            }),
+            portfolioQuoteCashFlow: subtractDecimal({
+              left: nextPosition?.quoteNetCashFlow.amount ?? "0",
+              right: previousPosition?.quoteNetCashFlow.amount ?? "0",
+            }),
+            buyCost: subtractDecimal({
+              left: nextLedger.buyCost,
+              right: currentLedger.buyCost,
+            }),
+            netSellProceeds: subtractDecimal({
+              left: nextLedger.netSellProceeds,
+              right: currentLedger.netSellProceeds,
+            }),
+            outstandingRecoveryAmount: subtractDecimal({
+              left: nextLedger.outstandingRecoveryAmount,
+              right: currentLedger.outstandingRecoveryAmount,
+            }),
+            realizedNetProfit: subtractDecimal({
+              left: nextLedger.realizedNetProfit,
+              right: currentLedger.realizedNetProfit,
+            }),
+          },
+        })
+      } else {
+        logger.error?.({
+          message: "Harvester accounting execution rejected",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          errors: (result.errors ?? []).map((error) => ({
+            name: error?.name,
+            message: error?.message ?? String(error),
+            stack: error?.stack,
+          })),
+          unchangedPortfolio: previousPortfolio.value,
+          unchangedRecoveryLedger: currentLedger.value,
+        })
       }
       return result
     })
@@ -142,20 +259,60 @@ const createPortfolioWorkflow = ({ evaluateStrategy }) => {
         return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
       }
       try {
-        const completion = evaluateRecoveryCompletion({
+        const completionInput = {
           sellOrderFullyFilled: true,
           buyCost: recoveryLedger.buyCost,
           netSellProceeds: recoveryLedger.netSellProceeds,
           activeQuantity: position.baseQuantity.amount,
           keepQuantity,
           minProfit,
+        }
+        logger.debug?.({
+          message: "Harvester recovery completion evaluation input",
+          marketId,
+          symbol: recoveryLedger.market.symbol,
+          completionInput,
+          position: position.value,
+          recoveryLedger: recoveryLedger.value,
         })
+        const completion = evaluateRecoveryCompletion(completionInput)
         if (completion.eligible) {
+          const previousPortfolio = portfolio
+          const previousLedger = recoveryLedger
           portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
-          recoveryLedgers.set(marketId, recoveryLedger.resetCycle())
+          const resetLedger = recoveryLedger.resetCycle()
+          recoveryLedgers.set(marketId, resetLedger)
+          logger.debug?.({
+            message: "Harvester recovery cycle completed and inventory allocated",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            previousPosition: previousPortfolio.getPosition({ marketId })?.value ?? null,
+            nextPosition: portfolio.getPosition({ marketId })?.value ?? null,
+            previousRecoveryLedger: previousLedger.value,
+            nextRecoveryLedger: resetLedger.value,
+          })
+        } else {
+          logger.debug?.({
+            message: "Harvester recovery cycle not completed",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            unchangedPosition: position.value,
+            unchangedRecoveryLedger: recoveryLedger.value,
+          })
         }
         return toResult({ data: completion })
       } catch (error) {
+        logger.error?.({
+          message: "Harvester recovery completion evaluation failed",
+          marketId,
+          errorName: error?.name,
+          errorMessage: error?.message ?? String(error),
+          errorStack: error?.stack,
+          unchangedPortfolio: portfolio.value,
+          unchangedRecoveryLedger: recoveryLedger.value,
+        })
         return toResult({ error })
       }
     },
@@ -221,7 +378,7 @@ export async function startHarvester({
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
   })
 
-  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
+  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let processMarketPrice = portfolioWorkflow.processMarketPrice
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
   const {
@@ -353,6 +510,30 @@ export async function startHarvester({
 
     return nextSnapshot
   }
+  const publishAccountSnapshot = async ({ phase, auditStatus = "COMPLETE", auditReasons = [] } = {}) => {
+    const snapshot = await refreshAccountSnapshot()
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+      dataResult: mapAccountSnapshotCapturedData({ phase, snapshot, auditStatus, auditReasons }),
+    })
+    if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
+    if (typeof eventPublisher?.flush === "function") {
+      const flushed = await eventPublisher.flush()
+      if (flushed?.ok !== true) {
+        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
+      }
+    } else if (tradingEnabled) {
+      throw new Error("Conservative TESTNET trading requires a durable Journal flush before trading")
+    }
+    logger.info?.({
+      message: "Account snapshot captured and durably journaled",
+      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+    })
+    return snapshot
+  }
+
   const isMarketPriceFresh = (marketPrice) => {
     const ageMs = now() - marketPrice.timestamp
     return Number.isSafeInteger(ageMs) &&
@@ -753,7 +934,9 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
+    const initialSnapshotTask = userDataEventQueue.then(() => tradingEnabled
+      ? publishAccountSnapshot({ phase: "OPENING" })
+      : refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
@@ -794,6 +977,7 @@ export async function startHarvester({
         canTrade: () => userDataReady,
         isMarketPriceFresh,
         isMarketBookFresh,
+        logger,
         isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
@@ -978,9 +1162,40 @@ export async function startHarvester({
 
     const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
     await userDataEventQueue
+
+    const auditReasons = []
+    let snapshotError
+    if (intakeErrors.length > 0) auditReasons.push("BROKER_INTAKE_SHUTDOWN_FAILED")
+    if (tradingEnabled && tradingEngine) {
+      try {
+        const reconciliation = await tradingEngine.reconcileOwnedOrders()
+        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      } catch {
+        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      }
+      const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
+      const unresolvedOrders = tradingEngine.getOrders().filter((order) => !terminalStatuses.has(order.status))
+      if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
+      if (userDataAccountingFailed || userDataRequiresReconciliation) {
+        auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
+      }
+    }
+    try {
+      if (tradingEnabled) {
+        await publishAccountSnapshot({
+          phase: "CLOSING",
+          auditStatus: auditReasons.length === 0 ? "COMPLETE" : "INCOMPLETE",
+          auditReasons,
+        })
+      }
+    } catch (error) {
+      snapshotError = error
+      logger.error?.({ message: "Harvester closing account snapshot failed", error })
+    }
+
     userDataStatus = "STOPPED"
     const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cleanupErrors = [...intakeErrors, ...disconnectErrors]
+    const cleanupErrors = [...intakeErrors, ...disconnectErrors, ...(snapshotError ? [snapshotError] : [])]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }

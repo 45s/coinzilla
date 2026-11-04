@@ -100,7 +100,7 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
-    { side: "SELL", price: "0.102", quantity: "99" },
+    { side: "SELL", price: "0.103", quantity: "98" },
     { side: "BUY", price: "0.099", quantity: "100" },
   ])
 })
@@ -164,7 +164,7 @@ test("does not create another BUY when outstanding recovery plus the next order 
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
 })
 
-test("plans recovery SELL commission from makerPercent only for fee-bearing LIMIT pairs", () => {
+test("reserves the higher takerPercent for recovery SELL planning when taker is more expensive", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -188,7 +188,7 @@ test("plans recovery SELL commission from makerPercent only for fee-bearing LIMI
 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(sell.type, "LIMIT")
-  assert.equal(sell.quantity, "98.9")
+  assert.equal(sell.quantity, "98.8")
   assert.equal(sell.price, "0.102")
 })
 
@@ -206,5 +206,24 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(recoveryLedger.buyCost, "10.2")
-  assert.equal(sell.price, "0.104")
+  assert.equal(sell.price, "0.105")
+})
+
+test("does not create a recovery SELL from residual active inventory after the recovery ledger is reset", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const completedLedger = recoveryLedger.resetCycle()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger: completedLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(completedLedger.outstandingRecoveryAmount, "0")
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
+  assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "100")
 })

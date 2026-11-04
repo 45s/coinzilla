@@ -49,9 +49,15 @@ See [Architecture](./docs/architecture.md) for the responsibilities of domain en
 
 Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The optional Journal is enabled by default; set `HARVESTER_JOURNAL_ENABLED=false` to disable persistence or `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.
 
-Journal initialization is asynchronous and is not awaited by startup or trading. Events published before its subscription becomes active may be missed. A write failure degrades that Journal session and stops further writes, but never blocks broker connectivity or trading. Files are one JSONL session per process; automatic rotation and retention are not provided.
+Journal initialization remains optional for read-only operation. Conservative TESTNET trading requires an enabled, ready Journal with durable flush support. Startup fails closed if Journal is disabled, cannot start, or cannot flush. Before the trading engine is activated, Harvester captures the full broker account balance snapshot (all returned assets, free and locked quantities) and waits for the Journal to flush/fsync the OPENING event. During graceful shutdown it stops new intake, drains accepted user-data work, reconciles Harvester-owned orders, captures a CLOSING balance snapshot, and durably flushes it before disconnecting the broker. The closing snapshot is marked INCOMPLETE if order reconciliation failed, owned orders remain non-terminal, or user-data/accounting state is unsafe.
 
-Normal shutdown stops intake, drains accepted user-data work, disconnects the broker, publishes the final stopped event, closes Journal (drain and sync), then closes EventBus. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the exact event inventory, file format, failure behavior, and diagnosis steps. Follow the [staged Journal integration roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) and its [AI implementation task](./docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md).
+The Journal event is an account-level balance record, not a Portfolio import. Each event is a separate opening/closing audit point; it is never used to seed strategy-owned inventory. It includes every asset returned by the broker, with exact free, locked, and total decimal quantities, and does not silently assign pre-existing balances or external orders to Harvester.
+
+Recovery completion allocates exactly the configured keepQuantity to free inventory. Any additional active residual (for example, quantity-step or conservative fee-reserve dust) remains active inventory. Once the RecoveryLedger is reset, that residual alone is not a recovery obligation and must not generate another recovery SELL. A deterministic 12-fill regression exercises the real Conservative policy and verifies that every next BUY price is derived from the preceding reconciled fill.
+
+The recovery.cycle_completed event's realizedNetProfit is per-cycle, not cumulative session profit. The read-only journal:balance-audit command sums those cycle results per JSONL session and reports the cumulative recovery profit alongside exact per-asset opening/closing balance deltas. Files are one JSONL session per process; automatic rotation and retention are not provided.
+
+Normal shutdown stops intake, drains accepted user-data work, reconciles owned orders, records and flushes the CLOSING account snapshot while broker REST access is still available, disconnects the broker, publishes the final stopped event, closes Journal (drain and sync), then closes EventBus. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the exact event inventory, file format, failure behavior, and diagnosis steps. Follow the [staged Journal integration roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) and its [AI implementation task](./docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md).
 
 ### Portfolio domain
 
@@ -113,8 +119,8 @@ The configuration loader and validation live in `src/infrastructure/config/load-
 
 The process entry point and bootstrap use `defaultLogger` from `@coinzilla/utils`. Keep logging at application boundaries, inject a logger where tests or alternate composition need control, and do not call global `console` directly from Harvester modules. The shared logger accepts one data argument per method; pass structured objects when a log needs metadata.
 
-- `logger.debug({ message, ...context })` traces startup stages, broker operations, market metadata/rule validation, user-data subscription and status, initial account snapshot loading, order ownership/commitment checks, market-price processing, and cleanup. A failed startup leaves the last completed/in-progress stage visible; debug output is suppressed when `NODE_ENV=production` by the shared logger.
-- `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, accepted initial account snapshot, trading readiness, engine activation, active market subscriptions, and shutdown.
+- `logger.debug({ message, ...context })` traces startup stages, broker operations, market metadata/rule validation, user-data subscription and status, initial account snapshot loading, order ownership/commitment checks, market-price processing, strategy evaluation inputs/results, and per-fill accounting. Strategy traces include every market-price event with a monotonic event ID, previous price, `lastBuyPrice`, reference overrides, active orders, Portfolio and RecoveryLedger snapshots, readiness/pause state, plus trailing-BUY repricing trigger inputs/results and the correlated evaluation ID, decision and generated intents. Accounting traces include execution/trade/order identity, side, price, base/quote quantities, actual commission amount/asset/status, before/after Position and RecoveryLedger values, exact per-fill deltas for active/free base and quote cash flow, BUY cost, SELL proceeds, outstanding recovery and realized profit, plus duplicate/applied outcome. Rejected accounting traces include errors and unchanged state. A failed startup leaves the last completed/in-progress stage visible; debug output is suppressed when `NODE_ENV=production` by the shared logger.
+- `logger.info({ message, ...context })` marks key lifecycle actions such as configuration validation, broker connection, user-data subscription, OPENING/CLOSING account snapshot phase and audit completeness, trading readiness, engine activation, active market subscriptions, and shutdown.
 - `logger.error({ message, errorName, errorMessage, errorStack })` records actionable failures. The process entry point also emits normalized nested error details so `Error` and `AggregateError` messages/stacks remain visible in structured logs. Startup tests verify both the original error and its normalized diagnostic details.
 - Never log API keys, API secrets, signed requests, or raw exchange payloads. Market-price diagnostics include only the symbol, price, and event timestamp; user-data diagnostics include event type and relevant symbol/side metadata.
 
@@ -144,7 +150,7 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity is opt-in. Conservative is the only executable strategy; strategy availability is read from `trading-config.json`, not environment variables. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`; this explicit opt-in also requires `HARVESTER_BROKER=binance`, otherwise startup fails instead of silently falling back to read-only mode. Execution requires `HARVESTER_TRADING_MODE=testnet` and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
+Broker connectivity is opt-in. Conservative is the only executable strategy; strategy availability is read from `trading-config.json`, not environment variables. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`; this explicit opt-in also requires `HARVESTER_BROKER=binance`, otherwise startup fails instead of silently falling back to read-only mode. Execution requires `HARVESTER_TRADING_MODE=testnet` and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup captures and durably journals one canonical full-account snapshot before activating the trading engine. This records the initial wallet state without adopting external open orders or treating pre-existing inventory as Harvester-owned. A closing snapshot is recorded during graceful shutdown; if open owned orders or unresolved execution state remain, it is marked INCOMPLETE.
 
 ```sh
 HARVESTER_BROKER=binance
@@ -242,7 +248,7 @@ with documentation deferred to a later follow-up commit.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, exactly-once fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, and graceful shutdown. GitHub Actions passed on the current P0.7 branch (Harvester 298/298; broker 274/274; 1,367 workspace tests total). Local Binance Spot TESTNET startup is confirmed through ZROUSDT price subscription; the process is awaiting its first validated price. The first BUY and complete TESTNET BUY → SELL → next-cycle run have not yet been observed. Durable restart recovery, reconnect reconciliation, multi-pair shared-asset allocation, and Aggressive remain deferred. See [ROADMAP.md](./ROADMAP.md).
+Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, graceful shutdown, durable OPENING/CLOSING all-asset account snapshots, and a read-only per-session balance audit command. The 2026-11-04 Journal shows 21 BUY fills (8,400 DOGE / 635.85200 USDT) and 8 SELL fills (8,390 DOGE / 636.42265 USDT), net +0.57065 USDT quote cash flow. The five per-cycle recovery profits (+0.07808, +0.03285, +0.06053, +0.03584, +0.36335) sum exactly to +0.57065; the +0.20730 difference was the previous four cycles, while +0.36335 was only the final cycle. The same Journal confirms the twelve BUY race: all 12 distinct 400-DOGE BUYs at 0.07598 USDT were acknowledged FILLED before the first execution fill was applied. PR #513 now waits for complete fill-history reconciliation before releasing the serialized transition, and deterministic delayed-ack plus 12-fill real-policy tests cover the race. The post-cycle residual inventory path now requires positive outstanding recovery before another recovery SELL can be planned; invalid order validation pauses the pair. Engine-level regressions cover the reset/keep/free state and repeated MIN_NOTIONAL decisions. Exact-head CI and the remaining lifecycle overlap matrix still require verification. The latest read-only account snapshot reports 12,321 free DOGE, 9,792.44855 free USDT, 9,990.865 FDUSD, and 517 non-zero assets; this is account-wide pre-existing TESTNET inventory, not Harvester-owned Portfolio state. The historical Journal predates opening/closing snapshots, so it cannot establish the account opening baseline. Keep TESTNET trading stopped; live trading remains disabled. See [ROADMAP.md](./ROADMAP.md) for the incident evidence, remaining gates, and next acceptance steps.
 
 
 ## Standalone Binance TESTNET order tools
@@ -289,6 +295,8 @@ The command uses the local TESTNET credentials, displays exact exchange
 decimal strings, and does not place/cancel orders or change balances. See
 [Binance TESTNET operator scripts](./docs/testnet-order-tools.md).
 
+**Account-state warning (2026-11-04):** the latest supplied snapshot contains 517 non-zero assets, including 12,321 free DOGE and 9,792.44855 free USDT; all reported locked balances are zero. This is not a clean test account and is not a Harvester Portfolio snapshot. Do not treat wallet DOGE as strategy-owned inventory, infer the strategy's retained/free quantity from it, or calculate PnL from this snapshot. Establish a known opening balance and reconcile all relevant DOGEUSDT trades with their actual commission amount and asset before attributing balances or profit.
+
 
 ## Standalone Binance TESTNET ZRO market sell
 
@@ -334,3 +342,81 @@ status, and client order ID. It is read-only and defaults to the latest 20
 orders for `ZROUSDT`. See
 [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for details
 and diagnostic limitations.
+
+
+### 2026-11-04 TESTNET incident remediation
+
+**BUY-burst clarification:** the twelve DOGEUSDT BUYs were twelve distinct exchange orders with distinct client IDs and broker order IDs; they were not duplicate IDs. All twelve nevertheless used the exact same 0.07598 USDT price and 400 DOGE quantity, executed as TAKER within roughly three seconds. A 12-order burst may be expected during a sharp price dump; twelve independently submitted orders at the identical price are the anomaly. The Conservative strategy interprets priceStepPercent: 0.05 as 0.05% and computes the next BUY from the last reconciled BUY execution price. The repeated identical price is consistent with submissions occurring before the previous BUY fill had updated strategy state. PR #513 adds the immediate-FILLED acknowledgement reconciliation barrier; review and test the non-terminal acknowledgement followed by streamed FILLED/TRADE event path as well. Do not describe this as a client-ID collision or treat the burst count alone as proof of a defect.
+
+PR #513 now contains source-level fixes for the two defects recorded in the incident report: FILLED broker acknowledgements are held behind complete execution-history retrieval/application before the serialized strategy transition can finish, and residual active inventory no longer creates a recovery SELL after the recovery ledger has been reset. Invalid strategy order validation now pauses the affected pair rather than allowing the same invalid decision to be retried on every market event. Deterministic regression tests cover delayed multi-fill acknowledgement reconciliation, incomplete-history fail-closed behavior, and residual inventory after cycle completion. The first CI attempts exposed two regression-test issues (terminal registry ordering and the canonical Fill ID format); both were corrected. The current branch contains the corrected MIN_NOTIONAL regression expectation. The previous CI attempt failed against an earlier merge ref; fresh exact-head CI is required before merge. Syntax and dependency-audit checks passed on that earlier run. Keep Harvester stopped; CI success and merge do not authorize TESTNET restart.
+
+
+## Standalone Binance TESTNET trade history (read-only)
+
+Retrieve actual executions, including exchange trade IDs, order IDs, side,
+price, base/quote quantities, commission amount/asset, maker/taker role, and
+execution timestamp. This is the evidence needed to reconcile exchange fills
+with Harvester's journal and accounting.
+
+From the repository root, run this **single command** for the DOGEUSDT incident:
+
+```sh
+pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000
+```
+
+It loads `apps/harvester/.env.development` and calls Binance Spot TESTNET
+`GET /api/v3/myTrades`. The command is read-only; it does not create or
+cancel orders. It prints every returned trade. Binance limits a response to
+1,000 trades; this command retrieves one page only. If the incident spans more
+than 1,000 executions, request the next page with the optional third argument
+`FROM_ID` (the next trade ID to retrieve), for example:
+`pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000 212336`. The local system clock must be synchronized
+because the signed endpoint validates request timestamps.
+
+
+### Follow-up execution-history validation
+
+PR #513 now rejects conflicting duplicate canonical fill records during immediate-FILLED acknowledgement reconciliation. Previously, the path deduplicated by fill ID without comparing payloads; it now pauses the pair if the same ID appears with different Fill.value data. A regression test verifies that no fill is applied before this conflict is rejected.
+
+
+### TESTNET commission configuration note — 2026-11-04
+
+The Binance Spot TESTNET account initially showed **Commissions: None**. The operator changed the account setting to **0.1% maker & taker** (shown in the later screenshot). Historical incident trades report zero commission; do not retroactively apply 0.1% to them. For future trades, verify the setting is active and reconcile actual per-trade commission amount and asset from Binance. The setting is account-wide across the API keys on that TESTNET account. Harvester must account for actual fees in net-profit and recovery calculations; a configured rate is not a substitute for execution-level commission facts.
+
+### Incident review status — 2026-11-04 (latest PR head)
+
+The previous CI run checked an earlier PR merge ref and failed one Harvester regression because it still expected a successful result for an invalid MIN_NOTIONAL intent. The current branch test now asserts the intended contract: `processMarketPrice()` returns `ok: false` with the MIN_NOTIONAL validation error, pauses the pair once, and does not reevaluate on later ticks. A fresh CI run must verify the exact current PR head before merge.
+
+The earlier maker-only fee-reserve finding is resolved in source: Conservative recovery SELL sizing reserves the greater of configured makerPercent and takerPercent. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee rates. Actual exchange commissions remain authoritative for realized accounting.
+
+The remaining lifecycle overlap matrix and a future closed-session account-baseline audit are follow-up work, not blockers to merging the completed source remediation. Keep Harvester stopped; merge does not authorize TESTNET restart or order submission.
+
+
+### Incident audit logging requirement — 2026-11-04
+
+The Harvester TESTNET Journal initially appeared to show a +0.20730 USDT discrepancy because the final recovery.cycle_completed event reported +0.36335 while the exchange's session-wide quote cash flow was +0.57065. Reconciliation of all five cycle events resolves this exactly: the previous four cycles sum to +0.20730 and all five sum to +0.57065. Historical exchange executions reported zero commission; the later 0.1% maker/taker setting is not retroactive.
+
+The current PR #513 source now emits structured DEBUG traces for strategy evaluation and every accounting fill. These logs are diagnostic evidence; the durable Journal must not be assumed to contain them. For any incident reconciliation, correlate by exchange trade ID and verify gross quote, actual commission asset/amount, Portfolio cash-flow changes, RecoveryLedger cost/proceeds, cycle completion/reset, and Journal aggregation. Recovery-completion trace and end-to-end journal arithmetic reconciliation remain open before TESTNET can restart.
+
+
+### Account-level balance audit
+
+Every explicitly enabled Conservative TESTNET session records an OPENING snapshot before the trading engine can submit its first order and a CLOSING snapshot during graceful shutdown, before broker disconnect. The snapshot includes all broker-returned assets (including unrelated and third-asset balances) with exact free, locked, and total quantities. A closing snapshot is marked INCOMPLETE when owned-order reconciliation fails, an owned order remains non-terminal, intake fails, or user-data/accounting state is unresolved.
+
+The pure reconcileAccountSnapshotDeltas helper computes exact per-asset free/locked/total changes from OPENING and CLOSING events, including assets that appear or disappear, and propagates INCOMPLETE audit reasons. Balance deltas are an independent account-level cross-check, not a standalone proof of strategy profit. Reconcile every asset delta against executions and commissions, deposits/withdrawals/transfers, other account activity, and the valuation of remaining inventory in a common quote currency. Trade-level fill accounting remains authoritative for realized strategy PnL. Unknown external activity or open orders makes the account-level result incomplete.
+
+### Compare persisted opening and closing balances
+
+After a graceful shutdown, run the read-only Journal audit command from the Harvester app directory:
+
+```bash
+pnpm run journal:balance-audit
+```
+
+Pass a Journal directory as the first argument when using a non-default location:
+
+```bash
+pnpm run journal:balance-audit -- ./logs
+```
+
+The command groups records by JSONL session and reports exact per-asset free, locked, and total balance deltas. It exits non-zero if a session is missing either snapshot, has duplicate endpoints, or carries an INCOMPLETE closing audit. The command is read-only and never modifies Journal sessions. It deliberately does not convert these deltas into a profit figure; executions, commissions, external transfers, and remaining inventory valuation still require reconciliation.

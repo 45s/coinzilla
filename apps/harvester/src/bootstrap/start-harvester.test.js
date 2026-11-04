@@ -4,6 +4,19 @@ import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingR
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+const testEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+})
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher
+    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
+      : input.eventPublisher
+    : testEventPublisher
+  return startHarvester({ ...input, eventPublisher })
+}
+
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 
 async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
@@ -31,8 +44,16 @@ const tradingConfig = {
       enabled: true,
       settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
-        ETHUSDT: { enabled: false, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+        BTCUSDT: {
+          enabled: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
+          makerPercent: 0, takerPercent: 0,
+        },
+        ETHUSDT: {
+          enabled: false, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
+          makerPercent: 0, takerPercent: 0,
+        },
       },
     },
   },
@@ -145,7 +166,7 @@ const createFill = ({ tradeId = "trade-1", quantity = "0.01" } = {}) => {
 }
 
 test("does not connect a broker unless explicitly selected", async () => {
-  const result = await startHarvester({ loadConfig: async () => tradingConfig, env: {} })
+  const result = await startHarvesterForTest({ loadConfig: async () => tradingConfig, env: {} })
   assert.equal(result.tradingConfig, tradingConfig)
   assert.equal(result.broker, undefined)
   assert.equal(result.connected, false)
@@ -155,7 +176,7 @@ test("does not connect a broker unless explicitly selected", async () => {
 
 test("rejects enabling the deferred Aggressive strategy in trading config", async () => {
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => ({ ...tradingConfig, strategies: { ...tradingConfig.strategies, CG_coinGrabber: { ...tradingConfig.strategies.CG_coinGrabber, settings: { ...tradingConfig.strategies.CG_coinGrabber.settings, aggressive: { enabled: true } } } } }),
       env: binanceEnv,
       brokerAdapterFactory: () => createBroker(),
@@ -169,7 +190,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   const calls = []
   const broker = createBroker(calls)
   const strategyCalls = []
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -225,7 +246,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
 
 test("uses Conservative by default and passes updated Portfolio after a fill", async () => {
   const broker = createBroker()
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -258,7 +279,7 @@ test("uses Conservative by default and passes updated Portfolio after a fill", a
 })
 
 test("serializes concurrent Portfolio updates without losing fills", async () => {
-  const result = await startHarvester({ loadConfig: async () => tradingConfig, env: {} })
+  const result = await startHarvesterForTest({ loadConfig: async () => tradingConfig, env: {} })
   const [first, second] = await Promise.all([
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-1" }) }),
     result.updatePortfolio({ fill: createFill({ tradeId: "trade-2" }) }),
@@ -275,7 +296,7 @@ test("disconnects when a market price subscription fails", async () => {
     subscribeResult: { ok: false, errors: [new Error("stream unavailable")] },
   })
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -309,13 +330,13 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
         ...tradingConfig.strategies.CG_coinGrabber,
         pairs: {
           ...tradingConfig.strategies.CG_coinGrabber.pairs,
-          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
         },
       },
     },
   }
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => config,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -339,7 +360,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
 
 test("rejects an unsupported broker selection", async () => {
   await assert.rejects(
-    startHarvester({ loadConfig: async () => tradingConfig, env: { HARVESTER_BROKER: "unknown" } }),
+    startHarvesterForTest({ loadConfig: async () => tradingConfig, env: { HARVESTER_BROKER: "unknown" } }),
     /Unsupported HARVESTER_BROKER value: unknown/,
   )
 })
@@ -352,7 +373,7 @@ test("disconnects after a failed broker connection", async () => {
     throw new Error("connection failed")
   }
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -365,7 +386,7 @@ test("disconnects after a failed broker connection", async () => {
 test("accounts canonical execution events without refreshing the initial account snapshot in read-only mode", async () => {
   const broker = createBroker()
   let handled
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -405,7 +426,7 @@ test("does not clear a genuine startup stream-recovery gate with only the initia
   }
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: {
         ...binanceEnv,
@@ -433,7 +454,7 @@ test("does not adopt an external order report received before the ownership regi
   }
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: {
         ...binanceEnv,
@@ -451,7 +472,7 @@ test("does not adopt an external order report received before the ownership regi
 
 test("requires authoritative reconciliation after a user-data stream recovery", async () => {
   const broker = createBroker()
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -489,7 +510,7 @@ test("does not become ready when recovery is reported during subscription setup"
     return result
   }
 
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -501,7 +522,7 @@ test("does not become ready when recovery is reported during subscription setup"
 
 test("does not surface a stream-ready status as application readiness before reconciliation", async () => {
   const broker = createBroker()
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -520,7 +541,7 @@ test("does not surface a stream-ready status as application readiness before rec
 test("does not reopen order placement after execution accounting without authoritative reconciliation", async () => {
   const calls = []
   const broker = createBroker(calls)
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -551,7 +572,7 @@ test("fails startup closed when user-data subscription cannot be established", a
   })
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -564,7 +585,7 @@ test("fails startup closed when user-data subscription cannot be established", a
 
 test("does not expose a broker port that could bypass the trading engine", async () => {
   const broker = createBroker()
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -585,7 +606,7 @@ test("does not adopt malformed external TRADE reports in read-only mode", async 
   const broker = createBroker()
   let observed
   const eventObserved = new Promise((resolve) => { observed = resolve })
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -629,7 +650,7 @@ test("fails startup before opening streams when required minimum notional is una
   }
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -655,7 +676,7 @@ test("fails startup when the configured post-only order type is unsupported", as
   }
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -675,7 +696,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
     if (calls === 1) return getAccountSnapshot()
     return { ok: false, errors: [new Error("account endpoint unavailable")] }
   }
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -718,7 +739,7 @@ test("fails startup when the exchange snapshot omits an enabled market asset", a
   }
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
@@ -741,7 +762,7 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
   const broker = createBroker()
   let observed
   const eventObserved = new Promise((resolve) => { observed = resolve })
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
@@ -783,6 +804,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
   const runtimeErrors = []
+  const runtimeDebug = []
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -885,7 +907,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
     },
   }
-  const runtime = await startHarvester({
+  const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env: {
       NODE_ENV: "development",
@@ -905,6 +927,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     now: () => 1000,
     logger: {
       info() {},
+      debug: (entry) => runtimeDebug.push(entry),
       error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
     },
   })
@@ -1058,6 +1081,14 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     userDataStatus: runtime.userDataStatus,
     errors: runtimeErrors,
   }))
+  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+    message === "Harvester accounting execution applied" && tradeId === "testnet-buy-fill"))
+  assert.ok(runtimeDebug.some(({ message, tradeId }) =>
+    message === "Harvester accounting execution applied" && tradeId === "testnet-sell-fill"))
+  assert.ok(runtimeDebug.some(({ message }) =>
+    message === "Harvester recovery completion evaluation input"))
+  assert.ok(runtimeDebug.some(({ message }) =>
+    message === "Harvester recovery cycle completed and inventory allocated"))
   await subscriptions.get("BTCUSDT")({
     eventType: "aggTrade",
     symbol: "BTCUSDT",
@@ -1068,21 +1099,23 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   assert.equal(submittedOrders[5].side, "BUY")
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0")
+  assert.equal(position.baseQuantity.amount, "0.001")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
   assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
 
 
-test("logs confirmed broker readiness at info level without debug output", async () => {
+test("logs readiness at info and traces Conservative strategy input and decision at debug level", async () => {
   const calls = []
   const broker = createBroker()
-  const result = await startHarvester({
+  broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    now: () => 123,
     logger: {
       debug: (data) => calls.push({ level: "debug", ...data }),
       info: (data) => calls.push({ level: "info", ...data }),
@@ -1090,22 +1123,33 @@ test("logs confirmed broker readiness at info level without debug output", async
     },
   })
 
+  await broker.emitUserDataStatus({ type: "reconciled", recoveryRequired: false })
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
     symbol: "BTCUSDT",
     price: "65000.12",
     timestamp: 123,
   })
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "65000.11",
+    bestBidQuantity: "1",
+    bestAskPrice: "65000.13",
+    bestAskQuantity: "1",
+    timestamp: 123,
+  })
   const infoCalls = calls.filter(({ level }) => level === "info")
   const infoMessages = infoCalls.map(({ message }) => message)
   const marketEvaluations = infoCalls.filter(({ message }) => message === "Market price evaluated")
-  assert.equal(marketEvaluations.length, 1)
-  assert.equal(marketEvaluations[0].level, "info")
-  assert.equal(marketEvaluations[0].message, "Market price evaluated")
-  assert.equal(marketEvaluations[0].symbol, "BTCUSDT")
-  assert.equal(marketEvaluations[0].price, "65000.12")
-  assert.ok(typeof marketEvaluations[0].action === "string" && marketEvaluations[0].action.length > 0)
-  assert.notEqual(marketEvaluations[0].action, "UNKNOWN")
+  const targetMarketEvaluation = marketEvaluations.find(({ price }) => price === "65000.12")
+  assert.ok(marketEvaluations.length >= 1)
+  assert.ok(targetMarketEvaluation)
+  assert.equal(targetMarketEvaluation.level, "info")
+  assert.equal(targetMarketEvaluation.message, "Market price evaluated")
+  assert.equal(targetMarketEvaluation.symbol, "BTCUSDT")
+  assert.equal(targetMarketEvaluation.price, "65000.12")
+  assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
+  assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
   assert.ok(infoMessages.includes("Harvester trading configuration validated"))
   assert.ok(infoMessages.includes("Binance broker connected"))
   assert.ok(infoMessages.includes("Exchange trading rules validated"))
@@ -1114,14 +1158,35 @@ test("logs confirmed broker readiness at info level without debug output", async
   assert.ok(infoMessages.includes("Conservative TESTNET trading engine activated"))
   assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
   assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
-  assert.equal(calls.filter(({ level }) => level === "debug").length, 0)
+  const debugCalls = calls.filter(({ level }) => level === "debug")
+  const marketEvent = debugCalls.find(({ message, price }) =>
+    message === "Harvester market price event received" && price === "65000.12")
+  const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
+    message === "Harvester Conservative evaluation started" &&
+    marketEventId === marketEvent?.marketEventId)
+  const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
+    message === "Harvester Conservative evaluation decided" &&
+    evaluationId === evaluationStarted?.evaluationId)
+  assert.ok(marketEvent)
+  assert.ok(evaluationStarted)
+  assert.ok(evaluationDecided)
+  assert.equal(marketEvent.symbol, "BTCUSDT")
+  assert.equal(marketEvent.price, "65000.12")
+  assert.equal(evaluationStarted.marketEventId, marketEvent.marketEventId)
+  assert.equal(evaluationStarted.symbol, "BTCUSDT")
+  assert.equal(evaluationStarted.marketPrice.price, "65000.12")
+  assert.equal(evaluationStarted.lastBuyPrice, null)
+  assert.deepEqual(evaluationStarted.activeOrders, [])
+  assert.ok(Array.isArray(evaluationStarted.portfolio.positions))
+  assert.equal(evaluationDecided.evaluationId, evaluationStarted.evaluationId)
+  assert.ok(Array.isArray(evaluationDecided.actions))
 
   await result.stop()
 })
 
 test("retains an explicitly injected application event publisher in configuration-only runtime", async () => {
   const eventPublisher = { publish: () => ({ ok: true }) }
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: {},
     eventPublisher,
@@ -1192,7 +1257,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   let signalQueueStarted
   const queueStarted = new Promise((resolve) => { signalQueueStarted = resolve })
   let queuedEvents = 0
-  const runtime = await startHarvester({
+  const runtime = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
@@ -1233,7 +1298,7 @@ test("stops broker intake before draining queued user-data and disconnects after
 test("logs safe correlation details when an execution report is not owned", async () => {
   const broker = createBroker()
   const errors = []
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
@@ -1293,7 +1358,7 @@ test("logs safe correlation details when an execution report is not owned", asyn
 
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
-  const result = await startHarvester({
+  const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
@@ -1337,7 +1402,7 @@ test("reconciles the in-memory order registry before reopening trading after str
 test("fails closed when trading is explicitly enabled without selecting a broker", async () => {
   let brokerFactoryCalled = false
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => tradingConfig,
       env: {
         HARVESTER_ENABLE_TRADING: "true",
@@ -1397,3 +1462,135 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
   assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
 })
 
+
+
+test("emits per-execution debug audit records with commission and before/after accounting", async () => {
+  const debugRecords = []
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: {},
+    logger: {
+      info() {},
+      error() {},
+      debug(record) { debugRecords.push(record) },
+    },
+  })
+
+  const fill = createFill({ tradeId: "audited-trade", quantity: "0.01" })
+  const applied = await result.updateTradingAccounting({ fill })
+
+  assert.equal(applied.ok, true)
+  const received = debugRecords.find((record) =>
+    record.message === "Harvester accounting execution received")
+  const committed = debugRecords.find((record) =>
+    record.message === "Harvester accounting execution applied")
+
+  assert.equal(received.executionId, fill.id)
+  assert.equal(received.tradeId, "audited-trade")
+  assert.equal(received.symbol, "BTCUSDT")
+  assert.equal(received.side, "BUY")
+  assert.equal(received.liquidityRole, "UNKNOWN")
+  assert.equal(received.executedAt, undefined)
+  assert.equal(received.quantity, "0.01")
+  assert.equal(received.quoteQuantity, "650")
+  assert.equal(received.commissionStatus, "COMPLETE")
+  assert.deepEqual(received.commissions, [])
+  assert.equal(received.previousRecoveryLedger.buyCost, "0")
+  assert.equal(committed.applied, true)
+  assert.equal(committed.duplicate, false)
+  assert.equal(committed.nextRecoveryLedger.buyCost, "650")
+  assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
+  assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01")
+  assert.equal(committed.accountingDelta.buyCost, "650")
+  assert.equal(committed.accountingDelta.netSellProceeds, "0")
+  assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
+  assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
+
+  await result.stop()
+})
+
+
+test("journals OPENING balances before trading and CLOSING balances before broker disconnect", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  const eventPublisher = {
+    publish: (event) => {
+      events.push(event)
+      calls.push("publish:" + event.name)
+      return { ok: true }
+    },
+    flush: async () => {
+      calls.push("journal:flush")
+      return { ok: true, durable: true }
+    },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
+  assert.equal(openingEvent.data.phase, "OPENING")
+  assert.equal(openingEvent.data.auditStatus, "COMPLETE")
+  assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
+  assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
+  const openingPublishIndex = calls.indexOf("publish:account.snapshot_captured")
+  const openingFlushIndex = calls.indexOf("journal:flush")
+  const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
+  assert.ok(openingPublishIndex >= 0)
+  assert.ok(openingFlushIndex > openingPublishIndex)
+  assert.ok(firstMarketSubscriptionIndex > openingFlushIndex)
+
+  await runtime.stop()
+
+  const snapshotEvents = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshotEvents.length, 2)
+  assert.equal(snapshotEvents[1].data.phase, "CLOSING")
+  assert.equal(snapshotEvents[1].data.auditStatus, "COMPLETE")
+  const closingFlushIndex = calls.lastIndexOf("journal:flush")
+  const disconnectIndex = calls.indexOf("disconnect")
+  assert.ok(closingFlushIndex >= 0)
+  assert.ok(disconnectIndex > closingFlushIndex)
+})
+
+
+test("fails startup before market subscriptions when OPENING account snapshot cannot be durably flushed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  }), /Unable to durably persist OPENING account snapshot/)
+  assert.ok(calls.includes("disconnect"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+})
+
+
+test("fails startup before market subscriptions when OPENING account snapshot cannot be durably flushed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  }), /Unable to durably persist OPENING account snapshot/)
+  assert.ok(calls.includes("disconnect"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+})

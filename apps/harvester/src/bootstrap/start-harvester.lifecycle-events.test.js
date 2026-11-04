@@ -3,6 +3,19 @@ import assert from "node:assert/strict"
 import { Asset, Balance, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
+const testEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+})
+const startHarvesterForTest = (input = {}) => {
+  const eventPublisher = input.eventPublisher
+    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+      ? { ...input.eventPublisher, flush: testEventPublisher.flush }
+      : input.eventPublisher
+    : testEventPublisher
+  return startHarvester({ ...input, eventPublisher })
+}
+
 
 const config = {
   strategies: {
@@ -108,7 +121,7 @@ function createPublisher() {
 test("publishes validated config, broker/subscription lifecycle and meaningful reconnect transitions", async () => {
   const eventPublisher = createPublisher()
   const broker = createBroker()
-  const runtime = await startHarvester({
+  const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env,
     brokerAdapterFactory: () => broker,
@@ -163,7 +176,7 @@ test("publishes broker connection failure without claiming a successful connecti
   const eventPublisher = createPublisher()
   const broker = createBroker({ connectError: new Error("socket connect failed") })
 
-  await assert.rejects(startHarvester({
+  await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env,
     brokerAdapterFactory: () => broker,
@@ -184,7 +197,7 @@ test("publishes user-data subscription failure before cleanup", async () => {
     userDataResult: { ok: false, errors: [new Error("user stream unavailable")] },
   })
 
-  await assert.rejects(startHarvester({
+  await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env,
     brokerAdapterFactory: () => broker,
@@ -207,7 +220,7 @@ test("publishes market-price subscription failure and broker disconnect outcome"
     priceResult: { ok: false, errors: [new Error("market stream unavailable")] },
   })
 
-  await assert.rejects(startHarvester({
+  await assert.rejects(startHarvesterForTest({
     loadConfig: async () => config,
     env,
     brokerAdapterFactory: () => broker,
@@ -231,7 +244,7 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
   const eventPublisher = createPublisher()
   const logs = []
   const broker = createBroker()
-  const runtime = await startHarvester({
+  const runtime = await startHarvesterForTest({
     loadConfig: async () => config,
     env,
     brokerAdapterFactory: () => broker,

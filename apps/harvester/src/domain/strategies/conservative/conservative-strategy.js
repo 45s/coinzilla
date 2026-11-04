@@ -83,10 +83,20 @@ export function evaluateConservativeStrategy({
     })
   }
 
+  // Residual active inventory alone is not a recovery obligation. After a
+  // completed cycle the ledger is reset; preserve that inventory for the next
+  // legitimate cycle instead of creating a new recovery SELL from it.
+  const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
+    left: "0",
+    right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
+  })
   // Submit recovery first. The executor processes intents in order and stops on failure.
-  if (!hasActiveSell && compareDecimal({ left: activeQuantity, right: "0" }) > 0) {
+  if (!hasActiveSell &&
+      compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
+      compareDecimal({ left: outstandingRecovery, right: "0" }) > 0) {
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
+      takerPercent: String(pairConfig.takerPercent),
     }).feeRate
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
@@ -127,10 +137,6 @@ export function evaluateConservativeStrategy({
       throw new RangeError("Configured BUY quantity is below the exchange quantity step")
     }
     const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
-    const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
-      left: "0",
-      right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
-    })
     const investmentLimit = pairConfig.investment === undefined ? undefined : String(pairConfig.investment)
     const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
       left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
