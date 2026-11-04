@@ -66,6 +66,7 @@ export function makeConservativeTradingEngine({
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
+  logger,
 } = {}) {
   const strategyConfig = tradingConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
@@ -82,6 +83,7 @@ export function makeConservativeTradingEngine({
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
   let transitionTail = Promise.resolve()
+  let strategyEvaluationSequence = 0
   const runTransition = ({ task } = {}) => {
     const current = transitionTail.then(task)
     transitionTail = current.catch(() => undefined)
@@ -565,17 +567,56 @@ export function makeConservativeTradingEngine({
     }
     try {
       const metadata = getMarketMetadata({ symbol })
-      const decision = strategyPolicy.evaluate({
+      const evaluationId = ++strategyEvaluationSequence
+      const portfolioBefore = getPortfolio()
+      const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
+      const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      const lastBuyPrice = state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
+      const evaluationInput = {
         marketPrice,
         pairConfig: pairs[symbol],
-        settings: settings,
-        portfolio: getPortfolio(),
-        recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id }),
+        settings,
+        portfolio: portfolioBefore,
+        recoveryLedger: recoveryLedgerBefore,
         marketMetadata: metadata,
-        activeOrders: state.registry.getActiveOrders({ marketId: metadata.market.id }),
-        lastBuyPrice: state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol),
+        activeOrders: activeOrdersBefore,
+        lastBuyPrice,
+      }
+      logger?.debug?.({
+        message: "Harvester Conservative evaluation started",
+        evaluationId,
+        symbol,
+        marketPrice,
+        lastBuyPrice: lastBuyPrice ?? null,
+        buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+        lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+        activeOrders: activeOrdersBefore.map((order) => order.value),
+        portfolio: portfolioBefore.value,
+        recoveryLedger: recoveryLedgerBefore?.value ?? null,
+        pairConfig: pairs[symbol],
       })
-      if (decision.actions.length === 0) return toResult({ data: { decision, submittedOrders: [] } })
+      const decision = strategyPolicy.evaluate(evaluationInput)
+      logger?.debug?.({
+        message: "Harvester Conservative evaluation decided",
+        evaluationId,
+        symbol,
+        action: decision.action,
+        reason: decision.reason,
+        actions: decision.actions,
+        position: decision.position,
+        portfolio: portfolioBefore.value,
+        recoveryLedger: recoveryLedgerBefore?.value ?? null,
+      })
+      if (decision.actions.length === 0) {
+        logger?.debug?.({
+          message: "Harvester Conservative evaluation submitted no orders",
+          evaluationId,
+          symbol,
+          reason: decision.reason,
+          activeOrders: activeOrdersBefore.map((order) => order.value),
+        })
+        return toResult({ data: { decision, submittedOrders: [] } })
+      }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
       const position = getPortfolio().getPosition({ marketId: metadata.market.id })
@@ -652,7 +693,31 @@ export function makeConservativeTradingEngine({
         }),
       })
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
+      logger?.debug?.({
+        message: "Harvester Conservative executable intents",
+        evaluationId,
+        symbol,
+        strategyActions: decision.actions,
+        executableActions,
+        accountSnapshot: accountSnapshot.value,
+        quoteCashFlow,
+        committedQuote,
+        committedBase,
+      })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
+      logger?.debug?.({
+        message: "Harvester Conservative submission result",
+        evaluationId,
+        symbol,
+        ok: result.ok,
+        submittedOrders: result.data?.submittedOrders?.map((order) => order.value) ?? [],
+        errors: (result.errors ?? []).map((error) => ({
+          name: error?.name,
+          message: error?.message ?? String(error),
+        })),
+        lastBuyPriceAfter: state.lastBuyPrices.get(symbol) ?? null,
+        activeOrdersAfter: state.registry.getActiveOrders({ marketId: metadata.market.id }).map((order) => order.value),
+      })
       if (!result.ok) return result
       if (result.data?.deferred === true) {
         return toResult({
