@@ -1076,3 +1076,13 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - Added conflicting fill ownership cases for broker order ID, market, side, and client order ID. Added acknowledgement replay checks so an identical acknowledgement is idempotent but changed immutable order intent cannot bypass validation merely because the client/broker IDs match.
 - Current exact PR head `dcf2b63c98306dc149dde970c4710729f223d5f5` passed all five required workflows: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The branch remains synchronized with `develop`.
 - These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.
+
+
+## Automatic startup account audit — 2026-11-05
+
+- [x] Capture and journal account-wide balances on every connected startup, including read-only `pnpm run dev`.
+- [x] Capture and journal account-wide open orders on every connected startup using the existing broker connection.
+- [x] Use shared `PREFLIGHT` phase for trading-enabled and read-only startup; durably flush each event before market subscriptions or engine activation.
+- [x] Record existing orders without adopting or changing them. Trading-enabled startup fails closed when pre-existing unowned orders exist; read-only startup preserves observation-only behavior.
+- [x] Add regressions for exactly-once reads, event ordering and durability, existing-order preservation, query failures, and Journal flush failures.
+- [ ] Complete exact-head CI and merge the implementation PR. TESTNET remains stopped pending a separately controlled session.
