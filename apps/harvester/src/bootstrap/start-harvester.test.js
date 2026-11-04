@@ -1941,9 +1941,10 @@ test("blocks read-only startup when either PREFLIGHT audit event cannot be durab
         publish: (event) => { events.push(event); return { ok: true } },
         flush: async () => {
           flushCount += 1
-          return flushCount === failedFlush
+          if (flushCount !== failedFlush) return { ok: true, durable: true }
+          return failedFlush === 1
             ? { ok: false, errors: [new Error("journal fsync failed")] }
-            : { ok: true, durable: true }
+            : { ok: true, durable: false }
         },
       },
       logger: { info() {}, error() {}, debug() {} },
