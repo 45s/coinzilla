@@ -883,6 +883,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         },
       },
     },
+    },
   }
   const runtime = await startHarvester({
     loadConfig: async () => config,
