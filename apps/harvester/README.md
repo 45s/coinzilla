@@ -206,6 +206,19 @@ Each normalized broker price event is validated by the `process-market-price` ap
 
 Bootstrap seeds each enabled market from a REST ticker snapshot, then processes ongoing aggregate-trade price updates. When TESTNET trading is enabled, Harvester also subscribes to Binance `bookTicker`: every `LIMIT_MAKER` order waits for a fresh best bid/ask and is deferred if a BUY would reach/cross the best ask or a SELL would reach/cross the best bid. Binance's POST-ONLY rejection remains the final race-condition safeguard; a confirmed Spot POST-ONLY rejection invalidates the cached book and waits for a new book update before reevaluation.
 
+## Binance client order identifiers
+
+Every Harvester trading-engine executor creates an 88-bit random client-order
+ID namespace at startup and increments a local sequence within that namespace.
+The resulting IDs are compatible with Binance Spot's 36-character client-order
+ID limit and are not reused merely because the process restarts.
+
+This prevents a fresh process from restarting at a predictable identifier
+such as `h-DOGEUSDT-1`, which Binance may already have seen on the account.
+It does not make an order submission safe to retry: if the submission outcome
+is unknown, Harvester must continue to pause and reconcile rather than submit
+another order blindly. Durable retry idempotency remains unfinished.
+
 ## Runtime boundary and startup reporting
 
 The runtime returned by `startHarvester` exposes read-only state and lifecycle
