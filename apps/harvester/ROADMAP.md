@@ -1037,3 +1037,6 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 
 - The first CI run showed that `CanonicalOrder` intentionally forbids a broker ID on `PENDING`. This invariant is preserved. The acknowledgement attachment now moves the registered order to `UNKNOWN` with the exchange broker ID and zero reconciled quantity. `UNKNOWN` is an existing active status that can transition to PARTIALLY_FILLED/FILLED when canonical stream or REST execution facts arrive. This represents an acknowledged but not yet reconciled execution state without inventing applied quantity.
 - Regression expectations now require UNKNOWN + brokerOrderId after a failed FILLED-ack reconciliation, then verify one-time application of a later stream fill while the pair remains paused.
+
+
+- **CI regression refinement — 2026-11-04:** Broker-layer fixture verifies raw Binance `myTrades` fills have no clientOrderId. The engine intentionally enriches a reconciled fill with the known owned-order client ID before accounting/journaling; the engine-level assertion therefore verifies that enrichment rather than expecting the accounting event to remain without identity. Broker and registry tests passed in the latest run; this corrected expectation is being rerun.

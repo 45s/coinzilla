@@ -2591,7 +2591,7 @@ test("reconciles a FILLED acknowledgement from Binance myTrades without a client
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(accountedFills.length, 1)
-  assert.equal(accountedFills[0].clientOrderId, undefined)
+  assert.equal(accountedFills[0].clientOrderId, engine.getOrders()[0].clientOrderId)
   assert.deepEqual(pauses, [])
 })
 
