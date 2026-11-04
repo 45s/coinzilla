@@ -96,6 +96,7 @@ export function evaluateConservativeStrategy({
       compareDecimal({ left: outstandingRecovery, right: "0" }) > 0) {
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
+      takerPercent: String(pairConfig.takerPercent),
     }).feeRate
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
