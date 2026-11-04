@@ -20,6 +20,7 @@ import {
   mapFillAppliedData,
   mapDuplicateFillData,
   mapRecoveryCycleCompletedData,
+  mapAccountSnapshotCapturedData,
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
@@ -61,6 +62,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
     EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
     RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
+    ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -578,4 +580,29 @@ test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
       realizedNetProfit: "1.2345",
     },
   })
+})
+
+test("maps all account assets into sorted exact-decimal snapshot facts", () => {
+  const balance = (code, free, locked) => ({ asset: { code }, free: { amount: free }, locked: { amount: locked } })
+  const result = mapAccountSnapshotCapturedData({
+    phase: "OPENING",
+    snapshot: { sourceTime: 1730740000000, balances: [balance("USDT", "12.3400", "1.66"), balance("DOGE", "12321", "0"), balance("BNB", "0.2", "0.01")] },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.balances, [
+    { asset: "BNB", free: "0.2", locked: "0.01", total: "0.21" },
+    { asset: "DOGE", free: "12321", locked: "0", total: "12321" },
+    { asset: "USDT", free: "12.3400", locked: "1.66", total: "14" },
+  ])
+  assert.equal(result.data.assetCount, 3)
+  assert.equal(result.data.auditStatus, "COMPLETE")
+})
+
+test("rejects invalid account snapshot phase, decimals, duplicate assets and incomplete reasons", () => {
+  const balance = { asset: { code: "USDT" }, free: { amount: "1" }, locked: { amount: "0" } }
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "MID", snapshot: { sourceTime: 1, balances: [balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "OPENING", snapshot: { sourceTime: 1, balances: [{ ...balance, free: { amount: "NaN" } }] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", snapshot: { sourceTime: 1, balances: [balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", snapshot: { sourceTime: 1, balances: [balance, balance] } }).ok, false)
+  assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", auditReasons: ["OPEN_ORDERS"], snapshot: { sourceTime: 1, balances: [balance] } }).ok, true)
 })

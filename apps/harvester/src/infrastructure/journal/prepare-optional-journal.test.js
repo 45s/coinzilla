@@ -176,3 +176,28 @@ test("reports a write failure through live health status without affecting Event
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test("flush waits for Journal durability", async () => {
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(), directory: "/unused", logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true }),
+    }),
+  })
+  assert.equal((await service.ready).ok, true)
+  assert.deepEqual(await service.flush(), { ok: true, durable: true })
+  assert.equal((await service.close()).ok, true)
+})
+
+test("fails closed when Journal has no durable flush capability", async () => {
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(), directory: "/unused", logger,
+    journalFactory: () => ({ start: async () => ({ ok: true }), close: async () => ({ ok: true }) }),
+  })
+  assert.equal((await service.ready).ok, true)
+  const result = await service.flush()
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /must provide flush/)
+})

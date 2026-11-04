@@ -578,3 +578,43 @@ test("writes and durably closes a JSONL session in HARVESTER_JOURNAL_DIRECTORY",
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test("refuses TESTNET trading when Journal startup fails", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false } },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("rejects disabling Journal for TESTNET trading", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "false" },
+      createJournalService: disabledJournalService,
+      start: async () => { started = true; return { connected: false } },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
