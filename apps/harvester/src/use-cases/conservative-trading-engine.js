@@ -26,7 +26,7 @@ import { validateCancellationEligibility } from "../domain/orders/validate-cance
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
-  isMarketPriceFresh = () => true,
+  isMarketPriceFresh,
 } = {}) {
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {

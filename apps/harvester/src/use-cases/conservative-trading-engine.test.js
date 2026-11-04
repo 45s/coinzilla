@@ -48,7 +48,7 @@ const tradingConfig = {
   },
 }
 
-function createHarness({ strategyPolicy, isMarketPriceFresh, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -1727,4 +1727,21 @@ test("does not evaluate or submit from a stale market price", async () => {
   assert.equal(result.data.skipped, true)
   assert.equal(result.data.reason, "STALE_MARKET_PRICE")
   assert.equal(orders.length, 0)
+})
+
+
+test("does not reuse a cached market price after it becomes stale", async () => {
+  let isFresh = true
+  const { engine, orders } = createHarness({ isMarketPriceFresh: () => isFresh })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(orders.length, 1)
+  isFresh = false
+  const result = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.skipped, true)
+  assert.equal(result.data.reason, "STALE_MARKET_PRICE")
+  assert.equal(orders.length, 1)
 })
