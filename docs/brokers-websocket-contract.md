@@ -126,7 +126,7 @@ This package is an **exchange infrastructure adapter**, not the owner of trading
 
 ### First refactoring candidates (ordered by risk)
 
-- **Candidate A — pure broker helpers:** move the independent decimal-filter validators and book-ticker payload adaptation currently embedded in `broker-websocket/broker.js` into focused, colocated helper modules. Preserve decimal strings and timestamp semantics. Characterize through broker-facing tests before extraction.
+- [x] **Candidate A — pure broker helpers:** extracted decimal-filter validators and book-ticker payload adaptation from `broker-websocket/broker.js` into `helpers/symbol-filter-adapters.js` and `helpers/adapt-book-ticker.js`. Focused tests preserve exact decimal strings, zero-optional-filter semantics, event validation, immutable output, and injected timestamp semantics.
 - **Candidate B — user-data port:** after recovery contract tests are complete, define the smallest internal user-data client port for subscribe/unsubscribe/subscription lookup and listener registration; keep Binance RPC method names in its adapter. Preserve uncertain-outcome verification and all-subscriber acknowledgement semantics.
 - **Candidate C — broker operation slices:** separate cohesive request/response adaptation from the facade one operation family at a time (account, orders, market metadata, trades), retaining the public result envelopes and method signatures.
 
@@ -134,5 +134,5 @@ Do not start Candidate B or C until the relevant contract tests are green and th
 
 ### Verified package coverage snapshot
 
-On PR #516 commit `bf44e8e8d1e9444066a7ea595d518341e0a06fcc`, the CI-executed package command `pnpm --filter @coinzilla/brokers test:coverage` passed with **81.31% lines, 81.59% branches, and 79.09% functions**. The new direct event-adapter characterization tests bring `helpers/adapters/user.js` to **100% line, branch, and function coverage**. This is a measured baseline, not a claim that every protocol/recovery edge case is covered; RPC and Streams failure branches remain the next coverage targets.
+On PR #516 commit `bf44e8e8d1e9444066a7ea595d518341e0a06fcc`, the CI-executed package command `pnpm --filter @coinzilla/brokers test:coverage` passed with **81.41% lines, 81.94% branches, and 79.09% functions**. The direct event-adapter characterization tests bring `helpers/adapters/user.js` to **100% line, branch, and function coverage**. The first pure-helper vertical slice also extracts symbol-filter validation and book-ticker mapping from the broker facade; both new helper modules are **100% covered**. The package suite passed **295/295** tests on commit `51afa0d06b65e8be4f31ba57fdb6d3cb50896af2`. This is a measured baseline, not a claim that every protocol/recovery edge case is covered; RPC and Streams failure branches remain the next coverage targets.
 
