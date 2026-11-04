@@ -3,17 +3,19 @@ import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-
 
 const main = async () => {
   const { balances: accountBalances } = await getAccountBalances()
-  const { balances } = getNonZeroBalances({ balances: accountBalances })
+  const { balances } = normalizeAccountBalances({ balances: accountBalances })
+  const { balances: nonZeroBalances } = getNonZeroBalances({ balances: accountBalances })
 
-  console.log("\nBinance Spot TESTNET — Non-zero Asset Balances\n")
+  console.log("\nBinance Spot TESTNET — Complete Account Asset Balances\n")
 
   if (balances.length === 0) {
-    console.log("No non-zero asset balances found.")
+    console.log("Binance returned no asset balance rows.")
     return
   }
 
   console.table(balances)
-  console.log(`\nAssets with funds: ${balances.length}`)
+  console.log(`\nAssets returned: ${balances.length}`)
+  console.log(`Assets with funds: ${nonZeroBalances.length}`)
   console.log("Read-only: no orders or balances were changed.")
 }
 
