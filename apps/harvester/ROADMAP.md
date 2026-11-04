@@ -786,7 +786,7 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 
 The source strategy computes a BUY limit from a single reference (lastBuyPrice, falling back to current market price) using priceStepPercent and rounds down to the exchange tick. 0.05 means **0.05%**, not 5%. After a BUY is fully reconciled, the engine stores the actual weighted execution price as lastBuyPrice; the next standing BUY should therefore be calculated from that updated reference. Repeated identical prices are consistent with multiple submissions being evaluated against stale/unreconciled BUY state. The incident logs support the acknowledgement/fill timing race described below, but do not prove the exact triggering market event for each order. Do not label the twelve orders as duplicate IDs or conclude that a 12-order burst itself is invalid.
 
-**Current PR #513 remediation scope:** terminal FILLED acknowledgements are held behind complete fill-history retrieval, identity/quantity validation, and ordered fill application before the serialized transition completes. This closes the observed acknowledgement-to-accounting gap for immediate-FILLED broker acknowledgements. Continue reviewing the alternate path where an order is first acknowledged non-terminal and subsequently becomes FILLED through user-data events, including event ordering, duplicate/out-of-order reports, and cancellation/fill races. The existing engine serializes market-price and user-data transitions; regression coverage must prove that serialization plus fill reconciliation prevents the next strategy evaluation from observing a terminal BUY without its reconciled fills.
+**Merged PR #513 remediation (completed):** terminal FILLED acknowledgements are held behind complete fill-history retrieval, identity/quantity validation, and ordered fill application before the serialized transition completes. This closes the observed acknowledgement-to-accounting gap for immediate-FILLED broker acknowledgements. The remaining alternate lifecycle path—non-terminal acknowledgement followed by streamed partial/final fills, duplicate/out-of-order reports, and cancellation/fill races—is now assigned to follow-up PR #515 for deterministic verification.
 
 
 The twelve BUYs used distinct client IDs, so this is not the client-ID collision addressed by PR #512. The journal ordering and source inspection support the race: a FILLED acknowledgement could remove the BUY from the active-order registry before canonical fills updated Portfolio/last-buy state, allowing a market transition to see neither an active BUY nor the reconciled fill. PR #513 now addresses this by keeping the registered order non-terminal while it retrieves and validates complete execution history, then applying ordered incremental fills before the serialized strategy transition can complete. Deterministic tests cover delayed immediate-FILLED acknowledgement reconciliation with multiple executions and incomplete history. This is an offline regression fix; it has not yet been validated by a subsequent TESTNET run.
@@ -824,7 +824,7 @@ To close reconciliation, run the newly added read-only command `pnpm --filter @c
 - [ ] Deterministic regression tests, Harvester tests, workspace checks, and required CI pass on PR #513.
 - [x] Live trading remains disabled.
 
-**Current milestone status:** the two incident defects are source-remediated in PR #513: the twelve-BUY burst was caused by FILLED acknowledgements releasing the serialized transition before execution fills updated strategy state; and residual active inventory alone could trigger another recovery SELL after ledger reset. The +0.20730 USDT difference is a cycle/session scope mismatch: five cycle profits sum to +0.57065 USDT. The remaining merge gate is fresh green CI on the exact current PR head. The first safe, repeatable Conservative TESTNET cycle is still **not accepted**. Keep Harvester stopped. After merge, continue lifecycle overlap and new-session balance-baseline verification in a separate PR.
+**Current milestone status:** PR #513 is merged and its two source defects are resolved: the twelve-BUY burst was caused by FILLED acknowledgements releasing the serialized transition before execution fills updated strategy state; residual active inventory alone could trigger another recovery SELL after ledger reset. The +0.20730 USDT difference is a cycle/session scope mismatch: five cycle profits sum to +0.57065 USDT. Follow-up lifecycle, accounting, fee-policy, and account-audit verification is in PR #515. The first safe, repeatable Conservative TESTNET cycle is still **not accepted**. Keep Harvester stopped; merge status and offline CI do not authorize a TESTNET restart.
 
 
 ### Follow-up source review — conflicting duplicate execution records
@@ -848,7 +848,7 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 
 ## 2026-11-04 TESTNET incident — investigation progress and blockers
 
-**Current state: STOPPED. No TESTNET restart or new order is authorized by this work. Continue only in PR #513.**
+**Current state: STOPPED. Continue offline investigation and fixes only in follow-up PR #515. No TESTNET restart, order submission/cancellation, or account setting change is authorized.**
 
 ### Evidence established
 
@@ -890,7 +890,7 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [ ] Reconcile account opening baseline and Harvester-owned trades/orders; confirm the 0.1% commission setting is effective.
 - [ ] Obtain explicit operator approval for a controlled TESTNET run.
 
-Merge PR #513 after its exact-head CI is green and its source-remediation scope is documented. Do not restart TESTNET while any TESTNET acceptance gate remains open; merge status is not a trading-readiness signal.
+PR #513 is already merged. Keep PR #515 draft until its offline acceptance criteria and exact-head CI pass. Do not restart TESTNET while any TESTNET acceptance gate remains open; merge status is not a trading-readiness signal.
 
 
 ## TESTNET incident — account balance audit implementation (2026-11-04)
