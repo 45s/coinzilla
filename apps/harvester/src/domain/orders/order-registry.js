@@ -201,14 +201,14 @@ export class OrderRegistry {
     const index = this.#orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
     if (index < 0) throw new Error("Acknowledged order is not registered by clientOrderId")
     const current = this.#orders[index]
+    if (!sameOrderIntent({ current, next: order })) {
+      throw new Error("Broker acknowledgement changed immutable order intent")
+    }
     if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
       return Object.freeze({ registry: this, applied: false, duplicate: true })
     }
     if (current.status !== "PENDING") {
       throw new Error("Only a PENDING order can receive its acknowledged brokerOrderId")
-    }
-    if (!sameOrderIntent({ current, next: order })) {
-      throw new Error("Broker acknowledgement changed immutable order intent")
     }
     if (current.brokerOrderId !== undefined) {
       if (current.brokerOrderId === order.brokerOrderId) {
