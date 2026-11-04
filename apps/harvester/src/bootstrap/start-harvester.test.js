@@ -1464,7 +1464,11 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(committed.duplicate, false)
   assert.equal(committed.nextRecoveryLedger.buyCost, "650")
   assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
+  assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01")
+  assert.equal(committed.accountingDelta.buyCost, "650")
+  assert.equal(committed.accountingDelta.netSellProceeds, "0")
   assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
+  assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
 
   await result.stop()
 })
