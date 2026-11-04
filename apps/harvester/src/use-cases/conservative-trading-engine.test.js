@@ -286,6 +286,44 @@ test("pauses an immediately FILLED acknowledged order when execution history is 
   assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE"))
 })
 
+test("pauses after an invalid strategy order and does not reevaluate it on later market events", async () => {
+  let evaluations = 0
+  const strategyPolicy = {
+    evaluate: () => {
+      evaluations += 1
+      return {
+        strategy: "TEST_POLICY",
+        symbol: "DOGEUSDT",
+        action: "PLACE_ORDERS",
+        actions: [{
+          side: "BUY",
+          type: "LIMIT_MAKER",
+          price: "0.01",
+          quantity: "1",
+        }],
+      }
+    },
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({ strategyPolicy })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const second = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "101", timestamp: 2 },
+  })
+
+  assert.equal(first.ok, false)
+  assert.equal(second.ok, true)
+  assert.equal(evaluations, 1)
+  assert.equal(harness.orders.length, 0)
+  assert.ok(harness.pauses.includes("STRATEGY_ORDER_VALIDATION_FAILED"))
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
 test("trails an initial BUY upward only after one full step and replaces it below the latest trade", async () => {
   const { engine, orders, pauses } = await createHarness()
   await engine.processMarketPrice({
