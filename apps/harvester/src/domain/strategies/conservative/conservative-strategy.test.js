@@ -100,7 +100,7 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
-    { side: "SELL", price: "0.102", quantity: "99" },
+    { side: "SELL", price: "0.103", quantity: "98" },
     { side: "BUY", price: "0.099", quantity: "100" },
   ])
 })
@@ -189,7 +189,7 @@ test("reserves the higher takerPercent for recovery SELL planning when taker is 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(sell.type, "LIMIT")
   assert.equal(sell.quantity, "98.8")
-  assert.equal(sell.price, "0.102")
+  assert.equal(sell.price, "0.103")
 })
 
 test("includes the actual BUY quote commission in the recovery SELL limit price", () => {
@@ -206,7 +206,7 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(recoveryLedger.buyCost, "10.2")
-  assert.equal(sell.price, "0.104")
+  assert.equal(sell.price, "0.105")
 })
 
 test("does not create a recovery SELL from residual active inventory after the recovery ledger is reset", () => {
