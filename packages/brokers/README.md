@@ -74,6 +74,8 @@ The recommended reconciliation inputs are:
 
 - `getAccountSnapshot()` for current balances and the account snapshot's source timestamp.
 - `getOpenOrders()` for the current open-order set.
+`getOpenOrders({ symbol? })` accepts an omitted symbol to retrieve the account-wide open-order set. Its normalized `Order` values retain `id`, `symbol`, optional `clientOrderId`, `originalPrice`, `originalQuantity`, `executedQuantity`, and `status`. `price` remains the legacy numeric convenience field; use `originalPrice` when exact decimal fidelity is required for audit/reconciliation. `originalPrice`, original quantity, and executed quantity preserve the exchange's decimal strings.
+
 - `getMyTrades()` and `getOrderHistory()` for available symbol-scoped history, using pagination where required.
 
 These snapshots and query results do **not** reconstruct every intermediate event or balance delta missed during an outage. Event timestamps are not a global replay cursor. Consumers must reconcile their own durable state and must not assume that reconnecting replays missed events.
