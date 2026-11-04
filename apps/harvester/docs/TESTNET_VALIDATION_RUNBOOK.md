@@ -209,3 +209,14 @@ The engine must retain a known broker order ID even if immediate FILLED-ack exec
 The observed SELL 698745 cancellation follows the Conservative BUY-filled path: cancel the old recovery SELL, reconcile its fills, and wait for a subsequent eligible market event to evaluate a replacement against the new inventory. The supplied cancellation client ID `IR2BlFAQOVPlsCtcQqq2A5` cannot be attributed to Binance `c`, `C`, or a cancel request without the raw execution report; capture both fields in any future evidence. These offline fixes do not authorize live validation.
 
 Exact accounting regression baseline: 9939 = 5 ZRO × 1.792 = 8.96 USDT gross, 0.005 ZRO commission; 9940 = 5 ZRO × 1.789 = 8.945 USDT gross, 0.005 ZRO commission. Combined net base 9.990 ZRO, buy cost/recovery 17.905 USDT, sell proceeds 0, realized net profit -17.905 USDT. Reconcile actual Journal records against these values during the next joint session.
+
+
+### Offline contract checks added during PR #529 review
+
+Canonical `allOrders` history must retain the requested order's exact identity and authoritative status. For the target row, require matching `symbol`, exchange `orderId`, Harvester `clientOrderId`, `side`, supported `type`, recognized non-empty `status`, exact `origQty`, and exact `executedQty` (plus `price` for limit orders). Missing `time`, `updateTime`, and unrelated Binance metadata are optional and must not invalidate an otherwise complete canonical order. A missing or unsupported status must fail closed; it must not silently become an UNKNOWN historical snapshot.
+
+A cursor page may contain orders after the requested `orderId`; filter to the exact exchange order ID before adapting the target row. An absent target row is incomplete history, not proof that the order never existed. Shutdown reconciliation must require exactly one target row and independently match its immutable identity against the Harvester registry.
+
+The offline regression suite also covers fill-history visibility lag: a FILLED acknowledgement with no currently visible trades remains UNKNOWN with the acknowledged broker order ID and zero reconciled quantity; the pair stays paused. Once exact trade history becomes visible, REST reconciliation must match the order's cumulative executed quantity, apply each trade once, and leave the pause in place. Conflicting broker order ID, market, side, or a present-but-different client order ID is rejected before accounting.
+
+These are offline tests only. They do not authorize or substitute for the separately controlled TESTNET validation.
