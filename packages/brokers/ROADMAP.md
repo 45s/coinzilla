@@ -65,9 +65,22 @@ The migration is complete only when all of the following are true:
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
 
+### DDD architecture modernization — accepted, in progress
+
+The goal is to align the broker package with the responsibility boundaries already used by Harvester, without a risky all-at-once directory rewrite.
+
+- [~] Add a package-scoped coverage command and establish the current line/branch baseline before setting thresholds.
+- [ ] Inventory the public broker contract and map current modules into domain policy, application orchestration, and Binance infrastructure responsibilities.
+- [ ] Strengthen public contract and lifecycle/recovery characterization tests before moving implementation.
+- [ ] Refactor one cohesive vertical slice at a time, using strict RED → GREEN → REFACTOR and preserving exports, method signatures, result shapes, decimal strings, event semantics, and recovery acknowledgement behavior.
+- [ ] Set risk-based package coverage thresholds only after reviewing the measured baseline and uncovered critical branches.
+- [ ] Verify broker consumers and run the package, workspace, syntax, and required CI checks.
+
+Do not introduce empty DDD folders or abstractions without a concrete responsibility and a tested behavior. Keep exchange-specific protocol details in Binance infrastructure; keep strategy and bot behavior outside this package.
+
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `674a3b10ed34fb444a9f2ef2179fc073c90b7827` (PR #365).
+1. Re-check the latest `develop` tip at task start and immediately before merge; do not rely on a pinned historical SHA.
 2. PR #333 (`refactor: make Binance broker WebSocket-only`) is merged. It removes `@binance/spot`, the legacy REST broker and listen-key transport, and makes `BinanceWebSocketBroker` the active implementation while retaining the `BinanceSdkBroker` compatibility alias.
 3. PR #333's exact head `c777956cb23b25768f4fbcde866eb22069cfbfb8` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, and Utils Unit Tests. The merge commit's post-merge Unit Tests workflow also passed.
 4. PR #342 makes both Binance TESTNET integration suites require an explicit `BINANCE_TESTNET_INTEGRATION=1` flag as well as non-placeholder credentials. The default test suite verifies that both remain offline when credentials are present but the flag is absent.
