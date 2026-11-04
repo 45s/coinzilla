@@ -1243,6 +1243,53 @@ test("does not complete recovery when SELL fills do not equal the original order
   assert.ok(pauses.includes("SELL_FILL_RECONCILIATION_FAILED"))
 })
 
+test("rejects a late PARTIALLY_FILLED trade update after terminal cancellation", async () => {
+  const { engine, accountedFills } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const canceled = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+        updatedAt: 2,
+      }),
+    },
+  })
+  assert.equal(canceled.ok, true)
+
+  const latePartial = await engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "PARTIALLY_FILLED",
+        executedQuantity: "0.5",
+        updatedAt: 3,
+      }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "late-partial-after-cancel",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+        executedAt: 10,
+      }),
+    },
+  })
+
+  assert.equal(latePartial.ok, false)
+  assert.equal(accountedFills.length, 0)
+  const registeredOrder = engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId)
+  assert.equal(registeredOrder.status, "CANCELED")
+  assert.equal(registeredOrder.executedQuantity.amount, "0")
+})
+
 test("ignores an out-of-order OPEN update after the BUY has already filled", async () => {
   const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
