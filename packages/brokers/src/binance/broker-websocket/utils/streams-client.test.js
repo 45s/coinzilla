@@ -419,32 +419,37 @@ test("rejects malformed LIST_SUBSCRIPTIONS acknowledgements and closes the unrea
 
 test("rejects malformed SUBSCRIBE acknowledgements without activating the stream", async () => {
   const { client, clock, transports } = createClient()
-  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  const first = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0], 0, { result: [] })
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
+
+  const second = client.subscribe("ethusdt@trade", () => {})
   await flush()
   clock.advanceBy(300)
   await flush()
 
   assert.equal(transports[0].sent[1].method, "SUBSCRIBE")
   acknowledge(transports[0], 1, { result: ["unexpected"] })
-  await assert.rejects(subscription, /Malformed Binance Streams SUBSCRIBE acknowledgement/)
-  assert.deepEqual(client.subscriptions, [])
+  await assert.rejects(second, /Malformed Binance Streams SUBSCRIBE acknowledgement/)
+  assert.deepEqual(client.subscriptions, ["btcusdt@aggTrade"])
   assert.equal(client.state, "open")
   await client.disconnect()
 })
 
 test("cleans up a queued stream request when transport send throws", async () => {
   const { client, clock, transports } = createClient()
-  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  const first = client.subscribe("btcusdt@aggTrade", () => {})
   await flush()
-  acknowledge(transports[0], 0, { result: [] })
-  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
 
+  const second = client.subscribe("ethusdt@trade", () => {})
+  await flush()
   transports[0].send = () => { throw new Error("control send failed") }
   clock.advanceBy(300)
-  await assert.rejects(subscription, /control send failed/)
-  assert.deepEqual(client.subscriptions, [])
+  await assert.rejects(second, /control send failed/)
+  assert.deepEqual(client.subscriptions, ["btcusdt@aggTrade"])
   assert.equal(client.state, "open")
   await client.disconnect()
 })
