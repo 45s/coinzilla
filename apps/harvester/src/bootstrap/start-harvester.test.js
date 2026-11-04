@@ -93,7 +93,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     disconnect: async () => calls.push("disconnect"),
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true }),
+    getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getAccountSnapshot: async () => {
@@ -1424,7 +1424,7 @@ test("fails closed when trading is explicitly enabled without selecting a broker
 test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
   const client = {
     connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
     getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
@@ -1524,7 +1524,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
       flush: async () => {
         flushCount += 1
         calls.push("journal:flush:" + flushCount)
-        return flushCount === 1
+        return flushCount < 3
           ? { ok: true, durable: true }
           : { ok: false, errors: [new Error("closing snapshot fsync failed")] }
       },
@@ -1536,7 +1536,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
   await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(flushCount, 2)
+  assert.equal(flushCount, 3)
   assert.equal(snapshots.length, 2)
   assert.equal(snapshots[0].data.phase, "OPENING")
   assert.equal(snapshots[1].data.phase, "CLOSING")
@@ -1553,7 +1553,8 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   let signalOpenOrdersStarted
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
   const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
-  broker.getOpenOrders = async () => {
+  broker.getOpenOrders = async ({ symbol } = {}) => {
+    if (symbol === undefined) return { ok: true, data: [] }
     signalOpenOrdersStarted()
     await openOrdersGate
     return { ok: true }
@@ -1662,6 +1663,10 @@ test("journals OPENING balances before trading and CLOSING balances before broke
 
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
   assert.equal(openingEvent.data.phase, "OPENING")
+  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
+  assert.equal(openOrdersEvent.data.readiness, "READY")
+  assert.equal(openOrdersEvent.data.orderCount, 0)
+  assert.deepEqual(openOrdersEvent.data.orders, [])
   assert.equal(openingEvent.data.auditStatus, "COMPLETE")
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
@@ -1670,7 +1675,7 @@ test("journals OPENING balances before trading and CLOSING balances before broke
   const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
   assert.ok(openingPublishIndex >= 0)
   assert.ok(openingFlushIndex > openingPublishIndex)
-  assert.ok(firstMarketSubscriptionIndex > openingFlushIndex)
+  assert.ok(firstMarketSubscriptionIndex > calls.lastIndexOf("journal:flush"))
 
   await runtime.stop()
 
@@ -1701,4 +1706,88 @@ test("fails startup before market subscriptions when OPENING account snapshot ca
   assert.ok(calls.includes("disconnect"))
   assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+})
+
+
+test("journals account-wide open orders and blocks trading before engine activation when any exist", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  broker.getOpenOrders = async (input = {}) => {
+    calls.push("open-orders:account-wide:" + String(input.symbol))
+    return {
+      ok: true,
+      data: [{
+        clientOrderId: "manual-zro-sell",
+        id: "699694",
+        symbol: "ZROUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        originalPrice: "1.82800000",
+        originalQuantity: "4.98000000",
+        executedQuantity: "0.00000000",
+        status: "NEW",
+      }],
+    }
+  }
+  const eventPublisher = {
+    publish: (event) => { events.push(event); return { ok: true } },
+    flush: async () => ({ ok: true, durable: true }),
+  }
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => ({
+      ...tradingConfig,
+      strategies: {
+        ...tradingConfig.strategies,
+        CG_coinGrabber: {
+          ...tradingConfig.strategies.CG_coinGrabber,
+          pairs: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs,
+            BTCUSDT: { ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT, enabled: true },
+          },
+        },
+      },
+    }),
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    logger: { info() {}, error() {}, debug() {} },
+  }), /startup blocked: account has 1 pre-existing open order/)
+
+  const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
+  const openOrders = events.find((event) => event.name === "account.open_orders_captured")
+  assert.equal(openingBalances.data.phase, "OPENING")
+  assert.equal(openOrders.data.readiness, "BLOCKED")
+  assert.equal(openOrders.data.orderCount, 1)
+  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
+  assert.ok(calls.includes("open-orders:account-wide:undefined"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+  assert.ok(calls.includes("disconnect"))
+})
+
+
+test("fails closed before market subscriptions when the account-wide open-order query fails", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  broker.getOpenOrders = async () => ({
+    ok: false,
+    errors: [new Error("Binance openOrders.status unavailable")],
+  })
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  }), /Unable to load authoritative account-wide open orders/)
+  assert.ok(events.some((event) => event.name === "account.snapshot_captured"))
+  assert.equal(events.some((event) => event.name === "account.open_orders_captured"), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+  assert.ok(calls.includes("disconnect"))
 })
