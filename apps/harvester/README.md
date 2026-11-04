@@ -360,6 +360,7 @@ It loads `apps/harvester/.env.development` and calls Binance Spot TESTNET
 `GET /api/v3/myTrades`. The command is read-only; it does not create or
 cancel orders. It prints every returned trade. Binance limits a response to
 1,000 trades; this command retrieves one page only. If the incident spans more
-than 1,000 executions, paginate from the last returned trade ID before
-treating the result as complete. The local system clock must be synchronized
+than 1,000 executions, request the next page with the optional third argument
+`FROM_ID` (the next trade ID to retrieve), for example:
+`pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000 212336`. The local system clock must be synchronized
 because the signed endpoint validates request timestamps.
