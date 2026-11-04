@@ -53,7 +53,7 @@ Hard operational limits for the first session:
 Run these commands from `apps/harvester` after confirming `.env.development` contains TESTNET-only credentials. These commands read account state; they do not submit or cancel orders.
 
 ```bash
-# Full non-zero account inventory (all assets)
+# Complete account inventory (all exchange-returned assets, including zero balances)
 pnpm run testnet:balances
 
 # Every currently open order on the account (all symbols)
@@ -74,7 +74,7 @@ The trade command accepts an optional third `FROM_ID` argument:
 
 **Never run `pnpm run testnet:cancel-orders` as part of this runbook.** That script cancels every open order across every symbol, including manual/external orders. It violates this runbook's ownership and exact-order cancellation rules. No command in the precondition/baseline procedure is allowed to perform an exchange write.
 
-The account-balance and open-order commands return account-wide state. Preserve every asset/order row and classify pre-existing inventory/orders as external unless separately evidenced as Harvester-owned. The Journal audit is local/read-only and must be run only after graceful shutdown has durably written CLOSING.
+The account-balance command prints every asset row returned by Binance, including zero balances, preserving exact free/locked decimal strings; it also reports the count of non-zero assets. The open-order command returns account-wide state. Preserve every asset/order row and classify pre-existing inventory/orders as external unless separately evidenced as Harvester-owned. The Journal audit is local/read-only and must be run only after graceful shutdown has durably written CLOSING.
 
 ## 4. Account baseline and ownership boundary
 
