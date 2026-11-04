@@ -5,10 +5,10 @@ import {
 } from "./testnet-trade-history-utils.js"
 
 const main = async () => {
-  const { symbol, limit } = parseTradeHistoryArguments({
+  const { symbol, limit, fromId } = parseTradeHistoryArguments({
     args: process.argv.slice(2),
   })
-  const { trades: responseTrades } = await getMyTrades({ symbol, limit })
+  const { trades: responseTrades } = await getMyTrades({ symbol, limit, fromId })
   const { trades } = normalizeTradeHistory({ trades: responseTrades })
 
   console.log(`\nBinance Spot TESTNET — Actual Trades: ${symbol}\n`)
@@ -33,7 +33,7 @@ const main = async () => {
     })),
   )
 
-  console.log(`\nReturned trades: ${trades.length} (requested limit: ${limit})`)
+  console.log(`\nReturned trades: ${trades.length} (requested limit: ${limit}, fromId: ${fromId ?? "not set"})`)
   console.log("Keep these raw rows for exact commission and inventory reconciliation.")
 
 }
