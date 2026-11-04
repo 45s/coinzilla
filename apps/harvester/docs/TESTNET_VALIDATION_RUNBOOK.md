@@ -78,10 +78,10 @@ The account-balance command prints every asset row returned by Binance, includin
 
 ## 4. Account baseline and ownership boundary
 
-Before starting Harvester, collect read-only evidence:
+Before starting Harvester, its trading-enabled startup audit now collects and journals the authoritative account balances and all account-wide open orders automatically. The manual read-only commands in section 3 remain available for ad-hoc diagnosis, but are no longer a required repeated precondition. Preserve the two startup audit events from the same Journal session as the baseline evidence:
 
-- Account balances for every returned asset, including exact free and locked amounts.
-- Open orders across the account, including symbol, order ID, client order ID, side, price, original/executed quantity, status, and time.
+- `account.snapshot_captured`: every returned asset, exact free/locked/total quantities, exchange source timestamp.
+- `account.open_orders_captured`: all account-wide open orders, including symbol, broker/client order IDs, side, type, price, original/executed quantity, status, and observation time.
 - Relevant recent account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp.
 - Any deposits, withdrawals, transfers, conversions, or manual trades relevant to the session window.
 - Account commission setting and timestamp of verification.
@@ -90,14 +90,16 @@ The known account is pre-funded and contains many non-zero assets; the previous 
 
 Record the exact baseline evidence and classify pre-existing orders as external. Do not cancel them as a cleanup shortcut. If an external open order could affect ZROUSDT available balance or ownership attribution, the session is blocked until the operator decides how to handle it.
 
-## 5. OPENING snapshot and startup gate
+## 5. OPENING account audit and startup gate
+
+The account baseline is now captured automatically by Harvester on every trading-enabled startup. You do not need to run `pnpm run testnet:balances` or `pnpm run testnet:orders` manually. Before the engine is activated, Harvester fetches the complete account balance snapshot and account-wide open orders (without a symbol filter), writes both `account.snapshot_captured` and `account.open_orders_captured` to the Journal, and waits for durable flush/fsync. The order event includes all currently open orders and a READY/BLOCKED decision. Any pre-existing open order is currently unowned because durable restart ownership recovery is not implemented; Harvester records it and exits before market subscriptions or order submission. It does not cancel or adopt those orders. A failed or malformed balance/order query, failed event mapping, or failed Journal flush also blocks startup.
 
 1. Start only the agreed TESTNET configuration during the joint session.
 2. Verify the process reports Conservative TESTNET trading enabled, not read-only or production.
 3. Verify broker connection and user-data stream readiness.
-4. Verify the durable OPENING account snapshot is recorded and flushed before the trading engine can activate or market data can trigger an order.
-5. Confirm the OPENING snapshot includes every broker-returned asset with exact free, locked, and total quantities, and that the Journal session ID and timestamp are recorded.
-6. Confirm the Journal contains exactly one valid OPENING endpoint for this session.
+4. Verify the durable OPENING balance snapshot and account-wide open-order snapshot are recorded and flushed before the trading engine or market subscriptions can activate.
+5. Confirm the balance snapshot includes every broker-returned asset with exact free, locked, and total quantities, and that the Journal session ID and source timestamp are recorded.
+6. Confirm `account.open_orders_captured` reports `readiness: READY`, `orderCount: 0`, and an empty `orders` array. If it reports BLOCKED or any open order, Harvester must exit without trading; do not cancel the order as part of startup.
 7. Confirm ZROUSDT market rules, fee configuration, balances, and readiness are accepted. Confirm all other pairs remain disabled.
 
 **Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if readiness is not READY; if any unexpected pair is enabled; or if the process logs an unresolved error.
