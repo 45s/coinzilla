@@ -376,3 +376,11 @@ PR #513 now rejects conflicting duplicate canonical fill records during immediat
 ### TESTNET commission configuration note — 2026-11-04
 
 The Binance Spot TESTNET account initially showed **Commissions: None**. The operator changed the account setting to **0.1% maker & taker** (shown in the later screenshot). Historical incident trades report zero commission; do not retroactively apply 0.1% to them. For future trades, verify the setting is active and reconcile actual per-trade commission amount and asset from Binance. The setting is account-wide across the API keys on that TESTNET account. Harvester must account for actual fees in net-profit and recovery calculations; a configured rate is not a substitute for execution-level commission facts.
+
+### Incident review status — 2026-11-04 (latest PR head)
+
+The latest PR head has **no GitHub Actions workflow runs, check runs, or commit status contexts reported**; this is not a green CI result. Earlier offline test/coverage passes recorded in this document and the PR description belong to an earlier source head and must not be used to claim verification of the latest head. Re-run the required workflow checks after the next code update and record the exact head they cover.
+
+A further fee-policy gap is confirmed by source inspection: Conservative recovery SELL planning calls `calculateSellFeeRate` with `makerPercent` only, although pair configuration also has `takerPercent` and the incident SELL/BUY executions were reported as TAKER. Actual fill commissions are correctly intended to drive Portfolio/RecoveryLedger accounting, but that does not make a maker-only pre-trade reserve safe for a potentially taker execution. Resolve the permitted order/liquidity behavior and reserve against the applicable worst-case maker/taker rate; add regression tests for both roles before TESTNET is considered.
+
+No TESTNET process was started and no orders were submitted during this review. Keep the restart gate closed.
