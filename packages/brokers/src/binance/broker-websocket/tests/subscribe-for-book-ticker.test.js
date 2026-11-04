@@ -14,7 +14,6 @@ function createBroker() {
 }
 
 const validEvent = {
-  e: "bookTicker",
   u: 123,
   s: "BTCUSDT",
   b: "65000.10",
