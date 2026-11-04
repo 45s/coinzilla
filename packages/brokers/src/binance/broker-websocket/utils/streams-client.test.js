@@ -518,6 +518,8 @@ test("retries failed reconnects with bounded exponential backoff", async () => {
   clock.advanceBy(20)
   await flush()
   assert.equal(made.length, 3)
+  clock.advanceBy(270)
+  await flush()
   assert.equal(made[2].sent[0].method, "LIST_SUBSCRIPTIONS")
   acknowledge(made[2], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
