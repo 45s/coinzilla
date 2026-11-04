@@ -371,3 +371,8 @@ because the signed endpoint validates request timestamps.
 ### Follow-up execution-history validation
 
 PR #513 now rejects conflicting duplicate canonical fill records during immediate-FILLED acknowledgement reconciliation. Previously, the path deduplicated by fill ID without comparing payloads; it now pauses the pair if the same ID appears with different Fill.value data. A regression test verifies that no fill is applied before this conflict is rejected.
+
+
+### TESTNET commission configuration note — 2026-11-04
+
+The Binance Spot TESTNET account initially showed **Commissions: None**. The operator changed the account setting to **0.1% maker & taker** (shown in the later screenshot). Historical incident trades report zero commission; do not retroactively apply 0.1% to them. For future trades, verify the setting is active and reconcile actual per-trade commission amount and asset from Binance. The setting is account-wide across the API keys on that TESTNET account. Harvester must account for actual fees in net-profit and recovery calculations; a configured rate is not a substitute for execution-level commission facts.
