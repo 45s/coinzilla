@@ -1061,7 +1061,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
 })
 
 
-test("logs each broker startup stage and key readiness actions", async () => {
+test("logs confirmed broker readiness at info level without debug output", async () => {
   const calls = []
   const broker = createBroker()
   const result = await startHarvester({
@@ -1076,17 +1076,16 @@ test("logs each broker startup stage and key readiness actions", async () => {
     },
   })
 
-  const messages = calls.map(({ message }) => message)
-  assert.ok(messages.includes("Startup step: loading and validating trading configuration"))
-  assert.ok(messages.includes("Startup step: opening Binance WebSocket connection"))
-  assert.ok(messages.includes("Startup step: loading exchange trading rules"))
-  assert.ok(messages.includes("Startup step: opening user-data subscription"))
-  assert.ok(messages.includes("Startup step: loading initial exchange account snapshot"))
-  assert.ok(messages.includes("Startup step: subscribing to market prices"))
-  assert.ok(messages.includes("Binance broker connected"))
-  assert.ok(messages.includes("Binance user-data subscription established"))
-  assert.ok(messages.includes("Exchange account snapshot loaded"))
-  assert.ok(messages.includes("Harvester subscribed to market prices"))
+  const infoMessages = calls.filter(({ level }) => level === "info").map(({ message }) => message)
+  assert.ok(infoMessages.includes("Harvester trading configuration validated"))
+  assert.ok(infoMessages.includes("Binance broker connected"))
+  assert.ok(infoMessages.includes("Exchange trading rules validated"))
+  assert.ok(infoMessages.includes("Binance user-data subscription established"))
+  assert.ok(infoMessages.includes("Exchange account snapshot loaded"))
+  assert.ok(infoMessages.includes("Conservative TESTNET trading engine activated"))
+  assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
+  assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
+  assert.equal(calls.filter(({ level }) => level === "debug").length, 0)
 
   await result.stop()
 })
