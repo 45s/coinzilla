@@ -146,6 +146,8 @@ the output as the full incident ledger. The account's opening baseline remains
 unknown unless an actual pre-run snapshot can be found. Do not infer it from
 the latest account balance or bounded order history.
 
+A further source-review hardening change in PR #513 rejects repeated fill IDs when the duplicate canonical payload differs from the first record. This prevents conflicting execution-history rows from being silently discarded during immediate-FILLED acknowledgement reconciliation; a deterministic regression test asserts the pair pauses before applying any fill.
+
 The trade-history retrieval is still pending operator execution. Harvester
 remains stopped; no further TESTNET orders are authorized until trade-level
 reconciliation, regression checks, and the incident gate are complete.
