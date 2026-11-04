@@ -324,6 +324,17 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
       timestamp: 1,
     },
   })
+  await engine.processBookTicker({
+    symbol: "ZROUSDT",
+    bookTicker: {
+      symbol: "ZROUSDT",
+      bestBidPrice: "0.5",
+      bestBidQuantity: "1",
+      bestAskPrice: "1.5",
+      bestAskQuantity: "1",
+      timestamp: 1,
+    },
+  })
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
     priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
