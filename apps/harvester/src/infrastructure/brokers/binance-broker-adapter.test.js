@@ -18,6 +18,7 @@ const createClient = () => {
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
     subscribeForPrices: async (input) => { calls.push(["subscribeForPrices", input]); return result },
+    subscribeForBookTicker: async (input) => { calls.push(["subscribeForBookTicker", input]); return result },
     subscribeForUserData: async (input) => { calls.push(["subscribeForUserData", input]); return result },
   }
   return { calls, client, result }
