@@ -35,9 +35,15 @@ test("parses the default symbol and maximum limit", () => {
     symbol: "DOGEUSDT",
     limit: 1000,
   })
+  assert.deepEqual(parseTradeHistoryArguments({ args: ["DOGEUSDT", "1000", "212000"] }), {
+    symbol: "DOGEUSDT",
+    limit: 1000,
+    fromId: 212000,
+  })
 })
 
 test("rejects invalid trade-history arguments", () => {
   assert.throws(() => parseTradeHistoryArguments({ args: ["DOGEUSDT", "1001"] }), /between 1 and 1000/)
   assert.throws(() => parseTradeHistoryArguments({ args: ["DOGE/USDT"] }), /Symbol/)
+  assert.throws(() => parseTradeHistoryArguments({ args: ["DOGEUSDT", "100", "-1"] }), /fromId/)
 })
