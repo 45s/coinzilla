@@ -7,6 +7,17 @@ The active Binance implementation is `BinanceWebSocketBroker`. It uses two indep
 
 The package does not use the Binance REST API or a third-party Binance SDK. Do not add REST fallbacks or automatically retry a state-changing request after an uncertain disconnect.
 
+## Package exports
+
+The `@coinzilla/brokers` entry point exports:
+
+- `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
+- `BinanceWebSocketConfig` — validated Binance broker configuration.
+- `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
+- `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
+
+Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
+
 ## Runtime and configuration
 
 - Node.js **22.23.4 or newer** is required. The native transport also checks the bundled Undici version at runtime.
