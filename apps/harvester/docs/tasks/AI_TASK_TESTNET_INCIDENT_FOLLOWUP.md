@@ -107,7 +107,7 @@ Do not execute this package in this PR. Prepare a safe runbook for a separately 
 - [x] OPENING/CLOSING lifecycle and balance-audit failure modes are covered, including duplicate/malformed endpoints, reconciliation failure, and OPENING/CLOSING durability failure.
 - [x] Historical-session eligibility was reviewed: the incident Journal predates OPENING snapshots, so no eligible historical session exists for an actual opening/closing delta audit.
 - [x] TESTNET runbook prerequisites and hard safety gates are documented without executing them.
-- [x] Verified code head passed Harvester 387/387, workspace tests/coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit. [ ] Re-run exact-head CI after the latest documentation-only update.
+- [x] Exact final head passed Harvester 387/387, workspace tests/coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit after the latest documentation-only update.
 - [x] README, ROADMAP, and `docs/TRADING_FIRST.md` reflect verified outcomes and remaining TESTNET gates.
 - [x] Harvester remains stopped; no TESTNET order or account write operation has been performed.
 
@@ -128,6 +128,17 @@ Continue the Harvester follow-up in private GitHub repository `45s/coinzilla`, a
 ## Verified implementation status — 2026-11-04
 
 - Latest fully green code head: `test(harvester): reject late partial fill after cancel` (Harvester 387/387; all required workflows passed).
-- The later documentation-only progress update is undergoing its own exact-head CI run.
+- The latest documentation-only update has passed exact-head CI.
 - PR #515 remains draft. `develop` has advanced with unrelated broker-package and coverage-workflow changes; the follow-up branch must be updated before merge.
 - No TESTNET writes were performed. Harvester remains stopped. Controlled TESTNET validation is explicitly reserved for the user and assistant together.
+
+## Final offline verification — 2026-11-04
+
+- Final exact-head Harvester suite: 387/387 passed, 0 failed.
+- Workspace test coverage: passed, including all package coverage enforcement steps.
+- Utilities unit tests: passed.
+- JavaScript syntax: passed.
+- Workflow lint/actionlint: passed.
+- Production dependency audit: passed.
+- No Harvester process was started and no TESTNET writes were performed.
+- Remaining work is operational only: update the PR branch onto the latest `develop`, merge the offline follow-up when synchronized, then conduct the separate controlled TESTNET session together.
