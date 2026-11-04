@@ -21,6 +21,7 @@ import {
   mapDuplicateFillData,
   mapRecoveryCycleCompletedData,
   mapAccountSnapshotCapturedData,
+  mapAccountOpenOrdersCapturedData,
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
@@ -63,6 +64,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
     RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
     ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
+  ACCOUNT_OPEN_ORDERS_CAPTURED: "account.open_orders_captured",
   })
   assert.equal(HARVESTER_EVENT_SOURCE, "harvester")
   assert.ok(Object.isFrozen(HARVESTER_EVENT_NAMES))
@@ -605,4 +607,51 @@ test("rejects invalid account snapshot phase, decimals, duplicate assets and inc
   assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", snapshot: { sourceTime: 1, balances: [balance] } }).ok, false)
   assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", snapshot: { sourceTime: 1, balances: [balance, balance] } }).ok, false)
   assert.equal(mapAccountSnapshotCapturedData({ phase: "CLOSING", auditStatus: "INCOMPLETE", auditReasons: ["OPEN_ORDERS"], snapshot: { sourceTime: 1, balances: [balance] } }).ok, true)
+})
+
+
+test("maps complete account-wide open orders and blocks trading while any are unowned", () => {
+  const order = {
+    clientOrderId: "manual-order-1",
+    brokerOrderId: "699694",
+    market: { symbol: "ZROUSDT" },
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: { amount: "1.828" },
+    originalQuantity: { amount: "4.98" },
+    executedQuantity: { amount: "0" },
+    status: "NEW",
+  }
+  const result = mapAccountOpenOrdersCapturedData({
+    observedAt: 1793830000000,
+    orders: [order],
+    readiness: "BLOCKED",
+    blockReasons: ["UNOWNED_OPEN_ORDERS:1"],
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      observedAt: 1793830000000,
+      readiness: "BLOCKED",
+      orderCount: 1,
+      orders: [{
+        clientOrderId: "manual-order-1",
+        brokerOrderId: "699694",
+        symbol: "ZROUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "1.828",
+        quantity: "4.98",
+        executedQuantity: "0",
+        status: "NEW",
+      }],
+      blockReasons: ["UNOWNED_OPEN_ORDERS:1"],
+    },
+  })
+  assert.equal(mapAccountOpenOrdersCapturedData({
+    observedAt: 1, orders: [], readiness: "READY",
+  }).ok, true)
+  assert.equal(mapAccountOpenOrdersCapturedData({
+    observedAt: 1, orders: [order], readiness: "READY",
+  }).ok, false)
 })
