@@ -137,3 +137,31 @@ test("resets cycle totals while preserving fill identities for deduplication", (
     true,
   )
 })
+
+
+test("deduplicates equivalent REST and WebSocket fills in either delivery order", () => {
+  const restDelivery = makeFill({
+    tradeId: "binance-trade-10259",
+    quantity: "4.995",
+    quoteQuantity: "9.08",
+  })
+  const websocketDelivery = makeFill({
+    tradeId: "binance-trade-10259",
+    quantity: "4.995",
+    quoteQuantity: "9.08",
+  })
+
+  const restThenWebsocket = RecoveryLedger.empty({ market })
+    .applyFill({ fill: restDelivery }).ledger
+  const duplicateWebsocket = restThenWebsocket.applyFill({ fill: websocketDelivery })
+  assert.equal(duplicateWebsocket.applied, false)
+  assert.equal(duplicateWebsocket.duplicate, true)
+  assert.equal(duplicateWebsocket.ledger.buyCost, restThenWebsocket.buyCost)
+
+  const websocketThenRest = RecoveryLedger.empty({ market })
+    .applyFill({ fill: websocketDelivery }).ledger
+  const duplicateRest = websocketThenRest.applyFill({ fill: restDelivery })
+  assert.equal(duplicateRest.applied, false)
+  assert.equal(duplicateRest.duplicate, true)
+  assert.equal(duplicateRest.ledger.buyCost, websocketThenRest.buyCost)
+})
