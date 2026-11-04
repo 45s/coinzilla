@@ -9,7 +9,7 @@ const tradingConfig = {
   settings: { minProfit: 0.01 },
   strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
   pairs: {
-    BTCUSDT: { enabled: true, orderQuantity: 0.01, makerPercent: 0 },
+    BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
     ETHUSDT: { enabled: false, orderQuantity: 0.1, makerPercent: 0 },
   },
 }
@@ -274,7 +274,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
     ...tradingConfig,
     pairs: {
       BTCUSDT: tradingConfig.pairs.BTCUSDT,
-      ETHUSDT: { enabled: true, orderQuantity: 0.1, makerPercent: 0 },
+      ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
     },
   }
   await assert.rejects(
