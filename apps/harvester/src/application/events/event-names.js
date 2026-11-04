@@ -30,4 +30,5 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
   RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
   ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
+  ACCOUNT_OPEN_ORDERS_CAPTURED: "account.open_orders_captured",
 })
