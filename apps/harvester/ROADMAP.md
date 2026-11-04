@@ -1,19 +1,17 @@
 # Harvester Roadmap
 
-> **CURRENT DIRECTION — 2026-11-04: CONSERVATIVE DOMAIN CONTRACT + INCIDENT FOLLOW-UP.**
+> **CURRENT DIRECTION — 2026-11-04: POST-PR #515 CONTROLLED TESTNET VALIDATION.**
 >
-> Harvester Conservative remains the established standing-order accumulation and capital-recovery strategy. Preserve its documented behavior and keep exchange-specific concerns behind the broker adapter.
+> PR #513 and PR #515 are merged into `develop`. Latest merge: `26fab0c5c22822aa3a8cfa5f851f3e35da37aeb8` — `test(harvester): complete incident lifecycle and audit verification`. The offline lifecycle, accounting, fee-policy, and account-audit implementation/test work is complete. All five required workflows passed on this exact merge commit.
 >
-> **PR #513 is merged into `develop`** (merge commit `d5a0b86df6c5e8a392017a29e233b98e3957c72c`). Its source remediation and exact-head CI are complete. The +0.20730 USDT discrepancy is a historical scope mismatch (+0.20730 across four prior cycles; +0.57065 across all five cycles), and the twelve BUYs were distinct exchange orders whose FILLED acknowledgements preceded application of their fills. The serialized reconciliation barrier, recovery-obligation guard, fail-closed invalid-order handling, worst-case maker/taker fee reservation, durable OPENING/CLOSING snapshots, and read-only per-session balance audit are merged.
+> **The remaining critical milestone is joint Binance Spot TESTNET validation.** Offline CI is not exchange acceptance. Follow [TESTNET_VALIDATION_RUNBOOK.md](./docs/TESTNET_VALIDATION_RUNBOOK.md); keep Harvester stopped during preparation. No order submission/cancellation or account-setting change is authorized until the operator and assistant explicitly begin the joint session.
 >
-> **Current work is PR #515** on `investigate/harvester-lifecycle-audit`. Its branch has been updated onto the merged `develop`. Remaining acceptance work is the deterministic lifecycle/interleaving matrix, end-to-end Portfolio/RecoveryLedger commission and replay invariants, a complete fee-policy caller/rounding audit, and OPENING/CLOSING ordering and audit failure-mode verification. Update this roadmap only when evidence and executed tests support the status.
+> The historical twelve-BUY incident is established: twelve distinct 400 DOGE BUYs at 0.07598 USDT (4,800 DOGE / 364.704 USDT gross), client IDs `h-DOGEUSDT-32` through `h-DOGEUSDT-43`, all TAKER. The confirmed race was FILLED acknowledgements preceding canonical fill application. The merged engine awaits full execution reconciliation before releasing the serialized transition; offline regression coverage includes twelve sequential immediate fills and weighted execution-price references. TAKER execution alone does not explain the repeated BUYs.
 >
-> **Hard safety gate:** Harvester remains stopped. Do not restart it, submit/cancel TESTNET orders, change account settings, or perform exchange write operations in this follow-up. Offline CI is not TESTNET readiness. A future controlled TESTNET run requires a separate explicit authorization after all offline acceptance gates and the ownership/balance audit runbook are complete.
+> Actual TESTNET commission amounts/assets must be reconciled per trade. Historical fills reporting zero commission remain zero; never retroactively apply the later 0.1% setting. Existing account inventory (previous baseline: 517 non-zero assets, including 12,321 free DOGE) is not Harvester-owned by default.
 >
-> **Historical findings are closed unless contradictory evidence appears.** Do not reopen the +0.20730 scope mismatch or twelve-BUY acknowledgement/fill race as unresolved without new evidence.
->
-> Older sections below are historical implementation notes. Where they conflict with this incident status, follow this notice and the current Conservative Domain Specification.
->
+> Older sections below are historical implementation notes. Where they conflict with this current post-merge status, follow this notice and the final handoff section at the end of this roadmap.
+
 ## Strategy-scoped trading configuration
 
 - [~] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
@@ -981,3 +979,20 @@ Harvester remains stopped. No TESTNET write operations have been performed as pa
 - [ ] Verify all five required workflows on the synchronized merge commit, then mark PR ready and merge only when every required check is green.
 
 **Correction:** Earlier entries in this roadmap stating that the GitHub connector could not synchronize the branch are superseded by this completed merge. No TESTNET operations were performed.
+
+
+## Post-PR #515 TESTNET handoff — 2026-11-04
+
+- [x] PR #515 merged into `develop`; merge message: `test(harvester): complete incident lifecycle and audit verification`.
+- [x] Exact merge commit: `26fab0c5c22822aa3a8cfa5f851f3e35da37aeb8`.
+- [x] All five required workflows passed on that exact commit: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, Dependency Audit.
+- [x] Offline lifecycle matrix, accounting/commission invariants, fee-policy audit, and OPENING/CLOSING snapshot/audit failure-mode coverage completed and merged.
+- [x] Runbook audited against current config, scripts, source lifecycle behavior, and CI state. Read-only command reference and explicit 12-BUY stale-reference evidence requirements added.
+- [x] `TRADING_FIRST.md` current incident and implementation status corrected; older pending-PR status explicitly superseded.
+- [ ] Joint TESTNET session: verify TESTNET credentials/environment, live 0.1% maker/taker account setting, current ZROUSDT exchange filters, account baseline/ownership, and durable OPENING snapshot before first write.
+- [ ] During the bounded one-pair/one-cycle session, verify no duplicate/stale same-price BUY, canonical fill reconciliation before next strategy transition, reconciled weighted BUY reference, actual commission amount/asset, Portfolio/RecoveryLedger/Journal agreement, and owned-order limits.
+- [ ] Graceful shutdown, durable COMPLETE CLOSING snapshot, read-only per-session balance audit, and exact account trade-history reconciliation against external activity.
+- [ ] Live partial-fill/cancel/late-event paths not naturally exercised in the bounded session remain NOT OBSERVED; do not mark them TESTNET-proven without a separately bounded and explicitly authorized scenario.
+- [ ] Joint evidence review and explicit acceptance. Until then TESTNET validation remains NOT ACCEPTED and Harvester remains stopped.
+
+**Safety during preparation:** no Harvester process was started; no TESTNET orders were submitted/canceled; no account settings were changed; no exchange write operations were performed.
