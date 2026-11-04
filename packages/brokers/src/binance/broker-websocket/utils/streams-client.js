@@ -264,9 +264,9 @@ export class BinanceStreamsClient {
     }
 
     this.#connectPromise = Promise.resolve().then(() => {
-      removers.push(transport.onMessage((message) => this.#handleMessage(message)))
+      removers.push(transport.onMessage((message) => this.#handleMessage(message, transport)))
       removers.push(transport.onError((error) => this.#reportError(error)))
-      removers.push(transport.onClose((event) => this.#handleClose(event)))
+      removers.push(transport.onClose((event) => this.#handleClose(event, transport)))
       return transport.connect()
     }).then(async () => {
       if (this.#transport !== transport || this.#manualDisconnect) {
@@ -400,7 +400,9 @@ export class BinanceStreamsClient {
     }
   }
 
-  #handleMessage(rawMessage) {
+  #handleMessage(rawMessage, transport) {
+    if (this.#transport !== transport) return
+
     let parsed
     try {
       parsed = parseStreamMessage(rawMessage)
@@ -454,7 +456,8 @@ export class BinanceStreamsClient {
     }
   }
 
-  #handleClose(event) {
+  #handleClose(event, transport) {
+    if (this.#transport !== transport) return
     this.#detachTransportListeners()
     const wasReady = this.#ready
     this.#ready = false

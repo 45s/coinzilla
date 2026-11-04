@@ -603,3 +603,58 @@ test("reports transport-listener cleanup exceptions without interrupting disconn
   assert.deepEqual(errors, ["message listener cleanup failed"])
   assert.equal(client.state, "closed")
 })
+
+
+test("ignores messages already queued by a superseded Streams transport", async () => {
+  const { client, clock, transports } = createClient()
+  const received = []
+  const subscription = client.subscribe("btcusdt@aggTrade", (event) => received.push(event.p))
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  const staleMessage = transports[0].messageListener
+  transports[0].serverClose()
+  clock.advanceBy(10)
+  await flush()
+  clock.advanceBy(290)
+  await flush()
+
+  assert.equal(transports.length, 2)
+  acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
+  await flush()
+
+  staleMessage({ e: "aggTrade", s: "BTCUSDT", p: "stale" })
+  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "fresh" })
+
+  assert.deepEqual(received, ["fresh"])
+  await client.disconnect()
+})
+
+test("ignores a delayed close callback from a superseded Streams transport", async () => {
+  const { client, clock, transports } = createClient()
+  const received = []
+  const subscription = client.subscribe("btcusdt@aggTrade", (event) => received.push(event.p))
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  const staleClose = transports[0].closeListener
+  transports[0].serverClose()
+  clock.advanceBy(10)
+  await flush()
+  clock.advanceBy(290)
+  await flush()
+
+  assert.equal(transports.length, 2)
+  acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
+  await flush()
+  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "before-stale-close" })
+
+  staleClose({ code: 1006, reason: "late close callback", wasClean: false })
+  transports[1].receive({ e: "aggTrade", s: "BTCUSDT", p: "after-stale-close" })
+
+  assert.equal(client.state, "open")
+  assert.deepEqual(received, ["before-stale-close", "after-stale-close"])
+  await client.disconnect()
+})

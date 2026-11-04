@@ -61,34 +61,49 @@ The migration is complete only when all of the following are true:
 - [x] Phase 3 — WebSocket API RPC client; PR #263 merged into `migration/binance-native-ws` (merge commit `cdc2333fdf43e84d4cba2a0814e905472a558b70`).
 - [x] Phase 4 — public WebSocket Streams client; PR #265 merged into `migration/binance-native-ws` (merge commit `b8daae9a5d7df6dd081de8537783ce3976ab7b39`).
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
-- [~] Phase 6 — user-data session lifecycle and recovery; reconnect retry liveness and repeated reconciliation acknowledgement are being hardened after the WebSocket-only migration.
+- [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
-- [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
+- [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete, but opt-in TESTNET verification and long-running recovery/soak validation remain blocked on a configured TESTNET environment and credentials.
 
-### DDD architecture modernization — first tranche complete; recovery hardening continues
+### DDD architecture modernization — first tranche complete; operational verification remains
 
 The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
 
-- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #522 implementation head `7163587568190a4ed4f2b23f08c792e41dd8e1c2`: **83.13% lines, 85.71% branches, 80.55% functions**.
+- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #527 implementation head `7a8e5576d829871f78b221ccbc78ed7f3338f056`: **83.20% lines, 85.79% branches, 80.55% functions**.
 - [x] Codify the architecture boundary in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md): brokers is an infrastructure adapter; Harvester owns portfolio/position domain policy, strategies, and application use cases. Do not create empty `domain/` or `application/` folders in brokers.
-- [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **339/339** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.43%/85.37%/81.03% (lines/branches/functions).
+- [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **343/343** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.47%/85.78%/81.03% (lines/branches/functions). PR #527 also characterizes and prevents late message/close callbacks from superseded Streams transports.
 - [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
+- [x] Complete deterministic user-data lifecycle/recovery characterization. The session suite has 42 offline tests covering uncertain subscription resolution, retries, reconnect races, repeated reconciliation acknowledgement, blocked state-changing operations, stale events, listener rollback, and stale-subscription cleanup. `user-data-session.js` measures 99.37% lines / 90.45% branches / 100.00% functions.
 - [x] Extract focused pure Binance adapters for symbol filters, canonical fills, order history, and order request parameters. Each new adapter has direct tests and 100% line/branch/function coverage.
 - [x] Follow RED → GREEN → REFACTOR for the vertical slices while preserving public exports, method signatures, result envelopes, decimal strings, event semantics, order-safety gates, and reconciliation acknowledgement behavior.
-- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#523 are merged.
+- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#525 are merged.
 - [ ] Set risk-based package coverage thresholds only after the remaining critical recovery/operational branches have been reviewed. Do not impose a blanket percentage target.
 
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
+### Large-file review and scoped refactoring plan
+
+The following files exceed 500 lines. Their size is a review trigger, not a reason for mechanical splitting:
+
+| File | Current technical justification | Scoped follow-up plan |
+|---|---|---|
+| `broker.js` (613 lines) | Public facade coordinates the exchange RPC/Streams clients and preserves result/callback contracts. Pure mappings for symbol filters, canonical fills, order history, and order parameters are already extracted. | Keep simple RPC methods cohesive in the facade. On the next account/history change, first characterize whether account snapshot normalization forms one reusable pure adapter; extract only that responsibility if the tests and callers confirm the boundary. Do not create one wrapper per RPC. |
+| `methods/user-data-session.js` (635 lines) | One stateful lifecycle coordinator owns subscriber state, reconnect/ack timers, remote subscription identity, and listener cleanup. Splitting private methods would fragment one state machine. | Keep state transitions together. A future focused extraction candidate is the duplicated `session.subscriptions` response validation used by uncertain subscribe/unsubscribe resolution; extract it only with direct tests for malformed, ambiguous, empty, and valid states. |
+| `methods/user-data-session.test.js` (1,534 lines) | Lifecycle scenarios share deterministic scheduler, client-port, and broker fixtures. | Split by subscription setup/uncertain outcomes, recovery/acknowledgement, and teardown/cleanup after moving genuinely shared fixtures into `test-helpers`; preserve every assertion and keep each suite offline. |
+| `utils/rpc-client.test.js` (609 lines) | Request/protocol and transport-lifecycle scenarios share one fake transport and deterministic timer setup. | Split request/protocol tests from connection/cleanup tests only after extracting a shared fixture; no runtime changes or weaker assertions. |
+| `utils/streams-client.js` (551 lines) | One stateful coordinator owns desired/active streams, request acknowledgements, reconnect, rotation, and control timers. | Keep the lifecycle class cohesive. Consider extracting the pure raw-event-to-stream matching matrix only if it gains independent consumers or a substantially larger rule set. |
+| `utils/streams-client.test.js` (661 lines after PR #527) | Subscription, reconnect, acknowledgement, and cleanup cases share one FakeTransport/FakeClock fixture. | Split protocol/subscription scenarios from lifecycle/cleanup scenarios after extracting the shared fake fixture; avoid duplicate transport simulation code. |
+
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `18e84da3be2833115dceb9e97b315a2d95c0c472` (PR #523).
-2. The DDD/TDD first tranche is merged through PRs #516–#523: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
-3. Latest package verification: **339/339 broker tests passed**. The exact `pnpm --filter @coinzilla/brokers test:coverage` command passed with **83.13% lines, 85.71% branches, and 80.55% functions**. The new pure adapters report 100% line/branch/function coverage.
-4. Phase 6 remains in progress. Continue deterministic reconnect/reconciliation liveness tests, including repeated acknowledgement, superseded connections, and stale subscription cleanup. A connected socket or successful subscription is never proof that missed events have been reconciled.
-5. Phase 8 remains open for opt-in TESTNET verification and long-running recovery/soak validation. Do not claim replay of events missed during a disconnect unless that behavior is proven.
+1. The source of truth is `develop`; the baseline for PR #527 was merge commit `322a60c0cb1c1f41933539cea5815a601f4a1e25` (PR #525).
+2. The DDD/TDD first tranche is merged through PRs #516–#525: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
+3. Latest package verification on PR #527 implementation head: **343/343 broker tests passed**. The exact `pnpm --filter @coinzilla/brokers test:coverage` command passed with **83.20% lines, 85.79% branches, and 80.55% functions**. The new pure adapters report 100% line/branch/function coverage.
+4. Phase 6 is complete for deterministic offline lifecycle/recovery behavior: 42 session tests cover uncertain subscribe/unsubscribe outcomes, reconnect retry liveness, fresh acknowledgements after each interruption, order gates, and stale cleanup. The package coverage report measures `user-data-session.js` at 99.37% lines / 90.45% branches / 100.00% functions. A connected socket or successful subscription is never proof that missed events have been reconciled.
+5. Phase 8 remains open for opt-in TESTNET verification and long-running recovery/soak validation. The integration suite requires `BINANCE_TESTNET_INTEGRATION=1`, non-placeholder `BINANCE_API_KEY`/`BINANCE_API_SECRET_KEY`, and a TESTNET endpoint; the live-event case additionally requires `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1` and external TESTNET activity. These checks were not run in this offline workstream. Do not claim replay of events missed during a disconnect unless that behavior is proven.
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
+8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
 8. The broker package must not implement bot strategy or portfolio policy. Those remain owned by Harvester/bot application domains; preserve the callback and reconciliation-acknowledgement contract.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
