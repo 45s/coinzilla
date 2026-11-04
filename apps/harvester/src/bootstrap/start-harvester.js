@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
@@ -182,6 +182,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+        const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
+        const nextLedger = result.data.recoveryLedger
         logger.debug?.({
           message: "Harvester accounting execution applied",
           executionId: fill.id,
@@ -189,13 +191,37 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
           symbol: fill.market.symbol,
           applied: result.data.applied,
           duplicate: result.data.duplicate,
-          nextPosition: portfolio.getPosition({ marketId: fill.market.id })?.value ?? null,
-          nextRecoveryLedger: result.data.recoveryLedger.value,
+          nextPosition: nextPosition?.value ?? null,
+          nextRecoveryLedger: nextLedger.value,
           accountingDelta: {
-            buyCost: result.data.recoveryLedger.buyCost,
-            netSellProceeds: result.data.recoveryLedger.netSellProceeds,
-            outstandingRecoveryAmount: result.data.recoveryLedger.outstandingRecoveryAmount,
-            realizedNetProfit: result.data.recoveryLedger.realizedNetProfit,
+            portfolioActiveBase: subtractDecimal({
+              left: nextPosition?.baseQuantity.amount ?? "0",
+              right: previousPosition?.baseQuantity.amount ?? "0",
+            }),
+            portfolioFreeBase: subtractDecimal({
+              left: nextPosition?.freeBaseQuantity.amount ?? "0",
+              right: previousPosition?.freeBaseQuantity.amount ?? "0",
+            }),
+            portfolioQuoteCashFlow: subtractDecimal({
+              left: nextPosition?.quoteNetCashFlow.amount ?? "0",
+              right: previousPosition?.quoteNetCashFlow.amount ?? "0",
+            }),
+            buyCost: subtractDecimal({
+              left: nextLedger.buyCost,
+              right: currentLedger.buyCost,
+            }),
+            netSellProceeds: subtractDecimal({
+              left: nextLedger.netSellProceeds,
+              right: currentLedger.netSellProceeds,
+            }),
+            outstandingRecoveryAmount: subtractDecimal({
+              left: nextLedger.outstandingRecoveryAmount,
+              right: currentLedger.outstandingRecoveryAmount,
+            }),
+            realizedNetProfit: subtractDecimal({
+              left: nextLedger.realizedNetProfit,
+              right: currentLedger.realizedNetProfit,
+            }),
           },
         })
       } else {
