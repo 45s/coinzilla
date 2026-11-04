@@ -646,4 +646,4 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ## Accepted cross-domain capability — Harvester book ticker (#506)
 
-- [~] Expose Binance `bookTicker` through an additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method. Preserve the aggregate-trade `subscribeForPrices` contract. The Harvester consumer uses this stream for fresh best-bid/best-ask POST-ONLY crossing validation. The request is accepted; mark complete after this broker API, deterministic tests, documentation, and required CI are merged and verified.
+- [x] Expose Binance `bookTicker` through the additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method while preserving the aggregate-trade `subscribeForPrices` contract. Broker API, immutable exact-string adapter, deterministic adapter/subscription tests, and README documentation merged in PRs #507 and #510; Harvester's fresh best-bid/best-ask POST-ONLY crossing validation and shutdown coverage merged in PRs #508 and #509.
