@@ -431,3 +431,12 @@ pnpm run journal:balance-audit -- ./logs
 ```
 
 The command groups records by JSONL session and reports exact per-asset free, locked, and total balance deltas. It exits non-zero if a session is missing either snapshot, has duplicate endpoints, or carries an INCOMPLETE closing audit. The command is read-only and never modifies Journal sessions. It deliberately does not convert these deltas into a profit figure; executions, commissions, external transfers, and remaining inventory valuation still require reconciliation.
+
+## Startup account preflight audit
+
+Every connected `pnpm run dev` startup captures the exchange account state before market subscriptions, regardless of whether order execution is enabled. The audit uses the existing broker connection and publishes two durable Journal events in order:
+
+1. `account.snapshot_captured` — all account balances with exact free, locked, and total quantities.
+2. `account.open_orders_captured` — account-wide open orders, including broker/client IDs, symbol, side, type, price, original/executed quantities, and status.
+
+Both events use phase `PREFLIGHT` and each is durably flushed before startup proceeds. Query, publication, or flush failure blocks startup. Existing orders are recorded as unowned and are never adopted, canceled, or modified. Read-only mode can continue after recording a blocked open-order audit; trading-enabled startup remains blocked when any pre-existing open order exists because ownership state is not restored.
