@@ -1510,6 +1510,40 @@ test("emits per-execution debug audit records with commission and before/after a
 })
 
 
+test("disconnects after a CLOSING snapshot durability failure and reports shutdown incomplete", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  let flushCount = 0
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => {
+        flushCount += 1
+        calls.push("journal:flush:" + flushCount)
+        return flushCount === 1
+          ? { ok: true, durable: true }
+          : { ok: false, errors: [new Error("closing snapshot fsync failed")] }
+      },
+    },
+    now: () => 1000,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
+
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(flushCount, 2)
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[0].data.phase, "OPENING")
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+  assert.equal(calls.includes("disconnect"), true)
+})
+
 test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
   const calls = []
   const broker = createBroker(calls)
