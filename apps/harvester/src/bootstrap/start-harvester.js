@@ -181,8 +181,11 @@ export async function startHarvester({
   if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
     throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
   }
-  const tradingEnabled = brokerName !== undefined && brokerName !== "" &&
-    env.HARVESTER_ENABLE_TRADING === "true"
+  const tradingRequested = env.HARVESTER_ENABLE_TRADING === "true"
+  if (tradingRequested && (brokerName === undefined || brokerName === "")) {
+    throw new Error("HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true")
+  }
+  const tradingEnabled = brokerName === "binance" && tradingRequested
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
