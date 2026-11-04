@@ -1507,6 +1507,52 @@ test("serializes market and user-data transitions until a pending SELL is acknow
 })
 
 
+test("serializes concurrent market updates while a trailing BUY cancellation is pending", async () => {
+  let resolveCancellation
+  const cancelOrderGate = { promise: new Promise((resolve) => { resolveCancellation = resolve }) }
+  let signalCancellationStarted
+  const cancellationStarted = new Promise((resolve) => { signalCancellationStarted = resolve })
+  const { engine, orders, cancellationIds } = await createHarness({
+    cancelOrderGate,
+    onCancelOrderStarted: () => signalCancellationStarted(),
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const initialBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+
+  const trailingTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  await cancellationStarted
+  assert.deepEqual(cancellationIds, [initialBuy.brokerOrderId])
+  assert.equal(orders.length, 1)
+
+  const concurrentTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
+  })
+  assert.equal(orders.length, 1)
+
+  resolveCancellation()
+  const [trailingResult, concurrentResult] = await Promise.all([
+    trailingTransition,
+    concurrentTransition,
+  ])
+
+  assert.equal(trailingResult.ok, true)
+  assert.equal(concurrentResult.ok, true)
+  assert.equal(orders.length, 2)
+  assert.deepEqual(cancellationIds, [initialBuy.brokerOrderId])
+  const activeBuys = engine.getOrders().filter((order) =>
+    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeBuys.length, 1)
+  assert.equal(activeBuys[0].status, "OPEN")
+})
+
 test("serializes concurrent market updates while an initial BUY acknowledgement is pending", async () => {
   let resolveAcknowledgement
   const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
