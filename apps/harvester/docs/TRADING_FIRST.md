@@ -112,3 +112,29 @@ At the end of each task, state:
 4. Why any secondary work was necessary to unblock that step.
 5. Exact tests/checks run and their outcomes.
 
+
+
+### 2026-11-04 exchange trade reconciliation update
+
+The operator-provided DOGEUSDT order-history response contained 102 orders
+across 2026-10-28 and 2026-11-04. The 2026-11-04 subset contains 21 FILLED
+BUYs (8,400 DOGE; 635.85200 USDT gross quote) and 5 FILLED SELLs
+(8,390 DOGE; 636.42265 USDT gross quote). Bounded order-history arithmetic is
+therefore +10 DOGE and +0.57065 USDT before commissions. The twelve-order
+burst alone bought 4,800 DOGE for 364.704 USDT; the 5,595-DOGE recovery SELL
+exceeded that burst by 795 DOGE and necessarily consumed earlier accumulated
+inventory too. These are gross exchange order totals, not reconciled Harvester
+PnL or a known free-inventory balance.
+
+A read-only `testnet:trades` diagnostic now retrieves Binance
+`GET /api/v3/myTrades` records with per-trade commission facts. Run the
+single command documented in the README. Correlate each trade's `orderId`
+to order history and the journal; preserve the raw rows. The command retrieves
+one page (up to 1,000 trades), so completeness must be checked before using
+the output as the full incident ledger. The account's opening baseline remains
+unknown unless an actual pre-run snapshot can be found. Do not infer it from
+the latest account balance or bounded order history.
+
+The trade-history retrieval is still pending operator execution. Harvester
+remains stopped; no further TESTNET orders are authorized until trade-level
+reconciliation, regression checks, and the incident gate are complete.
