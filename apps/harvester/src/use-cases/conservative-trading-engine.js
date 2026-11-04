@@ -703,7 +703,11 @@ export function makeConservativeTradingEngine({
         symbol,
         strategyActions: decision.actions,
         executableActions,
-        accountSnapshot: accountSnapshot.value,
+        accountSnapshot: {
+          sourceTime: accountSnapshot.sourceTime,
+          baseFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })?.amount ?? null,
+          quoteFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })?.amount ?? null,
+        },
         quoteCashFlow,
         committedQuote,
         committedBase,
