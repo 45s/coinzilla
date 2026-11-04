@@ -100,16 +100,16 @@ Do not execute this package in this PR. Prepare a safe runbook for a separately 
 
 ## Acceptance criteria
 
-- [ ] All lifecycle/interleaving cases above have deterministic regression coverage.
-- [ ] Portfolio and RecoveryLedger remain atomic and exactly-once across duplicate, partial, out-of-order, cancel/fill, and REST/stream overlap cases.
-- [ ] Base/quote/third-asset commission behavior is explicit, correct, and tested.
-- [ ] Fee policy callers and conservative reserve behavior are verified end to end.
-- [ ] OPENING/CLOSING lifecycle and balance-audit failure modes are covered.
-- [ ] A read-only audit of any available completed historical session is performed where valid opening/closing records exist; otherwise explicitly record that no eligible session exists.
-- [ ] Future TESTNET runbook documents prerequisites and hard safety gates without executing them.
-- [ ] Harvester focused tests, workspace unit tests, coverage thresholds, syntax/agent policy, workflow lint, and production dependency audit pass on the exact PR head.
-- [ ] README, ROADMAP, and `docs/TRADING_FIRST.md` reflect verified outcomes and remaining TESTNET gates.
-- [ ] Harvester remains stopped; no TESTNET order or account write operation is performed.
+- [x] All lifecycle/interleaving cases above have deterministic regression coverage, including immediate FILLED, streamed partials, duplicate/conflicting/out-of-order events, cancel/fill races, REST/stream overlap, pending acknowledgements/cancellations, and shutdown reconciliation.
+- [x] Portfolio and RecoveryLedger remain atomic and exactly-once across duplicate, partial, out-of-order, cancel/fill, and REST/stream overlap cases; multi-fill, cycle-profit, and per-session reconciliation tests pass.
+- [x] Base/quote commission behavior and unsupported third-asset commission rejection are explicit and tested, including combined base/quote fees and replay atomicity.
+- [x] Fee policy callers and conservative reserve behavior are verified end to end; maker/taker percentages are validated in [0,100), USDT pairs reflect 0.1%/0.1%, and FDUSD pairs retain the configured zero-maker policy with 0.1% taker.
+- [x] OPENING/CLOSING lifecycle and balance-audit failure modes are covered, including duplicate/malformed endpoints, reconciliation failure, and OPENING/CLOSING durability failure.
+- [x] Historical-session eligibility was reviewed: the incident Journal predates OPENING snapshots, so no eligible historical session exists for an actual opening/closing delta audit.
+- [x] TESTNET runbook prerequisites and hard safety gates are documented without executing them.
+- [x] Verified code head passed Harvester 387/387, workspace tests/coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit. [ ] Re-run exact-head CI after the latest documentation-only update.
+- [x] README, ROADMAP, and `docs/TRADING_FIRST.md` reflect verified outcomes and remaining TESTNET gates.
+- [x] Harvester remains stopped; no TESTNET order or account write operation has been performed.
 
 ## First actions for the implementing agent
 
@@ -123,4 +123,11 @@ Do not execute this package in this PR. Prepare a safe runbook for a separately 
 
 ## Handoff prompt
 
-Continue the Harvester incident follow-up in private GitHub repository `45s/coinzilla`, application `apps/harvester`, using branch `investigate/harvester-lifecycle-audit` and this task document. PR #513 is already merged into `develop`, and the follow-up branch has already been synchronized with it; verify the current branch relationship rather than repeating the old prerequisite. Do not recreate PR #513 fixes. Complete the deterministic lifecycle overlap matrix, end-to-end Portfolio/RecoveryLedger commission invariants, fee-policy caller audit, and OPENING/CLOSING balance-audit verification described above. Update README, ROADMAP, and `docs/TRADING_FIRST.md`, and deliver small commits with tests and documentation. Run focused and workspace tests plus all required CI; if no local checkout is available, use exact-head CI as the verification gate and state this limitation. Provide a precise status of fixed/verified/unknown blockers. Harvester must remain stopped: do not restart it, submit/cancel TESTNET orders, or perform exchange write operations. Do not claim TESTNET readiness from offline CI alone.
+Continue the Harvester follow-up in private GitHub repository `45s/coinzilla`, application `apps/harvester`, branch `investigate/harvester-lifecycle-audit`, PR #515. PR #513 is merged. The offline lifecycle, Portfolio/RecoveryLedger, fee-policy, and OPENING/CLOSING audit acceptance work is implemented and covered by tests; do not redo completed work. First verify the latest exact-head CI after the documentation updates. Then synchronize this branch with the current `develop` head before merge; intervening develop commits are broker-package and coverage-workflow changes, not Harvester changes. The available GitHub connector cannot perform the branch update, so use GitHub's PR **Update branch** operation if necessary. Keep PR #515 draft until synchronized and exact-head CI is green. Harvester must remain stopped: do not restart it, submit/cancel TESTNET orders, change account settings, or perform exchange writes. After the offline PR is merged, stop and coordinate a separate controlled TESTNET session with the user; offline CI is not TESTNET readiness.
+
+## Verified implementation status — 2026-11-04
+
+- Latest fully green code head: `test(harvester): reject late partial fill after cancel` (Harvester 387/387; all required workflows passed).
+- The later documentation-only progress update is undergoing its own exact-head CI run.
+- PR #515 remains draft. `develop` has advanced with unrelated broker-package and coverage-workflow changes; the follow-up branch must be updated before merge.
+- No TESTNET writes were performed. Harvester remains stopped. Controlled TESTNET validation is explicitly reserved for the user and assistant together.
