@@ -165,8 +165,9 @@ describe("Binance user-data session recovery", () => {
     assert.deepEqual(calls, [["subscribe"], ["unsubscribe", 17]])
     assert.equal(listeners.event.size, 0)
     assert.equal(listeners.error.size, 0)
-    assert.equal(listeners.close.size, 0)
+    assert.equal(listeners.close.size, 1)
     await session.stop()
+    assert.equal(listeners.close.size, 0)
   })
 
   it("retries when a subscribe response arrives after its socket has closed", async () => {
