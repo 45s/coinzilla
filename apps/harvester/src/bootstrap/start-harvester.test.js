@@ -1663,6 +1663,10 @@ test("journals OPENING balances before trading and CLOSING balances before broke
 
   const openingEvent = events.find((event) => event.name === "account.snapshot_captured")
   assert.equal(openingEvent.data.phase, "OPENING")
+  const openOrdersEvent = events.find((event) => event.name === "account.open_orders_captured")
+  assert.equal(openOrdersEvent.data.readiness, "READY")
+  assert.equal(openOrdersEvent.data.orderCount, 0)
+  assert.deepEqual(openOrdersEvent.data.orders, [])
   assert.equal(openingEvent.data.auditStatus, "COMPLETE")
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "BTC"))
   assert.ok(openingEvent.data.balances.some((balance) => balance.asset === "USDT"))
@@ -1671,7 +1675,7 @@ test("journals OPENING balances before trading and CLOSING balances before broke
   const firstMarketSubscriptionIndex = calls.findIndex((call) => call.startsWith("subscribe:book:"))
   assert.ok(openingPublishIndex >= 0)
   assert.ok(openingFlushIndex > openingPublishIndex)
-  assert.ok(firstMarketSubscriptionIndex > openingFlushIndex)
+  assert.ok(firstMarketSubscriptionIndex > calls.lastIndexOf("journal:flush"))
 
   await runtime.stop()
 
@@ -1757,6 +1761,32 @@ test("journals account-wide open orders and blocks trading before engine activat
   assert.equal(openOrders.data.orderCount, 1)
   assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
   assert.ok(calls.includes("open-orders:account-wide:undefined"))
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
+  assert.ok(calls.includes("disconnect"))
+})
+
+
+test("fails closed before market subscriptions when the account-wide open-order query fails", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  broker.getOpenOrders = async () => ({
+    ok: false,
+    errors: [new Error("Binance openOrders.status unavailable")],
+  })
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  }), /Unable to load authoritative account-wide open orders/)
+  assert.ok(events.some((event) => event.name === "account.snapshot_captured"))
+  assert.equal(events.some((event) => event.name === "account.open_orders_captured"), false)
   assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
   assert.ok(calls.includes("disconnect"))
