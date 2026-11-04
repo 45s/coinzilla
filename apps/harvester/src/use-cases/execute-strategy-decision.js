@@ -43,7 +43,7 @@ export function makeExecuteStrategyDecision({
         throw new TypeError("executeStrategyDecision requires canonical market metadata and trading rules")
       }
 
-      const pendingOrders = decision.actions.map((action) => {
+      const pendingOrders = await Promise.all(decision.actions.map(async (action) => {
         const clientOrderId = "h-" + orderIdNamespace + "-" + (++orderSequence)
         const orderIntent = {
           symbol: marketMetadata.market.symbol,
@@ -66,7 +66,7 @@ export function makeExecuteStrategyDecision({
           throw error
         }
         return Object.freeze({ orderIntent, pendingOrder })
-      })
+      }))
 
       const submittedOrders = []
       for (const { orderIntent, pendingOrder } of pendingOrders) {
