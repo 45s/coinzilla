@@ -12,6 +12,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
@@ -2139,4 +2140,82 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
     assert.ok(Number(harness.orders[index].price) < Number(harness.orders[index - 1].price))
   }
   assert.equal(harness.engine.getPausedMarkets().length, 0)
+})
+
+
+test("keeps post-recovery residual active inventory and does not issue another recovery SELL", async () => {
+  const seeded = makeSeededRecoveryState()
+  let currentPortfolio = seeded.portfolio
+  let currentRecoveryLedger = seeded.recoveryLedger
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    accountingApplied: true,
+    getPortfolio: () => currentPortfolio,
+    getRecoveryLedger: () => currentRecoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
+      const portfolioUpdate = currentPortfolio.applyFill({ fill })
+      const ledgerUpdate = currentRecoveryLedger.applyFill({ fill })
+      currentPortfolio = portfolioUpdate.portfolio
+      currentRecoveryLedger = ledgerUpdate.ledger
+      return {
+        ok: true,
+        data: {
+          applied: portfolioUpdate.applied && ledgerUpdate.applied,
+          duplicate: portfolioUpdate.duplicate || ledgerUpdate.duplicate,
+        },
+      }
+    },
+    completeRecoveryCycle: async ({ marketId }) => {
+      const position = currentPortfolio.getPosition({ marketId })
+      const completion = evaluateRecoveryCompletion({
+        sellOrderFullyFilled: true,
+        buyCost: currentRecoveryLedger.buyCost,
+        netSellProceeds: currentRecoveryLedger.netSellProceeds,
+        activeQuantity: position.baseQuantity.amount,
+        keepQuantity: "0.1",
+        minProfit: "0.01",
+      })
+      if (completion.eligible) {
+        currentPortfolio = currentPortfolio.allocateFreeQuantity({
+          marketId,
+          quantity: completion.freeQuantity,
+        })
+        currentRecoveryLedger = currentRecoveryLedger.resetCycle()
+      }
+      return { ok: true, data: completion }
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+  const recoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(recoverySell)
+  const quantity = recoverySell.originalQuantity.amount
+  const price = recoverySell.limitPrice.amount
+  const fill = makeSellFill({
+    order: recoverySell,
+    tradeId: "post-recovery-residual-sell",
+    quantity,
+    quoteQuantity: multiplyDecimal({ left: price, right: quantity }),
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: recoverySell }),
+      fill,
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
+  const position = currentPortfolio.getPosition({ marketId: market.id })
+  assert.equal(position.freeBaseQuantity.amount, "0.1")
+  assert.ok(Number(position.baseQuantity.amount) > 0)
+  const sellOrders = harness.engine.getOrders().filter((order) => order.side === "SELL")
+  assert.equal(sellOrders.length, 1)
+  assert.equal(sellOrders[0].status, "FILLED")
+  assert.deepEqual(harness.pauses, [])
 })
