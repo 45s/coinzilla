@@ -1,7 +1,6 @@
-import { Asset, Market } from "@coinzilla/entities"
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
-import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
+import { adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../shared/index.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
 import { BinanceWebSocketApiClient } from "./utils/rpc-client.js"
 import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
@@ -11,6 +10,7 @@ import { NativeWebSocketTransport } from "./utils/transport.js"
 import { BinanceUserDataSession } from "./methods/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
 import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js"
+import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
 import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
 import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
@@ -350,38 +350,11 @@ export class BinanceWebSocketBroker extends CoreBroker {
       const { symbol } = params
 
       const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol })
-      const symbolMatches = Array.isArray(metadataResponse.data?.symbols)
-        ? metadataResponse.data.symbols.filter((item) => item?.symbol === symbol)
-        : []
-      if (symbolMatches.length !== 1) {
-        throw new Error(`Binance market metadata is missing or ambiguous for ${symbol}`)
-      }
-      const [symbolInfo] = symbolMatches
-      if (
-        typeof symbolInfo.baseAsset !== "string" ||
-        !symbolInfo.baseAsset.trim() ||
-        typeof symbolInfo.quoteAsset !== "string" ||
-        !symbolInfo.quoteAsset.trim()
-      ) {
-        throw new Error(`Binance market metadata is incomplete for ${symbol}`)
-      }
-
-      const baseCode = symbolInfo.baseAsset.trim().toUpperCase()
-      const quoteCode = symbolInfo.quoteAsset.trim().toUpperCase()
-      const market = new Market({
-        venue: "binance",
-        symbol: symbolInfo.symbol,
-        baseAsset: new Asset({ id: baseCode.toLowerCase(), code: baseCode }),
-        quoteAsset: new Asset({ id: quoteCode.toLowerCase(), code: quoteCode }),
-      })
+      const market = createCanonicalFillMarket({ symbol, exchangeInfo: metadataResponse.data })
 
       const tradesResponse = await this.tradingConnection.request("myTrades", params, { signed: true })
-      if (!Array.isArray(tradesResponse.data)) {
-        throw new TypeError("Binance myTrades response should be an array")
-      }
-
       return toResult({
-        data: tradesResponse.data.map((trade) => adaptCanonicalFill({ trade, market })),
+        data: adaptCanonicalFills({ trades: tradesResponse.data, market }),
       })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.getFills()", error })
