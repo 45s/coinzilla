@@ -924,6 +924,7 @@ export async function startHarvester({
         canTrade: () => userDataReady,
         isMarketPriceFresh,
         isMarketBookFresh,
+        logger,
         isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
