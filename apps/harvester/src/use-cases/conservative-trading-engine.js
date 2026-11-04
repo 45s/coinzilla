@@ -84,6 +84,7 @@ export function makeConservativeTradingEngine({
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
   let transitionTail = Promise.resolve()
   let strategyEvaluationSequence = 0
+  let marketPriceEventSequence = 0
   const runTransition = ({ task } = {}) => {
     const current = transitionTail.then(task)
     transitionTail = current.catch(() => undefined)
@@ -104,6 +105,7 @@ export function makeConservativeTradingEngine({
     replacementIntents: new Set(),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(),
+    marketPriceEventIds: new Map(),
   }
   const rememberProcessedFill = ({ fill }) => {
     const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
@@ -585,6 +587,7 @@ export function makeConservativeTradingEngine({
       logger?.debug?.({
         message: "Harvester Conservative evaluation started",
         evaluationId,
+        marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
         symbol,
         marketPrice,
         lastBuyPrice: lastBuyPrice ?? null,
@@ -599,6 +602,7 @@ export function makeConservativeTradingEngine({
       logger?.debug?.({
         message: "Harvester Conservative evaluation decided",
         evaluationId,
+        marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
         symbol,
         action: decision.action,
         reason: decision.reason,
@@ -761,9 +765,37 @@ export function makeConservativeTradingEngine({
     try {
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
+      const marketEventId = ++marketPriceEventSequence
+      const previousPrice = state.prices.get(symbol)
+      const metadata = getMarketMetadata({ symbol })
+      const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
+      logger?.debug?.({
+        message: "Harvester market price event received",
+        marketEventId,
+        symbol,
+        price: price.price,
+        timestamp: price.timestamp,
+        previousPrice: previousPrice ?? null,
+        lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
+        buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+        lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+        activeOrders: activeOrdersBefore.map((order) => order.value),
+        portfolio: getPortfolio().value,
+        recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id })?.value ?? null,
+        paused: state.paused.has(symbol),
+        tradingReady: canTrade({ symbol }),
+      })
       if (!isMarketPriceFresh(price)) {
+        logger?.debug?.({
+          message: "Harvester market price event skipped",
+          marketEventId,
+          symbol,
+          reason: "STALE_MARKET_PRICE",
+          price,
+        })
         return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
       }
+      state.marketPriceEventIds.set(symbol, marketEventId)
       state.prices.set(symbol, price)
       if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
       const metadata = getMarketMetadata({ symbol })
