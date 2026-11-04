@@ -39,9 +39,10 @@ test("reports missing or duplicate snapshot endpoints as incomplete instead of i
     ],
   })
   assert.equal(result.ok, false)
-  assert.equal(result.data.reports[0].auditStatus, "INCOMPLETE")
-  assert.deepEqual(result.data.reports[0].blockers, ["CLOSING_SNAPSHOT_COUNT:0"])
-  assert.deepEqual(result.data.reports[1].blockers, ["OPENING_SNAPSHOT_COUNT:2"])
+  const reports = new Map(result.data.reports.map((report) => [report.session, report]))
+  assert.equal(reports.get("missing-close.jsonl").auditStatus, "INCOMPLETE")
+  assert.deepEqual(reports.get("missing-close.jsonl").blockers, ["CLOSING_SNAPSHOT_COUNT:0"])
+  assert.deepEqual(reports.get("duplicate-open.jsonl").blockers, ["OPENING_SNAPSHOT_COUNT:2"])
 })
 
 test("preserves an INCOMPLETE closing audit and rejects missing snapshot events", () => {

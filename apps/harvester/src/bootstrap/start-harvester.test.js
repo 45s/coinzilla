@@ -1159,12 +1159,14 @@ test("logs readiness at info and traces Conservative strategy input and decision
   assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
   assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
   const debugCalls = calls.filter(({ level }) => level === "debug")
-  const marketEvent = debugCalls.find(({ message }) =>
-    message === "Harvester market price event received")
-  const evaluationStarted = debugCalls.find(({ message }) =>
-    message === "Harvester Conservative evaluation started")
-  const evaluationDecided = debugCalls.find(({ message }) =>
-    message === "Harvester Conservative evaluation decided")
+  const marketEvent = debugCalls.find(({ message, price }) =>
+    message === "Harvester market price event received" && price === "65000.12")
+  const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
+    message === "Harvester Conservative evaluation started" &&
+    marketEventId === marketEvent?.marketEventId)
+  const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
+    message === "Harvester Conservative evaluation decided" &&
+    evaluationId === evaluationStarted?.evaluationId)
   assert.ok(marketEvent)
   assert.ok(evaluationStarted)
   assert.ok(evaluationDecided)
