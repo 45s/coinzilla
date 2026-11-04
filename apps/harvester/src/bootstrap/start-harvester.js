@@ -551,7 +551,7 @@ export async function startHarvester({
         : "Account-wide open-orders audit blocked trading because open orders are unowned",
       orderCount: orders.length,
       readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
-      symbols: [...new Set(orders.map((order) => order.market?.symbol).filter(Boolean))],
+      symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
     if (orders.length > 0) {
       throw new Error(
