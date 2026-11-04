@@ -15,9 +15,7 @@ import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
-    settings: { minProfit: 0.01 },
-    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
-    pairs: { ZROUSDT: { enabled: true } },
+    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: { ZROUSDT: { enabled: true } } } },
   };
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
@@ -51,7 +49,7 @@ test('fails startup when configuration loading or validation fails', async () =>
 test('loads the default validated trading configuration', async () => {
   const context = await startHarvester();
 
-  assert.ok(context.tradingConfig.pairs.ZROUSDT);
+  assert.ok(context.tradingConfig.strategies.CG_coinGrabber.pairs.ZROUSDT);
 });
 
 
@@ -89,9 +87,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
     }),
   ];
   const tradingConfig = {
-    settings: { minProfit: '0.01' },
-    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
-    pairs: {
+    strategies: { CG_coinGrabber: { enabled: true, settings: { minProfit: '0.01', conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {
       ZROUSDT: {
         enabled: true,
         priceStepPercent: 0.5,
@@ -101,7 +97,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
         takerPercent: 0,
         investment: 1000,
       },
-    },
+    } } },
   };
   let accountSnapshotCalls = 0;
   let openOrderSnapshotCalls = 0;

@@ -26,11 +26,15 @@ async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_
 }
 
 const tradingConfig = {
-  settings: { minProfit: 0.01 },
-  strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
-  pairs: {
-    BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
-    ETHUSDT: { enabled: false, orderQuantity: 0.1, makerPercent: 0 },
+  strategies: {
+    CG_coinGrabber: {
+      enabled: true,
+      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      pairs: {
+        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
+        ETHUSDT: { enabled: false, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+      },
+    },
   },
 }
 const createMarketMetadata = (symbol) => {
@@ -152,7 +156,7 @@ test("does not connect a broker unless explicitly selected", async () => {
 test("rejects enabling the deferred Aggressive strategy in trading config", async () => {
   await assert.rejects(
     startHarvester({
-      loadConfig: async () => ({ ...tradingConfig, strategies: { ...tradingConfig.strategies, aggressive: { enabled: true } } }),
+      loadConfig: async () => ({ ...tradingConfig, strategies: { ...tradingConfig.strategies, CG_coinGrabber: { ...tradingConfig.strategies.CG_coinGrabber, settings: { ...tradingConfig.strategies.CG_coinGrabber.settings, aggressive: { enabled: true } } } } }),
       env: binanceEnv,
       brokerAdapterFactory: () => createBroker(),
       logger: { info() {}, error() {} },
@@ -201,8 +205,8 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
     price: "65000.12000000",
     timestamp: 123,
   })
-  assert.equal(strategyCalls[0].pairConfig, tradingConfig.pairs.BTCUSDT)
-  assert.equal(strategyCalls[0].settings, tradingConfig.settings)
+  assert.equal(strategyCalls[0].pairConfig, tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT)
+  assert.equal(strategyCalls[0].settings, tradingConfig.strategies.CG_coinGrabber.settings)
   assert.ok(strategyCalls[0].portfolio instanceof Portfolio)
 
   await result.stop()
@@ -230,8 +234,8 @@ test("uses Conservative by default and passes updated Portfolio after a fill", a
   const decision = await result.processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: { symbol: "BTCUSDT", price: "65000.12", timestamp: 123 },
-    pairConfig: tradingConfig.pairs.BTCUSDT,
-    settings: tradingConfig.settings,
+    pairConfig: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+    settings: tradingConfig.strategies.CG_coinGrabber.settings,
   })
   assert.equal(decision.ok, true)
   assert.equal(decision.data.decision.strategy, "CONSERVATIVE")
@@ -246,8 +250,8 @@ test("uses Conservative by default and passes updated Portfolio after a fill", a
   const nextDecision = await result.processMarketPrice({
     symbol: "BTCUSDT",
     priceEvent: { symbol: "BTCUSDT", price: "65000.12", timestamp: 124 },
-    pairConfig: tradingConfig.pairs.BTCUSDT,
-    settings: tradingConfig.settings,
+    pairConfig: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+    settings: tradingConfig.strategies.CG_coinGrabber.settings,
   })
   assert.equal(nextDecision.data.decision.position.baseQuantity.amount, "0.01")
   await result.stop()
@@ -300,7 +304,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   const config = {
     ...tradingConfig,
     pairs: {
-      BTCUSDT: tradingConfig.pairs.BTCUSDT,
+      BTCUSDT: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
       ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
     },
   }
