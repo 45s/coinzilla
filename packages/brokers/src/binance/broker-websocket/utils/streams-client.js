@@ -28,7 +28,7 @@ function matchesRawStream(stream, message) {
   if (streamType === "trade") return message.e === "trade"
   if (streamType === "miniTicker") return message.e === "24hrMiniTicker"
   if (streamType === "ticker") return message.e === "24hrTicker"
-  if (streamType === "bookTicker") return message.e === "bookTicker"
+  if (streamType === "bookTicker") return message.e === undefined || message.e === "bookTicker"
   if (streamType.startsWith("kline_")) return message.e === "kline" && message.k?.i === streamType.slice(6)
   if (streamType.startsWith("ticker_")) return message.e === `${streamType.slice(7)}Ticker`
   if (streamType.startsWith("depth")) return message.e === "depthUpdate"
