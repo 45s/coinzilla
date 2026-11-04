@@ -526,6 +526,7 @@ export async function startHarvester({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
       dataResult: mapAccountOpenOrdersCapturedData({
+        phase: "OPENING",
         observedAt: now(),
         orders,
         readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",

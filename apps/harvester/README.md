@@ -48,6 +48,10 @@ The engine must not contain Conservative- or Aggressive-specific policy. Strateg
 
 See [Architecture](./docs/architecture.md) for the responsibilities of domain entities, strategy policies, the Trading Engine, use cases, and broker adapters. The selected broker integration is a Harvester-owned application port implemented by an infrastructure adapter around `@coinzilla/brokers`; see [Broker Port and Adapter](./docs/infrastructure/broker-port-and-adapter.md) for the examples and reliability rules. AI coding agents must also follow the [Harvester implementation guidance](./AGENTS.md#required-implementation-style-use-case-factories-and-explicit-composition) and the concrete [use-case implementation pattern](./docs/architecture.md#implementation-pattern-for-use-cases).
 
+### One-shot TESTNET account audit
+
+To capture the current account baseline without restarting Harvester or enabling trading, run `pnpm run testnet:audit` from `apps/harvester`. This read-only command connects to the Binance TESTNET WebSocket API, retrieves all account balances and account-wide open orders, writes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushes both events, and disconnects. It does not subscribe to market/user-data streams, create the trading engine, submit orders, or cancel orders. It requires `HARVESTER_BROKER=binance`, `HARVESTER_TRADING_MODE=testnet`, non-production `NODE_ENV`, TESTNET credentials, and an enabled Journal. Exit code 0 means no open orders were found; exit code 2 means the audit was saved but existing orders make trading readiness BLOCKED; exit code 1 means the audit itself failed.
+
 ### Operational event journal
 
 Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The optional Journal is enabled by default; set `HARVESTER_JOURNAL_ENABLED=false` to disable persistence or `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.

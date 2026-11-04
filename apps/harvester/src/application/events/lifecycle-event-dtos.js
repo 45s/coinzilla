@@ -438,8 +438,9 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 /** Map the complete account-wide open-order snapshot before trading readiness is granted. */
 export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
-    observedAt, orders, readiness, blockReasons = [],
+    phase, observedAt, orders, readiness, blockReasons = [],
   }) => {
+    if (!["OPENING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING or PREFLIGHT")
     if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
       throw new TypeError("observedAt must be a non-negative safe integer")
     }
@@ -494,6 +495,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
       throw new TypeError("BLOCKED open-order audit requires blockReasons")
     }
     return {
+      phase,
       observedAt,
       readiness,
       orderCount: mappedOrders.length,
@@ -507,7 +509,7 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
     phase, snapshot, auditStatus = "COMPLETE", auditReasons = [],
   }) => {
-    if (!["OPENING", "CLOSING"].includes(phase)) throw new TypeError("phase must be OPENING or CLOSING")
+    if (!["OPENING", "CLOSING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, or PREFLIGHT")
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
     if (!snapshot || !Array.isArray(snapshot.balances) || !Number.isSafeInteger(snapshot.sourceTime)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")

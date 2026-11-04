@@ -114,6 +114,16 @@ checks pass.
 - [ ] Verify Harvester tests and repository CI on the feature branch.
 - [ ] After merge, the user only needs to start Harvester; no repeated manual balances/orders output is required. Inspect the Journal automatically for account baseline and open-order audit results.
 
+
+
+## Standalone read-only TESTNET account preflight
+
+- [x] Add `pnpm run testnet:audit` to query account balances and account-wide open orders through the Binance WebSocket API without starting Harvester.
+- [x] Journal and durably flush both account events with phase `PREFLIGHT`; keep the normal Harvester startup gate using phase `OPENING`.
+- [x] Return READY when there are no open orders and BLOCKED (exit code 2) when any pre-existing order is found; never submit or cancel orders.
+- [x] Add offline tests for full balance/order capture, blocked and ready results, TESTNET-only environment validation, query failure, and resource cleanup.
+- [ ] Verify the standalone audit command and full repository CI on this PR head.
+
 ## P0 — Deliver the first working trading cycle
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
