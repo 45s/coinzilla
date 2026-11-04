@@ -862,9 +862,9 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [x] Recovery SELL fee reserve now uses the greater of configured maker and taker percentages; the role and reserved percentage are returned by the pure fee calculator.
 - [x] Replaced the test that explicitly ignored taker fees with tests for zero, maker-higher, taker-higher, equal, and invalid fee inputs.
 - [x] Updated Conservative strategy regression expectation to size a fee-bearing recovery SELL against the higher taker fee.
-- [x] Added structured DEBUG input/result records around every strategy evaluation, including market price, lastBuyPrice, active orders, pair settings, Portfolio snapshot, RecoveryLedger snapshot, and resulting decision/intents.
+- [x] Added structured DEBUG records for every market-price event and correlated Conservative evaluation, including monotonic market/evaluation IDs, current/previous price, lastBuyPrice, reference overrides, active orders, pair settings, readiness/pause state, Portfolio/RecoveryLedger snapshots, decisions and executable intents.
 - [x] Added per-fill accounting DEBUG records before and after applying an execution: trade/execution/order identity, side, price, base/quote quantity, actual commission asset/amount/status, prior Position and RecoveryLedger, applied/duplicate outcome, next Position and ledger, cumulative recovery/profit values. Rejected accounting records include errors and unchanged state.
-- [x] Added a bootstrap regression test asserting the per-fill audit records contain the execution facts and before/after accounting totals.
+- [x] Added regression tests asserting per-fill accounting audit records and correlated market-event/strategy-evaluation traces.
 - [x] Add recovery-completion trace: exact eligibility inputs/result, free-quantity allocation, and pre/post reset state.
 - [ ] Verify actual logger DEBUG visibility/configuration in the local development run; test records prove emission to the injected logger, not that the operator's current logger configuration displays them.
 
