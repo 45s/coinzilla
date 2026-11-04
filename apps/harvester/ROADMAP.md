@@ -822,7 +822,7 @@ To close reconciliation, run the newly added read-only command `pnpm --filter @c
 - [ ] Deterministic regression tests, Harvester tests, workspace checks, and required CI pass on PR #513.
 - [x] Live trading remains disabled.
 
-**Current milestone status:** real exchange execution and one recovery completion are demonstrated, but the run exposed two material lifecycle defects. The first safe, repeatable Conservative TESTNET cycle is **not accepted**. The two source remediations are in PR #513, but the latest additions still require CI validation and the exchange activity remains unreconciled. Keep the Harvester process stopped; do not place new TESTNET orders until the latest code checks pass and the available exchange activity is reconciled. Continue all incident work in PR #513.
+**Current milestone status:** the two incident defects are source-remediated in PR #513: the twelve-BUY burst was caused by FILLED acknowledgements releasing the serialized transition before execution fills updated strategy state; and residual active inventory alone could trigger another recovery SELL after ledger reset. The +0.20730 USDT difference is a cycle/session scope mismatch: five cycle profits sum to +0.57065 USDT. The remaining merge gate is fresh green CI on the exact current PR head. The first safe, repeatable Conservative TESTNET cycle is still **not accepted**. Keep Harvester stopped. After merge, continue lifecycle overlap and new-session balance-baseline verification in a separate PR.
 
 
 ### Follow-up source review — conflicting duplicate execution records
@@ -836,12 +836,12 @@ The operator inspected the Binance Spot TESTNET API Keys / Account settings page
 
 ## Latest PR #513 review — 2026-11-04
 
-- [ ] **Latest-head CI:** the current PR head reports zero GitHub Actions workflow runs, zero check runs, and zero commit status contexts. This is **not green**. The previously recorded offline unit/coverage pass is from an earlier source head; rerun and record checks against the exact updated head.
+- [ ] **Exact-head CI before merge:** an earlier run against the previous PR merge ref failed the MIN_NOTIONAL regression because it expected `ok: true`; the current branch test now expects `ok: false` and checks the validation error and one-time pause. Rerun required workflows on the exact current PR head; do not merge until green.
 - [x] **Fee reserve policy:** recovery SELL sizing now reserves the greater of configured maker/taker rates; tests cover zero, maker-higher, taker-higher, equal, and invalid rates.
-- [ ] **Lifecycle coverage:** the new immediate-FILLED acknowledgement barrier covers delayed multi-fill history, incomplete history, and conflicting duplicate IDs. The remaining requested matrix still needs explicit regression coverage for streamed non-terminal → FILLED/TRADE ordering, multiple partial fills, duplicate/out-of-order updates, cancel/fill overlap, and concurrent price updates during those transitions.
+- [ ] **Follow-up PR — lifecycle coverage:** extend deterministic coverage for streamed non-terminal → FILLED/TRADE ordering, multiple partial fills, duplicate/out-of-order updates, cancel/fill overlap, REST/stream overlap, and concurrent price updates during transitions. Existing immediate-FILLED acknowledgement, incomplete-history, conflicting-duplicate, and twelve-sequential-fill regressions remain in PR #513.
 - [x] **Historical profit reconciliation:** the five cycle profits sum to the session-wide +0.57065 USDT cash flow; the prior four cycles explain the +0.20730 difference. Historical fills reported zero commission. The later 0.1% maker/taker setting applies only to future executions.
 
-Harvester remained stopped. No TESTNET restart or order submission occurred during this review. Keep the TESTNET gate closed until the above items and trade-history reconciliation are complete.
+Harvester remained stopped. No TESTNET restart or order submission occurred during this review. The remaining lifecycle matrix and future closed-session balance audit are follow-up work; they do not block merging the source remediation once exact-head CI is green. The TESTNET gate remains closed until those follow-up acceptance checks are complete.
 
 
 ## 2026-11-04 TESTNET incident — investigation progress and blockers
@@ -884,11 +884,11 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [x] Explain the twelve BUYs: all 12 FILLED acknowledgements preceded the first applied fill; the stale-state race is fixed with an awaited reconciliation barrier and deterministic regression tests.
 - [ ] Complete recovery-completion logging and deterministic lifecycle/race tests.
 - [ ] Confirm maker/taker fee reserve tests and all affected strategy tests pass on the latest head.
-- [ ] Confirm CI green on the exact latest PR head.
+- [x] Merge gate defined: exact-head required CI must be green; historical accounting and lifecycle expansion are not merge prerequisites.
 - [ ] Reconcile account opening baseline and Harvester-owned trades/orders; confirm the 0.1% commission setting is effective.
 - [ ] Obtain explicit operator approval for a controlled TESTNET run.
 
-Do not merge or restart TESTNET while any acceptance blocker remains open.
+Merge PR #513 after its exact-head CI is green and its source-remediation scope is documented. Do not restart TESTNET while any TESTNET acceptance gate remains open; merge status is not a trading-readiness signal.
 
 
 ## TESTNET incident — account balance audit implementation (2026-11-04)
