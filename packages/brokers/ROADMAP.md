@@ -69,23 +69,23 @@ The migration is complete only when all of the following are true:
 
 The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
 
-- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #522 implementation head `7163587568190a4ed4f2b23f08c792e41dd8e1c2`: **83.13% lines, 85.71% branches, 80.55% functions**.
+- [x] Establish and execute the package-scoped coverage command in CI. Latest measured broker package coverage on PR #527 implementation head `7a8e5576d829871f78b221ccbc78ed7f3338f056`: **83.20% lines, 85.79% branches, 80.55% functions**.
 - [x] Codify the architecture boundary in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md): brokers is an infrastructure adapter; Harvester owns portfolio/position domain policy, strategies, and application use cases. Do not create empty `domain/` or `application/` folders in brokers.
-- [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **339/339** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.43%/85.37%/81.03% (lines/branches/functions).
+- [x] Add deterministic RPC/Streams failure-path characterization. The package suite passed **343/343** tests; `rpc-client.js` measures 99.06%/93.39%/94.12% and `streams-client.js` 93.47%/85.78%/81.03% (lines/branches/functions). PR #527 also characterizes and prevents late message/close callbacks from superseded Streams transports.
 - [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
 - [x] Extract focused pure Binance adapters for symbol filters, canonical fills, order history, and order request parameters. Each new adapter has direct tests and 100% line/branch/function coverage.
 - [x] Follow RED → GREEN → REFACTOR for the vertical slices while preserving public exports, method signatures, result envelopes, decimal strings, event semantics, order-safety gates, and reconciliation acknowledgement behavior.
-- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#523 are merged.
+- [x] Verify package/workspace tests, package coverage, JavaScript syntax, actionlint, workflow lint, production dependency audit, and Utils tests on the exact PR heads. PRs #516–#525 are merged.
 - [ ] Set risk-based package coverage thresholds only after the remaining critical recovery/operational branches have been reviewed. Do not impose a blanket percentage target.
 
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
 ### Next action
 
-1. The source of truth is `develop`, currently at merge commit `18e84da3be2833115dceb9e97b315a2d95c0c472` (PR #523).
-2. The DDD/TDD first tranche is merged through PRs #516–#523: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
-3. Latest package verification: **339/339 broker tests passed**. The exact `pnpm --filter @coinzilla/brokers test:coverage` command passed with **83.13% lines, 85.71% branches, and 80.55% functions**. The new pure adapters report 100% line/branch/function coverage.
-4. Phase 6 remains in progress. Continue deterministic reconnect/reconciliation liveness tests, including repeated acknowledgement, superseded connections, and stale subscription cleanup. A connected socket or successful subscription is never proof that missed events have been reconciled.
+1. The source of truth is `develop`; the baseline for PR #527 was merge commit `322a60c0cb1c1f41933539cea5815a601f4a1e25` (PR #525).
+2. The DDD/TDD first tranche is merged through PRs #516–#525: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
+3. Latest package verification on PR #527 implementation head: **343/343 broker tests passed**. The exact `pnpm --filter @coinzilla/brokers test:coverage` command passed with **83.20% lines, 85.79% branches, and 80.55% functions**. The new pure adapters report 100% line/branch/function coverage.
+4. Phase 6 remains in progress. Continue deterministic reconnect/reconciliation liveness tests, including remaining retry-liveness and stale user-data subscription cleanup. PR #527 adds transport-scoped Streams message/close callbacks so delayed callbacks from superseded connections cannot affect the active transport. A connected socket or successful subscription is never proof that missed events have been reconciled.
 5. Phase 8 remains open for opt-in TESTNET verification and long-running recovery/soak validation. Do not claim replay of events missed during a disconnect unless that behavior is proven.
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
