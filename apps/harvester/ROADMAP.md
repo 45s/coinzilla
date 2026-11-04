@@ -1078,6 +1078,16 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.
 
 
+### Binance duplicate-fill timestamp parity — 2026-11-05
+
+- [x] Root cause: Binance WebSocket `executionReport` exposes event publication time `E` and transaction time `T`. REST `myTrades.time` uses transaction time; using `E` for WebSocket canonical fills caused a timestamp mismatch for the same trade identity.
+- [x] WebSocket canonical fills now use transaction time while order-update metadata retains event publication time.
+- [x] Added full REST/WebSocket canonical Fill parity coverage with `E !== T`, plus Portfolio and RecoveryLedger duplicate-delivery tests for both arrival orders.
+- [ ] Merge only after all required CI workflows pass on the synchronized PR head. No TESTNET operations are authorized by this offline fix.
+
+- [x] Feature branch synchronized with the latest `develop` head before final CI verification.
+
+
 ## Automatic startup account audit — 2026-11-05
 
 - [x] Capture and journal account-wide balances on every connected startup, including read-only `pnpm run dev`.
