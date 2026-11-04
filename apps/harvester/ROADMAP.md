@@ -1055,3 +1055,17 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - Added conflicting fill ownership cases for broker order ID, market, side, and client order ID. Added acknowledgement replay checks so an identical acknowledgement is idempotent but changed immutable order intent cannot bypass validation merely because the client/broker IDs match.
 - Current exact PR head `dcf2b63c98306dc149dde970c4710729f223d5f5` passed all five required workflows: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The branch remains synchronized with `develop`.
 - These are offline verification results. Live partial-fill/cancel-race/late-event and post-fix shutdown behavior remain NOT OBSERVED and are reserved for the controlled joint TESTNET session. Harvester remains stopped; no exchange write was performed.
+
+## Binance TESTNET duplicate-fill incident — 2026-11-04
+
+- [x] Root cause identified: Binance execution reports expose both E (event publication time) and T (transaction time). The WebSocket fill adapter previously populated canonical execution time from E; REST myTrades.time uses transaction time. For the same trade, the market-scoped Fill ID matched but the strict Harvester fingerprint differed by 1 ms.
+- [x] Shared broker fix: use T for canonical fill execution time while retaining E as order-update/event metadata. Do not weaken Portfolio or RecoveryLedger duplicate conflict detection.
+- [x] Confirmed ownership behavior: REST myTrades does not include a client order ID. Canonical Fill intentionally omits it on both REST and WebSocket paths. Harvester correlates the WebSocket CanonicalOrder with its in-memory OrderRegistry and matches fills by market, side, and broker order ID; REST reconciliation reconstructs the registered client-order identity before applying recovered fills.
+- [x] Confirmed shared canonical mapping: REST and WebSocket execution facts pass through the same adaptCanonicalFill mapper for trade ID, broker order ID, side, price, base/quote quantities, commission asset/amount, liquidity role, and execution time.
+- [x] Added broker regression coverage comparing complete canonical Fill values from equivalent REST and WebSocket trade representations with E different from T.
+- [x] Added Harvester Portfolio regression coverage for REST-then-WebSocket and WebSocket-then-REST duplicate delivery. Existing tests continue to reject genuinely conflicting facts that reuse a Fill ID.
+- [ ] Verify the new broker and Harvester regressions on the exact PR head via CI; do not infer success from commit creation.
+- [ ] Merge PR #536 only after required checks pass and the branch remains synchronized with develop.
+- [ ] After merge, deploy the fix to TESTNET and perform read-only reconciliation against the operator-provided current balance output before any order-state recommendations.
+
+**Operational hold:** do not restart Harvester, cancel either existing TESTNET order, or submit new orders while the incident is unresolved. The previously reported two orders (SELL 699694, BUY 699695) and the 50 ZRO external account baseline must remain untouched. Wait for the user to provide the current pnpm run testnet:balances output. This source fix and passing offline CI are not authorization to resume trading.
