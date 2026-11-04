@@ -1510,6 +1510,63 @@ test("emits per-execution debug audit records with commission and before/after a
 })
 
 
+test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  broker.placeOrder = async ({ order }) => {
+    calls.push("placeOrder:" + order.side)
+    return {
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "broker-" + order.clientOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+        status: "OPEN",
+        createdAt: 1,
+        acknowledgedAt: 1,
+        updatedAt: 1,
+      }),
+    }
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    now: () => 1000,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "64999",
+    bestBidQuantity: "1",
+    bestAskPrice: "65001",
+    bestAskQuantity: "1",
+    timestamp: 1000,
+  })
+  assert.ok(calls.includes("placeOrder:BUY"))
+
+  await runtime.stop()
+
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
+  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
+  assert.ok(snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"))
+  assert.ok(calls.indexOf("disconnect") > calls.indexOf("account:snapshot"))
+})
+
 test("journals OPENING balances before trading and CLOSING balances before broker disconnect", async () => {
   const calls = []
   const broker = createBroker(calls)
