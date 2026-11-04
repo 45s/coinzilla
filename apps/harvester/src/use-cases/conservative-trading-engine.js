@@ -531,6 +531,19 @@ export function makeConservativeTradingEngine({
       referencePrice,
       priceStepPercent: String(pairConfig.priceStepPercent),
     })
+    logger?.debug?.({
+      message: "Harvester trailing BUY repricing evaluated",
+      marketEventId: state.marketPriceEventIds.get(symbol) ?? null,
+      symbol,
+      activeBuy: activeBuy.value,
+      marketPrice: marketPrice.price,
+      referencePrice,
+      lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
+      buyReferenceOverride: state.buyReferenceOverrides.get(symbol) ?? null,
+      lastAdjustmentPrice: state.lastAdjustmentPrices.get(symbol) ?? null,
+      priceStepPercent: String(pairConfig.priceStepPercent),
+      trigger,
+    })
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
