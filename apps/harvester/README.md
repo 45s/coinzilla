@@ -366,3 +366,8 @@ than 1,000 executions, request the next page with the optional third argument
 `FROM_ID` (the next trade ID to retrieve), for example:
 `pnpm --filter @coinzilla/harvester testnet:trades DOGEUSDT 1000 212336`. The local system clock must be synchronized
 because the signed endpoint validates request timestamps.
+
+
+### Follow-up execution-history validation
+
+PR #513 now rejects conflicting duplicate canonical fill records during immediate-FILLED acknowledgement reconciliation. Previously, the path deduplicated by fill ID without comparing payloads; it now pauses the pair if the same ID appears with different Fill.value data. A regression test verifies that no fill is applied before this conflict is rejected.
