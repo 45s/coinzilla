@@ -54,6 +54,14 @@ test('rejects invalid pair enabled flags, amounts, fees, and precision', () => {
   assert.throws(() => validateTradingConfig(invalidOrderQuantity), /orderQuantity.*greater than 0/);
   const negativeFee = structuredClone(validConfig); strategy(negativeFee).pairs.DOGEUSDT.makerPercent = -0.01;
   assert.throws(() => validateTradingConfig(negativeFee), /makerPercent/);
+  const makerFeeAtUpperBound = structuredClone(validConfig); strategy(makerFeeAtUpperBound).pairs.DOGEUSDT.makerPercent = 100;
+  assert.throws(() => validateTradingConfig(makerFeeAtUpperBound), /makerPercent.*less than 100/);
+  const takerFeeAtUpperBound = structuredClone(validConfig); strategy(takerFeeAtUpperBound).pairs.DOGEUSDT.takerPercent = 100;
+  assert.throws(() => validateTradingConfig(takerFeeAtUpperBound), /takerPercent.*less than 100/);
+  const highestValidFees = structuredClone(validConfig);
+  strategy(highestValidFees).pairs.DOGEUSDT.makerPercent = 99.999;
+  strategy(highestValidFees).pairs.DOGEUSDT.takerPercent = 99.999;
+  assert.equal(validateTradingConfig(highestValidFees), highestValidFees);
   const invalidPrecision = structuredClone(validConfig); strategy(invalidPrecision).pairs.DOGEUSDT.pricePrecision = 1.5;
   assert.throws(() => validateTradingConfig(invalidPrecision), /pricePrecision/);
 });
