@@ -573,7 +573,7 @@ export async function startHarvester({
     if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
     if (typeof eventPublisher?.flush === "function") {
       const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true) {
+      if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
       }
