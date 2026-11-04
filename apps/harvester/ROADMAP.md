@@ -14,9 +14,9 @@
 >
 ## Strategy-scoped trading configuration
 
-- [x] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
-- [x] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
-- [x] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
+- [~] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
+- [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
+- [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
 
 ## Independent operational observability
 
