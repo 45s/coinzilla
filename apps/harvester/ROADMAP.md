@@ -763,6 +763,20 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 - [x] The prior operator order-history summary showed gross BUY quantity `8,400 DOGE` and gross SELL quantity `8,390 DOGE` across the latest 50 DOGEUSDT orders, a net `+10 DOGE` before commissions. This is a bounded history window, not a complete account ledger.
 - [x] A later read-only open-orders command reported no open orders. A separate latest read-only balance snapshot reports 517 non-zero assets; DOGE `12,321.00000000 free / 0 locked`, USDT `9,792.44855000 free / 0 locked`, and FDUSD `9,990.86500000 free / 0 locked`.
 
+
+### Source remediation progress — PR #513
+
+- [x] Add an acknowledgement reconciliation barrier: a terminal FILLED acknowledgement now fetches its complete execution history, validates order identity and cumulative quantity, and applies ordered incremental fills before the current serialized transition can finish.
+- [x] Fail closed and pause the pair when the acknowledgement execution history is unavailable, incomplete, or inconsistent.
+- [x] Require positive outstanding recovery in the Conservative policy before creating a recovery SELL; positive residual active inventory alone is not a recovery obligation after ledger reset.
+- [x] Add deterministic regression coverage for delayed immediate-FILLED acknowledgement reconciliation with multiple executions, incomplete acknowledgement history, and residual active inventory after recovery reset.
+- [ ] Execute the Harvester test suite and coverage locally or in CI; inspect and fix any failures.
+- [ ] Verify required workspace checks and CI are green.
+- [ ] Review duplicate/out-of-order stream overlap, cancellation/fill races, and complete recovery lifecycle regressions against the new barrier.
+- [ ] Reconcile complete exchange trade-level commission facts and establish the limits of the opening-balance baseline.
+
+**Verification status:** source changes and regression tests are committed to this PR, but no test command has been executed in this work session and no CI/status checks have been reported for the latest head. These implementation checkboxes do not satisfy the TESTNET restart gate. Keep the process stopped.
+
 ### Incident A — repeated BUY submissions around immediate FILLED acknowledgements
 
 The twelve BUYs used distinct client IDs, so this is not the client-ID collision addressed by PR #512. The journal ordering shows FILLED broker acknowledgements and subsequent strategy BUY decisions occurring before the corresponding fill-application work had fully caught up. The source inspection found that a FILLED acknowledgement can remove the BUY from the active-order registry before the canonical fill has updated Portfolio/last-buy state; a market transition in that gap can therefore see neither an active BUY nor the reconciled fill and submit another BUY. This is a strongly supported race hypothesis, but it still requires a deterministic test that controls acknowledgement/fill promise ordering and reproduces the burst. A serialized transition queue alone is not sufficient if it does not wait for the associated fill reconciliation barrier.
