@@ -188,7 +188,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] For the first end-to-end proof, use one explicitly enabled TESTNET pair and verify its configured investment/balance limits. Add multi-pair shared-asset allocation after this first cycle works.
 - [ ] Verify post-only rejection, insufficient balance, min-notional, precision, stale price, stream loss, and unknown order outcome all fail safely.
 - [ ] Verify loss protection and Conservative takeover do not force a loss-making sale or operate the same Position concurrently.
-- [ ] Provide a documented, reproducible TESTNET runbook and evidence (logs/journal/test results) for the first successful cycle.
+- [~] Provide a documented, reproducible TESTNET runbook and evidence for the first successful cycle. The runbook exists and partial live TESTNET evidence is recorded below; the recovery SELL fill and next-cycle completion are still missing.
 - [ ] Keep live trading disabled until the user explicitly approves a separate live-trading milestone after TESTNET evidence is reviewed.
 
 ## P1 — Implement Aggressive after Conservative is proven
@@ -703,3 +703,39 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 ### POST-ONLY book-ticker subscription lifecycle regression — 2026-11-04
 
 - [x] Extend the bootstrap shutdown regression to run with Conservative TESTNET trading explicitly enabled and assert that the book-ticker subscription is removed before queued user-data processing drains and before broker disconnect. This closes a test-coverage gap introduced by the book-ticker intake added for POST-ONLY validation; runtime behavior is unchanged.
+
+ 
+## TESTNET live progress — 2026-11-04
+
+This is the latest operator-provided Binance Spot TESTNET evidence and supersedes earlier roadmap/README statements that the process was still waiting for its first price or had not yet submitted a BUY. It records observations only; it does not change the acceptance criteria or claim a complete trading cycle.
+
+### Runtime observations
+
+- [x] Harvester started in Conservative TESTNET mode and subscribed to the enabled DOGEUSDT market.
+- [x] DOGEUSDT market prices were validated and evaluated; both `NO_ACTION` and later `PLACE_ORDERS` decisions were observed.
+- [x] BUY order `1194922` was acknowledged as `NEW`.
+- [x] A later cancellation report for that BUY was received with broker order ID `1194922`, `originalClientOrderId: h-DOGEUSDT-1`, and `clientOrderId: 6vkbmc75fHmEQ6opHmm99R`. Harvester logged `outcome: IGNORED` and `ignored: true`; this event is **not** counted as verified cancellation reconciliation.
+- [x] Replacement BUY order `1195036` was acknowledged and later received a `TRADE` execution report with execution ID `binance:DOGEUSDT:212100`; the event log reported `fillApplied: true`.
+- [x] Following that BUY fill, Harvester submitted and received `NEW` acknowledgements for recovery SELL order `1195057` and standing BUY order `1195058`.
+
+### Later read-only open-orders snapshot
+
+The operator ran `pnpm run testnet:orders` from `apps/harvester`. The returned Binance Spot TESTNET snapshot contained exactly these two open DOGEUSDT orders:
+
+| Exchange order ID | Side | Price | Original quantity | Executed quantity | Status | Client order ID |
+|---:|---|---:|---:|---:|---|---|
+| `1195221` | SELL | `0.07496000` | `1198.00000000` | `0.00000000` | NEW | `h-DOGEUSDT-7` |
+| `1195222` | BUY | `0.07461000` | `400.00000000` | `0.00000000` | NEW | `h-DOGEUSDT-8` |
+
+Total open orders: 2; symbol: DOGEUSDT. This confirms that the exchange currently has both a recovery-side SELL and a standing BUY open. It does not prove either order filled, does not independently prove the SELL quantity is correct for the recorded Portfolio, and does not establish the cancellation/replace event was reconciled correctly inside the running process.
+
+### Interpretation and remaining proof
+
+- The process producing the supplied logs was started before PR #512 was pulled. Its sequential IDs (`h-DOGEUSDT-1` through `-8`) are therefore expected for that old process and do not test PR #512's random per-process namespace. Verify the new ID format only after starting a fresh process with the updated `develop` code.
+- [ ] Verify cancellation/replacement correlation for the ignored CANCELED report using the full TESTNET order-history rows and the matching raw Binance event fields. Do not infer correctness from the `originalClientOrderId` field alone.
+- [ ] Verify the SELL order fills and its actual commissions/proceeds are reconciled into Portfolio/RecoveryLedger.
+- [ ] Verify recovery completion, keepQuantity/free-inventory allocation, and the next cycle's BUY on TESTNET.
+- [ ] Verify the full BUY → fill → SELL → fill → next-cycle sequence, including actual fill accounting and no duplicate submissions.
+- [ ] After restarting on PR #512 or later, verify generated client order IDs use the random namespace and do not collide with prior process IDs.
+
+**Current milestone status:** partial real TESTNET execution demonstrated; the first complete Conservative trading cycle is still **in progress**, not complete. Keep the run bounded to one TESTNET pair and keep live trading disabled.
