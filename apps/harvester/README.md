@@ -336,3 +336,8 @@ status, and client order ID. It is read-only and defaults to the latest 20
 orders for `ZROUSDT`. See
 [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for details
 and diagnostic limitations.
+
+
+### 2026-11-04 TESTNET incident remediation
+
+PR #513 now contains source-level fixes for the two defects recorded in the incident report: FILLED broker acknowledgements are held behind complete execution-history retrieval/application before the serialized strategy transition can finish, and residual active inventory no longer creates a recovery SELL after the recovery ledger has been reset. Deterministic regression tests cover delayed multi-fill acknowledgement reconciliation, incomplete-history fail-closed behavior, and residual inventory after cycle completion. These changes have **not yet been verified by an executed Harvester test run or green CI**. Keep Harvester stopped and do not submit TESTNET orders until the tests/CI pass and the exchange activity is reconciled as required by the incident gate.
