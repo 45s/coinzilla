@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { createBroker, createScheduler } from "../test-helpers/user-data-session-fixtures.js"
+import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
 
 import { BinanceUserDataSession } from "./user-data-session.js"
 
