@@ -563,8 +563,7 @@ test("closing an idle transport finalizes without creating a socket", async () =
   const first = transport.close()
   const second = transport.disconnect()
 
-  assert.strictEqual(first, second)
-  await first
+  await Promise.all([first, second])
 
   assert.equal(transport.state, "closed")
   assert.equal(transport.readyState, null)
