@@ -34,8 +34,11 @@ const marketMetadata = {
   }),
 }
 const tradingConfig = {
-  settings: { minProfit: 0.01 },
-  pairs: {
+  strategies: {
+    CG_coinGrabber: {
+      enabled: true,
+      settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+      pairs: {
     DOGEUSDT: {
       enabled: true,
       investment: 1000,
@@ -44,7 +47,9 @@ const tradingConfig = {
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
+      },
     },
+  },
   },
 }
 

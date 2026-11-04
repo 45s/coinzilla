@@ -183,13 +183,18 @@ export async function startHarvester({
   now = Date.now,
 } = {}) {
   const tradingConfig = await loadConfig(configSource)
-  if (tradingConfig.strategies?.conservative?.enabled !== true) {
-    throw new Error("Conservative strategy must remain enabled in trading config")
+  const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
+  if (strategyConfig?.enabled !== true) {
+    throw new Error("CG_coinGrabber strategy must remain enabled in trading config")
   }
-  if (tradingConfig.strategies?.aggressive?.enabled === true) {
-    throw new Error("Aggressive strategy is disabled and deferred; set strategies.aggressive.enabled=false")
+  if (strategyConfig.settings?.conservative?.enabled !== true) {
+    throw new Error("Conservative strategy must remain enabled in CG_coinGrabber settings")
   }
-  const enabledSymbols = Object.entries(tradingConfig.pairs)
+  if (strategyConfig.settings?.aggressive?.enabled === true) {
+    throw new Error("Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false")
+  }
+  const { settings, pairs } = strategyConfig
+  const enabledSymbols = Object.entries(pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
   const brokerName = env.HARVESTER_BROKER
@@ -370,7 +375,7 @@ export async function startHarvester({
   }
 
   try {
-    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
+    for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
 
       const filtersResult = await broker.getSymbolFilters({ symbol })
@@ -761,7 +766,7 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
       }
 
-      const enabledPairs = Object.entries(tradingConfig.pairs).filter(([, pairConfig]) => pairConfig.enabled)
+      const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
       if (enabledPairs.length !== 1) {
         throw new Error("The first Conservative TESTNET trading cycle requires exactly one enabled pair")
       }
@@ -799,7 +804,7 @@ export async function startHarvester({
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
     }
 
-    for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
+    for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
       if (tradingEnabled) {
         let bookResult
@@ -848,7 +853,7 @@ export async function startHarvester({
             symbol,
             priceEvent,
             pairConfig,
-            settings: tradingConfig.settings,
+            settings: settings,
           })).then((processed) => {
           if (!processed.ok) {
             reportPriceError({ symbol, errors: processed.errors })
@@ -936,7 +941,7 @@ export async function startHarvester({
             symbol,
             priceEvent,
             pairConfig,
-            settings: tradingConfig.settings,
+            settings: settings,
           })
           if (!processed.ok) {
             reportPriceError({ symbol, errors: processed.errors })

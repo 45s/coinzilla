@@ -67,6 +67,8 @@ export function makeConservativeTradingEngine({
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
 } = {}) {
+  const strategyConfig = tradingConfig.strategies.CG_coinGrabber
+  const { settings, pairs } = strategyConfig
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
     throw new TypeError("strategyPolicy must provide evaluate and evaluateTrailingBuyRepricing functions")
@@ -415,7 +417,7 @@ export function makeConservativeTradingEngine({
 
   const maybeReplaceTrailingBuy = async ({ symbol, marketPrice } = {}) => {
     const metadata = getMarketMetadata({ symbol })
-    const pairConfig = tradingConfig.pairs[symbol]
+    const pairConfig = pairs[symbol]
     const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .find((order) => order.side === "BUY")
     if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatestTransition({ symbol })
@@ -466,8 +468,8 @@ export function makeConservativeTradingEngine({
       const metadata = getMarketMetadata({ symbol })
       const decision = strategyPolicy.evaluate({
         marketPrice,
-        pairConfig: tradingConfig.pairs[symbol],
-        settings: tradingConfig.settings,
+        pairConfig: pairs[symbol],
+        settings: settings,
         portfolio: getPortfolio(),
         recoveryLedger: getRecoveryLedger({ marketId: metadata.market.id }),
         marketMetadata: metadata,
@@ -763,8 +765,8 @@ export function makeConservativeTradingEngine({
         }
         const completion = await completeRecoveryCycle({
           marketId: order.market.id,
-          keepQuantity: String(tradingConfig.pairs[symbol].keepQuantity),
-          minProfit: String(tradingConfig.settings.minProfit),
+          keepQuantity: String(pairs[symbol].keepQuantity),
+          minProfit: String(settings.minProfit),
         })
         if (!completion?.ok || !completion.data?.eligible) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
