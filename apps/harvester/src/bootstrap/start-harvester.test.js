@@ -44,8 +44,16 @@ const tradingConfig = {
       enabled: true,
       settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
-        ETHUSDT: { enabled: false, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
+        BTCUSDT: {
+          enabled: true, investment: 100, orderQuantity: 0.01, keepQuantity: 0.001,
+          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
+          makerPercent: 0, takerPercent: 0,
+        },
+        ETHUSDT: {
+          enabled: false, investment: 100, orderQuantity: 0.1, keepQuantity: 0.001,
+          priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
+          makerPercent: 0, takerPercent: 0,
+        },
       },
     },
   },
