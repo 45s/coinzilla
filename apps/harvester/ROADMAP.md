@@ -699,3 +699,7 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [x] Remove combined observed commission-rate state and use configured `makerPercent` directly for Conservative recovery SELL planning. No MAKER/TAKER histories or maximum-observed-rate tracking. Merged in PR #489.
 - [x] Add focused offline tests for zero/non-zero `makerPercent`, independence from `takerPercent`, shared order-type selection, actual BUY-fee inclusion in recovery SELL planning, and cycle-reset deduplication. Existing actual SELL-fee accounting tests remain in place; Aggressive order planning is deferred while the strategy returns `NO_ACTION`.
 - [x] Verify deterministic CI and update implementation status. PR #489 passed required checks; no TESTNET verification is implied by this documentation decision.
+
+### POST-ONLY book-ticker subscription lifecycle regression — 2026-11-04
+
+- [x] Extend the bootstrap shutdown regression to run with Conservative TESTNET trading explicitly enabled and assert that the book-ticker subscription is removed before queued user-data processing drains and before broker disconnect. This closes a test-coverage gap introduced by the book-ticker intake added for POST-ONLY validation; runtime behavior is unchanged.
