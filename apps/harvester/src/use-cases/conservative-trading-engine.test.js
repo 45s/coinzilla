@@ -1464,6 +1464,52 @@ test("serializes market and user-data transitions until a pending SELL is acknow
 })
 
 
+test("serializes concurrent market updates while an initial BUY acknowledgement is pending", async () => {
+  let resolveAcknowledgement
+  const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
+  let signalBuySubmission
+  const buySubmissionStarted = new Promise((resolve) => { signalBuySubmission = resolve })
+  const { engine, orders } = await createHarness({
+    placeOrderGate,
+    deferOrderSide: "BUY",
+    onPlaceOrderStarted: ({ order }) => {
+      if (order.side === "BUY") signalBuySubmission()
+    },
+  })
+
+  const initial = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await buySubmissionStarted
+  const pendingBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.equal(pendingBuy.status, "PENDING")
+  assert.equal(pendingBuy.brokerOrderId, undefined)
+
+  const concurrentUpdates = [
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
+    }),
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 3 },
+    }),
+  ]
+  assert.equal(orders.length, 1)
+  assert.equal(engine.getOrders().filter((order) => order.side === "BUY").length, 1)
+
+  resolveAcknowledgement()
+  const results = await Promise.all([initial, ...concurrentUpdates])
+
+  assert.ok(results.every((result) => result.ok))
+  assert.equal(orders.length, 1)
+  const activeOrders = engine.getOrders().filter((order) =>
+    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map((order) => order.side), ["BUY"])
+  assert.equal(activeOrders[0].status, "OPEN")
+})
+
 test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
   const seeded = makeSeededRecoveryState()
   const { engine, orders, cancellationIds, pauses } = await createHarness({
