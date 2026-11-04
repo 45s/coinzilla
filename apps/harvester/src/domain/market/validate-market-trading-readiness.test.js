@@ -104,6 +104,16 @@ test("rejects mismatched market, rules, and invalid configuration", () => {
   }), /makerPercent/)
   assert.throws(() => validateMarketTradingReadiness({
     symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, makerPercent: 100 },
+    marketMetadata: makeMetadata(),
+  }), /makerPercent/)
+  assert.throws(() => validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
+    pairConfig: { ...pairConfig, takerPercent: 100 },
+    marketMetadata: makeMetadata(),
+  }), /takerPercent/)
+  assert.throws(() => validateMarketTradingReadiness({
+    symbol: "DOGEUSDT",
     pairConfig,
     marketMetadata: {},
   }), /canonical Market/)
