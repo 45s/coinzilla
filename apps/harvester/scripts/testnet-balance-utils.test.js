@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { getNonZeroBalances } from "./testnet-balance-utils.js"
+import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-utils.js"
 
 test("getNonZeroBalances returns only assets with free or locked funds", () => {
   const { balances } = getNonZeroBalances({
@@ -32,4 +32,29 @@ test("getNonZeroBalances rejects malformed account balances", () => {
     /invalid asset balance/,
   )
   assert.throws(() => getNonZeroBalances({ balances: null }), /must be an array/)
+})
+
+test("normalizeAccountBalances preserves every exchange row including zero balances", () => {
+  const { balances } = normalizeAccountBalances({
+    balances: [
+      { asset: "ZRO", free: "249.85000000", locked: "0.00000000" },
+      { asset: "USDT", free: "0.00000000", locked: "12.50000000" },
+      { asset: "DOGE", free: "0.00000000", locked: "0.00000000" },
+    ],
+  })
+
+  assert.deepEqual(balances, [
+    { asset: "ZRO", free: "249.85000000", locked: "0.00000000" },
+    { asset: "USDT", free: "0.00000000", locked: "12.50000000" },
+    { asset: "DOGE", free: "0.00000000", locked: "0.00000000" },
+  ])
+})
+
+test("normalizeAccountBalances rejects malformed rows even when their balances are zero", () => {
+  assert.throws(
+    () => normalizeAccountBalances({
+      balances: [{ asset: "DOGE", free: "0.00000000", locked: "invalid" }],
+    }),
+    /invalid asset balance/,
+  )
 })

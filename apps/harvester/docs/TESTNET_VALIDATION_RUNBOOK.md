@@ -48,7 +48,35 @@ Hard operational limits for the first session:
 8. Verify the read-only `journal:balance-audit` and `testnet:trades` diagnostics are available. Do not execute any write-capable script as a precondition.
 9. Agree the session's start time, operator, assistant, exact symbol, quote/base limits, order-count limit, and stop conditions. If any limit is not explicit, do not start.
 
-## 3. Account baseline and ownership boundary
+## 3. Read-only command reference
+
+Run these commands from `apps/harvester` after confirming `.env.development` contains TESTNET-only credentials. These commands read account state; they do not submit or cancel orders.
+
+```bash
+# Complete account inventory (all exchange-returned assets, including zero balances)
+pnpm run testnet:balances
+
+# Every currently open order on the account (all symbols)
+pnpm run testnet:orders
+
+# Recent ZROUSDT order history (up to 1,000 orders)
+pnpm run testnet:history ZROUSDT 1000
+
+# Actual ZROUSDT trades with trade IDs and actual commission facts (up to 1,000 rows)
+pnpm run testnet:trades ZROUSDT 1000
+
+# Audit the closed Journal session; default directory is ./logs from apps/harvester
+pnpm run journal:balance-audit -- logs
+```
+
+The trade command accepts an optional third `FROM_ID` argument:
+`pnpm run testnet:trades ZROUSDT 1000 FROM_ID`. If exactly 1,000 rows are returned, retrieve subsequent pages using the next page's first uncollected trade ID (last returned trade ID + 1), preserve every page, and verify there are no gaps or duplicates. A response shorter than the requested limit is not, by itself, proof that all historical account trades were retrieved; bound the query to the session time window and compare against order history and Journal evidence. The order-history command has no cursor argument; use it for recent order inspection, not as a substitute for complete trade-history pagination.
+
+**Never run `pnpm run testnet:cancel-orders` as part of this runbook.** That script cancels every open order across every symbol, including manual/external orders. It violates this runbook's ownership and exact-order cancellation rules. No command in the precondition/baseline procedure is allowed to perform an exchange write.
+
+The account-balance command prints every asset row returned by Binance, including zero balances, preserving exact free/locked decimal strings; it also reports the count of non-zero assets. The open-order command returns account-wide state. Preserve every asset/order row and classify pre-existing inventory/orders as external unless separately evidenced as Harvester-owned. The Journal audit is local/read-only and must be run only after graceful shutdown has durably written CLOSING.
+
+## 4. Account baseline and ownership boundary
 
 Before starting Harvester, collect read-only evidence:
 
@@ -62,7 +90,7 @@ The known account is pre-funded and contains many non-zero assets; the previous 
 
 Record the exact baseline evidence and classify pre-existing orders as external. Do not cancel them as a cleanup shortcut. If an external open order could affect ZROUSDT available balance or ownership attribution, the session is blocked until the operator decides how to handle it.
 
-## 4. OPENING snapshot and startup gate
+## 5. OPENING snapshot and startup gate
 
 1. Start only the agreed TESTNET configuration during the joint session.
 2. Verify the process reports Conservative TESTNET trading enabled, not read-only or production.
@@ -74,23 +102,24 @@ Record the exact baseline evidence and classify pre-existing orders as external.
 
 **Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if readiness is not READY; if any unexpected pair is enabled; or if the process logs an unresolved error.
 
-## 5. Controlled order and execution sequence
+## 6. Controlled order and execution sequence
 
 The operator and assistant explicitly authorize each phase together. Do not treat this document as standing authorization.
 
 1. Observe the initial market price and calculated BUY intent. Verify symbol, side, order type, price tick, quantity step, notional, investment cap, client order ID, and post-only constraints before allowing submission.
 2. Verify the exchange acknowledgement and correlate it to the exact client order ID and exchange order ID. There must be no duplicate active BUY.
+2a. **Specific regression-race observation:** record each strategy evaluation ID, order intent/client order ID, BUY limit price, `lastBuyPrice` before evaluation, canonical fill trade IDs, and the weighted execution price after reconciliation. A new BUY decision must not use the previous market price or an un-reconciled/empty reference after the preceding BUY has been acknowledged FILLED. A later BUY must be based on the preceding reconciled weighted execution price. If a second BUY is submitted while the prior FILLED acknowledgement's execution history is still being fetched/applied, or if the same BUY price is resubmitted from stale state, abort immediately and preserve evidence. Do not deliberately create twelve live orders to test this; the offline twelve-sequential-immediate-fill regression already exercises twelve transitions at a fixed market input, and the live session is bounded to one recovery cycle.
 3. Reconcile every execution report against REST order/trade history. For every fill, record trade ID, order ID, client order ID, side, price, base quantity, quote quantity, commission amount/asset/status, and event time.
 4. Verify Portfolio and RecoveryLedger are updated exactly once for each canonical fill. Base-asset commissions affect net base inventory; quote-asset commissions affect net quote cash flow. Unknown, malformed, or unsupported third-asset commission data must fail closed; never estimate realized fees from the configured percentage.
 5. Verify the next standing BUY and recovery SELL are consistent with the reconciled fills, outstanding recovery amount, fee reserve, tick/quantity rules, available balances, and the one-BUY/one-SELL limit.
 6. If a BUY fills while a recovery SELL is open, verify cancellation is limited to that identified owned SELL. Wait for the cancellation acknowledgement and reconcile any fills that raced with cancellation before allowing a replacement SELL.
-7. Verify partial fills and multiple fills are accumulated by unique trade ID and exact decimal arithmetic. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause.
+7. Verify any partial fills and multiple fills that occur are accumulated by unique trade ID and exact decimal arithmetic. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
 8. After the recovery SELL is fully filled, verify actual net proceeds, commissions, recovery completion, realized net profit, and allocation of exactly 0.01 ZRO to free inventory. Any additional residual must remain correctly classified; it must not create a new recovery SELL after the ledger is reset.
 9. Stop after the first completed recovery cycle. Do not allow another cycle without a separate explicit decision.
 
 Expected result: one complete controlled BUY/fill → recovery SELL/fill → recovery completion, with a single active next BUY only if the agreed scenario requires it and the operator explicitly elects to leave it open. Otherwise, the session must finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.
 
-## 6. Reconciliation during and after execution
+## 7. Reconciliation during and after execution
 
 For each order, reconcile the user-data stream with REST order status and complete trade history. Do not infer fills solely from cumulative order status. Use exchange trade IDs as execution identity and verify each trade is applied once.
 
@@ -105,7 +134,7 @@ Reconcile these projections independently:
 
 Portfolio/RecoveryLedger agreement does not by itself prove account-wide reconciliation. Account balance deltas do not by themselves prove PnL. Explain every difference using exact trade/commission facts, locked funds, open orders, external activity, and remaining inventory.
 
-## 7. Graceful CLOSING and balance audit
+## 8. Graceful CLOSING and balance audit
 
 1. During the joint session, agree whether any final Harvester-owned order must remain open. Prefer no outstanding owned orders for the first closed-session audit.
 2. If an order must be canceled, authorize that exact order only, wait for the terminal acknowledgement, and reconcile all fills including cancel/fill races. Never use cancel-all.
@@ -116,7 +145,7 @@ Portfolio/RecoveryLedger agreement does not by itself prove account-wide reconci
 7. Retrieve complete TESTNET trade history for the session window and verify pagination/completeness. Correlate every trade with the order journal and commission facts. Preserve raw read-only evidence securely.
 8. Reconcile per-asset balance deltas against executions, commissions, open/locked orders, and external account activity. Reconcile cycle profit against exact Portfolio cash flow and RecoveryLedger totals. No unexplained residual is accepted.
 
-## 8. Abort conditions
+## 9. Abort conditions
 
 Immediately stop new order intake and do not restart or resubmit if any of the following occurs:
 
@@ -124,7 +153,7 @@ Immediately stop new order intake and do not restart or resubmit if any of the f
 - OPENING snapshot or durable Journal flush missing/invalid.
 - More than one Harvester process or an unknown process can trade the account.
 - Unexpected open order, unknown client order ID, or order not attributable to Harvester.
-- More than one active BUY or one active recovery SELL, or any order beyond the agreed cap.
+- More than one active BUY or one active recovery SELL, any second BUY submitted before the prior FILLED acknowledgement is fully reconciled, any repeated same-price BUY attributable to stale strategy state, or any order beyond the agreed cap.
 - Order submission has an unknown outcome, acknowledgement identity mismatch, or duplicate active order.
 - User-data disconnect, readiness loss, stale market data, or broker REST failure.
 - Partial-fill/cancel race, REST/stream disagreement, missing trade IDs, conflicting duplicate facts, or incomplete execution history.
@@ -135,7 +164,7 @@ Immediately stop new order intake and do not restart or resubmit if any of the f
 
 On abort: do not blindly retry or restart. Preserve logs and read-only exchange evidence; identify all Harvester-owned orders by exact IDs; determine whether any submission/fill is unresolved; and agree the smallest safe recovery action before any cancellation or new order. A process stop does not cancel exchange orders.
 
-## 9. Evidence checklist
+## 10. Evidence checklist
 
 Capture and retain, with secrets redacted:
 
@@ -155,11 +184,11 @@ Capture and retain, with secrets redacted:
 
 Redact API keys, signatures, secrets, and sensitive account identifiers. Do not upload credentials or signed requests.
 
-## 10. Final acceptance
+## 11. Final acceptance
 
 The controlled TESTNET session passes only when:
 
-- Exactly the agreed one-pair/one-cycle limits were respected.
+- Exactly the agreed one-pair/one-cycle limits were respected, with no duplicate/stale same-price BUY burst and every subsequent BUY reference derived from the preceding reconciled weighted fill price.
 - Every order and trade is attributable and reconciled.
 - Actual commissions are accounted for exactly.
 - Portfolio, RecoveryLedger, Journal, and exchange execution facts agree.
