@@ -161,6 +161,42 @@ Binance Spot TESTNET account settings previously showed **Commissions: None**. T
 
 The latest PR head currently has no reported GitHub Actions runs, check runs, or commit status contexts. This is not a green CI result; earlier offline test/coverage passes refer to a prior head. Re-run the complete required CI after the next source changes and verify it covers the exact latest PR head.
 
-Source review found that recovery SELL fee reservation currently derives only from `makerPercent`, despite `takerPercent` being configured and the incident executions being classified as TAKER. Actual commissions are used by fill accounting, but pre-trade recovery sizing must also account for the applicable liquidity role or a conservative worst-case rate. Add maker/taker fee-sizing regression tests. The lifecycle regression suite also still needs explicit streamed partial/final, duplicate/out-of-order, cancel/fill race, and concurrent-market-update boundaries.
+Source review found that recovery SELL fee reservation previously derived only from `makerPercent`, despite `takerPercent` being configured and the incident executions being classified as TAKER. PR #513 now reserves the higher configured maker/taker rate and replaces the old test that explicitly ignored taker fees. Actual commissions remain authoritative for realized fill accounting. The lifecycle regression suite also still needs explicit streamed partial/final, duplicate/out-of-order, cancel/fill race, and concurrent-market-update boundaries.
 
 Do not restart Harvester or submit TESTNET orders until fee sizing, lifecycle coverage, latest-head CI, and historical trade reconciliation are complete. The historical zero-commission records must remain zero; the later 0.1% account setting applies only to future executions.
+
+
+### Incident execution handoff — 2026-11-04 (PR #513 only)
+
+**Do not ask the operator to restart Harvester, submit orders, or repeat already supplied evidence.** The operator's role is to provide TESTNET logs/trade-history outputs when explicitly requested after source instrumentation and verification are ready. The engineering agent owns code investigation, fixes, regression tests, documentation, and CI.
+
+#### Implemented in the current PR continuation
+
+- Recovery SELL planning now reserves `max(makerPercent, takerPercent)` until the actual execution role is guaranteed. The fee calculator returns the reserved rate, percentage and role.
+- Fee calculator tests now cover zero, maker-higher, taker-higher, equal and invalid rates. The Conservative strategy test expects the higher taker fee to reduce sellable quantity.
+- Bootstrap now emits DEBUG strategy input/result records, including market price, lastBuyPrice, active orders, pair config, Portfolio/RecoveryLedger snapshots and decision/intents.
+- Bootstrap now emits DEBUG per-fill accounting records, including trade/execution/order identity, side, price, quantities, actual commission facts, before/after Position and RecoveryLedger snapshots, applied/duplicate outcome, outstanding recovery and realized net profit. Rejected fills log errors and unchanged state.
+- A bootstrap regression test verifies the per-fill accounting trace.
+- README and roadmap now record the incident findings, current fixes and explicit acceptance blockers.
+
+#### Open blockers — work in this order
+
+1. **Journal arithmetic / 0.20730 USDT:** Reconcile every historical exchange trade ID against Journal records and accounting projections. Explain why exchange gross cash flow is +0.57065 USDT while Journal reports +0.36335 USDT. Check missing/double-applied fills, commission treatment, signed cash flow, cycle resets, aggregation and rounding. Historical commission was zero; do not attribute the gap to the later 0.1% setting without evidence.
+2. **Twelve same-price BUYs:** Reconstruct each decision with the new traces. Follow market event → engine transition → lastBuyPrice/reference override → Portfolio/RecoveryLedger → active-order registry → intent → submission → acknowledgement → fills. Determine whether this was valid rapid strategy behavior or stale-state/race behavior.
+3. **Lifecycle interleaving:** Add deterministic tests for market updates overlapping fill processing and immediate FILLED acknowledgement; partial fill then cancel/fill race; duplicate and out-of-order execution; REST reconciliation overlapping stream updates; repeated same-price events while an order is pending/active.
+4. **Recovery completion observability:** Add logs for completion inputs (buy cost, net sell proceeds, realized profit, minimum profit, active quantity, keep quantity), eligibility/reason, exact free allocation, pre/post Portfolio and ledger reset. Test that logging reflects both eligible and rejected paths.
+5. **Accounting invariants:** Test base and quote commission effects exactly once, third-asset and incomplete commission fail-closed behavior, Portfolio vs RecoveryLedger per-fill deltas, and duplicate execution idempotency. Explain each journal total from source executions.
+6. **Fee policy integration:** Search every fee-calculator call site and every pair fixture/config. Ensure both makerPercent and takerPercent are supplied; verify quantity/price rounding and net-profit guarantee with 0.1% maker/taker.
+7. **Exact-head verification:** Run the full Harvester test/coverage and repository CI suite on the exact latest PR head. Do not cite earlier-head passes as current. Latest CI must be green before considering a controlled TESTNET run.
+8. **Account/trade ownership baseline:** Use the read-only trade-history diagnostic and supplied exchange evidence to separate Harvester-owned orders/trades from unrelated wallet inventory. The observed 12,321 free DOGE and 517 non-zero assets are not a strategy opening position. Verify the new commission setting is effective before any future controlled test.
+
+#### Current gate
+
+- Source fixes above: committed to PR #513.
+- Regression tests: added/updated, **not yet executed on the current head**.
+- Recovery-completion trace and full lifecycle race coverage: open.
+- 0.20730 USDT reconciliation: open.
+- Twelve-BUY causality: open.
+- Latest CI: must be checked on the exact current head; no green status may be claimed until observed.
+- TESTNET: stopped; no restart/order submission.
+- Merge: not authorized until blockers close and operator approves.
