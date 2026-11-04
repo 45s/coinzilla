@@ -280,9 +280,10 @@ test("publishes actionable decisions and order submission facts around broker I/
     }],
   })
   assert.equal(events[1].data.status, "PENDING")
-  assert.equal(events[1].data.clientOrderId, "h-DOGEUSDT-1")
+  const clientOrderId = events[1].data.clientOrderId
+  assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
-  assert.equal(events[2].data.brokerOrderId, "broker-h-DOGEUSDT-1")
+  assert.equal(events[2].data.brokerOrderId, "broker-" + clientOrderId)
 })
 
 test("EventBus publication failure cannot prevent a broker order", async () => {
@@ -335,7 +336,7 @@ test("publishes rejected submission outcome without blocking pair pause", async 
     "strategy.paused",
   ])
   assert.equal(events[2].data.outcome, "REJECTED_OR_UNKNOWN")
-  assert.equal(events[2].data.clientOrderId, "h-DOGEUSDT-1")
+  assert.match(events[2].data.clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
 })
 
@@ -426,7 +427,7 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
 
   const cancelled = events.find(({ name }) => name === "order.cancelled")
   assert.ok(cancelled)
-  assert.equal(cancelled.data.clientOrderId, "h-DOGEUSDT-1")
+  assert.match(cancelled.data.clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(cancelled.data.status, "CANCELED")
   assert.equal(cancelled.data.executedQuantity, "0")
 })
