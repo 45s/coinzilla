@@ -934,7 +934,9 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    const initialSnapshotTask = userDataEventQueue.then(() => publishAccountSnapshot({ phase: "OPENING" }))
+    const initialSnapshotTask = userDataEventQueue.then(() => tradingEnabled
+      ? publishAccountSnapshot({ phase: "OPENING" })
+      : refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
