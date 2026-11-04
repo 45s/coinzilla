@@ -174,7 +174,7 @@ Do not restart Harvester or submit TESTNET orders until fee sizing, lifecycle co
 
 - Recovery SELL planning now reserves `max(makerPercent, takerPercent)` until the actual execution role is guaranteed. The fee calculator returns the reserved rate, percentage and role.
 - Fee calculator tests now cover zero, maker-higher, taker-higher, equal and invalid rates. The Conservative strategy test expects the higher taker fee to reduce sellable quantity.
-- Bootstrap now emits DEBUG strategy input/result records, including market price, lastBuyPrice, active orders, pair config, Portfolio/RecoveryLedger snapshots and decision/intents.
+- The actual Conservative engine now emits DEBUG records for every market-price event and correlated strategy evaluation, including monotonic market/evaluation IDs, current/previous price, lastBuyPrice/reference overrides, active orders, pair config, readiness/pause state, Portfolio/RecoveryLedger snapshots, decisions and executable intents. Regression coverage verifies event/evaluation correlation.
 - Bootstrap now emits DEBUG per-fill accounting records, including trade/execution/order identity, side, price, quantities, actual commission facts, before/after Position and RecoveryLedger snapshots, applied/duplicate outcome, outstanding recovery and realized net profit. Rejected fills log errors and unchanged state.
 - A bootstrap regression test verifies the per-fill accounting trace.
 - README and roadmap now record the incident findings, current fixes and explicit acceptance blockers.
