@@ -69,7 +69,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
       calls.push("filters:" + symbol)
       return { ok: true, data: createMarketMetadata(symbol) }
     },
-    getPrices: async () => ({ ok: true }),
+    getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
     subscribeForPrices: async ({ symbol, onPrice }) => {
       calls.push("subscribe:" + symbol)
       subscriptions.set(symbol, onPrice)
@@ -858,14 +858,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     logger: { info() {}, error() {} },
   })
   assert.equal(runtime.userDataReady, true)
-  await subscriptions.get("BTCUSDT")({
-    eventType: "aggTrade",
-    symbol: "BTCUSDT",
-    price: "65000.12",
-    timestamp: 1,
-  })
-  assert.equal(calls.filter((call) => typeof call === "object").length, 1)
-  assert.equal(calls.find((call) => typeof call === "object").side, "BUY")
+  assert.equal(submittedOrders.length, 1, "the initial ticker snapshot should trigger the first BUY")
+  assert.equal(submittedOrders[0].side, "BUY")
 
   const submitted = calls.find((call) => typeof call === "object")
   const clientOrderId = "h-BTCUSDT-1"
@@ -994,7 +988,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     eventType: "aggTrade",
     symbol: "BTCUSDT",
     price: "65000.12",
-    timestamp: 5,
+    timestamp: 1000,
   })
   assert.equal(submittedOrders.length, 6)
   assert.equal(submittedOrders[5].side, "BUY")
