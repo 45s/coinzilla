@@ -913,23 +913,26 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 
 ## PR #515 offline follow-up progress — 2026-11-04
 
-**Latest verified code increment:** `test(harvester): complete lifecycle fee config fixture`.
+**Latest verified code increment:** `test(harvester): assert pair-specific maker fee policy`.
 
 - [x] Task handoff and README / ROADMAP / TRADING_FIRST incident status no longer describe PR #513 as pending.
 - [x] Remove duplicate OPENING snapshot flush-failure test.
 - [x] Add recovery SELL exact tick-rounding and base-commission retained-inventory boundary tests.
-- [x] Validate maker/taker percentages in both trading-config validation and market-readiness validation: accept 0 inclusive, reject 100 or higher; startup tests and README document the [0, 100) percentage contract.
+- [x] Validate maker/taker percentages in both trading-config and market-readiness validation: accept 0 inclusive, reject 100 or higher.
+- [x] Align trading config with the reported fee settings: USDT pairs use 0.1% maker/taker; FDUSD pairs retain the configured zero-maker policy and use 0.1% taker. README and config tests document/verify this split.
 - [x] Add duplicate CLOSING snapshot endpoint and malformed Journal snapshot/session/profit record tests.
 - [x] Add streamed BUY partial-fill sequence coverage (cumulative 0.4 → 0.7 → 1.0) and assert VWAP is reconciled before strategy advancement.
 - [x] Add REST/stream stale-history protection: REST order history behind an already-applied stream fill is rejected without applying stale REST fills.
 - [x] Add shutdown interleaving coverage: shutdown waits for REST owned-order reconciliation; failed reconciliation produces an INCOMPLETE CLOSING snapshot before broker disconnect.
+- [x] Add CLOSING snapshot durability-failure coverage and verify broker disconnect still occurs while shutdown reports an incomplete result.
 - [x] Add multi-fill commission reconciliation and verify Portfolio quote cash flow equals RecoveryLedger outstanding recovery.
 - [x] Add fee-adjusted cycle reconciliation and verify Portfolio quote cash flow equals RecoveryLedger realized cycle profit and exact free keepQuantity.
-- [x] Add concurrent market-update coverage while the initial BUY acknowledgement is pending; multiple queued price updates do not submit duplicate BUYs.
-- [x] Latest exact-head CI passed: Harvester 383/383, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
-- [~] Lifecycle matrix: immediate-FILLED acknowledgement, streamed BUY/SELL partials, duplicate/conflicting fills, stale REST history, REST/stream overlap, cancel/fill overlap, pending BUY/SELL acknowledgements, and shutdown waiting are covered. Remaining out-of-order/conflicting order-event permutations and concurrent market updates during cancellation interleavings still require explicit review.
+- [x] Add concurrent market-update coverage while initial BUY acknowledgement and trailing BUY cancellation are pending; queued updates do not create duplicate active BUY orders.
+- [x] Add out-of-order stale OPEN-after-FILLED event coverage.
+- [x] Latest exact-head CI passed: Harvester 386/386, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
+- [~] Lifecycle matrix: immediate-FILLED acknowledgement, streamed BUY/SELL partials, duplicate/conflicting fills, stale REST history, REST/stream overlap, cancel/fill overlap, pending BUY/SELL acknowledgements, concurrent market updates during acknowledgement/cancellation, and shutdown waiting are covered. Remaining out-of-order/conflicting order-event permutations and further cancellation/shutdown permutations still require explicit review.
 - [~] Accounting/fees: Portfolio/RecoveryLedger base/quote commission atomicity, unsupported third-asset/unknown commission failures, multi-fill totals, cycle profit, maker/taker selection, and price/quantity boundaries are covered. Remaining review is the complete production fee caller audit and the full per-session reconciliation evidence chain.
-- [~] Account audit: OPENING/CLOSING ordering, incomplete closing on reconciliation failure, duplicate endpoints, malformed session/phase/profit records, and per-session cycle-profit aggregation are covered. No eligible historical session has an OPENING snapshot; the historical incident Journal predates this feature.
+- [~] Account audit: OPENING/CLOSING ordering, incomplete closing on reconciliation failure, CLOSING flush failure, duplicate endpoints, malformed session/phase/profit records, and per-session cycle-profit aggregation are covered. No eligible historical session has an OPENING snapshot; the historical incident Journal predates this feature.
 - [ ] Branch synchronization: `develop` has advanced with unrelated broker-package refactoring and CI coverage commits after this branch's merge base. The branch must be updated before merge; the available GitHub connector does not expose the repository-tree read or PR branch-update operation needed to perform that merge here.
 - [ ] Historical account baseline: a future controlled session is required for an actual OPENING/CLOSING balance audit against exchange trades, commissions, and external account activity.
 
