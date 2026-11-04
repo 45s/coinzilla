@@ -381,7 +381,7 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
 })
 
 
-test("attaches a FILLED acknowledgement broker ID without advancing unreconciled quantity", () => {
+test("tracks a FILLED acknowledgement as UNKNOWN until execution quantity is reconciled", () => {
   const pending = makeOrder({ clientOrderId: "h-ZROUSDT-ack" })
   const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
   const acknowledged = makeOrder({
@@ -398,7 +398,7 @@ test("attaches a FILLED acknowledgement broker ID without advancing unreconciled
   const attached = registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
   const trackedPending = attached.registry.getOrder({ clientOrderId: pending.clientOrderId })
   assert.equal(attached.applied, true)
-  assert.equal(trackedPending.status, "PENDING")
+  assert.equal(trackedPending.status, "UNKNOWN")
   assert.equal(trackedPending.brokerOrderId, "698746")
   assert.equal(trackedPending.executedQuantity.amount, "0")
 

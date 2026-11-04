@@ -201,6 +201,9 @@ export class OrderRegistry {
     const index = this.#orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
     if (index < 0) throw new Error("Acknowledged order is not registered by clientOrderId")
     const current = this.#orders[index]
+    if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
+      return Object.freeze({ registry: this, applied: false, duplicate: true })
+    }
     if (current.status !== "PENDING") {
       throw new Error("Only a PENDING order can receive its acknowledged brokerOrderId")
     }
@@ -224,7 +227,10 @@ export class OrderRegistry {
       limitPrice: current.limitPrice,
       originalQuantity: current.originalQuantity,
       executedQuantity: current.executedQuantity,
-      status: "PENDING",
+      // The exchange acknowledgement confirms existence, but execution facts
+      // are not yet reconciled. UNKNOWN is active and can advance to partial/FILLED
+      // when the stream or canonical REST history supplies the executions.
+      status: "UNKNOWN",
       createdAt: order.createdAt ?? current.createdAt,
       acknowledgedAt: order.acknowledgedAt,
       updatedAt: order.updatedAt,

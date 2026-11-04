@@ -2618,7 +2618,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
   })
   assert.equal(failed.ok, false)
   const tracked = engine.getOrders()[0]
-  assert.equal(tracked.status, "PENDING")
+  assert.equal(tracked.status, "UNKNOWN")
   assert.ok(tracked.brokerOrderId)
   assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
 
