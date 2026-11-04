@@ -23,6 +23,7 @@ export function adaptOrder(binanceOrder) {
   })
 
   // Keep exact exchange quantities and terminal status available to reconciliation.
+  order.originalPrice = String(price)
   order.originalQuantity = String(origQty)
   order.executedQuantity = String(executedQty)
   order.status = binanceOrder.status
