@@ -65,7 +65,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete, but opt-in TESTNET verification and long-running recovery/soak validation remain blocked on a configured TESTNET environment and credentials.
 
-### DDD architecture modernization — first tranche complete; recovery hardening continues
+### DDD architecture modernization — first tranche complete; operational verification remains
 
 The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
 
