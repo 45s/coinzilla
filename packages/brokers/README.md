@@ -93,6 +93,8 @@ Default package tests are offline. Live integration suites require **both** an e
 - `BINANCE_API_KEY`
 - `BINANCE_API_SECRET_KEY`
 
+Order placement/check/cancel coverage has an additional independent safety gate: set `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=1` only when you explicitly intend the integration suite to create and cancel a TESTNET order. The general integration opt-in alone enables read-only checks and leaves the order lifecycle test skipped. The mutation flag does not bypass the general integration opt-in or the non-placeholder credential requirement.
+
 The sample environment file is `packages/brokers/.env.example`. Copy it to `.env.development` and replace placeholders only with Binance TESTNET credentials. Do not use production credentials.
 
 Commands from the repository root:
