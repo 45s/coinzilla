@@ -106,7 +106,11 @@ export function parseStreamMessage(rawMessage) {
   }
 
   if (typeof parsed.e !== "string" || parsed.e.length === 0) {
-    throw new TypeError("Binance raw stream event is missing its event type")
+    const isBookTickerPayload = typeof parsed.s === "string" &&
+      ["u", "b", "B", "a", "A"].every((field) => Object.hasOwn(parsed, field))
+    if (!isBookTickerPayload) {
+      throw new TypeError("Binance raw stream event is missing its event type")
+    }
   }
 
   return { stream: null, data: parsed }
