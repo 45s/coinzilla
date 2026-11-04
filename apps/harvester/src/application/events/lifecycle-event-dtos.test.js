@@ -613,13 +613,13 @@ test("rejects invalid account snapshot phase, decimals, duplicate assets and inc
 test("maps complete account-wide open orders and blocks trading while any are unowned", () => {
   const order = {
     clientOrderId: "manual-order-1",
-    brokerOrderId: "699694",
-    market: { symbol: "ZROUSDT" },
+    id: "699694",
+    symbol: "ZROUSDT",
     side: "SELL",
     type: "LIMIT",
-    limitPrice: { amount: "1.828" },
-    originalQuantity: { amount: "4.98" },
-    executedQuantity: { amount: "0" },
+    originalPrice: "1.82800000",
+    originalQuantity: "4.98000000",
+    executedQuantity: "0.00000000",
     status: "NEW",
   }
   const result = mapAccountOpenOrdersCapturedData({
