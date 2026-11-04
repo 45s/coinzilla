@@ -127,3 +127,58 @@ describe("adaptCanonicalFill", () => {
     assert.equal(fill.commissions[0].amount.amount, "0.000000000000000001")
   })
 })
+
+
+describe("REST and WebSocket canonical fill parity", () => {
+  it("maps equivalent execution facts to identical canonical fills when E differs from T", async () => {
+    const { adaptMsg } = await import("../broker-websocket/helpers/adapters/adapt-msg.js")
+    const transactionTime = trade.time
+    const event = adaptMsg({
+      e: "executionReport",
+      E: transactionTime + 1,
+      s: "BTCUSDT",
+      c: "harvester-order-7",
+      C: "",
+      S: "BUY",
+      o: "LIMIT",
+      f: "GTC",
+      q: trade.qty,
+      p: trade.price,
+      x: "TRADE",
+      X: "FILLED",
+      i: trade.orderId,
+      T: transactionTime,
+      l: trade.qty,
+      z: trade.qty,
+      L: trade.price,
+      n: trade.commission,
+      N: trade.commissionAsset,
+      t: trade.id,
+      m: trade.isMaker,
+      O: transactionTime - 1,
+      Z: trade.quoteQty,
+      Y: trade.quoteQty,
+    })
+
+    const restFill = adaptCanonicalFill({ trade, market })
+    const websocketFill = adaptCanonicalFill({
+      market,
+      trade: {
+        id: event.fill.id,
+        orderId: event.fill.orderId,
+        isBuyer: event.fill.side === "BUY",
+        isMaker: event.fill.isMaker,
+        price: event.fill.price,
+        qty: event.fill.quantity,
+        quoteQty: event.fill.quoteQuantity,
+        commission: event.fill.commissionAmount,
+        commissionAsset: event.fill.commissionAsset,
+        time: event.fill.time,
+      },
+    })
+
+    assert.equal(event.fill.time, transactionTime)
+    assert.notEqual(event.fill.time, transactionTime + 1)
+    assert.deepEqual(websocketFill.value, restFill.value)
+  })
+})
