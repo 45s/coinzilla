@@ -29,4 +29,5 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
   EXECUTION_DUPLICATE_FILL: "execution.duplicate_fill",
   RECOVERY_CYCLE_COMPLETED: "recovery.cycle_completed",
+  ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
 })

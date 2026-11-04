@@ -24,6 +24,7 @@ import {
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
+  mapAccountSnapshotCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
@@ -509,6 +510,30 @@ export async function startHarvester({
 
     return nextSnapshot
   }
+  const publishAccountSnapshot = async ({ phase, auditStatus = "COMPLETE", auditReasons = [] } = {}) => {
+    const snapshot = await refreshAccountSnapshot()
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+      dataResult: mapAccountSnapshotCapturedData({ phase, snapshot, auditStatus, auditReasons }),
+    })
+    if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
+    if (typeof eventPublisher?.flush === "function") {
+      const flushed = await eventPublisher.flush()
+      if (flushed?.ok !== true) {
+        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
+      }
+    } else if (tradingEnabled) {
+      throw new Error("Conservative TESTNET trading requires a durable Journal flush before trading")
+    }
+    logger.info?.({
+      message: "Account snapshot captured and durably journaled",
+      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+    })
+    return snapshot
+  }
+
   const isMarketPriceFresh = (marketPrice) => {
     const ageMs = now() - marketPrice.timestamp
     return Number.isSafeInteger(ageMs) &&
@@ -909,7 +934,7 @@ export async function startHarvester({
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
+    const initialSnapshotTask = userDataEventQueue.then(() => publishAccountSnapshot({ phase: "OPENING" }))
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
@@ -1135,9 +1160,40 @@ export async function startHarvester({
 
     const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
     await userDataEventQueue
+
+    const auditReasons = []
+    let snapshotError
+    if (intakeErrors.length > 0) auditReasons.push("BROKER_INTAKE_SHUTDOWN_FAILED")
+    if (tradingEnabled && tradingEngine) {
+      try {
+        const reconciliation = await tradingEngine.reconcileOwnedOrders()
+        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      } catch {
+        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      }
+      const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
+      const unresolvedOrders = tradingEngine.getOrders().filter((order) => !terminalStatuses.has(order.status))
+      if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
+      if (userDataAccountingFailed || userDataRequiresReconciliation) {
+        auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
+      }
+    }
+    try {
+      if (tradingEnabled) {
+        await publishAccountSnapshot({
+          phase: "CLOSING",
+          auditStatus: auditReasons.length === 0 ? "COMPLETE" : "INCOMPLETE",
+          auditReasons,
+        })
+      }
+    } catch (error) {
+      snapshotError = error
+      logger.error?.({ message: "Harvester closing account snapshot failed", error })
+    }
+
     userDataStatus = "STOPPED"
     const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cleanupErrors = [...intakeErrors, ...disconnectErrors]
+    const cleanupErrors = [...intakeErrors, ...disconnectErrors, ...(snapshotError ? [snapshotError] : [])]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }

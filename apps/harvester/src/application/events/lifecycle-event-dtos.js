@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, assertObjectInput, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
 const OUTCOMES = Object.freeze(["success", "failed"])
@@ -432,3 +432,31 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
     freeQuantity: requireDecimalString({ value: freeQuantity, field: "freeQuantity" }),
     realizedNetProfit: requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" }),
   }))
+
+
+/** Map all exchange-returned balances into an exact-decimal account audit event. */
+export const mapAccountSnapshotCapturedData = (input = {}) =>
+  mapData(input, "Account-snapshot-captured event mapping", ({
+    phase, snapshot, auditStatus = "COMPLETE", auditReasons = [],
+  }) => {
+    if (!["OPENING", "CLOSING"].includes(phase)) throw new TypeError("phase must be OPENING or CLOSING")
+    if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
+    if (!snapshot || !Array.isArray(snapshot.balances) || !Number.isSafeInteger(snapshot.sourceTime)) {
+      throw new TypeError("snapshot must contain sourceTime and canonical balances")
+    }
+    if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+      throw new TypeError("auditReasons must contain non-empty strings")
+    }
+    const balances = snapshot.balances.map((balance, index) => {
+      const asset = requireString({ value: balance?.asset?.code, field: "balances[" + index + "].asset.code" })
+      const free = requireDecimalString({ value: balance?.free?.amount, field: "balances[" + index + "].free" })
+      const locked = requireDecimalString({ value: balance?.locked?.amount, field: "balances[" + index + "].locked" })
+      return { asset, free, locked, total: addDecimal({ left: free, right: locked }) }
+    }).sort((left, right) => left.asset.localeCompare(right.asset))
+    if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
+      throw new TypeError("snapshot must not contain duplicate asset codes")
+    }
+    if (auditStatus === "COMPLETE" && auditReasons.length > 0) throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
+    if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) throw new TypeError("INCOMPLETE snapshot requires auditReasons")
+    return { phase, auditStatus, sourceTime: snapshot.sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
+  })

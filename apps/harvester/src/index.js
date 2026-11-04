@@ -10,9 +10,7 @@ import { startHarvester } from "./bootstrap/start-harvester.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
-function createDefaultJournalService({ eventBus, logger }) {
-  const enabled = process.env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() !== "false"
-  const directory = process.env.HARVESTER_JOURNAL_DIRECTORY
+function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
   return prepareOptionalJournal({ eventBus, logger, enabled, directory })
 }
 
@@ -91,13 +89,34 @@ export async function main({
   let journalService
   try {
     eventBus = createEventBus({ logger })
-    eventPublisher = makeEventPublisher({ eventBus, logger })
     journalService = createJournalService({
       eventBus,
       logger,
-      enabled: env.HARVESTER_JOURNAL_ENABLED?.toLowerCase() !== "false",
+      enabled: env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() !== "false",
       directory: env.HARVESTER_JOURNAL_DIRECTORY,
     })
+    eventPublisher = makeEventPublisher({
+      eventBus,
+      logger,
+      flush: () => journalService?.flush?.() ?? Promise.resolve({
+        ok: false,
+        errors: [new Error("Harvester Journal durable flush is unavailable")],
+      }),
+    })
+
+    if (env.HARVESTER_ENABLE_TRADING === "true") {
+      if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
+        throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
+      }
+      if (!journalService || typeof journalService.flush !== "function" || !journalService.ready) {
+        throw new Error("Conservative TESTNET trading requires a ready Journal with durable flush() support")
+      }
+      const journalReady = await journalService.ready
+      if (journalReady?.ok !== true) {
+        const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Conservative TESTNET trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
+      }
+    }
 
     const runtime = await start({ eventPublisher })
     const enabledMarkets = runtime.tradingConfig?.pairs
