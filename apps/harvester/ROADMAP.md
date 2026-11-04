@@ -885,8 +885,8 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [x] Explain the 0.20730 USDT difference: five cycle profits sum exactly to +0.57065 USDT; the last cycle alone was +0.36335 and the previous four total +0.20730.
 - [x] Explain the twelve BUYs: all 12 FILLED acknowledgements preceded the first applied fill; the stale-state race is fixed with an awaited reconciliation barrier and deterministic regression tests.
 - [ ] Complete recovery-completion logging and deterministic lifecycle/race tests.
-- [ ] Confirm maker/taker fee reserve tests and all affected strategy tests pass on the latest head.
-- [x] Merge gate defined: exact-head required CI must be green; historical accounting and lifecycle expansion are not merge prerequisites.
+- [x] Confirm maker/taker fee reserve tests and exact recovery SELL tick/base-fee quantity boundaries pass on PR #515 code head `test(harvester): normalize fake broker order acknowledgement`; the complete production-caller audit remains open.
+- [x] PR #513 source-remediation merge gate satisfied and merged. PR #515 has its own offline acceptance gate: lifecycle, accounting, fee-policy, and account-audit follow-up must be complete and exact-head CI green before #515 is merge-ready.
 - [ ] Reconcile account opening baseline and Harvester-owned trades/orders; confirm the 0.1% commission setting is effective.
 - [ ] Obtain explicit operator approval for a controlled TESTNET run.
 
@@ -901,12 +901,29 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 - [x] During graceful shutdown, stop new intake and drain accepted user-data events; reconcile owned orders before capturing CLOSING balances and flushing while broker REST remains connected.
 - [x] Mark CLOSING snapshot INCOMPLETE with explicit reasons when reconciliation fails, owned orders remain non-terminal, intake fails, or user-data/accounting remains unsafe. A failed closing snapshot fails shutdown.
 - [x] Document account-vs-strategy ownership and that raw balance deltas do not prove PnL without execution, commission, external movement, and inventory valuation reconciliation.
-- [ ] Verify the new engine-level regression on the exact CI head: after a completed SELL the ledger is reset, exactly keepQuantity is allocated as free, extra residual remains active, and residual alone cannot generate another recovery SELL. The test exercises the real Portfolio, RecoveryLedger, and completion callback.
-- [ ] Run focused Harvester tests, full workspace tests/coverage, and latest PR CI after this change.
+- [x] Verify the engine-level regression: after a completed SELL the ledger is reset, exactly keepQuantity is allocated as free, extra residual remains active, and residual alone cannot generate another recovery SELL. The test exercises the real Portfolio, RecoveryLedger, and completion callback and passed in the latest 378/378 Harvester test run.
+- [x] Run focused Harvester tests, full workspace tests/coverage, syntax/workflow lint, Utilities tests, and production dependency audit on the latest PR #515 code head; all required workflows passed, with Harvester 378/378.
 - [x] Reconcile the historical +0.57065 gross exchange cash flow / +0.36335 final-cycle profit gap: previous four cycles total +0.20730 and all five total +0.57065. Historical commission amount/asset remains absent from the old Journal event payload; exchange records report zero commissions.
 - [x] Classify the twelve distinct 400 DOGE @ 0.07598 TAKER BUYs: the Journal event ordering confirms the stale acknowledgement/fill race. Current code waits for canonical fill reconciliation; the delayed-ack and 12-fill real-policy tests cover it.
-- [ ] Complete streamed partial/final, duplicate/out-of-order, cancellation/fill, REST/stream overlap and shutdown reconciliation regression matrix.
+- [~] Lifecycle matrix in progress: streamed BUY partial fills through cumulative 0.4 → 0.7 → 1.0 and shutdown waiting for pending REST order reconciliation are now covered and passed CI. Existing tests cover cancel/fill, REST/stream overlap, duplicate fill, stale order updates, and immediate-FILLED acknowledgement. Remaining out-of-order/conflicting event permutations and further shutdown edge cases still require explicit review.
 - [ ] Keep TESTNET stopped until all gates above and current-head CI are green. Do not submit orders as part of this PR work.
 
 - [x] Add a read-only Journal audit command that pairs OPENING/CLOSING snapshots per JSONL session and reports exact per-asset balance deltas, missing/duplicate endpoints, and INCOMPLETE audit reasons.
 - [ ] Run the Journal audit command against a real closed TESTNET session and reconcile its asset deltas with exchange trade/commission history and any external account activity.
+
+## PR #515 offline follow-up progress — 2026-11-04
+
+**Latest verified code increment:** `test(harvester): normalize fake broker order acknowledgement`.
+
+- [x] Task handoff and README / ROADMAP / TRADING_FIRST incident status no longer describe PR #513 as pending.
+- [x] Remove duplicate OPENING snapshot flush-failure test.
+- [x] Add recovery SELL exact tick-rounding boundary and base-commission retained-inventory boundary tests.
+- [x] Add duplicate CLOSING snapshot endpoint coverage to the read-only per-session Journal audit.
+- [x] Add a streamed BUY partial-fill sequence test and assert the VWAP reference is not advanced until the cumulative FILLED quantity reconciles.
+- [x] Add shutdown interleaving coverage: shutdown waits for REST owned-order reconciliation; a failed reconciliation produces an INCOMPLETE CLOSING snapshot before broker disconnect.
+- [x] Latest exact-head CI passed: Harvester 378/378, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
+- [ ] Remaining offline work: finish the complete lifecycle event permutation matrix, per-fill/per-cycle/session accounting reconciliation, full maker/taker caller/boundary audit, and account-audit malformed/edge cases.
+- [ ] Branch synchronization: `develop` advanced by two unrelated broker-package commits after this branch's merge base. The branch must be updated before merge; current GitHub connector does not expose the repository tree/branch-update operation needed to perform that merge here.
+- [ ] Historical account baseline: no eligible historical session has an OPENING snapshot; the old incident Journal predates this feature. A future controlled session is required for an actual OPENING/CLOSING balance audit.
+
+Harvester remains stopped. No TESTNET write operations have been performed as part of this follow-up.
