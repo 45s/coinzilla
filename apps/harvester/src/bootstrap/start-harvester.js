@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { toResult } from "@coinzilla/utils"
+import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
@@ -85,15 +85,19 @@ const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) =
   position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
 })
 
-function logMarketPriceEvaluation({ logger, symbol, processed }) {
+function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   if (!processed?.ok) return
 
-  const { marketPrice, decision } = processed.data ?? {}
+  const { decision } = processed.data ?? {}
+  const action = decision?.action ??
+    (decision?.actions?.length
+      ? decision.actions.map(({ side }) => side).join("+")
+      : "NO_ACTION")
   logger.info?.({
     message: "Market price evaluated",
     symbol,
-    price: marketPrice?.price,
-    action: decision?.action ?? "UNKNOWN",
+    price: priceEvent?.price,
+    action,
   })
 }
 
@@ -849,7 +853,7 @@ export async function startHarvester({
           if (!processed.ok) {
             reportPriceError({ symbol, errors: processed.errors })
           } else {
-            logMarketPriceEvaluation({ logger, symbol, processed })
+            logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
           }
 
           return processed
