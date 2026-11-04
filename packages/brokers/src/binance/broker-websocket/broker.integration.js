@@ -2,6 +2,7 @@ import { describe, it, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { BinanceWebSocketBroker } from "./broker.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
+import { isTestnetOrderMutationEnabled } from "./testnet-integration-guards.js"
 
 if (process.env.NODE_ENV === "production") {
   throw new Error(
@@ -78,34 +79,41 @@ describe(
       assert.equal(data.symbol, symbol)
     })
 
-    it("creates, checks, and cancels a test order", async () => {
-      let order
+    it(
+      "creates, checks, and cancels a test order",
+      {
+        skip: !isTestnetOrderMutationEnabled() &&
+          "Set BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=1 to enable TESTNET order placement and cancellation",
+      },
+      async () => {
+        let order
 
-      try {
-        const { ok, data } = await broker.createOrder({
-          symbol,
-          side: "BUY",
-          price,
-          quantity,
-        })
-        order = data
-        assert.ok(ok)
-        assert.ok(order.id)
-        assert.equal(order.symbol, symbol)
-
-        const result = await broker.getOrder({ symbol, orderId: order.id })
-        assert.ok(result.ok)
-        assert.equal(result.data.id, order.id)
-      } finally {
-        if (order?.id) {
-          const result = await broker.cancelOrder({
+        try {
+          const { ok, data } = await broker.createOrder({
             symbol,
-            orderId: order.id,
+            side: "BUY",
+            price,
+            quantity,
           })
+          order = data
+          assert.ok(ok)
+          assert.ok(order.id)
+          assert.equal(order.symbol, symbol)
+
+          const result = await broker.getOrder({ symbol, orderId: order.id })
           assert.ok(result.ok)
-          assert.equal(order.id, result.data.id)
+          assert.equal(result.data.id, order.id)
+        } finally {
+          if (order?.id) {
+            const result = await broker.cancelOrder({
+              symbol,
+              orderId: order.id,
+            })
+            assert.ok(result.ok)
+            assert.equal(order.id, result.data.id)
+          }
         }
-      }
-    })
+      },
+    )
   },
 )
