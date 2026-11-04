@@ -204,7 +204,7 @@ describe("canonical fill response ID precision", () => {
 })
 
 
-test("maps the observed ZROUSDT TESTNET myTrades without inventing client order IDs", async () => {
+it("maps the observed ZROUSDT TESTNET myTrades without inventing client order IDs", async () => {
   const zroMarket = { symbol: "ZROUSDT", baseAsset: "ZRO", quoteAsset: "USDT" }
   const trades = [
     { id: 9939, orderId: 698704, isBuyer: true, isMaker: true, price: "1.792", qty: "5", quoteQty: "8.96", commission: "0.005", commissionAsset: "ZRO", time: 1793820000000 },

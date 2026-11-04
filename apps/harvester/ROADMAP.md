@@ -1025,3 +1025,9 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - Live partial-fill, cancel/fill race, late-event and post-fix shutdown paths: **NOT OBSERVED**; no new TESTNET activity is authorized by this work.
 - Portfolio/RecoveryLedger/Journal live reconciliation for these two fills is supported by the supplied arithmetic, but no new Journal file was supplied for an independent event-by-event audit. Verify the Journal in the next joint session.
 - Harvester remains stopped. No order, cancellation, account-setting change, or exchange write was performed.
+
+
+### CI iteration — 2026-11-04
+
+- Initial draft PR CI confirmed JavaScript syntax, dependency audit, and utilities tests pass.
+- The first full broker test run exposed two newly introduced fixture issues (an existing cursor test used a nonmatching order ID after exact filtering was added; the new `get-fills` fixture used `test` instead of the file's imported `it`). Both are corrected in the follow-up commit; rerun all workflows on the updated and then develop-synchronized head.

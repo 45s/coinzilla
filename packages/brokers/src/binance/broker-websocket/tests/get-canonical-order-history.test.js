@@ -37,7 +37,7 @@ function createBroker(handlers) {
 test("getCanonicalOrderHistory returns canonical orders using exact market metadata", async () => {
   const broker = createBroker({
     allOrders(params, options) {
-      assert.deepEqual(params, { symbol: "DOGEFDUSD", limit: 50, orderId: 100 })
+      assert.deepEqual(params, { symbol: "DOGEFDUSD", limit: 50, orderId: 123 })
       assert.deepEqual(options, { signed: true })
       return [rawOrder]
     },
@@ -49,7 +49,7 @@ test("getCanonicalOrderHistory returns canonical orders using exact market metad
 
   const result = await broker.getCanonicalOrderHistory({
     symbol: "DOGEFDUSD",
-    orderId: 100,
+    orderId: 123,
     limit: 50,
   })
 
