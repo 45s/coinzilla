@@ -539,7 +539,7 @@ export async function startHarvester({
     }
     if (typeof eventPublisher?.flush === "function") {
       const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true) {
+      if (flushed?.ok !== true || flushed?.durable !== true) {
         const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : ""))
       }
