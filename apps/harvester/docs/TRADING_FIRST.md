@@ -10,6 +10,14 @@ Harvester's first product deliverable is a running trading application that can 
 
 Do not turn the first trading milestone into a persistence, journal, recovery-framework, observability, architecture, or optimization project. Those are secondary. They must not be prerequisites for implementing or demonstrating the first working trading cycle unless a specific minimal safety requirement makes a particular capability unavoidable.
 
+## Current TESTNET incident safety gate — 2026-11-04
+
+The source-remediation PR [#513](https://github.com/45s/coinzilla/pull/513) has merged into `develop` (merge commit `d5a0b86df6c5e8a392017a29e233b98e3957c72c`). Its exact-head unit tests, coverage, syntax/workflow lint, and production dependency audit passed. This proves offline source/CI status only; it does **not** prove TESTNET readiness.
+
+The follow-up [PR #515](https://github.com/45s/coinzilla/pull/515) owns the remaining deterministic lifecycle overlap matrix, full commission/accounting invariants, fee-policy audit, and OPENING/CLOSING account-audit verification. Its branch is based on the merged `develop`; these acceptance gates remain open until implemented and tested.
+
+**Operational stop remains mandatory:** Harvester must remain stopped during this follow-up. Do not restart it, submit or cancel TESTNET orders, change exchange account settings, or perform exchange write operations. The historical +0.20730 USDT scope mismatch and twelve-distinct-BUY acknowledgement/fill race are resolved findings from #513, not open blockers. A controlled TESTNET run requires a separate explicit authorization after the follow-up acceptance criteria pass.
+
 ## Mandatory implementation order
 
 Agents MUST work in this order:
