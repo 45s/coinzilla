@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { FakeTransport, createClient, flush, acknowledge } from "../test-helpers/streams-client-fixtures.js"
+import { createClient, flush, acknowledge } from "../test-helpers/streams-client-fixtures.js"
 
 test("connects lazily and subscribes with a correlated acknowledgement", async () => {
   const { client, transports } = createClient()
