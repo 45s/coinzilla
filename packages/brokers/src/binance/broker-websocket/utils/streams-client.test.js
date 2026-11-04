@@ -404,3 +404,123 @@ test("dispatches raw bookTicker payloads without an event type", async () => {
   assert.deepEqual(events, [bookTicker])
   await client.disconnect()
 })
+
+test("rejects malformed LIST_SUBSCRIPTIONS acknowledgements and closes the unready connection", async () => {
+  const { client, transports } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: null })
+
+  await assert.rejects(subscription, /Malformed Binance Streams LIST_SUBSCRIPTIONS acknowledgement/)
+  assert.equal(client.state, "closed")
+  assert.deepEqual(client.subscriptions, [])
+  await client.disconnect()
+})
+
+test("rejects malformed SUBSCRIBE acknowledgements without activating the stream", async () => {
+  const { client, clock, transports } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: [] })
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+
+  assert.equal(transports[0].sent[1].method, "SUBSCRIBE")
+  acknowledge(transports[0], 1, { result: ["unexpected"] })
+  await assert.rejects(subscription, /Malformed Binance Streams SUBSCRIBE acknowledgement/)
+  assert.deepEqual(client.subscriptions, [])
+  assert.equal(client.state, "open")
+  await client.disconnect()
+})
+
+test("cleans up a queued stream request when transport send throws", async () => {
+  const { client, clock, transports } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: [] })
+  await flush()
+
+  transports[0].send = () => { throw new Error("control send failed") }
+  clock.advanceBy(300)
+  await assert.rejects(subscription, /control send failed/)
+  assert.deepEqual(client.subscriptions, [])
+  assert.equal(client.state, "open")
+  await client.disconnect()
+})
+
+test("isolates throwing stream listeners through the error observer", async () => {
+  const errors = []
+  const { client, transports } = createClient({
+    onError: (error) => errors.push(error.message),
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {
+    throw new Error("stream listener failed")
+  })
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "1" })
+  assert.deepEqual(errors, ["stream listener failed"])
+  assert.equal(client.state, "open")
+  await client.disconnect()
+})
+
+test("keeps a local stream subscription when the server rejects unsubscribe", async () => {
+  const { client, clock, transports } = createClient()
+  const events = []
+  const listener = (event) => events.push(event)
+  const subscription = client.subscribe("btcusdt@aggTrade", listener)
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  const unsubscribe = client.unsubscribe("btcusdt@aggTrade", listener)
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+  acknowledge(transports[0], 1, { code: 2, msg: "unsubscribe denied" })
+  await assert.rejects(unsubscribe, /unsubscribe denied/)
+
+  assert.deepEqual(client.subscriptions, ["btcusdt@aggTrade"])
+  transports[0].receive({ e: "aggTrade", s: "BTCUSDT", p: "2" })
+  assert.equal(events.length, 1)
+  await client.disconnect()
+})
+
+test("retries failed reconnects with bounded exponential backoff", async () => {
+  const made = []
+  const errors = []
+  const { client, clock } = createClient({
+    onError: (error) => errors.push(error.message),
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      if (made.length === 1) {
+        transport.connect = () => Promise.reject(new Error("reconnect attempt failed"))
+      }
+      made.push(transport)
+      return transport
+    },
+  })
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(made[0], 0, { result: ["btcusdt@aggTrade"] })
+  await subscription
+
+  made[0].serverClose()
+  clock.advanceBy(10)
+  await flush()
+  assert.equal(made.length, 2)
+  assert.equal(client.state, "closed")
+  assert.ok(errors.includes("reconnect attempt failed"))
+
+  clock.advanceBy(20)
+  await flush()
+  assert.equal(made.length, 3)
+  assert.equal(made[2].sent[0].method, "LIST_SUBSCRIPTIONS")
+  acknowledge(made[2], 0, { result: ["btcusdt@aggTrade"] })
+  await flush()
+  assert.equal(client.state, "open")
+  await client.disconnect()
+})
