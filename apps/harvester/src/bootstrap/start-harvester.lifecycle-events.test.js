@@ -9,7 +9,7 @@ const testEventPublisher = Object.freeze({
 })
 const startHarvesterForTest = (input = {}) => {
   const eventPublisher = input.eventPublisher
-    ? input.env?.HARVESTER_ENABLE_TRADING === "true" && typeof input.eventPublisher.flush !== "function"
+    ? typeof input.eventPublisher.flush !== "function"
       ? { ...input.eventPublisher, flush: testEventPublisher.flush }
       : input.eventPublisher
     : testEventPublisher
