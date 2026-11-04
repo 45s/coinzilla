@@ -167,14 +167,14 @@ Binance Spot TESTNET account settings previously showed **Commissions: None**. T
 
 ### 2026-11-04 latest PR #513 review gates
 
-The previous CI run tested an earlier PR merge ref and failed the MIN_NOTIONAL regression because it expected `ok: true` for an invalid order. The current branch test now expects `ok: false`, asserts the MIN_NOTIONAL validation error, and verifies the pair pauses once without repeated evaluation. Fresh exact-head CI is the only remaining merge gate; do not treat the earlier run as current verification.
+PR #513 has merged and its exact-head CI passed. The MIN_NOTIONAL regression now expects `ok: false`, asserts the validation error, and verifies the pair pauses once without repeated evaluation. PR #515 remains the active offline follow-up: its lifecycle, accounting, fee-policy, and OPENING/CLOSING audit acceptance checks are still in progress. Require fresh exact-head CI for every pushed increment; earlier green runs do not certify later commits.
 
 The maker-only fee-reserve defect is fixed in PR #513: Conservative recovery SELL sizing reserves the greater of configured `makerPercent` and `takerPercent`. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee inputs. Actual commissions remain authoritative for realized fill accounting.
 
 The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/stream and concurrent-market-update matrix is moved to the follow-up PR. The future closed-session opening-balance audit is also follow-up work. Keep Harvester stopped; merge of PR #513 does not authorize TESTNET restart or orders.
 
 
-### Incident execution handoff — 2026-11-04 (PR #513 only)
+### Incident execution handoff — 2026-11-04 (PR #515 follow-up)
 
 **Do not ask the operator to restart Harvester, submit orders, or repeat already supplied evidence.** The operator's role is to provide TESTNET logs/trade-history outputs when explicitly requested after source instrumentation and verification are ready. The engineering agent owns code investigation, fixes, regression tests, documentation, and CI.
 
