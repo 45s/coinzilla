@@ -775,7 +775,7 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 - [ ] Review duplicate/out-of-order stream overlap, cancellation/fill races, and complete recovery lifecycle regressions against the new barrier.
 - [ ] Reconcile complete exchange trade-level commission facts and establish the limits of the opening-balance baseline.
 
-**Verification status:** source changes and regression tests are committed to this PR, but no test command has been executed in this work session and no CI/status checks have been reported for the latest head. These implementation checkboxes do not satisfy the TESTNET restart gate. Keep the process stopped.
+**Verification status:** CI syntax and workflow lint checks passed on the previous head. The first regression run exposed a terminal registry ordering defect; after that fix, the next run exposed only a test assertion using Fill.id instead of tradeId. Both have been corrected. The latest head still needs a fresh successful Harvester unit-test and workspace-coverage run. These implementation checkboxes do not satisfy the TESTNET restart gate. Keep the process stopped.
 
 ### Incident A — repeated BUY submissions around immediate FILLED acknowledgements
 
