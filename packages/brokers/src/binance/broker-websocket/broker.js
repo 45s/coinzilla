@@ -12,6 +12,7 @@ import { BinanceUserDataSession } from "./methods/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
 import { readOptionalDecimalFilter, validatePositiveDecimalFilter } from "./helpers/symbol-filter-adapters.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
+import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
 import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
 
 function createApiClient(config) {
@@ -124,6 +125,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     this.userDataSession = new BinanceUserDataSession({
       getClient: () => this.tradingConnection,
       createClient: () => this.apiClientFactory(this.config),
+      createUserDataClientPort: createBinanceUserDataClientPort,
       setClient: (client) => { this.tradingConnection = client },
       setConnected: (connected) => { this.connected = connected },
       setUnavailable: (unavailable) => { this.userDataUnavailable = unavailable },
