@@ -1928,7 +1928,8 @@ test("blocks read-only startup when either account audit query fails", async () 
 })
 
 test("blocks read-only startup when either PREFLIGHT audit event cannot be durably flushed", async () => {
-  for (const failedFlush of [1, 2]) {
+  for (const scenario of [{ failedFlush: 1, nonDurable: false }, { failedFlush: 1, nonDurable: true }, { failedFlush: 2, nonDurable: true }]) {
+    const { failedFlush, nonDurable } = scenario
     const calls = []
     const broker = createBroker(calls)
     const events = []
@@ -1942,9 +1943,9 @@ test("blocks read-only startup when either PREFLIGHT audit event cannot be durab
         flush: async () => {
           flushCount += 1
           if (flushCount !== failedFlush) return { ok: true, durable: true }
-          return failedFlush === 1
-            ? { ok: false, errors: [new Error("journal fsync failed")] }
-            : { ok: true, durable: false }
+          return nonDurable
+            ? { ok: true, durable: false }
+            : { ok: false, errors: [new Error("journal fsync failed")] }
         },
       },
       logger: { info() {}, error() {}, debug() {} },
