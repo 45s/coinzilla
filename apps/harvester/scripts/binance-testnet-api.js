@@ -143,6 +143,9 @@ export const getMyTrades = async ({ symbol, limit = 1000, fromId }) => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) {
     throw new RangeError("Trade history limit must be an integer between 1 and 1000")
   }
+  if (fromId !== undefined && (!Number.isSafeInteger(fromId) || fromId < 0)) {
+    throw new RangeError("Trade history fromId must be a non-negative safe integer")
+  }
 
   const { data } = await binanceTestnetRequest({
     method: "GET",
