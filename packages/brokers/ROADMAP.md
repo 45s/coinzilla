@@ -65,6 +65,19 @@ The migration is complete only when all of the following are true:
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [ ] Phase 8 — operational hardening and completion; opt-in TESTNET verification and long-running recovery/soak validation remain.
 
+### DDD architecture modernization — accepted, in progress
+
+The goal is to align the broker package with the responsibility boundaries already used by Harvester, without a risky all-at-once directory rewrite.
+
+- [~] Add a package-scoped coverage command and establish the current line/branch baseline before setting thresholds.
+- [ ] Inventory the public broker contract and map current modules into domain policy, application orchestration, and Binance infrastructure responsibilities.
+- [ ] Strengthen public contract and lifecycle/recovery characterization tests before moving implementation.
+- [ ] Refactor one cohesive vertical slice at a time, using strict RED → GREEN → REFACTOR and preserving exports, method signatures, result shapes, decimal strings, event semantics, and recovery acknowledgement behavior.
+- [ ] Set risk-based package coverage thresholds only after reviewing the measured baseline and uncovered critical branches.
+- [ ] Verify broker consumers and run the package, workspace, syntax, and required CI checks.
+
+Do not introduce empty DDD folders or abstractions without a concrete responsibility and a tested behavior. Keep exchange-specific protocol details in Binance infrastructure; keep strategy and bot behavior outside this package.
+
 ### Next action
 
 1. The source of truth is `develop`, currently at merge commit `674a3b10ed34fb444a9f2ef2179fc073c90b7827` (PR #365).
