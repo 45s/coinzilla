@@ -6,6 +6,30 @@ import { validateTradingConfig } from '../../src/domain/trading-config.js';
 const configUrl = new URL('../../trading-config.json', import.meta.url);
 const validConfig = JSON.parse(await readFile(configUrl, 'utf8'));
 
+test('requires explicit Conservative and disabled Aggressive strategy settings', () => {
+  const config = structuredClone(validConfig);
+  config.strategies = {
+    conservative: { enabled: true },
+    aggressive: { enabled: false },
+  };
+
+  assert.equal(validateTradingConfig(config), config);
+
+  const aggressiveEnabled = structuredClone(config);
+  aggressiveEnabled.strategies.aggressive.enabled = true;
+  assert.throws(
+    () => validateTradingConfig(aggressiveEnabled),
+    /strategies.aggressive.enabled.*Aggressive strategy is deferred/,
+  );
+
+  const conservativeDisabled = structuredClone(config);
+  conservativeDisabled.strategies.conservative.enabled = false;
+  assert.throws(
+    () => validateTradingConfig(conservativeDisabled),
+    /strategies.conservative.enabled.*Conservative must remain enabled/,
+  );
+});
+
 test('accepts the flat Harvester trading configuration', () => {
   assert.equal(validateTradingConfig(validConfig), validConfig);
   assert.equal('strategies' in validConfig, false);
