@@ -1554,6 +1554,11 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     bestAskQuantity: "1",
     timestamp: 1000,
   })
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 1000,
+  })
   assert.ok(calls.includes("placeOrder:BUY"))
 
   await runtime.stop()
