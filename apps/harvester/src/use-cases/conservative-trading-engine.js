@@ -172,6 +172,83 @@ export function makeConservativeTradingEngine({
     await onPause({ symbol, reason, error })
   }
 
+  // A FILLED submission acknowledgement is terminal exchange state, but it
+  // is not reconciled strategy state until every execution has been fetched
+  // and applied. Keep this inside the current serialized transition so market
+  // events cannot observe the acknowledgement/fill gap.
+  const reconcileFilledAcknowledgement = async ({ order } = {}) => {
+    if (order.status !== "FILLED") return toResult({ data: { reconciled: false } })
+    const fillsResult = await broker.getFills({
+      symbol: order.market.symbol,
+      orderId: order.brokerOrderId,
+    })
+    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+      const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve executions for FILLED acknowledgement")
+      await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_BUY_FILL_RECONCILIATION_FAILED", error })
+      return toResult({ error })
+    }
+
+    const fillsById = new Map()
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          fill.clientOrderId !== order.clientOrderId) {
+        const error = new Error("Execution history does not match the FILLED acknowledged order")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      if (!fillsById.has(fill.id)) fillsById.set(fill.id, fill)
+    }
+    const fills = [...fillsById.values()].sort((left, right) => {
+      if (left.executedAt !== undefined && right.executedAt !== undefined &&
+          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+      return left.tradeId.localeCompare(right.tradeId)
+    })
+    const reconciledQuantity = fills.reduce(
+      (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+      "0",
+    )
+    if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0 ||
+        compareDecimal({ left: order.executedQuantity.amount, right: order.originalQuantity.amount }) !== 0) {
+      const error = new Error("Execution history does not fully reconcile with the FILLED acknowledged order quantity")
+      await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE", error })
+      return toResult({ error })
+    }
+
+    let cumulativeQuantity = "0"
+    for (const fill of fills) {
+      cumulativeQuantity = addDecimal({ left: cumulativeQuantity, right: fill.quantity.amount })
+      const isFinalExecution = compareDecimal({
+        left: cumulativeQuantity,
+        right: order.executedQuantity.amount,
+      }) === 0
+      const executionOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: new Quantity({ amount: cumulativeQuantity, asset: order.market.baseAsset }),
+        status: isFinalExecution ? "FILLED" : "PARTIALLY_FILLED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: order.updatedAt,
+        ...(isFinalExecution && order.completedAt !== undefined ? { completedAt: order.completedAt } : {}),
+      })
+      const processed = await processUserDataEventTransition({
+        event: { eventType: "executionReport", executionType: "TRADE", executedOrder: executionOrder, fill },
+      })
+      if (!processed?.ok) {
+        const error = processed?.errors?.[0] ?? new Error("Acknowledged order execution could not be applied")
+        await pause({ symbol: order.market.symbol, reason: "ACKNOWLEDGED_FILL_APPLICATION_FAILED", error })
+        return toResult({ errors: processed?.errors ?? [error] })
+      }
+    }
+    return toResult({ data: { reconciled: true, fills: fills.length } })
+  }
+
   const publishOrderCancelled = ({ order }) => publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
@@ -228,6 +305,8 @@ export function makeConservativeTradingEngine({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
         dataResult: mapOrderSubmittedData({ order }),
       })
+      const reconciliation = await reconcileFilledAcknowledgement({ order })
+      if (!reconciliation.ok) throw reconciliation.errors?.[0] ?? new Error("FILLED acknowledgement reconciliation failed")
     },
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
