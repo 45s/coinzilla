@@ -47,7 +47,6 @@ const tradingConfig = {
       keepQuantity: 0.1,
       priceStepPercent: 0.05,
       makerPercent: 0,
-      takerPercent: 0,
       takerPercent: 0.075,
       },
     },
