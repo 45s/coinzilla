@@ -431,3 +431,7 @@ pnpm run journal:balance-audit -- ./logs
 ```
 
 The command groups records by JSONL session and reports exact per-asset free, locked, and total balance deltas. It exits non-zero if a session is missing either snapshot, has duplicate endpoints, or carries an INCOMPLETE closing audit. The command is read-only and never modifies Journal sessions. It deliberately does not convert these deltas into a profit figure; executions, commissions, external transfers, and remaining inventory valuation still require reconciliation.
+
+## Startup account preflight audit
+
+Every connected `pnpm run dev` startup captures exchange account state before market subscriptions, whether order execution is enabled or not. Harvester uses its existing broker connection and durably journals `account.snapshot_captured` (exact free, locked, and total balances) and `account.open_orders_captured` (account-wide open orders and their identifiers, symbol, side, type, price, original/executed quantities, and status), both with phase `PREFLIGHT`. Each event is flushed before startup proceeds. Query, publication, or flush failure blocks startup. Existing orders are recorded as unowned and are never adopted or changed. Read-only mode may continue with a blocked order audit; trading-enabled startup remains blocked when any pre-existing order exists.

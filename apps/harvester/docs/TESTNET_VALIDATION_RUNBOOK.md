@@ -226,3 +226,8 @@ A cursor page may contain orders after the requested `orderId`; filter to the ex
 The offline regression suite also covers fill-history visibility lag: a FILLED acknowledgement with no currently visible trades remains UNKNOWN with the acknowledged broker order ID and zero reconciled quantity; the pair stays paused. Once exact trade history becomes visible, REST reconciliation must match the order's cumulative executed quantity, apply each trade once, and leave the pause in place. Conflicting broker order ID, market, side, or a present-but-different client order ID is rejected before accounting.
 
 These are offline tests only. They do not authorize or substitute for the separately controlled TESTNET validation.
+
+
+## Startup PREFLIGHT account audit (all modes)
+
+Before market subscriptions or trading-engine activation, Harvester uses its existing broker connection to fetch the complete account balance snapshot and account-wide open orders. It publishes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushing each event before continuing. Verify both records in the Journal for every dev startup, including read-only runs. The balance event records exact free, locked, and total quantities per asset. Existing orders are external/unowned: the audit does not adopt or change them. Read-only mode may continue with a `BLOCKED` open-order audit; trading-enabled startup must stop. Any exchange query, event publication, or durable flush failure blocks startup. This audit is observational and does not authorize TESTNET order activity.
