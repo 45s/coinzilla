@@ -434,6 +434,72 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
   }))
 
 
+
+/** Map the complete account-wide open-order snapshot before trading readiness is granted. */
+export const mapAccountOpenOrdersCapturedData = (input = {}) =>
+  mapData(input, "Account-open-orders-captured event mapping", ({
+    observedAt, orders, readiness, blockReasons = [],
+  }) => {
+    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+      throw new TypeError("observedAt must be a non-negative safe integer")
+    }
+    if (!Array.isArray(orders)) throw new TypeError("orders must be an array")
+    if (!["READY", "BLOCKED"].includes(readiness)) {
+      throw new TypeError("readiness must be READY or BLOCKED")
+    }
+    if (!Array.isArray(blockReasons) || blockReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
+      throw new TypeError("blockReasons must contain non-empty strings")
+    }
+    const mappedOrders = orders.map((order, index) => {
+      if (!order || typeof order !== "object" || !order.market?.symbol) {
+        throw new TypeError("orders[" + index + "] must contain canonical order facts")
+      }
+      return {
+        ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
+          ? { clientOrderId: order.clientOrderId.trim() }
+          : {}),
+        brokerOrderId: requireString({ value: order.brokerOrderId, field: "orders[" + index + "].brokerOrderId" }),
+        symbol: requireString({ value: order.market.symbol, field: "orders[" + index + "].symbol" }),
+        side: order.side === "BUY" || order.side === "SELL"
+          ? order.side
+          : (() => { throw new TypeError("orders[" + index + "].side must be BUY or SELL") })(),
+        type: requireString({ value: order.type, field: "orders[" + index + "].type" }),
+        ...(order.limitPrice?.amount === undefined ? {} : {
+          price: requireDecimalString({ value: order.limitPrice.amount, field: "orders[" + index + "].price" }),
+        }),
+        quantity: requireDecimalString({
+          value: order.originalQuantity?.amount,
+          field: "orders[" + index + "].quantity",
+        }),
+        executedQuantity: requireDecimalString({
+          value: order.executedQuantity?.amount ?? "0",
+          field: "orders[" + index + "].executedQuantity",
+        }),
+        status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
+      }
+    }).sort((left, right) =>
+      left.symbol.localeCompare(right.symbol) ||
+      left.brokerOrderId.localeCompare(right.brokerOrderId)
+    )
+    const identities = mappedOrders.map(({ symbol, brokerOrderId }) => symbol + ":" + brokerOrderId)
+    if (new Set(identities).size !== identities.length) {
+      throw new TypeError("orders must not contain duplicate symbol/brokerOrderId identities")
+    }
+    if (readiness === "READY" && (mappedOrders.length > 0 || blockReasons.length > 0)) {
+      throw new TypeError("READY open-order audit requires no open orders and no block reasons")
+    }
+    if (readiness === "BLOCKED" && blockReasons.length === 0) {
+      throw new TypeError("BLOCKED open-order audit requires blockReasons")
+    }
+    return {
+      observedAt,
+      readiness,
+      orderCount: mappedOrders.length,
+      orders: mappedOrders,
+      blockReasons: [...blockReasons],
+    }
+  })
+
 /** Map all exchange-returned balances into an exact-decimal account audit event. */
 export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
