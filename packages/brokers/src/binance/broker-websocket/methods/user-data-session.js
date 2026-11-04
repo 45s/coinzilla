@@ -48,14 +48,17 @@ export class BinanceUserDataSession {
     clearTimeoutFn = clearTimeout,
   }) {
     if (typeof getClient !== "function" || typeof createClient !== "function" ||
-        typeof createUserDataClientPort !== "function" || typeof setClient !== "function" ||
-        typeof setConnected !== "function" ||
+        typeof setClient !== "function" || typeof setConnected !== "function" ||
         typeof setUnavailable !== "function") {
       throw new TypeError("User-data session requires client and state callbacks")
     }
     if (!Number.isInteger(reconnectDelay) || reconnectDelay < 0 ||
         !Number.isInteger(recoveryWarningThreshold) || recoveryWarningThreshold < 1) {
       throw new RangeError("Invalid user-data reconnect policy")
+    }
+
+    if (typeof createUserDataClientPort !== "function") {
+      throw new TypeError("User-data session requires a client port factory")
     }
 
     this.getClient = getClient
