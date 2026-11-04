@@ -151,7 +151,11 @@ export function makeConservativeTradingEngine({
 
   const submit = makeExecuteStrategyDecision({
     broker,
-    canSubmit: ({ order } = {}) => canTrade({ symbol: order.market.symbol }),
+    canSubmit: ({ order } = {}) => {
+      const symbol = order.market.symbol
+      const marketPrice = state.prices.get(symbol)
+      return canTrade({ symbol }) && Boolean(marketPrice && isMarketPriceFresh(marketPrice))
+    },
     onSubmissionDeferred: ({ order, registered } = {}) => {
       if (registered) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
