@@ -230,20 +230,60 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
         return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
       }
       try {
-        const completion = evaluateRecoveryCompletion({
+        const completionInput = {
           sellOrderFullyFilled: true,
           buyCost: recoveryLedger.buyCost,
           netSellProceeds: recoveryLedger.netSellProceeds,
           activeQuantity: position.baseQuantity.amount,
           keepQuantity,
           minProfit,
+        }
+        logger.debug?.({
+          message: "Harvester recovery completion evaluation input",
+          marketId,
+          symbol: recoveryLedger.market.symbol,
+          completionInput,
+          position: position.value,
+          recoveryLedger: recoveryLedger.value,
         })
+        const completion = evaluateRecoveryCompletion(completionInput)
         if (completion.eligible) {
+          const previousPortfolio = portfolio
+          const previousLedger = recoveryLedger
           portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
-          recoveryLedgers.set(marketId, recoveryLedger.resetCycle())
+          const resetLedger = recoveryLedger.resetCycle()
+          recoveryLedgers.set(marketId, resetLedger)
+          logger.debug?.({
+            message: "Harvester recovery cycle completed and inventory allocated",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            previousPosition: previousPortfolio.getPosition({ marketId })?.value ?? null,
+            nextPosition: portfolio.getPosition({ marketId })?.value ?? null,
+            previousRecoveryLedger: previousLedger.value,
+            nextRecoveryLedger: resetLedger.value,
+          })
+        } else {
+          logger.debug?.({
+            message: "Harvester recovery cycle not completed",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            unchangedPosition: position.value,
+            unchangedRecoveryLedger: recoveryLedger.value,
+          })
         }
         return toResult({ data: completion })
       } catch (error) {
+        logger.error?.({
+          message: "Harvester recovery completion evaluation failed",
+          marketId,
+          errorName: error?.name,
+          errorMessage: error?.message ?? String(error),
+          errorStack: error?.stack,
+          unchangedPortfolio: portfolio.value,
+          unchangedRecoveryLedger: recoveryLedger.value,
+        })
         return toResult({ error })
       }
     },
