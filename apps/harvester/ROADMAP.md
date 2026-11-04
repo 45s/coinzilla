@@ -913,17 +913,23 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 
 ## PR #515 offline follow-up progress — 2026-11-04
 
-**Latest verified code increment:** `test(harvester): normalize fake broker order acknowledgement`.
+**Latest verified code increment:** `fix(harvester): validate fee percentages below 100`; documentation now records the same contract.
 
 - [x] Task handoff and README / ROADMAP / TRADING_FIRST incident status no longer describe PR #513 as pending.
 - [x] Remove duplicate OPENING snapshot flush-failure test.
-- [x] Add recovery SELL exact tick-rounding boundary and base-commission retained-inventory boundary tests.
-- [x] Add duplicate CLOSING snapshot endpoint coverage to the read-only per-session Journal audit.
-- [x] Add a streamed BUY partial-fill sequence test and assert the VWAP reference is not advanced until the cumulative FILLED quantity reconciles.
-- [x] Add shutdown interleaving coverage: shutdown waits for REST owned-order reconciliation; a failed reconciliation produces an INCOMPLETE CLOSING snapshot before broker disconnect.
-- [x] Latest exact-head CI passed: Harvester 378/378, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
-- [ ] Remaining offline work: finish the complete lifecycle event permutation matrix, per-fill/per-cycle/session accounting reconciliation, full maker/taker caller/boundary audit, and account-audit malformed/edge cases.
-- [ ] Branch synchronization: `develop` advanced by two unrelated broker-package commits after this branch's merge base. The branch must be updated before merge; current GitHub connector does not expose the repository tree/branch-update operation needed to perform that merge here.
-- [ ] Historical account baseline: no eligible historical session has an OPENING snapshot; the old incident Journal predates this feature. A future controlled session is required for an actual OPENING/CLOSING balance audit.
+- [x] Add recovery SELL exact tick-rounding and base-commission retained-inventory boundary tests.
+- [x] Add maker/taker configuration upper-bound validation: both rates accept 0 inclusive and reject 100 or higher at config load; README documents the [0, 100) percentage contract.
+- [x] Add duplicate CLOSING snapshot endpoint and malformed Journal snapshot/session/profit record tests.
+- [x] Add streamed BUY partial-fill sequence coverage (cumulative 0.4 → 0.7 → 1.0) and assert VWAP is reconciled before strategy advancement.
+- [x] Add REST/stream stale-history protection: a REST order snapshot behind an already applied stream fill is rejected without applying stale REST fills.
+- [x] Add shutdown interleaving coverage: shutdown waits for REST owned-order reconciliation; failed reconciliation produces an INCOMPLETE CLOSING snapshot before broker disconnect.
+- [x] Add multi-fill commission reconciliation: Portfolio net quote cash flow matches RecoveryLedger outstanding recovery after multiple BUY/SELL fills.
+- [x] Add fee-adjusted cycle reconciliation: actual Portfolio quote cash flow matches RecoveryLedger realized cycle profit and the exact free keepQuantity allocation.
+- [x] Latest exact-head CI passed on the code head: Harvester 382/382, workspace tests and coverage, Utilities tests, JavaScript syntax, workflow lint/actionlint, and production dependency audit.
+- [~] Lifecycle matrix: immediate-FILLED acknowledgement, streamed BUY/SELL partials, duplicate/conflicting fills, stale REST history, REST/stream overlap, cancel/fill overlap, and shutdown waiting are covered. Remaining out-of-order/conflicting order-event permutations and concurrent market updates during each acknowledgement/cancel interleaving still require explicit review.
+- [~] Accounting/fees: Portfolio/RecoveryLedger base/quote commission atomicity, unsupported third-asset/unknown commission failures, multi-fill totals, cycle profit, maker/taker selection, and price/quantity boundaries are covered. Remaining review is to verify every fee-related production caller and complete the full per-session reconciliation evidence chain.
+- [~] Account audit: OPENING/CLOSING ordering, incomplete closing on reconciliation failure, duplicate endpoints, malformed session/phase/profit records, and per-session cycle-profit aggregation are covered. No eligible historical session has an OPENING snapshot; the historical incident Journal predates this feature.
+- [ ] Branch synchronization: `develop` advanced by two unrelated broker-package commits after this branch's merge base. The branch must be updated before merge; the available GitHub connector does not expose the repository-tree read or PR branch-update operation needed to perform that merge here.
+- [ ] Historical account baseline: a future controlled session is required for an actual OPENING/CLOSING balance audit against exchange trades, commissions, and external account activity.
 
 Harvester remains stopped. No TESTNET write operations have been performed as part of this follow-up.
