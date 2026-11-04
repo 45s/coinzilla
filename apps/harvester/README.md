@@ -1,5 +1,8 @@
 # Harvester
 
+> **TESTNET incident status — 2026-11-04:** source remediation is merged in [PR #513](https://github.com/45s/coinzilla/pull/513). The remaining lifecycle, commission-accounting, fee-policy, and OPENING/CLOSING audit verification is tracked in [PR #515](https://github.com/45s/coinzilla/pull/515). Harvester remains stopped; do not infer TESTNET readiness from offline CI. See [Trading First](./docs/TRADING_FIRST.md) and the [Harvester Roadmap](./ROADMAP.md) for the acceptance gates.
+
+
 Harvester is an independent Node.js process for cryptocurrency trading, built inside the Coinzilla pnpm monorepo.
 
 It is intended to support multiple trading strategies through a shared trading engine. The first documented strategy modes are:
