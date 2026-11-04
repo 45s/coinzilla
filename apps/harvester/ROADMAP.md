@@ -958,3 +958,15 @@ PR #513 is already merged. Keep PR #515 draft until its offline acceptance crite
 **Offline status:** the lifecycle, accounting, fee-policy, and account-audit implementation/test work is complete on the verified code head. Remaining gates are branch synchronization, a final exact-head CI run after documentation updates, and the separately authorized controlled TESTNET session.
 
 Harvester remains stopped. No TESTNET write operations have been performed as part of this follow-up.
+
+
+## PR #515 finalization and controlled TESTNET handoff — 2026-11-04
+
+- [x] Offline lifecycle, accounting, fee-policy, and account-audit remediation completed; exact pre-documentation PR head passed Harvester 387/387 and all five required workflows (JavaScript Syntax, Utils Unit Tests, Dependency Audit, Test Coverage, Unit Tests).
+- [x] Added `docs/TESTNET_VALIDATION_RUNBOOK.md` with explicit one-pair/one-cycle limits, current expected ZROUSDT configuration, account ownership baseline, OPENING/CLOSING verification, order/cancel authorization, execution and REST reconciliation, commission accounting, Portfolio/RecoveryLedger reconciliation, abort/recovery conditions, and evidence checklist.
+- [x] README links to the controlled TESTNET validation runbook. Runbook is preparation only; it does not authorize execution.
+- [ ] Synchronize PR #515 with current `develop` before merge. Latest observed comparison before the documentation-only commits: 53 commits ahead / 9 behind. The GitHub integration available to this agent cannot invoke GitHub's PR **Update branch** operation. Do not replace this with a force-push or unsafe ref update.
+- [ ] After synchronization, verify exact PR head and merge base, rerun all required workflows, inspect every result, mark PR ready, and merge only when required checks are green.
+- [ ] After merge, record the merge commit/message and confirm Harvester remains stopped. The joint TESTNET session remains a separate, explicit operator/assistant authorization gate.
+
+**Safety:** No Harvester process was started. No TESTNET orders were submitted or canceled, no account settings were changed, and no exchange write operations were performed. Offline CI is not TESTNET acceptance.
