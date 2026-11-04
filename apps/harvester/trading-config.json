@@ -20,8 +20,8 @@
           "priceStepPercent": 0.05,
           "pricePrecision": 5,
           "quantityPrecision": 0,
-          "makerPercent": 0.075,
-          "takerPercent": 0.075
+          "makerPercent": 0.1,
+          "takerPercent": 0.1
         },
         "SOLFDUSD": {
           "enabled": false,
@@ -31,8 +31,8 @@
           "priceStepPercent": 0.05,
           "pricePrecision": 2,
           "quantityPrecision": 3,
-          "makerPercent": 0,
-          "takerPercent": 0.075
+          "makerPercent": 0.1,
+          "takerPercent": 0.1
         },
         "ZROUSDT": {
           "enabled": true,
@@ -42,8 +42,8 @@
           "priceStepPercent": 0.05,
           "pricePrecision": 3,
           "quantityPrecision": 1,
-          "makerPercent": 0.075,
-          "takerPercent": 0.075
+          "makerPercent": 0.1,
+          "takerPercent": 0.1
         },
         "ZROFDUSD": {
           "enabled": false,
@@ -53,8 +53,8 @@
           "priceStepPercent": 0.5,
           "pricePrecision": 3,
           "quantityPrecision": 1,
-          "makerPercent": 0,
-          "takerPercent": 0.075
+          "makerPercent": 0.1,
+          "takerPercent": 0.1
         }
       }
     }
