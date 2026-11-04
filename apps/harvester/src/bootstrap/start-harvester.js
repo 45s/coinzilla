@@ -25,6 +25,7 @@ import {
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
   mapAccountSnapshotCapturedData,
+  mapAccountOpenOrdersCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
@@ -510,6 +511,54 @@ export async function startHarvester({
 
     return nextSnapshot
   }
+
+  const publishOpenOrdersSnapshot = async () => {
+    const result = await broker.getOpenOrders({})
+    if (!result?.ok || !Array.isArray(result.data)) {
+      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
+    }
+    const orders = result.data
+    const blockReasons = orders.length > 0
+      ? ["UNOWNED_OPEN_ORDERS:" + orders.length]
+      : []
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
+      dataResult: mapAccountOpenOrdersCapturedData({
+        observedAt: now(),
+        orders,
+        readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
+        blockReasons,
+      }),
+    })
+    if (!published?.ok) throw new Error("Unable to publish account open-orders audit event")
+    if (typeof eventPublisher?.flush === "function") {
+      const flushed = await eventPublisher.flush()
+      if (flushed?.ok !== true) {
+        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : ""))
+      }
+    } else if (tradingEnabled) {
+      throw new Error("Conservative TESTNET trading requires a durable open-orders audit before trading")
+    }
+    logger.info?.({
+      message: orders.length === 0
+        ? "Account-wide open-orders audit complete; no open orders found"
+        : "Account-wide open-orders audit blocked trading because open orders are unowned",
+      orderCount: orders.length,
+      readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
+      symbols: [...new Set(orders.map((order) => order.market?.symbol).filter(Boolean))],
+    })
+    if (orders.length > 0) {
+      throw new Error(
+        "Conservative TESTNET startup blocked: account has " + orders.length +
+        " pre-existing open order(s) with no restored Harvester ownership state; inspect account.open_orders_captured in Journal",
+      )
+    }
+    return orders
+  }
+
   const publishAccountSnapshot = async ({ phase, auditStatus = "COMPLETE", auditReasons = [] } = {}) => {
     const snapshot = await refreshAccountSnapshot()
     const published = publishLifecycleEvent({
@@ -939,6 +988,7 @@ export async function startHarvester({
       : refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
+    if (tradingEnabled) await publishOpenOrdersSnapshot()
     initialAccountSnapshotReady = true
 
     if (tradingEnabled) {
