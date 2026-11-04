@@ -101,19 +101,77 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
-const createPortfolioWorkflow = ({ evaluateStrategy }) => {
+const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
   let portfolio = new Portfolio()
   const recoveryLedgers = new Map()
   let updateQueue = Promise.resolve()
-  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy })
+
+  const tracedEvaluateStrategy = (input = {}) => {
+    const marketId = input.marketMetadata?.market?.id
+    const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
+    logger.debug?.({
+      message: "Harvester strategy evaluation input",
+      symbol: input.marketPrice?.symbol,
+      marketPrice: input.marketPrice,
+      lastBuyPrice: input.lastBuyPrice,
+      activeOrders: input.activeOrders,
+      pairConfig: input.pairConfig,
+      settings: input.settings,
+      portfolio: portfolio.value,
+      recoveryLedger: recoveryLedger?.value ?? null,
+    })
+    const decision = evaluateStrategy(input)
+    logger.debug?.({
+      message: "Harvester strategy evaluation result",
+      symbol: input.marketPrice?.symbol,
+      action: decision?.action,
+      reason: decision?.reason,
+      actions: decision?.actions,
+      position: decision?.position,
+      recoveryLedger: recoveryLedger?.value ?? null,
+    })
+    return decision
+  }
+  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
 
   const updateTradingAccounting = ({ fill } = {}) => {
     const task = updateQueue.then(() => {
       if (!(fill instanceof Fill)) {
+        logger.error?.({
+          message: "Harvester accounting rejected non-canonical fill",
+          fillType: fill?.constructor?.name ?? typeof fill,
+        })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
       }
+
+      const previousPortfolio = portfolio
       const currentLedger = recoveryLedgers.get(fill.market.id) ??
         RecoveryLedger.empty({ market: fill.market })
+      const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id })
+      const commissionFacts = (fill.commissions ?? []).map(({ amount } = {}) => ({
+        amount: amount?.amount,
+        asset: amount?.asset?.code,
+        assetId: amount?.asset?.id,
+      }))
+
+      logger.debug?.({
+        message: "Harvester accounting execution received",
+        executionId: fill.id,
+        tradeId: fill.tradeId,
+        brokerOrderId: fill.brokerOrderId,
+        clientOrderId: fill.clientOrderId,
+        marketId: fill.market.id,
+        symbol: fill.market.symbol,
+        side: fill.side,
+        price: fill.price?.amount,
+        quantity: fill.quantity?.amount,
+        quoteQuantity: fill.quoteQuantity?.amount,
+        commissionStatus: fill.commissionStatus,
+        commissions: commissionFacts,
+        previousPosition: previousPosition?.value ?? null,
+        previousRecoveryLedger: currentLedger.value,
+      })
+
       const result = applyTradingAccounting({
         portfolio,
         recoveryLedger: currentLedger,
@@ -122,6 +180,36 @@ const createPortfolioWorkflow = ({ evaluateStrategy }) => {
       if (result.ok) {
         portfolio = result.data.portfolio
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+        logger.debug?.({
+          message: "Harvester accounting execution applied",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          applied: result.data.applied,
+          duplicate: result.data.duplicate,
+          nextPosition: portfolio.getPosition({ marketId: fill.market.id })?.value ?? null,
+          nextRecoveryLedger: result.data.recoveryLedger.value,
+          accountingDelta: {
+            buyCost: result.data.recoveryLedger.buyCost,
+            netSellProceeds: result.data.recoveryLedger.netSellProceeds,
+            outstandingRecoveryAmount: result.data.recoveryLedger.outstandingRecoveryAmount,
+            realizedNetProfit: result.data.recoveryLedger.realizedNetProfit,
+          },
+        })
+      } else {
+        logger.error?.({
+          message: "Harvester accounting execution rejected",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          errors: (result.errors ?? []).map((error) => ({
+            name: error?.name,
+            message: error?.message ?? String(error),
+            stack: error?.stack,
+          })),
+          unchangedPortfolio: previousPortfolio.value,
+          unchangedRecoveryLedger: currentLedger.value,
+        })
       }
       return result
     })
@@ -221,7 +309,7 @@ export async function startHarvester({
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
   })
 
-  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
+  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let processMarketPrice = portfolioWorkflow.processMarketPrice
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
   const {
