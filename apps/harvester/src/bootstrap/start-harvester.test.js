@@ -1543,8 +1543,24 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
       }),
     }
   }
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            investment: 2000,
+          },
+        },
+      },
+    },
+  }
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => config,
     env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
