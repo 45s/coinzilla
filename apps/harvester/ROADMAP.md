@@ -1095,7 +1095,7 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Use shared `PREFLIGHT` phase for trading-enabled and read-only startup; durably flush each event before market subscriptions or engine activation.
 - [x] Record existing orders without adopting or changing them. Trading-enabled startup fails closed when pre-existing unowned orders exist; read-only startup preserves observation-only behavior.
 - [x] Add regressions for exactly-once reads, event ordering and durability, existing-order preservation, query failures, and Journal flush failures.
-- [ ] Complete exact-head CI and merge the implementation PR. TESTNET remains stopped pending a separately controlled session.
+- [x] Exact-head CI passed and the implementation merged in PR #545. TESTNET remains stopped pending a separately controlled session.
 
 - [x] Feature branch synchronized with the latest `develop` head before final CI verification.
 
