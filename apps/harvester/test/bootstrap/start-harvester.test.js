@@ -12,6 +12,17 @@ import {
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
+const testEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+})
+const startHarvesterForTest = (input = {}) => startHarvesterForTest({
+  ...input,
+  eventPublisher: input.eventPublisher
+    ? { ...testEventPublisher, ...input.eventPublisher }
+    : testEventPublisher,
+})
+
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
@@ -20,7 +31,7 @@ test('loads configuration before returning the startup context', async () => {
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
 
-  const context = await startHarvester({
+  const context = await startHarvesterForTest({
     configSource,
     loadConfig: async (source) => {
       calls.push(source);
@@ -37,7 +48,7 @@ test('fails startup when configuration loading or validation fails', async () =>
   const startupError = new TypeError('Invalid trading config');
 
   await assert.rejects(
-    startHarvester({
+    startHarvesterForTest({
       loadConfig: async () => {
         throw startupError;
       },
@@ -160,7 +171,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
       return toResult({ data: { disconnect: async () => {} } });
     },
   };
-  const context = await startHarvester({
+  const context = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     brokerAdapterFactory: () => broker,
     env: {
