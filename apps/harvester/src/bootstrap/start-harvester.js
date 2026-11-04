@@ -532,7 +532,10 @@ export async function startHarvester({
         blockReasons,
       }),
     })
-    if (!published?.ok) throw new Error("Unable to publish account open-orders audit event")
+    if (!published?.ok) {
+      const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : ""))
+    }
     if (typeof eventPublisher?.flush === "function") {
       const flushed = await eventPublisher.flush()
       if (flushed?.ok !== true) {
