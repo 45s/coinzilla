@@ -246,7 +246,7 @@ export async function startHarvester({
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
-const broker = assertBrokerPort({
+  const broker = assertBrokerPort({
     broker: brokerAdapterFactory({
       config: {
         apiKey: env.BINANCE_API_KEY,
@@ -255,7 +255,7 @@ const broker = assertBrokerPort({
     }),
   })
 
-try {
+  try {
     logger.info?.({ message: "Connecting to Binance broker" })
 
     await broker.connect()
@@ -401,7 +401,7 @@ try {
         }
         let reevaluateSymbol
 
-if (isExecution) {
+        if (isExecution) {
           logger.info?.({
             message: "Trade execution received",
             symbol: event.fill?.market?.symbol ?? event.executedOrder?.market?.symbol,
@@ -741,7 +741,7 @@ if (isExecution) {
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
+    const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
@@ -846,7 +846,7 @@ const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot
             settings: tradingConfig.settings,
           })).then((processed) => {
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
-          
+
           return processed
         }).catch((error) => {
           reportPriceError({ symbol, error })
@@ -898,7 +898,7 @@ const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
 
-if (tradingEnabled) {
+      if (tradingEnabled) {
 
         let tickerResult
         try {
@@ -937,8 +937,6 @@ if (tradingEnabled) {
             settings: tradingConfig.settings,
           })
           if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
-        } else {
-
         }
       }
     }
