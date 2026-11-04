@@ -1867,6 +1867,69 @@ test("fails closed when REST fill IDs conflict with executions already processed
 })
 
 
+test("rejects REST order history that is behind an already processed stream fill", async () => {
+  const { engine, broker, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const streamFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-ahead-of-rest",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    executedAt: 10,
+  })
+  const streamOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5",
+    updatedAt: 3,
+  })
+  const streamResult = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: streamOrder, fill: streamFill },
+  })
+  assert.equal(streamResult.ok, true)
+  assert.equal(accountedFills.length, 1)
+
+  const staleRestFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stale-rest-history-fill",
+    price: "99.95",
+    quantity: "0.4",
+    quoteQuantity: "39.98",
+    executedAt: 9,
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.4",
+      updatedAt: 4,
+    })],
+  })
+  broker.getFills = async () => ({ ok: true, data: [staleRestFill] })
+
+  const result = await engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(accountedFills[0].tradeId, "stream-ahead-of-rest")
+  assert.equal(
+    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).executedQuantity.amount,
+    "0.5",
+  )
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
+  assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
 test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
   let releaseFills
   let signalFillsStarted
