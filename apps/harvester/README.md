@@ -82,6 +82,10 @@ Example:
   "settings": {
     "minProfit": 0.01
   },
+  "strategies": {
+    "conservative": { "enabled": true },
+    "aggressive": { "enabled": false }
+  },
   "pairs": {
     "ZROUSDT": {
       "enabled": true,
