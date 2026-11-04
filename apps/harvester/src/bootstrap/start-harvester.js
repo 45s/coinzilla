@@ -29,16 +29,13 @@ import {
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const results = await Promise.allSettled([
     ...bookSubscriptions.map(({ unsubscribe }) => {
-
       return Promise.resolve().then(() => unsubscribe())
     }),
     ...subscriptions.map(({ unsubscribe }) => {
-
       return Promise.resolve().then(() => unsubscribe())
     }),
     ...(typeof userDataSubscription?.disconnect === "function"
       ? [Promise.resolve().then(() => {
-
         return userDataSubscription.disconnect()
       })]
       : []),
@@ -51,7 +48,6 @@ async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDat
 async function disconnectBroker({ broker, brokerName, eventPublisher }) {
   const results = await Promise.allSettled([
     Promise.resolve().then(() => {
-
       return broker.disconnect()
     }),
   ])
@@ -71,7 +67,6 @@ async function disconnectBroker({ broker, brokerName, eventPublisher }) {
 }
 
 async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
-
   const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription })
   const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher })
   const errors = [...intakeErrors, ...disconnectErrors]
@@ -171,7 +166,6 @@ export async function startHarvester({
   onUserDataStatus = () => {},
   now = Date.now,
 } = {}) {
-
   const tradingConfig = await loadConfig(configSource)
   if (tradingConfig.strategies?.conservative?.enabled !== true) {
     throw new Error("Conservative strategy must remain enabled in trading config")
@@ -265,7 +259,6 @@ export async function startHarvester({
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
     logger.info?.({ message: "Binance broker connected" })
-
   } catch (error) {
     publishLifecycleEvent({
       eventPublisher,
@@ -312,7 +305,6 @@ export async function startHarvester({
     })
   }
   const refreshAccountSnapshot = async () => {
-
     const result = await broker.getAccountSnapshot()
     if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -380,7 +372,6 @@ export async function startHarvester({
       })
       marketMetadata.set(symbol, validatedMetadata)
       logger.info?.({ message: "Exchange trading rules validated", symbol })
-
     }
 
     logger.info?.({ message: "Subscribing to Binance user-data events" })
@@ -790,13 +781,11 @@ export async function startHarvester({
       processMarketPrice = tradingEngine.processMarketPrice
       processMarketBook = tradingEngine.processBookTicker
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
-
     }
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       if (tradingEnabled) {
-
         let bookResult
         try {
           bookResult = await broker.subscribeForBookTicker({
@@ -899,7 +888,6 @@ export async function startHarvester({
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
 
       if (tradingEnabled) {
-
         let tickerResult
         try {
           tickerResult = await broker.getPrices({ symbol })
