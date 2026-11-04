@@ -297,9 +297,16 @@ export function makeConservativeTradingEngine({
       })
     },
     onAcknowledgedOrder: async ({ order }) => {
-      const update = state.registry.applyUpdate({ order })
-      if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
-      state.registry = update.registry
+      if (order.status === "FILLED") {
+        const registered = state.registry.orders.some(
+          (item) => item.clientOrderId === order.clientOrderId,
+        )
+        if (!registered) throw new Error("Broker acknowledged an unregistered Harvester order")
+      } else {
+        const update = state.registry.applyUpdate({ order })
+        if (update.unknown) throw new Error("Broker acknowledged an unregistered Harvester order")
+        state.registry = update.registry
+      }
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
