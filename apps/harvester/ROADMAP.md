@@ -115,7 +115,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
 - [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
 - [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [x] Shared commission/order policy for Conservative and Aggressive: `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`. Conservative recovery SELL planning uses configured `makerPercent` only; `takerPercent`, observed liquidity role, and historical rates do not alter the reserve. Accounting uses actual exchange-reported commissions on every confirmed fill. Aggressive still returns `NO_ACTION`; its future planner must use the same rule. Verified by merged PR #489.
+- [x] Shared commission/order policy for Conservative and Aggressive: `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`. Conservative recovery SELL planning now reserves the higher of configured `makerPercent` and `takerPercent` because the eventual execution role is not guaranteed before placement. Accounting uses actual exchange-reported commissions on every confirmed fill. Aggressive still returns `NO_ACTION`; its future planner must use the same rule. Verified by merged PR #489.
 - [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
 - [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
 - [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
@@ -842,3 +842,50 @@ The operator inspected the Binance Spot TESTNET API Keys / Account settings page
 - [ ] **Historical reconciliation:** retain the historical zero commissions exactly as returned by Binance. The new 0.1% maker/taker setting applies only to future executions. The +0.57065 USDT gross exchange cash-flow difference versus +0.36335 USDT journal profit remains unexplained; the setting change is not an explanation.
 
 Harvester remained stopped. No TESTNET restart or order submission occurred during this review. Keep the TESTNET gate closed until the above items and trade-history reconciliation are complete.
+
+
+## 2026-11-04 TESTNET incident — investigation progress and blockers
+
+**Current state: STOPPED. No TESTNET restart or new order is authorized by this work. Continue only in PR #513.**
+
+### Evidence established
+
+- Twelve distinct DOGEUSDT BUY orders/client IDs were observed, each for 400 DOGE at 0.07598 USDT, all reported as TAKER, filled within roughly three seconds. This is not an order-ID collision. A rapid burst during a dump can be legitimate, but identical pricing means we must prove each decision used the correct current state.
+- A 5,595 DOGE recovery SELL exceeded that burst's 4,800 DOGE by 795 DOGE, so it necessarily included earlier accumulated inventory.
+- The reviewed historical exchange trade sample contains 21 BUYs (8,400 DOGE; 635.85200 USDT gross) and 5 SELLs (8,390 DOGE; 636.42265 USDT gross): +10 DOGE and +0.57065 USDT gross before commissions. This is not yet a complete account/strategy ledger.
+- The journal reported +0.36335 USDT. The 0.20730 USDT difference from gross exchange cash flow remains unreconciled. The prior journal records do not expose enough per-fill arithmetic to explain this amount; this is an observability defect, not a value we may hand-wave as fees.
+- Historical exchange fills report zero commissions. The TESTNET account commission setting was subsequently changed from None to 0.1% maker and 0.1% taker. Do not retroactively apply the new setting to historical fills. Future accounting must use actual commission amount and asset on each fill.
+- The account snapshot showed 12,321 free DOGE and 517 non-zero assets. Wallet balances are not Harvester-owned inventory and cannot be used as the strategy's opening position without explicit reconciliation.
+
+### Source changes now made in PR #513
+
+- [x] Recovery SELL fee reserve now uses the greater of configured maker and taker percentages; the role and reserved percentage are returned by the pure fee calculator.
+- [x] Replaced the test that explicitly ignored taker fees with tests for zero, maker-higher, taker-higher, equal, and invalid fee inputs.
+- [x] Updated Conservative strategy regression expectation to size a fee-bearing recovery SELL against the higher taker fee.
+- [x] Added structured DEBUG input/result records around every strategy evaluation, including market price, lastBuyPrice, active orders, pair settings, Portfolio snapshot, RecoveryLedger snapshot, and resulting decision/intents.
+- [x] Added per-fill accounting DEBUG records before and after applying an execution: trade/execution/order identity, side, price, base/quote quantity, actual commission asset/amount/status, prior Position and RecoveryLedger, applied/duplicate outcome, next Position and ledger, cumulative recovery/profit values. Rejected accounting records include errors and unchanged state.
+- [x] Added a bootstrap regression test asserting the per-fill audit records contain the execution facts and before/after accounting totals.
+- [ ] Add equally detailed recovery-completion trace: exact eligibility inputs/result, free-quantity allocation, and post-reset state.
+- [ ] Verify actual logger DEBUG visibility/configuration in the local development run; test records prove emission to the injected logger, not that the operator's current logger configuration displays them.
+
+### Remaining investigation — actual blockers
+
+1. **Explain the 0.20730 USDT discrepancy.** Reconstruct the complete journal calculation from individual trade IDs and compare each fill's gross quote, commission amount/asset, Portfolio cash-flow delta, RecoveryLedger delta, cycle reset, and journal aggregation. Determine whether the discrepancy is missing fills, double counting, cycle boundaries, rounding, or a journal projection bug. Do not declare resolved until every amount ties out.
+2. **Explain the twelve-BUY burst.** Trace each order from market event through serialized engine transition: input price/timestamp, Portfolio and RecoveryLedger versions, lastBuyPrice/reference override, active BUY registry, generated intent, validation, submission, acknowledgement, and fill reconciliation. Prove whether the burst was a valid sequence of independent strategy decisions or stale-state/race behavior.
+3. **Audit event/market interleaving.** Confirm a market event cannot evaluate against stale portfolio/order state while execution processing or REST reconciliation is pending. Add deterministic race tests where market updates overlap immediate FILLED acknowledgements, partial fills, cancel/fill races, duplicate/out-of-order executions, and reconciliation.
+4. **Complete accounting invariants.** Verify base-asset commission reduces received BUY inventory / SELL inventory consumption correctly; quote-asset commission affects quote cost/proceeds exactly once; third-asset or incomplete commission data pauses safely. Compare Portfolio signed cash flow and RecoveryLedger values per fill and per cycle.
+5. **Verify fee economics end-to-end.** Check all callers/config fixtures supply both makerPercent and takerPercent; test recovery quantity/price rounding and net-profit guarantee at both fee rates. Confirm Binance's effective 0.1% setting on a future controlled run and compare actual commissions, never estimates, after execution.
+6. **Reconcile ownership and opening state.** Separate Harvester executions from unrelated wallet inventory and trades. The 12,321 DOGE wallet balance is not a valid strategy Position. Establish the exact opening baseline and owned order/trade set before interpreting cumulative holdings.
+7. **Run verification on the exact latest PR head.** Run Harvester unit tests, coverage, workspace checks, lint/policy/security checks, and GitHub Actions. Earlier passing results belong to earlier commits; no latest-head green CI may be claimed until observed.
+
+### Acceptance blockers before any TESTNET restart
+
+- [ ] Explain the 0.20730 USDT difference from a complete per-trade/per-journal reconciliation.
+- [ ] Explain all twelve BUY decisions from correlated market/strategy/order/fill traces; no unexplained repeated stale-state decisions.
+- [ ] Complete recovery-completion logging and deterministic lifecycle/race tests.
+- [ ] Confirm maker/taker fee reserve tests and all affected strategy tests pass on the latest head.
+- [ ] Confirm CI green on the exact latest PR head.
+- [ ] Reconcile account opening baseline and Harvester-owned trades/orders; confirm the 0.1% commission setting is effective.
+- [ ] Obtain explicit operator approval for a controlled TESTNET run.
+
+Do not merge or restart TESTNET while any acceptance blocker remains open.
