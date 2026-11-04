@@ -26,7 +26,7 @@ function createMarketClient(config, logger) {
     url: config.websocketStreamsUrl,
     reconnectDelay: Math.max(1, config.reconnectDelay),
     maxReconnectDelay: Math.max(30_000, config.reconnectDelay),
-    onError: (error) => logger.error?.("Binance market stream error", error),
+    onError: (error) => logger.error?.({ message: "Binance market stream error", error }),
   })
 }
 
@@ -90,7 +90,7 @@ function validateCallback(callback, name) {
 
 function adaptBookTickerMessage({ message, symbol }) {
   if (!message || typeof message !== "object" || Array.isArray(message) ||
-      message.e !== "bookTicker") {
+      (message.e !== undefined && message.e !== "bookTicker")) {
     throw new TypeError("A Binance bookTicker event is required")
   }
   if (message.s !== symbol) {
