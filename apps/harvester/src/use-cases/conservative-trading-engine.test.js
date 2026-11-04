@@ -15,7 +15,7 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
-import { calculateInitialBuyPrice } from "../domain/strategies/conservative/initial-buy-price.js"
+import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -2089,20 +2089,12 @@ test("invalid book updates invalidate the cached book and fail closed", async ()
 test("twelve sequential immediately-filled BUYs advance from each reconciled lastBuyPrice", async () => {
   const observedReferences = []
   const strategyPolicy = {
-    evaluate: ({ lastBuyPrice }) => {
-      observedReferences.push(lastBuyPrice ?? null)
-      const price = lastBuyPrice
-        ? calculateInitialBuyPrice({
-            lastTradePrice: lastBuyPrice,
-            priceStepPercent: "0.05",
-            priceTickSize: "0.01",
-          }).price
-        : "99.95"
-      return {
-        strategy: "TEST_POLICY",
-        symbol: "DOGEUSDT",
-        actions: [{ side: "BUY", type: "LIMIT_MAKER", price, quantity: "0.1" }],
-      }
+    evaluate: (input) => {
+      observedReferences.push(input.lastBuyPrice ?? null)
+      return evaluateConservativeStrategy({
+        ...input,
+        pairConfig: { ...input.pairConfig, orderQuantity: 0.1, keepQuantity: 1 },
+      })
     },
     evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
