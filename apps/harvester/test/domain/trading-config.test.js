@@ -41,13 +41,24 @@ test('rejects missing settings or pairs objects', () => {
   assert.throws(() => validateTradingConfig({ pairs: {} }), /settings.*expected an object/);
   assert.throws(
     () => validateTradingConfig({ settings: { minProfit: 0.01 } }),
+    /strategies.*expected an object/,
+  );
+  assert.throws(
+    () => validateTradingConfig({
+      settings: { minProfit: 0.01 },
+      strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
+    }),
     /pairs.*expected an object/,
   );
 });
 
 test('rejects an empty pairs collection', () => {
   assert.throws(
-    () => validateTradingConfig({ settings: { minProfit: 0.01 }, pairs: {} }),
+    () => validateTradingConfig({
+      settings: { minProfit: 0.01 },
+      strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      pairs: {},
+    }),
     /pairs.*at least one pair/,
   );
 });
