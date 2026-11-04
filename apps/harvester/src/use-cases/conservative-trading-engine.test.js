@@ -15,6 +15,7 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { multiplyDecimal } from "@coinzilla/utils"
+import { calculateInitialBuyPrice } from "../domain/strategies/conservative/initial-buy-price.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -2083,4 +2084,60 @@ test("invalid book updates invalidate the cached book and fail closed", async ()
   })
   assert.equal(result.data.deferred, true)
   assert.equal(orders.length, 0)
+})
+
+
+test("twelve sequential immediately-filled BUYs advance from each reconciled lastBuyPrice", async () => {
+  const observedReferences = []
+  const strategyPolicy = {
+    evaluate: ({ lastBuyPrice }) => {
+      observedReferences.push(lastBuyPrice ?? null)
+      const price = lastBuyPrice
+        ? calculateInitialBuyPrice({
+            lastTradePrice: lastBuyPrice,
+            priceStepPercent: "0.05",
+            priceTickSize: "0.01",
+          }).price
+        : "99.95"
+      return {
+        strategy: "TEST_POLICY",
+        symbol: "DOGEUSDT",
+        actions: [{ side: "BUY", type: "LIMIT_MAKER", price, quantity: "1" }],
+      }
+    },
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({
+    strategyPolicy,
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => [makeBuyFill({
+      order,
+      tradeId: "sequential-buy-" + order.clientOrderId,
+      price: order.limitPrice.amount,
+      quantity: order.originalQuantity.amount,
+      quoteQuantity: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: order.originalQuantity.amount,
+      }),
+    })],
+  })
+
+  for (let index = 0; index < 12; index += 1) {
+    const result = await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: index + 1 },
+    })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+  }
+
+  assert.equal(harness.orders.length, 12)
+  assert.equal(observedReferences.length, 12)
+  assert.equal(observedReferences[0], null)
+  assert.ok(observedReferences.slice(1).every((price) => price !== null))
+  assert.equal(new Set(harness.orders.map((order) => order.price)).size, 12)
+  for (let index = 1; index < harness.orders.length; index += 1) {
+    assert.ok(Number(harness.orders[index].price) < Number(harness.orders[index - 1].price))
+  }
+  assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
