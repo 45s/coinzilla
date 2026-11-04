@@ -8,7 +8,7 @@ const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
 })
-const startHarvesterForTest = (input = {}) => startHarvesterForTest({
+const startHarvesterForTest = (input = {}) => startHarvester({
   ...input,
   eventPublisher: input.eventPublisher
     ? { ...testEventPublisher, ...input.eventPublisher }
