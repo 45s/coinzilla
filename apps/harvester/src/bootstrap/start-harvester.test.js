@@ -1424,6 +1424,8 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(received.tradeId, "audited-trade")
   assert.equal(received.symbol, "BTCUSDT")
   assert.equal(received.side, "BUY")
+  assert.equal(received.liquidityRole, "UNKNOWN")
+  assert.equal(received.executedAt, undefined)
   assert.equal(received.quantity, "0.01")
   assert.equal(received.quoteQuantity, "650")
   assert.equal(received.commissionStatus, "COMPLETE")
