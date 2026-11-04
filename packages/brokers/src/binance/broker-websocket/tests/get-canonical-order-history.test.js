@@ -134,3 +134,48 @@ test("filters a Binance allOrders cursor page to the exact requested order ID", 
   assert.equal(result.data[0].brokerOrderId, "698704")
   assert.equal(result.data[0].clientOrderId, "h-cda9ae9551e041288f6018-1")
 })
+
+
+test("accepts absent optional Binance order-history timestamps and metadata", async () => {
+  const broker = createBroker({
+    allOrders: () => [{
+      ...rawOrder,
+      time: undefined,
+      updateTime: undefined,
+      workingTime: undefined,
+      selfTradePreventionMode: undefined,
+    }],
+    exchangeInfo: () => ({ symbols: [symbolInfo] }),
+  })
+
+  const result = await broker.getCanonicalOrderHistory({ symbol: "DOGEFDUSD", orderId: 123 })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].createdAt, undefined)
+  assert.equal(result.data[0].updatedAt, undefined)
+})
+
+test("rejects canonical history rows with missing mandatory identity or status", async () => {
+  const invalidOrders = [
+    { ...rawOrder, orderId: undefined },
+    { ...rawOrder, clientOrderId: undefined },
+    { ...rawOrder, symbol: undefined },
+    { ...rawOrder, symbol: "OTHERFDUSD" },
+    { ...rawOrder, side: undefined },
+    { ...rawOrder, status: undefined },
+    { ...rawOrder, status: "UNKNOWN_EXCHANGE_STATUS" },
+    { ...rawOrder, origQty: undefined },
+    { ...rawOrder, executedQty: undefined },
+  ]
+
+  for (const order of invalidOrders) {
+    const broker = createBroker({
+      allOrders: () => [order],
+      exchangeInfo: () => ({ symbols: [symbolInfo] }),
+    })
+    const result = await broker.getCanonicalOrderHistory({ symbol: "DOGEFDUSD", orderId: 123 })
+    assert.equal(result.ok, false, JSON.stringify(order))
+    assert.ok(result.errors.length > 0)
+  }
+})
