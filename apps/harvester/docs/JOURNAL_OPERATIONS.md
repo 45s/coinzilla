@@ -58,14 +58,16 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
 | `execution.duplicate_fill` | Fill facts plus `duplicate: true` |
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
-| `account.snapshot_captured` | OPENING/CLOSING phase, audit status, exchange source timestamp, every returned asset with exact free/locked/total quantities, audit reasons |
-| `account.open_orders_captured` | observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
+| `account.snapshot_captured` | PREFLIGHT/OPENING/CLOSING phase, audit status, exchange source timestamp, every returned asset with exact free/locked/total quantities, audit reasons |
+| `account.open_orders_captured` | PREFLIGHT/OPENING phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
 A `strategy.decision` event is emitted only when the strategy produces at least one actionable order. NO_ACTION evaluations are not journaled. No event is emitted for every market-price update.
 
 The broker status `recovered` means the remote user-data subscription has returned; it does not mean Harvester has reconciled account state or reopened order placement.
 
 ## Startup and capture gaps
+
+A standalone read-only audit can be run while Harvester remains stopped with `pnpm run testnet:audit`. It creates its own Journal session and writes both account events with phase `PREFLIGHT`; it does not start trading or alter exchange state. Exit code 2 means the audit was persisted successfully but open orders were found.
 
 For trading-enabled startup, `main()` awaits Journal readiness before connecting the broker. Bootstrap then fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` (OPENING) and `account.open_orders_captured`, and durably flushes each audit before creating the trading engine or subscribing to market data. If the open-order query fails, any pre-existing open order is found, mapping fails, or either flush is not durable, startup fails closed. A pre-existing order is not adopted or canceled; it is preserved as external/unowned until restart recovery and explicit ownership reconciliation are implemented. Read-only operation retains the optional Journal behavior. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
 
