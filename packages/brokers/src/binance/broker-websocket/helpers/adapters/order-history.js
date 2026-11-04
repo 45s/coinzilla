@@ -31,6 +31,32 @@ export function createCanonicalOrderHistoryMarket({ symbol, exchangeInfo }) {
   return createCanonicalMarket({ symbolInfo: symbolMatches[0] })
 }
 
+const CANONICAL_ORDER_STATUSES = new Set([
+  "NEW",
+  "PARTIALLY_FILLED",
+  "FILLED",
+  "CANCELED",
+  "REJECTED",
+  "EXPIRED",
+  "EXPIRED_IN_MATCH",
+])
+
+export function validateCanonicalOrderHistoryItems({ orders, symbol }) {
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    throw new TypeError("Canonical order history requires a symbol")
+  }
+  for (const order of orders) {
+    if (typeof order.symbol !== "string" || order.symbol.trim().toUpperCase() !== symbol.trim().toUpperCase()) {
+      throw new TypeError("Binance order history is missing or conflicts with the requested symbol")
+    }
+    if (typeof order.status !== "string" || !CANONICAL_ORDER_STATUSES.has(order.status.toUpperCase())) {
+      throw new TypeError("Binance order history is missing or has an unsupported status")
+    }
+  }
+  return orders
+}
+
 export function adaptCanonicalOrderHistory({ orders, market }) {
+  validateCanonicalOrderHistoryItems({ orders, symbol: market?.symbol })
   return orders.map((order) => adaptCanonicalOrder({ order, market }))
 }
