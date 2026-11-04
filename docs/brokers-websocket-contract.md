@@ -150,4 +150,7 @@ The raw and canonical order-history paths now share a pure `helpers/adapters/ord
 ### Order request parameter adapter slice
 
 `createOrder()` and `createCanonicalOrder()` now share the pure `helpers/adapters/order-request-params.js` mapper for client-order-ID mapping, side/type defaults, and LIMIT_MAKER time-in-force omission. User-data readiness gates, canonical client-order-ID validation, and signed `stateChanging` RPC options remain in the broker facade. The new helper reports **100% line, branch, and function coverage**; existing broker contract tests continue to verify the signed/state-changing request options.
+### Responsibility map
+
+The broker package is an infrastructure adapter, not a second home for Harvester's trading domain or use cases. The public broker facade composes exchange clients and enforces the broker contract; the user-data session coordinates connection/subscription/reconciliation state; pure Binance DTO and request/response mapping lives in focused adapters; native transport/RPC/Streams protocol lives in utilities; canonical entities are created through shared adapters. Harvester retains portfolio/position policy, strategies, and application orchestration. No empty DDD layer folders are introduced where there is no corresponding package-owned responsibility.
 
