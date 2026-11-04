@@ -86,6 +86,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
   ];
   const tradingConfig = {
     settings: { minProfit: '0.01' },
+    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
     pairs: {
       ZROUSDT: {
         enabled: true,
