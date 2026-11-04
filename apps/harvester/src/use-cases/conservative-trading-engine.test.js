@@ -2719,3 +2719,90 @@ test("publishes one durable fill-applied event per reconciled execution and no d
   })
   assert.equal(events.filter((event) => event.name === HARVESTER_EVENT_NAMES.FILL_APPLIED).length, 2)
 })
+
+
+test("rejects acknowledged REST fills with conflicting broker, market, or side ownership", async () => {
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "OTHERUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  const conflictingIdentity = [
+    { brokerOrderId: "another-broker-order-id" },
+    { market: otherMarket },
+    { side: "SELL" },
+  ]
+
+  for (const identity of conflictingIdentity) {
+    const harness = await createHarness({
+      immediateFilledAcknowledgement: true,
+      accountingApplied: true,
+      getAcknowledgedFills: ({ order }) => [makeBuyFill({
+        order,
+        tradeId: "conflicting-ownership-" + Object.keys(identity)[0],
+        price: order.limitPrice.amount,
+        quantity: order.originalQuantity.amount,
+        quoteQuantity: multiplyDecimal({
+          left: order.limitPrice.amount,
+          right: order.originalQuantity.amount,
+        }),
+        ...identity,
+      })],
+    })
+
+    const result = await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(harness.accountedFills.length, 0)
+    assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+    assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
+  }
+})
+
+test("recovers an acknowledged fill when Binance trade history becomes visible later", async () => {
+  let tradeHistoryVisible = false
+  const harness = await createHarness({
+    immediateFilledAcknowledgement: true,
+    accountingApplied: true,
+    getAcknowledgedFills: ({ order }) => () => tradeHistoryVisible
+      ? [makeBuyFill({
+          order,
+          tradeId: "delayed-visible-trade",
+          price: order.limitPrice.amount,
+          quantity: order.originalQuantity.amount,
+          quoteQuantity: multiplyDecimal({
+            left: order.limitPrice.amount,
+            right: order.originalQuantity.amount,
+          }),
+          clientOrderId: undefined,
+        })]
+      : [],
+  })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, false)
+  assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+  assert.ok(harness.engine.getOrders()[0].brokerOrderId)
+  assert.equal(harness.accountedFills.length, 0)
+  assert.ok(harness.pauses.includes("ACKNOWLEDGED_FILL_HISTORY_INCOMPLETE"))
+
+  tradeHistoryVisible = true
+  const recovered = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(recovered.ok, true, recovered.errors?.[0]?.message)
+  assert.equal(harness.accountedFills.length, 1)
+  assert.equal(harness.accountedFills[0].id, "binance:DOGEUSDT:delayed-visible-trade")
+  assert.equal(harness.engine.getOrders()[0].status, "FILLED")
+  assert.equal(harness.engine.getPausedMarkets().includes("DOGEUSDT"), true)
+
+  const replayed = await harness.engine.reconcileOwnedOrders()
+  assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
+  assert.equal(harness.accountedFills.length, 1)
+})
