@@ -31,8 +31,8 @@ const tradingConfig = {
       enabled: true,
       settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
       pairs: {
-        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0 },
-        ETHUSDT: { enabled: false, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+        BTCUSDT: { enabled: true, investment: 100, orderQuantity: 0.01, makerPercent: 0, takerPercent: 0 },
+        ETHUSDT: { enabled: false, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
       },
     },
   },
@@ -309,7 +309,7 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
         ...tradingConfig.strategies.CG_coinGrabber,
         pairs: {
           ...tradingConfig.strategies.CG_coinGrabber.pairs,
-          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0, takerPercent: 0 },
         },
       },
     },
