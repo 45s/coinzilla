@@ -66,6 +66,29 @@ test("reports duplicate CLOSING endpoints as an incomplete session", () => {
   assert.deepEqual(result.data.reports[0].assetDeltas, [])
 })
 
+test("fails closed for malformed snapshot session, phase, and recovery profit records", () => {
+  const missingSession = reconcileJournalAccountSnapshotRecords({
+    records: [{ payload: event("OPENING", 100, []), position: { lineNumber: 1 } }],
+  })
+  const invalidPhase = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("invalid-phase.jsonl", event("MIDDLE", 100, [])),
+    ],
+  })
+  const malformedProfit = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("malformed-profit.jsonl", {
+        name: "recovery.cycle_completed",
+        data: { realizedNetProfit: "NaN" },
+      }),
+    ],
+  })
+
+  assert.equal(missingSession.ok, false)
+  assert.equal(invalidPhase.ok, false)
+  assert.equal(malformedProfit.ok, false)
+})
+
 test("preserves an INCOMPLETE closing audit and rejects missing snapshot events", () => {
   const incomplete = reconcileJournalAccountSnapshotRecords({
     records: [
