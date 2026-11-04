@@ -78,11 +78,12 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
   return errors
 }
 
-const evaluateReadOnlyConservativeStrategy = ({ marketPrice } = {}) => Object.freeze({
+const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
   strategy: "CONSERVATIVE",
   symbol: marketPrice?.symbol,
   action: "NO_ACTION",
   reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
+  position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
 })
 
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
