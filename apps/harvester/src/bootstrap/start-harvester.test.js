@@ -1114,6 +1114,7 @@ test("logs readiness at info and traces Conservative strategy input and decision
     },
   })
 
+  await broker.emitUserDataStatus({ type: "reconciled", recoveryRequired: false })
   await broker.emitPrice("BTCUSDT", {
     eventType: "aggTrade",
     symbol: "BTCUSDT",

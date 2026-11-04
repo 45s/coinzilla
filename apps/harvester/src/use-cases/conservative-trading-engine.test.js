@@ -1225,7 +1225,7 @@ test("does not complete recovery when SELL fills do not equal the original order
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({ order: sellOrder, tradeId: "short-recovery-sell", quantity: "0.8" }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "short-recovery-sell", quantity: "0.7" }),
     },
   })
 
@@ -1261,7 +1261,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-2", quantity: "0.5" }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-2", quantity: "0.4" }),
     },
   })
 

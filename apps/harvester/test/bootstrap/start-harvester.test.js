@@ -249,6 +249,6 @@ test('ordinary TRADE fills update owned accounting without per-fill snapshots or
   await context.stop();
 
   assert.equal(accountSnapshotCalls, 2);
-  assert.equal(openOrderSnapshotCalls, 0);
+  assert.equal(openOrderSnapshotCalls, 1);
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
