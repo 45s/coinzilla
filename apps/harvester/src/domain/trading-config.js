@@ -32,7 +32,7 @@ const requirePrecision = (value, path) => {
 };
 
 /**
- * Validate Harvester's flat trading-config shape and basic numeric invariants.
+ * Validate Harvester's strategy, settings, and pair configuration plus basic numeric invariants.
  * Each market pair owns its capital allocation and trading parameters.
  * Returns the original object without silently changing values or dropping fields.
  */
