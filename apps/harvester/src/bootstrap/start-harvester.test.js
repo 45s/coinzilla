@@ -303,9 +303,15 @@ test("unsubscribes earlier markets when a later market subscription fails", asyn
   })
   const config = {
     ...tradingConfig,
-    pairs: {
-      BTCUSDT: tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-      ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          ETHUSDT: { enabled: true, investment: 100, orderQuantity: 0.1, makerPercent: 0 },
+        },
+      },
     },
   }
   await assert.rejects(
@@ -859,9 +865,11 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
   }
   const config = {
-    settings: { minProfit: 0.01 },
-    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
-    pairs: {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+        pairs: {
       BTCUSDT: {
         enabled: true,
         investment: 2000,
@@ -872,6 +880,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         quantityPrecision: 3,
         makerPercent: 0,
         takerPercent: 0.075,
+        },
       },
     },
   }

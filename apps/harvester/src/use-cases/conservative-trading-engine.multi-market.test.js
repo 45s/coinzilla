@@ -57,8 +57,11 @@ async function createHarness() {
     makeMarketMetadata(market),
   ]))
   const tradingConfig = {
-    settings: { minProfit: 0.01 },
-    pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: { minProfit: 0.01, conservative: { enabled: true }, aggressive: { enabled: false } },
+        pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
       enabled: true,
       investment: 1000,
       orderQuantity: 1,
@@ -66,7 +69,9 @@ async function createHarness() {
       priceStepPercent: 0.05,
       makerPercent: 0,
       takerPercent: 0.075,
-    }])),
+        }])),
+      },
+    },
   }
   const broker = {
     placeOrder: async ({ order }) => {
