@@ -14,6 +14,7 @@ export function makeExecuteStrategyDecision({
   onPendingOrder,
   onAcknowledgedOrder,
   onSubmissionFailure,
+  onOrderValidationFailure = async ({} = {}) => {},
   canSubmit = ({} = {}) => true,
   onSubmissionDeferred = async ({} = {}) => {},
 } = {}) {
@@ -24,6 +25,7 @@ export function makeExecuteStrategyDecision({
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
+    onOrderValidationFailure,
     canSubmit,
     onSubmissionDeferred,
   })) {
@@ -57,7 +59,12 @@ export function makeExecuteStrategyDecision({
           clientOrderId,
           supportedOrderTypes: marketMetadata.supportedOrderTypes,
         })
-        validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        try {
+          validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        } catch (error) {
+          await onOrderValidationFailure({ order: pendingOrder, error })
+          throw error
+        }
         return Object.freeze({ orderIntent, pendingOrder })
       })
 
