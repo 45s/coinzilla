@@ -1076,7 +1076,23 @@ test("logs confirmed broker readiness at info level without debug output", async
     },
   })
 
-  const infoMessages = calls.filter(({ level }) => level === "info").map(({ message }) => message)
+  await broker.emitPrice("BTCUSDT", {
+    eventType: "aggTrade",
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp: 123,
+  })
+  const infoCalls = calls.filter(({ level }) => level === "info")
+  const infoMessages = infoCalls.map(({ message }) => message)
+  const marketEvaluations = infoCalls.filter(({ message }) => message === "Market price evaluated")
+  assert.equal(marketEvaluations.length, 1)
+  assert.deepEqual(marketEvaluations[0], {
+    level: "info",
+    message: "Market price evaluated",
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    action: "NO_ACTION",
+  })
   assert.ok(infoMessages.includes("Harvester trading configuration validated"))
   assert.ok(infoMessages.includes("Binance broker connected"))
   assert.ok(infoMessages.includes("Exchange trading rules validated"))
