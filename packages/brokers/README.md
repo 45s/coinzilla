@@ -98,6 +98,17 @@ The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `
 
 These reconnect guarantees apply to the public stream subscription set; they do not imply user-data event replay or reconciliation.
 
+## Offline tests and coverage
+
+The default broker test suite is deterministic and offline:
+
+```sh
+pnpm --filter @coinzilla/brokers test
+pnpm --filter @coinzilla/brokers test:coverage
+```
+
+The coverage command enforces minimums of **90% lines, 80% branches, and 80% functions** for the active Binance WebSocket runtime and shared Binance adapters. It deliberately excludes TESTNET integration suites, test files, and test-only fixtures/helpers: skipped live integrations and test scaffolding are not evidence of production-source coverage. These are risk-based broker-runtime floors, not a blanket workspace percentage.
+
 ## TESTNET integration tests
 
 Default package tests are offline. Live integration suites require **both** an explicit opt-in and non-placeholder credentials:
