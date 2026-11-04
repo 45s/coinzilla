@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
