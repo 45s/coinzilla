@@ -26,19 +26,16 @@ import {
   mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
-async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
+async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const results = await Promise.allSettled([
-    ...bookSubscriptions.map(({ symbol, unsubscribe }) => {
-      logger.debug?.({ message: "Removing book-ticker subscription", symbol })
+    ...bookSubscriptions.map(({ unsubscribe }) => {
       return Promise.resolve().then(() => unsubscribe())
     }),
-    ...subscriptions.map(({ symbol, unsubscribe }) => {
-      logger.debug?.({ message: "Removing market-price subscription", symbol })
+    ...subscriptions.map(({ unsubscribe }) => {
       return Promise.resolve().then(() => unsubscribe())
     }),
     ...(typeof userDataSubscription?.disconnect === "function"
       ? [Promise.resolve().then(() => {
-        logger.debug?.({ message: "Disconnecting user-data subscription" })
         return userDataSubscription.disconnect()
       })]
       : []),
@@ -48,10 +45,9 @@ async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDat
     .map((result) => result.reason)
 }
 
-async function disconnectBroker({ broker, brokerName, eventPublisher, logger = defaultLogger }) {
+async function disconnectBroker({ broker, brokerName, eventPublisher }) {
   const results = await Promise.allSettled([
     Promise.resolve().then(() => {
-      logger.debug?.({ message: "Disconnecting broker" })
       return broker.disconnect()
     }),
   ])
@@ -70,17 +66,11 @@ async function disconnectBroker({ broker, brokerName, eventPublisher, logger = d
     .map((result) => result.reason)
 }
 
-async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription, logger = defaultLogger }) {
-  logger.debug?.({
-    message: "Harvester cleanup started",
-    marketSubscriptions: subscriptions.map(({ symbol }) => symbol),
-    bookSubscriptions: bookSubscriptions.map(({ symbol }) => symbol),
-    hasUserDataSubscription: typeof userDataSubscription?.disconnect === "function",
-  })
-  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
-  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
+async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
+  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription })
+  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher })
   const errors = [...intakeErrors, ...disconnectErrors]
-  logger.debug?.({ message: "Harvester cleanup completed", errorCount: errors.length })
+
   return errors
 }
 
@@ -94,6 +84,22 @@ const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) =
   reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
   position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
 })
+
+function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
+  if (!processed?.ok) return
+
+  const { decision } = processed.data ?? {}
+  const action = decision?.action ??
+    (decision?.actions?.length
+      ? decision.actions.map(({ side }) => side).join("+")
+      : "NO_ACTION")
+  logger.info?.({
+    message: "Market price evaluated",
+    symbol,
+    price: priceEvent?.price,
+    action,
+  })
+}
 
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
@@ -176,7 +182,6 @@ export async function startHarvester({
   onUserDataStatus = () => {},
   now = Date.now,
 } = {}) {
-  logger.debug?.({ message: "Startup step: loading and validating trading configuration" })
   const tradingConfig = await loadConfig(configSource)
   if (tradingConfig.strategies?.conservative?.enabled !== true) {
     throw new Error("Conservative strategy must remain enabled in trading config")
@@ -210,10 +215,7 @@ export async function startHarvester({
     enabledSymbols,
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
   })
-  logger.debug?.({
-    message: "Startup step completed: trading configuration ready",
-    enabledMarketCount: enabledSymbols.length,
-  })
+
   const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy })
   let processMarketPrice = portfolioWorkflow.processMarketPrice
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
@@ -254,7 +256,6 @@ export async function startHarvester({
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
-  logger.debug?.({ message: "Startup step: creating Binance broker adapter" })
   const broker = assertBrokerPort({
     broker: brokerAdapterFactory({
       config: {
@@ -263,11 +264,10 @@ export async function startHarvester({
       },
     }),
   })
-  logger.debug?.({ message: "Startup step completed: Binance broker adapter created" })
 
   try {
     logger.info?.({ message: "Connecting to Binance broker" })
-    logger.debug?.({ message: "Startup step: opening Binance WebSocket connection" })
+
     await broker.connect()
     publishLifecycleEvent({
       eventPublisher,
@@ -275,7 +275,6 @@ export async function startHarvester({
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
     logger.info?.({ message: "Binance broker connected" })
-    logger.debug?.({ message: "Startup step completed: Binance WebSocket connection established" })
   } catch (error) {
     publishLifecycleEvent({
       eventPublisher,
@@ -322,7 +321,6 @@ export async function startHarvester({
     })
   }
   const refreshAccountSnapshot = async () => {
-    logger.debug?.({ message: "Account snapshot request started" })
     const result = await broker.getAccountSnapshot()
     if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -347,7 +345,7 @@ export async function startHarvester({
       balanceCount: nextSnapshot.balances.length,
       sourceTime: nextSnapshot.sourceTime,
     })
-    logger.debug?.({ message: "Account snapshot validated and accepted" })
+
     return nextSnapshot
   }
   const isMarketPriceFresh = (marketPrice) => {
@@ -374,7 +372,7 @@ export async function startHarvester({
   try {
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
-      logger.debug?.({ message: "Startup step: loading exchange trading rules", symbol })
+
       const filtersResult = await broker.getSymbolFilters({ symbol })
       if (!filtersResult?.ok || !filtersResult.data) {
         const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
@@ -390,11 +388,10 @@ export async function startHarvester({
       })
       marketMetadata.set(symbol, validatedMetadata)
       logger.info?.({ message: "Exchange trading rules validated", symbol })
-      logger.debug?.({ message: "Startup step completed: market metadata ready", symbol })
     }
 
     logger.info?.({ message: "Subscribing to Binance user-data events" })
-    logger.debug?.({ message: "Startup step: opening user-data subscription" })
+
     let userDataResult
     try {
       userDataResult = await broker.subscribeForUserData({
@@ -411,18 +408,6 @@ export async function startHarvester({
         }
         let reevaluateSymbol
 
-        logger.debug?.({
-          message: "User-data event received",
-          eventType: event.eventType ?? "UNKNOWN",
-          executionType: event.executionType,
-          symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-          brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
-          clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
-          originalClientOrderId: event.originalClientOrderId,
-          side: event.executedOrder?.side ?? event.fill?.side,
-          orderStatus: event.executedOrder?.status,
-          executionId: event.fill?.id,
-        })
         if (isExecution) {
           logger.info?.({
             message: "Trade execution received",
@@ -469,7 +454,7 @@ export async function startHarvester({
               })
               return
             }
-            logger.debug?.({
+            logger.info?.({
               message: "Harvester order event processed",
               eventType: event.eventType ?? "UNKNOWN",
               executionType: event.executionType,
@@ -577,7 +562,7 @@ export async function startHarvester({
             }),
           })
         }
-        logger.debug?.({
+        logger.info?.({
           message: "User-data stream status changed",
           statusType: status.type ?? "UNKNOWN",
           recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
@@ -757,18 +742,17 @@ export async function startHarvester({
     })
     userDataSubscription = userDataResult.data
     logger.info?.({ message: "Binance user-data subscription established" })
-    logger.debug?.({ message: "Startup step completed: user-data subscription active" })
+
     userDataReady = false
     userDataStatus = userDataAccountingFailed
       ? "EXECUTION_ACCOUNTING_FAILED"
       : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 
-    logger.debug?.({ message: "Startup step: loading initial exchange account snapshot" })
     const initialSnapshotTask = userDataEventQueue.then(() => refreshAccountSnapshot())
     userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
     await initialSnapshotTask
     initialAccountSnapshotReady = true
-    logger.debug?.({ message: "Startup step completed: initial account snapshot ready" })
+
     if (tradingEnabled) {
       if (userDataAccountingFailed) {
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
@@ -776,7 +760,7 @@ export async function startHarvester({
       if (userDataRequiresReconciliation) {
         throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
       }
-      logger.debug?.({ message: "Startup step: validating Conservative TESTNET pair scope" })
+
       const enabledPairs = Object.entries(tradingConfig.pairs).filter(([, pairConfig]) => pairConfig.enabled)
       if (enabledPairs.length !== 1) {
         throw new Error("The first Conservative TESTNET trading cycle requires exactly one enabled pair")
@@ -790,7 +774,7 @@ export async function startHarvester({
       userDataRequiresReconciliation = false
       userDataReady = true
       userDataStatus = "READY"
-      logger.debug?.({ message: "Startup step: composing Conservative trading engine" })
+
       tradingEngine = makeConservativeTradingEngine({
         broker,
         strategyPolicy: conservativeStrategyPolicy,
@@ -813,13 +797,11 @@ export async function startHarvester({
       processMarketPrice = tradingEngine.processMarketPrice
       processMarketBook = tradingEngine.processBookTicker
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
-      logger.debug?.({ message: "Startup step completed: Conservative trading engine ready" })
     }
 
     for (const [symbol, pairConfig] of Object.entries(tradingConfig.pairs)) {
       if (!pairConfig.enabled) continue
       if (tradingEnabled) {
-        logger.debug?.({ message: "Startup step: subscribing to book ticker", symbol })
         let bookResult
         try {
           bookResult = await broker.subscribeForBookTicker({
@@ -845,7 +827,7 @@ export async function startHarvester({
         bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
         logger.info?.({ message: "Harvester subscribed to book ticker", symbol })
       }
-      logger.debug?.({ message: "Startup step: subscribing to market prices", symbol })
+
       let hasFreshWebSocketPrice = false
       let latestWebSocketPriceTask
       let result
@@ -854,12 +836,7 @@ export async function startHarvester({
         symbol,
         onPrice: (priceEvent) => {
           if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-          logger.debug?.({
-            message: "Market price received",
-            symbol,
-            price: priceEvent?.price,
-            timestamp: priceEvent?.timestamp,
-          })
+
           try {
             if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
               hasFreshWebSocketPrice = true
@@ -873,16 +850,12 @@ export async function startHarvester({
             pairConfig,
             settings: tradingConfig.settings,
           })).then((processed) => {
-          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
-          if (processed?.ok) {
-            logger.debug?.({
-              message: "Market price processed",
-              symbol,
-              action: processed.data?.decision?.action ?? processed.data?.action,
-              skipped: processed.data?.skipped,
-              reason: processed.data?.reason,
-            })
+          if (!processed.ok) {
+            reportPriceError({ symbol, errors: processed.errors })
+          } else {
+            logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
           }
+
           return processed
         }).catch((error) => {
           reportPriceError({ symbol, error })
@@ -933,10 +906,8 @@ export async function startHarvester({
       })
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       logger.info?.({ message: "Harvester subscribed to market prices", symbol })
-      logger.debug?.({ message: "Startup step completed: market-price subscription active", symbol })
 
       if (tradingEnabled) {
-        logger.debug?.({ message: "Startup step: requesting initial ticker price", symbol })
         let tickerResult
         try {
           tickerResult = await broker.getPrices({ symbol })
@@ -961,21 +932,17 @@ export async function startHarvester({
           if (marketPrice.symbol !== symbol) {
             throw new Error("Initial ticker price symbol does not match enabled market " + symbol)
           }
-          logger.info?.({
-            message: "Initial market price loaded from Binance ticker snapshot",
-            symbol,
-            price: marketPrice.price,
-            timestamp: marketPrice.timestamp,
-          })
           const processed = await processMarketPrice({
             symbol,
             priceEvent,
             pairConfig,
             settings: tradingConfig.settings,
           })
-          if (!processed.ok) reportPriceError({ symbol, errors: processed.errors })
-        } else {
-          logger.debug?.({ message: "Initial ticker snapshot skipped; a fresh WebSocket price was already received", symbol })
+          if (!processed.ok) {
+            reportPriceError({ symbol, errors: processed.errors })
+          } else {
+            logMarketPriceEvaluation({ logger, symbol, processed })
+          }
         }
       }
     }
@@ -987,7 +954,7 @@ export async function startHarvester({
       errorStack: error?.stack,
     })
     await userDataEventQueue
-    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription, logger })
+    const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],

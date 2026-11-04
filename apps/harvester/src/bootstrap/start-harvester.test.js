@@ -1061,12 +1061,12 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
 })
 
 
-test("logs each broker startup stage and key readiness actions", async () => {
+test("logs confirmed broker readiness at info level without debug output", async () => {
   const calls = []
   const broker = createBroker()
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
-    env: binanceEnv,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {
@@ -1076,17 +1076,31 @@ test("logs each broker startup stage and key readiness actions", async () => {
     },
   })
 
-  const messages = calls.map(({ message }) => message)
-  assert.ok(messages.includes("Startup step: loading and validating trading configuration"))
-  assert.ok(messages.includes("Startup step: opening Binance WebSocket connection"))
-  assert.ok(messages.includes("Startup step: loading exchange trading rules"))
-  assert.ok(messages.includes("Startup step: opening user-data subscription"))
-  assert.ok(messages.includes("Startup step: loading initial exchange account snapshot"))
-  assert.ok(messages.includes("Startup step: subscribing to market prices"))
-  assert.ok(messages.includes("Binance broker connected"))
-  assert.ok(messages.includes("Binance user-data subscription established"))
-  assert.ok(messages.includes("Exchange account snapshot loaded"))
-  assert.ok(messages.includes("Harvester subscribed to market prices"))
+  await broker.emitPrice("BTCUSDT", {
+    eventType: "aggTrade",
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp: 123,
+  })
+  const infoCalls = calls.filter(({ level }) => level === "info")
+  const infoMessages = infoCalls.map(({ message }) => message)
+  const marketEvaluations = infoCalls.filter(({ message }) => message === "Market price evaluated")
+  assert.equal(marketEvaluations.length, 1)
+  assert.equal(marketEvaluations[0].level, "info")
+  assert.equal(marketEvaluations[0].message, "Market price evaluated")
+  assert.equal(marketEvaluations[0].symbol, "BTCUSDT")
+  assert.equal(marketEvaluations[0].price, "65000.12")
+  assert.ok(typeof marketEvaluations[0].action === "string" && marketEvaluations[0].action.length > 0)
+  assert.notEqual(marketEvaluations[0].action, "UNKNOWN")
+  assert.ok(infoMessages.includes("Harvester trading configuration validated"))
+  assert.ok(infoMessages.includes("Binance broker connected"))
+  assert.ok(infoMessages.includes("Exchange trading rules validated"))
+  assert.ok(infoMessages.includes("Binance user-data subscription established"))
+  assert.ok(infoMessages.includes("Exchange account snapshot loaded"))
+  assert.ok(infoMessages.includes("Conservative TESTNET trading engine activated"))
+  assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
+  assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
+  assert.equal(calls.filter(({ level }) => level === "debug").length, 0)
 
   await result.stop()
 })

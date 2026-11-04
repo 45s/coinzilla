@@ -98,7 +98,7 @@ export async function main({
       enabled: env.HARVESTER_JOURNAL_ENABLED?.toLowerCase() !== "false",
       directory: env.HARVESTER_JOURNAL_DIRECTORY,
     })
-    logger.debug?.({ message: "Harvester process startup requested" })
+
     const runtime = await start({ eventPublisher })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
@@ -115,13 +115,7 @@ export async function main({
         tradingEnabled: runtime.tradingEnabled === true,
       }),
     })
-    logger.debug?.({
-      message: "Harvester bootstrap completed",
-      connected: runtime.connected === true,
-      tradingEnabled: runtime.tradingEnabled === true,
-      strategyMode: runtime.strategyMode ?? "read-only",
-      subscriptions: runtime.subscriptions ?? [],
-    })
+
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
         ? "Harvester connected and subscribed to " + runtime.subscriptions.length +
