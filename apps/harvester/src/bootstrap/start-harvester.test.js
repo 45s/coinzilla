@@ -1397,3 +1397,43 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
   assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
 })
 
+
+
+test("emits per-execution debug audit records with commission and before/after accounting", async () => {
+  const debugRecords = []
+  const result = await startHarvester({
+    loadConfig: async () => tradingConfig,
+    env: {},
+    logger: {
+      info() {},
+      error() {},
+      debug(record) { debugRecords.push(record) },
+    },
+  })
+
+  const fill = createFill({ tradeId: "audited-trade", quantity: "0.01" })
+  const applied = await result.updateTradingAccounting({ fill })
+
+  assert.equal(applied.ok, true)
+  const received = debugRecords.find((record) =>
+    record.message === "Harvester accounting execution received")
+  const committed = debugRecords.find((record) =>
+    record.message === "Harvester accounting execution applied")
+
+  assert.equal(received.executionId, fill.id)
+  assert.equal(received.tradeId, "audited-trade")
+  assert.equal(received.symbol, "BTCUSDT")
+  assert.equal(received.side, "BUY")
+  assert.equal(received.quantity, "0.01")
+  assert.equal(received.quoteQuantity, "650")
+  assert.equal(received.commissionStatus, "COMPLETE")
+  assert.deepEqual(received.commissions, [])
+  assert.equal(received.previousRecoveryLedger.buyCost, "0")
+  assert.equal(committed.applied, true)
+  assert.equal(committed.duplicate, false)
+  assert.equal(committed.nextRecoveryLedger.buyCost, "650")
+  assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
+  assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
+
+  await result.stop()
+})
