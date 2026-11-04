@@ -2239,7 +2239,8 @@ test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
   })
-  assert.equal(first.ok, true)
+  assert.equal(first.ok, false)
+  assert.match(first.errors?.[0]?.message ?? "", /MIN_NOTIONAL/)
   assert.equal(evaluationCount, 1)
   assert.ok(harness.pauses.includes("STRATEGY_ORDER_VALIDATION_FAILED"))
   assert.equal(harness.orders.length, 0)
