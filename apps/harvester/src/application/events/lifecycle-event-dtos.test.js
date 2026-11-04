@@ -623,6 +623,7 @@ test("maps complete account-wide open orders and blocks trading while any are un
     status: "NEW",
   }
   const result = mapAccountOpenOrdersCapturedData({
+    phase: "OPENING",
     observedAt: 1793830000000,
     orders: [order],
     readiness: "BLOCKED",
@@ -631,6 +632,7 @@ test("maps complete account-wide open orders and blocks trading while any are un
   assert.deepEqual(result, {
     ok: true,
     data: {
+      phase: "OPENING",
       observedAt: 1793830000000,
       readiness: "BLOCKED",
       orderCount: 1,
@@ -649,9 +651,9 @@ test("maps complete account-wide open orders and blocks trading while any are un
     },
   })
   assert.equal(mapAccountOpenOrdersCapturedData({
-    observedAt: 1, orders: [], readiness: "READY",
+    phase: "OPENING", observedAt: 1, orders: [], readiness: "READY",
   }).ok, true)
   assert.equal(mapAccountOpenOrdersCapturedData({
-    observedAt: 1, orders: [order], readiness: "READY",
+    phase: "OPENING", observedAt: 1, orders: [order], readiness: "READY",
   }).ok, false)
 })
