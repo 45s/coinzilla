@@ -596,5 +596,7 @@ test("validates observer callbacks and isolates message and error observer failu
 
   assert.deepEqual(errors, ["message observer failed"])
   assert.equal(transport.state, "open")
-  await transport.close()
+  const closing = transport.close()
+  sockets[0].serverClose()
+  await closing
 })
