@@ -73,3 +73,13 @@ if (!result.ok) {
 The complete journal is validated before the first handler runs. Handlers then execute sequentially in deterministic order. If a handler fails, replay stops and reports `replayed` and `failedRecordId`. Replay is not exactly-once: a process can crash after a handler applies a record but before the caller durably checkpoints that application. Consumers must make replay idempotent using the stable record ID and must reconcile external systems independently.
 
 Only one writer may own a journal directory at a time; Journal does not currently acquire an inter-process lock, so the application/deployment must enforce this. Read/replay is available while the Journal instance is stopped (before `start()` or after `close()`); it is rejected while that instance is writing. The directory must already exist: a missing directory returns `JOURNAL_DIRECTORY_NOT_FOUND` instead of being treated as an empty history.
+
+
+## Harvester startup account preflight records
+
+Harvester emits two durable lifecycle records on every connected startup, whether trading is enabled or not:
+
+- `account.snapshot_captured` with `data.phase = "PREFLIGHT"`: complete balance inventory, with exact decimal `free`, `locked`, and `total` quantities per asset, plus the exchange `sourceTime`.
+- `account.open_orders_captured` with `data.phase = "PREFLIGHT"`: account-wide open orders, including broker/client identifiers, symbol, side, order type, price, original and executed quantities, and status. `readiness` is `READY` only for an empty open-order set; otherwise it is `BLOCKED` with explicit reasons.
+
+Each event is followed by a successful `Journal.flush()` durability barrier before Harvester proceeds to market subscriptions or engine activation. Treat a missing event or failed flush as an incomplete startup audit. Existing orders remain externally owned; these records are observations, not adoption or cancellation instructions.
