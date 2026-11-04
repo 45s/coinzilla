@@ -136,7 +136,7 @@ export const getAccountBalances = async () => {
   return { balances: data.balances }
 }
 
-export const getMyTrades = async ({ symbol, limit = 1000 }) => {
+export const getMyTrades = async ({ symbol, limit = 1000, fromId }) => {
   if (typeof symbol !== "string" || !/^[A-Z0-9]{5,20}$/.test(symbol)) {
     throw new TypeError("A valid uppercase Binance symbol is required for trade history")
   }
@@ -147,7 +147,7 @@ export const getMyTrades = async ({ symbol, limit = 1000 }) => {
   const { data } = await binanceTestnetRequest({
     method: "GET",
     path: "/api/v3/myTrades",
-    params: { symbol, limit },
+    params: { symbol, limit, ...(fromId === undefined ? {} : { fromId }) },
   })
 
   if (!Array.isArray(data)) {
