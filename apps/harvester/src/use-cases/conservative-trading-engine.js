@@ -26,6 +26,7 @@ import { validateCancellationEligibility } from "../domain/orders/validate-cance
 export function makeConservativeTradingEngine({
   broker, strategyPolicy, tradingConfig, getPortfolio, getRecoveryLedger, getMarketMetadata,
   getAccountSnapshot, updateTradingAccounting, completeRecoveryCycle, canTrade, onPause, isStopping, eventPublisher,
+  isMarketPriceFresh = () => true,
 } = {}) {
   if (!strategyPolicy || typeof strategyPolicy.evaluate !== "function" ||
       typeof strategyPolicy.evaluateTrailingBuyRepricing !== "function") {
@@ -37,6 +38,7 @@ export function makeConservativeTradingEngine({
   })) {
     if (typeof callback !== "function") throw new TypeError(name + " must be a function")
   }
+  if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
   let transitionTail = Promise.resolve()
   const runTransition = ({ task } = {}) => {
     const current = transitionTail.then(task)
@@ -400,6 +402,9 @@ export function makeConservativeTradingEngine({
     state.deferredEvaluations.delete(symbol)
     const marketPrice = state.prices.get(symbol)
     if (!marketPrice) return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
+    if (!isMarketPriceFresh(marketPrice)) {
+      return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
+    }
     try {
       const metadata = getMarketMetadata({ symbol })
       const decision = strategyPolicy.evaluate({
@@ -519,6 +524,9 @@ export function makeConservativeTradingEngine({
     try {
       const price = createMarketPrice({ priceEvent })
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
+      if (!isMarketPriceFresh(price)) {
+        return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
+      }
       state.prices.set(symbol, price)
       if (!canTrade({ symbol }) || state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
       const metadata = getMarketMetadata({ symbol })

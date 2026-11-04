@@ -855,6 +855,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         return { ok: true }
       },
     },
+    now: () => 1000,
     logger: { info() {}, error() {} },
   })
   assert.equal(runtime.userDataReady, true)
