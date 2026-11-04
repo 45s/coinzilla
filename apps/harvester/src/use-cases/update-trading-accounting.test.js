@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -267,6 +268,68 @@ test("reconciles multiple commission-bearing fills exactly across Portfolio and 
   )
   assert.equal(portfolio.appliedFillIds.length, 4)
   assert.equal(recoveryLedger.appliedFillIds.length, 4)
+})
+
+test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle profit", () => {
+  const fills = [
+    makeFill({
+      tradeId: "cycle-proof-buy",
+      quantity: "100",
+      quoteQuantity: "10",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "1", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "cycle-proof-sell-1",
+      side: "SELL",
+      quantity: "48.5",
+      quoteQuantity: "5.5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.485", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+    makeFill({
+      tradeId: "cycle-proof-sell-2",
+      side: "SELL",
+      quantity: "48.5",
+      quoteQuantity: "5.5",
+      commissions: [
+        new Commission({ amount: new Money({ amount: "0.485", asset: baseAsset }) }),
+        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
+      ],
+    }),
+  ]
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
+
+  for (const fill of fills) {
+    const result = updateTradingAccounting({ portfolio, recoveryLedger, fill })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    portfolio = result.data.portfolio
+    recoveryLedger = result.data.recoveryLedger
+  }
+
+  const position = portfolio.getPosition({ marketId: market.id })
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    buyCost: recoveryLedger.buyCost,
+    netSellProceeds: recoveryLedger.netSellProceeds,
+    activeQuantity: position.baseQuantity.amount,
+    keepQuantity: "1",
+    minProfit: "0.01",
+  })
+
+  assert.equal(position.baseQuantity.amount, "1.03")
+  assert.equal(position.quoteNetCashFlow.amount, "0.97")
+  assert.equal(recoveryLedger.buyCost, "10.01")
+  assert.equal(recoveryLedger.netSellProceeds, "10.98")
+  assert.equal(completion.eligible, true)
+  assert.equal(completion.freeQuantity, "1")
+  assert.equal(completion.realizedNetProfit, "0.97")
+  assert.equal(position.quoteNetCashFlow.amount, completion.realizedNetProfit)
 })
 
 test("rejects unknown commission status without committing either accounting projection", () => {
