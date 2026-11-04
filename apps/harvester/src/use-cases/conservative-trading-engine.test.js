@@ -65,6 +65,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   const cancellationIds = []
   const canceledOrders = new Map()
   const acknowledgedFillsByOrder = new Map()
+  const acknowledgedOrdersById = new Map()
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
@@ -96,6 +97,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
         ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
       })
       if (immediateFilledAcknowledgement) {
+        acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
         acknowledgedFillsByOrder.set(
           acknowledgedOrder.brokerOrderId,
           getAcknowledgedFills({ order: acknowledgedOrder }),
@@ -135,7 +137,8 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     getFills: async ({ orderId }) => {
       if (acknowledgedFillsByOrder.has(orderId)) {
         if (acknowledgedFillsGate) await acknowledgedFillsGate.promise
-        return { ok: true, data: acknowledgedFillsByOrder.get(orderId) }
+        const fills = acknowledgedFillsByOrder.get(orderId)
+        return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
       return {
@@ -159,6 +162,11 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
           : [],
       }
     },
+    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async ({ orderId }) => ({
+      ok: true,
+      data: acknowledgedOrdersById.has(orderId) ? [acknowledgedOrdersById.get(orderId)] : [],
+    }),
   }
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
@@ -743,13 +751,13 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
   })
 }
 
-function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt, clientOrderId = order.clientOrderId }) {
+function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedAt, clientOrderId = order.clientOrderId, brokerOrderId = order.brokerOrderId, market: fillMarket = market, side = "BUY" }) {
   return new Fill({
     tradeId,
-    brokerOrderId: order.brokerOrderId,
+    brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
-    market,
-    side: "BUY",
+    market: fillMarket,
+    side,
     price: new Money({ amount: price, asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
