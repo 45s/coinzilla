@@ -1122,6 +1122,14 @@ test("logs readiness at info and traces Conservative strategy input and decision
     price: "65000.12",
     timestamp: 123,
   })
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "65000.11",
+    bestBidQuantity: "1",
+    bestAskPrice: "65000.13",
+    bestAskQuantity: "1",
+    timestamp: 123,
+  })
   const infoCalls = calls.filter(({ level }) => level === "info")
   const infoMessages = infoCalls.map(({ message }) => message)
   const marketEvaluations = infoCalls.filter(({ message }) => message === "Market price evaluated")
