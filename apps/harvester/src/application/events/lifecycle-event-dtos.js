@@ -451,28 +451,30 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
       throw new TypeError("blockReasons must contain non-empty strings")
     }
     const mappedOrders = orders.map((order, index) => {
-      if (!order || typeof order !== "object" || !order.market?.symbol) {
-        throw new TypeError("orders[" + index + "] must contain canonical order facts")
+      if (!order || typeof order !== "object") {
+        throw new TypeError("orders[" + index + "] must be a normalized broker order")
       }
+      const symbol = order.market?.symbol ?? order.symbol
+      const brokerOrderId = order.brokerOrderId ?? order.id
+      const price = order.limitPrice?.amount ?? order.originalPrice
+      const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+      const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
       return {
         ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
           ? { clientOrderId: order.clientOrderId.trim() }
           : {}),
-        brokerOrderId: requireString({ value: order.brokerOrderId, field: "orders[" + index + "].brokerOrderId" }),
-        symbol: requireString({ value: order.market.symbol, field: "orders[" + index + "].symbol" }),
+        brokerOrderId: requireString({ value: brokerOrderId, field: "orders[" + index + "].brokerOrderId" }),
+        symbol: requireString({ value: symbol, field: "orders[" + index + "].symbol" }),
         side: order.side === "BUY" || order.side === "SELL"
           ? order.side
           : (() => { throw new TypeError("orders[" + index + "].side must be BUY or SELL") })(),
         type: requireString({ value: order.type, field: "orders[" + index + "].type" }),
-        ...(order.limitPrice?.amount === undefined ? {} : {
-          price: requireDecimalString({ value: order.limitPrice.amount, field: "orders[" + index + "].price" }),
+        ...(price === undefined ? {} : {
+          price: requireDecimalString({ value: price, field: "orders[" + index + "].price" }),
         }),
-        quantity: requireDecimalString({
-          value: order.originalQuantity?.amount,
-          field: "orders[" + index + "].quantity",
-        }),
+        quantity: requireDecimalString({ value: quantity, field: "orders[" + index + "].quantity" }),
         executedQuantity: requireDecimalString({
-          value: order.executedQuantity?.amount ?? "0",
+          value: executedQuantity,
           field: "orders[" + index + "].executedQuantity",
         }),
         status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
