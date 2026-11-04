@@ -227,14 +227,24 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
     acknowledgedFillsGate,
     getAcknowledgedFills: ({ order }) => {
       signalFillsStarted()
-      return [makeBuyFill({
-        order,
-        tradeId: "immediate-ack-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95",
-        executedAt: 10,
-      })]
+      return [
+        makeBuyFill({
+          order,
+          tradeId: "immediate-ack-fill-1",
+          price: "99.95",
+          quantity: "0.4",
+          quoteQuantity: "39.98",
+          executedAt: 10,
+        }),
+        makeBuyFill({
+          order,
+          tradeId: "immediate-ack-fill-2",
+          price: "99.95",
+          quantity: "0.6",
+          quoteQuantity: "59.97",
+          executedAt: 11,
+        }),
+      ]
     },
   })
 
@@ -257,7 +267,7 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
   assert.equal(firstResult.ok, true, firstResult.errors?.[0]?.message)
   assert.equal(secondResult.ok, true, secondResult.errors?.[0]?.message)
   assert.equal(harness.orders.length, 1)
-  assert.deepEqual(harness.accountedFills.map((fill) => fill.id), ["immediate-ack-fill"])
+  assert.deepEqual(harness.accountedFills.map((fill) => fill.id), ["immediate-ack-fill-1", "immediate-ack-fill-2"])
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
 
