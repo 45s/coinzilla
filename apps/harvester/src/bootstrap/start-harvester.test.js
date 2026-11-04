@@ -1424,7 +1424,7 @@ test("fails closed when trading is explicitly enabled without selecting a broker
 test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => {
   const client = {
     connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
     getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
@@ -1553,7 +1553,8 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   let signalOpenOrdersStarted
   const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
   const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
-  broker.getOpenOrders = async () => {
+  broker.getOpenOrders = async ({ symbol } = {}) => {
+    if (symbol === undefined) return { ok: true, data: [] }
     signalOpenOrdersStarted()
     await openOrdersGate
     return { ok: true }
