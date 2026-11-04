@@ -1108,6 +1108,23 @@ test("stops broker intake before draining queued user-data and disconnects after
   const calls = []
   const broker = createBroker(calls)
   const originalSubscribeForPrices = broker.subscribeForPrices.bind(broker)
+  let resolveBookUnsubscribe
+  const bookUnsubscribed = new Promise((resolve) => { resolveBookUnsubscribe = resolve })
+  const originalSubscribeForBookTicker = broker.subscribeForBookTicker.bind(broker)
+  broker.subscribeForBookTicker = async (input) => {
+    const result = await originalSubscribeForBookTicker(input)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        unsubscribe: async () => {
+          calls.push("unsubscribe:book:" + input.symbol)
+          resolveBookUnsubscribe()
+          return result.data.unsubscribe()
+        },
+      },
+    }
+  }
   let resolveMarketUnsubscribe
   const marketUnsubscribed = new Promise((resolve) => { resolveMarketUnsubscribe = resolve })
   broker.subscribeForPrices = async (input) => {
@@ -1149,7 +1166,7 @@ test("stops broker intake before draining queued user-data and disconnects after
   let queuedEvents = 0
   const runtime = await startHarvester({
     loadConfig: async () => tradingConfig,
-    env: binanceEnv,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     onUserDataEvent: async () => {
@@ -1164,8 +1181,9 @@ test("stops broker intake before draining queued user-data and disconnects after
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await queueStarted
   const stopPromise = runtime.stop()
-  await Promise.all([marketUnsubscribed, userDataUnsubscribed])
+  await Promise.all([bookUnsubscribed, marketUnsubscribed, userDataUnsubscribed])
 
+  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"))
   assert.ok(calls.includes("unsubscribe:BTCUSDT"))
   assert.ok(calls.includes("unsubscribe:user-data"))
   assert.equal(calls.includes("queue:done"), false)
@@ -1177,6 +1195,7 @@ test("stops broker intake before draining queued user-data and disconnects after
 
   resolveQueue()
   await stopPromise
+  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"))
   assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("queue:done"))
   assert.ok(calls.indexOf("queue:done") < calls.indexOf("disconnect"))
