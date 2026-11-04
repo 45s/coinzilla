@@ -126,8 +126,11 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
   }
   const tradingConfig = {
-    settings: { minProfit: "0.01" },
-    pairs: {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: { minProfit: "0.01", conservative: { enabled: true }, aggressive: { enabled: false } },
+        pairs: {
       ZROUSDT: {
         enabled: true,
         priceStepPercent: 0.5,
@@ -136,6 +139,7 @@ const createFixture = ({ initiallyReady = true, deferFirstSell = false, deferCan
         makerPercent: 0,
         takerPercent: 0,
         investment: 1000,
+        },
       },
     },
   }
