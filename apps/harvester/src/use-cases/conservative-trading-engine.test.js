@@ -1861,13 +1861,19 @@ test("rechecks book freshness after PENDING registration before broker I/O", asy
 })
 
 test("definite POST-ONLY rejection removes PENDING and waits for a fresh book without pausing", async () => {
+  const events = []
   const rejection = Object.assign(new Error("known post-only rejection"), { code: "POST_ONLY_WOULD_TAKE" })
-  const { engine, orders, pauses } = createHarness({ placeOrderFailureCount: 1, placeOrderFailureError: rejection })
+  const { engine, orders, pauses } = createHarness({
+    placeOrderFailureCount: 1,
+    placeOrderFailureError: rejection,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
   const result = await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   assert.equal(result.ok, false)
   assert.equal(orders.length, 1)
   assert.deepEqual(pauses, [])
   assert.equal(engine.getOrders().length, 0)
+  assert.equal(events.find((event) => event.name === "order.submission_failed").data.outcome, "REJECTED")
   await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
     symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
     bestAskPrice: "99.94", bestAskQuantity: "1", timestamp: 2,
@@ -1879,4 +1885,23 @@ test("definite POST-ONLY rejection removes PENDING and waits for a fresh book wi
   } })
   assert.equal(orders.length, 2)
   assert.deepEqual(pauses, [])
+})
+
+
+test("invalid book updates invalidate the cached book and fail closed", async () => {
+  const { engine, orders } = createHarness({ initialBook: false })
+  await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "99.90", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 1,
+  } })
+  const invalid = await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: {
+    symbol: "DOGEUSDT", bestBidPrice: "100.00", bestBidQuantity: "1",
+    bestAskPrice: "100.00", bestAskQuantity: "1", timestamp: 2,
+  } })
+  assert.equal(invalid.ok, false)
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+  assert.equal(result.data.deferred, true)
+  assert.equal(orders.length, 0)
 })

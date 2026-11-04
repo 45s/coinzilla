@@ -231,10 +231,11 @@ export function makeConservativeTradingEngine({
       const submissionError = error ?? errors?.[0]
       const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
         submissionError?.code === "POST_ONLY_WOULD_TAKE"
+      const failureOutcome = definitePostOnlyRejection ? "REJECTED" : outcome
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
-        dataResult: mapOrderSubmissionFailedData({ order, outcome, error: submissionError }),
+        dataResult: mapOrderSubmissionFailedData({ order, outcome: failureOutcome, error: submissionError }),
       })
       if (definitePostOnlyRejection) {
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
@@ -585,6 +586,7 @@ export function makeConservativeTradingEngine({
       if (state.deferredEvaluations.has(symbol) && !state.paused.has(symbol)) return evaluateLatestTransition({ symbol })
       return toResult({ data: { updated: true } })
     } catch (error) {
+      state.books.delete(symbol)
       return toResult({ error })
     }
   }

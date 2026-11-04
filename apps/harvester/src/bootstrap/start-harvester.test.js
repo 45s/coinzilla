@@ -1289,4 +1289,23 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
   client.createCanonicalOrder = async () => ({ ok: false, errors: [unrelated] })
   const other = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
   assert.equal(other.errors[0], unrelated)
+
+  const unknownOutcome = Object.assign(
+    new Error("Order would immediately match and take."),
+    { code: -2010, outcomeUnknown: true },
+  )
+  client.createCanonicalOrder = async () => ({ ok: false, errors: [unknownOutcome] })
+  const unknown = await broker.placeOrder({ order: { symbol: "BTCUSDT", type: "LIMIT_MAKER" } })
+  assert.equal(unknown.errors[0], unknownOutcome)
+
+  let forwardedSubscription
+  const onBookTicker = () => {}
+  client.subscribeForBookTicker = async (input) => {
+    forwardedSubscription = input
+    return { ok: true, data: { unsubscribe: async () => {} } }
+  }
+  await broker.subscribeForBookTicker({ symbol: "BTCUSDT", onBookTicker })
+  assert.equal(forwardedSubscription.symbol, "BTCUSDT")
+  assert.equal(forwardedSubscription.onBookTicker, onBookTicker)
 })
+

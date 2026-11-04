@@ -277,8 +277,8 @@ export const mapOrderSubmittedData = (input = {}) =>
 /** Map a rejected or unknown submission without retaining raw errors or SDK data. */
 export const mapOrderSubmissionFailedData = (input = {}) =>
   mapData(input, "Order-submission-failed event mapping", ({ order, outcome, error }) => {
-    if (!["REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(outcome)) {
-      throw new TypeError("outcome must be REJECTED_OR_UNKNOWN or UNKNOWN")
+    if (!["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(outcome)) {
+      throw new TypeError("outcome must be REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN")
     }
     return {
       clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
