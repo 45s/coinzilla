@@ -6,6 +6,7 @@ import { startHarvester } from "./start-harvester.js"
 
 const config = {
   settings: { minProfit: 0.01 },
+  strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
   pairs: {
     BTCUSDT: { enabled: true, orderQuantity: 0.01, makerPercent: 0 },
   },
