@@ -152,3 +152,17 @@ Continue the Harvester follow-up in private GitHub repository `45s/coinzilla`, a
 - Latest observed PR comparison before the documentation-only commits: 53 ahead / 9 behind `develop`. The connected GitHub integration cannot invoke the PR **Update branch** operation. Use that exact GitHub PR UI operation; do not force-push or replace it with a non-fast-forward ref update.
 - After update: verify the new exact head and merge base, rerun all required checks, inspect failed/pending jobs, mark ready, and merge only when every required check is green. Then record the merge commit/message.
 - Harvester must remain stopped until the separate joint TESTNET session. No exchange writes are authorized by this handoff.
+
+
+## Branch synchronization correction — 2026-11-04
+
+The earlier handoff statement that the GitHub integration could not update the branch was incorrect and is superseded. The branch was synchronized directly with a verified two-parent merge commit:
+
+- Commit message: `Merge latest develop into Harvester lifecycle audit`
+- Merge commit: `0d018d1f2992744d50040b6c7dce9352373169c1`
+- Parents: feature head `6a083d3011cacd682688c520683067eae00ce83b`; `develop` head `ed48e31bebee12c93652f8879171997a21102d4c`
+- Three-way tree comparison found no overlapping changed paths.
+- PR #515 now compares as 58 commits ahead / 0 behind, and its diff is limited to 17 Harvester files.
+- All five required workflows have been triggered for the synchronized merge commit; inspect their final conclusions before marking ready or merging.
+
+Keep Harvester stopped and the TESTNET execution gate closed. No exchange writes were performed.
