@@ -1243,6 +1243,73 @@ test("does not complete recovery when SELL fills do not equal the original order
   assert.ok(pauses.includes("SELL_FILL_RECONCILIATION_FAILED"))
 })
 
+test("reconciles streamed BUY partial fills cumulatively before advancing the strategy", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(buyOrder)
+
+  const first = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.4", updatedAt: 2 }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-1",
+        price: "99.95",
+        quantity: "0.4",
+        quoteQuantity: "39.98",
+        executedAt: 10,
+      }),
+    },
+  })
+  const second = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.7", updatedAt: 3 }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-2",
+        price: "99.95",
+        quantity: "0.3",
+        quoteQuantity: "29.985",
+        executedAt: 11,
+      }),
+    },
+  })
+  const completed = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-3",
+        price: "99.95",
+        quantity: "0.3",
+        quoteQuantity: "29.985",
+        executedAt: 12,
+      }),
+    },
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(first.data.waitingForFullFill, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.waitingForFullFill, true)
+  assert.equal(completed.ok, true, completed.errors?.[0]?.message)
+  assert.equal(completed.data.reevaluate, true)
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
+    "streamed-buy-part-1",
+    "streamed-buy-part-2",
+    "streamed-buy-part-3",
+  ])
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+  assert.deepEqual(pauses, [])
+})
+
 test("reconciles multiple actual SELL fills before completing recovery", async () => {
   const seeded = makeSeededRecoveryState()
   const { engine, completedCycles, pauses } = await createHarness({
