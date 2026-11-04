@@ -1090,7 +1090,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
-  assert.equal(position.freeBaseQuantity.amount, "0.001")
+  assert.equal(position.freeBaseQuantity.amount, "0.002")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
   assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
@@ -1099,6 +1099,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
 test("logs readiness at info and traces Conservative strategy input and decision at debug level", async () => {
   const calls = []
   const broker = createBroker()
+  broker.getOpenOrders = async () => ({ ok: true, data: [] })
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
