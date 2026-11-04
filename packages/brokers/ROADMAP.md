@@ -81,6 +81,8 @@ The first DDD/TDD modernization tranche is merged into `develop`. It aligns the 
 
   Coverage review on PR #539's exact CI head `c6c073ee07043b63e83f1d72863e768bc903df51`: broker facade 97.25% lines / 90.79% branches / 96.00% functions; user-data session 99.37% / 91.28% / 100.00%; RPC client 99.06% / 93.39% / 94.12%; Streams client 93.47% / 85.78% / 81.03%; native transport 93.84% / 79.10% / 92.31%. Transport constructor/observer/idle-close gaps are being covered before selecting an enforced threshold; integration suites and test helpers must be excluded from production-code thresholds.
 
+  PR #543's exact CI head `dfbb79ba3de1e656270cb81ec176304e3d3e2b1b` raised native transport coverage to 100.00% lines / 91.25% branches / 96.15% functions. The remaining legacy `adaptTrade` adapter measured 81.25% lines / 40.00% branches / 100.00% functions; PR #544 adds direct tests for its required-field, ID, side, decimal-string, optional-fee, and timestamp branches before it is included in the production coverage gate.
+
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
 ### Large-file review and scoped refactoring plan
