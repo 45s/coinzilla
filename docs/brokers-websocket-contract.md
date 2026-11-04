@@ -39,6 +39,8 @@ packages/brokers/
         broker.test.js
         broker.*.test.js
         broker.integration.js
+        testnet-integration-guards.js
+        testnet-integration-guards.test.js
         tests/
           *.test.js
         config/
@@ -96,7 +98,7 @@ packages/brokers/
 
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
-The package entry point exports only `BinanceWebSocketBroker` and `BinanceWebSocketConfig`. Do not reintroduce the removed third-party SDK.
+The package entry point currently exports `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`. `CoreBroker` is an exported compatibility base class, not a formal application-owned port; `normalizeBinanceId` is used by the Harvester infrastructure adapter. The concrete broker and config are consumed by Bot and Harvester infrastructure adapters. Preserve these exports unless a separately reviewed compatibility change proves they are unused. Do not reintroduce the removed third-party SDK.
 
 ## DDD responsibility map (current implementation and target boundaries)
 
@@ -107,7 +109,7 @@ This package is an **exchange infrastructure adapter**, not the owner of trading
 | Current module | Actual responsibility | DDD interpretation |
 |---|---|---|
 | `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Interface/composition boundary; keep thin |
-| `src/broker.core.js` | Shared broker base contract | Broker port/contract boundary |
+| `src/broker.core.js` | Exported compatibility base class with default unimplemented methods | Compatibility surface, not a formal application-owned broker port |
 | `binance/broker-websocket/broker.js` | Implements broker operations, coordinates RPC/Streams clients and user-data lifecycle, maps Binance responses to shared Entities | Binance infrastructure adapter; currently also contains orchestration and several pure validation/mapping functions |
 | `binance/broker-websocket/methods/user-data-session.js` | Owns subscriber state, reconnect scheduling, remote subscription lifecycle, and reconciliation acknowledgement | Stateful application-style lifecycle coordinator; currently coupled to Binance RPC method names and client shape |
 | `binance/broker-websocket/helpers/` | Builds exchange request parameters, adapts Binance stream/event payloads, and deduplicates events | Anti-corruption/adaptation layer; pure helpers where possible, not trading-domain policy |
