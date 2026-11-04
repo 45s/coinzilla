@@ -6,7 +6,7 @@
 >
 > **Working rule:** preserve the established strategy behavior. When current Harvester code differs, treat that as an implementation gap by default. Discuss only a concrete ambiguity that cannot be resolved from the behavior contract or would materially change financial exposure. Resolve one item at a time; do not create a large questionnaire.
 >
-> **Next work:** continue the 2026-11-04 TESTNET incident resolution in the existing [PR #513](https://github.com/45s/coinzilla/pull/513). The two source fixes and deterministic regression tests are now present in PR #513. Next validate the latest PR head (including the new read-only trade-history diagnostic), review remaining lifecycle overlap/cancellation cases, and reconcile exchange trades, commissions, and account balances before any TESTNET restart. Keep strategy rules, accounting, and order lifecycle consistent across specification, code, tests, and live evidence.
+> **Next work:** continue the 2026-11-04 TESTNET incident resolution in the existing [PR #513](https://github.com/45s/coinzilla/pull/513). Durable OPENING/CLOSING all-asset balance snapshots are implemented as a hard prerequisite for TESTNET trading, with a fail-closed Journal readiness/flush barrier and explicit incomplete closing-audit states. Remaining blockers are exchange-history reconciliation of the historical 0.20730 USDT discrepancy and the twelve same-price BUY burst, full lifecycle regression verification, and fresh current-head CI. Keep Harvester stopped; do not restart or submit TESTNET orders.
 >
 > **Boundaries:** keep this work in PR #513; do not create a parallel PR/branch for this same incident. Do not weaken exchange validation, silently skip rejected intents, or restart TESTNET trading before the regression fixes and reconciliation gates pass. Keep PR #479 paused unless a specific part is explicitly selected for review. Preserve merged infrastructure work; do not reimplement it.
 >
@@ -889,3 +889,18 @@ Harvester remained stopped. No TESTNET restart or order submission occurred duri
 - [ ] Obtain explicit operator approval for a controlled TESTNET run.
 
 Do not merge or restart TESTNET while any acceptance blocker remains open.
+
+
+## TESTNET incident — account balance audit implementation (2026-11-04)
+
+- [x] Add an allowlisted account-snapshot lifecycle event with OPENING/CLOSING phase, exact free/locked/total quantities, deterministic asset ordering, and every broker-returned asset (not only enabled-pair assets).
+- [x] Require Journal enabled, ready, and durably flushable before TESTNET trading can proceed. Read-only operation remains optional.
+- [x] Capture and fsync OPENING balances after user-data subscription/queue barrier and before Conservative engine activation or market-price subscription/order evaluation.
+- [x] During graceful shutdown, stop new intake and drain accepted user-data events; reconcile owned orders before capturing CLOSING balances and flushing while broker REST remains connected.
+- [x] Mark CLOSING snapshot INCOMPLETE with explicit reasons when reconciliation fails, owned orders remain non-terminal, intake fails, or user-data/accounting remains unsafe. A failed closing snapshot fails shutdown.
+- [x] Document account-vs-strategy ownership and that raw balance deltas do not prove PnL without execution, commission, external movement, and inventory valuation reconciliation.
+- [ ] Run focused Harvester tests, full workspace tests/coverage, and latest PR CI after this change.
+- [ ] Reconcile the historical +0.57065 gross exchange cash-flow / +0.36335 journal profit gap (0.20730 USDT) against complete trade IDs, per-fill commission amount/asset, and external account activity.
+- [ ] Conclusively classify the twelve distinct 400 DOGE @ 0.07598 TAKER BUYs within ~3 seconds using source trace and complete exchange history. Distinct IDs rule out ID collision, but do not alone prove whether identical pricing arose from stale transition state or independent decisions.
+- [ ] Complete streamed partial/final, duplicate/out-of-order, cancellation/fill, REST/stream overlap and shutdown reconciliation regression matrix.
+- [ ] Keep TESTNET stopped until all gates above and current-head CI are green. Do not submit orders as part of this PR work.
