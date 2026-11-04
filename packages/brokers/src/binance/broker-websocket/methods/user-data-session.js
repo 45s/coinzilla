@@ -32,10 +32,12 @@ export class BinanceUserDataSession {
   #recoveryRequired = false
   #deduplicator = createUserDataEventDeduplicator()
   #generation = 0
+  #clientPorts = new WeakMap()
 
   constructor({
     getClient,
     createClient,
+    createUserDataClientPort,
     setClient,
     setConnected,
     setUnavailable,
@@ -46,7 +48,8 @@ export class BinanceUserDataSession {
     clearTimeoutFn = clearTimeout,
   }) {
     if (typeof getClient !== "function" || typeof createClient !== "function" ||
-        typeof setClient !== "function" || typeof setConnected !== "function" ||
+        typeof createUserDataClientPort !== "function" || typeof setClient !== "function" ||
+        typeof setConnected !== "function" ||
         typeof setUnavailable !== "function") {
       throw new TypeError("User-data session requires client and state callbacks")
     }
@@ -57,6 +60,7 @@ export class BinanceUserDataSession {
 
     this.getClient = getClient
     this.createClient = createClient
+    this.createUserDataClientPort = createUserDataClientPort
     this.setClient = setClient
     this.setConnected = setConnected
     this.setUnavailable = setUnavailable
@@ -83,7 +87,7 @@ export class BinanceUserDataSession {
 
   onConnected() {
     const client = this.getClient()
-    if (!this.#stopped && client?.state === "open") {
+    if (!this.#stopped && client && this.#portFor(client).state === "open") {
       this.#bindClient(client, { includeUserData: false })
     }
   }
@@ -159,6 +163,15 @@ export class BinanceUserDataSession {
     this.#deduplicator.clear()
   }
 
+  #portFor(client) {
+    let port = this.#clientPorts.get(client)
+    if (!port) {
+      port = this.createUserDataClientPort(client)
+      this.#clientPorts.set(client, port)
+    }
+    return port
+  }
+
   async #ensureRemoteSubscription() {
     if (this.#subscriptionId !== null) return this.#subscriptionId
     if (this.#subscribePromise) {
@@ -170,7 +183,11 @@ export class BinanceUserDataSession {
 
     const generation = this.#generation
     const client = this.getClient()
-    if (!client || client.state !== "open") {
+    if (!client) {
+      throw new Error("Binance WebSocket API must be open before subscribing to user data")
+    }
+    const port = this.#portFor(client)
+    if (port.state !== "open") {
       throw new Error("Binance WebSocket API must be open before subscribing to user data")
     }
 
@@ -179,26 +196,22 @@ export class BinanceUserDataSession {
     this.#subscribePromise = (async () => {
       let subscriptionId
       try {
-        const response = await client.request(
-          "userDataStream.subscribe.signature",
-          {},
-          { signed: true },
-        )
+        const response = await port.subscribe()
         subscriptionId = response.data?.subscriptionId
       } catch (error) {
-        subscriptionId = await this.#findExistingSubscription(client, error)
+        subscriptionId = await this.#findExistingSubscription(port, error)
       }
 
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {
         subscriptionId = await this.#findExistingSubscription(
-          client,
+          port,
           new Error("Binance user-data subscription response did not include a valid subscriptionId"),
         )
       }
       if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
-          this.getClient() !== client || client.state !== "open") {
+          this.getClient() !== client || port.state !== "open") {
         try {
-          await this.#unsubscribeRemoteSubscription(client, subscriptionId)
+          await this.#unsubscribeRemoteSubscription(port, subscriptionId)
         } catch (error) {
           logSafely(this.logger, "warn", "Unable to clean up an unused Binance user-data subscription", error)
         }
@@ -218,10 +231,10 @@ export class BinanceUserDataSession {
     return this.#subscribePromise
   }
 
-  async #findExistingSubscription(client, originalError) {
+  async #findExistingSubscription(port, originalError) {
     let response
     try {
-      response = await client.request("session.subscriptions")
+      response = await port.listSubscriptions()
     } catch (lookupError) {
       logSafely(this.logger, "warn", "Unable to verify Binance user-data subscription after an uncertain response", lookupError)
       throw originalError
@@ -244,14 +257,14 @@ export class BinanceUserDataSession {
     throw originalError
   }
 
-  async #unsubscribeRemoteSubscription(client, subscriptionId) {
+  async #unsubscribeRemoteSubscription(port, subscriptionId) {
     try {
-      await client.request("userDataStream.unsubscribe", { subscriptionId })
+      await port.unsubscribe(subscriptionId)
       return
     } catch (originalError) {
       let response
       try {
-        response = await client.request("session.subscriptions")
+        response = await port.listSubscriptions()
       } catch (lookupError) {
         logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
         throw originalError
@@ -272,7 +285,7 @@ export class BinanceUserDataSession {
       if (!activeIds.includes(subscriptionId)) return
 
       try {
-        await client.request("userDataStream.unsubscribe", { subscriptionId })
+        await port.unsubscribe(subscriptionId)
       } catch (retryError) {
         logSafely(this.logger, "warn", "Binance user-data subscription remains active after verified unsubscribe retry", {
           subscriptionId,
@@ -289,23 +302,24 @@ export class BinanceUserDataSession {
   #bindClient(client, { includeUserData = true } = {}) {
     this.#detachClientListeners()
     const removers = []
+    const port = this.#portFor(client)
 
     try {
       if (includeUserData) {
-        const removeEventListener = client.onEvent((message) => {
+        const removeEventListener = port.onEvent((message) => {
           if (this.getClient() === client) this.#handleEvent(message)
         })
         if (typeof removeEventListener === "function") removers.push(removeEventListener)
         this.#removeEventListener = removeEventListener ?? null
 
-        const removeErrorListener = client.onError?.((error) => {
+        const removeErrorListener = port.onError((error) => {
           if (this.getClient() === client) this.#handleError(error)
         })
         if (typeof removeErrorListener === "function") removers.push(removeErrorListener)
         this.#removeErrorListener = removeErrorListener ?? null
       }
 
-      const removeCloseListener = client.onClose?.((event) => {
+      const removeCloseListener = port.onClose((event) => {
         if (this.getClient() === client) this.#handleClose(event)
       })
       if (typeof removeCloseListener === "function") removers.push(removeCloseListener)
@@ -440,19 +454,21 @@ export class BinanceUserDataSession {
       const attempt = ++this.#reconnectAttempts
       try {
         let client = this.getClient()
-        if (!client || client.state !== "open") {
+        let port = client ? this.#portFor(client) : null
+        if (!client || port.state !== "open") {
           client = this.createClient()
           this.setClient(client)
+          port = this.#portFor(client)
           this.#bindClient(client)
           try {
-            await client.connect()
+            await port.connect()
           } catch (error) {
             if (this.getClient() === client) this.#detachClientListeners()
             throw error
           }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
               this.getClient() !== client) {
-            await client.disconnect()
+            await port.disconnect()
             return
           }
           this.setConnected(true)
@@ -563,9 +579,10 @@ export class BinanceUserDataSession {
     this.setUnavailable(true)
 
     const client = this.getClient()
+    const port = client ? this.#portFor(client) : null
     try {
-      if (subscriptionId !== null && client?.state === "open") {
-        await this.#unsubscribeRemoteSubscription(client, subscriptionId)
+      if (subscriptionId !== null && port?.state === "open") {
+        await this.#unsubscribeRemoteSubscription(port, subscriptionId)
       }
     } finally {
       this.#detachUserDataListeners()
