@@ -470,6 +470,7 @@ test("RPC client decodes ArrayBuffer and typed-array response frames", async () 
     id: "request-2", status: 200, result: { frame: "typed-array" },
   })))
   assert.deepEqual((await second).data, { frame: "typed-array" })
+  await context.client.disconnect()
 })
 
 test("RPC client rejects invalid and throwing request ID factories without leaking timers", async () => {
@@ -485,6 +486,8 @@ test("RPC client rejects invalid and throwing request ID factories without leaki
   await assert.rejects(throwing.client.request("ticker.price", {}), failure)
   assert.equal(throwing.client.pendingCount, 0)
   assert.equal(throwing.clock.pendingCount, 0)
+  await invalid.client.disconnect()
+  await throwing.client.disconnect()
 })
 
 test("RPC client isolates throwing event and error observers", async () => {
