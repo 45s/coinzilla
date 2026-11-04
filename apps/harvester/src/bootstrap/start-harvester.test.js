@@ -1524,7 +1524,7 @@ test("disconnects after a CLOSING snapshot durability failure and reports shutdo
       flush: async () => {
         flushCount += 1
         calls.push("journal:flush:" + flushCount)
-        return flushCount === 1
+        return flushCount < 3
           ? { ok: true, durable: true }
           : { ok: false, errors: [new Error("closing snapshot fsync failed")] }
       },
