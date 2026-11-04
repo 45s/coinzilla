@@ -142,3 +142,13 @@ Continue the Harvester follow-up in private GitHub repository `45s/coinzilla`, a
 - Production dependency audit: passed.
 - No Harvester process was started and no TESTNET writes were performed.
 - Remaining work is operational only: update the PR branch onto the latest `develop`, merge the offline follow-up when synchronized, then conduct the separate controlled TESTNET session together.
+
+
+## Finalization handoff — 2026-11-04 (PR #515)
+
+- Offline remediation is complete. The last verified code head passed Harvester 387/387 and all five required workflows. Subsequent documentation-only commits add the controlled runbook and status updates; CI must be rerun after PR branch synchronization.
+- The detailed, non-executable joint TESTNET procedure is now `apps/harvester/docs/TESTNET_VALIDATION_RUNBOOK.md`. It defines one-pair/one-cycle limits, the expected ZROUSDT configuration, account baseline and ownership boundary, durable OPENING/CLOSING snapshots, order/cancel authorization, stream/REST/trade reconciliation, actual commission accounting, Portfolio/RecoveryLedger checks, abort/recovery conditions, and evidence capture.
+- README links to the runbook; ROADMAP records the current finalization gate.
+- Latest observed PR comparison before the documentation-only commits: 53 ahead / 9 behind `develop`. The connected GitHub integration cannot invoke the PR **Update branch** operation. Use that exact GitHub PR UI operation; do not force-push or replace it with a non-fast-forward ref update.
+- After update: verify the new exact head and merge base, rerun all required checks, inspect failed/pending jobs, mark ready, and merge only when every required check is green. Then record the merge commit/message.
+- Harvester must remain stopped until the separate joint TESTNET session. No exchange writes are authorized by this handoff.
