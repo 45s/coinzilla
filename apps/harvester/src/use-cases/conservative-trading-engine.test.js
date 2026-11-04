@@ -2219,3 +2219,36 @@ test("keeps post-recovery residual active inventory and does not issue another r
   assert.equal(sellOrders[0].status, "FILLED")
   assert.deepEqual(harness.pauses, [])
 })
+
+
+test("pauses once on an invalid MIN_NOTIONAL decision and does not reevaluate it repeatedly", async () => {
+  let evaluationCount = 0
+  const strategyPolicy = {
+    evaluate: () => {
+      evaluationCount += 1
+      return {
+        strategy: "TEST_POLICY",
+        symbol: "DOGEUSDT",
+        actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "0.01", quantity: "0.1" }],
+      }
+    },
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({ strategyPolicy })
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+  assert.equal(first.ok, true)
+  assert.equal(evaluationCount, 1)
+  assert.ok(harness.pauses.includes("STRATEGY_ORDER_VALIDATION_FAILED"))
+  assert.equal(harness.orders.length, 0)
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 3 },
+  })
+  assert.equal(evaluationCount, 1)
+  assert.equal(harness.orders.length, 0)
+  assert.equal(harness.engine.getPausedMarkets().length, 1)
+})
