@@ -44,7 +44,7 @@ test("omits absent optional filters and preserves zero decimal strings", () => {
 
 test("rejects malformed and negative optional filters", () => {
   assert.throws(() => readOptionalDecimalFilter({
-    value: "1e-8", name: "PRICE_FILTER.minPrice", symbol: "BTCUSDT",
+    value: "NaN", name: "PRICE_FILTER.minPrice", symbol: "BTCUSDT",
   }), /is invalid/)
   assert.throws(() => readOptionalDecimalFilter({
     value: "-0.01", name: "PRICE_FILTER.minPrice", symbol: "BTCUSDT",
