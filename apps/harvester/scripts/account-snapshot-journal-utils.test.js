@@ -51,6 +51,21 @@ test("reports missing or duplicate snapshot endpoints as incomplete instead of i
   assert.deepEqual(reports.get("duplicate-open.jsonl").blockers, ["OPENING_SNAPSHOT_COUNT:2"])
 })
 
+test("reports duplicate CLOSING endpoints as an incomplete session", () => {
+  const result = reconcileJournalAccountSnapshotRecords({
+    records: [
+      record("duplicate-close.jsonl", event("OPENING", 100, [])),
+      record("duplicate-close.jsonl", event("CLOSING", 200, [])),
+      record("duplicate-close.jsonl", event("CLOSING", 201, [])),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.data.reports[0].auditStatus, "INCOMPLETE")
+  assert.deepEqual(result.data.reports[0].blockers, ["CLOSING_SNAPSHOT_COUNT:2"])
+  assert.deepEqual(result.data.reports[0].assetDeltas, [])
+})
+
 test("preserves an INCOMPLETE closing audit and rejects missing snapshot events", () => {
   const incomplete = reconcileJournalAccountSnapshotRecords({
     records: [
