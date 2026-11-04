@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { createBroker, createScheduler } from "../test-helpers/user-data-session-fixtures.js"
+import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
 describe("Binance user-data reconciliation and recovery races", () => {
 
@@ -480,4 +481,5 @@ describe("Binance user-data reconciliation and recovery races", () => {
     assert.equal(received[1].event.balanceDelta, "2")
     await subscription.data.disconnect()
     await broker.disconnect()
-  })})})
+  })
+})
