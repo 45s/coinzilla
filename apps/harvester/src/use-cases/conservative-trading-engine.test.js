@@ -1243,6 +1243,163 @@ test("does not complete recovery when SELL fills do not equal the original order
   assert.ok(pauses.includes("SELL_FILL_RECONCILIATION_FAILED"))
 })
 
+test("rejects a late PARTIALLY_FILLED trade update after terminal cancellation", async () => {
+  const { engine, accountedFills } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const canceled = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "CANCELED",
+        executedQuantity: "0",
+        updatedAt: 2,
+      }),
+    },
+  })
+  assert.equal(canceled.ok, true)
+
+  const latePartial = await engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "PARTIALLY_FILLED",
+        executedQuantity: "0.5",
+        updatedAt: 3,
+      }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "late-partial-after-cancel",
+        price: "99.95",
+        quantity: "0.5",
+        quoteQuantity: "49.975",
+        executedAt: 10,
+      }),
+    },
+  })
+
+  assert.equal(latePartial.ok, false)
+  assert.equal(accountedFills.length, 0)
+  const registeredOrder = engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId)
+  assert.equal(registeredOrder.status, "CANCELED")
+  assert.equal(registeredOrder.executedQuantity.amount, "0")
+})
+
+test("ignores an out-of-order OPEN update after the BUY has already filled", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const fill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "filled-before-stale-open",
+    price: "99.95",
+    quantity: "1",
+    quoteQuantity: "99.95",
+    executedAt: 10,
+  })
+  const completed = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill,
+    },
+  })
+  assert.equal(completed.ok, true)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+
+  const stale = await engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: buyOrder,
+        status: "OPEN",
+        executedQuantity: "0",
+        updatedAt: 1,
+      }),
+    },
+  })
+
+  assert.equal(stale.ok, true)
+  assert.equal(stale.data.ignored, true)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+  assert.deepEqual(pauses, [])
+})
+
+test("reconciles streamed BUY partial fills cumulatively before advancing the strategy", async () => {
+  const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(buyOrder)
+
+  const first = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.4", updatedAt: 2 }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-1",
+        price: "99.95",
+        quantity: "0.4",
+        quoteQuantity: "39.98",
+        executedAt: 10,
+      }),
+    },
+  })
+  const second = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.7", updatedAt: 3 }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-2",
+        price: "99.95",
+        quantity: "0.3",
+        quoteQuantity: "29.985",
+        executedAt: 11,
+      }),
+    },
+  })
+  const completed = await engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "streamed-buy-part-3",
+        price: "99.95",
+        quantity: "0.3",
+        quoteQuantity: "29.985",
+        executedAt: 12,
+      }),
+    },
+  })
+
+  assert.equal(first.ok, true)
+  assert.equal(first.data.waitingForFullFill, true)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.waitingForFullFill, true)
+  assert.equal(completed.ok, true, completed.errors?.[0]?.message)
+  assert.equal(completed.data.reevaluate, true)
+  assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
+    "streamed-buy-part-1",
+    "streamed-buy-part-2",
+    "streamed-buy-part-3",
+  ])
+  assert.equal(engine.getLastBuyPrice({ symbol: "DOGEUSDT" }), "99.95")
+  assert.deepEqual(pauses, [])
+})
+
 test("reconciles multiple actual SELL fills before completing recovery", async () => {
   const seeded = makeSeededRecoveryState()
   const { engine, completedCycles, pauses } = await createHarness({
@@ -1396,6 +1553,98 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
 })
 
+
+test("serializes concurrent market updates while a trailing BUY cancellation is pending", async () => {
+  let resolveCancellation
+  const cancelOrderGate = { promise: new Promise((resolve) => { resolveCancellation = resolve }) }
+  let signalCancellationStarted
+  const cancellationStarted = new Promise((resolve) => { signalCancellationStarted = resolve })
+  const { engine, orders, cancellationIds } = await createHarness({
+    cancelOrderGate,
+    onCancelOrderStarted: () => signalCancellationStarted(),
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const initialBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+
+  const trailingTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  await cancellationStarted
+  assert.deepEqual(cancellationIds, [initialBuy.brokerOrderId])
+  assert.equal(orders.length, 1)
+
+  const concurrentTransition = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
+  })
+  assert.equal(orders.length, 1)
+
+  resolveCancellation()
+  const [trailingResult, concurrentResult] = await Promise.all([
+    trailingTransition,
+    concurrentTransition,
+  ])
+
+  assert.equal(trailingResult.ok, true)
+  assert.equal(concurrentResult.ok, true)
+  assert.equal(orders.length, 2)
+  assert.deepEqual(cancellationIds, [initialBuy.brokerOrderId])
+  const activeBuys = engine.getOrders().filter((order) =>
+    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeBuys.length, 1)
+  assert.equal(activeBuys[0].status, "OPEN")
+})
+
+test("serializes concurrent market updates while an initial BUY acknowledgement is pending", async () => {
+  let resolveAcknowledgement
+  const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
+  let signalBuySubmission
+  const buySubmissionStarted = new Promise((resolve) => { signalBuySubmission = resolve })
+  const { engine, orders } = await createHarness({
+    placeOrderGate,
+    deferOrderSide: "BUY",
+    onPlaceOrderStarted: ({ order }) => {
+      if (order.side === "BUY") signalBuySubmission()
+    },
+  })
+
+  const initial = engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  await buySubmissionStarted
+  const pendingBuy = engine.getOrders().find((order) => order.side === "BUY")
+  assert.equal(pendingBuy.status, "PENDING")
+  assert.equal(pendingBuy.brokerOrderId, undefined)
+
+  const concurrentUpdates = [
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
+    }),
+    engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100.02", timestamp: 3 },
+    }),
+  ]
+  assert.equal(orders.length, 1)
+  assert.equal(engine.getOrders().filter((order) => order.side === "BUY").length, 1)
+
+  resolveAcknowledgement()
+  const results = await Promise.all([initial, ...concurrentUpdates])
+
+  assert.ok(results.every((result) => result.ok))
+  assert.equal(orders.length, 1)
+  const activeOrders = engine.getOrders().filter((order) =>
+    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map((order) => order.side), ["BUY"])
+  assert.equal(activeOrders[0].status, "OPEN")
+})
 
 test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
   const seeded = makeSeededRecoveryState()
@@ -1799,6 +2048,69 @@ test("fails closed when REST fill IDs conflict with executions already processed
   assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
 })
 
+
+test("rejects REST order history that is behind an already processed stream fill", async () => {
+  const { engine, broker, accountedFills, pauses } = await createHarness({ accountingApplied: true })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const streamFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-ahead-of-rest",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    executedAt: 10,
+  })
+  const streamOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5",
+    updatedAt: 3,
+  })
+  const streamResult = await engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: streamOrder, fill: streamFill },
+  })
+  assert.equal(streamResult.ok, true)
+  assert.equal(accountedFills.length, 1)
+
+  const staleRestFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stale-rest-history-fill",
+    price: "99.95",
+    quantity: "0.4",
+    quoteQuantity: "39.98",
+    executedAt: 9,
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.4",
+      updatedAt: 4,
+    })],
+  })
+  broker.getFills = async () => ({ ok: true, data: [staleRestFill] })
+
+  const result = await engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(accountedFills.length, 1)
+  assert.equal(accountedFills[0].tradeId, "stream-ahead-of-rest")
+  assert.equal(
+    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).executedQuantity.amount,
+    "0.5",
+  )
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"))
+  assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
+})
 
 test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
   let releaseFills

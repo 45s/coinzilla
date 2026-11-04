@@ -10,6 +10,14 @@ Harvester's first product deliverable is a running trading application that can 
 
 Do not turn the first trading milestone into a persistence, journal, recovery-framework, observability, architecture, or optimization project. Those are secondary. They must not be prerequisites for implementing or demonstrating the first working trading cycle unless a specific minimal safety requirement makes a particular capability unavoidable.
 
+## Current TESTNET incident safety gate — 2026-11-04 (post-PR #515)
+
+PR [#513](https://github.com/45s/coinzilla/pull/513) and follow-up [#515](https://github.com/45s/coinzilla/pull/515) are merged into `develop`. PR #515 merge commit is `26fab0c5c22822aa3a8cfa5f851f3e35da37aeb8` (`test(harvester): complete incident lifecycle and audit verification`). All five required workflows passed on that exact `develop` commit: Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit. The Harvester offline lifecycle, accounting, fee-policy, and account-audit implementation/test work is complete; the merge and green CI do **not** prove live TESTNET effectiveness.
+
+The historical incident facts remain: twelve distinct 400-DOGE BUY orders at 0.07598 USDT, client IDs `h-DOGEUSDT-32` through `h-DOGEUSDT-43`, total 4,800 DOGE / 364.704 USDT gross, all TAKER. FILLED acknowledgements preceded canonical fill application. The merged engine now awaits complete execution-history reconciliation inside the serialized transition before the next strategy evaluation; the regression suite also covers twelve sequential immediate fills and reconciled BUY reference prices. Limit orders may execute as TAKER when they immediately match resting liquidity; TAKER status alone does not explain the repeated BUYs.
+
+**Operational stop remains mandatory:** Harvester stays stopped until the operator and assistant explicitly begin the joint TESTNET session. Do not submit/cancel orders, change account settings, or perform exchange writes during preparation. The current one-pair/one-cycle runbook is [TESTNET_VALIDATION_RUNBOOK.md](./TESTNET_VALIDATION_RUNBOOK.md). Actual per-trade commission amount/asset remains authoritative; historical zero-commission fills remain zero and must not be recalculated at the later 0.1% setting. The account's 12,321 free DOGE and 517 non-zero assets are external/unowned baseline inventory unless separately attributed; never adopt them as Harvester inventory.
+
 ## Mandatory implementation order
 
 Agents MUST work in this order:
@@ -82,7 +90,9 @@ Do not use "production readiness", "future recovery", "complete architecture", o
 Follow the canonical [repository engineering standards](../../../ENGINEERING_STANDARDS.md) and [Harvester agent instructions](../AGENTS.md). This document defines Harvester's product priority and TESTNET execution sequence only.
 ## Current implementation status
 
-The Conservative policy and in-process TESTNET workflow have deterministic fake-broker coverage for initial BUY, trailing replacement, BUY-driven SELL replacement, full recovery SELL, and free-inventory allocation. PR #513 now also contains source remediation for terminal FILLED acknowledgement reconciliation and post-cycle residual-inventory planning, and pair pausing after invalid strategy-order validation, with deterministic regression tests added. Earlier CI attempts exposed and led to fixes for a terminal registry ordering defect and a test fixture's Fill identifier assertion. An earlier PR head passed workspace unit tests, workspace coverage and thresholds, JavaScript syntax, workflow lint, dependency audit, and Utilities tests; those results do not apply to subsequent commits. The current account-audit implementation requires fresh CI. Offline verification is not claimed for this new code. The TESTNET restart gate remains closed pending exchange reconciliation. Real Binance Spot TESTNET evidence now includes twelve distinct 400-DOGE BUY orders filled within roughly three seconds, a fully filled 5,595-DOGE recovery SELL, and a `recovery.cycle_completed` event. The same run exposed a rapid-BUY acknowledgement/fill race and a post-cycle residual-inventory SELL intent rejected by the exchange MIN_NOTIONAL filter. The latest account snapshot contains 12,321 free DOGE and 517 non-zero assets, so this is not a clean account and the wallet balance cannot be treated as Harvester-owned Portfolio inventory. Actual trade-level commissions and a known opening balance are still required for reconciliation. The full safe repeatable BUY → fill → SELL → fill → next-cycle sequence is not yet accepted for TESTNET. The two known defects have source fixes and deterministic regressions in PR #513. Keep the process stopped; remaining lifecycle and new-session account-baseline checks are tracked in the follow-up PR. The committed default config enables only ZROUSDT; DOGEUSDT was an operator-enabled TESTNET market for this incident. Use the [controlled TESTNET runbook](../README.md#controlled-testnet-runbook); do not use production credentials. See the dated [incident record](../ROADMAP.md#testnet-incident-and-account-snapshot--2026-11-04-supersedes-earlier-partial-progress-status).
+Offline implementation and CI are complete through merged PR #515. The deterministic suite covers immediate-FILLED acknowledgement barriers, twelve sequential immediate BUY fills through the Conservative policy, weighted execution-price references, streamed partial fills, cancellation/fill and late-event races, REST/stream overlap and stale history, duplicate/conflicting execution facts, concurrent market updates, shutdown reconciliation, commission accounting, RecoveryLedger/Portfolio agreement, Journal aggregation, and OPENING/CLOSING audit failure modes.
+
+The remaining milestone is live Binance Spot TESTNET validation, not another offline implementation phase unless new evidence exposes a defect. Use the [controlled TESTNET runbook](./TESTNET_VALIDATION_RUNBOOK.md). Do not claim that offline tests prove the exchange lifecycle. Any partial-fill/cancel/late-event case not observed in the bounded live session remains explicitly NOT OBSERVED rather than silently accepted.
 
 ## Definition of done for the first trading milestone
 
@@ -97,7 +107,7 @@ All of the following must be demonstrated, not merely described:
 - [x] The strategy reacts to a BUY fill/order transition and submits the next required SELL plus standing BUY (both acknowledged on TESTNET, 2026-11-04).
 - [ ] A safe, repeatable BUY → fill → SELL → fill → next-cycle sequence succeeds on TESTNET. (One recovery SELL and cycle-completion event are evidenced, but the run exposed a repeated-BUY race and a post-cycle MIN_NOTIONAL failure.)
 - [ ] Disconnect/unknown-outcome behavior pauses new orders rather than blindly duplicating them.
-- [ ] Deterministic regression tests and fixes for the rapid-BUY race and post-cycle MIN_NOTIONAL intent pass with required CI; the TESTNET runbook records the incident and restart gate.
+- [x] Deterministic regression tests and fixes for the rapid-BUY race and post-cycle MIN_NOTIONAL intent are merged into develop and pass all five required workflows on the PR #515 merge commit; live TESTNET effectiveness remains unproven.
 - [x] Live trading remains disabled; the evidence recorded here is Binance Spot TESTNET only.
 
 Only after this definition of done is met should the team move the main priority to durable Journal integration, restart recovery, comprehensive reconciliation, operational hardening, or Aggressive strategy work.
@@ -159,14 +169,14 @@ Binance Spot TESTNET account settings previously showed **Commissions: None**. T
 
 ### 2026-11-04 latest PR #513 review gates
 
-The previous CI run tested an earlier PR merge ref and failed the MIN_NOTIONAL regression because it expected `ok: true` for an invalid order. The current branch test now expects `ok: false`, asserts the MIN_NOTIONAL validation error, and verifies the pair pauses once without repeated evaluation. Fresh exact-head CI is the only remaining merge gate; do not treat the earlier run as current verification.
+PR #513 has merged and its exact-head CI passed. The MIN_NOTIONAL regression now expects `ok: false`, asserts the validation error, and verifies the pair pauses once without repeated evaluation. PR #515 remains the active offline follow-up: its lifecycle, accounting, fee-policy, and OPENING/CLOSING audit acceptance checks are still in progress. Require fresh exact-head CI for every pushed increment; earlier green runs do not certify later commits.
 
 The maker-only fee-reserve defect is fixed in PR #513: Conservative recovery SELL sizing reserves the greater of configured `makerPercent` and `takerPercent`. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee inputs. Actual commissions remain authoritative for realized fill accounting.
 
 The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/stream and concurrent-market-update matrix is moved to the follow-up PR. The future closed-session opening-balance audit is also follow-up work. Keep Harvester stopped; merge of PR #513 does not authorize TESTNET restart or orders.
 
 
-### Incident execution handoff — 2026-11-04 (PR #513 only)
+### Incident execution handoff — 2026-11-04 (PR #515 follow-up)
 
 **Do not ask the operator to restart Harvester, submit orders, or repeat already supplied evidence.** The operator's role is to provide TESTNET logs/trade-history outputs when explicitly requested after source instrumentation and verification are ready. The engineering agent owns code investigation, fixes, regression tests, documentation, and CI.
 
@@ -219,3 +229,7 @@ Account-level balance changes are a cross-check only. They cannot be labeled pro
 The historical +0.20730 USDT scope mismatch and twelve-BUY acknowledgement/fill race are resolved and source-remediated in PR #513. Follow-up blockers are the lifecycle overlap matrix, a future closed-session opening-balance reconciliation, ownership separation, and commission-setting verification. No TESTNET restart or order submission is permitted until those gates are complete.
 
 After a session has been stopped gracefully, use `pnpm run journal:balance-audit` from `apps/harvester` to compare its OPENING and CLOSING snapshots. The command reports exact per-asset quantity deltas and fails if either endpoint is absent or the closing audit is incomplete. It does not claim profit from balances alone.
+
+### Post-PR #515 status correction — 2026-11-04
+
+This status supersedes older incident-handoff text in this document that describes PR #515 as pending or its lifecycle/accounting matrix as incomplete. PR #515 is merged; its offline acceptance matrix and exact-head CI are complete. The only remaining critical milestone is the separately authorized joint TESTNET validation and real opening/closing account reconciliation. No TESTNET write has been performed during this documentation preparation.

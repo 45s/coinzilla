@@ -278,35 +278,37 @@ test("rejects immutable order intent changes and invalid status transitions", ()
   }), /Rejected orders cannot have changing executed quantity/)
 })
 
-test("allows a late terminal FILLED update after a partial cancellation race", () => {
-  const registry = OrderRegistry.empty().registerPending({
-    order: makeOrder(),
-  }).registry
-  const canceled = registry.applyUpdate({
-    order: makeOrder({
-      brokerOrderId: "9001",
-      status: "CANCELED",
-      executedQuantity: "40",
-      createdAt: 100,
-      acknowledgedAt: 101,
-      updatedAt: 102,
-      completedAt: 102,
-    }),
-  }).registry
-  const filled = canceled.applyUpdate({
-    order: makeOrder({
-      brokerOrderId: "9001",
-      status: "FILLED",
-      executedQuantity: "100",
-      createdAt: 100,
-      acknowledgedAt: 101,
-      updatedAt: 103,
-      completedAt: 103,
-    }),
-  })
+test("allows a late terminal FILLED update after partial CANCELED or EXPIRED races", () => {
+  for (const terminalStatus of ["CANCELED", "EXPIRED"]) {
+    const registry = OrderRegistry.empty().registerPending({
+      order: makeOrder(),
+    }).registry
+    const terminal = registry.applyUpdate({
+      order: makeOrder({
+        brokerOrderId: "9001",
+        status: terminalStatus,
+        executedQuantity: "40",
+        createdAt: 100,
+        acknowledgedAt: 101,
+        updatedAt: 102,
+        completedAt: 102,
+      }),
+    }).registry
+    const filled = terminal.applyUpdate({
+      order: makeOrder({
+        brokerOrderId: "9001",
+        status: "FILLED",
+        executedQuantity: "100",
+        createdAt: 100,
+        acknowledgedAt: 101,
+        updatedAt: 103,
+        completedAt: 103,
+      }),
+    })
 
-  assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
-  assert.equal(filled.registry.getActiveOrders().length, 0)
+    assert.equal(filled.registry.getTerminalOrders()[0].status, "FILLED")
+    assert.equal(filled.registry.getActiveOrders().length, 0)
+  }
 })
 
 test("validates constructor and operation input types", () => {
