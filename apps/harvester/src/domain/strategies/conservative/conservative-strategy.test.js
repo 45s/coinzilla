@@ -208,3 +208,22 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
   assert.equal(recoveryLedger.buyCost, "10.2")
   assert.equal(sell.price, "0.104")
 })
+
+test("does not create a recovery SELL from residual active inventory after the recovery ledger is reset", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const completedLedger = recoveryLedger.resetCycle()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger: completedLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(completedLedger.outstandingRecoveryAmount, "0")
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
+  assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "100")
+})
