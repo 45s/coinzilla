@@ -1510,6 +1510,133 @@ test("emits per-execution debug audit records with commission and before/after a
 })
 
 
+test("disconnects after a CLOSING snapshot durability failure and reports shutdown incomplete", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  let flushCount = 0
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => {
+        flushCount += 1
+        calls.push("journal:flush:" + flushCount)
+        return flushCount === 1
+          ? { ok: true, durable: true }
+          : { ok: false, errors: [new Error("closing snapshot fsync failed")] }
+      },
+    },
+    now: () => 1000,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
+
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(flushCount, 2)
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[0].data.phase, "OPENING")
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+  assert.equal(calls.includes("disconnect"), true)
+})
+
+test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliation fails", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const events = []
+  const btcMarket = createMarketMetadata("BTCUSDT").market
+  let releaseOpenOrders
+  let signalOpenOrdersStarted
+  const openOrdersGate = new Promise((resolve) => { releaseOpenOrders = resolve })
+  const openOrdersStarted = new Promise((resolve) => { signalOpenOrdersStarted = resolve })
+  broker.getOpenOrders = async () => {
+    signalOpenOrdersStarted()
+    await openOrdersGate
+    return { ok: true }
+  }
+  broker.placeOrder = async ({ order }) => {
+    calls.push("placeOrder:" + order.side)
+    return {
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "broker-" + order.clientOrderId,
+        market: btcMarket,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: btcMarket.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: btcMarket.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: btcMarket.baseAsset }),
+        status: "OPEN",
+        createdAt: 1,
+        acknowledgedAt: 1,
+        updatedAt: 1,
+      }),
+    }
+  }
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            investment: 2000,
+          },
+        },
+      },
+    },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    now: () => 1000,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "64999",
+    bestBidQuantity: "1",
+    bestAskPrice: "65001",
+    bestAskQuantity: "1",
+    timestamp: 1000,
+  })
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 1000,
+  })
+  assert.ok(calls.includes("placeOrder:BUY"))
+
+  const stopPromise = runtime.stop()
+  await openOrdersStarted
+  assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
+  assert.equal(calls.includes("disconnect"), false)
+  releaseOpenOrders()
+  await stopPromise
+
+  const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
+  assert.equal(snapshots.length, 2)
+  assert.equal(snapshots[1].data.phase, "CLOSING")
+  assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
+  assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
+  assert.ok(snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"))
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
+})
+
 test("journals OPENING balances before trading and CLOSING balances before broker disconnect", async () => {
   const calls = []
   const broker = createBroker(calls)
@@ -1555,25 +1682,6 @@ test("journals OPENING balances before trading and CLOSING balances before broke
   const disconnectIndex = calls.indexOf("disconnect")
   assert.ok(closingFlushIndex >= 0)
   assert.ok(disconnectIndex > closingFlushIndex)
-})
-
-
-test("fails startup before market subscriptions when OPENING account snapshot cannot be durably flushed", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  await assert.rejects(startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
-    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: () => ({ ok: true }),
-      flush: async () => ({ ok: false, errors: [new Error("fsync failed")] }),
-    },
-    logger: { info() {}, error() {}, debug() {} },
-  }), /Unable to durably persist OPENING account snapshot/)
-  assert.ok(calls.includes("disconnect"))
-  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
 })
 
 

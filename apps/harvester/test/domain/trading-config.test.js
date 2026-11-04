@@ -13,6 +13,12 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal(strategy(validConfig).settings.conservative.enabled, true);
   assert.equal(strategy(validConfig).settings.aggressive.enabled, false);
   assert.ok(strategy(validConfig).pairs.ZROUSDT);
+  assert.equal(strategy(validConfig).pairs.ZROUSDT.makerPercent, 0.1);
+  assert.equal(strategy(validConfig).pairs.ZROUSDT.takerPercent, 0.1);
+  assert.equal(strategy(validConfig).pairs.SOLFDUSD.makerPercent, 0);
+  assert.equal(strategy(validConfig).pairs.SOLFDUSD.takerPercent, 0.1);
+  assert.equal(strategy(validConfig).pairs.ZROFDUSD.makerPercent, 0);
+  assert.equal(strategy(validConfig).pairs.ZROFDUSD.takerPercent, 0.1);
   assert.equal('settings' in validConfig, false);
   assert.equal('pairs' in validConfig, false);
 });
@@ -54,6 +60,14 @@ test('rejects invalid pair enabled flags, amounts, fees, and precision', () => {
   assert.throws(() => validateTradingConfig(invalidOrderQuantity), /orderQuantity.*greater than 0/);
   const negativeFee = structuredClone(validConfig); strategy(negativeFee).pairs.DOGEUSDT.makerPercent = -0.01;
   assert.throws(() => validateTradingConfig(negativeFee), /makerPercent/);
+  const makerFeeAtUpperBound = structuredClone(validConfig); strategy(makerFeeAtUpperBound).pairs.DOGEUSDT.makerPercent = 100;
+  assert.throws(() => validateTradingConfig(makerFeeAtUpperBound), /makerPercent.*less than 100/);
+  const takerFeeAtUpperBound = structuredClone(validConfig); strategy(takerFeeAtUpperBound).pairs.DOGEUSDT.takerPercent = 100;
+  assert.throws(() => validateTradingConfig(takerFeeAtUpperBound), /takerPercent.*less than 100/);
+  const highestValidFees = structuredClone(validConfig);
+  strategy(highestValidFees).pairs.DOGEUSDT.makerPercent = 99.999;
+  strategy(highestValidFees).pairs.DOGEUSDT.takerPercent = 99.999;
+  assert.equal(validateTradingConfig(highestValidFees), highestValidFees);
   const invalidPrecision = structuredClone(validConfig); strategy(invalidPrecision).pairs.DOGEUSDT.pricePrecision = 1.5;
   assert.throws(() => validateTradingConfig(invalidPrecision), /pricePrecision/);
 });

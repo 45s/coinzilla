@@ -98,10 +98,14 @@ export function validateMarketTradingReadiness({
     )
   }
 
-  if (typeof pairConfig.makerPercent !== "number" ||
-      !Number.isFinite(pairConfig.makerPercent) ||
-      pairConfig.makerPercent < 0) {
-    throw new TypeError("pairConfig.makerPercent must be a non-negative finite number")
+  for (const field of ["makerPercent", "takerPercent"]) {
+    const percent = pairConfig[field]
+    if (typeof percent !== "number" ||
+        !Number.isFinite(percent) ||
+        percent < 0 ||
+        percent >= 100) {
+      throw new TypeError("pairConfig." + field + " must be a finite percentage from 0 inclusive to 100 exclusive")
+    }
   }
   const orderType = pairConfig.makerPercent === 0 ? "LIMIT_MAKER" : "LIMIT"
   if (!supportedOrderTypes.includes(orderType)) {

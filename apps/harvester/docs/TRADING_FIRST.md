@@ -10,6 +10,14 @@ Harvester's first product deliverable is a running trading application that can 
 
 Do not turn the first trading milestone into a persistence, journal, recovery-framework, observability, architecture, or optimization project. Those are secondary. They must not be prerequisites for implementing or demonstrating the first working trading cycle unless a specific minimal safety requirement makes a particular capability unavoidable.
 
+## Current TESTNET incident safety gate — 2026-11-04
+
+The source-remediation PR [#513](https://github.com/45s/coinzilla/pull/513) has merged into `develop` (merge commit `d5a0b86df6c5e8a392017a29e233b98e3957c72c`). Its exact-head unit tests, coverage, syntax/workflow lint, and production dependency audit passed. This proves offline source/CI status only; it does **not** prove TESTNET readiness.
+
+The follow-up [PR #515](https://github.com/45s/coinzilla/pull/515) owns the remaining deterministic lifecycle overlap matrix, full commission/accounting invariants, fee-policy audit, and OPENING/CLOSING account-audit verification. Its branch is based on the merged `develop`; these acceptance gates remain open until implemented and tested.
+
+**Operational stop remains mandatory:** Harvester must remain stopped during this follow-up. Do not restart it, submit or cancel TESTNET orders, change exchange account settings, or perform exchange write operations. The historical +0.20730 USDT scope mismatch and twelve-distinct-BUY acknowledgement/fill race are resolved findings from #513, not open blockers. A controlled TESTNET run requires a separate explicit authorization after the follow-up acceptance criteria pass.
+
 ## Mandatory implementation order
 
 Agents MUST work in this order:
@@ -159,14 +167,14 @@ Binance Spot TESTNET account settings previously showed **Commissions: None**. T
 
 ### 2026-11-04 latest PR #513 review gates
 
-The previous CI run tested an earlier PR merge ref and failed the MIN_NOTIONAL regression because it expected `ok: true` for an invalid order. The current branch test now expects `ok: false`, asserts the MIN_NOTIONAL validation error, and verifies the pair pauses once without repeated evaluation. Fresh exact-head CI is the only remaining merge gate; do not treat the earlier run as current verification.
+PR #513 has merged and its exact-head CI passed. The MIN_NOTIONAL regression now expects `ok: false`, asserts the validation error, and verifies the pair pauses once without repeated evaluation. PR #515 remains the active offline follow-up: its lifecycle, accounting, fee-policy, and OPENING/CLOSING audit acceptance checks are still in progress. Require fresh exact-head CI for every pushed increment; earlier green runs do not certify later commits.
 
 The maker-only fee-reserve defect is fixed in PR #513: Conservative recovery SELL sizing reserves the greater of configured `makerPercent` and `takerPercent`. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee inputs. Actual commissions remain authoritative for realized fill accounting.
 
 The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/stream and concurrent-market-update matrix is moved to the follow-up PR. The future closed-session opening-balance audit is also follow-up work. Keep Harvester stopped; merge of PR #513 does not authorize TESTNET restart or orders.
 
 
-### Incident execution handoff — 2026-11-04 (PR #513 only)
+### Incident execution handoff — 2026-11-04 (PR #515 follow-up)
 
 **Do not ask the operator to restart Harvester, submit orders, or repeat already supplied evidence.** The operator's role is to provide TESTNET logs/trade-history outputs when explicitly requested after source instrumentation and verification are ready. The engineering agent owns code investigation, fixes, regression tests, documentation, and CI.
 
