@@ -42,8 +42,8 @@ test("validates, registers, and submits each strategy intent through the broker 
   assert.equal(result.ok, true)
   assert.equal(submitted.length, 1)
   assert.equal(submitted[0].status, "OPEN")
-  assert.equal(calls[0], "pending:h-DOGEUSDT-1")
-  assert.equal(calls[1].clientOrderId, "h-DOGEUSDT-1")
+  assert.match(calls[0], /^pending:h-[0-9a-f]{22}-1$/)
+  assert.match(calls[1].clientOrderId, /^h-[0-9a-f]{22}-1$/)
 })
 
 test("validates the complete exchange order before calling the broker", async () => {
@@ -73,7 +73,8 @@ test("registers a pending order before reporting a thrown submission as unknown"
   })
   const result = await execute({ decision, marketMetadata })
   assert.equal(result.ok, false)
-  assert.deepEqual(calls, ["h-DOGEUSDT-1", "UNKNOWN"])
+  assert.match(calls[0], /^h-[0-9a-f]{22}-1$/)
+  assert.equal(calls[1], "UNKNOWN")
 })
 
 test("does not silently accept a non-canonical broker acknowledgement", async () => {
@@ -121,4 +122,36 @@ test("pauses an unknown order outcome when local acknowledgement registration fa
   const result = await execute({ decision, marketMetadata })
   assert.equal(result.ok, false)
   assert.deepEqual(outcomes, ["UNKNOWN"])
+})
+
+
+test("uses different client order ID namespaces for separate executor instances", async () => {
+  const createExecutor = () => {
+    let submittedOrder
+    const execute = makeExecuteStrategyDecision({
+      broker: { placeOrder: async ({ order }) => {
+        submittedOrder = order
+        return { ok: true, data: makeAcknowledgement(order) }
+      } },
+      onPendingOrder: async () => {},
+      onAcknowledgedOrder: async () => {},
+      onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+    })
+    return {
+      run: async () => {
+        const result = await execute({ decision, marketMetadata })
+        assert.equal(result.ok, true)
+        return submittedOrder.clientOrderId
+      },
+    }
+  }
+
+  const firstId = await createExecutor().run()
+  const secondId = await createExecutor().run()
+
+  assert.match(firstId, /^h-[0-9a-f]{22}-1$/)
+  assert.match(secondId, /^h-[0-9a-f]{22}-1$/)
+  assert.notEqual(firstId, secondId)
+  assert.ok(firstId.length <= 36)
+  assert.ok(secondId.length <= 36)
 })

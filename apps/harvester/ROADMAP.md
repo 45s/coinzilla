@@ -136,7 +136,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Reserve conservatively before an order can race with another order; reconcile the exchange response before releasing or resizing reservations.
 - [ ] Ensure multiple SELL reservations never exceed available base inventory and multiple BUY commitments never exceed available quote/investment limits.
 - [ ] Treat timeout/disconnect during place/cancel as UNKNOWN, not failed; reconcile by client order ID, order status, open orders, and trade history before retrying.
-- [ ] Implement idempotent client order IDs and safe retry/reconciliation rules.
+- [~] Generate Binance-compatible client order IDs with a per-executor 88-bit random namespace and monotonic local sequence, preventing predictable ID reuse after process restarts. Durable idempotent retries and safe submission reconciliation remain unfinished.
 - [ ] Implement cancel/replace workflow that processes fills received during cancellation before calculating replacement quantity.
 - [ ] Never blindly resubmit a state-changing request after an unknown transport outcome.
 
