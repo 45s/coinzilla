@@ -132,3 +132,7 @@ This package is an **exchange infrastructure adapter**, not the owner of trading
 
 Do not start Candidate B or C until the relevant contract tests are green and the branch can execute the RED → GREEN → REFACTOR sequence. A structural move without a failing-first test is not evidence of behavior preservation.
 
+### Verified package coverage snapshot
+
+On PR #516 commit `bf44e8e8d1e9444066a7ea595d518341e0a06fcc`, the CI-executed package command `pnpm --filter @coinzilla/brokers test:coverage` passed with **81.31% lines, 81.59% branches, and 79.09% functions**. The new direct event-adapter characterization tests bring `helpers/adapters/user.js` to **100% line, branch, and function coverage**. This is a measured baseline, not a claim that every protocol/recovery edge case is covered; RPC and Streams failure branches remain the next coverage targets.
+
