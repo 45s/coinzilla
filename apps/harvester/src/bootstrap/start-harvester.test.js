@@ -1564,7 +1564,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
   assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
   assert.ok(snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"))
-  assert.ok(calls.indexOf("disconnect") > calls.indexOf("account:snapshot"))
+  assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
 })
 
 test("journals OPENING balances before trading and CLOSING balances before broker disconnect", async () => {
