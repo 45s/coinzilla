@@ -1081,6 +1081,60 @@ describe("Binance user-data session recovery", () => {
     await broker.disconnect()
   })
 
+  it("unsubscribes a late remote resubscription when the final subscriber disconnects", async () => {
+    const scheduler = createScheduler()
+    const clients = []
+    let resolveResubscribe
+    let markResubscribeStarted
+    const resubscribeStarted = new Promise((resolve) => {
+      markResubscribeStarted = resolve
+    })
+    const broker = new BinanceSdkBroker({
+      apiKey: "test-key",
+      apiSecret: "test-secret",
+      reconnectDelay: 10,
+      logger: { error() {}, info() {}, warn() {} },
+    }, {
+      apiClientFactory: () => {
+        const index = clients.length
+        const client = createFakeRpcClient({
+          "userDataStream.subscribe.signature": index === 0
+            ? () => ({ subscriptionId: 10 })
+            : () => new Promise((resolve) => {
+                resolveResubscribe = resolve
+                markResubscribeStarted()
+              }),
+          "session.subscriptions": () => [],
+          "userDataStream.unsubscribe": () => ({}),
+        })
+        clients.push(client)
+        return client
+      },
+      marketClientFactory: () => createFakeStreamsClient(),
+      setTimeoutFn: scheduler.setTimeout,
+      clearTimeoutFn: scheduler.clearTimeout,
+    })
+    await broker.connect()
+    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    const recovery = scheduler.runNext()
+    await resubscribeStarted
+
+    assert.equal(clients.length, 2)
+    assert.equal(clients[1].state, "open")
+    await subscription.data.disconnect()
+    resolveResubscribe({ subscriptionId: 110 })
+    await recovery
+
+    assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+    assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
+    assert.equal(scheduler.pendingCount, 0)
+    assert.equal(broker.userDataUnavailable, true)
+    await broker.disconnect()
+  })
+
   it("continues reconnecting after the warning threshold until the socket recovers", async () => {
     const scheduler = createScheduler()
     const clients = []
