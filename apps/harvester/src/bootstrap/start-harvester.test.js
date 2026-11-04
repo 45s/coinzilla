@@ -121,6 +121,18 @@ test("does not connect a broker unless explicitly selected", async () => {
   await result.stop()
 })
 
+test("rejects enabling the deferred Aggressive strategy", async () => {
+  await assert.rejects(
+    startHarvester({
+      loadConfig: async () => tradingConfig,
+      env: { ...binanceEnv, HARVESTER_ENABLE_AGGRESSIVE: "true" },
+      brokerAdapterFactory: () => createBroker(),
+      logger: { info() {}, error() {} },
+    }),
+    /Aggressive strategy is disabled and deferred/,
+  )
+})
+
 test("subscribes only enabled pairs and passes the current Portfolio to strategy", async () => {
   const calls = []
   const broker = createBroker(calls)
@@ -179,7 +191,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   ])
 })
 
-test("uses Aggressive by default and passes updated Portfolio after a fill", async () => {
+test("uses Conservative by default and passes updated Portfolio after a fill", async () => {
   const broker = createBroker()
   const result = await startHarvester({
     loadConfig: async () => tradingConfig,
@@ -194,7 +206,7 @@ test("uses Aggressive by default and passes updated Portfolio after a fill", asy
     settings: tradingConfig.settings,
   })
   assert.equal(decision.ok, true)
-  assert.equal(decision.data.decision.strategy, "AGGRESSIVE")
+  assert.equal(decision.data.decision.strategy, "CONSERVATIVE")
   assert.equal(decision.data.decision.action, "NO_ACTION")
   assert.equal(result.portfolio.positions.length, 0)
 

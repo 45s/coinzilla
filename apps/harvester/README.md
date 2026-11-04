@@ -139,7 +139,7 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity is opt-in. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
+Broker connectivity is opt-in. Aggressive is disabled by default; startup rejects `HARVESTER_ENABLE_AGGRESSIVE=true`. Conservative is the only strategy used by default and the only executable strategy. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
 
 ```sh
 HARVESTER_BROKER=binance

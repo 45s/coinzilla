@@ -193,6 +193,8 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 ## P1 — Implement Aggressive after Conservative is proven
 
+- [x] Disable Aggressive at runtime with `HARVESTER_ENABLE_AGGRESSIVE=false`; reject startup if an attempt is made to enable it. Conservative is the only default evaluator and the only strategy composed for order execution.
+
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 
 - [ ] Review the remaining Aggressive decisions in [Trading Strategies](./docs/trading-strategies.md), ask one plain-language product question at a time, and update the specification before implementing unresolved behavior.

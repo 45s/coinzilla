@@ -7,7 +7,6 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { evaluateAggressiveStrategy } from "../domain/strategies/aggressive-strategy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -79,6 +78,14 @@ async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions
   return errors
 }
 
+const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
+  strategy: "CONSERVATIVE",
+  symbol: marketPrice?.symbol,
+  action: "NO_ACTION",
+  reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
+  position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
+})
+
 const createPortfolioWorkflow = ({ evaluateStrategy }) => {
   let portfolio = new Portfolio()
   const recoveryLedgers = new Map()
@@ -145,7 +152,7 @@ export async function startHarvester({
   loadConfig = loadTradingConfig,
   env = process.env,
   brokerAdapterFactory = createBinanceBrokerAdapter,
-  evaluateStrategy = evaluateAggressiveStrategy,
+  evaluateStrategy = evaluateReadOnlyConservativeStrategy,
   logger = defaultLogger,
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
@@ -161,6 +168,9 @@ export async function startHarvester({
 } = {}) {
   logger.debug?.({ message: "Startup step: loading and validating trading configuration" })
   const tradingConfig = await loadConfig(configSource)
+  if (env.HARVESTER_ENABLE_AGGRESSIVE !== undefined && env.HARVESTER_ENABLE_AGGRESSIVE !== "false") {
+    throw new Error("Aggressive strategy is disabled and deferred; set HARVESTER_ENABLE_AGGRESSIVE=false")
+  }
   const enabledSymbols = Object.entries(tradingConfig.pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
