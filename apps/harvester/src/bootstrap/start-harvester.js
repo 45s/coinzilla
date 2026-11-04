@@ -168,8 +168,11 @@ export async function startHarvester({
 } = {}) {
   logger.debug?.({ message: "Startup step: loading and validating trading configuration" })
   const tradingConfig = await loadConfig(configSource)
-  if (env.HARVESTER_ENABLE_AGGRESSIVE !== undefined && env.HARVESTER_ENABLE_AGGRESSIVE !== "false") {
-    throw new Error("Aggressive strategy is disabled and deferred; set HARVESTER_ENABLE_AGGRESSIVE=false")
+  if (tradingConfig.strategies?.conservative?.enabled !== true) {
+    throw new Error("Conservative strategy must remain enabled in trading config")
+  }
+  if (tradingConfig.strategies?.aggressive?.enabled === true) {
+    throw new Error("Aggressive strategy is disabled and deferred; set strategies.aggressive.enabled=false")
   }
   const enabledSymbols = Object.entries(tradingConfig.pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)

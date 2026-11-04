@@ -14,7 +14,11 @@ import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 
 test('loads configuration before returning the startup context', async () => {
-  const tradingConfig = { settings: { minProfit: 0.01 }, pairs: { ZROUSDT: { enabled: true } } };
+  const tradingConfig = {
+    settings: { minProfit: 0.01 },
+    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
+    pairs: { ZROUSDT: { enabled: true } },
+  };
   const configSource = '/etc/harvester/trading-config.json';
   const calls = [];
 
@@ -86,6 +90,7 @@ test('ordinary TRADE fills update owned accounting without another account snaps
   ];
   const tradingConfig = {
     settings: { minProfit: '0.01' },
+    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
     pairs: {
       ZROUSDT: {
         enabled: true,

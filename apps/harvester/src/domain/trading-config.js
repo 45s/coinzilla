@@ -32,7 +32,7 @@ const requirePrecision = (value, path) => {
 };
 
 /**
- * Validate Harvester's flat trading-config shape and basic numeric invariants.
+ * Validate Harvester's strategy, settings, and pair configuration plus basic numeric invariants.
  * Each market pair owns its capital allocation and trading parameters.
  * Returns the original object without silently changing values or dropping fields.
  */
@@ -40,6 +40,17 @@ export function validateTradingConfig(config) {
   requireRecord(config, 'root');
   requireRecord(config.settings, 'settings');
   requireNumber(config.settings.minProfit, 'settings.minProfit', { min: 0 });
+  requireRecord(config.strategies, 'strategies');
+  requireRecord(config.strategies.conservative, 'strategies.conservative');
+  requireBoolean(config.strategies.conservative.enabled, 'strategies.conservative.enabled');
+  if (!config.strategies.conservative.enabled) {
+    fail('strategies.conservative.enabled', 'Conservative must remain enabled');
+  }
+  requireRecord(config.strategies.aggressive, 'strategies.aggressive');
+  requireBoolean(config.strategies.aggressive.enabled, 'strategies.aggressive.enabled');
+  if (config.strategies.aggressive.enabled) {
+    fail('strategies.aggressive.enabled', 'Aggressive strategy is deferred and must remain disabled');
+  }
   requireRecord(config.pairs, 'pairs');
 
   const pairs = Object.entries(config.pairs);

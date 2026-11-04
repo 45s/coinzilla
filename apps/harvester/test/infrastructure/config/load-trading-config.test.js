@@ -42,7 +42,7 @@ test('rejects structurally invalid JSON after parsing', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'harvester-config-'));
   const path = join(directory, 'invalid-shape.json');
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await writeFile(path, JSON.stringify({ settings: { minProfit: 0.01 }, pairs: {} }));
+  await writeFile(path, JSON.stringify({ settings: { minProfit: 0.01 }, strategies: { conservative: { enabled: true }, aggressive: { enabled: false } }, pairs: {} }));
 
   await assert.rejects(loadTradingConfig(path), /at least one pair/);
 });

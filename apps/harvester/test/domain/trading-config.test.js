@@ -6,9 +6,34 @@ import { validateTradingConfig } from '../../src/domain/trading-config.js';
 const configUrl = new URL('../../trading-config.json', import.meta.url);
 const validConfig = JSON.parse(await readFile(configUrl, 'utf8'));
 
-test('accepts the flat Harvester trading configuration', () => {
+test('requires explicit Conservative and disabled Aggressive strategy settings', () => {
+  const config = structuredClone(validConfig);
+  config.strategies = {
+    conservative: { enabled: true },
+    aggressive: { enabled: false },
+  };
+
+  assert.equal(validateTradingConfig(config), config);
+
+  const aggressiveEnabled = structuredClone(config);
+  aggressiveEnabled.strategies.aggressive.enabled = true;
+  assert.throws(
+    () => validateTradingConfig(aggressiveEnabled),
+    /strategies.aggressive.enabled.*Aggressive strategy is deferred/,
+  );
+
+  const conservativeDisabled = structuredClone(config);
+  conservativeDisabled.strategies.conservative.enabled = false;
+  assert.throws(
+    () => validateTradingConfig(conservativeDisabled),
+    /strategies.conservative.enabled.*Conservative must remain enabled/,
+  );
+});
+
+test('accepts the Harvester trading configuration', () => {
   assert.equal(validateTradingConfig(validConfig), validConfig);
-  assert.equal('strategies' in validConfig, false);
+  assert.equal(validConfig.strategies.conservative.enabled, true);
+  assert.equal(validConfig.strategies.aggressive.enabled, false);
   assert.equal('free-roll' in validConfig, false);
 });
 
@@ -16,13 +41,24 @@ test('rejects missing settings or pairs objects', () => {
   assert.throws(() => validateTradingConfig({ pairs: {} }), /settings.*expected an object/);
   assert.throws(
     () => validateTradingConfig({ settings: { minProfit: 0.01 } }),
+    /strategies.*expected an object/,
+  );
+  assert.throws(
+    () => validateTradingConfig({
+      settings: { minProfit: 0.01 },
+      strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
+    }),
     /pairs.*expected an object/,
   );
 });
 
 test('rejects an empty pairs collection', () => {
   assert.throws(
-    () => validateTradingConfig({ settings: { minProfit: 0.01 }, pairs: {} }),
+    () => validateTradingConfig({
+      settings: { minProfit: 0.01 },
+      strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      pairs: {},
+    }),
     /pairs.*at least one pair/,
   );
 });

@@ -65,12 +65,13 @@ See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and 
 
 ## Configuration
 
-Harvester uses one flat configuration shared by its strategy policies. The root contains:
+Harvester uses one `trading-config.json` for strategy availability, process-wide trading settings, and market-specific settings. The root contains:
 
+- `strategies`: strategy availability. Keep `conservative.enabled` set to `true` and `aggressive.enabled` set to `false`; Aggressive is deferred until Conservative is proven on TESTNET.
 - `settings`: process-wide trading settings, currently `minProfit`.
-- `pairs`: market-specific settings keyed by symbol (for example, `ZROUSDT` or `ZROFDUSD`).
+- `pairs`: market-specific settings keyed by symbol (for example, `ZROUSDT` or `ZROFDUSD`). Each pair has its own `enabled` flag, `investment` limit, order sizing, reserve quantity, price/quantity precision, and fee percentages.
 
-There is no strategy-name wrapper in the config. Each pair has its own `enabled` flag, `investment` limit, order sizing, reserve quantity, price/quantity precision, and fee percentages.
+Strategy availability is not configured through environment variables. The runtime currently requires Conservative enabled and rejects Aggressive enabled.
 
 `investment` is the maximum quote-currency capital allocated to that pair. It is denominated in the quote asset named by the symbol: `ZROUSDT` uses USDT, while `ZROFDUSD` uses FDUSD. It is a per-pair allocation limit, not an order size. `orderQuantity` remains a separate configured order quantity; `keepQuantity` remains the retained base-asset quantity. These values are not interchangeable.
 
@@ -80,6 +81,10 @@ Example:
 {
   "settings": {
     "minProfit": 0.01
+  },
+  "strategies": {
+    "conservative": { "enabled": true },
+    "aggressive": { "enabled": false }
   },
   "pairs": {
     "ZROUSDT": {
@@ -139,7 +144,7 @@ See [Architecture — implementation style](./docs/architecture.md#implementatio
 
 Run `pnpm --filter @coinzilla/harvester start` from the repository root. Startup always loads and validates `trading-config.json`.
 
-Broker connectivity is opt-in. Aggressive is disabled by default; startup rejects `HARVESTER_ENABLE_AGGRESSIVE=true`. Conservative is the only strategy used by default and the only executable strategy. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
+Broker connectivity is opt-in. Conservative is the only executable strategy; strategy availability is read from `trading-config.json`, not environment variables. Order execution is separately opt-in with `HARVESTER_ENABLE_TRADING=true`, requires `HARVESTER_TRADING_MODE=testnet`, and is rejected when `NODE_ENV=production`. The default `trading-config.json` enables only `ZROUSDT` for the first trading run. Trading startup currently supports exactly one enabled pair; enable additional pairs only after shared-asset allocation is implemented. Startup loads one canonical account snapshot for free-balance validation, but it does not require a clean account, adopt external open orders, or treat pre-existing inventory as Harvester-owned.
 
 ```sh
 HARVESTER_BROKER=binance

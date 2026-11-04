@@ -7,6 +7,7 @@ import { startHarvester } from "./start-harvester.js"
 
 const tradingConfig = {
   settings: { minProfit: 0.01 },
+  strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
   pairs: {
     BTCUSDT: { enabled: true, orderQuantity: 0.01, makerPercent: 0 },
     ETHUSDT: { enabled: false, orderQuantity: 0.1, makerPercent: 0 },
@@ -121,11 +122,11 @@ test("does not connect a broker unless explicitly selected", async () => {
   await result.stop()
 })
 
-test("rejects enabling the deferred Aggressive strategy", async () => {
+test("rejects enabling the deferred Aggressive strategy in trading config", async () => {
   await assert.rejects(
     startHarvester({
-      loadConfig: async () => tradingConfig,
-      env: { ...binanceEnv, HARVESTER_ENABLE_AGGRESSIVE: "true" },
+      loadConfig: async () => ({ ...tradingConfig, strategies: { ...tradingConfig.strategies, aggressive: { enabled: true } } }),
+      env: binanceEnv,
       brokerAdapterFactory: () => createBroker(),
       logger: { info() {}, error() {} },
     }),
@@ -822,6 +823,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   }
   const config = {
     settings: { minProfit: 0.01 },
+    strategies: { conservative: { enabled: true }, aggressive: { enabled: false } },
     pairs: {
       BTCUSDT: {
         enabled: true,
