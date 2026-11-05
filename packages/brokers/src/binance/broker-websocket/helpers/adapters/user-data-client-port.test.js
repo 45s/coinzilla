@@ -64,10 +64,12 @@ test("forwards connection state and listener lifecycle through the port", async 
   client.emitError(error)
   client.emitClose(close)
 
-  assert.equal(received.events.length, 1)
+  assert.equal(received.events.length, 2)
   assert.equal(received.events[0].type, "event")
   assert.equal(received.events[0].subscriptionId, 17)
   assert.equal(received.events[0].event.balanceDelta, "1")
+  assert.equal(typeof received.events[0].deduplicationKey, "string")
+  assert.equal(received.events[1].deduplicationKey, received.events[0].deduplicationKey)
   assert.deepEqual(received.errors, [error])
   assert.deepEqual(received.closes, [close])
 
