@@ -192,3 +192,57 @@ test("does not emit ANSI color codes when color is disabled", () => {
   assert.match(written, /INFO Plain terminal output/)
   output.destroy()
 })
+
+
+test("renders semantic SUCCESS and SYSTEM methods with distinct labels and colors", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: true })
+  const data = { message: "Lifecycle event" }
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    method: "success",
+    data,
+  })
+  transport.write({
+    timestamp: "2026-11-05T12:00:01.000Z",
+    level: "info",
+    method: "system",
+    data,
+  })
+  transport.write({
+    timestamp: "2026-11-05T12:00:02.000Z",
+    level: "info",
+    method: "info",
+    data,
+  })
+  transport.close()
+
+  assert.match(written, /\u001b\[32mSUCCESS\u001b\[0m/)
+  assert.match(written, /\u001b\[36mSYSTEM\u001b\[0m/)
+  assert.match(written, /\u001b\[34mINFO\u001b\[0m/)
+  assert.equal((written.match(/Lifecycle event/g) ?? []).length, 3)
+  assert.doesNotMatch(written, /repeated/)
+  output.destroy()
+})
+
+test("keeps colored semantic labels within the configured console line limit", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: true })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    method: "success",
+    data: { message: "x".repeat(240) },
+  })
+
+  const plainLine = written.replace(/\u001b\[[0-9;]*m/g, "").trimEnd()
+  assert.ok(plainLine.length <= 200)
+  output.destroy()
+})
