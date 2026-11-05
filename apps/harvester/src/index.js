@@ -105,7 +105,6 @@ export async function main({
       }),
     })
 
-    let journalRecoverySummary
     if (env.HARVESTER_ENABLE_TRADING === "true") {
       if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
         throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
@@ -129,7 +128,6 @@ export async function main({
       if (!summary.ok) {
         throw new Error("Conservative TESTNET trading cannot start because Journal history could not be summarized")
       }
-      journalRecoverySummary = summary
       if (summary.hasPriorTradingHistory) {
         throw new Error(
           "Conservative TESTNET trading is blocked: prior Harvester order/fill history exists " +
