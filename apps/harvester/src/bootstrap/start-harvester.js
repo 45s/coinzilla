@@ -504,6 +504,10 @@ export async function startHarvester({
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
   let userDataReconciliationQueued = false
+  let userDataRecoveryGeneration = 0
+  let userDataRecoveryTask = null
+  let userDataStartupComplete = false
+  let pendingUserDataRecovery = false
   let stopped = false
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
@@ -688,6 +692,101 @@ export async function startHarvester({
       phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
     })
     return snapshot
+  }
+
+  const drainUserDataEvents = async () => {
+    while (true) {
+      const queuedEvents = userDataEventQueue
+      await queuedEvents
+      if (queuedEvents === userDataEventQueue) return
+    }
+  }
+
+  const startUserDataRecovery = () => {
+    if (stopped || !userDataStartupComplete || !userDataRequiresReconciliation ||
+        userDataAccountingFailed || userDataRecoveryTask) {
+      pendingUserDataRecovery = true
+      return
+    }
+    if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
+      logger.error?.({
+        message: "Harvester cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
+      })
+      return
+    }
+
+    pendingUserDataRecovery = false
+    const generation = userDataRecoveryGeneration
+    const isCurrentGeneration = () => !stopped && generation === userDataRecoveryGeneration
+    const recoveryTask = (async () => {
+      try {
+        logger.info?.({
+          message: "Harvester application recovery started after user-data transport reconnect",
+          generation,
+        })
+
+        let reconciliation = { ok: true, data: { reconciled: 0, symbols: [] } }
+        if (tradingEnabled) {
+          if (!tradingEngine) throw new Error("Trading engine is unavailable during user-data recovery")
+          reconciliation = await tradingEngine.reconcileOwnedOrders({
+            recoveryMode: true,
+            beforeApply: drainUserDataEvents,
+          })
+          if (!reconciliation?.ok) {
+            throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
+          }
+          hasCanonicalOwnershipReconciliation = true
+        }
+        await drainUserDataEvents()
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+
+        const snapshot = await refreshAccountSnapshot()
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
+
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        await publishOpenOrdersSnapshot({
+          phase: "RECOVERY",
+          blockOnExistingOrders: tradingEnabled,
+          ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
+        })
+        await drainUserDataEvents()
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+
+        // The broker only emits "reconciled" after every subscriber acknowledges.
+        // Keep the application gate closed unless this generation has passed
+        // order/fill reconciliation and durable account/order audits.
+        userDataRequiresReconciliation = false
+        const acknowledged = userDataSubscription.acknowledgeRecovery()
+        if (acknowledged !== true) {
+          userDataRequiresReconciliation = true
+          throw new Error("Broker rejected the application recovery acknowledgement")
+        }
+        logger.info?.({
+          message: "Harvester application recovery completed and broker acknowledgement accepted",
+          generation,
+          reconciledOrders: reconciliation.data?.reconciled ?? 0,
+        })
+      } catch (error) {
+        userDataReady = false
+        userDataRequiresReconciliation = true
+        userDataStatus = userDataAccountingFailed
+          ? "EXECUTION_ACCOUNTING_FAILED"
+          : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+        logger.error?.({
+          message: "Harvester application recovery failed; trading remains blocked",
+          generation,
+          errorName: error?.name ?? "Error",
+          errorMessage: error?.message || String(error),
+          errorStack: error?.stack,
+        })
+      } finally {
+        if (userDataRecoveryTask === recoveryTask) userDataRecoveryTask = null
+      }
+    })()
+    userDataRecoveryTask = recoveryTask
   }
 
   const isMarketPriceFresh = (marketPrice) => {
@@ -986,6 +1085,11 @@ export async function startHarvester({
         ) {
           userDataStreamUnsafe = false
         }
+        const recoveryInvalidated = [
+          "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
+          "executionNormalizationFailed",
+        ].includes(status.type)
+        if (recoveryInvalidated) userDataRecoveryGeneration += 1
         if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
           userDataStreamUnsafe = true
           userDataRequiresReconciliation = true
@@ -996,8 +1100,8 @@ export async function startHarvester({
               ? "EXECUTION_ACCOUNTING_FAILED"
               : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         } else if (userDataRequiresReconciliation) {
-          // A stream-level "reconciled" acknowledgement alone does not clear
-          // an application-level gate raised by a disconnect or recovery.
+          // A stream-level status cannot clear the application gate unless the
+          // application has completed reconciliation and acknowledged recovery.
           userDataReady = false
           userDataStatus = userDataAccountingFailed
             ? "EXECUTION_ACCOUNTING_FAILED"
@@ -1013,92 +1117,9 @@ export async function startHarvester({
           userDataReady = false
           userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
         }
-        if (
-          status.type === "reconciled" &&
-          status.recoveryRequired !== true &&
-          status.reconciliationRequired !== true &&
-          tradingEngine &&
-          initialAccountSnapshotReady &&
-          userDataRequiresReconciliation &&
-          !userDataAccountingFailed &&
-          !userDataReconciliationQueued
-        ) {
-          userDataReconciliationQueued = true
-          logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
-          const reconciliationTask = tradingEngine.reconcileOwnedOrders({
-            recoveryMode: !userDataReady,
-            beforeApply: async () => {
-              // REST reads do not hold the engine transition queue. Let every
-              // stream event received during those reads reach the engine
-              // before comparing REST execution IDs and applying missing fills.
-              while (true) {
-                const queuedEvents = userDataEventQueue
-                await queuedEvents
-                if (queuedEvents === userDataEventQueue) break
-              }
-            },
-          })
-          void reconciliationTask.then((reconciliation) => {
-            if (stopped) {
-              userDataReconciliationQueued = false
-              return
-            }
-            if (!reconciliation?.ok) {
-              userDataReady = false
-              userDataRequiresReconciliation = true
-              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-              logger.error?.({
-                message: "Harvester REST/stream order reconciliation failed; trading remains paused",
-                errors: reconciliation?.errors,
-              })
-              userDataReconciliationQueued = false
-              return
-            }
-
-            // Stream callbacks received before this barrier are processed
-            // before readiness is reopened. Later callbacks are ordinary live
-            // events and still pass through the same serialized accounting path.
-            const queuedEvents = userDataEventQueue
-            const readinessTask = queuedEvents.then(async () => {
-              if (stopped || userDataAccountingFailed) return
-              userDataRequiresReconciliation = false
-              userDataReady = true
-              userDataStatus = "READY"
-              for (const symbol of reconciliation.data?.symbols ?? []) {
-                const evaluated = await tradingEngine.evaluateLatest({ symbol })
-                if (!evaluated?.ok) {
-                  userDataReady = false
-                  userDataRequiresReconciliation = true
-                  userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-                  logger.error?.({
-                    message: "Harvester strategy reevaluation failed after REST/stream reconciliation",
-                    symbol,
-                    errors: evaluated?.errors,
-                  })
-                  return
-                }
-              }
-              logger.info?.({
-                message: "Harvester REST/stream order reconciliation completed",
-                reconciledOrders: reconciliation.data?.reconciled ?? 0,
-              })
-              resumeDeferredStrategyEvaluations()
-            }).catch((error) => {
-              userDataReady = false
-              userDataRequiresReconciliation = true
-              userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-              logger.error?.({ message: "Harvester readiness transition after reconciliation failed", error })
-            }).finally(() => {
-              userDataReconciliationQueued = false
-            })
-            userDataEventQueue = readinessTask
-          }).catch((error) => {
-            userDataReady = false
-            userDataRequiresReconciliation = true
-            userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-            userDataReconciliationQueued = false
-            logger.error?.({ message: "Harvester REST/stream order reconciliation failed", error })
-          })
+        if (status.type === "recovered" && status.recoveryRequired === true) {
+          if (userDataStartupComplete) startUserDataRecovery()
+          else pendingUserDataRecovery = true
         }
         try {
           onUserDataStatus({ status, ready: userDataReady })
@@ -1363,6 +1384,9 @@ export async function startHarvester({
     }
     throw error
   }
+
+  userDataStartupComplete = true
+  if (pendingUserDataRecovery) startUserDataRecovery()
 
   const stop = async () => {
     if (stopped) return
