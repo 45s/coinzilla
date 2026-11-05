@@ -36,13 +36,12 @@ pnpm --filter @coinzilla/harvester testnet:cancel-orders
 
 The command:
 
-1. Fetches and displays the current open orders across all symbols.
+1. Fetches and logs the current open orders across all symbols.
 2. Stops without making changes if there are no open orders.
-3. Requires the exact phrase `CANCEL ALL TESTNET ORDERS`.
-4. Calls `DELETE /api/v3/openOrders` once for each symbol found in the initial snapshot.
-5. Fetches open orders again and reports whether any remain.
+3. Automatically calls `DELETE /api/v3/openOrders` once for each distinct symbol in the initial snapshot; there is no interactive confirmation.
+4. Fetches open orders again and reports whether any remain.
 
-**This is account-wide in effect:** every open order on every symbol found in the snapshot is targeted, including orders placed manually or by another application. Review the displayed list and stop all trading processes first. Do not run this command if any order must be preserved. It does not cancel orders created after the initial snapshot, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
+**This is an account-wide destructive operation.** Every open order on every symbol found in the initial snapshot is targeted, including orders placed manually or by another application. **Stop Harvester and every other trading process first.** Review the account with the read-only `testnet:orders` command before invoking cancellation. Do not run this command if any order must be preserved. Invoking `testnet:cancel-orders` is the operator's authorization to cancel all orders in that TESTNET account. Orders created after the initial snapshot are not part of the cancellation requests, so the final verification is essential. A failed cancellation or any remaining order produces a non-zero exit code.
 
 The command does not sell, transfer, or otherwise change asset balances. Canceling an order may release its locked balance, but existing free base-asset inventory remains and can still prevent Harvester's clean-account startup check from passing.
 

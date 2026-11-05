@@ -1209,3 +1209,9 @@ These barriers deliberately await filesystem durability only immediately before 
 - [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
 
 **Current safety boundary:** PR #606 and PR #607 are merged into `develop`. Durable reconstruction and canonical exchange reconciliation are implemented for known Harvester-owned state. Trading-enabled restart after prior trading remains fail-closed because the current Binance exchangeInfo catalog cannot prove the historical symbol universe, including delisted markets. The complete account-wide external/manual execution audit and full crash-boundary matrix remain open. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
+
+## Standalone TESTNET order-cancellation operator tool — 2026-11-05
+
+- [~] Make the explicitly invoked Spot TESTNET cancel-all command non-interactive, while clearly warning that it cancels every open order across all symbols and applications.
+- [~] Route script diagnostics through the shared `defaultLogger`, preserve per-symbol failure handling and final account-wide verification, and cover the workflow with deterministic offline tests.
+- [ ] Merge only after the focused Harvester tests and all required CI checks pass on the synchronized PR head. This code change does not authorize any TESTNET account operation; the controlled TESTNET acceptance gate remains separately closed.
