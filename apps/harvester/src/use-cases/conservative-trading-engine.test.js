@@ -3277,6 +3277,7 @@ test("clears a recovered replacement intent only after canonical history confirm
       orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedCancellationClientOrderIds: new Set(["recovered-sell-cancel"]),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
@@ -3372,6 +3373,7 @@ test("does not clear an independently durable strategy pause when a recovery can
       pausedMarkets: new Set(["DOGEUSDT"]),
       durablePausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedCancellationClientOrderIds: new Set(["recovered-sell-durable-pause"]),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
@@ -3408,6 +3410,7 @@ test("processes recovery-time user-data cancellation facts without broker cancel
       orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedCancellationClientOrderIds: new Set(["recovered-stream-cancel"]),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
