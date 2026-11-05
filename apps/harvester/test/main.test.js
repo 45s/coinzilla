@@ -19,7 +19,7 @@ test('reports successful configuration startup without claiming a workflow ran',
 
   assert.deepEqual(messages, [[
     'info',
-    'Harvester configuration validated; broker connection and market data are disabled.',
+    'Configuration validated; broker and market data are disabled.',
   ]]);
 });
 
@@ -46,7 +46,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   });
 
   assert.equal(process.exitCode, 1);
-  const startupLog = messages.find(([, entry]) => entry?.message === 'Harvester startup failed.');
+  const startupLog = messages.find(([, entry]) => entry?.message === 'startup failed.');
   assert.ok(startupLog);
   assert.equal(startupLog[0], 'error');
   assert.equal(startupLog[1].error, startupError);
