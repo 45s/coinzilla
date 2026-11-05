@@ -568,6 +568,72 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await result.stop()
 })
 
+test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let accountReads = 0
+  let openOrderReads = 0
+  const getOpenOrders = broker.getOpenOrders
+  broker.getOpenOrders = async (input) => {
+    openOrderReads += 1
+    return getOpenOrders(input)
+  }
+  broker.getAccountSnapshot = async () => {
+    accountReads += 1
+    if (accountReads === 2) {
+      broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+    }
+    return getAccountSnapshot()
+  }
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {} },
+  })
+
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  await waitForTestSignal(acknowledged, "recovery after user-data audit event", () => ({
+    accountReads,
+    openOrderReads,
+    acknowledgementCount,
+  }), 2_000)
+
+  assert.equal(accountReads, 3)
+  assert.equal(openOrderReads, 3)
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(result.userDataReady, true)
+  await result.stop()
+})
+
 test("logs stack and cause details when a user-data RPC error has an empty message", async () => {
   const broker = createBroker()
   const diagnostics = []
