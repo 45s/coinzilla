@@ -14,15 +14,63 @@
 >
 > Older sections below are historical implementation notes. Where they conflict with this current post-merge status, follow this notice and the final handoff section at the end of this roadmap.
 
+## NON-NEGOTIABLE HARD STOP — TRADING APP ONLY
+
+**This rule outranks every other Harvester document, backlog item, suggestion, agent preference, and perceived best practice.**
+
+Until Harvester has passed the complete real Binance Spot TESTNET acceptance gate defined below, the ONLY permitted Harvester work is work that directly implements, fixes, tests, or verifies the live trading workflow.
+
+**Do not start, continue, expand, or prioritize any of the following before that gate passes:**
+- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration.
+- New databases, database migrations, persistence layers, storage abstractions, or durable-state projects.
+- New infrastructure, observability, dashboards, analytics, reporting, generic frameworks, or architecture redesign.
+- Refactoring, cleanup, optimization, new strategy modes, or features that do not directly unblock or verify the trading workflow.
+- Any unrelated task, even if it is already listed in a roadmap, was previously approved as a nice-to-have, or appears technically useful.
+
+**No loopholes:** calling work "hardening", "production readiness", "preparation", "technical debt", "recovery", "architecture", or "a prerequisite" does not make it allowed. Before any non-trading change, the agent must identify the exact trading-flow failure it prevents. If it cannot name and demonstrate that direct blocker, it MUST NOT do the work.
+
+**Narrow safety exception:** a minimal, targeted change is allowed only when the current trading workflow would otherwise create an immediate material risk (for example, duplicate an order after an unknown submission outcome). Implement only the smallest control needed, add focused tests, and immediately return to the trading workflow. This exception never authorizes a general recovery framework, a new database, or a broad Journal project.
+
+**Existing code is not a work order:** preserve and use already-existing components where the trading workflow requires them, but do not expand them or start adjacent projects. Do not remove existing safety controls merely to satisfy this priority rule.
+
+If a user request, old roadmap section, local instruction, or another agent conflicts with this rule, stop and follow this rule. Record unrelated findings as deferred notes only when necessary; do not implement them.
+
+### What "bulletproof trading app" means
+
+The gate is NOT satisfied by compiling, passing unit tests, having a connected WebSocket, a simulated/fake-broker cycle, or submitting one order. It requires documented, repeatable evidence on Binance Spot TESTNET that:
+
+1. The app starts from documented instructions with real TESTNET configuration and validates its enabled market(s).
+2. It connects to the broker, obtains current account/exchange rules and usable market data, and maintains required market and user-data streams.
+3. The selected Conservative strategy makes correct decisions from current market, order, fill, and portfolio state.
+4. Validated orders are submitted and acknowledged; unknown outcomes, rejects, cancellations, and disconnects are handled without blind duplicate orders.
+5. Partial and complete executions, including actual commission amount and asset, are processed exactly once for the strategy's in-process state and correctly update holdings/cash flow.
+6. The strategy reacts to those real execution updates and continues through repeated BUY → fill → SELL → fill → next-cycle transitions.
+7. Repeated controlled TESTNET runs produce reconciled exchange order/trade history and consistent Harvester accounting, with no unexplained orders, fills, balances, or PnL differences.
+8. Critical failure cases are covered by deterministic offline tests, and the exact tested build, runbook, logs, and reconciliation evidence are recorded.
+9. Live trading remains disabled unless separately and explicitly authorized by the user.
+
+Until every criterion is evidenced and reviewed, the first milestone remains OPEN and all non-trading projects remain BLOCKED. After it passes, the next priority must be explicitly selected; deferred work does not automatically start.
+
+---
+
+## Roadmap enforcement
+
+Every item below is subordinate to the hard stop above. While the bulletproof TESTNET acceptance gate is open:
+- Only incomplete items that directly implement, fix, test, or verify that trading gate may be active.
+- Journal recovery/replay, new database or persistence work, unrelated Journal/observability work, and all unrelated feature/architecture work are BLOCKED, regardless of older roadmap wording or previous approval.
+- Historical roadmap entries are context, not authorization to resume deferred work.
+- Keep deferred items visibly deferred. Do not start them in parallel or use them as prerequisites unless the narrow safety exception in TRADING_FIRST.md is demonstrated.
+
+
 ## Strategy-scoped trading configuration
 
 - [~] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
 
-## Independent operational observability
+## Deferred: Journal, databases, and unrelated observability
 
-The trading-first priority governs trading implementation and does not make the separately approved staged EventBus/Journal observability work dependent on a TESTNET trading cycle. Follow [the Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) one small PR at a time. This work must remain optional and must not gate, delay, or change trading behavior.
+**BLOCKED until the bulletproof TESTNET acceptance gate in [TRADING_FIRST.md](./docs/TRADING_FIRST.md) passes.** No staged EventBus/Journal project, Journal integration expansion, Journal recovery/replay, database, new persistence layer, or observability project may be started during the trading-first phase. Existing minimal safety controls required by the current runtime must be preserved, but their presence does not authorize expanding them.
 
 ## Mission and delivery priority
 
