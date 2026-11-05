@@ -11,7 +11,15 @@ const logStream = createWriteStream(logPath, { flags: "a" })
 const child = spawn(
   process.execPath,
   ["--env-file=.env.development", "src/index.js"],
-  { stdio: ["inherit", "pipe", "pipe"] }
+  {
+    stdio: ["inherit", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      HARVESTER_LOG_COLOR: process.env.NO_COLOR === undefined && process.stdout.isTTY
+        ? "1"
+        : "0",
+    },
+  }
 )
 
 const forwardOutput = (stream, output) => {
