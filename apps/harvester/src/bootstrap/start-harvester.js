@@ -1248,6 +1248,7 @@ export async function startHarvester({
           currentAccountSnapshot: accountSnapshot,
           openOrders,
           markets: [...marketMetadata.values()].map(({ market }) => market),
+          requireCompleteTradeHistory: true,
         })
         if (accountAudit?.ok !== true) {
           throw new Error(
