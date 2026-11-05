@@ -48,6 +48,7 @@ test("rejects a second trading process without reclaiming the existing lock", as
       pid: 222,
       hostname: "test-host",
       token: "second-token",
+      isProcessAlive: () => true,
     })
 
     assert.equal(first.ok, true)
