@@ -186,6 +186,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.CANCEL_FAILED,
         EVENT.FILL_APPLIED,
         EVENT.RECOVERY_COMPLETED,
+        EVENT.STRATEGY_PAUSED,
       ].includes(name)) {
         session.hasTradingActivity = true
       }
