@@ -381,6 +381,31 @@ test("allows a late FILLED update after an EXPIRED order report", () => {
 })
 
 
+test("attaches a client-ID-resolved broker order ID to an UNKNOWN submission", () => {
+  const clientOrderId = "h-lost-ack"
+  const pending = makeOrder({ clientOrderId })
+  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
+    order: makeOrder({ clientOrderId, status: "UNKNOWN", updatedAt: 102 }),
+  }).registry
+  const acknowledged = makeOrder({
+    clientOrderId,
+    brokerOrderId: "broker-lost-ack",
+    status: "FILLED",
+    executedQuantity: "100",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 103,
+    completedAt: 103,
+  })
+
+  const attached = registry.attachAcknowledgedBrokerOrderId({ order: acknowledged })
+  const tracked = attached.registry.getOrder({ clientOrderId })
+
+  assert.equal(attached.applied, true)
+  assert.equal(tracked.status, "UNKNOWN")
+  assert.equal(tracked.brokerOrderId, "broker-lost-ack")
+  assert.equal(tracked.executedQuantity.amount, "0")
+})
 test("tracks a FILLED acknowledgement as UNKNOWN until execution quantity is reconciled", () => {
   const pending = makeOrder({ clientOrderId: "h-ZROUSDT-ack" })
   const registry = OrderRegistry.empty().registerPending({ order: pending }).registry
