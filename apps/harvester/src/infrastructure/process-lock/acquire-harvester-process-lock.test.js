@@ -82,7 +82,7 @@ test("refuses to remove a lock whose ownership token changed", async () => {
   }
 })
 
-test("does not automatically reclaim a stale or unreadable lock", async () => {
+test("does not reclaim locks owned by another host or unreadable locks", async () => {
   const directory = await createTempDirectory()
   const lockPath = path.join(directory, ".harvester-trading.lock")
   try {
@@ -96,6 +96,60 @@ test("does not automatically reclaim a stale or unreadable lock", async () => {
     assert.equal(result.ok, false)
     assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
     assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "stale-token")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("reclaims a same-host lock only when its recorded process is confirmed dead", async () => {
+  const directory = await createTempDirectory()
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  try {
+    await writeFile(lockPath, JSON.stringify({
+      pid: 456789,
+      hostname: os.hostname(),
+      startedAt: "2026-11-05T00:00:00.000Z",
+      token: "dead-owner-token",
+    }))
+
+    const result = await acquireHarvesterProcessLock({
+      directory,
+      pid: 987,
+      hostname: os.hostname(),
+      token: "new-owner-token",
+      isProcessAlive: () => false,
+    })
+
+    assert.equal(result.ok, true)
+    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "new-owner-token")
+    assert.equal((await result.release()).ok, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("retains a same-host lock when its recorded process may still be alive", async () => {
+  const directory = await createTempDirectory()
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  try {
+    await writeFile(lockPath, JSON.stringify({
+      pid: 456,
+      hostname: os.hostname(),
+      startedAt: "2026-11-05T00:00:00.000Z",
+      token: "live-owner-token",
+    }))
+
+    const result = await acquireHarvesterProcessLock({
+      directory,
+      pid: 987,
+      hostname: os.hostname(),
+      isProcessAlive: () => true,
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "live-owner-token")
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
