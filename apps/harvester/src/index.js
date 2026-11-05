@@ -191,12 +191,12 @@ export async function main({
 
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
-        ? "Harvester connected and subscribed to " + runtime.subscriptions.length +
+        ?  "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness."
-        : "Harvester connected and subscribed to " + runtime.subscriptions.length +
+        :  "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s) in read-only mode; order execution is disabled."
-      : "Harvester configuration validated; broker connection and market data are disabled."
-    logger.info(startupMessage)
+      : "Configuration validated; broker and market data are disabled."
+    logger.system(startupMessage)
 
     if (typeof runtime.stop === "function") {
       let shutdownPromise
@@ -214,7 +214,7 @@ export async function main({
               process.exitCode = 1
               logger.error({ message: "Harvester shutdown was not confirmed.", error: shutdownError })
             } else {
-              logger.info("Harvester shutdown completed.")
+              logger.system("Shutdown completed.")
             }
           } catch (error) {
             shutdownError = error
