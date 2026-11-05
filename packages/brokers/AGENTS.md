@@ -48,4 +48,31 @@ Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch 
 
 Keep exchange-specific fields and behavior inside the relevant adapter. Default unit tests must be offline. Network integration tests are separate; any test placing orders must use TESTNET only. Preserve decimal strings at exchange boundaries and never fabricate unavailable broker facts.
 
+## Autonomous DDD refactoring execution rules
+
+These rules are mandatory for every AI agent working on the existing broker package. They clarify how to execute the DDD refactor; they do not authorize replacing working broker behavior.
+
+### Scope and compatibility
+- The existing `packages/brokers` implementation works. The task is to refactor its internal architecture toward the documented DDD boundaries, not to rebuild, replace, or redesign working functionality.
+- Work strictly inside `packages/brokers/**`, except for repository-required metadata or explicitly coordinated cross-domain work under the repository workflow.
+- Preserve public exports, APIs, method signatures, result envelopes, event/callback behavior, exchange integrations, decimal precision, error semantics, and consumer compatibility. Do not change business behavior as an incidental consequence of moving code.
+- Use characterization tests before moving/refactoring existing behavior. Follow RED → GREEN → REFACTOR in small increments. Keep tests green after each increment; add regression tests for defects and tests for every intentional behavior change.
+- Separate genuine Domain, Application, Ports, and Infrastructure responsibilities where the code has real concepts and boundaries. Do not create empty/template folders or introduce wrappers without a concrete architectural benefit.
+
+### Autonomous PR and merge loop
+- **Create as many focused PRs as needed.** Prefer small, reviewable vertical slices over a risky all-at-once rewrite. Every task branch must be short-lived, based on the latest `develop`, and every task PR must target `develop`.
+- **Do not pause for routine user approval, ask the user to merge, or wait for the user to tell you to continue.** The responsible agent owns implementation, testing, synchronization, PR creation, CI monitoring, merge, cleanup, and progression to the next task.
+- Once a PR is fully validated—its exact head is current with `develop`, all required CI checks are green, the broker package tests and applicable coverage checks pass, the final diff is focused and safe, and the broker's existing behavior/contracts remain intact—**merge it into `develop` without waiting for a human approval**. Never bypass branch protection or merge with pending, failed, missing, or unexpectedly skipped required checks.
+- After a successful merge, verify the merge and resulting `develop` state, update the roadmap, delete the merged task branch when safe, then immediately start the next incomplete DDD refactoring slice on a fresh branch from the latest `develop`. Continue this loop until the agreed DDD refactor scope is complete or a concrete external blocker prevents safe progress.
+- Multiple commits per branch and multiple PRs across the overall refactor are expected. Commit in coherent increments with meaningful messages. Each PR must be well tested, documented, and independently safe to integrate.
+- A green CI run alone is not sufficient if broker behavior or compatibility is broken. Conversely, do not hold a validated task PR open for routine approval when the required gates are green and the broker remains correct.
+- If tests, CI, permissions, branch protection, conflicts, or a compatibility risk prevent a safe merge, fix the issue autonomously where possible. If genuinely blocked, report the exact evidence and continue with independent safe work where possible; do not invent a passing result or silently bypass a gate.
+
+### Definition of success for each merged slice
+1. Existing behavior is characterized and preserved; public compatibility is checked.
+2. Relevant deterministic tests and regression tests pass; package coverage thresholds remain satisfied.
+3. Required repository CI checks pass on the exact final PR head.
+4. Documentation and this roadmap reflect the actual change.
+5. The PR is merged into `develop`, the merge is verified, and the task branch is cleaned up.
+6. The next DDD slice starts without requiring another user prompt.
 
