@@ -14,7 +14,7 @@ When the CLI starts, it configures three independent destinations:
 | Development diagnostics | `logs/harvester.log` | DEBUG |
 | Detailed trace | `logs/harvester-trace.log` | TRACE |
 
-The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
+Terminal severity labels are colored when stdout is an interactive terminal and `NO_COLOR` is not set: INFO blue, DEBUG magenta, TRACE bright magenta, SUCCESS green, SYSTEM cyan, WARN yellow, and ERROR red. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
 retains its timestamp, normalized severity, logging method, and redacted,
 JSON-safe structured data. A console threshold change does not change either
 file threshold.
