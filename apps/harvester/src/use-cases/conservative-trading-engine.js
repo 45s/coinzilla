@@ -292,6 +292,23 @@ export function makeConservativeTradingEngine({
     eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
     dataResult: mapOrderCancelFailedData({ order, outcome, error }),
   })
+  const markCancellationUnknown = async ({ symbol, order, reason, error } = {}) => {
+    const result = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+    if (!result.ok) {
+      const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
+      await pause({ symbol, reason: reason + "_REGISTRY_FAILED", error: registryError })
+      return toResult({ errors: result.errors ?? [registryError] })
+    }
+    state.registry = result.data.registry
+    publishOrderCancelFailed({
+      order: result.data.order,
+      outcome: "UNCONFIRMED",
+      error,
+    })
+    await pause({ symbol, reason, error })
+    return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
+  }
+
   const ensureCancellationEligible = async ({ symbol, order, reason }) => {
     const result = validateCancellationEligibility({ order })
     if (result.ok) return result
@@ -430,14 +447,21 @@ export function makeConservativeTradingEngine({
       try {
         cancelResult = await broker.cancelOrder({ order })
       } catch (error) {
-        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error })
-        throw error
+        return markCancellationUnknown({
+          symbol,
+          order,
+          reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+          error,
+        })
       }
       if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
         const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical canceled order")]
-        publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error: errors[0] })
-        await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED", error: errors[0] })
-        return toResult({ errors })
+        return markCancellationUnknown({
+          symbol,
+          order,
+          reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+          error: errors[0],
+        })
       }
       const canceledOrder = cancelResult.data
       const update = state.registry.applyUpdate({ order: canceledOrder })
@@ -520,14 +544,21 @@ export function makeConservativeTradingEngine({
     try {
       cancelResult = await broker.cancelOrder({ order })
     } catch (error) {
-      publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error })
-      throw error
+      return markCancellationUnknown({
+        symbol,
+        order,
+        reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
+        error,
+      })
     }
     if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
       const errors = cancelResult?.errors ?? [new Error("Broker did not confirm a canonical BUY cancellation")]
-      publishOrderCancelFailed({ order, outcome: "UNCONFIRMED", error: errors[0] })
-      await pause({ symbol, reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED", error: errors[0] })
-      return toResult({ errors })
+      return markCancellationUnknown({
+        symbol,
+        order,
+        reason: "TRAILING_BUY_CANCELLATION_UNCONFIRMED",
+        error: errors[0],
+      })
     }
     const canceledOrder = cancelResult.data
     const update = state.registry.applyUpdate({ order: canceledOrder })
