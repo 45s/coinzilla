@@ -105,6 +105,48 @@ test("rejects SELL quantities that exceed exchange-available base after existing
   assert.match(result.errors[0].message, /available free base balance/)
 })
 
+test("subtracts shared quote-asset reservations without charging another pair's investment limit", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "50", quantity: "1" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    activeBaseBalance: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "900",
+    committedBase: "0",
+    committedBaseBalance: "0",
+    investmentLimit: "100",
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.executableActions, [{ side: "BUY", price: "50", quantity: "1" }])
+  assert.equal(result.data.remainingQuoteBalance, "50")
+  assert.equal(result.data.remainingInvestment, "50")
+})
+
+test("subtracts shared base-asset reservations from account availability independently of pair inventory", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "0.5" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "1",
+    activeBaseBalance: "2",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: "0",
+    committedBase: "0.1",
+    committedBaseBalance: "1.8",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /available free base balance/)
+})
+
 test("returns structured failures for invalid action sides and negative balance inputs", () => {
   const common = {
     quoteFreeBalance: "1000",
@@ -149,6 +191,9 @@ test("rejects malformed commitment inputs without throwing", () => {
     { actions: [{ side: "BUY", price: "10", quantity: "0" }] },
     { actions: [{ side: "BUY", price: "0", quantity: "1" }] },
     { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
+    { actions: [], activeBaseBalance: "-1" },
+    { actions: [], committedQuoteBalance: "-1" },
+    { actions: [], committedBaseBalance: "-1" },
   ]
 
   for (const invalidCase of invalidCases) {
