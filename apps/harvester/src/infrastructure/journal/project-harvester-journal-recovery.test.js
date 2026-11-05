@@ -872,7 +872,7 @@ test("accepts a RECONCILED account open-order snapshot with durable Harvester ow
         status: "NEW",
       }),
       record("account.open_orders_captured", {
-        phase: "PREFLIGHT",
+        phase: "OPENING",
         observedAt: 100,
         readiness: "RECONCILED",
         orderCount: 1,
@@ -1078,7 +1078,7 @@ test("rejects account snapshots whose exchange source time moves backwards", () 
         tradingEnabled: true,
       }),
       record("account.snapshot_captured", {
-        phase: "PREFLIGHT",
+        phase: "OPENING",
         sourceTime: 200,
         auditStatus: "COMPLETE",
         balances,
