@@ -207,8 +207,8 @@ export class OrderRegistry {
     if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
       return Object.freeze({ registry: this, applied: false, duplicate: true })
     }
-    if (current.status !== "PENDING") {
-      throw new Error("Only a PENDING order can receive its acknowledged brokerOrderId")
+    if (!["PENDING", "UNKNOWN"].includes(current.status)) {
+      throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
     }
     if (current.brokerOrderId !== undefined) {
       if (current.brokerOrderId === order.brokerOrderId) {
