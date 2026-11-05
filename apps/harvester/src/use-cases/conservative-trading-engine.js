@@ -91,9 +91,10 @@ export function makeConservativeTradingEngine({
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
   for (const field of ["pausedMarkets", "replacementIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
-    if (initialState[field] !== undefined && (
-      !Array.isArray(initialState[field]) ||
-      initialState[field].some((value) => typeof value !== "string" || !value.trim())
+    const values = initialState[field]
+    if (values !== undefined && (
+      !(Array.isArray(values) || values instanceof Set) ||
+      [...values].some((value) => typeof value !== "string" || !value.trim())
     )) {
       throw new TypeError("initialState." + field + " must contain non-empty strings")
     }
@@ -116,7 +117,7 @@ export function makeConservativeTradingEngine({
     processedFillIdsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
-    trailingBuy: new Map((initialState.trailingBuySymbols ?? []).map((symbol) => [symbol, true])),
+    trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
     replacementIntents: new Set(initialState.replacementIntents ?? []),
     deferredEvaluations: new Set(),
