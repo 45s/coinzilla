@@ -7,7 +7,7 @@ import test from "node:test"
 import { createSqliteDatabase } from "../src/index.js"
 
 test("SQLite connects and executes parameterized SQL", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -25,7 +25,7 @@ test("SQLite connects and executes parameterized SQL", async () => {
 })
 
 test("SQLite transactions commit successful work", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -43,7 +43,7 @@ test("SQLite transactions commit successful work", async () => {
 })
 
 test("SQLite transactions roll back all writes when work throws", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -65,7 +65,7 @@ test("SQLite transactions roll back all writes when work throws", async () => {
 })
 
 test("SQLite rejects async transaction callbacks before invoking them", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
   let invoked = false
 
@@ -84,7 +84,7 @@ test("SQLite rejects async transaction callbacks before invoking them", async ()
 })
 
 test("SQLite rejects promise-returning transaction callbacks and rolls back", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -131,7 +131,7 @@ test("SQLite file databases persist data after closing and reopening", async () 
 })
 
 test("SQLite enforces foreign keys", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -159,7 +159,7 @@ test("SQLite rejects invalid options", () => {
 })
 
 test("SQLite operations require an open connection", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
 
   assert.throws(() => database.exec("SELECT 1"), /connected/)
   assert.throws(() => database.prepare("SELECT 1"), /connected/)
