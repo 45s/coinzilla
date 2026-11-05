@@ -322,17 +322,18 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
-      submittedSymbols.push(order.market.symbol)
+      const market = metadataBySymbol.get(order.symbol).market
+      submittedSymbols.push(order.symbol)
       return toResult({
         data: new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: String(++orderSequence),
-          market: order.market,
+          market,
           side: order.side,
           type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
           status: "OPEN",
         }),
       })
