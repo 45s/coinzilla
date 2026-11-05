@@ -15,7 +15,7 @@ This package's domain model owns only database-infrastructure concepts: database
 ## Architecture rules
 
 - Keep the public entry point thin and export only intentional contracts.
-- Keep the dependency direction domain → application → infrastructure (outer layers depend inward); do not add folders or wrappers that do not own meaningful policy.
+- Keep the dependency direction infrastructure → application → domain (dependencies point inward); do not add folders or wrappers that do not own meaningful policy.
 - Model lifecycle invariants in the `Database` entity and immutable schema-change identity in the `Migration` entity; keep migration-history decisions in a pure domain service.
 - Define provider capabilities at the application port; keep `node:sqlite` and SQL under `src/infrastructure/sqlite/`.
 - Use Node.js built-in `node:sqlite`; do not add a third-party driver or ORM for SQLite.
