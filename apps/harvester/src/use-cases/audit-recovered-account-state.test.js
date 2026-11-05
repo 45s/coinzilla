@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Balance, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Market, Money, Order, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
@@ -281,4 +281,39 @@ test("rejects a current account snapshot older than the latest durable Journal s
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /older than the latest durable Journal/)
+})
+
+
+test("accepts the broker Order shape with exact raw quantity and price fields", () => {
+  const { projection, restored } = restoreState()
+  const canonicalOrder = openBuyOrder()
+  const brokerOrder = new Order({
+    id: canonicalOrder.brokerOrderId,
+    clientOrderId: canonicalOrder.clientOrderId,
+    symbol: canonicalOrder.market.symbol,
+    side: canonicalOrder.side,
+    type: canonicalOrder.type,
+    quantity: 1,
+    price: 100,
+  })
+  brokerOrder.originalPrice = "100"
+  brokerOrder.originalQuantity = "1"
+  brokerOrder.executedQuantity = "0"
+  brokerOrder.status = "NEW"
+
+  const recoveredState = {
+    ...restored,
+    orderRegistry: new OrderRegistry({ orders: [canonicalOrder] }),
+  }
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState,
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    openOrders: [brokerOrder],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.openOrdersChecked, 1)
+  assert.equal(result.data.reservationsChecked, 1)
 })
