@@ -2010,197 +2010,57 @@ test("blocks read-only startup when either PREFLIGHT audit event publication fai
 })
 
 
-test("rejects malformed durable Journal recovery before user-data subscription", async () => {
+test("starts from fresh in-memory state without replaying historical Journal records", async () => {
   const calls = []
   const broker = createBroker(calls)
+  const historicalReads = []
+  broker.getCanonicalOrder = async () => {
+    historicalReads.push("getCanonicalOrder")
+    return { ok: false, errors: [new Error("not found")] }
+  }
+  broker.getCanonicalOrderHistory = async () => {
+    historicalReads.push("getCanonicalOrderHistory")
+    return { ok: true, data: [] }
+  }
+  broker.getFills = async () => {
+    historicalReads.push("getFills")
+    return { ok: true, data: [] }
+  }
+  broker.getExchangeMarkets = async () => {
+    historicalReads.push("getExchangeMarkets")
+    return { ok: true, data: [] }
+  }
 
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => tradingConfig,
-      env: binanceEnv,
-      brokerAdapterFactory: () => broker,
-      journalRecoveryRecords: [{
-        id: "bad-recovery-record",
-        payload: {
-          id: "bad-recovery-record",
-          name: "order.submission_requested",
-          data: { clientOrderId: "missing-required-order-fields" },
-        },
-        position: { fileName: "session.jsonl", lineNumber: 1 },
-      }],
-      logger: { info() {}, error() {} },
-    }),
-    /Journal recovery projection failed/,
-  )
-
-  assert.deepEqual(calls, ["connect", "disconnect"])
-})
-
-
-test("blocks bootstrap when canonical lookup cannot resolve a recovered submission", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => tradingConfig,
-      env: {
-        ...binanceEnv,
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
-        NODE_ENV: "test",
-      },
-      brokerAdapterFactory: () => broker,
-      journalRecoveryRecords: [{
-        id: "prior-submission",
-        payload: {
-          id: "prior-submission",
-          name: "order.submission_requested",
-          data: {
-            clientOrderId: "h-BTCUSDT-recovered-1",
-            symbol: "BTCUSDT",
-            side: "BUY",
-            type: "LIMIT",
-            price: "65000",
-            quantity: "0.01",
-            status: "PENDING",
-          },
-        },
-        position: { fileName: "session.jsonl", lineNumber: 1 },
-      }],
-      logger: { info() {}, error() {} },
-    }),
-    /canonical owned-order\/fill reconciliation failed/,
-  )
-
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "account:snapshot", "unsubscribe:user-data", "disconnect"])
-  assert.equal(calls.includes("placeOrder"), false)
-  assert.equal(calls.includes("cancelOrder"), false)
-})
-
-
-test("keeps restart fail-closed until complete account-wide trade history is available", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const market = createMarketMetadata("BTCUSDT").market
-  const recoveredFill = new Fill({
-    tradeId: "1",
-    brokerOrderId: "9001",
-    clientOrderId: "h-BTCUSDT-buy-1",
-    market,
-    side: "BUY",
-    price: new Money({ amount: "65000", asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: "650", asset: market.quoteAsset }),
-    liquidityRole: "MAKER",
-    executedAt: 1500,
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-  const canonicalOrder = new CanonicalOrder({
-    clientOrderId: "h-BTCUSDT-buy-1",
-    brokerOrderId: "9001",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({ amount: "65000", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-    status: "FILLED",
-    createdAt: 100,
-    acknowledgedAt: 101,
-    updatedAt: 102,
-    completedAt: 102,
-  })
-  let accountSourceTime = 2000
-  broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      sourceTime: accountSourceTime++,
-      balances: [
-        new Balance({
-          free: new Quantity({ amount: "1000.01", asset: market.baseAsset }),
-          locked: new Quantity({ amount: "0", asset: market.baseAsset }),
-        }),
-        new Balance({
-          free: new Quantity({ amount: "1000", asset: new Asset({ id: "asset:ETH", code: "ETH" }) }),
-          locked: new Quantity({ amount: "0", asset: new Asset({ id: "asset:ETH", code: "ETH" }) }),
-        }),
-        new Balance({
-          free: new Quantity({ amount: "350", asset: market.quoteAsset }),
-          locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
-        }),
-      ],
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
     },
-  })
-  broker.getOpenOrders = async () => ({ ok: true, data: [] })
-  broker.getCanonicalOrder = async () => ({ ok: true, data: canonicalOrder })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [canonicalOrder] })
-  broker.getFills = async () => ({ ok: true, data: [recoveredFill] })
-  broker.placeOrder = async () => {
-    calls.push("placeOrder")
-    return { ok: false, errors: [new Error("unexpected order submission in recovery test")] }
-  }
-  broker.cancelOrder = async () => {
-    calls.push("cancelOrder")
-    return { ok: false, errors: [new Error("unexpected cancellation in recovery test")] }
-  }
-
-  const record = (id, name, data, lineNumber) => ({
-    id,
-    payload: { id, name, data },
-    position: { fileName: "2026-11-05_10-00-00.jsonl", lineNumber },
-  })
-  const journalRecoveryRecords = [
-    record("baseline", "account.snapshot_captured", {
-      phase: "PREFLIGHT",
-      sourceTime: 1000,
-      auditStatus: "COMPLETE",
-      balances: [
-        { asset: "BTC", free: "1000", locked: "0", total: "1000" },
-        { asset: "ETH", free: "1000", locked: "0", total: "1000" },
-        { asset: "USDT", free: "1000", locked: "0", total: "1000" },
-      ],
-      auditReasons: [],
-    }, 1),
-    record("started", "harvester.started", {
-      broker: "binance",
-      strategyMode: "conservative",
-      enabledMarkets: ["BTCUSDT"],
-      tradingEnabled: true,
-    }, 2),
-    record("intent", "order.submission_requested", {
-      clientOrderId: "h-BTCUSDT-buy-1",
-      symbol: "BTCUSDT",
-      side: "BUY",
-      type: "LIMIT",
-      price: "65000",
-      quantity: "0.01",
-      status: "PENDING",
-    }, 3),
-  ]
-
-  const config = structuredClone(tradingConfig)
-  config.strategies.CG_coinGrabber.pairs.BTCUSDT.keepQuantity = 0.0099
-  config.strategies.CG_coinGrabber.pairs.BTCUSDT.quantityPrecision = 4
-
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => config,
-      env: {
-        ...binanceEnv,
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
-        NODE_ENV: "test",
+    brokerAdapterFactory: () => broker,
+    // Historical records are deliberately ignored; restart recovery is disabled.
+    journalRecoveryRecords: [{
+      id: "malformed-historical-record",
+      payload: {
+        id: "malformed-historical-record",
+        name: "execution.fill_applied",
+        data: { fillId: "legacy-fill-without-tradeId" },
       },
-      brokerAdapterFactory: () => broker,
-      journalRecoveryRecords,
-      logger: { info() {}, error() {} },
-    }),
-    /Account-wide exchange market universe is incomplete/,
-  )
+      position: { fileName: "session.jsonl", lineNumber: 1 },
+    }],
+    logger: { info() {}, error() {} },
+  })
 
-  assert.deepEqual(calls.filter((call) => ["placeOrder", "cancelOrder"].includes(call)), [])
-  assert.ok(calls.includes("unsubscribe:user-data"))
-  assert.ok(calls.includes("disconnect"))
+  assert.equal(runtime.tradingEnabled, true)
+  assert.equal(runtime.userDataReady, true)
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])
+  assert.deepEqual(historicalReads, [])
+  assert.equal(calls.includes("account:snapshot"), true)
+  assert.equal(calls.includes("subscribe:user-data"), true)
+  assert.equal(calls.includes("subscribe:book:BTCUSDT"), true)
+  assert.equal(calls.includes("subscribe:BTCUSDT"), true)
+
+  await runtime.stop()
 })
