@@ -538,14 +538,16 @@ test("clears the control pump timer when its only queued request times out", asy
   await flush()
   acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
   await first
+  const baselineTimers = clock.pendingCount
 
   const second = client.subscribe("ethusdt@trade", () => {})
   await flush()
-  assert.equal(clock.pendingCount, 2)
+  assert.equal(clock.pendingCount, baselineTimers + 2)
 
   clock.advanceBy(100)
   await assert.rejects(second, /acknowledgement timed out/)
-  assert.equal(clock.pendingCount, 0)
+  assert.equal(clock.pendingCount, baselineTimers)
   assert.equal(client.state, "open")
   await client.disconnect()
+  assert.equal(clock.pendingCount, 0)
 })
