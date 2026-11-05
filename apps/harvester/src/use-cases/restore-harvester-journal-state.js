@@ -1,5 +1,4 @@
 import {
-  Asset,
   CanonicalOrder,
   Commission,
   Fill,
