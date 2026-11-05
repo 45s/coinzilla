@@ -87,7 +87,8 @@ test("formats console entries as one compact line while retaining structured fie
   })
 
   assert.equal(written.trim().split("\n").length, 1)
-  assert.match(written, /INFO Market price evaluated/)
+  assert.match(written, /Market price evaluated/)
+  assert.doesNotMatch(written, /INFO Market price evaluated/)
   assert.match(written, /"symbol":"ZROUSDT"/)
   assert.match(written, /"price":"1.74100000"/)
   output.destroy()
@@ -187,7 +188,7 @@ test("does not emit ANSI color codes when color is disabled", () => {
   })
 
   assert.doesNotMatch(written, /\u001b\[/)
-  assert.match(written, /INFO Plain terminal output/)
+  assert.match(written, /Plain terminal output/)
   output.destroy()
 })
 
@@ -242,5 +243,32 @@ test("keeps colored semantic labels within the configured console line limit", (
 
   const plainLine = written.replace(/\u001b\[[0-9;]*m/g, "").trimEnd()
   assert.ok(plainLine.length <= 200)
+  output.destroy()
+})
+
+test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  for (const [level, message] of [
+    ["info", "Informational event"],
+    ["debug", "Debug detail"],
+    ["warn", "Warning event"],
+    ["error", "Failure event"],
+  ]) {
+    transport.write({
+      timestamp: "2026-11-05T12:00:00.000Z",
+      level,
+      data: { message },
+    })
+  }
+
+  assert.match(written, / Informational event/)
+  assert.doesNotMatch(written, /INFO Informational event/)
+  assert.match(written, /DEBUG Debug detail/)
+  assert.match(written, /WARN Warning event/)
+  assert.match(written, /ERROR Failure event/)
   output.destroy()
 })
