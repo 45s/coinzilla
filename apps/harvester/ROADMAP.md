@@ -1114,12 +1114,12 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 
 - [x] PR #559 merged: same-process lost-submission acknowledgement lookup and canonical order/fill reconciliation; unresolved outcomes retain commitments and keep the pair paused.
 - [x] Persist complete applied-fill identity and accounting inputs in the Journal DTO: stable trade ID, exact price/base/quote quantities, commission status, and every actual commission amount with asset ID/code. This is a recovery-evidence prerequisite, not replay or automatic restart recovery.
-- [ ] Build a strict Journal recovery projection for order intents, acknowledgements, cancellation outcomes, applied fills, and recovery-cycle completions. Reject malformed, conflicting, truncated, or incomplete history; never infer exchange order state from a missing event.
-- [ ] Restore Portfolio/RecoveryLedger and fill deduplication from exact recorded fills only after the Journal projection is fully validated; reconcile each restored order against canonical exchange order/history/fills before any trading gate can open.
-- [x] Preserve ambiguous cancellation outcomes as UNKNOWN with broker/client identity and cumulative executed quantity; retain commitments and pause the pair. (This PR)
-- [ ] Reconcile unknown cancellation outcomes by exact owned broker/client order identity. Keep all affected pairs paused on not-found, conflicting, incomplete, or stale exchange evidence. No blind cancel, retry, replacement, or automatic resume.
-- [ ] Add single-writer process ownership protection or an equivalent startup guard before enabling recovery-based trading; Journal currently documents that its directory has no inter-process writer lock.
-- [ ] Add offline restart fixtures for crash windows before submission, after exchange acceptance/lost acknowledgement, during partial fills, during cancel/fill races, after accounting but before durable event delivery, and after recovery-cycle completion.
+- [~] PR #581 implements the strict Journal projection for order intents, acknowledgements, cancellation outcomes, applied fills, recovery-cycle completions, and account/process audit snapshots. Final CI and merge remain pending.
+- [~] PR #581 rehydrates Portfolio/RecoveryLedger and fill deduplication from exact recorded fills, then reconciles owned orders against canonical exchange order/history/fills before trading readiness.
+- [x] Preserve ambiguous cancellation outcomes as UNKNOWN with broker/client identity and cumulative executed quantity; retain commitments and pause the pair. (PR #564)
+- [~] PR #581 resolves unknown cancellation outcomes only through canonical owned-order history; unresolved, partial-fill, conflicting, or stale evidence remains blocked. No blind cancel/retry/replacement.
+- [x] PR #568 adds single-writer process ownership before Journal recovery and broker connection.
+- [~] PR #581 adds offline restart and cancel/replace recovery fixtures; full crash-boundary coverage remains open.
 - [ ] Keep TESTNET trading disabled during implementation. Recovery is not accepted until joint offline-evidence review and a separately authorized controlled TESTNET session.
 
 
@@ -1128,8 +1128,8 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Persist and durably flush each `order.submission_requested` intent before calling the broker placement port. If publication/flush fails, remove the unsent local PENDING order, pause the pair, and do not call the broker.
 - [x] Add `order.cancel_requested` with immutable order identity, cumulative executed quantity, status, and reason; durably flush it before either recovery-SELL or trailing-BUY cancellation calls.
 - [x] Fail closed on non-durable intent flushes; preserve the existing rule that unknown broker outcomes retain commitments and pause the pair.
-- [ ] Verify exact-head CI and review all direct broker place/cancel call sites to ensure no exchange write bypasses the durable intent barrier.
-- [ ] Implement strict Journal replay projection and canonical exchange reconciliation; durable intent records alone do not restore Portfolio, RecoveryLedger, or order registry state.
+- [x] Review broker placement/cancellation paths and retain the durable intent barrier before exchange side effects.
+- [~] PR #581 implements strict Journal replay projection and canonical exchange reconciliation; final CI and merge remain pending.
 
 These barriers deliberately await filesystem durability only immediately before exchange side effects. Ordinary market-price evaluation, strategy policy, and fill accounting remain asynchronous with respect to Journal delivery. No TESTNET exchange writes or trading-enabled restart are authorized by this work.
 
@@ -1145,20 +1145,42 @@ These barriers deliberately await filesystem durability only immediately before 
 The engine transition queue serializes decisions; this change additionally ensures serialized decisions reserve against the same account-level asset pool rather than reusing the full baseline balance for each market.
 
 
-## Restart recovery safety gate — P0 interim protection, 2026-11-05
+## Restart recovery safety gate — P0, 2026-11-05
 
 - [x] Read and validate all previous Journal sessions before opening a new writer session.
 - [x] Treat a missing Journal directory as an empty first run; fail closed on malformed, truncated, unsupported, duplicate-ID, or over-limit history.
-- [x] Refuse trading-enabled startup when any prior account-audit, order, cancellation, fill, or recovery-cycle history exists; allow read-only startup for inspection.
-- [ ] Implement idempotent Portfolio and RecoveryLedger replay, restore owned order commitments, and reconcile every restored order/fill against canonical exchange history before any trading restart can be accepted.
+- [~] Reconstruct and reconcile Harvester-owned order/fill history before trading readiness; external/manual account trade history remains unresolved.
+- [x] Preserve read-only startup for inspection without treating unverified open orders as reconciled.
+- [ ] Reconcile account-wide external/manual trade history and complete the remaining crash-boundary matrix; TESTNET acceptance remains separate.
 
-This is deliberately a fail-closed interim gate, not a claim that restart recovery is complete. Do not delete or rotate Journal files to bypass it.
+The original summary-only interim gate has been superseded by the recovery bootstrap described below. Do not delete or rotate Journal files to bypass recovery validation.
 
 
 ## Single-writer process ownership — P0, 2026-11-05
 
-- [~] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
-- [~] Refuse a second local trading process using the same Journal directory.
-- [~] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
-- [~] Never auto-reclaim stale locks; require operator verification.
+- [x] PR #568 acquires an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
+- [x] PR #568 refuses a second local trading process using the same Journal directory.
+- [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
+- [x] PR #568 never auto-reclaims stale locks; operator verification is required.
 - [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
+
+
+## P0 — Durable restart recovery (current engineering work)
+
+- [x] PR #568 — local single-writer process ownership; lock is acquired before Journal recovery and broker connection, and retained after uncertain runtime/Journal shutdown.
+- [~] PR #581 — strict Journal projection for order intents, acknowledgements, cancellation outcomes, exact fills, duplicate execution identities, recovery cycles, pauses, account snapshots, open-order snapshots, and process sessions.
+- [~] PR #581 — rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and cancel/replace intents.
+- [~] PR #581 — load canonical Market metadata for enabled and historical symbols before restoring domain state.
+- [~] PR #581 — reconcile every restored owned order through canonical client-order lookup, canonical order history, and complete paginated REST fill history; compare exact execution totals and identities.
+- [~] PR #581 — reconcile account-wide open orders against durable Harvester ownership; reject unowned, duplicate, missing, or contradictory orders.
+- [~] PR #581 — compare current free/locked balances against the original durable PREFLIGHT baseline, replayed Portfolio cash flows/inventory, and exact active-order reservations.
+- [~] PR #581 — gate trading readiness on canonical order/fill reconciliation, account ownership audit, user-data stream safety, and absence of unresolved pause/cancel/replace intents.
+- [~] PR #581 — preserve unresolved recovery replacement intents; only clear them after canonical exchange history proves the prior order was canceled or filled.
+- [~] PR #581 — add pagination regression coverage for more than 1,000 fills and a bootstrap restart test with a previously filled order.
+- [ ] Query and reconcile account-wide trade history since the durable baseline to detect external/manual executions that net to the same balances or are not associated with a recovered Harvester order.
+- [ ] Prove repeated full recovery attempts are idempotent across process crashes during reconciliation and recovery-cycle completion.
+- [ ] Expand crash-boundary tests across submission intent, broker acknowledgement, partial/full fill, cancellation request/result, replacement intent, reservation commit/release, and shutdown.
+- [ ] Prove Journal truncation, missing pages, stale source timestamps, contradictory status transitions, and missing account baselines all fail closed under real persisted Journal files.
+- [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
+
+**Current safety boundary:** PR #581 is draft, unmerged, and synchronized with develop. The previous CI failures were traced to recovery-pause fixture expectations and corrected; CI is running on the synchronized PR head. Exact Journal/REST fill parity, missing execution identity checks, monotonic audit timestamps, preflight ordering, post-close event rejection, and read-only stream recovery are covered by new regression tests. Account-wide external/manual trade-history enumeration and the full crash-boundary matrix remain unresolved. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
