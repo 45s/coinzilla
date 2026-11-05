@@ -29,6 +29,7 @@ export class BinanceUserDataSession {
   #removeCloseListener = null
   #stopped = false
   #recoveryRequired = false
+  #eventIdentities = new Set()
   #generation = 0
   #clientPorts = new WeakMap()
 
@@ -159,6 +160,7 @@ export class BinanceUserDataSession {
     this.#subscribers.clear()
     this.#subscriptionId = null
     this.#recoveryRequired = false
+    this.#eventIdentities.clear()
     this.setUnavailable(true)
     this.#detachClientListeners()
   }
@@ -355,7 +357,20 @@ export class BinanceUserDataSession {
       return
     }
 
-    if (message.type === "event") this.#forwardEvent(message.event)
+    if (message.type === "event" && !this.#isDuplicateEvent(message.deduplicationKey)) {
+      this.#forwardEvent(message.event)
+    }
+  }
+
+  #isDuplicateEvent(identity) {
+    if (typeof identity !== "string" || identity.length === 0) return false
+    if (this.#eventIdentities.has(identity)) return true
+
+    this.#eventIdentities.add(identity)
+    if (this.#eventIdentities.size > 2048) {
+      this.#eventIdentities.delete(this.#eventIdentities.values().next().value)
+    }
+    return false
   }
 
   #forwardEvent(event) {
@@ -578,6 +593,7 @@ export class BinanceUserDataSession {
       }
     } finally {
       this.#detachUserDataListeners()
+      this.#eventIdentities.clear()
     }
   }
 
