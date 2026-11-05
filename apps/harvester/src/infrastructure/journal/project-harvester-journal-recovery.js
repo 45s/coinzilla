@@ -272,6 +272,29 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (data.readiness === "RECONCILED" && (orders.length === 0 || blockReasons.length > 0)) {
           throw new Error("RECONCILED open-order snapshot requires owned orders and no block reasons")
         }
+        if (data.readiness === "RECONCILED") {
+          for (const order of orders) {
+            if (order.status !== "NEW" && order.status !== "PARTIALLY_FILLED") {
+              throw new Error("RECONCILED open-order snapshot contains a non-active order")
+            }
+            if (typeof order.clientOrderId !== "string") {
+              throw new Error("RECONCILED open-order snapshot order is missing clientOrderId")
+            }
+            const owned = ordersByClientId.get(order.clientOrderId)
+            if (!owned ||
+                owned.brokerOrderId !== order.brokerOrderId ||
+                owned.symbol !== order.symbol ||
+                owned.side !== order.side ||
+                owned.type !== order.type ||
+                compareDecimal({ left: owned.quantity, right: order.quantity }) !== 0 ||
+                compareDecimal({ left: owned.cumulativeFillQuantity, right: order.executedQuantity }) !== 0 ||
+                (owned.price === undefined
+                  ? order.price !== undefined
+                  : order.price === undefined || compareDecimal({ left: owned.price, right: order.price }) !== 0)) {
+              throw new Error("RECONCILED open-order snapshot contradicts durable Harvester ownership for " + order.clientOrderId)
+            }
+          }
+        }
         if (data.readiness === "BLOCKED" && blockReasons.length === 0) {
           throw new Error("BLOCKED open-order snapshot must contain block reasons")
         }
