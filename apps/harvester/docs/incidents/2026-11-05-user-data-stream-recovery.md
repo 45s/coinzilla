@@ -71,7 +71,7 @@ PR #627 corrects the ordering:
 1. Harvester starts application recovery on `recovered`, not `reconciled`.
 2. It reconciles Harvester-owned orders and fills, then drains queued user-data events.
 3. It fetches a fresh account snapshot and durably journals only assets belonging to enabled configured markets.
-4. It fetches and durably journals the account-wide open-orders snapshot, checking it against reconciled ownership.
+4. It fetches and durably journals the account-wide open-orders snapshot, checking it against the live in-memory order registry after canonical reconciliation. If user-data events arrive during either REST read or durable audit flush, it drains them and repeats both snapshots until the event sequence is stable.
 5. It calls `acknowledgeRecovery()` only after every required step succeeds. The broker's `reconciled` event then opens the readiness gate.
 6. Disconnect/recovering/error events advance a recovery generation. An older in-flight task cannot acknowledge a newer connection. Repeated reminders for an already acknowledged generation are ignored.
 7. Any reconciliation, snapshot, Journal flush, or acknowledgement failure leaves trading blocked; a later broker recovery reminder can retry the application work.
