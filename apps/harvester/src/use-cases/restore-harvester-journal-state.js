@@ -175,7 +175,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
-    const pausedMarkets = [...new Set(data.pausedMarkets.map(({ symbol }) => symbol))]
+    const pausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
@@ -185,6 +185,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
           replacementIntents.add(order.symbol)
         } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
           trailingBuyRepriceIntents.add(order.symbol)
+          pausedMarkets.add(order.symbol)
         } else {
           pausedMarkets.add(order.symbol)
         }
@@ -198,7 +199,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
           ? latestSubmissionSequenceBySymbolSide.get(order.symbol + ":" + replacementSide) ?? -1
           : -1
         if (order.cancellationSequence > latestReplacementSequence) {
-          if (replacementSide === "BUY") trailingBuyRepriceIntents.add(order.symbol)
+          if (replacementSide === "BUY") {
+            trailingBuyRepriceIntents.add(order.symbol)
+            pausedMarkets.add(order.symbol)
+          }
           if (replacementSide === "SELL") replacementIntents.add(order.symbol)
         }
       }
