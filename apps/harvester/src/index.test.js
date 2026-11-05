@@ -1,4 +1,5 @@
 import test from "node:test"
+import { isAbsolute as pathIsAbsolute } from "node:path"
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
@@ -801,8 +802,13 @@ test("acquires the process lock before Journal recovery and releases it only aft
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
-      acquireProcessLock: async () => {
+      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker }) => {
         sequence.push("lock")
+        assert.equal(typeof journalDirectory, "string")
+        assert.ok(pathIsAbsolute(journalDirectory))
+        assert.ok(globalDirectory.includes(".coinzilla"))
+        assert.ok(globalDirectory.endsWith("process-locks"))
+        assert.equal(broker, "binance")
         return {
           ok: true,
           release: async () => { sequence.push("release"); return { ok: true, released: true } },
