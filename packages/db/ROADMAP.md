@@ -32,7 +32,7 @@ Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../
 
 ## Implemented public API
 
-- `createSqliteDatabase({ filename, timeout })`: create a SQLite database; defaults to in-memory storage.
+- `createSqliteDatabase({ filename, timeout })`: create a SQLite database; the storage filename is required, and `:memory:` must be selected explicitly for ephemeral use.
 - `connect()` / `close()`: explicit resource lifecycle.
 - `exec(sql)` / `prepare(sql)`: execute SQL and create parameterized statements while connected.
 - `transaction(work)`: run synchronous SQL work atomically using `BEGIN IMMEDIATE`.
