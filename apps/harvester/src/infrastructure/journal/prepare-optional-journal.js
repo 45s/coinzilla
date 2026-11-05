@@ -110,9 +110,12 @@ export function prepareOptionalJournal({
             })
           } else {
             state = "failed"
+            const readError = readResult?.errors?.[0]
+              ?? new TypeError("Journal read returned an invalid recovery snapshot")
+            reportFailure({ error: readError })
             return readResult?.ok === false
               ? readResult
-              : toResult({ error: new TypeError("Journal read returned an invalid recovery snapshot") })
+              : toResult({ error: readError })
           }
         } else {
           recoveryResult = toResult({
