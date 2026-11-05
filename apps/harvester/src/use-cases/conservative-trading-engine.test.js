@@ -66,6 +66,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   const canceledOrders = new Map()
   const acknowledgedFillsByOrder = new Map()
   const acknowledgedOrdersById = new Map()
+  const canonicalOrdersByClientId = new Map()
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   const broker = {
     placeOrder: async ({ order }) => {
@@ -162,6 +163,12 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
           : [],
       }
     },
+    getCanonicalOrder: async ({ clientOrderId }) => {
+      const order = canonicalOrdersByClientId.get(clientOrderId)
+      return order
+        ? { ok: true, data: order }
+        : { ok: false, errors: [new Error("order not found by client order ID")] }
+    },
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async ({ orderId }) => ({
       ok: true,
@@ -216,6 +223,11 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     getCurrentRecoveryLedger: () => currentRecoveryLedger,
     setCurrentPortfolio: (next) => { currentPortfolio = next },
     setCurrentRecoveryLedger: (next) => { currentRecoveryLedger = next },
+    setCanonicalOrderLookup: ({ order }) => canonicalOrdersByClientId.set(order.clientOrderId, order),
+    setAcknowledgedOrder: ({ order, fills = [] }) => {
+      acknowledgedOrdersById.set(order.brokerOrderId, order)
+      acknowledgedFillsByOrder.set(order.brokerOrderId, fills)
+    },
   }
 }
 
@@ -2864,4 +2876,79 @@ test("rejects an overcommitted batch of SELL intents before submitting any order
 
   assert.equal(result.ok, false)
   assert.equal(harness.orders.length, 0)
+})
+
+test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
+  const strategyPolicy = {
+    evaluate: ({ lastBuyPrice }) => ({
+      strategy: "TEST_POLICY",
+      symbol: "DOGEUSDT",
+      action: lastBuyPrice ? "NO_ACTION" : "PLACE_ORDERS",
+      actions: lastBuyPrice ? [] : [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({ strategyPolicy, placeOrderThrow: true })
+
+  const submission = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(submission.ok, false)
+  const pendingOrder = harness.engine.getOrders()[0]
+  assert.equal(pendingOrder.status, "UNKNOWN")
+  assert.equal(pendingOrder.brokerOrderId, undefined)
+
+  const acknowledgedOrder = new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId: "broker-lost-ack",
+    market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const fill = makeBuyFill({
+    order: acknowledgedOrder,
+    tradeId: "lost-ack-fill-1",
+    price: "99.95",
+    quantity: "1",
+    quoteQuantity: "99.95",
+    executedAt: 2,
+  })
+  harness.setCanonicalOrderLookup({ order: acknowledgedOrder })
+  harness.setAcknowledgedOrder({ order: acknowledgedOrder, fills: [fill] })
+
+  const reconciliation = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(reconciliation.ok, true, reconciliation.errors?.[0]?.message)
+  assert.equal(reconciliation.data.reconciled, 1)
+  assert.equal(harness.engine.getOrders()[0].brokerOrderId, "broker-lost-ack")
+  assert.equal(harness.engine.getOrders()[0].status, "FILLED")
+  assert.equal(harness.accountedFills.length, 1)
+  assert.equal(harness.accountedFills[0].id, fill.id)
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
+test("keeps a pending submission UNKNOWN when client-order-ID lookup cannot resolve it", async () => {
+  const harness = await createHarness({ placeOrderThrow: true })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  const result = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+  assert.equal(harness.engine.getOrders()[0].brokerOrderId, undefined)
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.equal(harness.orders.length, 1)
 })
