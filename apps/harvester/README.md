@@ -52,6 +52,17 @@ See [Architecture](./docs/architecture.md) for the responsibilities of domain en
 
 To capture the current account baseline without restarting Harvester or enabling trading, run `pnpm run testnet:audit` from `apps/harvester`. This read-only command connects to the Binance TESTNET WebSocket API, retrieves all account balances and account-wide open orders, writes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushes both events, and disconnects. It does not subscribe to market/user-data streams, create the trading engine, submit orders, or cancel orders. It requires `HARVESTER_BROKER=binance`, `HARVESTER_TRADING_MODE=testnet`, non-production `NODE_ENV`, TESTNET credentials, and an enabled Journal. Exit code 0 means no open orders were found; exit code 2 means the audit was saved but existing orders make trading readiness BLOCKED; exit code 1 means the audit itself failed.
 
+### Trading process ownership
+
+When trading is enabled, Harvester acquires two exclusive local locks before Journal recovery or broker connection:
+
+- A broker-wide host lock under `~/.coinzilla/harvester/process-locks/`. This is independent of the configured Journal directory, so a second Harvester process cannot trade through another Journal directory under the same OS user.
+- A Journal-directory lock in `HARVESTER_JOURNAL_DIRECTORY`, preventing concurrent writers to the same recovery history.
+
+The lock records PID, hostname, start time, and a random ownership token. It is released only after runtime shutdown and Journal close both report success. Uncertain shutdown retains the lock. Stale locks are never reclaimed automatically; verify the recorded process owner before manual removal.
+
+This is a same-host, same-OS-user guard, not a distributed lock. It does not coordinate separate machines or different OS users, and the broker-wide lock intentionally allows only one Harvester trading process per broker under that user, even when credentials or Journal directories differ.
+
 ### Operational event journal
 
 Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The Journal is enabled by default. Applied-fill records include stable trade identity, exact execution quantities, actual commission amounts, and commission asset identity. This is necessary evidence for a future restart-recovery projection; it does not yet restore Portfolio, RecoveryLedger, or order ownership after restart. Set `HARVESTER_JOURNAL_ENABLED=false` only for configuration-only/no-broker operation; every broker-connected startup requires Journal persistence for the durable PREFLIGHT account audit. Set `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.
