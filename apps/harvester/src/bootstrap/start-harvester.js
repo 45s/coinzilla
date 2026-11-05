@@ -841,7 +841,10 @@ export async function startHarvester({
         }
         const task = userDataEventQueue.then(async () => {
           if (tradingEngine && isOrderUpdate) {
-            const processed = await tradingEngine.processUserDataEvent({ event })
+            const processed = await tradingEngine.processUserDataEvent({
+              event,
+              recoveryMode: recoveredState.requiresExchangeReconciliation && !userDataReady,
+            })
             if (!processed.ok) {
               userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
