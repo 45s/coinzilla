@@ -121,3 +121,12 @@ Event DTOs do not include credentials, raw exchange messages, or SDK objects. Th
 - Before starting a new Journal writer session, Harvester reads and validates all prior JSONL sessions. A missing Journal directory is treated as a first run; malformed, truncated, unsupported, duplicate-ID, or over-limit history fails the Journal readiness gate.
 - A trading-enabled process start is allowed only when the prior Journal snapshot was successfully read and contains no order-submission, cancellation, fill, recovery-cycle, or account-audit events.
 - If prior trading history exists, startup fails closed before broker connection. Read-only startup remains available. This is an interim safety gate: Portfolio, RecoveryLedger, and owned-order replay plus canonical exchange reconciliation are still required before trading can resume after a trading process restart.
+
+
+## Single-writer trading process lock
+
+- Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before reading Journal history or creating a Journal writer.
+- A second local process using that same directory fails before Journal startup and before broker connection.
+- The lock is released only after the Journal writer is confirmed closed. If Journal shutdown cannot be confirmed, the lock is retained to prevent another writer from trading concurrently.
+- Stale locks are not automatically reclaimed. After an unclean process termination, inspect the stored PID, hostname, and start time; remove the file manually only after confirming the owner is no longer running.
+- Different Journal directories do not share a lock. All local Harvester processes trading the same account must use the same directory.
