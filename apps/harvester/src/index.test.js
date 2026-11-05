@@ -7,6 +7,7 @@ import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main } from "./index.js"
+import { startHarvester } from "./bootstrap/start-harvester.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true, disabled: true }),
@@ -931,6 +932,40 @@ test("rejects disabling Journal for TESTNET trading", async () => {
   }
 })
 
+
+test("releases the process lock when the default bootstrap fails after confirmed startup cleanup", async () => {
+  let releaseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: {
+        HARVESTER_BROKER: "binance",
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "invalid",
+        HARVESTER_JOURNAL_ENABLED: "true",
+      },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          releaseCalls += 1
+          return { ok: true, released: true }
+        },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: startHarvester,
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(releaseCalls, 1)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
 
 test("retains the process lock when runtime startup fails after it may have activated broker resources", async () => {
   let releaseCalls = 0
