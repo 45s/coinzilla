@@ -43,6 +43,9 @@ Until every criterion is evidenced and reviewed, the first milestone remains OPE
 
 ## The mission
 
+**Current runtime decision (2026-11-05): Journal replay and process-restart recovery are disabled.** Every process starts with fresh in-memory trading state. Do not read prior Journal sessions, restore old Portfolio/RecoveryLedger/order state, or require historical trade reconciliation before startup. Keep only the narrowly required durable PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes. Existing exchange open orders are still unowned and must not be silently adopted.
+
+
 **FIRST MAKE IT WORK. THEN MAKE IT BETTER.**
 
 Harvester's first product deliverable is a running trading application that can repeatedly execute its selected strategy on Binance TESTNET. The main task is TRADING: read configuration, receive prices, decide, place orders, process executions, and repeat.

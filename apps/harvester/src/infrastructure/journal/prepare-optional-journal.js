@@ -45,17 +45,8 @@ export function prepareOptionalJournal({
 
   if (!enabled) {
     const ready = Promise.resolve(toResult({ disabled: true }))
-    const recovery = Promise.resolve(toResult({
-      records: [],
-      count: 0,
-      sessions: [],
-      bytesRead: 0,
-      available: false,
-      disabled: true,
-    }))
     return Object.freeze({
       ready,
-      recovery,
       get status() {
         return Object.freeze({
           state,
@@ -64,7 +55,6 @@ export function prepareOptionalJournal({
           writeFailed: false,
           writeErrorCount: 0,
           closed: false,
-          recoveryAvailable: false,
         })
       },
       flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
@@ -73,7 +63,6 @@ export function prepareOptionalJournal({
   }
 
   let ready
-  let recoveryResult
   try {
     if (typeof journalFactory !== "function") {
       throw new TypeError("journalFactory must be a function")
@@ -88,50 +77,7 @@ export function prepareOptionalJournal({
     }
 
     ready = Promise.resolve()
-      .then(async () => {
-        if (typeof journal.read === "function") {
-          const readResult = await journal.read()
-          if (readResult?.ok === true && Array.isArray(readResult.records)) {
-            recoveryResult = toResult({
-              records: readResult.records,
-              count: readResult.count ?? readResult.records.length,
-              sessions: readResult.sessions ?? [],
-              bytesRead: readResult.bytesRead ?? 0,
-              available: true,
-            })
-          } else if (
-            Array.isArray(readResult?.errors)
-            && readResult.errors.length === 1
-            && readResult.errors[0]?.code === "JOURNAL_DIRECTORY_NOT_FOUND"
-          ) {
-            recoveryResult = toResult({
-              records: [],
-              count: 0,
-              sessions: [],
-              bytesRead: 0,
-              available: true,
-              empty: true,
-            })
-          } else {
-            state = "failed"
-            const readError = readResult?.errors?.[0]
-              ?? new TypeError("Journal read returned an invalid recovery snapshot")
-            reportFailure({ error: readError })
-            return readResult?.ok === false
-              ? readResult
-              : toResult({ error: readError })
-          }
-        } else {
-          recoveryResult = toResult({
-            records: [],
-            count: 0,
-            sessions: [],
-            bytesRead: 0,
-            available: false,
-          })
-        }
-        return journal.start()
-      })
+      .then(() => journal.start())
       .then((result) => {
         if (result?.ok === true) {
           state = "ready"
@@ -152,12 +98,6 @@ export function prepareOptionalJournal({
     reportFailure({ error })
     ready = Promise.resolve(toResult({ error }))
   }
-  const recovery = ready.then((result) =>
-    result?.ok === true
-      ? recoveryResult
-      : result,
-  )
-
   const getStatus = () => {
     const writeFailed = journal?.writeFailed === true
     const currentState = state === "ready" && writeFailed ? "degraded" : state
@@ -168,7 +108,6 @@ export function prepareOptionalJournal({
       writeFailed,
       writeErrorCount: Array.isArray(journal?.writeErrors) ? journal.writeErrors.length : 0,
       closed: journal?.closed === true,
-      recoveryAvailable: recoveryResult?.available === true,
     })
   }
 
@@ -211,7 +150,6 @@ export function prepareOptionalJournal({
 
   return Object.freeze({
     ready,
-    recovery,
     get status() {
       return getStatus()
     },

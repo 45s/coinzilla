@@ -1,4 +1,4 @@
-import { Fill, Market } from "@coinzilla/entities"
+import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
 import { compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -8,10 +8,6 @@ import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-acc
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
-import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
-import { restoreHarvesterJournalState } from "../use-cases/restore-harvester-journal-state.js"
-import { auditRecoveredAccountState } from "../use-cases/audit-recovered-account-state.js"
-import { fetchAccountTradeHistory } from "../use-cases/fetch-account-trade-history.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -350,11 +346,7 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
-  journalRecoveryRecords = [],
 } = {}) {
-  if (!Array.isArray(journalRecoveryRecords)) {
-    throw new TypeError("journalRecoveryRecords must be an array")
-  }
   const tradingConfig = await loadConfig(configSource)
   const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
   if (strategyConfig?.enabled !== true) {
@@ -398,12 +390,18 @@ export async function startHarvester({
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
-    orderRegistry: undefined,
-    pausedMarkets: Object.freeze([]),
-    replacementIntents: Object.freeze([]),
-    completedOrderClientIds: Object.freeze([]),
-    trailingBuySymbols: Object.freeze([]),
-    requiresExchangeReconciliation: journalRecoveryRecords.length > 0,
+    orderRegistry: OrderRegistry.empty(),
+    journalFills: [],
+    pausedMarkets: new Set(),
+    durablePausedMarkets: new Set(),
+    recoveryManagedPausedMarkets: new Set(),
+    recoveryManagedCancellationClientOrderIds: new Set(),
+    unrequestedTerminalOrderClientIds: new Set(),
+    replacementIntents: new Set(),
+    trailingBuyRepriceIntents: new Set(),
+    completedOrderClientIds: new Set(),
+    trailingBuySymbols: new Set(),
+    requiresExchangeReconciliation: false,
   })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
@@ -490,16 +488,14 @@ export async function startHarvester({
   let userDataSubscription
   let userDataReady = false
   let initialAccountSnapshotReady = false
-  // Startup loads an authoritative initial balance snapshot. Disconnects and
-  // explicit recovery requirements still close the gate because in-memory
-  // order/accounting state is not comprehensively reconciled across reconnects.
-  let userDataRequiresReconciliation = !tradingEnabled || recoveredState.requiresExchangeReconciliation
+  // Journal replay is disabled; only current-session state is owned. Stream
+  // disconnects and explicit broker reconciliation requirements still close the gate.
+  let userDataRequiresReconciliation = !tradingEnabled
   let userDataStreamUnsafe = false
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
   let userDataReconciliationQueued = false
-  let startupRecoveryReconciliation = false
   let stopped = false
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
@@ -742,16 +738,6 @@ export async function startHarvester({
   }
 
   try {
-    const recoveryProjection = projectHarvesterJournalRecovery({
-      records: journalRecoveryRecords,
-    })
-    if (!recoveryProjection?.ok) {
-      throw new Error(
-        "Harvester Journal recovery projection failed; trading state cannot be reconstructed: " +
-        (recoveryProjection?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-      )
-    }
-
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
 
@@ -772,52 +758,11 @@ export async function startHarvester({
       logger.info?.({ message: "Exchange trading rules validated", symbol })
     }
 
-    const recoverySymbols = new Set([
-      ...recoveryProjection.data.orders.map(({ symbol }) => symbol),
-      ...recoveryProjection.data.fills.map(({ symbol }) => symbol),
-      ...recoveryProjection.data.recoveryCycles.map(({ symbol }) => symbol),
-    ])
-    for (const symbol of recoverySymbols) {
-      if (marketMetadata.has(symbol)) continue
-      const filtersResult = await broker.getSymbolFilters({ symbol })
-      const historicalMarket = filtersResult?.data?.market
-      if (!filtersResult?.ok || !(historicalMarket instanceof Market) || historicalMarket.symbol !== symbol) {
-        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
-          "Unable to load canonical exchange Market metadata for historical Harvester symbol " + symbol +
-          (details ? ": " + details : ""),
-        )
-      }
-      marketMetadata.set(symbol, { market: historicalMarket })
-      logger.info?.({ message: "Historical exchange Market metadata loaded for Journal recovery", symbol })
-    }
-
-    const restored = restoreHarvesterJournalState({
-      projection: recoveryProjection,
-      marketMetadata,
-    })
-    if (!restored?.ok) {
-      throw new Error(
-        "Harvester Journal domain-state restoration failed; trading state cannot be reconstructed: " +
-        (restored?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-      )
-    }
-    recoveredState = restored.data
-    startupRecoveryReconciliation = tradingEnabled && recoveredState.requiresExchangeReconciliation
+    // Durable Journal replay is intentionally disabled. Harvester starts with
+    // fresh in-process trading state; only current-session executions are owned.
+    // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     if (tradingEnabled) activateTradingEngine()
-    portfolioWorkflow = createPortfolioWorkflow({
-      evaluateStrategy,
-      logger,
-      initialPortfolio: recoveredState.portfolio,
-      initialRecoveryLedgers: recoveredState.recoveryLedgers,
-    })
-    logger.info?.({
-      message: "Harvester Journal state restored in memory; canonical exchange reconciliation remains mandatory",
-      recoveredOrders: recoveredState.orderRegistry?.orders?.length ?? 0,
-      recoveredMarkets: recoveredState.recoveryLedgers.size,
-      recoveredPausedMarkets: recoveredState.pausedMarkets.size ?? recoveredState.pausedMarkets.length,
-      requiresExchangeReconciliation: recoveredState.requiresExchangeReconciliation,
-    })
+    portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
     logger.info?.({ message: "Subscribing to Binance user-data events" })
 
@@ -848,7 +793,6 @@ export async function startHarvester({
           if (tradingEngine && isOrderUpdate) {
             const processed = await tradingEngine.processUserDataEvent({
               event,
-              recoveryMode: recoveredState.requiresExchangeReconciliation && !userDataReady,
             })
             if (!processed.ok) {
               userDataAccountingFailed = true
@@ -1062,8 +1006,7 @@ export async function startHarvester({
           initialAccountSnapshotReady &&
           userDataRequiresReconciliation &&
           !userDataAccountingFailed &&
-          !userDataReconciliationQueued &&
-          !startupRecoveryReconciliation
+          !userDataReconciliationQueued
         ) {
           userDataReconciliationQueued = true
           logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
@@ -1209,130 +1152,10 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
       }
 
-      let reconciliation
-      if (recoveredState.requiresExchangeReconciliation) {
-        startupRecoveryReconciliation = true
-        reconciliation = await tradingEngine.reconcileOwnedOrders({
-          recoveryMode: true,
-          beforeApply: async () => {
-            while (true) {
-              const queuedEvents = userDataEventQueue
-              await queuedEvents
-              if (queuedEvents === userDataEventQueue) break
-            }
-          },
-        })
-        if (reconciliation?.ok !== true) {
-          throw new Error(
-            "Conservative TESTNET startup blocked: canonical owned-order/fill reconciliation failed: " +
-            (reconciliation?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-          )
-        }
-        hasCanonicalOwnershipReconciliation = true
-        await publishAccountSnapshot({ phase: "PREFLIGHT" })
-      }
-
-      const openOrders = await publishOpenOrdersSnapshot({
+      await publishOpenOrdersSnapshot({
         phase: "PREFLIGHT",
         blockOnExistingOrders: true,
       })
-      if (recoveredState.requiresExchangeReconciliation) {
-        const reconciledState = {
-          ...recoveredState,
-          portfolio: getPortfolio(),
-          recoveryLedgers: new Map(recoveredState.recoveryLedgers),
-          orderRegistry: new OrderRegistry({ orders: tradingEngine.getOrders() }),
-        }
-        const firstTradingSession = recoveryProjection.data.sessions.find((session) =>
-          session.tradingEnabled || session.hasTradingActivity
-        )
-        const durableBaseline = firstTradingSession
-          ? recoveryProjection.data.accountSnapshots.find((snapshot) =>
-            snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
-          )
-          : undefined
-        if (!durableBaseline) {
-          throw new Error("Conservative TESTNET startup blocked: durable PREFLIGHT baseline is unavailable for account trade-history reconciliation")
-        }
-        const exchangeMarketsResult = await broker.getExchangeMarkets()
-        if (exchangeMarketsResult?.ok !== true || !Array.isArray(exchangeMarketsResult.data)) {
-          throw new Error(
-            "Conservative TESTNET startup blocked: canonical exchange market catalog is unavailable: " +
-            (exchangeMarketsResult?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-          )
-        }
-        const tradeMarketsBySymbol = new Map()
-        for (const market of exchangeMarketsResult.data) {
-          if (!(market instanceof Market)) {
-            throw new TypeError("Canonical exchange market catalog contains a non-Market value")
-          }
-          tradeMarketsBySymbol.set(market.symbol, market)
-        }
-        for (const { market } of marketMetadata.values()) {
-          const existing = tradeMarketsBySymbol.get(market.symbol)
-          if (existing && existing.id !== market.id) {
-            throw new Error("Canonical market catalog conflicts with recovered Journal market identity for " + market.symbol)
-          }
-          tradeMarketsBySymbol.set(market.symbol, market)
-        }
-        const tradeHistoryResult = await fetchAccountTradeHistory({
-          broker,
-          markets: [...tradeMarketsBySymbol.values()],
-          startTime: durableBaseline.sourceTime,
-          marketUniverseComplete: false,
-        })
-        if (tradeHistoryResult?.ok !== true) {
-          throw new Error(
-            "Conservative TESTNET startup blocked: account trade-history scan failed: " +
-            (tradeHistoryResult?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-          )
-        }
-        const accountAudit = auditRecoveredAccountState({
-          projection: recoveryProjection,
-          recoveredState: reconciledState,
-          currentAccountSnapshot: accountSnapshot,
-          openOrders,
-          markets: [...marketMetadata.values()].map(({ market }) => market),
-          exchangeTradeHistory: tradeHistoryResult.data,
-          requireCompleteTradeHistory: true,
-        })
-        if (accountAudit?.ok !== true) {
-          throw new Error(
-            "Conservative TESTNET startup blocked: recovered account/ownership/reservation audit failed: " +
-            (accountAudit?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-          )
-        }
-        const recoveryIntents = tradingEngine.getRecoveryIntents()
-        const unresolvedStrategyState =
-          recoveryIntents.pausedMarkets.length > 0 ||
-          recoveryIntents.replacementIntents.length > 0 ||
-          recoveryIntents.trailingBuyRepriceIntents.length > 0
-        if (unresolvedStrategyState) {
-          throw new Error("Conservative TESTNET startup blocked: recovered strategy contains paused markets or unresolved cancel/replace intents")
-        }
-        const enabledSymbols = new Set(
-          Object.entries(pairs)
-            .filter(([, pairConfig]) => pairConfig.enabled)
-            .map(([symbol]) => symbol),
-        )
-        const unmanagedRecoveredOrders = tradingEngine.getOrders().filter((order) =>
-          ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
-          !enabledSymbols.has(order.market.symbol)
-        )
-        if (unmanagedRecoveredOrders.length > 0) {
-          throw new Error(
-            "Conservative TESTNET startup blocked: recovered active orders belong to disabled markets: " +
-            unmanagedRecoveredOrders.map((order) => order.market.symbol + "/" + order.clientOrderId).join(", "),
-          )
-        }
-        logger.info?.({
-          message: "Harvester durable restart recovery and account ownership audit completed",
-          reconciledOrders: reconciliation.data?.reconciled ?? 0,
-          balancesChecked: accountAudit.data?.balancesChecked ?? 0,
-          openOrdersChecked: accountAudit.data?.openOrdersChecked ?? 0,
-          reservationsChecked: accountAudit.data?.reservationsChecked ?? 0,
-        })
-      }
 
       while (true) {
         const queuedEvents = userDataEventQueue
@@ -1344,19 +1167,18 @@ export async function startHarvester({
         "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
       ])
       if (userDataAccountingFailed || unsafeUserDataStatuses.has(userDataStatus)) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state after canonical recovery")
+        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
       }
-      if (userDataRequiresReconciliation && !recoveredState.requiresExchangeReconciliation) {
-        throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
+      if (userDataRequiresReconciliation) {
+        throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
       }
       const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
       const symbol = enabledPairs[0][0]
       logger.info?.({
-        message: "Conservative TESTNET startup checks passed; account ownership and order state are reconciled",
+        message: "Conservative TESTNET startup checks passed; current account audit is complete",
         symbol,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
       })
-      startupRecoveryReconciliation = false
       userDataRequiresReconciliation = false
       userDataReady = true
       userDataStatus = "READY"
