@@ -209,7 +209,7 @@ describe('Logger transports and severity levels', () => {
       transports: [createTransport('capture', 'trace', entries)],
     })
     const error = new TypeError('request failed', {
-      cause: Object.assign(new Error('nested failure'), { apiKey: 'secret-key' }),
+      cause: { message: 'nested failure', apiKey: 'secret-key' },
     })
 
     logger.error({
