@@ -165,11 +165,25 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
 
     const restoredOrders = []
     const replacementIntents = new Set()
+    const latestSubmissionSequenceBySymbol = new Map()
+    for (const order of data.orders) {
+      const current = latestSubmissionSequenceBySymbol.get(order.symbol) ?? -1
+      latestSubmissionSequenceBySymbol.set(
+        order.symbol,
+        Math.max(current, order.submissionSequence ?? -1),
+      )
+    }
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
       if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
+        replacementIntents.add(order.symbol)
+      } else if (
+        order.cancellationState === "CANCELED" &&
+        ["BUY_FILLED_RECALCULATE_RECOVERY_SELL", "TRAILING_BUY_REPRICE"].includes(order.cancellationReason) &&
+        order.cancellationSequence > (latestSubmissionSequenceBySymbol.get(order.symbol) ?? -1)
+      ) {
         replacementIntents.add(order.symbol)
       }
     }
