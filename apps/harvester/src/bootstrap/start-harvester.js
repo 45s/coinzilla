@@ -710,6 +710,7 @@ export async function startHarvester({
       logger,
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
+        journalFills: recoveredState.journalFills,
         pausedMarkets: recoveredState.pausedMarkets,
         durablePausedMarkets: recoveredState.durablePausedMarkets,
         recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
