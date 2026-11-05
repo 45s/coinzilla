@@ -2,7 +2,7 @@
 
 > **CURRENT DIRECTION — 2026-11-05: POST-MERGE ENGINEERING AND CONTROLLED TESTNET READINESS.**
 >
-> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop` when this task PR is merged. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
+> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is durable restart recovery and the separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
 > The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
@@ -1108,3 +1108,15 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Rebased on the newest `develop` tip after concurrent broker documentation updates.
 
 - [x] Confirmed no overlapping Harvester changes while synchronizing with the latest broker roadmap update.
+
+
+## Durable restart recovery — P0 investigation, 2026-11-05
+
+- [x] PR #559 merged: same-process lost-submission acknowledgement lookup and canonical order/fill reconciliation; unresolved outcomes retain commitments and keep the pair paused.
+- [x] Persist complete applied-fill identity and accounting inputs in the Journal DTO: stable trade ID, exact price/base/quote quantities, commission status, and every actual commission amount with asset ID/code. This is a recovery-evidence prerequisite, not replay or automatic restart recovery.
+- [ ] Build a strict Journal recovery projection for order intents, acknowledgements, cancellation outcomes, applied fills, and recovery-cycle completions. Reject malformed, conflicting, truncated, or incomplete history; never infer exchange order state from a missing event.
+- [ ] Restore Portfolio/RecoveryLedger and fill deduplication from exact recorded fills only after the Journal projection is fully validated; reconcile each restored order against canonical exchange order/history/fills before any trading gate can open.
+- [ ] Reconcile unknown cancellation outcomes by exact owned broker/client order identity. Keep all affected pairs paused on not-found, conflicting, incomplete, or stale exchange evidence. No blind cancel, retry, replacement, or automatic resume.
+- [ ] Add single-writer process ownership protection or an equivalent startup guard before enabling recovery-based trading; Journal currently documents that its directory has no inter-process writer lock.
+- [ ] Add offline restart fixtures for crash windows before submission, after exchange acceptance/lost acknowledgement, during partial fills, during cancel/fill races, after accounting but before durable event delivery, and after recovery-cycle completion.
+- [ ] Keep TESTNET trading disabled during implementation. Recovery is not accepted until joint offline-evidence review and a separately authorized controlled TESTNET session.
