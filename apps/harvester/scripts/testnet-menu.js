@@ -1,0 +1,161 @@
+import { spawnSync } from "node:child_process"
+import { createInterface, emitKeypressEvents } from "node:readline"
+import { stdin, stdout } from "node:process"
+import { pathToFileURL } from "node:url"
+
+export const TESTNET_MENU_ACTIONS = [
+  { id: "orders", label: "List open orders", script: "list-testnet-open-orders.js" },
+  { id: "cancel-orders", label: "Cancel all open orders", script: "cancel-testnet-open-orders.js", destructive: true },
+  { id: "balances", label: "List account balances", script: "list-testnet-balances.js" },
+  { id: "sell-zro", label: "Sell all free ZRO", script: "sell-testnet-zro.js", destructive: true },
+  { id: "history", label: "List order history", script: "list-testnet-order-history.js", prompts: ["symbol", "limit"] },
+  { id: "trades", label: "List trades", script: "list-testnet-trades.js", prompts: ["symbol", "limit", "fromId"] },
+  { id: "journal-audit", label: "Reconcile journal balances", script: "reconcile-journal-account-balances.js", prompts: ["directory"] },
+  { id: "account-audit", label: "Run TESTNET account audit", script: "audit-testnet-account.js" },
+  { id: "exit", label: "Exit" },
+]
+
+const PROMPT_DEFAULTS = {
+  symbol: { label: "Symbol", value: "ZROUSDT" },
+  limit: { label: "Result limit", value: "20" },
+  fromId: { label: "Starting trade ID (optional)", value: "" },
+  directory: { label: "Journal directory (blank uses configured/default directory)", value: "" },
+}
+
+export const buildTestnetMenuArguments = ({ actionId, answers = {} }) => {
+  switch (actionId) {
+    case "history":
+      return [answers.symbol || "ZROUSDT", answers.limit || "20"]
+    case "trades":
+      return [
+        answers.symbol || "DOGEUSDT",
+        answers.limit || "1000",
+        ...(answers.fromId ? [answers.fromId] : []),
+      ]
+    case "journal-audit":
+      return answers.directory ? [answers.directory] : []
+    default:
+      return []
+  }
+}
+
+const prompt = async (question) => {
+  const readline = createInterface({ input: stdin, output: stdout })
+  try {
+    return await readline.question(question)
+  } finally {
+    readline.close()
+  }
+}
+
+const collectArguments = async (action) => {
+  const answers = {}
+  for (const key of action.prompts ?? []) {
+    const { label, value } = PROMPT_DEFAULTS[key]
+    const answer = await prompt(`${label}${value ? ` [${value}]` : ""}: `)
+    answers[key] = answer.trim() || value
+  }
+  return buildTestnetMenuArguments({ actionId: action.id, answers })
+}
+
+const renderMenu = (selectedIndex) => {
+  stdout.write("\x1b[2J\x1b[H")
+  stdout.write("╔══════════════════════════════════════════════════════╗\n")
+  stdout.write("║              HARVESTER TESTNET TOOLS                 ║\n")
+  stdout.write("╠══════════════════════════════════════════════════════╣\n")
+  for (const [index, action] of TESTNET_MENU_ACTIONS.entries()) {
+    const marker = index === selectedIndex ? ">" : " "
+    const warning = action.destructive ? "  [CONFIRM]" : ""
+    stdout.write(`║ ${marker} ${action.label.padEnd(36)}${warning.padEnd(15)} ║\n`)
+  }
+  stdout.write("╠══════════════════════════════════════════════════════╣\n")
+  stdout.write("║  ↑/↓ Navigate   Enter Select   Q/Esc Exit             ║\n")
+  stdout.write("╚══════════════════════════════════════════════════════╝\n")
+}
+
+const waitForKeypress = () => new Promise((resolve) => {
+  stdin.once("keypress", (character, key) => resolve({ character, key }))
+})
+
+const runAction = async (action) => {
+  if (action.destructive && action.id === "cancel-orders") {
+    stdout.write("\nWARNING: this cancels every open TESTNET order on every symbol.\n")
+    stdout.write("Stop Harvester and any other trading process before continuing.\n")
+    const confirmation = await prompt('Type "CANCEL ALL OPEN TESTNET ORDERS" to continue: ')
+    if (confirmation.trim() !== "CANCEL ALL OPEN TESTNET ORDERS") {
+      stdout.write("\nConfirmation did not match. No orders were cancelled.\n")
+      await prompt("Press Enter to return to the menu...")
+      return
+    }
+  }
+
+  const args = await collectArguments(action)
+  stdout.write(`\nExecuting: ${action.script}${args.length ? ` ${args.join(" ")}` : ""}\n\n`)
+
+  const result = spawnSync(
+    process.execPath,
+    ["--env-file=.env.development", `scripts/${action.script}`, ...args],
+    { stdio: "inherit" },
+  )
+
+  if (result.error) {
+    stderrWrite(`Unable to start script: ${result.error.message}\n`)
+  } else if (result.status !== 0) {
+    stderrWrite(`\nScript exited with status ${result.status ?? "unknown"}.\n`)
+  }
+
+  await prompt("\nPress Enter to return to the menu...")
+}
+
+const stderrWrite = (message) => process.stderr.write(message)
+
+export const runTestnetMenu = async () => {
+  if (typeof stdin.setRawMode !== "function" || !stdin.isTTY) {
+    throw new Error("The TESTNET menu requires an interactive terminal.")
+  }
+
+  emitKeypressEvents(stdin)
+  stdin.setRawMode(true)
+  stdin.resume()
+
+  let selectedIndex = 0
+  try {
+    while (true) {
+      renderMenu(selectedIndex)
+      const { character, key = {} } = await waitForKeypress()
+
+      if (key.ctrl && key.name === "c") return
+      if (key.name === "up") {
+        selectedIndex = (selectedIndex - 1 + TESTNET_MENU_ACTIONS.length) % TESTNET_MENU_ACTIONS.length
+        continue
+      }
+      if (key.name === "down") {
+        selectedIndex = (selectedIndex + 1) % TESTNET_MENU_ACTIONS.length
+        continue
+      }
+      if (key.name === "escape" || character?.toLowerCase() === "q") return
+      if (key.name !== "return" && key.name !== "enter") continue
+
+      const action = TESTNET_MENU_ACTIONS[selectedIndex]
+      if (action.id === "exit") return
+
+      stdin.setRawMode(false)
+      stdout.write("\x1b[2J\x1b[H")
+      await runAction(action)
+      stdin.setRawMode(true)
+    }
+  } finally {
+    stdin.setRawMode(false)
+    stdout.write("\n")
+  }
+}
+
+const isDirectExecution = process.argv[1]
+  && pathToFileURL(process.argv[1]).href === import.meta.url
+
+if (isDirectExecution) {
+  runTestnetMenu().catch((error) => {
+    stderrWrite(`\nUnable to open TESTNET menu: ${error.message}\n`)
+    process.exitCode = 1
+  })
+}
