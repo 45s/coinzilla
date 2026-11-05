@@ -757,6 +757,23 @@ export function makeConservativeTradingEngine({
       .find((order) => order.side === "BUY")
     if (!activeBuy || state.trailingBuy.get(symbol) === false) return evaluateLatestTransition({ symbol })
 
+    // Portfolio is authoritative: retained free inventory is excluded because
+    // only baseQuantity represents active strategy inventory. This check runs
+    // inside the serialized transition immediately before any repricing work.
+    const position = getPortfolio().getPosition({ marketId: metadata.market.id })
+    const activePositionQuantity = position?.baseQuantity.amount ?? "0"
+    if (compareDecimal({ left: activePositionQuantity, right: "0" }) > 0) {
+      logger?.debug?.({
+        message: "Harvester trailing BUY repricing skipped",
+        symbol,
+        reason: "ACTIVE_POSITION_EXISTS",
+        marketId: metadata.market.id,
+        activePositionQuantity,
+        freeBaseQuantity: position?.freeBaseQuantity.amount ?? "0",
+      })
+      return evaluateLatestTransition({ symbol })
+    }
+
     const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
     const trigger = strategyPolicy.evaluateTrailingBuyRepricing({
       marketPrice: marketPrice.price,
