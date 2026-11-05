@@ -205,7 +205,7 @@ export class OrderRegistry {
       if (current.status === "UNKNOWN") {
         return toResult({ data: { registry: this, order: current, applied: false, duplicate: true } })
       }
-      if (current.status !== "PENDING") {
+      if (!["PENDING", "OPEN", "PARTIALLY_FILLED"].includes(current.status)) {
         return toResult({ data: { registry: this, order: current, applied: false, alreadyAcknowledged: true } })
       }
       const unknownOrder = new CanonicalOrder({
