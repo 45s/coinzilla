@@ -690,6 +690,7 @@ export function makeConservativeTradingEngine({
         throw allocation.errors[0] ?? new Error("Unable to allocate strategy order commitments")
       }
       const executableActions = allocation.data.executableActions
+      const deferredActions = allocation.data.deferredActions
       logger?.debug?.({
         message: "Harvester strategy order commitments allocated",
         evaluationId,
@@ -702,7 +703,15 @@ export function makeConservativeTradingEngine({
         remainingInvestment: allocation.data.remainingInvestment,
       })
       if (executableActions.length === 0) {
-        return toResult({ data: { decision, submittedOrders: [], waitingForAvailableQuoteBalance: true } })
+        return toResult({
+          data: {
+            decision,
+            submittedOrders: [],
+            deferredActions,
+            waitingForAvailableQuoteBalance: deferredActions.some(({ reason }) => reason === "INSUFFICIENT_QUOTE_BALANCE"),
+            waitingForInvestmentLimit: deferredActions.some(({ reason }) => reason === "PAIR_INVESTMENT_LIMIT"),
+          },
+        })
       }
       publishLifecycleEvent({
         eventPublisher,
@@ -762,7 +771,7 @@ export function makeConservativeTradingEngine({
         )
         state.buyReferenceOverrides.delete(symbol)
       }
-      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
+      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders, deferredActions } })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
       return toResult({ error })
