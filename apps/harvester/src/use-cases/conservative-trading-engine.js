@@ -1075,7 +1075,7 @@ export function makeConservativeTradingEngine({
         const isUnprocessedFill = order.status === "FILLED" &&
           !state.completedOrderTransitions.has(order.clientOrderId)
         if (!isUnprocessedFill) {
-          if (order.side === "SELL" && order.status !== "FILLED" &&
+          if (!recoveryMode && order.side === "SELL" && order.status !== "FILLED" &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
             if (!cancellation.ok) return cancellation
