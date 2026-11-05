@@ -26,7 +26,7 @@ Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../
 - [x] Implement explicit synchronous transactions with commit/rollback and nested/async callback rejection.
 - [x] Implement ordered, atomic, versioned schema migrations and migration-history validation.
 - [x] Add deterministic integration tests using real in-memory and temporary file-backed SQLite databases.
-- [~] Separate the database infrastructure domain model, application provider port/use case, and SQLite infrastructure adapter without changing the public API.
+- [x] Separate the database infrastructure domain model, application provider port/use case, and SQLite infrastructure adapter without changing the public API.
 - [ ] Integrate the first domain-owned repository contract with a real application consumer.
 - [ ] Add domain-specific repositories and schema migrations alongside their owning bounded contexts.
 - [ ] Reassess PostgreSQL or MongoDB only if deployment, concurrency, scale, or query requirements outgrow embedded SQLite.
