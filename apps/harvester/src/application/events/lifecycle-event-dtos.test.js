@@ -459,6 +459,7 @@ test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
       symbol: "DOGEUSDT",
       side: "BUY",
       brokerOrderId: "broker-1",
+      status: "OPEN",
       outcome: "UNCONFIRMED",
       error: { name: "Error", message: "apiSecret=[REDACTED]" },
     },
@@ -474,6 +475,7 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
     error: new Error("order state unavailable"),
   })
   assert.equal(result.ok, true)
+  assert.equal(result.data.status, "OPEN")
   assert.equal(result.data.outcome, "ORDER_STATE_UNKNOWN")
 })
 

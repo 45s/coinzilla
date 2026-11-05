@@ -532,6 +532,58 @@ test("marks a PENDING submission UNKNOWN without releasing its order commitment"
   assert.equal(result.data.registry.getActiveOrders({ marketId: market.id }).length, 1)
 })
 
+test("marks an acknowledged OPEN order UNKNOWN without losing broker identity or commitment", () => {
+  const clientOrderId = "h-unknown-cancel-open"
+  const brokerOrderId = "broker-unknown-cancel-open"
+  const pending = makeOrder({ clientOrderId })
+  const open = makeOrder({
+    clientOrderId,
+    brokerOrderId,
+    status: "OPEN",
+    updatedAt: 10,
+  })
+  const registry = OrderRegistry.empty()
+    .registerPending({ order: pending }).registry
+    .applyUpdate({ order: open }).registry
+
+  const result = registry.markCancellationUnknown({ clientOrderId })
+  const tracked = result.data.registry.getOrder({ clientOrderId })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.applied, true)
+  assert.equal(tracked.status, "UNKNOWN")
+  assert.equal(tracked.brokerOrderId, brokerOrderId)
+  assert.equal(tracked.executedQuantity.amount, "0")
+  assert.equal(tracked.originalQuantity.amount, "100")
+  assert.equal(result.data.registry.getActiveOrders({ marketId: market.id }).length, 1)
+})
+
+test("marks a partially filled order UNKNOWN and preserves cumulative execution", () => {
+  const clientOrderId = "h-unknown-cancel-partial"
+  const brokerOrderId = "broker-unknown-cancel-partial"
+  const pending = makeOrder({ clientOrderId })
+  const partiallyFilled = makeOrder({
+    clientOrderId,
+    brokerOrderId,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "25.5",
+    updatedAt: 20,
+  })
+  const registry = OrderRegistry.empty()
+    .registerPending({ order: pending }).registry
+    .applyUpdate({ order: partiallyFilled }).registry
+
+  const result = registry.markCancellationUnknown({ clientOrderId })
+  const tracked = result.data.registry.getOrder({ clientOrderId })
+
+  assert.equal(result.ok, true)
+  assert.equal(tracked.status, "UNKNOWN")
+  assert.equal(tracked.brokerOrderId, brokerOrderId)
+  assert.equal(tracked.executedQuantity.amount, "25.5")
+  assert.equal(tracked.originalQuantity.amount, "100")
+  assert.equal(result.data.registry.getActiveOrders({ marketId: market.id }).length, 1)
+})
+
 test("does not downgrade an already acknowledged order when submission failure arrives late", () => {
   const clientOrderId = "h-ack-race"
   const pending = makeOrder({ clientOrderId })

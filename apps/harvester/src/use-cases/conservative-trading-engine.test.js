@@ -713,10 +713,12 @@ test("publishes an unconfirmed cancellation and pause without changing the order
   const failed = events.find(({ name }) => name === "order.cancel_failed")
   assert.ok(failed)
   assert.equal(failed.data.outcome, "UNCONFIRMED")
+  assert.equal(failed.data.status, "UNKNOWN")
+  assert.equal(engine.getOrders()[0].status, "UNKNOWN")
   assert.equal(events.filter(({ name }) => name === "strategy.paused").length, 1)
 })
 
-test("publishes thrown cancellation outcomes as unconfirmed", async () => {
+test("publishes thrown cancellation outcomes as UNKNOWN and pauses the pair", async () => {
   const events = []
   const { engine } = await createHarness({
     cancelThrow: true,
@@ -726,15 +728,17 @@ test("publishes thrown cancellation outcomes as unconfirmed", async () => {
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  await assert.rejects(
-    engine.processMarketPrice({
-      symbol: "DOGEUSDT",
-      priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
-    }),
-    /cancel socket closed/,
-  )
-  assert.equal(events.at(-1).name, "order.cancel_failed")
-  assert.equal(events.at(-1).data.outcome, "UNCONFIRMED")
+  const result = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(events.at(-1).name, "strategy.paused")
+  const failed = events.find((event) => event.name === "order.cancel_failed")
+  assert.ok(failed)
+  assert.equal(failed.data.outcome, "UNCONFIRMED")
+  assert.equal(failed.data.status, "UNKNOWN")
+  assert.equal(engine.getOrders()[0].status, "UNKNOWN")
 })
 
 
@@ -1057,6 +1061,10 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
     event.name === "order.cancel_failed" && event.data.side === "SELL")
   assert.ok(failed)
   assert.equal(failed.data.outcome, "UNCONFIRMED")
+  assert.equal(failed.data.status, "UNKNOWN")
+  assert.equal(engine.getOrders().find((order) => order.side === "SELL").status, "UNKNOWN")
+  assert.ok(events.some((event) =>
+    event.name === "strategy.paused" && event.data.reason === "RECOVERY_SELL_CANCELLATION_UNCONFIRMED"))
 })
 
 

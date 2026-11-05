@@ -350,6 +350,7 @@ export const mapOrderCancelFailedData = (input = {}) =>
       ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim()
         ? { brokerOrderId: order.brokerOrderId.trim() }
         : {}),
+      status: requireString({ value: order?.status, field: "order.status" }),
       outcome,
       ...(error === undefined ? {} : { error: safeError({ error }) }),
     }
