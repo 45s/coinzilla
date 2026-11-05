@@ -838,6 +838,8 @@ export async function startHarvester({
               clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
               originalClientOrderId: event.originalClientOrderId,
               side: event.executedOrder?.side ?? event.fill?.side,
+              price: event.executedOrder?.limitPrice?.amount ?? null,
+              quantity: event.executedOrder?.originalQuantity?.amount,
               orderStatus: event.executedOrder?.status,
               executionId: event.fill?.id,
               outcome: processed.data?.ignored === true ? "IGNORED" : "ACCEPTED",
