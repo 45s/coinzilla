@@ -1065,3 +1065,61 @@ test("rejects multiple fully filled SELL orders before one recovery-cycle comple
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /Multiple fully filled Harvester SELL orders/)
 })
+
+
+test("rejects account snapshots whose exchange source time moves backwards", () => {
+  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 200,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.snapshot_captured", {
+        phase: "CLOSING",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /sourceTime moved backwards/)
+})
+
+test("rejects open-order audit timestamps that move backwards", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 200,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /observedAt moved backwards/)
+})
