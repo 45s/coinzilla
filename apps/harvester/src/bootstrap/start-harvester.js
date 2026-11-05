@@ -103,9 +103,15 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
-const createPortfolioWorkflow = ({ evaluateStrategy, logger }) => {
-  let portfolio = new Portfolio()
-  const recoveryLedgers = new Map()
+const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers } = {}) => {
+  if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
+    throw new TypeError("initialRecoveryLedgers must be a Map")
+  }
+  let portfolio = initialPortfolio ?? new Portfolio()
+  const recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
   let updateQueue = Promise.resolve()
 
   const tracedEvaluateStrategy = (input = {}) => {
@@ -379,16 +385,14 @@ export async function startHarvester({
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
   })
 
-  const portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
-  let processMarketPrice = portfolioWorkflow.processMarketPrice
+  let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+  let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
-  const {
-    updatePortfolio,
-    updateTradingAccounting,
-    getPortfolio,
-    getRecoveryLedger,
-    completeRecoveryCycle,
-  } = portfolioWorkflow
+  const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
+  const updateTradingAccounting = (...args) => portfolioWorkflow.updateTradingAccounting(...args)
+  const getPortfolio = (...args) => portfolioWorkflow.getPortfolio(...args)
+  const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
+  const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
   let accountSnapshot
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
