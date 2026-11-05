@@ -148,10 +148,12 @@ export function makeConservativeTradingEngine({
   const resolveRecoveryManagedCancellation = ({ order } = {}) => {
     if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) return false
     const symbol = order.market.symbol
-    if (!hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
+    if (order.side === "SELL" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
       state.replacementIntents.delete(symbol)
     }
-    if (!hasPendingRecoveryManagedCancellation({ symbol, side: "BUY" })) {
+    if (order.side === "BUY" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "BUY" })) {
       state.trailingBuyRepriceIntents.delete(symbol)
     }
     releaseRecoveryManagedPause({ symbol })
