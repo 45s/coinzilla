@@ -106,3 +106,24 @@ test("rejects invalid process lock inputs", async () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /non-empty directory/)
 })
+
+
+test("allows exactly one owner when two processes race to acquire the same lock", async () => {
+  const directory = await createTempDirectory()
+  try {
+    const results = await Promise.all([
+      acquireHarvesterProcessLock({ directory, pid: 301, hostname: "race-host", token: "race-token-a" }),
+      acquireHarvesterProcessLock({ directory, pid: 302, hostname: "race-host", token: "race-token-b" }),
+    ])
+    const owners = results.filter((result) => result.ok)
+    const conflicts = results.filter((result) => !result.ok)
+
+    assert.equal(owners.length, 1)
+    assert.equal(conflicts.length, 1)
+    assert.equal(conflicts[0].errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.equal(JSON.parse(await readFile(owners[0].lockPath, "utf8")).token, owners[0].owner.token)
+    assert.equal((await owners[0].release()).ok, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
