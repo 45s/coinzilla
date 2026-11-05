@@ -167,8 +167,27 @@ export function makeConservativeTradingEngine({
 
   const publishDurableIntent = async ({ eventName, dataResult } = {}) => {
     const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
-    if (!published?.ok) return published
-    if (published.skipped === true) return toResult({ data: { skipped: true } })
+    if (published && typeof published.then === "function") {
+      Promise.resolve(published).then(
+        (result) => {
+          if (result?.ok === false) {
+            logger?.error?.({
+              message: "Harvester durable intent publication was rejected asynchronously",
+              eventName,
+              errors: result.errors,
+            })
+          }
+        },
+        (error) => logger?.error?.({
+          message: "Harvester durable intent publication promise rejected",
+          eventName,
+          error,
+        }),
+      )
+    } else {
+      if (!published?.ok) return published
+      if (published.skipped === true) return toResult({ data: { skipped: true } })
+    }
     if (typeof eventPublisher?.flush !== "function") {
       return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
     }
