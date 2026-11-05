@@ -13,7 +13,11 @@ const otherMarket = new Market({
   quoteAsset,
 })
 
-const makeFill = ({ market: fillMarket = market, tradeId, executedAt = 100 } = {}) => new Fill({
+const makeFill = (input = {}) => {
+  const fillMarket = input.market ?? market
+  const { tradeId } = input
+  const executedAt = Object.hasOwn(input, "executedAt") ? input.executedAt : 100
+  return new Fill({
   tradeId: String(tradeId),
   brokerOrderId: "9001",
   market: fillMarket,
@@ -25,7 +29,8 @@ const makeFill = ({ market: fillMarket = market, tradeId, executedAt = 100 } = {
   executedAt,
   commissions: [],
   commissionStatus: "COMPLETE",
-})
+  })
+}
 
 test("paginates each market from the durable baseline with strictly advancing trade IDs", async () => {
   const fills = [makeFill({ tradeId: 1 }), makeFill({ tradeId: 2 }), makeFill({ tradeId: 3 })]
@@ -159,7 +164,7 @@ test("rejects non-advancing cursors, backward timestamps, and unsafe pagination 
     requestDelayMs: 0,
   })
   assert.equal(backwards.ok, false)
-  assert.match(backwards.errors[0].message, /timestamps are invalid or moved backwards/)
+  assert.match(backwards.errors[0].message, /timestamps are missing, invalid, or moved backwards/)
 
   const unsafe = await fetchAccountTradeHistory({
     broker: {
