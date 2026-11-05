@@ -53,11 +53,13 @@ test("accepts exact complete account trade history matching every durable Journa
     journalFills: [journalFill(fill)],
     exchangeFills: [fill],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, true)
   assert.deepEqual(result.data, {
     complete: true,
+    marketUniverseComplete: true,
     fillsChecked: 1,
     journalFillsChecked: 1,
   })
@@ -86,6 +88,7 @@ test("rejects an exchange execution absent from the Harvester Journal", () => {
     journalFills: [journalFill(ownedFill)],
     exchangeFills: [ownedFill, externalFill],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -98,6 +101,7 @@ test("rejects a Journal execution missing from complete exchange trade history",
     journalFills: [journalFill(fill)],
     exchangeFills: [],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -114,6 +118,7 @@ test("rejects contradictory exact execution facts and commission data", () => {
     journalFills: [journalFill(fill)],
     exchangeFills: [contradictory],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -126,6 +131,7 @@ test("rejects duplicate exchange execution and trade identities", () => {
     journalFills: [journalFill(fill)],
     exchangeFills: [fill, fill],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(duplicate.ok, false)
@@ -138,6 +144,7 @@ test("rejects non-canonical exchange fill records", () => {
     journalFills: [journalFill(fill)],
     exchangeFills: [{ ...fill }],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, false)
@@ -152,8 +159,23 @@ test("accepts canonical account trade fills that omit clientOrderId when broker 
     journalFills: [journalFill(journalExecution)],
     exchangeFills: [exchangeFill],
     complete: true,
+    marketUniverseComplete: true,
   })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.fillsChecked, 1)
+})
+
+
+test("rejects complete symbol pages when the exchange market universe is not proven complete", () => {
+  const fill = makeFill()
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(fill)],
+    exchangeFills: [fill],
+    complete: true,
+    marketUniverseComplete: false,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /market universe is incomplete/)
 })
