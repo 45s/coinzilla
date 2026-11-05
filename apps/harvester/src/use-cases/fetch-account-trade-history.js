@@ -102,15 +102,13 @@ export async function fetchAccountTradeHistory({
             throw new Error("Account trade history cursor did not advance strictly for " + market.symbol)
           }
           lastTradeId = numericTradeId
-          if (fill.executedAt !== undefined) {
-            if (!Number.isSafeInteger(fill.executedAt) || fill.executedAt < lastExecutedAt) {
-              throw new Error("Account trade history execution timestamps are invalid or moved backwards for " + market.symbol)
-            }
-            if (firstPage && fill.executedAt < startTime) {
-              throw new Error("Account trade history returned an execution before the requested baseline for " + market.symbol)
-            }
-            lastExecutedAt = fill.executedAt
+          if (!Number.isSafeInteger(fill.executedAt) || fill.executedAt < lastExecutedAt) {
+            throw new Error("Account trade history execution timestamps are missing, invalid, or moved backwards for " + market.symbol)
           }
+          if (fill.executedAt < startTime) {
+            throw new Error("Account trade history returned an execution before the requested baseline for " + market.symbol)
+          }
+          lastExecutedAt = fill.executedAt
           if (fillIds.has(fill.id)) {
             throw new Error("Account trade history contains duplicate execution identity " + fill.id)
           }
