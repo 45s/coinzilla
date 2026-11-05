@@ -81,6 +81,9 @@ export function auditRecoveredAccountState({
     if (!baseline) {
       throw new Error("Initial trading-session PREFLIGHT account snapshot is missing; account ownership cannot be proven")
     }
+    if (baseline.auditStatus !== "COMPLETE" || baseline.auditReasons.length > 0) {
+      throw new Error("Initial trading-session PREFLIGHT account snapshot is incomplete; account ownership cannot be proven")
+    }
     const latestRecordedSourceTime = projection.data.accountSnapshots.reduce(
       (latest, snapshot) => Math.max(latest, snapshot.sourceTime),
       baseline.sourceTime,
