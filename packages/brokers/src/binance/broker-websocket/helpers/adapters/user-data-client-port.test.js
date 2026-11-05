@@ -53,14 +53,21 @@ test("forwards connection state and listener lifecycle through the port", async 
   await port.connect()
   assert.equal(port.state, "open")
 
-  const event = { subscriptionId: 17, event: { e: "balanceUpdate" } }
+  const event = {
+    subscriptionId: 17,
+    event: { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 },
+  }
   const error = new Error("socket warning")
   const close = { code: 1006, reason: "network lost" }
   client.emitEvent(event)
+  client.emitEvent(structuredClone(event))
   client.emitError(error)
   client.emitClose(close)
 
-  assert.deepEqual(received.events, [event])
+  assert.equal(received.events.length, 1)
+  assert.equal(received.events[0].type, "event")
+  assert.equal(received.events[0].subscriptionId, 17)
+  assert.equal(received.events[0].event.balanceDelta, "1")
   assert.deepEqual(received.errors, [error])
   assert.deepEqual(received.closes, [close])
 
@@ -92,4 +99,22 @@ test("normalizes missing subscription data without exposing Binance response env
   assert.equal(await port.subscribe(), null)
   assert.equal(await port.listSubscriptions(), null)
   await client.disconnect()
+})
+
+
+test("normalizes Binance user-data stream termination into a neutral port event", async () => {
+  const client = createFakeRpcClient()
+  const port = createBinanceUserDataClientPort(client)
+  const received = []
+  port.onEvent((event) => received.push(event))
+
+  const termination = { e: "eventStreamTerminated", E: 123456 }
+  client.emitEvent({ subscriptionId: 17, event: termination })
+
+  assert.deepEqual(received, [{
+    type: "terminated",
+    subscriptionId: 17,
+    eventTime: 123456,
+    event: termination,
+  }])
 })
