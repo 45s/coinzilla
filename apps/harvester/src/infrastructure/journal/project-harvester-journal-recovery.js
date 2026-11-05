@@ -287,8 +287,15 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           if (existing.submissionRequested) continue
           throw new Error("Conflicting duplicate submission intent for " + intent.clientOrderId)
         }
+        const unresolvedCancellation = [...ordersByClientId.values()].find((order) =>
+          order.symbol === intent.symbol && ["REQUESTED", "UNKNOWN"].includes(order.cancellationState)
+        )
+        if (unresolvedCancellation) {
+          throw new Error("New order submission is journaled while a prior cancellation remains UNKNOWN for " + intent.symbol)
+        }
         ordersByClientId.set(intent.clientOrderId, {
           ...intent,
+          submissionSequence: currentSequence,
           brokerOrderId: undefined,
           submissionRequested: true,
           submissionOutcome: "PENDING",
@@ -363,6 +370,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           throw new Error("Cancellation intent executed quantity is behind journaled fills")
         }
         order.cancellationState = "REQUESTED"
+        order.cancellationReason = requireString({ value: data.reason, field: "cancellation reason" })
+        order.cancellationSequence = currentSequence
         order.cancellationExecutedQuantity = executedQuantity
         order.requiresExchangeReconciliation = true
         continue
@@ -387,6 +396,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           throw new Error("Confirmed cancellation executed quantity is behind journaled fills")
         }
         order.cancellationState = "CANCELED"
+        order.cancellationSequence = currentSequence
         order.cancellationExecutedQuantity = executedQuantity
         order.exchangeStatusHint = "CANCELED"
         order.recoveryStatus = "UNKNOWN"
@@ -405,6 +415,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           throw new Error("Cancellation failure changed brokerOrderId")
         }
         order.cancellationState = "UNKNOWN"
+        order.cancellationSequence = currentSequence
         order.recoveryStatus = "UNKNOWN"
         order.requiresExchangeReconciliation = true
         continue
