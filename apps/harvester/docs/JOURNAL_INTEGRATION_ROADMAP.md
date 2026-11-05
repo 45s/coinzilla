@@ -140,7 +140,7 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 - Expose `ready`, `status`, and an explicit `close()` operation; report startup/write/close outcomes without allowing logger failures to escape.
 - The Journal subscribes only after its directory/session file is ready. Events published before that point are not captured; Steps 1–3 publish no application lifecycle events yet.
 - Journal initialization failure must fail any broker-connected startup because the mandatory PREFLIGHT audit cannot be made durable; it must not affect configuration-only/no-broker startup.
-- Do not call Journal record/flush from trading callbacks. Explicit PREFLIGHT and CLOSING account-audit flushes are lifecycle gates, not trading callbacks. Coordinated process shutdown draining remains Step 7.
+- Do not await ordinary Journal record delivery from trading callbacks. Explicit PREFLIGHT/CLOSING account-audit flushes and the separate pre-side-effect order/cancel intent barriers are the only approved durability waits. Coordinated process shutdown draining remains Step 7.
 
 **Tests:** Journal ready/close; invalid directory; pending initialization; construction exception with failing logger; disabled mode; write failure reflected in health status; Harvester startup proceeds while Journal readiness is pending.
 
