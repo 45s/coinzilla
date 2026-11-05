@@ -7,6 +7,8 @@ const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
 const CONSOLE_DETAIL_KEYS = Object.freeze([
+  "errorName",
+  "errorMessage",
   "symbol",
   "symbols",
   "enabledSymbols",
@@ -23,8 +25,6 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "strategyMode",
   "broker",
   "reason",
-  "errorName",
-  "errorMessage",
 ])
 const MAX_CONSOLE_LINE_LENGTH = 200
 
@@ -38,7 +38,16 @@ function summarizeConsoleData({ data } = {}) {
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
       .filter((key) => data[key] !== undefined && data[key] !== null)
-      .map((key) => [key, data[key]]),
+      .map((key) => {
+        const value = data[key]
+        if (typeof value === "string" && value.length > 100) {
+          return [key, value.slice(0, 97) + "..."]
+        }
+        if (Array.isArray(value)) {
+          return [key, value.slice(0, 3)]
+        }
+        return [key, value]
+      }),
   )
   return { message, details }
 }
