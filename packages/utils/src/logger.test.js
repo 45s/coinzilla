@@ -111,6 +111,25 @@ describe('Logger transports and severity levels', () => {
     ])
   })
 
+  it('applies every configured minimum severity inclusively', () => {
+    const levels = ['trace', 'debug', 'info', 'warn', 'error']
+
+    levels.forEach((threshold, index) => {
+      const entries = []
+      const logger = new Logger({
+        transports: [createTransport('capture', threshold, entries)],
+      })
+
+      levels.forEach((level) => logger[level]({ level }))
+
+      assert.deepEqual(
+        entries.map(({ level }) => level),
+        levels.slice(index),
+        `minimum level ${threshold} should include itself and more severe entries`,
+      )
+    })
+  })
+
   it('assigns INFO severity to success and system semantic methods', () => {
     const entries = []
     const logger = new Logger({
