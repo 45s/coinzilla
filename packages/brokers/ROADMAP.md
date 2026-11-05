@@ -64,7 +64,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml` (`run_broker_testnet_read_only` manual input). The repository owner reports that the required TESTNET secrets are configured (values intentionally uninspected); the manual run on `develop` and long-running recovery/soak validation in a controlled TESTNET session remain pending.
-- [ ] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; planned, not started. The first modernization tranche established test seams, adapters, and selected ports, but did not complete the package's domain/application/infrastructure architecture. Phase 9 will define and implement broker-owned domain concepts, application use cases, explicit ports, and exchange-specific infrastructure adapters without expanding into Harvester or other packages.
+- [~] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; in progress. First vertical slice: extract and test the exchange-neutral user-data recovery acknowledgement invariant while preserving the existing session lifecycle. The first modernization tranche established test seams, adapters, and selected ports, but did not complete the package's domain/application/infrastructure architecture. Phase 9 will define and implement broker-owned domain concepts, application use cases, explicit ports, and exchange-specific infrastructure adapters without expanding into Harvester or other packages.
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 
@@ -149,7 +149,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** planned; no Phase 9 implementation is claimed by this documentation update.
+**Status:** in progress. The first test-first domain slice extracts the exchange-neutral user-data recovery acknowledgement invariant into `src/domain/user-data-recovery-policy.js`; the existing Binance session remains responsible for subscriber state, timers, and effects.
 
 ---
 
@@ -176,7 +176,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is the next planned architecture work inside `@coinzilla/brokers`: define broker-owned domain/application boundaries and ports, then move Binance-specific protocol concerns behind infrastructure adapters using vertical TDD slices. Do not interpret the first tranche as completion, and do not expand this task into Harvester or other packages.
+9. Phase 9 is in progress. The first domain slice isolates the rule that recovery can complete only when a remote user-data subscription is active and every current subscriber explicitly acknowledges reconciliation. Next, continue with application-owned orchestration and port boundaries, one tested capability slice at a time; do not expand into Harvester or other packages.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -723,3 +723,17 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 ## Accepted cross-domain capability — Harvester book ticker (#506)
 
 - [x] Expose Binance `bookTicker` through the additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method while preserving the aggregate-trade `subscribeForPrices` contract. Broker API, immutable exact-string adapter, deterministic adapter/subscription tests, and README documentation merged in PRs #507 and #510; Harvester's fresh best-bid/best-ask POST-ONLY crossing validation and shutdown coverage merged in PRs #508 and #509.
+
+## 14. Mandatory autonomous DDD refactoring execution
+
+The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
+
+- Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
+- Characterize existing behavior first. Follow strict RED → GREEN → REFACTOR in small vertical slices; run deterministic tests after each change and maintain the package coverage gates. Do not weaken or delete existing tests to make a refactor pass.
+- Create as many focused PRs as necessary. Each task branch is short-lived, starts from the latest `develop`, and targets `develop`. Multiple coherent commits per task branch are encouraged.
+- The agent owns the full delivery loop: implement, test, document, synchronize, open PR, inspect CI, merge when safe, clean up, update this roadmap, and start the next task. **Do not stop to request routine user approval or wait for the user to ask you to continue.**
+- Merge a task PR into `develop` once its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage pass, the diff is focused, and existing broker behavior/compatibility has been verified. No routine human approval is required for task PRs into `develop`. Never bypass branch protection or merge with pending/failed/missing required checks.
+- After merge, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
+- A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
+- If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
+
