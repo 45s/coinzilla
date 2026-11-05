@@ -1,6 +1,6 @@
 # Harvester
 
-> **Current status — 2026-11-05:** PR #545 (automatic account PREFLIGHT audit), PR #546 (Binance WebSocket/REST canonical fill timestamp alignment), and PR #552 (audit status documentation) are merged into `develop`. The source-level startup audit and duplicate-fill timestamp correction are covered by offline regressions; this does not constitute exchange acceptance. The controlled Binance Spot TESTNET gate remains CLOSED until the operator and assistant complete and review the joint one-pair recovery-cycle evidence. See [TESTNET validation runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Harvester Roadmap](./ROADMAP.md).
+> **Current status — 2026-11-05:** PR #545 (automatic account PREFLIGHT audit), PR #546 (Binance WebSocket/REST canonical fill timestamp alignment), PR #552 (audit status documentation), PR #553 (Journal durability policy reconciliation), and PR #554 (aggregate BUY/SELL commitment limits) are merged into `develop`. The source-level startup audit, canonical fill timestamp correction, and order-budget allocator are covered by offline regressions; this does not constitute exchange acceptance. The controlled Binance Spot TESTNET gate remains CLOSED until the operator and assistant complete and review the joint one-pair recovery-cycle evidence. See [TESTNET validation runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Harvester Roadmap](./ROADMAP.md).
 
 
 Harvester is an independent Node.js process for cryptocurrency trading, built inside the Coinzilla pnpm monorepo.
