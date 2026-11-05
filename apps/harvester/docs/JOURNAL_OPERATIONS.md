@@ -128,5 +128,6 @@ Event DTOs do not include credentials, raw exchange messages, or SDK objects. Th
 - Trading-enabled startup creates `.harvester-trading.lock` with exclusive-create semantics in the configured Journal directory before reading Journal history or creating a Journal writer.
 - A second local process using that same directory fails before Journal startup and before broker connection.
 - The lock is released only after runtime shutdown and Journal writer closure are confirmed. If runtime stop or Journal close is not confirmed, the lock is retained. If Journal shutdown cannot be confirmed, the lock is retained to prevent another writer from trading concurrently.
+- If runtime startup has been attempted and then fails, the lock is retained because broker resources may have been partially activated even when no runtime handle was returned. Verify the process and broker state before manually removing that stale lock.
 - Stale locks are not automatically reclaimed. After an unclean process termination, inspect the stored PID, hostname, and start time; remove the file manually only after confirming the owner is no longer running.
 - Different Journal directories do not share a lock. All local Harvester processes trading the same account must use the same directory.
