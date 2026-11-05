@@ -527,6 +527,32 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  async getExchangeMarkets() {
+    try {
+      const response = await this.tradingConnection.request("exchangeInfo", {})
+      const symbolInfos = response.data?.symbols
+      if (!Array.isArray(symbolInfos) || symbolInfos.length === 0) {
+        throw new TypeError("Binance exchangeInfo response must contain a non-empty symbols array")
+      }
+
+      const markets = []
+      const seenSymbols = new Set()
+      for (const [index, symbolInfo] of symbolInfos.entries()) {
+        const market = createCanonicalMarket({ symbolInfo })
+        if (seenSymbols.has(market.symbol)) {
+          throw new Error("Binance exchangeInfo contains duplicate market symbol " + market.symbol)
+        }
+        seenSymbols.add(market.symbol)
+        this.canonicalMarkets.set(market.symbol, market)
+        markets.push(market)
+      }
+      return toResult({ data: Object.freeze(markets) })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.getExchangeMarkets()", error })
+      return toResult({ error })
+    }
+  }
+
   async getSymbolFilters({ symbol }) {
     try {
       if (typeof symbol !== "string" || symbol.length === 0) {
