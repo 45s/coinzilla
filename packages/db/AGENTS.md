@@ -10,11 +10,14 @@ This package owns the built-in SQLite infrastructure, database lifecycle, SQL tr
 
 Roadmap: [`ROADMAP.md`](./ROADMAP.md).
 
-Bounded contexts own their domain models, aggregate invariants, and repository interfaces. Do not move domain repository contracts into this package merely to centralize persistence. Do not let domain/application policy import SQLite drivers, SQL, database connections, statement objects, or provider sessions.
+This package's domain model owns only database-infrastructure concepts: database lifecycle and immutable migration identity/history. Business bounded contexts own their business domain models, aggregate invariants, and repository interfaces. Do not move business repository contracts into this package merely to centralize persistence. Do not let domain/application policy import SQLite drivers, SQL, database connections, statement objects, or provider sessions.
 
 ## Architecture rules
 
 - Keep the public entry point thin and export only intentional contracts.
+- Keep the dependency direction domain → application → infrastructure (outer layers depend inward); do not add folders or wrappers that do not own meaningful policy.
+- Model lifecycle invariants in the `Database` entity and immutable schema-change identity in the `Migration` entity; keep migration-history decisions in a pure domain service.
+- Define provider capabilities at the application port; keep `node:sqlite` and SQL under `src/infrastructure/sqlite/`.
 - Use Node.js built-in `node:sqlite`; do not add a third-party driver or ORM for SQLite.
 - Keep SQL and SQLite-specific APIs in infrastructure adapters/repositories, not in domain policy.
 - Use prepared statements and bound parameters for values.
