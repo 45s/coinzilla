@@ -1199,9 +1199,9 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
       }
 
+      let reconciliation
       if (recoveredState.requiresExchangeReconciliation) {
         startupRecoveryReconciliation = true
-        let reconciliation
         reconciliation = await tradingEngine.reconcileOwnedOrders({
           recoveryMode: true,
           beforeApply: async () => {
