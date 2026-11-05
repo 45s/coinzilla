@@ -3628,3 +3628,39 @@ test("rejects REST history that omits a durable Journal fill despite matching cu
   assert.deepEqual(harness.cancellationIds, [])
   assert.deepEqual(harness.orders, [])
 })
+
+
+test("pauses a recovered order canceled without a durable Harvester cancellation intent", async () => {
+  const makeOrder = ({ status }) => new CanonicalOrder({
+    clientOrderId: "recovered-manual-cancel",
+    brokerOrderId: "broker-recovered-manual-cancel",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
+      unrequestedTerminalOrderClientIds: new Set(["recovered-manual-cancel"]),
+    },
+  })
+
+  const result = await harness.engine.processUserDataEvent({
+    recoveryMode: true,
+    event: { executedOrder: makeOrder({ status: "CANCELED" }) },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /without a durable cancellation intent/)
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.deepEqual(harness.orders, [])
+})
