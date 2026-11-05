@@ -890,6 +890,55 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   assert.ok(brokerCancelIndex > cancelFlushIndex)
 })
 
+test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
+  let flushCount = 0
+  let cancelCalls = 0
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    onCancelOrderStarted: () => { cancelCalls += 1 },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => {
+        flushCount += 1
+        return flushCount === 3
+          ? { ok: false, errors: [new Error("journal sync failed")] }
+          : { ok: true, durable: true }
+      },
+    },
+  })
+
+  const started = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(started.ok, true)
+  assert.equal(flushCount, 2)
+
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "cancel-intent-flush-failure",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(flushCount, 3)
+  assert.equal(cancelCalls, 0)
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
+})
+
 test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
   const { engine } = await createHarness()
   await engine.processMarketPrice({
