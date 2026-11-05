@@ -9,12 +9,14 @@ test("detects prior order and fill history across Journal sessions", () => {
       { id: "2", payload: { name: "order.submission_requested", source: "harvester" } },
       { id: "3", payload: { name: "order.cancel_requested", source: "harvester" } },
       { id: "4", payload: { name: "execution.fill_applied", source: "harvester" } },
+      { id: "5", payload: { name: "account.snapshot_captured", source: "harvester" } },
     ],
   })
 
   assert.equal(result.ok, true)
   assert.equal(result.hasPriorTradingHistory, true)
-  assert.equal(result.totalTradingEvents, 3)
+  assert.equal(result.totalTradingEvents, 4)
+  assert.equal(result.counts["account.snapshot_captured"], 1)
   assert.equal(result.counts["order.submission_requested"], 1)
   assert.equal(result.counts["order.cancel_requested"], 1)
   assert.equal(result.counts["execution.fill_applied"], 1)
