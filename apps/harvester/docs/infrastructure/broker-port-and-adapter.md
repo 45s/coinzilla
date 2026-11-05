@@ -89,6 +89,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
+    getExchangeMarkets: () => client.getExchangeMarkets(),
     subscribeForPrices: ({ symbol, onPrice }) => client.subscribeForPrices({ symbol, onPrice }),
     subscribeForUserData: ({ onEvent, onStatus }) => client.subscribeForUserData({ onEvent, onStatus }),
   })
