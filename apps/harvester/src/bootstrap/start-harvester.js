@@ -1060,6 +1060,7 @@ export async function startHarvester({
           userDataReconciliationQueued = true
           logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
           const reconciliationTask = tradingEngine.reconcileOwnedOrders({
+            recoveryMode: !userDataReady,
             beforeApply: async () => {
               // REST reads do not hold the engine transition queue. Let every
               // stream event received during those reads reach the engine
