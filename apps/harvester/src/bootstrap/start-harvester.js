@@ -34,6 +34,14 @@ import {
   mapAccountOpenOrdersCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
+
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const results = await Promise.allSettled([
     ...bookSubscriptions.map(({ unsubscribe }) => {
@@ -388,7 +396,7 @@ export async function startHarvester({
       tradingEnabled,
     }),
   })
-  logger.system?.({
+  logSystem(logger, {
     message: "Trading configuration validated",
     enabledSymbols,
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
@@ -426,7 +434,7 @@ export async function startHarvester({
   let hasCanonicalOwnershipReconciliation = false
 
   if (brokerName === undefined || brokerName === "") {
-    logger.system?.({ message: "Broker disabled; exchange connectivity unavailable" })
+    logSystem(logger, { message: "Broker disabled; exchange connectivity unavailable" })
     return Object.freeze({
       tradingConfig,
       eventPublisher,
@@ -459,7 +467,7 @@ export async function startHarvester({
   })
 
   try {
-    logger.system?.({ message: "Connecting to Binance broker" })
+    logSystem(logger, { message: "Connecting to Binance broker" })
 
     await broker.connect()
     publishLifecycleEvent({
@@ -545,7 +553,7 @@ export async function startHarvester({
       throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
     }
     accountSnapshot = nextSnapshot
-    logger.system?.({
+    logSystem(logger, {
       message: "Exchange account snapshot loaded",
       balanceCount: nextSnapshot.balances.length,
       sourceTime: nextSnapshot.sourceTime,
@@ -688,7 +696,7 @@ export async function startHarvester({
     } else {
       throw new Error("Harvester startup requires a durable Journal flush before market subscriptions")
     }
-    logger.system?.({
+    logSystem(logger, {
       message: "Account snapshot captured and durably journaled",
       phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
     })
@@ -887,7 +895,7 @@ export async function startHarvester({
         marketMetadata: filtersResult.data,
       })
       marketMetadata.set(symbol, validatedMetadata)
-      logger.system?.({ message: "Exchange trading rules validated", symbol })
+      logSystem(logger, { message: "Exchange trading rules validated", symbol })
     }
 
     // Durable Journal replay is intentionally disabled. Harvester starts with
@@ -896,7 +904,7 @@ export async function startHarvester({
     if (tradingEnabled) activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
-    logger.system?.({ message: "Subscribing to Binance user-data events" })
+    logSystem(logger, { message: "Subscribing to Binance user-data events" })
 
     let userDataResult
     try {
@@ -1204,7 +1212,7 @@ export async function startHarvester({
       dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
     })
     userDataSubscription = userDataResult.data
-    logger.system?.({ message: "Binance user-data subscription established" })
+    logSystem(logger, { message: "Binance user-data subscription established" })
 
     userDataReady = false
     userDataStatus = userDataAccountingFailed
@@ -1250,7 +1258,7 @@ export async function startHarvester({
       if (userDataRequiresReconciliation) {
         throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
       }
-      logger.system?.({
+      logSystem(logger, {
         message: "Conservative TESTNET startup checks passed; current account audit is complete",
         enabledSymbols,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
@@ -1259,7 +1267,7 @@ export async function startHarvester({
       userDataReady = true
       userDataStatus = "READY"
       resumeDeferredStrategyEvaluations()
-      logger.system?.({ message: "Conservative TESTNET trading engine activated" })
+      logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
     }
 
     // Establish every enabled market stream before doing any REST ticker
@@ -1293,7 +1301,7 @@ export async function startHarvester({
           throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
         }
         bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
-        logger.system?.({
+        logSystem(logger, {
           message: "Book ticker subscribed",
           symbol,
           stream: bookResult.data.stream ?? null,
@@ -1380,7 +1388,7 @@ export async function startHarvester({
       })
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       marketPriceIntake.set(symbol, intakeState)
-      logger.system?.({
+      logSystem(logger, {
         message: "Market data subscribed",
         symbol,
         stream: result.data.stream ?? null,
@@ -1392,7 +1400,7 @@ export async function startHarvester({
     if (missingSubscriptions.length > 0) {
       throw new Error("Harvester startup did not establish market-price subscriptions for every enabled pair: " + missingSubscriptions.join(", "))
     }
-    logger.system?.({
+    logSystem(logger, {
       message: "Market data subscriptions ready",
       enabledSymbols,
       subscribedSymbols,
@@ -1470,7 +1478,7 @@ export async function startHarvester({
     stopped = true
     userDataReady = false
     userDataStatus = "STOPPING"
-    logger.system?.({ message: "Shutdown started" })
+    logSystem(logger, { message: "Shutdown started" })
 
     const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
     await userDataEventQueue
@@ -1511,7 +1519,7 @@ export async function startHarvester({
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }
-    logger.system?.({ message: "Shutdown completed" })
+    logSystem(logger, { message: "Shutdown completed" })
   }
 
   return Object.freeze({
