@@ -24,6 +24,59 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 
+function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
+  const mismatch = (field) => {
+    throw new Error("Canonical REST fill conflicts with durable Journal " + field + " for execution " + fill.id)
+  }
+  const expectedClientOrderId = journalFill.clientOrderId ?? ownedOrder.clientOrderId
+  const actualClientOrderId = fill.clientOrderId ?? ownedOrder.clientOrderId
+  if (
+    fill.id !== journalFill.fillId ||
+    String(fill.tradeId) !== journalFill.tradeId ||
+    fill.brokerOrderId !== journalFill.brokerOrderId ||
+    actualClientOrderId !== expectedClientOrderId ||
+    expectedClientOrderId !== ownedOrder.clientOrderId ||
+    fill.market.symbol !== journalFill.symbol ||
+    fill.side !== journalFill.side ||
+    fill.liquidityRole !== journalFill.liquidityRole ||
+    fill.commissionStatus !== journalFill.commissionStatus
+  ) mismatch("identity or execution metadata")
+
+  for (const [field, actual, expected] of [
+    ["price", fill.price.amount, journalFill.price],
+    ["quantity", fill.quantity.amount, journalFill.quantity],
+    ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
+  ]) {
+    if (compareDecimal({ left: actual, right: expected }) !== 0) mismatch(field)
+  }
+  if (journalFill.executedAt !== undefined && fill.executedAt !== journalFill.executedAt) {
+    mismatch("transaction timestamp")
+  }
+
+  const actualCommissions = fill.commissions.map((commission) => ({
+    amount: commission.amount.amount,
+    assetId: commission.amount.asset.id,
+    asset: commission.amount.asset.code,
+  })).sort((left, right) =>
+    (left.assetId + ":" + left.asset + ":" + left.amount)
+      .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
+  )
+  const expectedCommissions = [...journalFill.commissions].sort((left, right) =>
+    (left.assetId + ":" + left.asset + ":" + left.amount)
+      .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
+  )
+  if (actualCommissions.length !== expectedCommissions.length) mismatch("commission count")
+  for (let index = 0; index < actualCommissions.length; index += 1) {
+    const actual = actualCommissions[index]
+    const expected = expectedCommissions[index]
+    if (
+      actual.assetId !== expected.assetId ||
+      actual.asset !== expected.asset ||
+      compareDecimal({ left: actual.amount, right: expected.amount }) !== 0
+    ) mismatch("commission facts")
+  }
+}
+
 export function createMarketBook({ bookTicker } = {}) {
   if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
     throw new TypeError("createMarketBook requires a normalized bookTicker object")
@@ -69,6 +122,7 @@ export function makeConservativeTradingEngine({
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   logger,
+  initialState = {},
 } = {}) {
   const strategyConfig = tradingConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
@@ -84,6 +138,31 @@ export function makeConservativeTradingEngine({
   }
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
+  if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
+    throw new TypeError("initialState must be an object")
+  }
+  const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
+  if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
+  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+    const values = initialState[field]
+    if (values !== undefined && (
+      !(Array.isArray(values) || values instanceof Set) ||
+      [...values].some((value) => typeof value !== "string" || !value.trim())
+    )) {
+      throw new TypeError("initialState." + field + " must contain non-empty strings")
+    }
+  }
+  if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
+    throw new TypeError("initialState.journalFills must be an array")
+  }
+  const journalFillsById = new Map()
+  for (const journalFill of initialState.journalFills ?? []) {
+    if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
+        journalFillsById.has(journalFill.fillId)) {
+      throw new TypeError("initialState.journalFills must contain unique canonical fill IDs")
+    }
+    journalFillsById.set(journalFill.fillId, journalFill)
+  }
   let transitionTail = Promise.resolve()
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
@@ -93,7 +172,8 @@ export function makeConservativeTradingEngine({
     return current
   }
   const state = {
-    registry: OrderRegistry.empty(),
+    registry: initialRegistry,
+    journalFillsById,
     prices: new Map(),
     books: new Map(),
     lastBuyPrices: new Map(),
@@ -102,12 +182,47 @@ export function makeConservativeTradingEngine({
     processedFillIdsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
-    trailingBuy: new Map(),
-    paused: new Set(),
-    replacementIntents: new Set(),
+    trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
+    paused: new Set(initialState.pausedMarkets ?? []),
+    durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
+    recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
+    recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
+    replacementIntents: new Set(initialState.replacementIntents ?? []),
+    trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
-    completedOrderTransitions: new Set(),
+    completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
+  }
+  const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
+    [...state.recoveryManagedCancellationClientOrderIds].some((clientOrderId) => {
+      const order = state.registry.getOrder({ clientOrderId })
+      return order?.market.symbol === symbol && (side === undefined || order.side === side)
+    })
+  const releaseRecoveryManagedPause = ({ symbol } = {}) => {
+    if (
+      !state.recoveryManagedPausedMarkets.has(symbol) ||
+      hasPendingRecoveryManagedCancellation({ symbol }) ||
+      state.durablePausedMarkets.has(symbol) ||
+      state.replacementIntents.has(symbol) ||
+      state.trailingBuyRepriceIntents.has(symbol)
+    ) return false
+    state.recoveryManagedPausedMarkets.delete(symbol)
+    state.paused.delete(symbol)
+    return true
+  }
+  const resolveRecoveryManagedCancellation = ({ order } = {}) => {
+    if (!state.recoveryManagedCancellationClientOrderIds.delete(order.clientOrderId)) return false
+    const symbol = order.market.symbol
+    if (order.side === "SELL" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "SELL" })) {
+      state.replacementIntents.delete(symbol)
+    }
+    if (order.side === "BUY" &&
+        !hasPendingRecoveryManagedCancellation({ symbol, side: "BUY" })) {
+      state.trailingBuyRepriceIntents.delete(symbol)
+    }
+    releaseRecoveryManagedPause({ symbol })
+    return true
   }
   const rememberProcessedFill = ({ fill }) => {
     const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
@@ -205,9 +320,10 @@ export function makeConservativeTradingEngine({
   }
 
   const pause = async ({ symbol, reason, error }) => {
-    const wasPaused = state.paused.has(symbol)
+    const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
     state.paused.add(symbol)
-    if (!wasPaused) {
+    state.durablePausedMarkets.add(symbol)
+    if (!wasDurablyPaused) {
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
@@ -987,7 +1103,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const processUserDataEventTransition = async ({ event } = {}) => {
+  const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
@@ -1006,6 +1122,13 @@ export function makeConservativeTradingEngine({
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
       state.registry = update.registry
+
+      if (recoveryMode && order.status === "CANCELED" &&
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
+        if (resolveRecoveryManagedCancellation({ order })) {
+          state.deferredEvaluations.add(symbol)
+        }
+      }
 
       if (event.executionType === "TRADE") {
         if (!(event.fill instanceof Fill)) {
@@ -1061,7 +1184,7 @@ export function makeConservativeTradingEngine({
         const isUnprocessedFill = order.status === "FILLED" &&
           !state.completedOrderTransitions.has(order.clientOrderId)
         if (!isUnprocessedFill) {
-          if (order.side === "SELL" && order.status !== "FILLED" &&
+          if (!recoveryMode && order.side === "SELL" && order.status !== "FILLED" &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
             if (!cancellation.ok) return cancellation
@@ -1084,7 +1207,7 @@ export function makeConservativeTradingEngine({
         state.completedOrderTransitions.add(order.clientOrderId)
       }
 
-      if (order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
+      if (!recoveryMode && order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
           state.replacementIntents.has(symbol)) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
@@ -1110,6 +1233,7 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
+        if (recoveryMode) resolveRecoveryManagedCancellation({ order })
         if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
         let executionPrice
         try {
@@ -1118,18 +1242,24 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
           return toResult({ error })
         }
-        const cancellation = await cancelAndReconcileRecoverySells({
-          symbol,
-          marketId: order.market.id,
-        })
-        if (!cancellation.ok) return cancellation
+        if (!recoveryMode) {
+          const cancellation = await cancelAndReconcileRecoverySells({
+            symbol,
+            marketId: order.market.id,
+          })
+          if (!cancellation.ok) return cancellation
+        }
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
         state.lastBuyPrices.set(symbol, executionPrice)
         state.buyExecutionTotals.delete(order.brokerOrderId)
       }
       if (order.status === "FILLED" && order.side === "SELL") {
-        state.replacementIntents.delete(symbol)
+        if (recoveryMode) {
+          resolveRecoveryManagedCancellation({ order })
+        } else {
+          state.replacementIntents.delete(symbol)
+        }
         try {
           assertReconciledSellExecution({ order })
         } catch (error) {
@@ -1248,28 +1378,71 @@ export function makeConservativeTradingEngine({
           throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
         }
 
-        const fillsResult = await broker.getFills({
-          symbol,
-          orderId: ownedOrder.brokerOrderId,
-        })
-        if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
-            fillsResult.data.some((fill) => !(fill instanceof Fill))) {
-          throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
-        }
         const fillsById = new Map()
-        for (const fill of fillsResult.data) {
-          if (
-            fill.market.id !== ownedOrder.market.id ||
-            fill.brokerOrderId !== ownedOrder.brokerOrderId ||
-            fill.side !== ownedOrder.side
-          ) {
-            throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+        const fillPageLimit = 1000
+        let fromId
+        let lastTradeId
+        let fillsComplete = false
+        for (let page = 0; page < 10000; page += 1) {
+          const fillsResult = await broker.getFills({
+            symbol,
+            orderId: ownedOrder.brokerOrderId,
+            ...(fromId === undefined ? {} : { fromId }),
+            limit: fillPageLimit,
+          })
+          if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
+              fillsResult.data.length > fillPageLimit ||
+              fillsResult.data.some((fill) => !(fill instanceof Fill))) {
+            throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
           }
-          const previous = fillsById.get(fill.id)
-          if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
-            throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
+          let pageLastTradeId
+          for (const fill of fillsResult.data) {
+            if (
+              fill.market.id !== ownedOrder.market.id ||
+              fill.brokerOrderId !== ownedOrder.brokerOrderId ||
+              fill.side !== ownedOrder.side
+            ) {
+              throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+            }
+            const journalFill = state.journalFillsById.get(fill.id)
+            if (journalFill) {
+              assertJournalFillParity({ fill, ownedOrder, journalFill })
+            }
+            const previous = fillsById.get(fill.id)
+            if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+              throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
+            }
+            fillsById.set(fill.id, fill)
           }
-          fillsById.set(fill.id, fill)
+          if (fillsResult.data.length < fillPageLimit) {
+            fillsComplete = true
+            break
+          }
+          for (const fill of fillsResult.data) {
+            if (typeof fill.tradeId !== "string" || !/^\d+$/.test(fill.tradeId)) {
+              throw new Error("REST fill history cannot be paginated safely because trade ID is non-numeric for owned order " + ownedOrder.brokerOrderId)
+            }
+            const tradeId = BigInt(fill.tradeId)
+            if (lastTradeId !== undefined && tradeId <= lastTradeId) {
+              throw new Error("REST fill pagination did not advance strictly by trade ID for owned order " + ownedOrder.brokerOrderId)
+            }
+            lastTradeId = tradeId
+            pageLastTradeId = tradeId
+          }
+          if (pageLastTradeId === undefined) {
+            throw new Error("REST fill pagination returned a full empty page for owned order " + ownedOrder.brokerOrderId)
+          }
+          const nextFromId = pageLastTradeId + 1n
+          if (nextFromId > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new Error("REST fill pagination trade ID exceeds the broker's safe cursor range for owned order " + ownedOrder.brokerOrderId)
+          }
+          fromId = nextFromId.toString()
+          if (page === 9999) {
+            throw new Error("REST fill history exceeded the maximum supported pagination depth for owned order " + ownedOrder.brokerOrderId)
+          }
+        }
+        if (!fillsComplete) {
+          throw new Error("REST fill history could not be proven complete for owned order " + ownedOrder.brokerOrderId)
         }
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
@@ -1278,6 +1451,14 @@ export function makeConservativeTradingEngine({
           }
           return left.tradeId.localeCompare(right.tradeId)
         })
+        const expectedJournalFillIds = [...state.journalFillsById.values()]
+          .filter((journalFill) => journalFill.brokerOrderId === ownedOrder.brokerOrderId)
+          .map((journalFill) => journalFill.fillId)
+        for (const expectedFillId of expectedJournalFillIds) {
+          if (!fillsById.has(expectedFillId)) {
+            throw new Error("REST fill history is missing durable Journal execution ID " + expectedFillId)
+          }
+        }
         const reconciledQuantity = fills.reduce(
           (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
           "0",
@@ -1298,7 +1479,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols } = {}) => {
+  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols, recoveryMode = false } = {}) => {
     let affectedSymbol = symbols[0]
     try {
       // Validate the collected REST snapshot against stream facts processed
@@ -1370,6 +1551,7 @@ export function makeConservativeTradingEngine({
           })
           const processed = await processUserDataEventTransition({
             event: { executionType: "TRADE", executedOrder: executionOrder, fill },
+            recoveryMode,
           })
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
@@ -1380,6 +1562,7 @@ export function makeConservativeTradingEngine({
         if (fills.length === 0) {
           const processed = await processUserDataEventTransition({
             event: { executedOrder: historyOrder },
+            recoveryMode,
           })
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered order state could not be applied")
@@ -1395,7 +1578,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const reconcileOwnedOrders = async ({ beforeApply } = {}) => {
+  const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
     const initialOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
     })
@@ -1476,7 +1659,7 @@ export function makeConservativeTradingEngine({
       })
     }
     return runTransition({
-      task: () => applyOwnedOrderSnapshotsTransition(snapshots),
+      task: () => applyOwnedOrderSnapshotsTransition({ ...snapshots, recoveryMode }),
     })
   }
 
@@ -1484,8 +1667,8 @@ export function makeConservativeTradingEngine({
     runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
   const processBookTicker = ({ symbol, bookTicker } = {}) =>
     runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
-  const processUserDataEvent = ({ event } = {}) =>
-    runTransition({ task: () => processUserDataEventTransition({ event }) })
+  const processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
+    runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
     runTransition({ task: () => evaluateLatestTransition({ symbol }) })
   const resumeDeferredEvaluations = ({} = {}) => runTransition({
@@ -1507,6 +1690,12 @@ export function makeConservativeTradingEngine({
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
+    getRecoveryIntents: () => Object.freeze({
+      pausedMarkets: Object.freeze([...state.paused]),
+      replacementIntents: Object.freeze([...state.replacementIntents]),
+      trailingBuyRepriceIntents: Object.freeze([...state.trailingBuyRepriceIntents]),
+      deferredEvaluations: Object.freeze([...state.deferredEvaluations]),
+    }),
     getPausedMarkets: () => [...state.paused],
     getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),
   })
