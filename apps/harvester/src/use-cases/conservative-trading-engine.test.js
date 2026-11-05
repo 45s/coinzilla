@@ -2184,7 +2184,7 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
 
   const historyOrder = makeOrderStatusUpdate({
     order: buyOrder,
-    status: "FILLED",
+    status: "PARTIALLY_FILLED",
     executedQuantity: "0.5",
     updatedAt: 4,
   })
@@ -2200,7 +2200,7 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
     ["rest-earlier-fill", "stream-later-fill"],
   )
   const reconciledOrder = engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId)
-  assert.equal(reconciledOrder.status, "FILLED")
+  assert.equal(reconciledOrder.status, "PARTIALLY_FILLED")
   assert.equal(reconciledOrder.executedQuantity.amount, "0.5")
   assert.deepEqual(pauses, [])
 })
