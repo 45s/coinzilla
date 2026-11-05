@@ -1020,3 +1020,48 @@ test("rejects trading activity journaled after the closing account snapshot", ()
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /after its closing account snapshot/)
 })
+
+
+test("rejects multiple fully filled SELL orders before one recovery-cycle completion", () => {
+  const records = completedCycleRecords()
+  records.splice(6, 0,
+    record("order.submission_requested", {
+      clientOrderId: "h-BTCUSDT-sell-2",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      type: "LIMIT",
+      price: "125.625",
+      quantity: "0.1",
+      status: "PENDING",
+    }),
+    record("order.submitted", {
+      clientOrderId: "h-BTCUSDT-sell-2",
+      brokerOrderId: "9003",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      type: "LIMIT",
+      price: "125.625",
+      quantity: "0.1",
+      status: "FILLED",
+    }),
+    record("execution.fill_applied", {
+      fillId: "binance:BTCUSDT:trade-3",
+      tradeId: "trade-3",
+      brokerOrderId: "9003",
+      clientOrderId: "h-BTCUSDT-sell-2",
+      symbol: "BTCUSDT",
+      side: "SELL",
+      price: "125.625",
+      quantity: "0.1",
+      quoteQuantity: "12.5625",
+      liquidityRole: "MAKER",
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+  )
+
+  const result = projectHarvesterJournalRecovery({ records })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /Multiple fully filled Harvester SELL orders/)
+})
