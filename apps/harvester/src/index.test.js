@@ -895,6 +895,7 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
         release: async () => { releaseCalls += 1; return { ok: true, released: true } },
       }),
       createJournalService: () => ({
+        status: { started: false },
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: true, available: true, records: [] }),
         flush: async () => ({ ok: true, durable: true }),
