@@ -1,8 +1,10 @@
 # Harvester Roadmap
 
-> **CURRENT DIRECTION — 2026-11-04: POST-PR #515 CONTROLLED TESTNET VALIDATION.**
+> **CURRENT DIRECTION — 2026-11-05: POST-MERGE ENGINEERING AND CONTROLLED TESTNET READINESS.**
 >
-> PR #513 and PR #515 are merged into `develop`. Latest merge: `26fab0c5c22822aa3a8cfa5f851f3e35da37aeb8` — `test(harvester): complete incident lifecycle and audit verification`. The offline lifecycle, accounting, fee-policy, and account-audit implementation/test work is complete. All five required workflows passed on this exact merge commit.
+> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion. These changes are merged into `develop`. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
+>
+> The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
 > **The remaining critical milestone is joint Binance Spot TESTNET validation.** Offline CI is not exchange acceptance. Follow [TESTNET_VALIDATION_RUNBOOK.md](./docs/TESTNET_VALIDATION_RUNBOOK.md); keep Harvester stopped during preparation. No order submission/cancellation or account-setting change is authorized until the operator and assistant explicitly begin the joint session.
 >
