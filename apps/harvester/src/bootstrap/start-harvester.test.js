@@ -2079,7 +2079,7 @@ test("blocks bootstrap when canonical lookup cannot resolve a recovered submissi
 })
 
 
-test("recovers a broker fill missing from Journal before opening trading readiness", async () => {
+test("keeps restart fail-closed until complete account-wide trade history is available", async () => {
   const calls = []
   const broker = createBroker(calls)
   const market = createMarketMetadata("BTCUSDT").market
@@ -2183,25 +2183,23 @@ test("recovers a broker fill missing from Journal before opening trading readine
   config.strategies.CG_coinGrabber.pairs.BTCUSDT.keepQuantity = 0.0099
   config.strategies.CG_coinGrabber.pairs.BTCUSDT.quantityPrecision = 4
 
-  const result = await startHarvesterForTest({
-    loadConfig: async () => config,
-    env: {
-      ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
-      NODE_ENV: "test",
-    },
-    brokerAdapterFactory: () => broker,
-    journalRecoveryRecords,
-    logger: { info() {}, error() {} },
-  })
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => config,
+      env: {
+        ...binanceEnv,
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+      },
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords,
+      logger: { info() {}, error() {} },
+    }),
+    /Account-wide exchange trade history pages are incomplete/,
+  )
 
-  assert.equal(result.tradingEnabled, true)
-  assert.equal(result.userDataReady, true)
-  assert.equal(result.portfolio.getPosition({ symbol: "BTCUSDT" }).baseQuantity.amount, "0.01")
-  assert.equal(result.getRecoveryLedger({ marketId: market.id }).buyCost, "650")
-  assert.ok(result.recoveredState.requiresExchangeReconciliation)
   assert.deepEqual(calls.filter((call) => ["placeOrder", "cancelOrder"].includes(call)), [])
-
-  await result.stop()
+  assert.ok(calls.includes("unsubscribe:user-data"))
+  assert.ok(calls.includes("disconnect"))
 })
