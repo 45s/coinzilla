@@ -1,4 +1,5 @@
 import { Market } from "@coinzilla/entities"
+import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -56,6 +57,8 @@ export function auditRecoveredAccountState({
   currentAccountSnapshot,
   openOrders,
   markets,
+  exchangeTradeHistory,
+  requireCompleteTradeHistory = false,
 } = {}) {
   try {
     if (projection?.ok !== true || !projection.data) {
@@ -83,6 +86,18 @@ export function auditRecoveredAccountState({
     }
     if (baseline.auditStatus !== "COMPLETE" || baseline.auditReasons.length > 0) {
       throw new Error("Initial trading-session PREFLIGHT account snapshot is incomplete; account ownership cannot be proven")
+    }
+    let tradeHistoryAudit
+    if (requireCompleteTradeHistory === true) {
+      tradeHistoryAudit = auditRecoveredTradeHistory({
+        journalFills: recoveredState.journalFills,
+        exchangeFills: exchangeTradeHistory?.fills,
+        complete: exchangeTradeHistory?.historyPagesComplete === true,
+        marketUniverseComplete: exchangeTradeHistory?.marketUniverseComplete === true,
+      })
+      if (!tradeHistoryAudit.ok) {
+        throw tradeHistoryAudit.errors?.[0] ?? new Error("Complete account-wide trade history could not be verified")
+      }
     }
     const latestRecordedSourceTime = projection.data.accountSnapshots.reduce(
       (latest, snapshot) => Math.max(latest, snapshot.sourceTime),
