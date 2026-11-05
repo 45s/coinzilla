@@ -779,10 +779,11 @@ test("releases the trading process lock only after runtime and Journal shutdown"
       start: async () => ({
         connected: true,
         tradingEnabled: true,
+        subscriptions: [],
         stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGINT") signalHandler = handler
+        if (signal === "SIGTERM") signalHandler = handler
       },
       logger: { info() {}, error() {}, debug() {} },
     })
@@ -854,10 +855,11 @@ test("retains the process lock when runtime shutdown throws", async () => {
       start: async () => ({
         connected: true,
         tradingEnabled: true,
+        subscriptions: [],
         stop: async () => { throw new Error("broker intake did not stop") },
       }),
       registerSignalHandler: (signal, handler) => {
-        if (signal === "SIGINT") signalHandler = handler
+        if (signal === "SIGTERM") signalHandler = handler
       },
       logger: { info() {}, error() {}, debug() {} },
     })
