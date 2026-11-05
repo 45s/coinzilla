@@ -7,6 +7,7 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
+import { summarizeHarvesterJournalHistory } from "./infrastructure/journal/summarize-harvester-journal-history.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
@@ -104,6 +105,7 @@ export async function main({
       }),
     })
 
+    let journalRecoverySummary
     if (env.HARVESTER_ENABLE_TRADING === "true") {
       if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
         throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
@@ -116,9 +118,28 @@ export async function main({
         const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Conservative TESTNET trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
       }
+      if (!journalService.recovery || typeof journalService.recovery.then !== "function") {
+        throw new Error("Conservative TESTNET trading requires a validated pre-start Journal recovery snapshot")
+      }
+      const journalRecovery = await journalService.recovery
+      if (journalRecovery?.ok !== true || journalRecovery.available !== true || !Array.isArray(journalRecovery.records)) {
+        throw new Error("Conservative TESTNET trading cannot start because prior Journal history could not be read and validated")
+      }
+      const summary = summarizeHarvesterJournalHistory({ records: journalRecovery.records })
+      if (!summary.ok) {
+        throw new Error("Conservative TESTNET trading cannot start because Journal history could not be summarized")
+      }
+      journalRecoverySummary = summary
+      if (summary.hasPriorTradingHistory) {
+        throw new Error(
+          "Conservative TESTNET trading is blocked: prior Harvester order/fill history exists " +
+          "and Portfolio, RecoveryLedger, and owned-order restart recovery are not yet implemented. " +
+          "Start in read-only mode; do not delete or rotate the Journal to bypass this safety gate.",
+        )
+      }
     }
 
-    const runtime = await start({ eventPublisher })
+    const runtime = await start({ eventPublisher, journalRecoverySummary })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
