@@ -50,9 +50,11 @@ Keep credentials in environment variables or a secret manager. Never commit real
 
 ## API permissions
 
-The key must be authorized for the account operations the application actually uses. Read-only account and history operations require the relevant account-read permission. Order placement/cancellation requires Spot trading permission. User-data signature subscription requires an API key/secret accepted by Binance for the account.
+Use a dedicated Binance Spot TESTNET API key, never a production key. The signed account, order-status, history, and user-data subscription checks in the read-only TESTNET workflow need the relevant account-read access and a valid API key/secret pair. They do **not** need Spot trading permission.
 
-Use the least privilege that supports the workload. The package cannot grant permissions or determine an account's Binance-side restrictions. The broker's TESTNET order integration test places and then cancels a test order, so credentials used for that test need TESTNET Spot trading permission. The user-data integration suite is read-only and does not place orders.
+**For the current GitHub Actions read-only workflow, keep Spot trading and withdrawals disabled.** The workflow sets `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0`; its integration checks do not create, cancel, or modify orders. Giving this key Spot trading permission does not make the workflow trade, but it grants capability the workflow does not need and increases the impact of an accidental future code/configuration change. If the key you created has trading permission enabled, edit its Binance TESTNET API restrictions and disable Spot trading before using it for this read-only acceptance run. Never enable withdrawals.
+
+A separate, explicitly authorized local TESTNET order-lifecycle test is different: it creates and then cancels a test order, requires TESTNET Spot trading permission, and must additionally set `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=1`. Do not add that permission or enable that flag for the GitHub Actions read-only workflow. The package cannot grant permissions or determine an account's Binance-side restrictions.
 
 ## Connection and subscription lifecycle
 
@@ -139,7 +141,28 @@ Both integration suites assert TESTNET WebSocket endpoints before connecting. Ne
 
 The existing **Unit Tests** GitHub Actions workflow includes an opt-in `run_broker_testnet_read_only` manual-dispatch input. Select the `develop` branch, enable that input, and run the workflow using repository secrets `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET_KEY`. The job requires non-placeholder TESTNET credentials and asserts the TESTNET WebSocket endpoints.
 
-The job explicitly sets `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`. It performs read-only account, order, trade, market-data, and user-data reconnect/reconciliation checks; it never places or cancels orders and does not wait for externally generated user-data events. Order-mutation and live-event checks remain separate, explicitly gated operations.
+The job explicitly sets `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`. It performs read-only account, order-status, trade-history, market-data, and user-data reconnect/reconciliation checks; it never places, cancels, or modifies orders and does not wait for externally generated user-data events. The API key's server-side Spot trading permission is not needed and should remain disabled. Order-mutation and live-event checks remain separate, explicitly gated operations.
+
+### GitHub Actions secret names and scope
+
+Create these as **repository-level Actions secrets** in `45s/coinzilla` → Settings → Secrets and variables → Actions → Repository secrets:
+
+| Secret name | Value |
+|---|---|
+| `BINANCE_TESTNET_API_KEY` | Dedicated Binance Spot TESTNET API key |
+| `BINANCE_TESTNET_API_SECRET_KEY` | Matching Binance Spot TESTNET API secret |
+
+The workflow maps these repository secrets to the broker's existing environment-variable names `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. Do not create a GitHub Environment for this workflow; it does not reference one. Never put secret values in source files, workflow YAML, issue/PR text, logs, screenshots, or chat. Never print or inspect secret values while troubleshooting.
+
+**Permission matrix**
+
+| Use case | Required API capability | Allowed mutations |
+|---|---|---|
+| Current manual GitHub Actions acceptance workflow | Signed account-read access and valid TESTNET key/secret | None; workflow forces mutation flag to `0` |
+| External user-data event validation | Same read-only TESTNET key/secret; external activity is generated separately | No order mutations by the test |
+| Separate local order create/check/cancel integration case | TESTNET account-read plus Spot trading | Creates and cancels a TESTNET order only when both opt-in flags are set |
+
+If the key was created with Spot trading enabled, disable that permission before the read-only workflow. The fact that a key has extra permission does not mean this workflow uses it; it means the key is more powerful than necessary.
 
 ## Operational checklist
 
