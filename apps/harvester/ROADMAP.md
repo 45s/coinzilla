@@ -1110,16 +1110,16 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Confirmed no overlapping Harvester changes while synchronizing with the latest broker roadmap update.
 
 
-## Durable restart recovery — P0 investigation, 2026-11-05
+## Durable restart recovery — P0, 2026-11-05
 
 - [x] PR #559 merged: same-process lost-submission acknowledgement lookup and canonical order/fill reconciliation; unresolved outcomes retain commitments and keep the pair paused.
-- [x] Persist complete applied-fill identity and accounting inputs in the Journal DTO: stable trade ID, exact price/base/quote quantities, commission status, and every actual commission amount with asset ID/code. This is a recovery-evidence prerequisite, not replay or automatic restart recovery.
-- [~] PR #602 implements the strict Journal projection for order intents, acknowledgements, cancellation outcomes, applied fills, recovery-cycle completions, and account/process audit snapshots. Final CI and merge remain pending.
-- [~] PR #602 rehydrates Portfolio/RecoveryLedger and fill deduplication from exact recorded fills, then reconciles owned orders against canonical exchange order/history/fills before trading readiness.
+- [x] Persist complete applied-fill identity and accounting inputs in the Journal DTO: stable trade ID, exact price/base/quote quantities, commission status, and every actual commission amount with asset ID/code.
+- [x] PR #606 merged: strict Journal projection, immutable Portfolio/RecoveryLedger restoration, canonical order/fill reconciliation, account balance/open-order auditing, and paginated symbol-scoped account trade-history parity checks.
 - [x] Preserve ambiguous cancellation outcomes as UNKNOWN with broker/client identity and cumulative executed quantity; retain commitments and pause the pair. (PR #564)
-- [~] PR #602 resolves unknown cancellation outcomes only through canonical owned-order history; unresolved, partial-fill, conflicting, or stale evidence remains blocked. No blind cancel/retry/replacement.
-- [x] PR #568 adds single-writer process ownership before Journal recovery and broker connection.
-- [~] PR #602 adds offline restart and cancel/replace recovery fixtures; full crash-boundary coverage remains open.
+- [x] PR #606 restores known cancel/replace intents and keeps unresolved or contradictory state blocked.
+- [x] PR #568 adds Journal-directory single-writer process ownership before Journal recovery and broker connection.
+- [ ] Prove a complete historical exchange symbol universe, including delisted markets, or provide an exchange-authoritative account-wide trade-history source.
+- [ ] Complete the crash-boundary matrix and persisted Journal truncation/missing-page fixtures.
 - [ ] Keep TESTNET trading disabled during implementation. Recovery is not accepted until joint offline-evidence review and a separately authorized controlled TESTNET session.
 
 
@@ -1162,28 +1162,29 @@ The original summary-only interim gate has been superseded by the recovery boots
 - [x] PR #568 refuses a second local trading process using the same Journal directory.
 - [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
 - [x] PR #568 never auto-reclaims stale locks; operator verification is required.
-- [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
+- [~] PR #607 adds a broker-wide host lock independent of Journal directory configuration, preventing concurrent same-user/same-broker trading processes across different Journal directories. Exact-head CI and merge remain pending.
+- [ ] Coordinate locks across different OS users or machines if multi-user or distributed same-account deployments become supported.
 
 
 ## P0 — Durable restart recovery (current engineering work)
 
 - [x] PR #568 — local single-writer process ownership; lock is acquired before Journal recovery and broker connection, and retained after uncertain runtime/Journal shutdown.
-- [~] PR #602 — strict Journal projection for order intents, acknowledgements, cancellation outcomes, exact fills, duplicate execution identities, recovery cycles, pauses, account snapshots, open-order snapshots, and process sessions.
-- [~] PR #602 — rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and cancel/replace intents.
-- [~] PR #602 — load canonical Market metadata for enabled and historical symbols before restoring domain state.
-- [~] PR #602 — reconcile every restored owned order through canonical client-order lookup, canonical order history, and complete paginated REST fill history; compare exact execution totals and identities.
-- [~] PR #602 — reconcile account-wide open orders against durable Harvester ownership; reject unowned, duplicate, missing, or contradictory orders.
-- [~] PR #602 — compare current free/locked balances against the original durable PREFLIGHT baseline, replayed Portfolio cash flows/inventory, and exact active-order reservations.
-- [~] PR #602 — gate trading readiness on canonical order/fill reconciliation, account ownership audit, user-data stream safety, and absence of unresolved pause/cancel/replace intents.
-- [~] PR #602 — preserve unresolved recovery replacement intents; only clear them after canonical exchange history proves the prior order was canceled or filled.
-- [~] PR #602 — add pagination regression coverage for more than 1,000 fills and a bootstrap restart test with a previously filled order.
+- [~] PR #606 — strict Journal projection for order intents, acknowledgements, cancellation outcomes, exact fills, duplicate execution identities, recovery cycles, pauses, account snapshots, open-order snapshots, and process sessions.
+- [~] PR #606 — rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and cancel/replace intents.
+- [~] PR #606 — load canonical Market metadata for enabled and historical symbols before restoring domain state.
+- [~] PR #606 — reconcile every restored owned order through canonical client-order lookup, canonical order history, and complete paginated REST fill history; compare exact execution totals and identities.
+- [~] PR #606 — reconcile account-wide open orders against durable Harvester ownership; reject unowned, duplicate, missing, or contradictory orders.
+- [~] PR #606 — compare current free/locked balances against the original durable PREFLIGHT baseline, replayed Portfolio cash flows/inventory, and exact active-order reservations.
+- [~] PR #606 — gate trading readiness on canonical order/fill reconciliation, account ownership audit, user-data stream safety, and absence of unresolved pause/cancel/replace intents.
+- [~] PR #606 — preserve unresolved recovery replacement intents; only clear them after canonical exchange history proves the prior order was canceled or filled.
+- [~] PR #606 — add pagination regression coverage for more than 1,000 fills and a bootstrap restart test with a previously filled order.
 - [x] PR #598 — expose the canonical current Binance exchange market catalog through the broker package and Harvester broker port.
-- [~] PR #602 — add rate-paced account trade-history pagination and exact exchange/Journal execution parity checks; reject unknown, missing, duplicate, or contradictory fills.
-- [~] PR #602 — require complete account-wide trade-history evidence before recovered trading readiness; current exchangeInfo omits delisted symbols, so the completeness gate intentionally remains closed.
+- [~] PR #606 — add rate-paced account trade-history pagination and exact exchange/Journal execution parity checks; reject unknown, missing, duplicate, or contradictory fills.
+- [~] PR #606 — require complete account-wide trade-history evidence before recovered trading readiness; current exchangeInfo omits delisted symbols, so the completeness gate intentionally remains closed.
 - [ ] Query and reconcile account-wide trade history since the durable baseline to detect external/manual executions that net to the same balances or are not associated with a recovered Harvester order.
 - [ ] Prove repeated full recovery attempts are idempotent across process crashes during reconciliation and recovery-cycle completion.
 - [ ] Expand crash-boundary tests across submission intent, broker acknowledgement, partial/full fill, cancellation request/result, replacement intent, reservation commit/release, and shutdown.
 - [~] Add fail-closed regression coverage for stale account/open-order timestamps, post-close activity, preflight ordering, and contradictory cancellation/fill transitions. Validation against real persisted Journal files and truncation/missing-page fixtures remains open.
 - [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
 
-**Current safety boundary:** PR #602 is draft and unmerged, based on the current `develop` tip after PR #598. It reconstructs and reconciles known Harvester-owned state, adds paginated account trade-history scanning, and fails closed when complete market-universe evidence is unavailable. CI is running on the exact PR #602 head. Current Binance exchangeInfo does not enumerate delisted symbols; until that historical universe gap is resolved, trading-enabled restart remains blocked. The full crash-boundary matrix also remains open. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work. Exact Journal/REST fill parity, missing execution identity checks, monotonic audit timestamps, preflight ordering, post-close event rejection, and read-only stream recovery are covered by new regression tests. Account-wide external/manual trade-history enumeration and the full crash-boundary matrix remain unresolved. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
+**Current safety boundary:** PR #606 is merged into `develop`. It reconstructs and reconciles known Harvester-owned state, adds paginated account trade-history scanning, and fails closed when complete market-universe evidence is unavailable. All six required CI workflows passed on the exact PR #606 head before merge. Current Binance exchangeInfo does not enumerate delisted symbols; until that historical universe gap is resolved, trading-enabled restart remains blocked. The full crash-boundary matrix also remains open. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work. Exact Journal/REST fill parity, missing execution identity checks, monotonic audit timestamps, preflight ordering, post-close event rejection, and read-only stream recovery are covered by new regression tests. Account-wide external/manual trade-history enumeration and the full crash-boundary matrix remain unresolved. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
