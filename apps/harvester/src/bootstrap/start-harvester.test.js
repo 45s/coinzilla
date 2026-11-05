@@ -2032,3 +2032,43 @@ test("rejects malformed durable Journal recovery before user-data subscription",
 
   assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
+
+
+test("blocks trading in bootstrap itself when validated Journal history requires exchange reconciliation", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: {
+        ...binanceEnv,
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+      },
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords: [{
+        id: "prior-submission",
+        payload: {
+          id: "prior-submission",
+          name: "order.submission_requested",
+          data: {
+            clientOrderId: "h-BTCUSDT-recovered-1",
+            symbol: "BTCUSDT",
+            side: "BUY",
+            type: "LIMIT",
+            price: "65000",
+            quantity: "0.01",
+            status: "PENDING",
+          },
+        },
+        position: { fileName: "session.jsonl", lineNumber: 1 },
+      }],
+      logger: { info() {}, error() {} },
+    }),
+    /recovered Journal history requires canonical exchange order\/fill and account-reservation reconciliation/,
+  )
+
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+})
