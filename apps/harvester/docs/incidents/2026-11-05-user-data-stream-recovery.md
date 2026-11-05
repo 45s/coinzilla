@@ -52,21 +52,39 @@ The operator reported a short internet outage. That is consistent with the disco
 
 `recovered` must not be interpreted as “safe to trade” unless the broker contract explicitly guarantees that all application reconciliation has completed. Transport connectivity and application recovery are separate facts.
 
-Until source investigation proves otherwise, the observed state must be treated as **recovery unresolved**. The engine must remain fail-closed and must not submit, cancel, or replace orders while canonical order/fill/account reconciliation is incomplete or ambiguous.
+At the time of the incident, the observed state was **recovery unresolved**. The engine must remain fail-closed and must not submit, cancel, or replace orders while canonical order/fill/account reconciliation is incomplete or ambiguous.
 
 Do not force `recoveryRequired` to false, bypass account/order/fill parity checks, or use the repeated `recovered` status as a readiness signal.
 
-## Required engineering follow-up
+## Source-confirmed root cause and implementation
 
-The detailed implementation task is tracked in [issue #626](https://github.com/45s/coinzilla/issues/626). It requires:
+Source review confirmed a circular dependency between the broker and Harvester:
 
-1. Trace the Binance adapter's WebSocket error/close/reconnect path and preserve useful error cause/stack information.
-2. Trace the broker status contract into Harvester's recovery orchestration and readiness gate.
-3. Prove whether REST reconciliation runs after reconnect and inspect all order, fill, account, and queued-stream barriers.
-4. Explain why `recovered` repeats while `recoveryRequired` stays true; separate transport state from reconciliation state.
-5. Fix the root cause without weakening fail-closed safety.
-6. Add deterministic regression coverage for successful/failed reconciliation, repeated reconnects, duplicate callbacks, and no order mutations while recovery is unresolved.
-7. Document the corrected state machine and verify required CI on the exact PR head.
+- In `packages/brokers/src/application/user-data-session.js`, `#notifyRecoveryReady()` emits `recovered` while keeping `recoveryRequired: true`.
+- The broker's `#acknowledgeRecovery()` / `#completeRecoveryIfAcknowledged()` path emits `reconciled` only after the subscriber calls `acknowledgeRecovery()`.
+- In `apps/harvester/src/bootstrap/start-harvester.js`, the old orchestration started `tradingEngine.reconcileOwnedOrders()` only after receiving `reconciled`.
+
+Harvester therefore waited for the broker's acknowledgement before starting the work required to issue that acknowledgement. The broker's `#scheduleAcknowledgementReminder()` repeats `recovered` while waiting, explaining the 254 reminders without demonstrating successful reconciliation.
+
+PR #627 corrects the ordering:
+
+1. Harvester starts application recovery on `recovered`, not `reconciled`.
+2. It reconciles Harvester-owned orders and fills, then drains queued user-data events.
+3. It fetches a fresh account snapshot and durably journals only assets belonging to enabled configured markets.
+4. It fetches and durably journals the account-wide open-orders snapshot, checking it against reconciled ownership.
+5. It calls `acknowledgeRecovery()` only after every required step succeeds. The broker's `reconciled` event then opens the readiness gate.
+6. Disconnect/recovering/error events advance a recovery generation. An older in-flight task cannot acknowledge a newer connection. Repeated reminders for an already acknowledged generation are ignored.
+7. Any reconciliation, snapshot, Journal flush, or acknowledgement failure leaves trading blocked; a later broker recovery reminder can retry the application work.
+
+The account audit event DTOs now accept the explicit `RECOVERY` phase. Regression tests cover successful recovery and durable snapshots, failed account-snapshot recovery, stale completion after a newer disconnect, and duplicate reminders after acknowledgement.
+
+### Remaining uncertainty
+
+The Journal's empty-message `TypeError` records do not establish the underlying SDK or network exception cause. The operator-reported internet outage is consistent with the WebSocket interruption, but it does not prove the TypeError's cause. This PR does not claim that the TypeError source or TESTNET behavior has been independently reproduced or validated.
+
+## Remaining engineering follow-up
+
+Issue [#626](https://github.com/45s/coinzilla/issues/626) remains the tracking record. Exact-head GitHub Actions results are required before this change can be considered verified. Controlled TESTNET acceptance is separate and has not been performed.
 
 ## Evidence inventory
 
@@ -78,4 +96,4 @@ The detailed implementation task is tracked in [issue #626](https://github.com/4
 | `broker.status_changed` with `status: recovered` and `recoveryRequired: true` | 254 |
 | Total Journal records | 323 |
 
-This report records observed evidence and open questions. It does not claim that the source-level root cause has already been identified or that TESTNET recovery acceptance has passed.
+This report separates the original Journal evidence from the source-confirmed circular dependency and its PR implementation. It does not claim that the empty TypeError cause or TESTNET recovery acceptance has been established.
