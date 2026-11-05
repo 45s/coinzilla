@@ -377,10 +377,14 @@ claiming durable restart or stream-recovery reconciliation.
 ## Trailing BUY lifecycle
 
 The engine tracks whether the pair is in a trailing phase. A newly initialized
-pair and a pair whose recovery SELL has completed may trail its standing BUY
-upward. A BUY that has fully filled turns trailing off; the next standing BUY
-is fixed while the new recovery cycle is active. A profitable recovery SELL
-turns trailing back on, including for a next BUY that was already resting.
+pair may trail its standing BUY upward while its active Position quantity is
+zero. A BUY that has fully filled turns trailing off; the next standing BUY is
+fixed while active strategy inventory exists. A profitable recovery SELL may
+turn the trailing phase back on, including for a next BUY that was already
+resting, but the engine still suppresses trailing repricing until the actual
+Portfolio Position has zero active `baseQuantity.amount`. Retained
+`freeBaseQuantity` does not count as active inventory and does not prevent
+trailing from becoming eligible once active quantity reaches zero.
 
 A trailing adjustment occurs only after the last traded price rises by at
 least one full percentage step from the reference used for the current BUY.
