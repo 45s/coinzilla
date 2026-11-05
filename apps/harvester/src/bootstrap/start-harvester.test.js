@@ -2130,6 +2130,7 @@ test("recovers a broker fill missing from Journal before opening trading readine
     },
   })
   broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  broker.getCanonicalOrder = async () => ({ ok: true, data: canonicalOrder })
   broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [canonicalOrder] })
   broker.getFills = async () => ({ ok: true, data: [recoveredFill] })
   broker.placeOrder = async () => {
@@ -2173,16 +2174,6 @@ test("recovers a broker fill missing from Journal before opening trading readine
       quantity: "0.01",
       status: "PENDING",
     }, 3),
-    record("ack", "order.submitted", {
-      clientOrderId: "h-BTCUSDT-buy-1",
-      brokerOrderId: "9001",
-      symbol: "BTCUSDT",
-      side: "BUY",
-      type: "LIMIT",
-      price: "65000",
-      quantity: "0.01",
-      status: "FILLED",
-    }, 4),
   ]
 
   const config = structuredClone(tradingConfig)
