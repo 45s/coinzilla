@@ -103,6 +103,35 @@ The same commission and order-type policy applies to Conservative and Aggressive
 
 Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
 
+### Shared BUY repricing safety — Conservative and Aggressive
+
+The active-Position gate applies to **every strategy's upward BUY repricing**, not only
+Conservative trailing BUY. Before evaluating a repricing threshold or initiating
+any BUY cancellation/replacement, the engine must read the latest Portfolio
+Position for the canonical market and compare `baseQuantity.amount` to zero
+using exact decimal arithmetic.
+
+- If active `baseQuantity.amount` is greater than zero, do not evaluate the
+  upward repricing trigger and do not cancel or replace any BUY order as part
+  of repricing.
+- If the Position is absent or active quantity is zero, repricing is eligible.
+- `freeBaseQuantity` is retained inventory, not active strategy inventory,
+  and must never block repricing.
+- This gate is independent of strategy-local trailing/grid flags. Such flags
+  remain additional controls, never substitutes for current Portfolio state.
+- A recovery SELL or strategy handover does not bypass the gate. Repricing
+  becomes eligible again only when the actual active Position quantity reaches
+  zero.
+
+Conservative currently implements this gate in its serialized engine
+transition. Aggressive's executable order planner and grid-repricing lifecycle
+are **not implemented yet**: `evaluateAggressiveStrategy` currently returns
+`NO_ACTION` with explicit blockers and submits no orders. When Aggressive grid
+placement/repricing is implemented, the shared engine boundary must enforce
+this exact same Portfolio gate before any grid BUY cancellation/replacement.
+Do not interpret the existing Aggressive grid specification below as evidence
+that grid repricing is currently executable.
+
 ### Aggressive — grid-style trading
 
 Aggressive is a higher-risk, grid-style strategy. It trades price movements using multiple active BUY and SELL orders. Unlike Conservative, it does not try to consolidate the whole position after every BUY; while it controls the pair, it can maintain several order opportunities and corresponding exits at the same time. It relinquishes control when actual executed BUY fills push the Position's quote investment above `conservativeTakeoverPercent` of the pair's planned total quote budget. Open/unfilled BUY orders are excluded from this strategy-switch calculation.
