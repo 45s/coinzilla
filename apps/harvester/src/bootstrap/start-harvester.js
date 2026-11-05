@@ -1,6 +1,6 @@
 import { Fill, Market } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
+import { compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
@@ -560,8 +560,8 @@ export async function startHarvester({
     const matchedOwnedClientIds = new Set()
     const unownedOrders = orders.filter((order) => {
       const clientOrderId = order?.clientOrderId
-      const brokerOrderId = order?.brokerOrderId
-      const symbol = order?.market?.symbol
+      const brokerOrderId = order?.brokerOrderId ?? order?.id
+      const symbol = order?.market?.symbol ?? order?.symbol
       if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
           typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
           typeof symbol !== "string" || !symbol.trim()) return true
@@ -572,15 +572,18 @@ export async function startHarvester({
       if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) return true
       if (owned.status === "CANCELED" || owned.status === "REJECTED") return true
       if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) return true
-      const actualPrice = order.limitPrice?.amount ?? order.price?.amount
+      const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
       const expectedPrice = owned.limitPrice?.amount
+      const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
       if (
         owned.clientOrderId !== clientOrderId ||
         owned.market.symbol !== symbol ||
         owned.side !== order.side ||
         owned.type !== order.type ||
-        owned.originalQuantity.amount !== order.originalQuantity?.amount ||
-        expectedPrice !== actualPrice
+        compareDecimal({ left: owned.originalQuantity.amount, right: actualQuantity }) !== 0 ||
+        (expectedPrice === undefined
+          ? actualPrice !== undefined
+          : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
       ) return true
       matchedOwnedClientIds.add(owned.clientOrderId)
       return false
@@ -588,6 +591,11 @@ export async function startHarvester({
     const blockReasons = unownedOrders.length > 0
       ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
       : []
+    const readiness = blockReasons.length > 0
+      ? "BLOCKED"
+      : orders.length > 0
+        ? "RECONCILED"
+        : "READY"
     const published = publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
@@ -595,7 +603,7 @@ export async function startHarvester({
         phase,
         observedAt: now(),
         orders,
-        readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
+        readiness,
         blockReasons,
       }),
     })
@@ -613,13 +621,13 @@ export async function startHarvester({
       throw new Error("Harvester startup requires a durable open-orders audit before market subscriptions")
     }
     logger.info?.({
-      message: blockReasons.length === 0
-        ? (orders.length === 0
-          ? "Account-wide open-orders audit complete; no open orders found"
-          : "Account-wide open-orders audit complete; all open orders match restored Harvester ownership")
-        : "Account-wide open-orders audit blocked trading because open orders are unowned",
+      message: readiness === "READY"
+        ? "Account-wide open-orders audit complete; no open orders found"
+        : readiness === "RECONCILED"
+          ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
+          : "Account-wide open-orders audit blocked trading because open orders are unowned",
       orderCount: orders.length,
-      readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
+      readiness,
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
     if (blockReasons.length > 0 && blockOnExistingOrders) {
