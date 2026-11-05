@@ -15,6 +15,14 @@ import { createLogCommandInterface } from "./infrastructure/logging/create-log-c
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
+function logSystem(logger, message) {
+  if (typeof logger?.system === "function") {
+    logger.system(message)
+    return
+  }
+  logger?.info?.(message)
+}
+
 function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
   return prepareOptionalJournal({ eventBus, logger, enabled, directory })
 }
@@ -191,12 +199,12 @@ export async function main({
 
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
-        ?  "Connected; subscribed to " + runtime.subscriptions.length +
+        ? "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness."
-        :  "Connected; subscribed to " + runtime.subscriptions.length +
+        : "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s) in read-only mode; order execution is disabled."
       : "Configuration validated; broker and market data are disabled."
-    logger.system(startupMessage)
+    logSystem(logger, startupMessage)
 
     if (typeof runtime.stop === "function") {
       let shutdownPromise
@@ -214,7 +222,7 @@ export async function main({
               process.exitCode = 1
               logger.error({ message: "Harvester shutdown was not confirmed.", error: shutdownError })
             } else {
-              logger.system("Shutdown completed.")
+              logSystem(logger, "Shutdown completed.")
             }
           } catch (error) {
             shutdownError = error
