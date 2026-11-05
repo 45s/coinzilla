@@ -149,11 +149,12 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. Slice 1 (exchange-neutral user-data recovery completion policy) merged via PR #596. Slice 2 normalizes user-data subscription RPC results at the injected port boundary so the session no longer reads Binance `{ data: ... }` response envelopes.
+**Status:** in progress. Slice 1 (exchange-neutral recovery completion policy) merged via PR #596; slice 2 (normalized user-data subscription port responses) merged via PR #599. Slice 3 is moving Binance event mapping and identity generation into the adapter while keeping only generic bounded deduplication state in the session.
 
 **Progress**
 - [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged into `develop` via PR #596. Six pure domain tests; package tests and domain coverage gate passed on the exact PR head.
-- [~] Slice 2 — normalize user-data client-port subscription results. The Binance adapter unwraps raw RPC response envelopes; the session consumes subscription IDs and ID arrays only. TDD and implementation are in progress.
+- [x] Slice 2 — normalize user-data client-port subscription results. The Binance adapter unwraps raw RPC response envelopes; the session consumes subscription IDs and ID arrays only. Merged via PR #599; 399/399 broker tests and coverage passed.
+- [~] Slice 3 — normalize Binance user-data events and termination notifications at the infrastructure adapter; keep the bounded event-identity cache generic and scoped to the session lifecycle. TDD and implementation are in progress.
 
 ---
 
@@ -180,7 +181,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. Slice 1 isolates the rule that recovery completes only when a user-data subscription is active and every current subscriber explicitly acknowledges reconciliation (PR #596). Slice 2 moves raw Binance RPC response-envelope unwrapping into the Binance client-port adapter, leaving the session to consume normalized subscription IDs. Next, separate Binance event adaptation/termination detection from the application-style session coordinator, preserving event fan-out and deduplication.
+9. Phase 9 is in progress. Slice 1 isolates the recovery completion invariant (PR #596). Slice 2 moves raw Binance RPC response-envelope unwrapping into the client-port adapter (PR #599). Slice 3 moves Binance event DTO adaptation, termination detection, and event identity generation into infrastructure while the session retains only generic bounded event-identity state. Next, extract a focused application coordinator from the remaining lifecycle/session responsibilities, one tested slice at a time.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
