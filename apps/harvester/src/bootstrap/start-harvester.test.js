@@ -94,7 +94,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true }),
+    getFills: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
@@ -2084,7 +2084,7 @@ test("keeps restart fail-closed until complete account-wide trade history is ava
   const broker = createBroker(calls)
   const market = createMarketMetadata("BTCUSDT").market
   const recoveredFill = new Fill({
-    tradeId: "restart-trade-1",
+    tradeId: "1",
     brokerOrderId: "9001",
     clientOrderId: "h-BTCUSDT-buy-1",
     market,
@@ -2093,6 +2093,7 @@ test("keeps restart fail-closed until complete account-wide trade history is ava
     quantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
     quoteQuantity: new Money({ amount: "650", asset: market.quoteAsset }),
     liquidityRole: "MAKER",
+    executedAt: 1500,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -2196,7 +2197,7 @@ test("keeps restart fail-closed until complete account-wide trade history is ava
       journalRecoveryRecords,
       logger: { info() {}, error() {} },
     }),
-    /Account-wide exchange trade history pages are incomplete/,
+    /Account-wide exchange market universe is incomplete/,
   )
 
   assert.deepEqual(calls.filter((call) => ["placeOrder", "cancelOrder"].includes(call)), [])
