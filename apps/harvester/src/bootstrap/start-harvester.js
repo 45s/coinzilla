@@ -1320,12 +1320,6 @@ export async function startHarvester({
               // The trading engine reports malformed events through its normal result.
             }
 
-            logger.debug?.({
-              message: "Harvester market price event received",
-              symbol,
-              price: priceEvent?.price,
-              timestamp: priceEvent?.timestamp,
-            })
             intakeState.latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
               symbol,
               priceEvent,
