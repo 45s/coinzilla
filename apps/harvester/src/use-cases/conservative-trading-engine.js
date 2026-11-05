@@ -1277,28 +1277,65 @@ export function makeConservativeTradingEngine({
           throw new Error("Owned order is active in history but missing from the open-order snapshot: " + ownedOrder.brokerOrderId)
         }
 
-        const fillsResult = await broker.getFills({
-          symbol,
-          orderId: ownedOrder.brokerOrderId,
-        })
-        if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
-            fillsResult.data.some((fill) => !(fill instanceof Fill))) {
-          throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
-        }
         const fillsById = new Map()
-        for (const fill of fillsResult.data) {
-          if (
-            fill.market.id !== ownedOrder.market.id ||
-            fill.brokerOrderId !== ownedOrder.brokerOrderId ||
-            fill.side !== ownedOrder.side
-          ) {
-            throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+        const fillPageLimit = 1000
+        let fromId
+        let lastTradeId
+        let fillsComplete = false
+        for (let page = 0; page < 10000; page += 1) {
+          const fillsResult = await broker.getFills({
+            symbol,
+            orderId: ownedOrder.brokerOrderId,
+            ...(fromId === undefined ? {} : { fromId }),
+            limit: fillPageLimit,
+          })
+          if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
+              fillsResult.data.length > fillPageLimit ||
+              fillsResult.data.some((fill) => !(fill instanceof Fill))) {
+            throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
           }
-          const previous = fillsById.get(fill.id)
-          if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
-            throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
+          let pageLastTradeId
+          for (const fill of fillsResult.data) {
+            if (
+              fill.market.id !== ownedOrder.market.id ||
+              fill.brokerOrderId !== ownedOrder.brokerOrderId ||
+              fill.side !== ownedOrder.side
+            ) {
+              throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+            }
+            if (typeof fill.tradeId !== "string" || !/^\\d+$/.test(fill.tradeId)) {
+              throw new Error("REST fill history contains a non-numeric trade ID for owned order " + ownedOrder.brokerOrderId)
+            }
+            const tradeId = BigInt(fill.tradeId)
+            if (lastTradeId !== undefined && tradeId <= lastTradeId) {
+              throw new Error("REST fill pagination did not advance strictly by trade ID for owned order " + ownedOrder.brokerOrderId)
+            }
+            lastTradeId = tradeId
+            pageLastTradeId = tradeId
+            const previous = fillsById.get(fill.id)
+            if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+              throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
+            }
+            fillsById.set(fill.id, fill)
           }
-          fillsById.set(fill.id, fill)
+          if (fillsResult.data.length < fillPageLimit) {
+            fillsComplete = true
+            break
+          }
+          if (pageLastTradeId === undefined) {
+            throw new Error("REST fill pagination returned a full empty page for owned order " + ownedOrder.brokerOrderId)
+          }
+          const nextFromId = pageLastTradeId + 1n
+          if (nextFromId > BigInt(Number.MAX_SAFE_INTEGER)) {
+            throw new Error("REST fill pagination trade ID exceeds the broker's safe cursor range for owned order " + ownedOrder.brokerOrderId)
+          }
+          fromId = nextFromId.toString()
+          if (page === 9999) {
+            throw new Error("REST fill history exceeded the maximum supported pagination depth for owned order " + ownedOrder.brokerOrderId)
+          }
+        }
+        if (!fillsComplete) {
+          throw new Error("REST fill history could not be proven complete for owned order " + ownedOrder.brokerOrderId)
         }
         const fills = [...fillsById.values()].sort((left, right) => {
           if (left.executedAt !== undefined && right.executedAt !== undefined &&
