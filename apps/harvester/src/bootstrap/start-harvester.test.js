@@ -2076,7 +2076,7 @@ test("blocks bootstrap when canonical lookup cannot resolve a recovered submissi
 })
 
 
-test("restores and reconciles a prior filled order before opening trading readiness", async () => {
+test("recovers a broker fill missing from Journal before opening trading readiness", async () => {
   const calls = []
   const broker = createBroker(calls)
   const market = createMarketMetadata("BTCUSDT").market
@@ -2183,20 +2183,6 @@ test("restores and reconciles a prior filled order before opening trading readin
       quantity: "0.01",
       status: "FILLED",
     }, 4),
-    record("fill", "execution.fill_applied", {
-      fillId: recoveredFill.id,
-      tradeId: recoveredFill.tradeId,
-      brokerOrderId: recoveredFill.brokerOrderId,
-      clientOrderId: recoveredFill.clientOrderId,
-      symbol: "BTCUSDT",
-      side: "BUY",
-      price: "65000",
-      quantity: "0.01",
-      quoteQuantity: "650",
-      liquidityRole: "MAKER",
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    }, 5),
   ]
 
   const config = structuredClone(tradingConfig)
