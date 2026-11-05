@@ -115,3 +115,9 @@ An absent first startup event can be the documented asynchronous-subscription ga
 ## Security
 
 Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
+
+## Restart recovery gate
+
+- Before starting a new Journal writer session, Harvester reads and validates all prior JSONL sessions. A missing Journal directory is treated as a first run; malformed, truncated, unsupported, duplicate-ID, or over-limit history fails the Journal readiness gate.
+- A trading-enabled process start is allowed only when the prior Journal snapshot was successfully read and contains no order-submission, cancellation, fill, recovery-cycle, or account-audit events.
+- If prior trading history exists, startup fails closed before broker connection. Read-only startup remains available. This is an interim safety gate: Portfolio, RecoveryLedger, and owned-order replay plus canonical exchange reconciliation are still required before trading can resume after a trading process restart.

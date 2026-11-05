@@ -601,6 +601,128 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
   }
 })
 
+test("allows a trading-enabled first start only with a validated empty Journal history", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [], count: 0 }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, true)
+    assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("blocks trading-enabled startup when Journal cannot read previous sessions", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("blocks trading-enabled restart when prior order or fill history exists", async () => {
+  let started = false
+  const errors = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({
+          ok: true,
+          available: true,
+          records: [
+            { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
+            { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
+          ],
+        }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false } },
+      logger: { info() {}, error: (data) => errors.push(data), debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+    assert.match(errors.at(-1).error.message, /prior Harvester order\/fill history exists/)
+    assert.match(errors.at(-1).error.message, /read-only mode/)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("allows read-only startup when prior trading history requires recovery", async () => {
+  let started = false
+  await main({
+    env: { HARVESTER_ENABLE_TRADING: "false", HARVESTER_JOURNAL_ENABLED: "true" },
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      recovery: Promise.resolve({
+        ok: true,
+        available: true,
+        records: [{ id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } }],
+      }),
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true }),
+    }),
+    start: async () => { started = true; return { connected: false, tradingEnabled: false } },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+  assert.equal(started, true)
+})
+
+test("blocks trading-enabled startup when Journal history cannot be read", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: false, errors: [new Error("journal read failed")] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false } },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("rejects disabling Journal for TESTNET trading", async () => {
   let started = false
   const previousExitCode = process.exitCode
