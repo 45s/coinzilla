@@ -121,14 +121,11 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
 }
 
 /**
- * Normalize log data for transport delivery. The returned value is detached
- * from the caller's object graph, preserves native Error diagnostics, and
- * applies the same recursive sensitive-field redaction as formatted logs.
- *
- * @param {*} data
- * @returns {*}
+ * Convert log data to a printable value without allowing hostile objects to
+ * make the logging path throw. Native errors are normalized to JSON-compatible
+ * objects before serialization so their non-enumerable diagnostics survive.
  */
-export function normalizeLogData(data) {
+export function formatLogContent(data) {
   if (['string', 'number', 'boolean'].some((type) => typeof data === type)) {
     return data
   }
@@ -139,37 +136,6 @@ export function normalizeLogData(data) {
 
   try {
     const normalized = normalizeLogValue({ value: data })
-    JSON.stringify(normalized)
-    return normalized
-  } catch {
-    try {
-      return String(data)
-    } catch {
-      return '[Unserializable log data]'
-    }
-  }
-}
-
-/**
- * Convert log data to a printable value without allowing hostile objects to
- * make the logging path throw. Native errors are normalized to JSON-compatible
- * objects before serialization so their non-enumerable diagnostics survive.
- *
- * @param {*} data
- * @returns {string|number|boolean|undefined}
- */
-export function formatLogContent(data) {
-  const normalized = normalizeLogData(data)
-
-  if (['string', 'number', 'boolean'].some((type) => typeof normalized === type)) {
-    return normalized
-  }
-
-  if (normalized === undefined) {
-    return undefined
-  }
-
-  try {
     return JSON.stringify(normalized, redactSensitiveLogField, 2)
   } catch {
     try {
