@@ -191,6 +191,9 @@ test("rejects malformed commitment inputs without throwing", () => {
     { actions: [{ side: "BUY", price: "10", quantity: "0" }] },
     { actions: [{ side: "BUY", price: "0", quantity: "1" }] },
     { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
+    { actions: [], activeBaseBalance: "-1" },
+    { actions: [], committedQuoteBalance: "-1" },
+    { actions: [], committedBaseBalance: "-1" },
   ]
 
   for (const invalidCase of invalidCases) {
