@@ -418,6 +418,7 @@ export async function startHarvester({
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
   const getAccountSnapshot = () => accountSnapshot
   let tradingEngine
+  let hasCanonicalOwnershipReconciliation = false
 
   if (brokerName === undefined || brokerName === "") {
     logger.info?.({ message: "Harvester started without a broker; exchange connectivity is disabled" })
@@ -548,6 +549,7 @@ export async function startHarvester({
   const publishOpenOrdersSnapshot = async ({
     phase = "PREFLIGHT",
     blockOnExistingOrders = tradingEnabled,
+    ownershipReconciled = hasCanonicalOwnershipReconciliation,
     orders: suppliedOrders,
   } = {}) => {
     let orders = suppliedOrders
@@ -594,7 +596,9 @@ export async function startHarvester({
     })
     const blockReasons = unownedOrders.length > 0
       ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
-      : []
+      : orders.length > 0 && !ownershipReconciled
+        ? ["CANONICAL_ORDER_RECONCILIATION_REQUIRED"]
+        : []
     const readiness = blockReasons.length > 0
       ? "BLOCKED"
       : orders.length > 0
@@ -629,12 +633,14 @@ export async function startHarvester({
         ? "Account-wide open-orders audit complete; no open orders found"
         : readiness === "RECONCILED"
           ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
-          : "Account-wide open-orders audit blocked trading because open orders are unowned",
+          : unownedOrders.length > 0
+          ? "Account-wide open-orders audit blocked trading because open orders are unowned"
+          : "Account-wide open-orders audit is waiting for canonical order reconciliation",
       orderCount: orders.length,
       readiness,
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
-    if (blockReasons.length > 0 && blockOnExistingOrders) {
+    if (unownedOrders.length > 0 && blockOnExistingOrders) {
       throw new Error(
         "Conservative TESTNET startup blocked: account has " + unownedOrders.length +
         " open order(s) without matching durable Harvester ownership; inspect account.open_orders_captured in Journal",
@@ -1205,6 +1211,7 @@ export async function startHarvester({
             (reconciliation?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
           )
         }
+        hasCanonicalOwnershipReconciliation = true
         await publishAccountSnapshot({ phase: "PREFLIGHT" })
       }
 
