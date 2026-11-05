@@ -54,7 +54,7 @@ defaultLogger.addTransport({
   name: "development-file",
   level: "debug",
   write(entry) {
-    return appendFile("logs/development.log", `${JSON.stringify(entry)}\\n`)
+    return appendFile("logs/development.log", `${JSON.stringify(entry)}\n`)
   },
 })
 
@@ -62,7 +62,7 @@ defaultLogger.addTransport({
   name: "diagnostics",
   level: "trace",
   write(entry) {
-    return appendFile("logs/diagnostics.log", `${JSON.stringify(entry)}\\n`)
+    return appendFile("logs/diagnostics.log", `${JSON.stringify(entry)}\n`)
   },
 })
 
@@ -76,7 +76,7 @@ const current = defaultLogger.getConfig()
 // A separate logger is useful for isolated tests or independent applications.
 const isolatedLogger = new Logger({ transports: [] })
 
-// Remove destinations and close their file handles during application shutdown.
+// Remove application-owned destinations during shutdown.
 await defaultLogger.removeTransport("development-file")
 await defaultLogger.removeTransport("diagnostics")
 ```
