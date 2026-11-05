@@ -505,6 +505,7 @@ export async function startHarvester({
   let userDataEventQueue = Promise.resolve()
   let userDataReconciliationQueued = false
   let userDataRecoveryGeneration = 0
+  let lastAcknowledgedRecoveryGeneration = -1
   let userDataRecoveryTask = null
   let userDataStartupComplete = false
   let pendingUserDataRecovery = false
@@ -704,7 +705,8 @@ export async function startHarvester({
 
   const startUserDataRecovery = () => {
     if (stopped || !userDataStartupComplete || !userDataRequiresReconciliation ||
-        userDataAccountingFailed || userDataRecoveryTask) {
+        userDataAccountingFailed || userDataRecoveryTask ||
+        lastAcknowledgedRecoveryGeneration === userDataRecoveryGeneration) {
       pendingUserDataRecovery = true
       return
     }
@@ -764,6 +766,7 @@ export async function startHarvester({
           userDataRequiresReconciliation = true
           throw new Error("Broker rejected the application recovery acknowledgement")
         }
+        lastAcknowledgedRecoveryGeneration = generation
         logger.info?.({
           message: "Harvester application recovery completed and broker acknowledgement accepted",
           generation,
