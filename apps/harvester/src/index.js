@@ -120,7 +120,7 @@ export async function main({
   let eventBus
   let journalService
   let processLock
-  let runtimeStartCompleted = false
+  let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
     if (env.HARVESTER_ENABLE_TRADING === "true") {
@@ -168,8 +168,8 @@ export async function main({
       }
     }
 
+    runtimeStartAttempted = true
     const runtime = await start({ eventPublisher })
-    runtimeStartCompleted = true
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
@@ -252,16 +252,11 @@ export async function main({
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
       dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
     })
-    // The default bootstrap owns cleanup when startup rejects. A plain error
-    // means its broker-intake cleanup completed; AggregateError means cleanup
-    // was uncertain, so retain the lock. Injected start functions own their
-    // own cleanup contract and remain fail-closed.
-    const startupCleanupConfirmed = start === startHarvester && !(error instanceof AggregateError)
     const cleanupErrors = await closeObservability({
       journalService,
       eventBus,
       processLock,
-      allowProcessLockRelease: !runtimeStartCompleted && startupCleanupConfirmed,
+      allowProcessLockRelease: !runtimeStartAttempted,
       logger,
     })
     if (cleanupErrors.length > 0) process.exitCode = 1
