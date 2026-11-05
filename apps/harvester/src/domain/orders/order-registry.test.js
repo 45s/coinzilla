@@ -513,3 +513,43 @@ test("rejects an acknowledgement that reuses another Harvester order's broker ID
     /already owned by another Harvester order/,
   )
 })
+
+test("marks a PENDING submission UNKNOWN without releasing its order commitment", () => {
+  const clientOrderId = "h-unknown-submit"
+  const registry = OrderRegistry.empty().registerPending({
+    order: makeOrder({ clientOrderId }),
+  }).registry
+
+  const result = registry.markUnknown({ clientOrderId })
+  const tracked = result.data.registry.getOrder({ clientOrderId })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.applied, true)
+  assert.equal(tracked.status, "UNKNOWN")
+  assert.equal(tracked.clientOrderId, clientOrderId)
+  assert.equal(tracked.originalQuantity.amount, "100")
+  assert.equal(tracked.executedQuantity.amount, "0")
+  assert.equal(result.data.registry.getActiveOrders({ marketId: market.id }).length, 1)
+})
+
+test("does not downgrade an already acknowledged order when submission failure arrives late", () => {
+  const clientOrderId = "h-ack-race"
+  const pending = makeOrder({ clientOrderId })
+  const registry = OrderRegistry.empty().registerPending({ order: pending }).registry.applyUpdate({
+    order: makeOrder({ clientOrderId, brokerOrderId: "broker-ack-race", status: "OPEN", updatedAt: 102 }),
+  }).registry
+
+  const result = registry.markUnknown({ clientOrderId })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.alreadyAcknowledged, true)
+  assert.equal(result.data.order.status, "OPEN")
+  assert.equal(result.data.order.brokerOrderId, "broker-ack-race")
+})
+
+test("returns an error when marking an unregistered order UNKNOWN", () => {
+  const result = OrderRegistry.empty().markUnknown({ clientOrderId: "missing-client-id" })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unregistered order/)
+})
