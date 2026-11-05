@@ -916,3 +916,36 @@ test("rejects disabling Journal for TESTNET trading", async () => {
     process.exitCode = previousExitCode
   }
 })
+
+
+test("retains the process lock when runtime startup fails after it may have activated broker resources", async () => {
+  let releaseCalls = 0
+  let journalCloseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => { journalCloseCalls += 1; return { ok: true, closed: true } },
+      }),
+      start: async () => {
+        throw new Error("broker startup failed after connection attempt")
+      },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(journalCloseCalls, 1)
+    assert.equal(releaseCalls, 0)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
