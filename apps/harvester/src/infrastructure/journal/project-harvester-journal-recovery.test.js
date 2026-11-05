@@ -61,7 +61,7 @@ test("projects durable order identity and exact fill facts without claiming exch
   assert.equal(result.data.orders[0].submissionOutcome, "ACKNOWLEDGED")
   assert.equal(result.data.orders[0].recoveryStatus, "UNKNOWN")
   assert.equal(result.data.orders[0].cumulativeFillQuantity, "0.4")
-  assert.deepEqual(result.data.orders[0].fillIds, ["BTCUSDT:trade-1"])
+  assert.deepEqual(result.data.orders[0].fillIds, ["binance:BTCUSDT:trade-1"])
   assert.equal(result.data.fills[0].commissions[0].amount, "0.0004")
   assert.equal(result.data.requiresExchangeReconciliation, true)
 })
@@ -242,9 +242,12 @@ test("projects recovery-cycle completions and paused strategy state", () => {
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.recoveryCycles, [{
     symbol: "BTCUSDT",
-    marketId: "market-btc-usdt",
+    marketId: "binance:BTCUSDT",
     freeQuantity: "0.01",
     realizedNetProfit: "0.25",
+    completedOrderClientId: "h-BTCUSDT-sell-1",
+    completedOrderBrokerOrderId: "9002",
+    sequence: 3,
   }])
   assert.deepEqual(result.data.pausedMarkets, [{
     symbol: "BTCUSDT",
