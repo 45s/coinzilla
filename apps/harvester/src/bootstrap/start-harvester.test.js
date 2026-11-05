@@ -476,30 +476,59 @@ test("does not adopt an external order report received before the ownership regi
   assert.ok(calls.includes("disconnect"))
 })
 
-test("requires authoritative reconciliation after a user-data stream recovery", async () => {
+test("starts application reconciliation on transport recovery and acknowledges only after it completes", async () => {
   const broker = createBroker()
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => {
+    resolveAcknowledgement = resolve
+  })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: binanceEnv,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
     brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: { info() {}, error() {} },
   })
 
+  assert.equal(result.userDataReady, true)
   broker.emitUserDataStatus({
     type: "recovered",
+    subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  assert.equal(result.userDataReady, false)
 
-  broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
-  })
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  assert.equal(result.placeOrder, undefined)
-  assert.equal(result.broker, undefined)
+  await waitForTestSignal(
+    acknowledged,
+    "application recovery acknowledgement",
+    () => ({ acknowledgementCount, userDataReady: result.userDataReady }),
+    2_000,
+  )
+
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(result.userDataReady, true)
   await result.stop()
 })
 
