@@ -2,7 +2,7 @@
 
 `@coinzilla/db` provides SQLite persistence using Node.js' built-in `node:sqlite` module. It has no external database driver or ORM dependency.
 
-The default database is in-memory. Pass a filename to persist data across process restarts.
+A storage filename is required so applications cannot accidentally start with an ephemeral in-memory database. Use the explicit filename `:memory:` in isolated tests.
 
 ## Requirements and runtime characteristics
 
@@ -51,7 +51,7 @@ Options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `filename` | `:memory:` | SQLite database file. Parent directories are created for file-backed databases. |
+| `filename` | Required | SQLite database file, or the explicit value `:memory:` for an ephemeral database. Parent directories are created for file-backed databases. |
 | `timeout` | `5000` | SQLite lock wait timeout in milliseconds. Must be a non-negative safe integer. |
 
 File-backed databases use WAL journal mode. Foreign-key enforcement is enabled for every connection. Always use prepared statements and bound parameters for values; never interpolate untrusted input into SQL.
