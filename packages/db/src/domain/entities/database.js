@@ -8,7 +8,7 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
  * Database is the lifecycle aggregate for a provider-backed database resource.
  * It owns the lifecycle state and guarantees that shutdown drains transactions.
  *
- * @param {import("../../application/ports/database-provider.js").DatabaseProvider} provider
+ * @param {{connect: () => Promise<void>|void, close: () => Promise<void>|void, withTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>|unknown}} provider
  * @returns {{connect: () => Promise<void>, transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>, close: () => Promise<void>, readonly state: string}}
  */
 export function createDatabaseEntity({ provider } = {}) {
