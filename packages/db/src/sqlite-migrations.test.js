@@ -110,11 +110,11 @@ test("migrations reject duplicate or invalid versions before changing the databa
     await assert.rejects(database.migrate([
       { version: 1, name: "one", up() {} },
       { version: 1, name: "duplicate", up() {} },
-     ]), /positive safe integer/)
+    ]), /unique positive integer versions/)
 
     await assert.rejects(database.migrate([
       { version: 0, name: "zero", up() {} },
-    ]), /unique positive integer versions/)
+    ]), /positive safe integer/)
 
     assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
   } finally {
