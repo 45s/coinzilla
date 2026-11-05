@@ -40,8 +40,7 @@ const renderMenu = (selectedIndex) => {
   stdout.write("╠══════════════════════════════════════════════════════╣\n")
   for (const [index, action] of TESTNET_MENU_ACTIONS.entries()) {
     const marker = index === selectedIndex ? ">" : " "
-    const warning = action.destructive ? "  [CONFIRM]" : ""
-    stdout.write(`║ ${marker} ${action.label.padEnd(36)}${warning.padEnd(15)} ║\n`)
+    stdout.write(`║ ${marker} ${action.label.padEnd(52)} ║\n`)
   }
   stdout.write("╠══════════════════════════════════════════════════════╣\n")
   stdout.write("║  ↑/↓ Navigate   Enter Select   Q/Esc Exit             ║\n")
@@ -53,17 +52,6 @@ const waitForKeypress = () => new Promise((resolve) => {
 })
 
 const runAction = async (action) => {
-  if (action.destructive && action.id === "cancel-orders") {
-    stdout.write("\nWARNING: this cancels every open TESTNET order on every symbol.\n")
-    stdout.write("Stop Harvester and any other trading process before continuing.\n")
-    const confirmation = await prompt('Type "CANCEL ALL OPEN TESTNET ORDERS" to continue: ')
-    if (normalizePromptAnswer(confirmation) !== "CANCEL ALL OPEN TESTNET ORDERS") {
-      stdout.write("\nConfirmation did not match. No orders were cancelled.\n")
-      await prompt("Press Enter to return to the menu...")
-      return
-    }
-  }
-
   const args = await collectArguments(action)
   stdout.write(`\nExecuting: ${action.script}${args.length ? ` ${args.join(" ")}` : ""}\n\n`)
 
