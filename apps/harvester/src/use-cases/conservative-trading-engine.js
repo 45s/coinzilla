@@ -751,10 +751,16 @@ export function makeConservativeTradingEngine({
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
-      const position = getPortfolio().getPosition({ marketId: metadata.market.id })
-      const quoteCashFlow = position?.quoteNetCashFlow.amount ?? "0"
-      const activeOrders = state.registry.getActiveOrders({ marketId: metadata.market.id })
-      const committedQuote = activeOrders
+      const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
+      const allPositions = portfolioBefore.positions
+      const quoteCashFlow = allPositions
+        .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
+        .reduce((total, item) => addDecimal({ left: total, right: item.quoteNetCashFlow.amount }), "0")
+      const activeBaseBalance = allPositions
+        .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
+        .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
+      const allActiveOrders = state.registry.getActiveOrders()
+      const committedQuote = activeOrdersBefore
         .filter((order) => order.side === "BUY")
         .reduce((total, order) => {
           const remaining = subtractDecimal({
@@ -767,8 +773,30 @@ export function makeConservativeTradingEngine({
           })
           return addDecimal({ left: total, right: commitment })
         }, "0")
-      const committedBase = activeOrders
+      const committedQuoteBalance = allActiveOrders
+        .filter((order) => order.side === "BUY" && order.market.quoteAsset.id === metadata.market.quoteAsset.id)
+        .reduce((total, order) => {
+          const remaining = subtractDecimal({
+            left: order.originalQuantity.amount,
+            right: order.executedQuantity.amount,
+          })
+          const commitment = multiplyDecimal({
+            left: remaining,
+            right: order.limitPrice.amount,
+          })
+          return addDecimal({ left: total, right: commitment })
+        }, "0")
+      const committedBase = activeOrdersBefore
         .filter((order) => order.side === "SELL")
+        .reduce((total, order) => addDecimal({
+          left: total,
+          right: subtractDecimal({
+            left: order.originalQuantity.amount,
+            right: order.executedQuantity.amount,
+          }),
+        }), "0")
+      const committedBaseBalance = allActiveOrders
+        .filter((order) => order.side === "SELL" && order.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, order) => addDecimal({
           left: total,
           right: subtractDecimal({
@@ -787,9 +815,12 @@ export function makeConservativeTradingEngine({
         baseFreeBalance: baseBalance.amount,
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
+        activeBaseBalance,
         outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
         committedQuote,
+        committedQuoteBalance,
         committedBase,
+        committedBaseBalance,
         investmentLimit: String(pairs[symbol].investment),
       })
       if (!allocation.ok) {
@@ -807,6 +838,12 @@ export function makeConservativeTradingEngine({
         remainingBaseBalance: allocation.data.remainingBaseBalance,
         remainingActiveBase: allocation.data.remainingActiveBase,
         remainingInvestment: allocation.data.remainingInvestment,
+        activeBaseBalance,
+        committedQuote,
+        committedQuoteBalance,
+        committedBase,
+        committedBaseBalance,
+        quoteCashFlow,
       })
       if (executableActions.length === 0) {
         return toResult({
@@ -843,7 +880,10 @@ export function makeConservativeTradingEngine({
         },
         quoteCashFlow,
         committedQuote,
+        committedQuoteBalance,
         committedBase,
+        committedBaseBalance,
+        activeBaseBalance,
       })
       const result = await submit({ decision: executableDecision, marketMetadata: metadata })
       logger?.debug?.({
