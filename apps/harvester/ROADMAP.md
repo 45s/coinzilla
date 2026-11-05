@@ -1149,7 +1149,7 @@ The engine transition queue serializes decisions; this change additionally ensur
 
 - [x] Read and validate all previous Journal sessions before opening a new writer session.
 - [x] Treat a missing Journal directory as an empty first run; fail closed on malformed, truncated, unsupported, duplicate-ID, or over-limit history.
-- [x] Refuse trading-enabled startup when any prior order, cancellation, fill, or recovery-cycle history exists; allow read-only startup for inspection.
+- [x] Refuse trading-enabled startup when any prior account-audit, order, cancellation, fill, or recovery-cycle history exists; allow read-only startup for inspection.
 - [ ] Implement idempotent Portfolio and RecoveryLedger replay, restore owned order commitments, and reconcile every restored order/fill against canonical exchange history before any trading restart can be accepted.
 
 This is deliberately a fail-closed interim gate, not a claim that restart recovery is complete. Do not delete or rotate Journal files to bypass it.
