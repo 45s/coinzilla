@@ -177,6 +177,10 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         continue
       }
 
+      if (session.closingSnapshotCount > 0) {
+        throw new Error("Journal session contains recognized events after its closing account snapshot")
+      }
+
       if ([
         EVENT.SUBMISSION_REQUESTED,
         EVENT.SUBMITTED,
@@ -228,6 +232,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         })
         accountSnapshots.push(snapshot)
         if (data.phase === "CLOSING") {
+          if (!session.started || !session.tradingEnabled) {
+            throw new Error("Closing account snapshot requires a started trading-enabled session")
+          }
           session.closingSnapshotCount += 1
           if (session.closingSnapshotCount > 1) throw new Error("Journal session contains multiple closing account snapshots")
           session.hasCompleteClosingSnapshot = data.auditStatus === "COMPLETE" && auditReasons.length === 0
