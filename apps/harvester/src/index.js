@@ -21,14 +21,14 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   if (typeof journalService?.close === "function") {
     try {
       const result = await journalService.close()
-      journalClosed = result?.ok === true || journalService.status?.started === false
+      journalClosed = result?.ok === true
       if (result?.ok !== true) {
         errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
           ? result.errors
           : [new Error("Journal close did not complete successfully")]))
       }
     } catch (error) {
-      journalClosed = journalService.status?.started === false
+      journalClosed = false
       errors.push(error)
     }
   } else if (journalService) {
