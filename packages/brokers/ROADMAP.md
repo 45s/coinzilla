@@ -215,6 +215,7 @@ The audited bot calls:
 - `subscribeForUserData({ onEvent })`.
 - `subscribeForPrices({ symbol, onPrice })`.
 - `getSymbolFilters({ symbol })`.
+- `getExchangeMarkets()` for the exchange-wide canonical market catalog used by complete account trade-history reconciliation.
 - `createOrder(input)`.
 - `cancelOrder({ symbol, orderId })`.
 - `getMyTrades({ symbol, orderId, limit })`.
@@ -244,7 +245,8 @@ Do not silently drop public methods because one current consumer does not call t
 | `cancelOrder(...)` | `order.cancel` | TRADE, signed |
 | `cancelAllOpenOrders({ symbol })` | `openOrders.cancelAll` | TRADE, signed |
 | `getPrices({ symbol })` | `ticker.price` | Public |
-| `getSymbolFilters({ symbol })` | `exchangeInfo` | Public |
+| `getSymbolFilters({ symbol })` | `exchangeInfo` with a symbol filter | Public |
+| `getExchangeMarkets()` | unfiltered `exchangeInfo` | Public |
 
 Verify exact current parameters, response envelopes, signing rules, rate limits, and error codes against official Binance documentation during implementation. This table is a starting map, not permission to guess undocumented behavior.
 
@@ -713,6 +715,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 ### Canonical fills and commissions
 
 - [x] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values. Broker API and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
+- [x] Add `getExchangeMarkets()` to return canonical `Market` values for every symbol in the current unfiltered Binance `exchangeInfo` catalog and prime the broker's canonical market cache; delisted symbols remain outside this catalog.
 - Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
 - Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.

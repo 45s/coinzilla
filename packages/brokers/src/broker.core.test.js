@@ -29,6 +29,7 @@ describe("CoreBroker", () => {
     "getOpenOrders",
     "getPrice",
     "getSymbolFilters",
+    "getExchangeMarkets",
     "getMyTrades",
     "getOrderHistory",
     "getCanonicalOrderHistory",
