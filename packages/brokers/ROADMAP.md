@@ -149,13 +149,14 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. Slices 1–3 are merged via PRs #596, #599, and #602. Slice 4 moves the exchange-neutral session coordinator into the Application layer and defines its explicit client port.
+**Status:** in progress. Slices 1–4 are merged via PRs #596, #599, #602, and #603. Slice 5 moves the Binance implementation of the user-data client port into an explicit infrastructure module.
 
 **Progress**
 - [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged via PR #596. Six pure domain tests; package tests and domain coverage gate passed.
 - [x] Slice 2 — normalize user-data client-port subscription results; merged via PR #599. The adapter unwraps Binance RPC envelopes; the session consumes IDs and ID arrays only. 399/399 broker tests and coverage passed.
 - [x] Slice 3 — normalize Binance user-data events and termination notifications in the adapter; the session retains only generic bounded identity state. Merged via PR #602; 400/400 broker tests and coverage passed.
-- [~] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and define `src/ports/user-data-client-port.js`; add runtime port-contract validation and include both layers in package coverage. TDD and implementation are in progress.
+- [x] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and define `src/ports/user-data-client-port.js`; runtime port validation and application/port coverage merged via PR #603. 405/405 broker tests and coverage passed.
+- [~] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate its tests, and include infrastructure modules in the package coverage gate. TDD and implementation are in progress.
 
 ---
 
@@ -182,7 +183,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. Slice 1 isolates the recovery completion invariant (PR #596); slice 2 normalizes subscription RPC responses (PR #599); slice 3 moves Binance event DTO mapping and identity generation into infrastructure (PR #602). Slice 4 moves the coordinator into `src/application` and formalizes `src/ports`. Next, move the Binance client adapter into an explicit infrastructure module and keep the broker facade as the composition root.
+9. Phase 9 is in progress. Slices 1–4 are merged (PRs #596, #599, #602, #603): recovery domain policy, normalized subscription responses, normalized event port, and application session/explicit port contract. Slice 5 moves the Binance port implementation into `src/infrastructure/binance`; the broker facade remains the composition root. Next, continue migrating exchange-specific adapters behind the package-owned ports, one tested capability at a time.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
