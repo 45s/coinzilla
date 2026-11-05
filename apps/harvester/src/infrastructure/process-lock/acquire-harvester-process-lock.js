@@ -4,11 +4,21 @@ import os from "node:os"
 import path from "node:path"
 import { toResult } from "@coinzilla/utils"
 
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM means the process exists but cannot be inspected; fail closed.
+    return error?.code !== "ESRCH"
+  }
+}
+
 /**
  * Acquire an exclusive same-host Harvester trading-process lock.
- * Existing locks are never reclaimed automatically; stale-lock removal requires
- * operator verification that the owning process is no longer running.
- * @param {{ directory: string, lockFileName?: string, pid?: number, hostname?: string, startedAt?: string, token?: string }} input
+ * A lock is reclaimed only when it belongs to this host and its recorded PID
+ * is demonstrably absent. Unknown, remote-host, and permission-denied owners fail closed.
+ * @param {{ directory: string, lockFileName?: string, pid?: number, hostname?: string, startedAt?: string, token?: string, isProcessAlive?: (pid: number) => boolean }} input
  */
 export async function acquireHarvesterProcessLock({
   directory,
@@ -17,6 +27,7 @@ export async function acquireHarvesterProcessLock({
   hostname = os.hostname(),
   startedAt = new Date().toISOString(),
   token = randomUUID(),
+  isProcessAlive: checkProcessAlive = isProcessAlive,
 } = {}) {
   try {
     if (typeof directory !== "string" || !directory.trim()) {
@@ -37,6 +48,9 @@ export async function acquireHarvesterProcessLock({
     if (typeof token !== "string" || !token.trim()) {
       throw new TypeError("Harvester process lock token must be a non-empty string")
     }
+    if (typeof checkProcessAlive !== "function") {
+      throw new TypeError("Harvester process lock isProcessAlive must be a function")
+    }
 
     const resolvedDirectory = path.resolve(directory)
     const lockPath = path.join(resolvedDirectory, lockFileName)
@@ -44,31 +58,51 @@ export async function acquireHarvesterProcessLock({
     await mkdir(resolvedDirectory, { recursive: true })
 
     let handle
-    try {
-      handle = await open(lockPath, "wx", 0o600)
-      await handle.writeFile(JSON.stringify(owner) + "\n", "utf8")
-      await handle.sync()
-      await handle.close()
-      handle = undefined
-    } catch (error) {
-      await handle?.close().catch(() => undefined)
-      if (error?.code !== "EEXIST") {
-        await unlink(lockPath).catch(() => undefined)
-        throw error
-      }
-      let existingOwner
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
-      } catch (readError) {
-        existingOwner = {
-          unreadable: true,
-          errorCode: readError?.code ?? "LOCK_FILE_READ_FAILED",
+        handle = await open(lockPath, "wx", 0o600)
+        await handle.writeFile(JSON.stringify(owner) + "\n", "utf8")
+        await handle.sync()
+        await handle.close()
+        handle = undefined
+        break
+      } catch (error) {
+        await handle?.close().catch(() => undefined)
+        handle = undefined
+        if (error?.code !== "EEXIST") {
+          await unlink(lockPath).catch(() => undefined)
+          throw error
         }
+
+        let existingOwner
+        try {
+          existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
+        } catch (readError) {
+          existingOwner = {
+            unreadable: true,
+            errorCode: readError?.code ?? "LOCK_FILE_READ_FAILED",
+          }
+        }
+
+        const sameHost = typeof existingOwner?.hostname === "string"
+          && existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
+        const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
+        if (attempt === 0 && sameHost && validPid && !checkProcessAlive(existingOwner.pid)) {
+          // Re-read immediately before unlinking so a replaced lock is not removed.
+          const currentOwner = JSON.parse(await readFile(lockPath, "utf8").catch(() => "null"))
+          if (currentOwner?.token === existingOwner.token
+            && currentOwner?.pid === existingOwner.pid
+            && currentOwner?.hostname?.toLowerCase() === existingOwner.hostname.toLowerCase()) {
+            await unlink(lockPath)
+            continue
+          }
+        }
+
+        const conflict = new Error("Another Harvester trading process already owns the process lock")
+        conflict.code = "HARVESTER_PROCESS_LOCK_EXISTS"
+        conflict.details = { lockPath, existingOwner }
+        return toResult({ error: conflict })
       }
-      const conflict = new Error("Another Harvester trading process already owns the process lock")
-      conflict.code = "HARVESTER_PROCESS_LOCK_EXISTS"
-      conflict.details = { lockPath, existingOwner }
-      return toResult({ error: conflict })
     }
 
     let released = false
