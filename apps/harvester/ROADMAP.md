@@ -1157,8 +1157,8 @@ This is deliberately a fail-closed interim gate, not a claim that restart recove
 
 ## Single-writer process ownership — P0, 2026-11-05
 
-- [x] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
-- [x] Refuse a second local trading process using the same Journal directory.
-- [x] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
-- [x] Never auto-reclaim stale locks; require operator verification.
+- [~] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
+- [~] Refuse a second local trading process using the same Journal directory.
+- [~] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
+- [~] Never auto-reclaim stale locks; require operator verification.
 - [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
