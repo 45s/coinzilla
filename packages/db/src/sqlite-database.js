@@ -33,7 +33,7 @@ function isAsyncFunction(callback) {
  * SQLite operations are synchronous. Transaction callbacks must therefore
  * complete synchronously; asynchronous callbacks are rejected before running.
  *
- * @param {{ filename?: string, timeout?: number }} [options]
+ * @param {{ filename: string, timeout?: number }} options
  * @returns {ReturnType<typeof createDatabase> & {
  *   exec: (sql: string) => void,
  *   prepare: (sql: string) => import('node:sqlite').StatementSync,
@@ -41,7 +41,7 @@ function isAsyncFunction(callback) {
  * }}
  */
 export function createSqliteDatabase({
-  filename = ":memory:",
+  filename,
   timeout = DEFAULT_TIMEOUT_MS,
 } = {}) {
   validateOptions({ filename, timeout })
