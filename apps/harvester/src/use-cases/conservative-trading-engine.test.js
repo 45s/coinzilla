@@ -3553,3 +3553,78 @@ test("rejects canonical REST fill facts that contradict the durable Journal exec
   assert.deepEqual(harness.cancellationIds, [])
   assert.deepEqual(harness.orders, [])
 })
+
+
+test("rejects REST history that omits a durable Journal fill despite matching cumulative quantity", async () => {
+  const ownedOrder = new CanonicalOrder({
+    clientOrderId: "recovered-missing-journal-fill",
+    brokerOrderId: "broker-missing-journal-fill",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    status: "UNKNOWN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const historyOrder = new CanonicalOrder({
+    clientOrderId: ownedOrder.clientOrderId,
+    brokerOrderId: ownedOrder.brokerOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: ownedOrder.limitPrice,
+    originalQuantity: ownedOrder.originalQuantity,
+    executedQuantity: ownedOrder.executedQuantity,
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const exchangeFill = new Fill({
+    tradeId: "replacement-trade-id",
+    brokerOrderId: ownedOrder.brokerOrderId,
+    clientOrderId: ownedOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
+      journalFills: [{
+        fillId: "binance:BTCUSDT:expected-trade-id",
+        tradeId: "expected-trade-id",
+        brokerOrderId: ownedOrder.brokerOrderId,
+        clientOrderId: ownedOrder.clientOrderId,
+        symbol: market.symbol,
+        side: "BUY",
+        price: "100",
+        quantity: "1",
+        quoteQuantity: "100",
+        liquidityRole: "MAKER",
+        commissions: [],
+        commissionStatus: "COMPLETE",
+      }],
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  harness.broker.getFills = async () => ({ ok: true, data: [exchangeFill] })
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /missing durable Journal execution ID/)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.deepEqual(harness.orders, [])
+})
