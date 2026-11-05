@@ -160,7 +160,7 @@ describe('Logger transports and severity levels', () => {
     logger.setLevel({ transport: 'console', level: 'info' })
     logger.debug({ message: 'console disabled' })
 
-    assert.deepEqual(consoleEntries.map(({ message, data }) => data.message), ['console enabled'])
+    assert.deepEqual(consoleEntries.map(({ data }) => data.message), ['console enabled'])
     assert.deepEqual(fileEntries.map(({ data }) => data.message), [
       'before', 'console enabled', 'console disabled',
     ])
@@ -323,5 +323,146 @@ describe('Logger transports and severity levels', () => {
     assert.equal(errors.length, 1)
     assert.equal(errors[0].transport, 'broken')
     assert.match(errors[0].error.message, /close failed/)
+  })
+})
+
+
+describe('Logger transport validation and error boundaries', () => {
+  it('validates constructor options and transport contracts', () => {
+    const logger = new Logger({ transports: [] })
+
+    assert.throws(() => new Logger({ transports: null }), /transports must be an array/)
+    assert.throws(() => new Logger({ onTransportError: true }), /onTransportError must be a function/)
+    assert.throws(() => new Logger({ transports: [null] }), /Transport must be an object/)
+    assert.throws(() => logger.addTransport({ name: '', level: 'info', write() {} }), /name must be a non-empty string/)
+    assert.throws(() => logger.addTransport({ name: 'missing-write', level: 'info' }), /must provide write/)
+    assert.throws(() => logger.addTransport({ name: 'bad-close', level: 'info', write() {}, close: true }), /close must be a function/)
+    assert.throws(() => logger.addTransport({ name: 'bad-filter', level: 'info', write() {}, shouldWrite: true }), /shouldWrite must be a function/)
+    assert.throws(() => logger.addTransport({ name: 'bad-level', level: 3, write() {} }), /Invalid log level/)
+    assert.throws(() => logger.addTransport({ name: 'temporary', level: 'info', write() {} }).addTransport({
+      name: 'temporary', level: 'info', write() {},
+    }), /already exists/)
+  })
+
+  it('validates transport identifiers and returns false when removing an unknown transport', async () => {
+    const logger = new Logger({ transports: [] })
+
+    assert.throws(() => logger.setLevel({ transport: '', level: 'info' }), /identifier must be a non-empty string/)
+    assert.throws(() => logger.setLevel({ transport: 42, level: 'info' }), /identifier must be a non-empty string/)
+    assert.throws(() => logger.setLevel({ transport: 'missing', level: 1 }), /Invalid log level/)
+    assert.throws(() => logger.removeTransport(' '), /identifier must be a non-empty string/)
+    assert.equal(await logger.removeTransport('missing'), false)
+  })
+
+  it('honors optional filters and reports filter failures without blocking other transports', () => {
+    const errors = []
+    const delivered = []
+    const logger = new Logger({
+      transports: [
+        {
+          name: 'filtered',
+          level: 'trace',
+          shouldWrite: () => false,
+          write() {
+            assert.fail('filtered transport must not write')
+          },
+        },
+        {
+          name: 'filter-failure',
+          level: 'trace',
+          shouldWrite() {
+            throw new Error('filter failure')
+          },
+          write() {
+            assert.fail('failed filter must not write')
+          },
+        },
+        {
+          name: 'healthy',
+          level: 'trace',
+          write(entry) {
+            delivered.push(entry)
+          },
+        },
+      ],
+      onTransportError: ({ transport, error }) => errors.push({ transport, error }),
+    })
+
+    logger.info({ message: 'delivered' })
+
+    assert.equal(delivered.length, 1)
+    assert.deepEqual(errors.map(({ transport, error }) => [transport, error.message]), [
+      ['filter-failure', 'filter failure'],
+    ])
+  })
+
+  it('contains synchronous and asynchronous failures in the error reporter', async () => {
+    const originalError = console.error
+    const reported = []
+    console.error = (...args) => reported.push(args)
+
+    try {
+      const syncLogger = new Logger({
+        transports: [{
+          name: 'broken',
+          level: 'info',
+          write() {
+            throw new Error('write failed')
+          },
+        }],
+        onTransportError() {
+          throw new Error('reporter failed')
+        },
+      })
+      syncLogger.info({ message: 'safe' })
+
+      const asyncLogger = new Logger({
+        transports: [{
+          name: 'broken',
+          level: 'info',
+          write() {
+            throw new Error('write failed')
+          },
+        }],
+        onTransportError() {
+          return Promise.reject(new Error('async reporter failed'))
+        },
+      })
+      asyncLogger.info({ message: 'safe' })
+      await new Promise((resolve) => setImmediate(resolve))
+
+      assert.equal(reported.length, 2)
+      assert.match(reported[0][0], /error handler failed/)
+      assert.match(reported[1][0], /error handler failed/)
+    } finally {
+      console.error = originalError
+    }
+  })
+
+  it('closes transports without cleanup hooks and remains reusable after close', async () => {
+    const entries = []
+    const logger = new Logger({
+      transports: [{
+        name: 'capture',
+        level: 'info',
+        write(entry) {
+          entries.push(entry)
+        },
+      }],
+    })
+
+    await logger.close()
+    assert.deepEqual(logger.getConfig().transports, [])
+    logger.addTransport({
+      name: 'replacement',
+      level: 'info',
+      write(entry) {
+        entries.push(entry)
+      },
+    })
+    logger.info({ message: 'reused' })
+
+    assert.equal(entries.length, 1)
+    assert.equal(entries[0].data.message, 'reused')
   })
 })
