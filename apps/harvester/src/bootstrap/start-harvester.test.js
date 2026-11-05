@@ -211,6 +211,10 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
     "subscribe:BTCUSDT",
   ])
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
+  assert.ok(result.recoveredState)
+  assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
+  assert.deepEqual(result.recoveredState.pausedMarkets, [])
+  assert.equal(result.recoveredState.orderRegistry, undefined)
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
@@ -2000,4 +2004,31 @@ test("blocks read-only startup when either PREFLIGHT audit event publication fai
     assert.equal(calls.includes("disconnect"), true)
     assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
   }
+})
+
+
+test("rejects malformed durable Journal recovery before user-data subscription", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords: [{
+        id: "bad-recovery-record",
+        payload: {
+          id: "bad-recovery-record",
+          name: "order.submission_requested",
+          data: { clientOrderId: "missing-required-order-fields" },
+        },
+        position: { fileName: "session.jsonl", lineNumber: 1 },
+      }],
+      logger: { info() {}, error() {} },
+    }),
+    /Journal recovery projection failed/,
+  )
+
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
