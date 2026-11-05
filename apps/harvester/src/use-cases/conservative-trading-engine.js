@@ -253,9 +253,10 @@ export function makeConservativeTradingEngine({
   }
 
   const pause = async ({ symbol, reason, error }) => {
-    const wasPaused = state.paused.has(symbol)
+    const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
     state.paused.add(symbol)
-    if (!wasPaused) {
+    state.durablePausedMarkets.add(symbol)
+    if (!wasDurablyPaused) {
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
