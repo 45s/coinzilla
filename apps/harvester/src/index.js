@@ -1,7 +1,8 @@
 import { pathToFileURL } from "node:url"
 import { EventBus } from "@coinzilla/event-bus"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
-import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
+import { prepareOptionalJournal, resolveJournalDirectory } from "./infrastructure/journal/prepare-optional-journal.js"
+import { acquireHarvesterProcessLock } from "./infrastructure/process-lock/acquire-harvester-process-lock.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
@@ -15,19 +16,24 @@ function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
   return prepareOptionalJournal({ eventBus, logger, enabled, directory })
 }
 
-async function closeObservability({ journalService, eventBus, logger }) {
+async function closeObservability({ journalService, eventBus, processLock, logger }) {
   const errors = []
+  let journalClosed = !journalService
   if (typeof journalService?.close === "function") {
     try {
       const result = await journalService.close()
+      journalClosed = result?.ok === true || journalService.status?.started === false
       if (result?.ok !== true) {
         errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
           ? result.errors
           : [new Error("Journal close did not complete successfully")]))
       }
     } catch (error) {
+      journalClosed = journalService.status?.started === false
       errors.push(error)
     }
+  } else if (journalService) {
+    errors.push(new Error("Journal close capability is unavailable; trading process lock will be retained"))
   }
   if (typeof eventBus?.close === "function") {
     try {
@@ -41,6 +47,22 @@ async function closeObservability({ journalService, eventBus, logger }) {
       }
     } catch (error) {
       errors.push(error)
+    }
+  }
+  if (processLock) {
+    if (journalClosed) {
+      try {
+        const result = await processLock.release()
+        if (result?.ok !== true) {
+          errors.push(...(Array.isArray(result?.errors) && result.errors.length > 0
+            ? result.errors
+            : [new Error("Harvester trading process lock release failed")]))
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+    } else {
+      errors.push(new Error("Harvester trading process lock retained because Journal shutdown was not confirmed"))
     }
   }
   if (errors.length > 0) {
@@ -82,14 +104,30 @@ export async function main({
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
+  acquireProcessLock = acquireHarvesterProcessLock,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
 } = {}) {
   let eventPublisher
   let eventBus
   let journalService
+  let processLock
   try {
     eventBus = createEventBus({ logger })
+    if (env.HARVESTER_ENABLE_TRADING === "true") {
+      if (env.HARVESTER_JOURNAL_ENABLED?.trim().toLowerCase() === "false") {
+        throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
+      }
+      const lockResult = await acquireProcessLock({
+        directory: resolveJournalDirectory({ directory: env.HARVESTER_JOURNAL_DIRECTORY }),
+        logger,
+      })
+      if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
+        const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Conservative TESTNET trading cannot start because the single-writer process lock could not be acquired" + (details ? ": " + details : ""))
+      }
+      processLock = lockResult
+    }
     journalService = createJournalService({
       eventBus,
       logger,
@@ -190,7 +228,7 @@ export async function main({
               error: shutdownError,
             }),
           })
-          const cleanupErrors = await closeObservability({ journalService, eventBus, logger })
+          const cleanupErrors = await closeObservability({ journalService, eventBus, processLock, logger })
           if (cleanupErrors.length > 0) process.exitCode = 1
         })()
         return shutdownPromise
@@ -205,7 +243,7 @@ export async function main({
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
       dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
     })
-    const cleanupErrors = await closeObservability({ journalService, eventBus, logger })
+    const cleanupErrors = await closeObservability({ journalService, eventBus, processLock, logger })
     if (cleanupErrors.length > 0) process.exitCode = 1
     try {
       logger.error({
