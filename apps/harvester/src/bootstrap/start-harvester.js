@@ -1,4 +1,4 @@
-import { Fill } from "@coinzilla/entities"
+import { Fill, Market } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
 import { defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -629,6 +629,16 @@ export async function startHarvester({
   }
 
   try {
+    const recoveryProjection = projectHarvesterJournalRecovery({
+      records: journalRecoveryRecords,
+    })
+    if (!recoveryProjection?.ok) {
+      throw new Error(
+        "Harvester Journal recovery projection failed; trading state cannot be reconstructed: " +
+        (recoveryProjection?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
+      )
+    }
+
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
 
@@ -649,15 +659,26 @@ export async function startHarvester({
       logger.info?.({ message: "Exchange trading rules validated", symbol })
     }
 
-    const recoveryProjection = projectHarvesterJournalRecovery({
-      records: journalRecoveryRecords,
-    })
-    if (!recoveryProjection?.ok) {
-      throw new Error(
-        "Harvester Journal recovery projection failed; trading state cannot be reconstructed: " +
-        (recoveryProjection?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
-      )
+    const recoverySymbols = new Set([
+      ...recoveryProjection.data.orders.map(({ symbol }) => symbol),
+      ...recoveryProjection.data.fills.map(({ symbol }) => symbol),
+      ...recoveryProjection.data.recoveryCycles.map(({ symbol }) => symbol),
+    ])
+    for (const symbol of recoverySymbols) {
+      if (marketMetadata.has(symbol)) continue
+      const filtersResult = await broker.getSymbolFilters({ symbol })
+      const historicalMarket = filtersResult?.data?.market
+      if (!filtersResult?.ok || !(historicalMarket instanceof Market) || historicalMarket.symbol !== symbol) {
+        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          "Unable to load canonical exchange Market metadata for historical Harvester symbol " + symbol +
+          (details ? ": " + details : ""),
+        )
+      }
+      marketMetadata.set(symbol, { market: historicalMarket })
+      logger.info?.({ message: "Historical exchange Market metadata loaded for Journal recovery", symbol })
     }
+
     const restored = restoreHarvesterJournalState({
       projection: recoveryProjection,
       marketMetadata,
