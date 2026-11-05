@@ -19,20 +19,29 @@ export function allocateOrderCommitments({
   baseFreeBalance,
   quoteCashFlow,
   activeBaseQuantity,
+  activeBaseBalance,
   outstandingRecoveryAmount,
   committedQuote,
+  committedQuoteBalance,
   committedBase,
+  committedBaseBalance,
   investmentLimit,
 } = {}) {
   try {
     if (!Array.isArray(actions)) throw new TypeError("actions must be an array")
+    const accountActiveBaseQuantity = activeBaseBalance ?? activeBaseQuantity
+    const accountCommittedQuote = committedQuoteBalance ?? committedQuote
+    const accountCommittedBase = committedBaseBalance ?? committedBase
     for (const [field, value] of Object.entries({
       quoteFreeBalance,
       baseFreeBalance,
       activeBaseQuantity,
+      activeBaseBalance: accountActiveBaseQuantity,
       outstandingRecoveryAmount,
       committedQuote,
+      committedQuoteBalance: accountCommittedQuote,
       committedBase,
+      committedBaseBalance: accountCommittedBase,
       investmentLimit,
     })) {
       assertNonNegativeDecimal({ value, field })
@@ -41,11 +50,11 @@ export function allocateOrderCommitments({
 
     let remainingQuoteBalance = subtractDecimal({
       left: addDecimal({ left: quoteFreeBalance, right: quoteCashFlow }),
-      right: committedQuote,
+      right: accountCommittedQuote,
     })
     let remainingBaseBalance = subtractDecimal({
-      left: addDecimal({ left: baseFreeBalance, right: activeBaseQuantity }),
-      right: committedBase,
+      left: addDecimal({ left: baseFreeBalance, right: accountActiveBaseQuantity }),
+      right: accountCommittedBase,
     })
     let remainingActiveBase = subtractDecimal({
       left: activeBaseQuantity,
