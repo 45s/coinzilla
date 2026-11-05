@@ -112,6 +112,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { balances, sourceTime: accountSnapshotTime },
       }
     },
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async ({ symbol }) => {
       calls.push("filters:" + symbol)
       return { ok: true, data: createMarketMetadata(symbol) }
@@ -818,6 +819,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const broker = {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
@@ -1433,6 +1435,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
