@@ -101,7 +101,7 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
     (decision?.actions?.length
       ? decision.actions.map(({ side }) => side).join("+")
       : "NO_ACTION")
-  logger.info?.({
+  logger.debug?.({
     message: "Market price evaluated",
     symbol,
     price: priceEvent?.price,
@@ -124,7 +124,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     const marketId = input.marketMetadata?.market?.id
     const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
     logger.debug?.({
-      message: "Harvester strategy evaluation input",
+      message: "Strategy evaluation input",
       symbol: input.marketPrice?.symbol,
       marketPrice: input.marketPrice,
       lastBuyPrice: input.lastBuyPrice,
@@ -136,7 +136,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     })
     const decision = evaluateStrategy(input)
     logger.debug?.({
-      message: "Harvester strategy evaluation result",
+      message: "Strategy evaluation result",
       symbol: input.marketPrice?.symbol,
       action: decision?.action,
       reason: decision?.reason,
@@ -169,7 +169,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       }))
 
       logger.debug?.({
-        message: "Harvester accounting execution received",
+        message: "Execution received",
         executionId: fill.id,
         tradeId: fill.tradeId,
         brokerOrderId: fill.brokerOrderId,
@@ -199,7 +199,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
         const nextLedger = result.data.recoveryLedger
         logger.debug?.({
-          message: "Harvester accounting execution applied",
+          message: "Execution accounted",
           executionId: fill.id,
           tradeId: fill.tradeId,
           symbol: fill.market.symbol,
@@ -296,7 +296,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           const resetLedger = recoveryLedger.resetCycle()
           recoveryLedgers.set(marketId, resetLedger)
           logger.debug?.({
-            message: "Harvester recovery cycle completed and inventory allocated",
+            message: "Recovery cycle completed",
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
@@ -342,7 +342,7 @@ export async function startHarvester({
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.({
-      message: "Harvester market price processing failed",
+      message: "Market price processing failed",
       symbol,
       error,
       errors,
@@ -965,7 +965,7 @@ export async function startHarvester({
               return
             }
             logger.info?.({
-              message: "Harvester order event processed",
+              message: "Order update processed",
               eventType: event.eventType ?? "UNKNOWN",
               executionType: event.executionType,
               symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -1447,7 +1447,7 @@ export async function startHarvester({
     }
   } catch (error) {
     logger.error?.({
-      message: "Harvester broker workflow startup step failed",
+      message: "Broker startup step failed",
       errorName: error?.name,
       errorMessage: error?.message ?? String(error),
       errorStack: error?.stack,
