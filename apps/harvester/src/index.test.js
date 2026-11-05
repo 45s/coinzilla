@@ -68,7 +68,7 @@ test("logs startup failures as one structured logger argument", async () => {
 
     assert.equal(calls.length, 1)
     assert.equal(calls[0].level, "error")
-    assert.equal(calls[0].data.message, "Harvester startup failed.")
+    assert.equal(calls[0].data.message, "startup failed.")
     assert.equal(calls[0].data.error, error)
     assert.equal(calls[0].data.errorDetails.name, "Error")
     assert.equal(calls[0].data.errorDetails.message, "configuration failed")
