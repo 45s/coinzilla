@@ -546,7 +546,7 @@ test("marks an acknowledged OPEN order UNKNOWN without losing broker identity or
     .registerPending({ order: pending }).registry
     .applyUpdate({ order: open }).registry
 
-  const result = registry.markUnknown({ clientOrderId })
+  const result = registry.markCancellationUnknown({ clientOrderId })
   const tracked = result.data.registry.getOrder({ clientOrderId })
 
   assert.equal(result.ok, true)
@@ -573,7 +573,7 @@ test("marks a partially filled order UNKNOWN and preserves cumulative execution"
     .registerPending({ order: pending }).registry
     .applyUpdate({ order: partiallyFilled }).registry
 
-  const result = registry.markUnknown({ clientOrderId })
+  const result = registry.markCancellationUnknown({ clientOrderId })
   const tracked = result.data.registry.getOrder({ clientOrderId })
 
   assert.equal(result.ok, true)
