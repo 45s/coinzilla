@@ -34,17 +34,29 @@ test("detects a prior trading-enabled startup even without persisted order inten
   assert.equal(result.counts["harvester.started"], 1)
 })
 
-test("allows a Journal containing only startup and account-audit events", () => {
+test("allows a Journal containing only read-only startup events", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
-      { id: "1", payload: { name: "harvester.started", source: "harvester" } },
-      { id: "2", payload: { name: "account.audit.completed", source: "harvester" } },
+      { id: "1", payload: { name: "harvester.started", source: "harvester", data: { tradingEnabled: false } } },
+      { id: "2", payload: { name: "config.validated", source: "harvester" } },
     ],
   })
 
   assert.equal(result.ok, true)
   assert.equal(result.hasPriorTradingHistory, false)
   assert.equal(result.totalTradingEvents, 0)
+})
+
+test("requires recovery after a prior account snapshot even without order events", () => {
+  const result = summarizeHarvesterJournalHistory({
+    records: [
+      { id: "1", payload: { name: "account.snapshot_captured", source: "harvester" } },
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.hasPriorTradingHistory, true)
+  assert.equal(result.counts["account.snapshot_captured"], 1)
 })
 
 test("fails closed for an invalid records input", () => {
