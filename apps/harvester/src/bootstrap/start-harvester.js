@@ -679,7 +679,7 @@ export async function startHarvester({
       message: "Harvester Journal state restored in memory; canonical exchange reconciliation remains mandatory",
       recoveredOrders: recoveredState.orderRegistry?.orders?.length ?? 0,
       recoveredMarkets: recoveredState.recoveryLedgers.size,
-      recoveredPausedMarkets: recoveredState.pausedMarkets.length,
+      recoveredPausedMarkets: recoveredState.pausedMarkets.size ?? recoveredState.pausedMarkets.length,
       requiresExchangeReconciliation: recoveredState.requiresExchangeReconciliation,
     })
 
@@ -1090,6 +1090,7 @@ export async function startHarvester({
           orderRegistry: recoveredState.orderRegistry,
           pausedMarkets: recoveredState.pausedMarkets,
           replacementIntents: recoveredState.replacementIntents,
+          trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
           completedOrderClientIds: recoveredState.completedOrderClientIds,
           trailingBuySymbols: recoveredState.trailingBuySymbols,
         },
