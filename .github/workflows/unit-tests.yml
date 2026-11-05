@@ -50,7 +50,8 @@ jobs:
 
   broker-testnet-read-only:
     name: Run read-only Binance TESTNET integration
-    if: github.event_name == 'workflow_dispatch' && inputs.run_broker_testnet_read_only
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.run_broker_testnet_read_only
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
