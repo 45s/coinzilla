@@ -131,3 +131,29 @@ test("returns structured failures for invalid action sides and negative balance 
   assert.equal(negativeBalance.ok, false)
   assert.match(negativeBalance.errors[0].message, /must be non-negative/)
 })
+
+test("rejects malformed commitment inputs without throwing", () => {
+  const common = {
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: "0",
+    investmentLimit: "1000",
+  }
+  const invalidCases = [
+    { actions: null },
+    { actions: [null] },
+    { actions: [{ side: "BUY", price: "10", quantity: "0" }] },
+    { actions: [{ side: "BUY", price: "0", quantity: "1" }] },
+    { actions: [{ side: "BUY", price: "10", quantity: "1" }], quoteCashFlow: "not-a-decimal" },
+  ]
+
+  for (const invalidCase of invalidCases) {
+    const result = allocateOrderCommitments({ ...common, actions: [], ...invalidCase })
+    assert.equal(result.ok, false)
+    assert.ok(result.errors.length > 0)
+  }
+})
