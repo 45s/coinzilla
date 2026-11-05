@@ -578,7 +578,6 @@ export class BinanceUserDataSession {
       }
     } finally {
       this.#detachUserDataListeners()
-      this.#deduplicator.clear()
     }
   }
 
