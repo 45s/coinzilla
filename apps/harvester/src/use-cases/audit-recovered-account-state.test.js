@@ -360,3 +360,29 @@ test("uses the durable PREFLIGHT baseline when a crash occurs before harvester.s
   assert.equal(result.ok, true)
   assert.equal(result.data.balancesChecked, 2)
 })
+
+
+test("rejects an incomplete durable PREFLIGHT baseline even when current balances happen to match", () => {
+  const { projection, restored } = restoreState()
+  const incompleteProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((snapshot, index) =>
+        index === 0
+          ? { ...snapshot, auditStatus: "INCOMPLETE", auditReasons: ["MISSING_ASSET_COVERAGE"] }
+          : snapshot
+      ),
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection: incompleteProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /baseline account snapshot is incomplete/)
+})
