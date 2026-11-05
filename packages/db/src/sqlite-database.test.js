@@ -155,8 +155,8 @@ test("SQLite enforces foreign keys", async () => {
 test("SQLite rejects missing or invalid options", () => {
   assert.throws(() => createSqliteDatabase(), /filename/)
   assert.throws(() => createSqliteDatabase({ filename: "" }), /filename/)
-  assert.throws(() => createSqliteDatabase({ timeout: -1 }), /timeout/)
-  assert.throws(() => createSqliteDatabase({ timeout: 1.5 }), /timeout/)
+  assert.throws(() => createSqliteDatabase({ filename: ":memory:", timeout: -1 }), /timeout/)
+  assert.throws(() => createSqliteDatabase({ filename: ":memory:", timeout: 1.5 }), /timeout/)
 })
 
 test("SQLite operations require an open connection", async () => {
