@@ -166,8 +166,8 @@ test("allows exactly one owner when two processes race to acquire the same lock"
   const directory = await createTempDirectory()
   try {
     const results = await Promise.all([
-      acquireHarvesterProcessLock({ directory, pid: 301, hostname: "race-host", token: "race-token-a" }),
-      acquireHarvesterProcessLock({ directory, pid: 302, hostname: "race-host", token: "race-token-b" }),
+      acquireHarvesterProcessLock({ directory, pid: 301, hostname: "race-host", token: "race-token-a", isProcessAlive: () => true }),
+      acquireHarvesterProcessLock({ directory, pid: 302, hostname: "race-host", token: "race-token-b", isProcessAlive: () => true }),
     ])
     const owners = results.filter((result) => result.ok)
     const conflicts = results.filter((result) => !result.ok)
