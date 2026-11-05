@@ -28,15 +28,15 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
 ])
 const MAX_CONSOLE_LINE_LENGTH = 200
 const LEVEL_COLORS = Object.freeze({
-  trace: "\\u001b[95m",
-  debug: "\\u001b[35m",
-  info: "\\u001b[34m",
-  success: "\\u001b[32m",
-  system: "\\u001b[36m",
-  warn: "\\u001b[33m",
-  error: "\\u001b[31m",
+  trace: "\u001b[95m",
+  debug: "\u001b[35m",
+  info: "\u001b[34m",
+  success: "\u001b[32m",
+  system: "\u001b[36m",
+  warn: "\u001b[33m",
+  error: "\u001b[31m",
 })
-const ANSI_RESET = "\\u001b[0m"
+const ANSI_RESET = "\u001b[0m"
 
 function formatLevel({ level, color }) {
   const label = level.toUpperCase()
@@ -205,7 +205,8 @@ export async function configureHarvesterLogging({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    output.write(time + " INFO Previous identical log entry repeated " + suppressedCount + " additional time(s)\n")
+    const level = formatLevel({ level: "info", color })
+    output.write(time + " " + level + " Previous identical log entry repeated " + suppressedCount + " additional time(s)\n")
     suppressedCount = 0
   }
 
@@ -226,7 +227,6 @@ export async function configureHarvesterLogging({
 
       const time = new Date(timestamp).toLocaleTimeString()
       const plainPrefix = time + " " + level.toUpperCase() + " " + summary.message
-      const prefix = time + " " + formatLevel({ level, color }) + " " + summary.message
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
         : ""
@@ -236,10 +236,15 @@ export async function configureHarvesterLogging({
           ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
           : "")
         : serializedDetails
-      const line = prefix + suffix
-      output.write((line.length > MAX_CONSOLE_LINE_LENGTH
-        ? line.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
-        : line) + "\n")
+      const plainLine = plainPrefix + suffix
+      const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
+        ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
+        : plainLine
+      const label = formatLevel({ level, color })
+      const renderedLine = color
+        ? time + " " + label + " " + boundedLine.slice(plainPrefix.length - level.length)
+        : boundedLine
+      output.write(renderedLine + "\n")
     },
     close: flushSuppressed,
   }
