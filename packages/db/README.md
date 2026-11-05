@@ -114,10 +114,10 @@ Migration functions must be synchronous. Applied versions must remain in the mig
 
 The source is organized by dependency direction:
 
-- `domain/entities/Database`: owns the provider-independent lifecycle state, transaction tracking, and shutdown invariants.
-- `domain/entities/Migration`: immutable schema-change identity (positive version) and its synchronous operation.
+- `domain/entities/database.js` (`Database`): owns the provider-independent lifecycle state, transaction tracking, and shutdown invariants.
+- `domain/entities/migration.js` (`Migration`): immutable schema-change identity (positive version) and its synchronous operation.
 - `domain/services/migration-history.js`: pure policy that detects removed or renamed applied migrations and identifies pending work.
-- `application/ports/DatabaseProvider`: the provider contract required by the lifecycle aggregate.
+- `application/ports/database-provider.js` (`DatabaseProvider`): the provider contract required by the lifecycle aggregate.
 - `application/use-cases/create-database.js`: constructs the lifecycle aggregate through that port.
 - `infrastructure/sqlite/`: owns `node:sqlite`, SQL execution, transaction mechanics, and the persistent migration-history table.
 
