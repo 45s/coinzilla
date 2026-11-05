@@ -15,6 +15,14 @@ import { createLogCommandInterface } from "./infrastructure/logging/create-log-c
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
+function logSystem(logger, message) {
+  if (typeof logger?.system === "function") {
+    logger.system(message)
+    return
+  }
+  logger?.info?.(message)
+}
+
 function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
   return prepareOptionalJournal({ eventBus, logger, enabled, directory })
 }
@@ -75,7 +83,7 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   if (errors.length > 0) {
     try {
       logger?.error?.({
-        message: "Harvester observability shutdown incomplete",
+        message: "observability shutdown incomplete",
         errorCount: errors.length,
         errors,
       })
@@ -191,12 +199,12 @@ export async function main({
 
     const startupMessage = runtime.connected
       ? runtime.tradingEnabled && runtime.strategyMode === "conservative"
-        ? "Harvester connected and subscribed to " + runtime.subscriptions.length +
+        ? "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness."
-        : "Harvester connected and subscribed to " + runtime.subscriptions.length +
+        : "Connected; subscribed to " + runtime.subscriptions.length +
           " enabled market(s) in read-only mode; order execution is disabled."
-      : "Harvester configuration validated; broker connection and market data are disabled."
-    logger.info(startupMessage)
+      : "Configuration validated; broker and market data are disabled."
+    logSystem(logger, startupMessage)
 
     if (typeof runtime.stop === "function") {
       let shutdownPromise
@@ -212,15 +220,15 @@ export async function main({
               shutdownError = stopResult?.errors?.[0]
                 ?? new Error("Harvester runtime stop did not confirm shutdown")
               process.exitCode = 1
-              logger.error({ message: "Harvester shutdown was not confirmed.", error: shutdownError })
+              logger.error({ message: "shutdown was not confirmed.", error: shutdownError })
             } else {
-              logger.info("Harvester shutdown completed.")
+              logSystem(logger, "Shutdown completed.")
             }
           } catch (error) {
             shutdownError = error
             process.exitCode = 1
             try {
-              logger.error({ message: "Harvester shutdown failed.", error })
+              logger.error({ message: "shutdown failed.", error })
             } catch {
               // Logging failure must not prevent the shutdown event attempt.
             }
@@ -247,7 +255,7 @@ export async function main({
           } catch (error) {
             process.exitCode = 1
             try {
-              logger.error({ message: "Harvester log transport shutdown failed.", error })
+              logger.error({ message: "log transport shutdown failed.", error })
             } catch {
               // Logging cleanup failure must not interrupt process shutdown.
             }
@@ -277,7 +285,7 @@ export async function main({
     if (cleanupErrors.length > 0) process.exitCode = 1
     try {
       logger.error({
-        message: "Harvester startup failed.",
+        message: "startup failed.",
         error,
         errorDetails: describeError(error),
       })
@@ -289,7 +297,7 @@ export async function main({
     } catch (loggingError) {
       process.exitCode = 1
       try {
-        logger.error({ message: "Harvester log transport shutdown failed.", error: loggingError })
+        logger.error({ message: "log transport shutdown failed.", error: loggingError })
       } catch {
         // Logging cleanup failure must not hide the original startup failure.
       }

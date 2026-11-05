@@ -4,7 +4,8 @@ import test from "node:test"
 import { BinanceSdkBroker } from "./broker.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "./test-helpers/fake-broker-clients.js"
 
-const logger = { debug() {}, error() {}, info() {}, warn() {} }
+const loggerCalls = []
+const logger = { debug() {}, error() {}, info() {}, system(message) { loggerCalls.push(message) }, warn() {} }
 const config = { apiKey: "test-key", apiSecret: "test-secret", logger }
 
 function createBroker(handlers = {}) {
@@ -121,10 +122,12 @@ test("connect opens the WebSocket API client and disconnect closes both native c
   await broker.connect()
   assert.equal(broker.connected, true)
   assert.equal(rpc.state, "open")
+  assert.ok(loggerCalls.includes("Binance WebSocket API connected; public Streams connect on demand"))
 
   await broker.disconnect()
   assert.equal(broker.connected, false)
   assert.equal(rpc.state, "closed")
+  assert.ok(loggerCalls.includes("Binance native WebSocket clients disconnected"))
   assert.deepEqual(streams.calls, [])
 })
 

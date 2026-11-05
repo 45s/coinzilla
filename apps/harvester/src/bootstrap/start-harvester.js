@@ -34,6 +34,14 @@ import {
   mapAccountOpenOrdersCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
+
 async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
   const results = await Promise.allSettled([
     ...bookSubscriptions.map(({ unsubscribe }) => {
@@ -101,7 +109,7 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
     (decision?.actions?.length
       ? decision.actions.map(({ side }) => side).join("+")
       : "NO_ACTION")
-  logger.info?.({
+  logger.debug?.({
     message: "Market price evaluated",
     symbol,
     price: priceEvent?.price,
@@ -124,7 +132,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     const marketId = input.marketMetadata?.market?.id
     const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
     logger.debug?.({
-      message: "Harvester strategy evaluation input",
+      message: "Strategy evaluation input",
       symbol: input.marketPrice?.symbol,
       marketPrice: input.marketPrice,
       lastBuyPrice: input.lastBuyPrice,
@@ -136,7 +144,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     })
     const decision = evaluateStrategy(input)
     logger.debug?.({
-      message: "Harvester strategy evaluation result",
+      message: "Strategy evaluation result",
       symbol: input.marketPrice?.symbol,
       action: decision?.action,
       reason: decision?.reason,
@@ -152,7 +160,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     const task = updateQueue.then(() => {
       if (!(fill instanceof Fill)) {
         logger.error?.({
-          message: "Harvester accounting rejected non-canonical fill",
+          message: "accounting rejected non-canonical fill",
           fillType: fill?.constructor?.name ?? typeof fill,
         })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
@@ -169,7 +177,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       }))
 
       logger.debug?.({
-        message: "Harvester accounting execution received",
+        message: "Execution received",
         executionId: fill.id,
         tradeId: fill.tradeId,
         brokerOrderId: fill.brokerOrderId,
@@ -199,7 +207,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
         const nextLedger = result.data.recoveryLedger
         logger.debug?.({
-          message: "Harvester accounting execution applied",
+          message: "Execution accounted",
           executionId: fill.id,
           tradeId: fill.tradeId,
           symbol: fill.market.symbol,
@@ -240,7 +248,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         })
       } else {
         logger.error?.({
-          message: "Harvester accounting execution rejected",
+          message: "accounting execution rejected",
           executionId: fill.id,
           tradeId: fill.tradeId,
           symbol: fill.market.symbol,
@@ -281,7 +289,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           minProfit,
         }
         logger.debug?.({
-          message: "Harvester recovery completion evaluation input",
+          message: "recovery completion evaluation input",
           marketId,
           symbol: recoveryLedger.market.symbol,
           completionInput,
@@ -296,7 +304,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           const resetLedger = recoveryLedger.resetCycle()
           recoveryLedgers.set(marketId, resetLedger)
           logger.debug?.({
-            message: "Harvester recovery cycle completed and inventory allocated",
+            message: "Recovery cycle completed",
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
@@ -307,7 +315,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           })
         } else {
           logger.debug?.({
-            message: "Harvester recovery cycle not completed",
+            message: "recovery cycle not completed",
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
@@ -318,7 +326,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         return toResult({ data: completion })
       } catch (error) {
         logger.error?.({
-          message: "Harvester recovery completion evaluation failed",
+          message: "recovery completion evaluation failed",
           marketId,
           errorName: error?.name,
           errorMessage: error?.message ?? String(error),
@@ -342,7 +350,7 @@ export async function startHarvester({
   eventPublisher,
   onMarketPriceError = ({ symbol, error, errors }) => {
     logger.error?.({
-      message: "Harvester market price processing failed",
+      message: "Market price processing failed",
       symbol,
       error,
       errors,
@@ -388,8 +396,8 @@ export async function startHarvester({
       tradingEnabled,
     }),
   })
-  logger.info?.({
-    message: "Harvester trading configuration validated",
+  logSystem(logger, {
+    message: "Trading configuration validated",
     enabledSymbols,
     strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
   })
@@ -426,7 +434,7 @@ export async function startHarvester({
   let hasCanonicalOwnershipReconciliation = false
 
   if (brokerName === undefined || brokerName === "") {
-    logger.info?.({ message: "Harvester started without a broker; exchange connectivity is disabled" })
+    logSystem(logger, { message: "Broker disabled; exchange connectivity unavailable" })
     return Object.freeze({
       tradingConfig,
       eventPublisher,
@@ -459,7 +467,7 @@ export async function startHarvester({
   })
 
   try {
-    logger.info?.({ message: "Connecting to Binance broker" })
+    logSystem(logger, { message: "Connecting to Binance broker" })
 
     await broker.connect()
     publishLifecycleEvent({
@@ -467,7 +475,6 @@ export async function startHarvester({
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
-    logger.info?.({ message: "Binance broker connected" })
   } catch (error) {
     publishLifecycleEvent({
       eventPublisher,
@@ -514,9 +521,9 @@ export async function startHarvester({
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) logger.error?.({ message: "Harvester deferred strategy evaluation failed", errors: result.errors })
+      if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
     }).catch((error) => {
-      logger.error?.({ message: "Harvester deferred strategy evaluation failed", error })
+      logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
   }
   const refreshAccountSnapshot = async () => {
@@ -546,7 +553,7 @@ export async function startHarvester({
       throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
     }
     accountSnapshot = nextSnapshot
-    logger.info?.({
+    logSystem(logger, {
       message: "Exchange account snapshot loaded",
       balanceCount: nextSnapshot.balances.length,
       sourceTime: nextSnapshot.sourceTime,
@@ -689,7 +696,7 @@ export async function startHarvester({
     } else {
       throw new Error("Harvester startup requires a durable Journal flush before market subscriptions")
     }
-    logger.info?.({
+    logSystem(logger, {
       message: "Account snapshot captured and durably journaled",
       phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
     })
@@ -713,7 +720,7 @@ export async function startHarvester({
     }
     if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
       logger.error?.({
-        message: "Harvester cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
+        message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
       })
       return
     }
@@ -724,7 +731,7 @@ export async function startHarvester({
     const recoveryTask = (async () => {
       try {
         logger.info?.({
-          message: "Harvester application recovery started after user-data transport reconnect",
+          message: "application recovery started after user-data transport reconnect",
           generation,
         })
 
@@ -786,7 +793,7 @@ export async function startHarvester({
         }
         lastAcknowledgedRecoveryGeneration = generation
         logger.info?.({
-          message: "Harvester application recovery completed and broker acknowledgement accepted",
+          message: "application recovery completed and broker acknowledgement accepted",
           generation,
           reconciledOrders: reconciliation.data?.reconciled ?? 0,
         })
@@ -797,7 +804,7 @@ export async function startHarvester({
           ? "EXECUTION_ACCOUNTING_FAILED"
           : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         logger.error?.({
-          message: "Harvester application recovery failed; trading remains blocked",
+          message: "application recovery failed; trading remains blocked",
           generation,
           errorName: error?.name ?? "Error",
           errorMessage: error?.message || String(error),
@@ -853,7 +860,7 @@ export async function startHarvester({
       },
       isStopping: () => stopped,
       onPause: async ({ symbol, reason, error }) => {
-        logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
+        logger.error?.({ message: "paused a trading pair", symbol, reason, error })
       },
     })
     processMarketPrice = tradingEngine.processMarketPrice
@@ -864,7 +871,7 @@ export async function startHarvester({
       onMarketPriceError(details)
     } catch (error) {
       logger.error?.({
-        message: "Harvester market price error handler failed",
+        message: "market price error handler failed",
         error,
       })
     }
@@ -888,7 +895,7 @@ export async function startHarvester({
         marketMetadata: filtersResult.data,
       })
       marketMetadata.set(symbol, validatedMetadata)
-      logger.info?.({ message: "Exchange trading rules validated", symbol })
+      logSystem(logger, { message: "Exchange trading rules validated", symbol })
     }
 
     // Durable Journal replay is intentionally disabled. Harvester starts with
@@ -897,7 +904,7 @@ export async function startHarvester({
     if (tradingEnabled) activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
-    logger.info?.({ message: "Subscribing to Binance user-data events" })
+    logSystem(logger, { message: "Subscribing to Binance user-data events" })
 
     let userDataResult
     try {
@@ -941,7 +948,7 @@ export async function startHarvester({
                 incomingBrokerOrderId !== undefined &&
                 order.brokerOrderId === incomingBrokerOrderId)
               logger.error?.({
-                message: "Harvester rejected an unowned or invalid order event",
+                message: "rejected an unowned or invalid order event",
                 eventType: event.eventType ?? "UNKNOWN",
                 executionType: event.executionType,
                 symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -965,7 +972,7 @@ export async function startHarvester({
               return
             }
             logger.info?.({
-              message: "Harvester order event processed",
+              message: "Order update processed",
               eventType: event.eventType ?? "UNKNOWN",
               executionType: event.executionType,
               symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -987,7 +994,7 @@ export async function startHarvester({
             userDataReady = false
             userDataStatus = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
             logger.error?.({
-              message: "Harvester received an order report before its order-ownership registry was ready",
+              message: "received an order report before its order-ownership registry was ready",
               symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
               brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
             })
@@ -1008,7 +1015,7 @@ export async function startHarvester({
             // Observability hooks must not roll back a fill already committed
             // to both immutable accounting projections.
             logger.error?.({
-              message: "Harvester user-data observer failed",
+              message: "user-data observer failed",
               eventType: event.eventType ?? "UNKNOWN",
               error,
             })
@@ -1017,7 +1024,7 @@ export async function startHarvester({
           userDataAccountingFailed = true
           userDataReady = false
           userDataStatus = "EVENT_QUEUE_FAILED"
-          logger.error?.({ message: "Harvester user-data event queue failed", error })
+          logger.error?.({ message: "user-data event queue failed", error })
         }).finally(async () => {
           if (stopped) {
             userDataReady = false
@@ -1042,7 +1049,7 @@ export async function startHarvester({
           userDataStatus = "READY"
           if (reevaluateSymbol && tradingEngine) {
             const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-            if (!reevaluated.ok) logger.error?.({ message: "Harvester next strategy evaluation failed", errors: reevaluated.errors })
+            if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
           }
           resumeDeferredStrategyEvaluations()
         })
@@ -1170,7 +1177,7 @@ export async function startHarvester({
           userDataReady = false
           userDataAccountingFailed = true
           userDataStatus = "STATUS_HANDLER_FAILED"
-          logger.error?.({ message: "Harvester user-data status handler failed", error })
+          logger.error?.({ message: "user-data status handler failed", error })
         }
       },
       })
@@ -1205,7 +1212,7 @@ export async function startHarvester({
       dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
     })
     userDataSubscription = userDataResult.data
-    logger.info?.({ message: "Binance user-data subscription established" })
+    logSystem(logger, { message: "Binance user-data subscription established" })
 
     userDataReady = false
     userDataStatus = userDataAccountingFailed
@@ -1251,7 +1258,7 @@ export async function startHarvester({
       if (userDataRequiresReconciliation) {
         throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
       }
-      logger.info?.({
+      logSystem(logger, {
         message: "Conservative TESTNET startup checks passed; current account audit is complete",
         enabledSymbols,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
@@ -1260,7 +1267,7 @@ export async function startHarvester({
       userDataReady = true
       userDataStatus = "READY"
       resumeDeferredStrategyEvaluations()
-      logger.info?.({ message: "Conservative TESTNET trading engine activated" })
+      logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
     }
 
     // Establish every enabled market stream before doing any REST ticker
@@ -1278,10 +1285,10 @@ export async function startHarvester({
             onBookTicker: (bookTicker) => {
               if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
               return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
-                if (!processed.ok) logger.error?.({ message: "Harvester market book processing failed", symbol, errors: processed.errors })
+                if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
                 return processed
               }).catch((error) => {
-                logger.error?.({ message: "Harvester market book processing failed", symbol, error })
+                logger.error?.({ message: "market book processing failed", symbol, error })
                 return toResult({ error })
               })
             },
@@ -1294,8 +1301,8 @@ export async function startHarvester({
           throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
         }
         bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
-        logger.info?.({
-          message: "Harvester subscribed to book ticker",
+        logSystem(logger, {
+          message: "Book ticker subscribed",
           symbol,
           stream: bookResult.data.stream ?? null,
         })
@@ -1381,8 +1388,8 @@ export async function startHarvester({
       })
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
       marketPriceIntake.set(symbol, intakeState)
-      logger.info?.({
-        message: "Harvester subscribed to market prices",
+      logSystem(logger, {
+        message: "Market data subscribed",
         symbol,
         stream: result.data.stream ?? null,
       })
@@ -1393,8 +1400,8 @@ export async function startHarvester({
     if (missingSubscriptions.length > 0) {
       throw new Error("Harvester startup did not establish market-price subscriptions for every enabled pair: " + missingSubscriptions.join(", "))
     }
-    logger.info?.({
-      message: "All enabled Harvester market-price subscriptions established",
+    logSystem(logger, {
+      message: "Market data subscriptions ready",
       enabledSymbols,
       subscribedSymbols,
     })
@@ -1447,7 +1454,7 @@ export async function startHarvester({
     }
   } catch (error) {
     logger.error?.({
-      message: "Harvester broker workflow startup step failed",
+      message: "Broker startup step failed",
       errorName: error?.name,
       errorMessage: error?.message ?? String(error),
       errorStack: error?.stack,
@@ -1471,7 +1478,7 @@ export async function startHarvester({
     stopped = true
     userDataReady = false
     userDataStatus = "STOPPING"
-    logger.info?.({ message: "Harvester shutdown started" })
+    logSystem(logger, { message: "Shutdown started" })
 
     const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
     await userDataEventQueue
@@ -1503,7 +1510,7 @@ export async function startHarvester({
       }
     } catch (error) {
       snapshotError = error
-      logger.error?.({ message: "Harvester closing account snapshot failed", error })
+      logger.error?.({ message: "closing account snapshot failed", error })
     }
 
     userDataStatus = "STOPPED"
@@ -1512,7 +1519,7 @@ export async function startHarvester({
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }
-    logger.info?.({ message: "Harvester shutdown completed" })
+    logSystem(logger, { message: "Shutdown completed" })
   }
 
   return Object.freeze({

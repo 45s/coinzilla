@@ -98,7 +98,7 @@ export class Journal {
       this.started = true
 
       try {
-        this.logger.info?.("Journal started", {
+        this.logger.system?.("Journal started", {
           filePath: this.filePath,
         })
       } catch {
@@ -345,7 +345,7 @@ export class Journal {
 
     this.closeDurable = true
     try {
-      this.logger.info?.("Journal closed", {
+      this.logger.system?.("Journal closed", {
         filePath: this.filePath,
       })
     } catch {

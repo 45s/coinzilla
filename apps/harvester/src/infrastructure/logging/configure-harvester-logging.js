@@ -206,7 +206,7 @@ export async function configureHarvesterLogging({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const line = time + " INFO Previous identical log entry repeated " + suppressedCount + " additional time(s)"
+    const line = time + " Previous identical log entry repeated " + suppressedCount + " additional time(s)"
     output.write(formatConsoleLine({ line, level: "info", color }) + "\n")
     suppressedCount = 0
   }
@@ -227,7 +227,8 @@ export async function configureHarvesterLogging({
       previousTimestamp = timestamp
 
       const time = new Date(timestamp).toLocaleTimeString()
-      const plainPrefix = time + " " + method.toUpperCase() + " " + summary.message
+      const levelLabel = method === "info" ? "" : method.toUpperCase() + " "
+      const plainPrefix = time + " " + levelLabel + summary.message
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
         : ""
