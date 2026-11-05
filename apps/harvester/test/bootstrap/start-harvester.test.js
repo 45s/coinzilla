@@ -315,6 +315,7 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   const priceSubscriptions = new Map()
   const bookSubscriptions = []
   const submittedSymbols = []
+  const diagnosticLogs = []
   let orderSequence = 0
   let snapshotSequence = 0
   const broker = {
@@ -379,13 +380,17 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       BINANCE_API_SECRET_KEY: "test-secret",
     },
     now: () => 10,
-    logger: { debug() {}, info() {}, error() {} },
+    logger: {
+      debug(entry) { diagnosticLogs.push(entry) },
+      info(entry) { diagnosticLogs.push(entry) },
+      error(entry) { diagnosticLogs.push(entry) },
+    },
   })
 
   assert.equal(context.userDataReady, true)
   assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
   assert.deepEqual(bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
-  assert.deepEqual(submittedSymbols, ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual(submittedSymbols, ["DOGEUSDT", "ZROUSDT"], JSON.stringify(diagnosticLogs))
   assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
   assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
 
