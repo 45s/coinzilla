@@ -658,3 +658,17 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 ## Accepted cross-domain capability — Harvester book ticker (#506)
 
 - [x] Expose Binance `bookTicker` through the additive `subscribeForBookTicker({ symbol, onBookTicker })` broker method while preserving the aggregate-trade `subscribeForPrices` contract. Broker API, immutable exact-string adapter, deterministic adapter/subscription tests, and README documentation merged in PRs #507 and #510; Harvester's fresh best-bid/best-ask POST-ONLY crossing validation and shutdown coverage merged in PRs #508 and #509.
+
+## 14. Mandatory autonomous DDD refactoring execution
+
+The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve all public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
+
+- Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
+- Characterize existing behavior first. Follow strict RED → GREEN → REFACTOR in small vertical slices; run deterministic tests after each change and maintain the package coverage gates. Do not weaken or delete existing tests to make a refactor pass.
+- Create as many focused PRs as necessary. Each task branch is short-lived, starts from the latest `develop`, and targets `develop`. Multiple coherent commits per task branch are encouraged.
+- The agent owns the full delivery loop: implement, test, document, synchronize, open PR, inspect CI, merge when safe, clean up, update this roadmap, and start the next task. **Do not stop to request routine user approval or wait for the user to ask you to continue.**
+- Merge a task PR into `develop` once its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage pass, the diff is focused, and existing broker behavior/compatibility has been verified. No routine human approval is required for task PRs into `develop`. Never bypass branch protection or merge with pending/failed/missing required checks.
+- After merge, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
+- A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
+- If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
+
