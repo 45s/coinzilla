@@ -3275,6 +3275,8 @@ test("clears a recovered replacement intent only after canonical history confirm
     initialBook: false,
     initialState: {
       orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
+      pausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
       replacementIntents: new Set(["DOGEUSDT"]),
     },
   })
@@ -3290,6 +3292,7 @@ test("clears a recovered replacement intent only after canonical history confirm
   assert.equal(harness.engine.getOrders()[0].status, "CANCELED")
   assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, [])
   assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  assert.deepEqual(harness.engine.getPausedMarkets(), [])
 })
 
 
