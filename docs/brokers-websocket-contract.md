@@ -206,3 +206,9 @@ The session coordinator no longer imports Binance event adapters or Binance even
 The user-data lifecycle coordinator now lives at `src/application/user-data-session.js` and depends on the exchange-neutral recovery policy plus the application-owned `UserDataClientPort` contract in `src/ports/user-data-client-port.js`. The Binance broker facade composes this application service with the Binance client adapter. Runtime validation at the application boundary rejects incomplete injected ports before subscription operations begin.
 
 The package coverage command now includes `src/application/**/*.js` and `src/ports/**/*.js`, excluding their test files, so these new DDD layers remain subject to the existing coverage thresholds.
+
+### Phase 9 implementation slice 5 — Binance infrastructure adapter
+
+The Binance implementation of `UserDataClientPort` now lives in `src/infrastructure/binance/user-data-client-adapter.js`. The broker facade composes this adapter with the application session; the adapter owns Binance request names, HMAC signing options, response-envelope normalization, canonical user-data event mapping, termination conversion, and exchange-specific event identity generation. Its deterministic tests live beside the infrastructure implementation.
+
+The broker coverage command now includes `src/infrastructure/**/*.js` and excludes infrastructure test files, applying the same existing coverage thresholds to the adapter layer.
