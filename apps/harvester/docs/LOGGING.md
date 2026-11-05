@@ -14,7 +14,7 @@ When the CLI starts, it configures three independent destinations:
 | Development diagnostics | `logs/harvester.log` | DEBUG |
 | Detailed trace | `logs/harvester-trace.log` | TRACE |
 
-The terminal suppresses consecutive identical entries and prints a repeat count when the entry changes or the process shuts down. Changed values are printed immediately. The JSONL files retain every structured shared-logger entry, including duplicates, with one entry per line. Each entry
+The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
 retains its timestamp, normalized severity, logging method, and redacted,
 JSON-safe structured data. A console threshold change does not change either
 file threshold.
