@@ -175,7 +175,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
-    const pausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
+    const pausedMarkets = [...new Set(data.pausedMarkets.map(({ symbol }) => symbol))]
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
