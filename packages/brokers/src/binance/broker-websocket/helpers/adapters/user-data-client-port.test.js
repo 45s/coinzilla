@@ -108,7 +108,7 @@ test("normalizes Binance user-data stream termination into a neutral port event"
   const client = createFakeRpcClient()
   const port = createBinanceUserDataClientPort(client)
   const received = []
-  port.onEvent((event) => received.push(event))
+  const removeEvent = port.onEvent((event) => received.push(event))
 
   const termination = { e: "eventStreamTerminated", E: 123456 }
   client.emitEvent({ subscriptionId: 17, event: termination })
@@ -119,4 +119,7 @@ test("normalizes Binance user-data stream termination into a neutral port event"
     eventTime: 123456,
     event: termination,
   }])
+
+  removeEvent()
+  await client.disconnect()
 })
