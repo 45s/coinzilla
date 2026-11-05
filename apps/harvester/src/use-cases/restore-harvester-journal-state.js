@@ -166,6 +166,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const restoredOrders = []
     const replacementIntents = new Set()
     const trailingBuyRepriceIntents = new Set()
+    const unrequestedTerminalOrderClientIds = new Set()
     const recoveryManagedPausedMarkets = new Set()
     const recoveryManagedCancellationClientOrderIds = new Set()
     const latestSubmissionSequenceBySymbolSide = new Map()
@@ -183,6 +184,9 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
+      if (order.cancellationState === "NONE") {
+        unrequestedTerminalOrderClientIds.add(order.clientOrderId)
+      }
       if (order.cancellationState === "CANCELED" &&
           compareDecimal({ left: order.cumulativeFillQuantity, right: "0" }) > 0) {
         // The live engine pauses after any partially executed order is canceled.
@@ -252,6 +256,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         durablePausedMarkets,
         recoveryManagedPausedMarkets,
         recoveryManagedCancellationClientOrderIds,
+        unrequestedTerminalOrderClientIds,
         replacementIntents,
         trailingBuyRepriceIntents,
         completedOrderClientIds,
