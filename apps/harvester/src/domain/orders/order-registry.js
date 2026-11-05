@@ -239,6 +239,52 @@ export class OrderRegistry {
       return toResult({ error })
     }
   }
+  markCancellationUnknown({ clientOrderId } = {}) {
+    try {
+      if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+        throw new TypeError("markCancellationUnknown requires a non-empty clientOrderId")
+      }
+      const index = this.#orders.findIndex((order) => order.clientOrderId === clientOrderId)
+      if (index < 0) throw new Error("Cannot mark an unregistered order UNKNOWN")
+      const current = this.#orders[index]
+      if (current.status === "UNKNOWN") {
+        return toResult({ data: { registry: this, order: current, applied: false, duplicate: true } })
+      }
+      if (!["OPEN", "PARTIALLY_FILLED"].includes(current.status)) {
+        return toResult({ data: { registry: this, order: current, applied: false, alreadyTerminal: true } })
+      }
+      const unknownOrder = new CanonicalOrder({
+        clientOrderId: current.clientOrderId,
+        brokerOrderId: current.brokerOrderId,
+        market: current.market,
+        side: current.side,
+        type: current.type,
+        limitPrice: current.limitPrice,
+        originalQuantity: current.originalQuantity,
+        executedQuantity: current.executedQuantity,
+        status: "UNKNOWN",
+        createdAt: current.createdAt,
+        acknowledgedAt: current.acknowledgedAt,
+        updatedAt: current.updatedAt,
+        completedAt: current.completedAt,
+      })
+      validateOrderUpdate({ current, next: unknownOrder })
+      const orders = this.#orders.map((order, orderIndex) =>
+        orderIndex === index ? unknownOrder : order,
+      )
+      return toResult({
+        data: {
+          registry: new OrderRegistry({ orders }),
+          order: unknownOrder,
+          applied: true,
+          duplicate: false,
+        },
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
   attachAcknowledgedBrokerOrderId({ order } = {}) {
     if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
         typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
