@@ -247,6 +247,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         portfolio,
         recoveryLedgers,
         orderRegistry,
+        journalFills: Object.freeze([...data.fills]),
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,
