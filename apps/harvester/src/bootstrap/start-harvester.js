@@ -1031,6 +1031,8 @@ export async function startHarvester({
       },
       onStatus: (status = {}) => {
         if (stopped) return
+        if (status.type === "recovered" &&
+            lastAcknowledgedRecoveryGeneration === userDataRecoveryGeneration) return
         if ([
           "connectionClosed",
           "recovering",
