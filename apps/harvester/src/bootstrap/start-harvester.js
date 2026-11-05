@@ -1232,10 +1232,11 @@ export async function startHarvester({
             (accountAudit?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
           )
         }
+        const recoveryIntents = tradingEngine.getRecoveryIntents()
         const unresolvedStrategyState =
-          recoveredState.pausedMarkets.size > 0 ||
-          recoveredState.replacementIntents.size > 0 ||
-          recoveredState.trailingBuyRepriceIntents.size > 0
+          recoveryIntents.pausedMarkets.length > 0 ||
+          recoveryIntents.replacementIntents.length > 0 ||
+          recoveryIntents.trailingBuyRepriceIntents.length > 0
         if (unresolvedStrategyState) {
           throw new Error("Conservative TESTNET startup blocked: recovered strategy contains paused markets or unresolved cancel/replace intents")
         }
@@ -1269,6 +1270,7 @@ export async function startHarvester({
       userDataRequiresReconciliation = false
       userDataReady = true
       userDataStatus = "READY"
+      resumeDeferredStrategyEvaluations()
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
     }
 
