@@ -19,7 +19,7 @@ function reportConstructionFailure({ logger, error }) {
   }
 }
 
-function resolveJournalDirectory({ directory }) {
+export function resolveJournalDirectory({ directory }) {
   if (directory === undefined) return path.resolve(APPLICATION_DIRECTORY, "logs")
   if (typeof directory !== "string" || directory.trim() === "") {
     throw new TypeError("Harvester Journal directory must be a non-empty string")

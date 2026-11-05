@@ -13,6 +13,11 @@ const disabledJournalService = () => ({
   close: async () => ({ ok: true, closed: true, disabled: true }),
 })
 
+const acquireProcessLock = async () => ({
+  ok: true,
+  release: async () => ({ ok: true, released: true }),
+})
+
 const runMain = (options = {}) => main({
   createJournalService: disabledJournalService,
   ...options,
@@ -205,7 +210,7 @@ test("publishes process started and stopped events for read-only startup without
 
   const result = await main({
     createEventBus: () => eventBus,
-    createJournalService: () => ({ status: { state: "disabled" } }),
+    createJournalService: () => ({ status: { state: "disabled" }, close: async () => ({ ok: true, closed: true }) }),
     env: {},
     start: async () => ({
       connected: false,
@@ -586,6 +591,7 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
         flush: async () => ({ ok: true, durable: true }),
@@ -608,6 +614,7 @@ test("allows a trading-enabled first start only with a validated empty Journal h
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: true, available: true, records: [], count: 0 }),
@@ -631,6 +638,7 @@ test("blocks trading-enabled startup when Journal cannot read previous sessions"
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         flush: async () => ({ ok: true, durable: true }),
@@ -655,6 +663,7 @@ test("blocks trading-enabled restart when prior order or fill history exists", a
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({
@@ -707,6 +716,7 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: false, errors: [new Error("journal read failed")] }),
@@ -717,6 +727,172 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
       logger: { info() {}, error() {}, debug() {} },
     })
     assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("blocks a second trading process before Journal startup when the process lock is held", async () => {
+  let journalFactoryCalls = 0
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: false,
+        errors: [Object.assign(new Error("another trading process owns the lock"), { code: "HARVESTER_PROCESS_LOCK_EXISTS" })],
+      }),
+      createJournalService: () => { journalFactoryCalls += 1; return disabledJournalService() },
+      start: async () => { started = true; return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(journalFactoryCalls, 0)
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("releases the trading process lock only after runtime and Journal shutdown", async () => {
+  let signalHandler
+  const sequence = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+      }),
+      start: async () => ({
+        connected: true,
+        tradingEnabled: true,
+        subscriptions: [],
+        stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
+      }),
+      registerSignalHandler: (signal, handler) => {
+        if (signal === "SIGTERM") signalHandler = handler
+      },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(typeof signalHandler, "function")
+    await signalHandler()
+    assert.deepEqual(sequence, ["runtime-stop", "journal-close", "lock-release"])
+    assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("acquires the process lock before Journal recovery and releases it after safe startup rejection", async () => {
+  const sequence = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => {
+        sequence.push("lock")
+        return {
+          ok: true,
+          release: async () => { sequence.push("release"); return { ok: true, released: true } },
+        }
+      },
+      createJournalService: () => {
+        sequence.push("journal")
+        return {
+          ready: Promise.resolve({ ok: true }),
+          recovery: Promise.resolve({
+            ok: true,
+            available: true,
+            records: [{ id: "prior", payload: { name: "account.snapshot_captured" } }],
+          }),
+          flush: async () => ({ ok: true, durable: true }),
+          close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+        }
+      },
+      start: async () => { sequence.push("start"); return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.deepEqual(sequence, ["lock", "journal", "journal-close", "release"])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when runtime shutdown throws", async () => {
+  let signalHandler
+  let releaseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => ({
+        connected: true,
+        tradingEnabled: true,
+        subscriptions: [],
+        stop: async () => { throw new Error("broker intake did not stop") },
+      }),
+      registerSignalHandler: (signal, handler) => {
+        if (signal === "SIGTERM") signalHandler = handler
+      },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    await signalHandler()
+    assert.equal(releaseCalls, 0)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when Journal writer shutdown is not confirmed", async () => {
+  let releaseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: false, errors: [new Error("writer close failed")] }),
+      }),
+      start: async () => { throw new Error("runtime startup failed") },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -735,6 +911,39 @@ test("rejects disabling Journal for TESTNET trading", async () => {
       logger: { info() {}, error() {}, debug() {} },
     })
     assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("retains the process lock when runtime startup fails after it may have activated broker resources", async () => {
+  let releaseCalls = 0
+  let journalCloseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => { journalCloseCalls += 1; return { ok: true, closed: true } },
+      }),
+      start: async () => {
+        throw new Error("broker startup failed after connection attempt")
+      },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(journalCloseCalls, 1)
+    assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
