@@ -11,6 +11,7 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
@@ -56,7 +57,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -220,6 +221,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     canTrade: () => true,
     isStopping: () => false,
     onPause: async ({ reason }) => pauses.push(reason),
+    initialState,
   })
   if (initialBook) await engine.processBookTicker({ symbol: "DOGEUSDT", bookTicker: initialBook === true ? {
     symbol: "DOGEUSDT", bestBidPrice: "0.01", bestBidQuantity: "1",
@@ -3164,4 +3166,86 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
   assert.equal(harness.engine.getOrders()[0].brokerOrderId, undefined)
   assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
+
+test("reconciles recovered orders without canceling or replacing any exchange order", async () => {
+  const makeRecoveredOrder = ({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0" }) =>
+    new CanonicalOrder({
+      clientOrderId,
+      brokerOrderId,
+      market,
+      side,
+      type: "LIMIT",
+      limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+      status,
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    })
+  const buyOwnedOrder = makeRecoveredOrder({
+    clientOrderId: "recovered-buy",
+    brokerOrderId: "broker-recovered-buy",
+    side: "BUY",
+    status: "UNKNOWN",
+  })
+  const sellOwnedOrder = makeRecoveredOrder({
+    clientOrderId: "recovered-sell",
+    brokerOrderId: "broker-recovered-sell",
+    side: "SELL",
+    status: "OPEN",
+  })
+  const buyHistory = makeRecoveredOrder({
+    clientOrderId: "recovered-buy",
+    brokerOrderId: "broker-recovered-buy",
+    side: "BUY",
+    status: "FILLED",
+    executedQuantity: "1",
+  })
+  const sellHistory = makeRecoveredOrder({
+    clientOrderId: "recovered-sell",
+    brokerOrderId: "broker-recovered-sell",
+    side: "SELL",
+    status: "OPEN",
+  })
+  const buyFill = new Fill({
+    tradeId: "recovered-buy-trade",
+    brokerOrderId: buyOwnedOrder.brokerOrderId,
+    clientOrderId: buyOwnedOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({ amount: "100", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [buyOwnedOrder, sellOwnedOrder] }),
+      replacementIntents: ["DOGEUSDT"],
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: sellHistory, executedQuantity: "0" })],
+  })
+  harness.broker.getCanonicalOrderHistory = async ({ orderId }) => ({
+    ok: true,
+    data: [orderId === buyOwnedOrder.brokerOrderId ? buyHistory : sellHistory],
+  })
+  harness.broker.getFills = async ({ orderId }) => ({
+    ok: true,
+    data: orderId === buyOwnedOrder.brokerOrderId ? [buyFill] : [],
+  })
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.deepEqual(harness.orders, [])
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-buy").status, "FILLED")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-sell").status, "OPEN")
 })
