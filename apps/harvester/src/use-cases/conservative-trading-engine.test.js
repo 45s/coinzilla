@@ -833,22 +833,31 @@ function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedA
   })
 }
 
-test("publishes recovery SELL cancellation only after broker confirmation and registry update", async () => {
+test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
   const events = []
+  const sequence = []
   let engine
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    eventPublisher: { publish: (event) => {
-      events.push(event)
-      if (event.name === "order.cancelled") {
-        const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
-        assert.equal(registered.status, "CANCELED")
-      }
-      return { ok: true }
-    } },
+    onCancelOrderStarted: () => sequence.push("broker:cancel"),
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
+        if (event.name === "order.cancelled") {
+          const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
+          assert.equal(registered.status, "CANCELED")
+        }
+        return { ok: true }
+      },
+      flush: async () => {
+        sequence.push("flush")
+        return { ok: true, durable: true }
+      },
+    },
   })
   engine = harness.engine
   await engine.processMarketPrice({
@@ -873,6 +882,12 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   assert.ok(cancelled)
   assert.equal(cancelled.data.side, "SELL")
   assert.equal(cancelled.data.status, "CANCELED")
+  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
+  const cancelFlushIndex = sequence.lastIndexOf("flush")
+  const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  assert.ok(cancelIntentIndex >= 0)
+  assert.ok(cancelFlushIndex > cancelIntentIndex)
+  assert.ok(brokerCancelIndex > cancelFlushIndex)
 })
 
 test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
