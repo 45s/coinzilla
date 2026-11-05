@@ -489,7 +489,7 @@ export async function startHarvester({
   // Startup loads an authoritative initial balance snapshot. Disconnects and
   // explicit recovery requirements still close the gate because in-memory
   // order/accounting state is not comprehensively reconciled across reconnects.
-  let userDataRequiresReconciliation = !tradingEnabled
+  let userDataRequiresReconciliation = !tradingEnabled || recoveredState.requiresExchangeReconciliation
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
@@ -1118,7 +1118,7 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
       }
       if (userDataRequiresReconciliation) {
-        throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
+        throw new Error("Cannot enable Conservative trading: prior Journal state requires canonical read-only exchange reconciliation and account ownership audit before trading can resume")
       }
 
       const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
