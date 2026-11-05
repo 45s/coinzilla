@@ -1136,6 +1136,7 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
+        if (recoveryMode) state.trailingBuyRepriceIntents.delete(symbol)
         if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
         let executionPrice
         try {
