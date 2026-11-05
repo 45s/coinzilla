@@ -1065,6 +1065,25 @@ export async function startHarvester({
           orderUpdatePending: status.orderUpdatePending === true,
         })
         userDataStatus = status.type ?? "UNKNOWN"
+        if (status.type === "rpcError" || status.type === "recoveryFailed") {
+          const error = status.error
+          const cause = error?.cause
+          logger.error?.({
+            message: "Binance user-data transport reported an error",
+            statusType: status.type,
+            attempt: status.attempt,
+            errorName: error?.name ?? "Error",
+            errorMessage: typeof error?.message === "string" && error.message
+              ? error.message
+              : "(empty error message)",
+            errorStack: error?.stack,
+            causeName: cause instanceof Error ? cause.name : undefined,
+            causeMessage: cause instanceof Error
+              ? (cause.message || "(empty cause message)")
+              : cause === undefined ? undefined : String(cause),
+            causeStack: cause instanceof Error ? cause.stack : undefined,
+          })
+        }
         if (status.type === "executionNormalizationFailed") {
           userDataAccountingFailed = true
           userDataStatus = "EXECUTION_NORMALIZATION_FAILED"
