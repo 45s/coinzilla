@@ -11,6 +11,10 @@ This document defines how independent AI workstreams collaborate in the Coinzill
 Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). Harvester agents must read and follow that document; do not duplicate its product priorities here.
 
 ## 1. The short version
+## 0. Mandatory documentation and requirements preflight
+
+Before **any** task or state-changing action, every agent MUST complete the documentation preflight defined in the repository-root [AGENTS.md](AGENTS.md#mandatory-documentation-and-requirements-preflight--hard-gate). Inventory and read in full all repository-wide policies and every applicable task checklist, domain instruction, roadmap, specification, architecture/ADR, runbook, contract, configuration guide, and test requirement; follow applicable document links recursively. Then inspect the affected implementation, consumers, tests, and configuration, and provide a concise readiness summary with the documents read, constraints, acceptance criteria, and blockers. **Do not implement, edit, mutate configuration/state, or start adjacent work until this review is complete and understanding is established.** If anything required is inaccessible, unclear, or contradictory, stop and report the blocker. Each agent must do this independently.
+
 
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
