@@ -86,3 +86,6 @@ The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is en
 - [x] Add regression tests for missing policy links and missing domain roadmaps.
 - [x] Configure GitHub-native weekly dependency update PRs for npm/pnpm manifests and GitHub Actions; no new package dependency is introduced.
 - [ ] Add `Workspace test coverage` and `actionlint` to the live `main` ruleset. The current ruleset was read back on 2026-11-02 and still requires only four contexts.
+
+
+- [ ] Add an execution-first rule to the canonical AI-agent instructions: clear implementation requests must be carried through to working changes, without unnecessary debate or deflection, while preserving security, ownership, and safety gates.
