@@ -30,7 +30,7 @@ test("rejects SELL batches that collectively exceed Harvester-owned active inven
       { side: "SELL", quantity: "0.6" },
     ],
     quoteFreeBalance: "1000",
-    baseFreeBalance: "0",
+    baseFreeBalance: "10",
     quoteCashFlow: "0",
     activeBaseQuantity: "1",
     outstandingRecoveryAmount: "100",
@@ -68,4 +68,66 @@ test("accounts for existing active-order commitments before allocating new BUY a
   assert.equal(result.data.remainingBaseBalance, "0.4")
   assert.equal(result.data.remainingActiveBase, "0.4")
   assert.equal(result.data.remainingInvestment, "0")
+})
+
+test("defers BUY actions when existing commitments exhaust free quote balance", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "60", quantity: "10" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "500",
+    committedBase: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.executableActions, [])
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
+})
+
+test("rejects SELL quantities that exceed exchange-available base after existing reservations", () => {
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "0.6" }],
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "1",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: "0.5",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /available free base balance/)
+})
+
+test("returns structured failures for invalid action sides and negative balance inputs", () => {
+  const common = {
+    quoteFreeBalance: "1000",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: "0",
+    investmentLimit: "1000",
+  }
+  const invalidSide = allocateOrderCommitments({
+    ...common,
+    actions: [{ side: "HOLD", quantity: "1" }],
+  })
+  const negativeBalance = allocateOrderCommitments({
+    ...common,
+    baseFreeBalance: "-1",
+    actions: [],
+  })
+
+  assert.equal(invalidSide.ok, false)
+  assert.match(invalidSide.errors[0].message, /side must be BUY or SELL/)
+  assert.equal(negativeBalance.ok, false)
+  assert.match(negativeBalance.errors[0].message, /must be non-negative/)
 })
