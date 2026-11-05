@@ -63,7 +63,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 5 — rebuild the broker on native clients; PR #271 merged into `migration/binance-native-ws` on 2026-10-31 (merge commit `a0ec1e64609c2291342f4470e203b453e0935c51`).
 - [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
-- [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml (`run_broker_testnet_read_only` manual input)`; execution and long-running recovery/soak validation remain blocked on configured TESTNET credentials and a controlled environment.
+- [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml` (`run_broker_testnet_read_only` manual input). The repository owner reports that the required TESTNET secrets are configured (values intentionally uninspected); the manual run on `develop` and long-running recovery/soak validation in a controlled TESTNET session remain pending.
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 
