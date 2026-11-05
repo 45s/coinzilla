@@ -800,6 +800,7 @@ export async function startHarvester({
       )
     }
     recoveredState = restored.data
+    startupRecoveryReconciliation = tradingEnabled && recoveredState.requiresExchangeReconciliation
     if (tradingEnabled) activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({
       evaluateStrategy,
