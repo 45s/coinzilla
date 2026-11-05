@@ -3223,6 +3223,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     commissionStatus: "COMPLETE",
   })
   const harness = await createHarness({
+    initialBook: false,
     initialState: {
       orderRegistry: new OrderRegistry({ orders: [buyOwnedOrder, sellOwnedOrder] }),
       replacementIntents: ["DOGEUSDT"],
