@@ -16,7 +16,18 @@ function requireAmount({ value, field }) {
 }
 
 function getOrderPrice({ order }) {
-  return order.limitPrice?.amount ?? order.price?.amount
+  const value = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
+  return typeof value === "number" ? String(value) : value
+}
+
+function getOpenOrderIdentity({ order }) {
+  return {
+    brokerOrderId: order.brokerOrderId ?? order.id,
+    symbol: order.market?.symbol ?? order.symbol,
+    clientOrderId: order.clientOrderId,
+    originalQuantity: order.originalQuantity?.amount ?? order.originalQuantity,
+    executedQuantity: order.executedQuantity?.amount ?? order.executedQuantity,
+  }
 }
 
 function normalizeOrderStatus({ status }) {
@@ -186,8 +197,8 @@ export function auditRecoveredAccountState({
 
     const actualOpenByBrokerId = new Map()
     for (const order of openOrders) {
-      const brokerOrderId = order?.brokerOrderId
-      const symbol = order?.market?.symbol
+      const identity = getOpenOrderIdentity({ order })
+      const { brokerOrderId, symbol } = identity
       if (typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
           typeof symbol !== "string" || !symbol.trim()) {
         throw new Error("Exchange open-order snapshot contains an order without canonical identity")
@@ -201,15 +212,17 @@ export function auditRecoveredAccountState({
       }
       const actualPrice = getOrderPrice({ order })
       const expectedPrice = expected.limitPrice?.amount
+      const actualStatus = order.status === "NEW" ? "OPEN" : order.status
+      const expectedStatus = normalizeOrderStatus({ status: expected.status })
       if (
-        expected.clientOrderId !== order.clientOrderId ||
+        expected.clientOrderId !== identity.clientOrderId ||
         expected.market.symbol !== symbol ||
         expected.side !== order.side ||
         expected.type !== order.type ||
-        normalizeOrderStatus({ status: expected.status }) !== normalizeOrderStatus({ status: order.status }) ||
-        expected.originalQuantity.amount !== order.originalQuantity?.amount ||
-        expected.executedQuantity.amount !== order.executedQuantity?.amount ||
-        expectedPrice !== actualPrice
+        expectedStatus !== actualStatus ||
+        compareDecimal({ left: expected.originalQuantity.amount, right: identity.originalQuantity }) !== 0 ||
+        compareDecimal({ left: expected.executedQuantity.amount, right: identity.executedQuantity }) !== 0 ||
+        compareDecimal({ left: expectedPrice, right: actualPrice }) !== 0
       ) {
         throw new Error("Exchange open-order facts contradict recovered ownership for broker order " + brokerOrderId)
       }
