@@ -267,8 +267,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const blockReasons = data.blockReasons.map((reason, index) =>
           requireString({ value: reason, field: "blockReasons[" + index + "]" }),
         )
-        if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
-          throw new Error("READY open-order snapshot must contain no orders or block reasons")
+        if (data.readiness === "READY" && blockReasons.length > 0) {
+          throw new Error("READY open-order snapshot cannot contain block reasons")
         }
         if (data.readiness === "BLOCKED" && blockReasons.length === 0) {
           throw new Error("BLOCKED open-order snapshot must contain block reasons")
