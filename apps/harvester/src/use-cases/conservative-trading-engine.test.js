@@ -2416,6 +2416,31 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").clientOrderId, initialBuy.clientOrderId)
 })
 
+test("reprices an active BUY normally when no Position exists", async () => {
+  const harness = await createHarness()
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+
+  const repriced = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(repriced.ok, true, repriced.errors?.[0]?.message)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.cancellationIds[0], initialBuy.brokerOrderId)
+  const activeBuys = harness.engine.getOrders().filter((order) =>
+    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeBuys.length, 1)
+  assert.notEqual(activeBuys[0].clientOrderId, initialBuy.clientOrderId)
+})
+
 test("allows trailing BUY repricing when only retained free inventory exists", async () => {
   const portfolio = new Portfolio({
     positions: [new Position({
