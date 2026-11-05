@@ -3249,4 +3249,43 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   assert.deepEqual(harness.orders, [])
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-buy").status, "FILLED")
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-sell").status, "OPEN")
+  assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, ["DOGEUSDT"])
+})
+
+test("clears a recovered replacement intent only after canonical history confirms cancellation", async () => {
+  const makeOrder = ({ status }) => new CanonicalOrder({
+    clientOrderId: "recovered-sell-cancel",
+    brokerOrderId: "broker-recovered-sell-cancel",
+    market,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const ownedOrder = makeOrder({ status: "UNKNOWN" })
+  const canceledHistory = makeOrder({ status: "CANCELED" })
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
+      replacementIntents: new Set(["DOGEUSDT"]),
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [canceledHistory] })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.deepEqual(harness.orders, [])
+  assert.equal(harness.engine.getOrders()[0].status, "CANCELED")
+  assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, [])
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
 })
