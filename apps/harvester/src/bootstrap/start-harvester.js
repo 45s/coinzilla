@@ -1187,6 +1187,13 @@ export async function startHarvester({
     await initialSnapshotTask
     initialAccountSnapshotReady = true
 
+    if (!tradingEnabled) {
+      await publishOpenOrdersSnapshot({
+        phase: "PREFLIGHT",
+        blockOnExistingOrders: false,
+      })
+    }
+
     if (tradingEnabled) {
       if (userDataAccountingFailed) {
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
