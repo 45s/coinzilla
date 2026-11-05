@@ -312,7 +312,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       if (hasClientOrderId && order.clientOrderId !== params.origClientOrderId) {
         throw new Error("Binance canonical order response clientOrderId does not match the requested clientOrderId")
       }
-      if (hasOrderId && normalizeBinanceId(order.orderId, "response order ID") !== params.orderId) {
+      if (hasOrderId && normalizeBinanceId(order.orderId, "response order ID") !== String(params.orderId)) {
         throw new Error("Binance canonical order response orderId does not match the requested orderId")
       }
 
