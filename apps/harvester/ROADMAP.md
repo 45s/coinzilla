@@ -1153,3 +1153,12 @@ The engine transition queue serializes decisions; this change additionally ensur
 - [ ] Implement idempotent Portfolio and RecoveryLedger replay, restore owned order commitments, and reconcile every restored order/fill against canonical exchange history before any trading restart can be accepted.
 
 This is deliberately a fail-closed interim gate, not a claim that restart recovery is complete. Do not delete or rotate Journal files to bypass it.
+
+
+## Single-writer process ownership — P0, 2026-11-05
+
+- [x] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
+- [x] Refuse a second local trading process using the same Journal directory.
+- [x] Release the lock only after confirmed Journal shutdown; retain it when writer shutdown is uncertain.
+- [x] Never auto-reclaim stale locks; require operator verification.
+- [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
