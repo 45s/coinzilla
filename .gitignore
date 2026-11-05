@@ -8,3 +8,5 @@ node_modules
 # Application session logs
 /logs_bot-free-roll/
 /logs_harvester/
+/apps/harvester/logs/harvester.log
+/apps/harvester/logs/harvester-trace.log

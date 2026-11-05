@@ -474,3 +474,17 @@ The automatic `PREFLIGHT` account audit is implemented and merged in PR #545. It
 
 
 Trading-enabled startup also acquires an exclusive `.harvester-trading.lock` in the configured Journal directory before reading prior sessions. A second local process using the same Journal directory is refused. The lock is released only after runtime shutdown and Journal writer closure are confirmed. A stale lock is never reclaimed automatically: after a crash, verify the recorded PID/host is no longer active before manually removing the lock file. Instances sharing one exchange account must use the same Journal directory; separate directories do not coordinate this local lock.
+
+## Development logging
+
+Harvester uses the shared `@coinzilla/utils` logger with independent output
+thresholds. Interactive development starts with INFO on the terminal while
+`logs/harvester.log` records DEBUG and `logs/harvester-trace.log` records TRACE
+as JSONL. Use `/log debug`, `/log trace`, `/log info`, or `/log status` in
+an interactive terminal to change or inspect the console threshold; file
+thresholds are unaffected. Identical consecutive terminal entries are summarized, while changed values and every JSONL record are retained. See [Logging](./docs/LOGGING.md) for the command,
+entry format, and shutdown behavior.
+
+This is a narrowly scoped, explicitly authorized observability task. It does
+not change the general TESTNET acceptance gate, authorize exchange writes, or
+modify trading/Journal behavior.

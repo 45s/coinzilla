@@ -963,3 +963,33 @@ test("retains the process lock when runtime startup fails after it may have acti
     process.exitCode = previousExitCode
   }
 })
+
+
+test("closes diagnostic log transports after runtime, Journal, and EventBus shutdown", async () => {
+  const operations = []
+  const handlers = {}
+  await main({
+    createEventBus: () => ({
+      publish: (event) => ({ ok: true, event }),
+      close: async () => { operations.push("eventbus.close"); return { ok: true } },
+    }),
+    createJournalService: () => ({
+      close: async () => { operations.push("journal.close"); return { ok: true } },
+    }),
+    start: async () => ({
+      connected: false,
+      stop: async () => { operations.push("runtime.stop") },
+    }),
+    registerSignalHandler: (signal, handler) => { handlers[signal] = handler },
+    logger: { info() {}, error() {} },
+    closeLogger: async () => { operations.push("logger.close") },
+  })
+
+  await handlers.SIGTERM()
+  assert.deepEqual(operations, [
+    "runtime.stop",
+    "journal.close",
+    "eventbus.close",
+    "logger.close",
+  ])
+})

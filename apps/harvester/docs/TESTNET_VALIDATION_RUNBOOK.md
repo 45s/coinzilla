@@ -231,3 +231,23 @@ These are offline tests only. They do not authorize or substitute for the separa
 ## Startup PREFLIGHT account audit (all broker-connected modes)
 
 Before market subscriptions or trading-engine activation, Harvester uses its existing broker connection to fetch the complete account balance snapshot and account-wide open orders. It publishes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushing each event before continuing. Verify both records in the Journal for every broker-connected dev startup, including read-only runs. Configuration-only startup without a broker does not query the exchange or perform this account audit. The balance event records exact free, locked, and total quantities per asset. Existing orders are external/unowned: the audit does not adopt or change them. Read-only mode may continue with a `BLOCKED` open-order audit; trading-enabled startup must stop. Any exchange query, event publication, or durable flush failure blocks startup. This audit is observational and does not authorize TESTNET order activity.
+
+## Development diagnostic log evidence
+
+For a development session, preserve the three independent logging destinations
+alongside the Journal session:
+
+- Terminal: INFO and higher by default.
+- `logs/harvester.log`: DEBUG and higher, one structured JSON entry per line.
+- `logs/harvester-trace.log`: TRACE and higher, one structured JSON entry per line.
+
+Changing the terminal threshold with `/log info|debug|trace` does not change
+either file threshold. Consecutive identical terminal entries are summarized;
+changed values are shown, and both JSONL files retain every record. Capture both JSONL files when reviewing an incident;
+they are diagnostic evidence and do not replace the durable Journal, canonical
+exchange order/trade history, or account snapshots. Keep the files private:
+the shared logger redacts recognized sensitive fields, but free-form messages
+and stack text must not contain credentials or signed request data.
+
+The logging refactor is observational only. It does not authorize a TESTNET
+session, order submission/cancellation, or any account mutation.
