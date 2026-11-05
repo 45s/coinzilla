@@ -350,7 +350,7 @@ test("rejects account snapshot totals that do not equal free plus locked", () =>
   assert.match(result.errors[0].message, /free plus locked/)
 })
 
-test("preserves owned open orders in a READY account open-order snapshot", () => {
+test("rejects open orders in a READY account open-order snapshot", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
       record("account.open_orders_captured", {
@@ -373,8 +373,8 @@ test("preserves owned open orders in a READY account open-order snapshot", () =>
     ],
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.data.openOrderSnapshots[0].orders.length, 1)
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /READY open-order snapshot requires no orders/)
 })
 
 
