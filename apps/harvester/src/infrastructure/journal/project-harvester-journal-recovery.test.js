@@ -943,6 +943,8 @@ test("restores a partially filled canceled order as a paused strategy market", (
 
   assert.equal(restored.ok, true)
   assert.deepEqual([...restored.data.pausedMarkets], ["BTCUSDT"])
+  assert.deepEqual([...restored.data.durablePausedMarkets], ["BTCUSDT"])
+  assert.deepEqual([...restored.data.recoveryManagedPausedMarkets], [])
   assert.deepEqual([...restored.data.trailingBuyRepriceIntents], [])
   assert.equal(restored.data.orderRegistry.orders[0].status, "CANCELED")
   assert.equal(restored.data.orderRegistry.orders[0].executedQuantity.amount, "0.4")
