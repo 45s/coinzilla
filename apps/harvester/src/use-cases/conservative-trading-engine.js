@@ -293,7 +293,7 @@ export function makeConservativeTradingEngine({
     dataResult: mapOrderCancelFailedData({ order, outcome, error }),
   })
   const markCancellationUnknown = async ({ symbol, order, reason, error } = {}) => {
-    const result = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+    const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
     if (!result.ok) {
       const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
       await pause({ symbol, reason: reason + "_REGISTRY_FAILED", error: registryError })
