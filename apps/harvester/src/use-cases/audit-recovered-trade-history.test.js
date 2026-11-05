@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { auditRecoveredTradeHistory } from "./audit-recovered-trade-history.js"
 
 const baseAsset = new Asset({ id: "binance:BTC", code: "BTC" })
@@ -178,4 +178,44 @@ test("rejects complete symbol pages when the exchange market universe is not pro
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /market universe is incomplete/)
+})
+
+
+test("accepts exchange fills missing from the prior Journal only when their broker order was reconciled as Harvester-owned", () => {
+  const fill = makeFill()
+  const ownedOrder = new CanonicalOrder({
+    clientOrderId: "h-BTCUSDT-1",
+    brokerOrderId: "9001",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
+    status: "FILLED",
+  })
+  const result = auditRecoveredTradeHistory({
+    journalFills: [],
+    exchangeFills: [fill],
+    ownedOrders: [ownedOrder],
+    complete: true,
+    marketUniverseComplete: true,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reconciledOwnedOrderFills, 1)
+})
+
+test("rejects an unjournaled account execution whose broker order identity is not owned", () => {
+  const fill = makeFill({ brokerOrderId: "external-order-77" })
+  const result = auditRecoveredTradeHistory({
+    journalFills: [],
+    exchangeFills: [fill],
+    ownedOrders: [],
+    complete: true,
+    marketUniverseComplete: true,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /absent from the Harvester Journal and recovered order registry/)
 })
