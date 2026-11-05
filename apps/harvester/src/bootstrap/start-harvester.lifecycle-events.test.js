@@ -85,6 +85,7 @@ function createBroker({
       },
     }),
     getSymbolFilters: async () => ({ ok: true, data: createMarketMetadata() }),
+    getExchangeMarkets: async () => ({ ok: true, data: [createMarketMetadata().market] }),
     getPrices: async () => ({ ok: true }),
     subscribeForUserData: async (input) => {
       handlers = input
