@@ -406,3 +406,71 @@ test("rejects cancellation execution quantities above the original order quantit
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /exceeds original order quantity/)
 })
+
+
+test("marks a trading session with order activity but no start event as unclean", () => {
+  const result = projectHarvesterJournalRecovery({ records: [submissionRequested()] })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.sessions[0].hasTradingActivity, true)
+  assert.equal(result.data.sessions[0].uncleanTradingShutdown, true)
+})
+
+test("flags cancellation snapshots whose cumulative execution is not fully represented by Journal fills", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0.8",
+        status: "PARTIALLY_FILLED",
+        reason: "restart-test",
+      }),
+      record("order.cancelled", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0.8",
+        status: "CANCELED",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.orders[0].requiresFillHistoryReconciliation, true)
+})
+
+test("rejects cancellation execution quantities above the original order quantity", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "1.01",
+        status: "PARTIALLY_FILLED",
+        reason: "restart-test",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /exceeds original order quantity/)
+})
