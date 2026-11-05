@@ -176,21 +176,10 @@ Follow the single [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_PO
 - Applying a design pattern or abstraction where the benefit is uncertain.
 - Enforcing purity or immutability where it conflicts with a clear, measured need.
 
-## PR branch freshness — required for every target branch
+## PR branch freshness
 
-A PR must contain the latest commit from its actual target branch before merge. The contributor/AI agent owns synchronization; the user must never be asked to perform routine branch updates manually.
+The mandatory branch-freshness procedure is defined in [AI_AGENT_WORKFLOW.md — Branch freshness and conflict handling](AI_AGENT_WORKFLOW.md#6-branch-freshness-and-conflict-handling--required-on-every-pr-update). It applies before and after **every PR update**, as well as immediately before merge. Follow that single authoritative procedure for task PRs targeting `develop` and release PRs targeting `main`; do not maintain a separate or weaker synchronization process here.
 
-- For task PRs targeting `develop`, synchronize against the latest `develop`.
-- For the final release PR targeting `main`, synchronize against the latest `main`.
-- Fetch both target and PR refs immediately before merge. Verify the target tip is an ancestor of the PR head.
-- If stale, merge the latest target into the task branch (or use the repository's explicitly approved history policy), resolve conflicts on the task branch, inspect the complete diff, and push. Never force-push shared history.
-- Wait for required checks on the exact final PR head SHA. If either ref changes, repeat synchronization and validation.
-- Do not merge if checks are pending, failed, skipped unexpectedly, or missing from the required-check policy.
-- Task PRs may be merged by the responsible AI agent into `develop` after all required automated gates pass. No routine human approval is required for `develop`.
-- No AI agent may merge a task PR directly into `main`. The user approves the final milestone/release PR from `develop` to `main`.
-- If the agent cannot verify freshness, checks, or required permissions, stop and report the blocker. Never bypass branch protection or ask the user to update a branch.
-
-Repository rulesets must enforce PR-only merges, target freshness, required status checks, no force pushes, and no deletion for both `develop` and `main`. Written instructions are not a technical substitute for branch protection.
 
 ## Exceptions
 

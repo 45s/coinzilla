@@ -88,21 +88,28 @@ A task PR targeting `develop` must:
 
 The agent is responsible for merge execution and cleanup. Do not ask the user to merge routine task PRs or update branches manually.
 
-## 6. Branch freshness and conflict handling
+## 6. Branch freshness and conflict handling — required on every PR update
 
-The target branch is authoritative. Never hard-code `main` as the synchronization target for every PR.
+The PR's actual target branch is authoritative. Never hard-code `main` as the synchronization target for every PR. **A PR branch must never be knowingly outdated when the PR is created, updated, pushed, marked ready, reviewed, or merged.** The responsible agent owns all freshness checks and synchronization; never ask the user to update a routine task branch.
 
-Immediately before merging a task PR:
-1. Fetch the latest remote `develop` and the PR head.
-2. Verify the latest `develop` tip is an ancestor of the PR head.
-3. If stale, merge the latest `develop` into the task branch, resolve conflicts there, inspect the complete diff, and push.
-4. Wait for all required checks to pass on the exact final head SHA.
-5. Re-fetch both refs immediately before merge. If either changed, repeat synchronization and validation.
-6. Merge only when branch freshness and every required gate are satisfied.
+### Mandatory freshness check before every PR update
 
-For the final release PR, apply the same procedure against `main`.
+Before **each** action that updates an existing PR or its source branch—including pushing or amending commits, changing the PR title/body/base, changing draft/ready state, requesting review, or enabling auto-merge—the agent MUST:
 
-Never force-push shared history, discard another agent's work, use empty commits to restart CI, or ask the user to perform routine synchronization. If permissions or tools prevent safe synchronization or verification, stop and report the exact blocker.
+1. Fetch the latest remote PR target branch and the current PR head.
+2. Compare the PR head with its actual target (`develop` for task PRs; `main` for the final release PR). Verify the latest target tip is an ancestor of the PR head; a branch that is merely ahead but also behind is stale.
+3. If the PR branch is behind or has diverged, synchronize it with the latest target **before updating the PR**. For task PRs, merge the latest `develop` into the task branch. For the final release PR, synchronize against `main`. Resolve conflicts only on the task branch, inspect the complete resulting diff, and never force-push shared history.
+4. After synchronization, fetch and compare both refs again. Do not proceed until the target tip is confirmed as an ancestor of the PR head.
+5. Re-run the checks affected by the synchronization and wait for all required checks to pass on the exact resulting head SHA. A previous green run on an older head does not count.
+6. Only then perform the intended PR update. Immediately afterward, re-fetch both refs and verify freshness again; if the target advanced during the update, synchronize and repeat validation before proceeding with further PR actions.
+
+This procedure applies every time, not only once per PR and not only before merge. If a PR is already current, record/confirm that result and proceed without creating an unnecessary synchronization commit. Metadata-only changes still require the pre-update freshness check.
+
+### Mandatory final merge check
+
+Immediately before merging, repeat the full freshness check against the PR's actual target. If either ref changes during validation, repeat synchronization and required checks. Merge only when the latest target tip is an ancestor of the exact PR head being merged and every required gate is satisfied.
+
+Never force-push shared history, discard another agent's work, use empty commits to restart CI, or ask the user to perform routine synchronization. If permissions or tools prevent safe synchronization or verification, stop and report the exact blocker. Never merge a stale PR or bypass branch protection.
 
 ## 7. Roadmap discipline
 
