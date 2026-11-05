@@ -180,13 +180,19 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
+      if (order.cancellationState === "CANCELED" &&
+          compareDecimal({ left: order.cumulativeFillQuantity, right: "0" }) > 0) {
+        // The live engine pauses after any partially executed order is canceled.
+        // Replaying an already-CANCELED order would otherwise make its REST
+        // update look duplicate/stale and skip that safety transition.
+        pausedMarkets.add(order.symbol)
+      }
       if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
         if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
           replacementIntents.add(order.symbol)
           pausedMarkets.add(order.symbol)
         } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
           trailingBuyRepriceIntents.add(order.symbol)
-          pausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         } else {
           pausedMarkets.add(order.symbol)
