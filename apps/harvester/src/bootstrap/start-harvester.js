@@ -503,6 +503,7 @@ export async function startHarvester({
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
+  let userDataEventSequence = 0
   let userDataReconciliationQueued = false
   let userDataRecoveryGeneration = 0
   let lastAcknowledgedRecoveryGeneration = -1
@@ -739,23 +740,40 @@ export async function startHarvester({
           }
           hasCanonicalOwnershipReconciliation = true
         }
-        await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+        while (true) {
+          await drainUserDataEvents()
+          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
 
-        const snapshot = await refreshAccountSnapshot()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
+          // Keep the account and open-order snapshots on the same side of all
+          // user-data events observed during the REST reads and durable flushes.
+          const eventSequence = userDataEventSequence
+          const snapshot = await refreshAccountSnapshot()
+          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+          const openOrdersResult = await broker.getOpenOrders({})
+          if (!openOrdersResult?.ok || !Array.isArray(openOrdersResult.data)) {
+            const details = openOrdersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+            throw new Error(
+              "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
+            )
+          }
+          await drainUserDataEvents()
+          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+          if (eventSequence !== userDataEventSequence) continue
 
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        await publishOpenOrdersSnapshot({
-          phase: "RECOVERY",
-          blockOnExistingOrders: tradingEnabled,
-          ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
-        })
-        await drainUserDataEvents()
-        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+          await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
+          await publishOpenOrdersSnapshot({
+            phase: "RECOVERY",
+            blockOnExistingOrders: tradingEnabled,
+            ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
+            orders: openOrdersResult.data,
+          })
+          await drainUserDataEvents()
+          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
+          if (eventSequence === userDataEventSequence) break
+        }
 
         // The broker only emits "reconciled" after every subscriber acknowledges.
         // Keep the application gate closed unless this generation has passed
@@ -895,6 +913,7 @@ export async function startHarvester({
           userDataStatus = "INVALID_EVENT"
           return
         }
+        userDataEventSequence += 1
         let reevaluateSymbol
 
         if (isExecution) {
