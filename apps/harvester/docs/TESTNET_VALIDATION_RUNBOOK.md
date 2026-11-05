@@ -168,7 +168,7 @@ Immediately stop new order intake and do not restart or resubmit if any of the f
 - Insufficient balance, filter rejection, post-only rejection loop, unexpected fee, or any risk/limit breach.
 - OPENING/CLOSING durability failure or CLOSING marked INCOMPLETE.
 
-On abort: do not blindly retry or restart. Preserve logs and read-only exchange evidence; identify all Harvester-owned orders by exact IDs; determine whether any submission/fill is unresolved; and agree the smallest safe recovery action before any cancellation or new order. A process stop does not cancel exchange orders.
+On abort: do not blindly retry or restart. While the process remains alive, its recovery path may perform a read-only canonical lookup by the original clientOrderId, then reconcile canonical order history and actual fills. This lookup never authorizes a retry or automatic resume. If the order cannot be resolved completely, keep the pair paused, stop the process, preserve logs and read-only exchange evidence, and investigate the exact clientOrderId/order history/trade history together before any cancellation or new order. A process stop does not cancel exchange orders.
 
 ## 10. Evidence checklist
 
@@ -179,7 +179,7 @@ Capture and retain, with secrets redacted:
 - Effective environment mode and enabled-pair configuration.
 - Exchange commission-setting evidence and timestamp.
 - Market filters and initial best bid/ask.
-- Read-only account baseline, all open orders, and relevant trade history.
+- Read-only account baseline, all open orders, relevant trade history, and any clientOrderId lookup/order-history/fill reconciliation evidence from an unknown submission.
 - OPENING snapshot and durable Journal confirmation.
 - Harvester startup/readiness logs.
 - Every order intent, acknowledgement, cancellation authorization/result, execution report, REST reconciliation result, and trade row.
