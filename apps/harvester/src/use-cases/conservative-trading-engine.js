@@ -24,6 +24,59 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 
+function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
+  const mismatch = (field) => {
+    throw new Error("Canonical REST fill conflicts with durable Journal " + field + " for execution " + fill.id)
+  }
+  const expectedClientOrderId = journalFill.clientOrderId ?? ownedOrder.clientOrderId
+  const actualClientOrderId = fill.clientOrderId ?? ownedOrder.clientOrderId
+  if (
+    fill.id !== journalFill.fillId ||
+    String(fill.tradeId) !== journalFill.tradeId ||
+    fill.brokerOrderId !== journalFill.brokerOrderId ||
+    actualClientOrderId !== expectedClientOrderId ||
+    expectedClientOrderId !== ownedOrder.clientOrderId ||
+    fill.market.symbol !== journalFill.symbol ||
+    fill.side !== journalFill.side ||
+    fill.liquidityRole !== journalFill.liquidityRole ||
+    fill.commissionStatus !== journalFill.commissionStatus
+  ) mismatch("identity or execution metadata")
+
+  for (const [field, actual, expected] of [
+    ["price", fill.price.amount, journalFill.price],
+    ["quantity", fill.quantity.amount, journalFill.quantity],
+    ["quoteQuantity", fill.quoteQuantity.amount, journalFill.quoteQuantity],
+  ]) {
+    if (compareDecimal({ left: actual, right: expected }) !== 0) mismatch(field)
+  }
+  if (journalFill.executedAt !== undefined && fill.executedAt !== journalFill.executedAt) {
+    mismatch("transaction timestamp")
+  }
+
+  const actualCommissions = fill.commissions.map((commission) => ({
+    amount: commission.amount.amount,
+    assetId: commission.amount.asset.id,
+    asset: commission.amount.asset.code,
+  })).sort((left, right) =>
+    (left.assetId + ":" + left.asset + ":" + left.amount)
+      .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
+  )
+  const expectedCommissions = [...journalFill.commissions].sort((left, right) =>
+    (left.assetId + ":" + left.asset + ":" + left.amount)
+      .localeCompare(right.assetId + ":" + right.asset + ":" + right.amount)
+  )
+  if (actualCommissions.length !== expectedCommissions.length) mismatch("commission count")
+  for (let index = 0; index < actualCommissions.length; index += 1) {
+    const actual = actualCommissions[index]
+    const expected = expectedCommissions[index]
+    if (
+      actual.assetId !== expected.assetId ||
+      actual.asset !== expected.asset ||
+      compareDecimal({ left: actual.amount, right: expected.amount }) !== 0
+    ) mismatch("commission facts")
+  }
+}
+
 export function createMarketBook({ bookTicker } = {}) {
   if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
     throw new TypeError("createMarketBook requires a normalized bookTicker object")
@@ -99,6 +152,17 @@ export function makeConservativeTradingEngine({
       throw new TypeError("initialState." + field + " must contain non-empty strings")
     }
   }
+  if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
+    throw new TypeError("initialState.journalFills must be an array")
+  }
+  const journalFillsById = new Map()
+  for (const journalFill of initialState.journalFills ?? []) {
+    if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
+        journalFillsById.has(journalFill.fillId)) {
+      throw new TypeError("initialState.journalFills must contain unique canonical fill IDs")
+    }
+    journalFillsById.set(journalFill.fillId, journalFill)
+  }
   let transitionTail = Promise.resolve()
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
@@ -109,6 +173,7 @@ export function makeConservativeTradingEngine({
   }
   const state = {
     registry: initialRegistry,
+    journalFillsById,
     prices: new Map(),
     books: new Map(),
     lastBuyPrices: new Map(),
@@ -1338,6 +1403,10 @@ export function makeConservativeTradingEngine({
               fill.side !== ownedOrder.side
             ) {
               throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
+            }
+            const journalFill = state.journalFillsById.get(fill.id)
+            if (journalFill) {
+              assertJournalFillParity({ fill, ownedOrder, journalFill })
             }
             const previous = fillsById.get(fill.id)
             if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
