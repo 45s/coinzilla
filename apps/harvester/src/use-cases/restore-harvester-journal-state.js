@@ -205,7 +205,8 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
           durablePausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         }
-      } else if (order.cancellationState === "CANCELED") {
+      } else if (order.cancellationState === "CANCELED" &&
+          compareDecimal({ left: order.cumulativeFillQuantity, right: "0" }) === 0) {
         const replacementSide = order.cancellationReason === "TRAILING_BUY_REPRICE"
           ? "BUY"
           : order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
