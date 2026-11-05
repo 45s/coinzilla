@@ -13,6 +13,11 @@ const disabledJournalService = () => ({
   close: async () => ({ ok: true, closed: true, disabled: true }),
 })
 
+const acquireProcessLock = async () => ({
+  ok: true,
+  release: async () => ({ ok: true, released: true }),
+})
+
 const runMain = (options = {}) => main({
   createJournalService: disabledJournalService,
   ...options,
@@ -586,6 +591,7 @@ test("refuses TESTNET trading when Journal startup fails", async () => {
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: false, errors: [new Error("disk unavailable")] }),
         flush: async () => ({ ok: true, durable: true }),
@@ -608,6 +614,7 @@ test("allows a trading-enabled first start only with a validated empty Journal h
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: true, available: true, records: [], count: 0 }),
@@ -631,6 +638,7 @@ test("blocks trading-enabled startup when Journal cannot read previous sessions"
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         flush: async () => ({ ok: true, durable: true }),
@@ -655,6 +663,7 @@ test("blocks trading-enabled restart when prior order or fill history exists", a
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({
@@ -707,6 +716,7 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
   try {
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: false, errors: [new Error("journal read failed")] }),
