@@ -492,6 +492,7 @@ export async function startHarvester({
   // explicit recovery requirements still close the gate because in-memory
   // order/accounting state is not comprehensively reconciled across reconnects.
   let userDataRequiresReconciliation = !tradingEnabled || recoveredState.requiresExchangeReconciliation
+  let userDataStreamUnsafe = false
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
   let userDataEventQueue = Promise.resolve()
@@ -968,7 +969,15 @@ export async function startHarvester({
           "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
           "executionNormalizationFailed",
         ].includes(status.type)
+        if (
+          status.type === "reconciled" &&
+          status.recoveryRequired !== true &&
+          status.reconciliationRequired !== true
+        ) {
+          userDataStreamUnsafe = false
+        }
         if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
+          userDataStreamUnsafe = true
           userDataRequiresReconciliation = true
           userDataReady = false
           userDataStatus = status.type === "executionNormalizationFailed"
