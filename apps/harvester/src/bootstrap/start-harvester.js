@@ -1124,6 +1124,11 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
       }
 
+      await publishOpenOrdersSnapshot({
+        phase: "PREFLIGHT",
+        blockOnExistingOrders: true,
+      })
+
       while (true) {
         const queuedEvents = userDataEventQueue
         await queuedEvents
