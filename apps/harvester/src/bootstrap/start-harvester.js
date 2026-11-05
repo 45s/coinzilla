@@ -515,9 +515,16 @@ export async function startHarvester({
       balances: result.data.balances,
       sourceTime: result.data.sourceTime,
     })
+    const accountAuditMarkets = [...marketMetadata.values()]
+      .map(({ market }) => market)
+      .filter((market) =>
+        enabledSymbols.includes(market.symbol) ||
+        Boolean(recoveredState.portfolio.getPosition({ marketId: market.id })) ||
+        (recoveredState.orderRegistry?.getActiveOrders({ marketId: market.id }).length ?? 0) > 0
+      )
     assertAccountSnapshotCoversMarkets({
       accountSnapshot: nextSnapshot,
-      markets: [...marketMetadata.values()].map(({ market }) => market),
+      markets: accountAuditMarkets,
     })
     if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
       throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
