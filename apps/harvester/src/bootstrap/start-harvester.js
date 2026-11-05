@@ -1263,8 +1263,13 @@ export async function startHarvester({
       logger.info?.({ message: "Conservative TESTNET trading engine activated" })
     }
 
+    // Establish every enabled market stream before doing any REST ticker
+    // seeding or waiting for an initial strategy evaluation. A slow first
+    // market must never prevent later enabled markets from receiving prices.
+    const marketPriceIntake = new Map()
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
+
       if (tradingEnabled) {
         let bookResult
         try {
@@ -1289,44 +1294,56 @@ export async function startHarvester({
           throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
         }
         bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
-        logger.info?.({ message: "Harvester subscribed to book ticker", symbol })
+        logger.info?.({
+          message: "Harvester subscribed to book ticker",
+          symbol,
+          stream: bookResult.data.stream ?? null,
+        })
       }
 
-      let hasFreshWebSocketPrice = false
-      let latestWebSocketPriceTask
+      const intakeState = {
+        hasFreshWebSocketPrice: false,
+        latestWebSocketPriceTask: null,
+      }
       let result
       try {
         result = await broker.subscribeForPrices({
-        symbol,
-        onPrice: (priceEvent) => {
-          if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+          symbol,
+          onPrice: (priceEvent) => {
+            if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
-          try {
-            if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
-              hasFreshWebSocketPrice = true
+            try {
+              if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
+                intakeState.hasFreshWebSocketPrice = true
+              }
+            } catch {
+              // The trading engine reports malformed events through its normal result.
             }
-          } catch {
-            // The trading engine reports malformed events through its normal result.
-          }
-          latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
-            symbol,
-            priceEvent,
-            pairConfig,
-            settings: settings,
-          })).then((processed) => {
-          if (!processed.ok) {
-            reportPriceError({ symbol, errors: processed.errors })
-          } else {
-            logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
-          }
 
-          return processed
-        }).catch((error) => {
-          reportPriceError({ symbol, error })
-          return { ok: false, errors: [error] }
-        })
-          return latestWebSocketPriceTask
-        },
+            logger.debug?.({
+              message: "Harvester market price event received",
+              symbol,
+              price: priceEvent?.price,
+              timestamp: priceEvent?.timestamp,
+            })
+            intakeState.latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
+              symbol,
+              priceEvent,
+              pairConfig,
+              settings,
+            })).then((processed) => {
+              if (!processed.ok) {
+                reportPriceError({ symbol, errors: processed.errors })
+              } else {
+                logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
+              }
+              return processed
+            }).catch((error) => {
+              reportPriceError({ symbol, error })
+              return { ok: false, errors: [error] }
+            })
+            return intakeState.latestWebSocketPriceTask
+          },
         })
       } catch (error) {
         publishLifecycleEvent({
@@ -1369,18 +1386,42 @@ export async function startHarvester({
         }),
       })
       subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
-      logger.info?.({ message: "Harvester subscribed to market prices", symbol })
+      marketPriceIntake.set(symbol, intakeState)
+      logger.info?.({
+        message: "Harvester subscribed to market prices",
+        symbol,
+        stream: result.data.stream ?? null,
+      })
+    }
 
-      if (tradingEnabled) {
+    const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
+    const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
+    if (missingSubscriptions.length > 0) {
+      throw new Error("Harvester startup did not establish market-price subscriptions for every enabled pair: " + missingSubscriptions.join(", "))
+    }
+    logger.info?.({
+      message: "All enabled Harvester market-price subscriptions established",
+      enabledSymbols,
+      subscribedSymbols,
+    })
+
+    // Only after all enabled symbols have active stream subscriptions may
+    // startup perform REST price seeding and wait for outstanding first ticks.
+    if (tradingEnabled) {
+      for (const [symbol, pairConfig] of Object.entries(pairs)) {
+        if (!pairConfig.enabled) continue
+        const intakeState = marketPriceIntake.get(symbol)
+        if (!intakeState) throw new Error("Missing market-price intake state for enabled pair " + symbol)
+
         let tickerResult
         try {
           tickerResult = await broker.getPrices({ symbol })
         } catch (error) {
           tickerResult = toResult({ error })
         }
-        if (latestWebSocketPriceTask) await latestWebSocketPriceTask
+        if (intakeState.latestWebSocketPriceTask) await intakeState.latestWebSocketPriceTask
 
-        if (!hasFreshWebSocketPrice) {
+        if (!intakeState.hasFreshWebSocketPrice) {
           if (!tickerResult?.ok || !tickerResult.data) {
             const details = tickerResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
             throw new Error(
@@ -1400,7 +1441,7 @@ export async function startHarvester({
             symbol,
             priceEvent,
             pairConfig,
-            settings: settings,
+            settings,
           })
           if (!processed.ok) {
             reportPriceError({ symbol, errors: processed.errors })
