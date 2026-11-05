@@ -17,6 +17,7 @@ import {
   mapOrderSubmissionFailedData,
   mapOrderCancelFailedData,
   mapOrderCancelledData,
+  mapOrderCancellationRequestedData,
   mapFillAppliedData,
   mapDuplicateFillData,
   mapRecoveryCycleCompletedData,
@@ -53,6 +54,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     STRATEGY_DECISION: "strategy.decision",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
     ORDER_SUBMITTED: "order.submitted",
+    ORDER_CANCELLATION_REQUESTED: "order.cancel_requested",
     ORDER_SUBMISSION_FAILED: "order.submission_failed",
     STRATEGY_PAUSED: "strategy.paused",
     ORDER_CANCELLED: "order.cancelled",
@@ -378,6 +380,36 @@ test("maps rejected and unknown order outcomes with sanitized errors only", () =
   }).ok, false)
 })
 
+
+test("maps cancellation intent before broker I/O with exact order identity", () => {
+  const result = mapOrderCancellationRequestedData({
+    order: {
+      ...canonicalOrderFacts,
+      executedQuantity: { amount: "0.25" },
+      status: "PARTIALLY_FILLED",
+    },
+    reason: "TRAILING_BUY_REPRICE",
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      brokerOrderId: "broker-1",
+      executedQuantity: "0.25",
+      status: "PARTIALLY_FILLED",
+      reason: "TRAILING_BUY_REPRICE",
+    },
+  })
+  assert.equal(mapOrderCancellationRequestedData({
+    order: { ...canonicalOrderFacts, status: "PENDING" },
+    reason: "TRAILING_BUY_REPRICE",
+  }).ok, false)
+})
 
 test("maps strategy pause and cancellation outcomes as safe DTOs", () => {
   const paused = mapStrategyPausedData({
