@@ -214,7 +214,7 @@ Split this work into two independently reviewable PRs; Step 6a must merge before
 
 **Work:**
 - Publish `execution.fill_applied` only when `updateTradingAccounting` reports `applied: true`, after the existing wrapper has committed both Portfolio and RecoveryLedger.
-- Use a small allowlisted DTO containing stable fill/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, and commission status.
+- Use a small allowlisted DTO containing stable fill/trade/order identifiers, symbol, side, exact price/quantity/quote-quantity strings, liquidity role, execution time when present, exact commission amount plus asset ID/code for each commission, and commission status.
 - Do not publish repeated duplicate fills in this PR; duplicate suppression is Step 6c.
 - Keep the sequential user-data queue and all current accounting invariants unchanged.
 - Do not await EventBus delivery or Journal in the user-data queue.
@@ -334,8 +334,10 @@ Every implementation PR must:
 
 ## Explicit non-goals for this integration
 
-- Durable Portfolio/RecoveryLedger persistence or restart recovery.
-- Journal replay as a source of trading state.
+- Durable Portfolio/RecoveryLedger persistence or restart recovery within this observability integration.
+- Journal replay as a source of trading state within this observability integration.
+
+A separate Harvester P0 recovery track may consume the Journal as validated recovery evidence; that work must define its own idempotency, ownership, checkpoint, and exchange-reconciliation guarantees. The operational Journal integration remains an observer and does not independently authorize trading.
 - Exactly-once delivery.
 - Database/outbox infrastructure.
 - Every-tick market data capture.

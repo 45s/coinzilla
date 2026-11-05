@@ -1000,6 +1000,7 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
   assert.ok(applied)
   assert.deepEqual(applied.data, {
     fillId: fill.id,
+    tradeId: fill.tradeId,
     brokerOrderId: fill.brokerOrderId,
     clientOrderId: fill.clientOrderId,
     symbol: "DOGEUSDT",
@@ -1009,6 +1010,7 @@ test("publishes a Fill only after the accounting workflow commits it", async () 
     quoteQuantity: "49.975",
     liquidityRole: "MAKER",
     executedAt: 2,
+    commissions: [],
     commissionStatus: "COMPLETE",
   })
 })

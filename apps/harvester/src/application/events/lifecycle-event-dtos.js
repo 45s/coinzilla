@@ -343,6 +343,7 @@ export const mapFillAppliedData = (input = {}) =>
     if (!(fill instanceof Fill)) throw new TypeError("fill must be a canonical Fill")
     return {
       fillId: requireString({ value: fill.id, field: "fillId" }),
+      tradeId: requireString({ value: fill.tradeId, field: "tradeId" }),
       brokerOrderId: requireString({ value: fill.brokerOrderId, field: "brokerOrderId" }),
       ...(fill.clientOrderId === undefined ? {} : {
         clientOrderId: requireString({ value: fill.clientOrderId, field: "clientOrderId" }),
@@ -356,6 +357,20 @@ export const mapFillAppliedData = (input = {}) =>
       quoteQuantity: requireDecimalString({ value: fill.quoteQuantity?.amount, field: "quoteQuantity" }),
       liquidityRole: requireString({ value: fill.liquidityRole, field: "liquidityRole" }),
       ...(fill.executedAt === undefined ? {} : { executedAt: fill.executedAt }),
+      commissions: fill.commissions.map((commission, index) => ({
+        amount: requireDecimalString({
+          value: commission.amount?.amount,
+          field: "commissions[" + index + "].amount",
+        }),
+        assetId: requireString({
+          value: commission.amount?.asset?.id,
+          field: "commissions[" + index + "].assetId",
+        }),
+        asset: requireString({
+          value: commission.amount?.asset?.code,
+          field: "commissions[" + index + "].asset",
+        }),
+      })),
       commissionStatus: requireString({ value: fill.commissionStatus, field: "commissionStatus" }),
     }
   })
