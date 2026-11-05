@@ -657,6 +657,26 @@ test("blocks trading-enabled restart when prior order or fill history exists", a
   }
 })
 
+test("allows read-only startup when prior trading history requires recovery", async () => {
+  let started = false
+  await main({
+    env: { HARVESTER_ENABLE_TRADING: "false", HARVESTER_JOURNAL_ENABLED: "true" },
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      recovery: Promise.resolve({
+        ok: true,
+        available: true,
+        records: [{ id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } }],
+      }),
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true }),
+    }),
+    start: async () => { started = true; return { connected: false, tradingEnabled: false } },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+  assert.equal(started, true)
+})
+
 test("blocks trading-enabled startup when Journal history cannot be read", async () => {
   let started = false
   const previousExitCode = process.exitCode
