@@ -92,6 +92,7 @@ export function auditRecoveredAccountState({
       tradeHistoryAudit = auditRecoveredTradeHistory({
         journalFills: recoveredState.journalFills,
         exchangeFills: exchangeTradeHistory?.fills,
+        ownedOrders: recoveredState.orderRegistry.orders,
         complete: exchangeTradeHistory?.historyPagesComplete === true,
         marketUniverseComplete: exchangeTradeHistory?.marketUniverseComplete === true,
       })
