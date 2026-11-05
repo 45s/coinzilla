@@ -119,8 +119,7 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are blue? No: they are cyan and keep the visible `SYSTEM`
-label, making lifecycle events easy to distinguish from ordinary INFO output.
+SYSTEM entries are cyan and retain the visible `SYSTEM` label, making lifecycle events easy to distinguish from blue INFO output.
 
 ## Runtime commands
 
