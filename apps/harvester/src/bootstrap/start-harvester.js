@@ -2,6 +2,7 @@ import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
 import { compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
@@ -389,11 +390,18 @@ export async function startHarvester({
   let recoveredState = Object.freeze({
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
-    orderRegistry: undefined,
-    pausedMarkets: Object.freeze([]),
-    replacementIntents: Object.freeze([]),
-    completedOrderClientIds: Object.freeze([]),
-    trailingBuySymbols: Object.freeze([]),
+    orderRegistry: OrderRegistry.empty(),
+    journalFills: [],
+    pausedMarkets: new Set(),
+    durablePausedMarkets: new Set(),
+    recoveryManagedPausedMarkets: new Set(),
+    recoveryManagedCancellationClientOrderIds: new Set(),
+    unrequestedTerminalOrderClientIds: new Set(),
+    replacementIntents: new Set(),
+    trailingBuyRepriceIntents: new Set(),
+    completedOrderClientIds: new Set(),
+    trailingBuySymbols: new Set(),
+    requiresExchangeReconciliation: false,
   })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
