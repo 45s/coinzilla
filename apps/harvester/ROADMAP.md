@@ -1212,6 +1212,6 @@ These barriers deliberately await filesystem durability only immediately before 
 
 ## Standalone TESTNET order-cancellation operator tool — 2026-11-05
 
-- [~] Make the explicitly invoked Spot TESTNET cancel-all command non-interactive, while clearly warning that it cancels every open order across all symbols and applications.
-- [~] Route script diagnostics through the shared `defaultLogger`, preserve per-symbol failure handling and final account-wide verification, and cover the workflow with deterministic offline tests.
-- [ ] Merge only after the focused Harvester tests and all required CI checks pass on the synchronized PR head. This code change does not authorize any TESTNET account operation; the controlled TESTNET acceptance gate remains separately closed.
+- [x] PR #618 merged the explicitly invoked Spot TESTNET cancel-all command's non-interactive behavior, with an explicit account-wide warning.
+- [x] Route script diagnostics through the shared `defaultLogger`, preserve per-symbol failure handling and final account-wide verification, and cover the workflow with deterministic offline tests; all required CI checks passed on the merged head.
+- [x] Update the README and TESTNET operator runbook. No TESTNET account operation was performed; the controlled TESTNET acceptance gate remains separately closed.
