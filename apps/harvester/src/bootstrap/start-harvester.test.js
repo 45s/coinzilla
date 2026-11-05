@@ -801,6 +801,7 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
 
 test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", { timeout: 90_000 }, async () => {
   const calls = []
+  const buyCancellationCount = { value: 0 }
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
   let userDataHandlers
@@ -823,7 +824,9 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
-    cancelOrder: async ({ order }) => ({
+    cancelOrder: async ({ order }) => {
+      if (order.side === "BUY") buyCancellationCount.value += 1
+      return {
       ok: true,
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -840,7 +843,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         updatedAt: 3,
         completedAt: 3,
       }),
-    }),
+    }
+    },
     getFills: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
@@ -1103,14 +1107,16 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  assert.equal(submittedOrders.length, 6)
-  assert.equal(submittedOrders[5].side, "BUY")
+  // The completed recovery cycle retained free inventory but left active
+  // strategy inventory. The existing standing BUY must not be trailed/canceled.
+  assert.equal(submittedOrders.length, 5)
+  assert.equal(buyCancellationCount.value, 0)
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0.001")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY"])
 })
 
 

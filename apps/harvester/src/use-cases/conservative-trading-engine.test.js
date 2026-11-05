@@ -11,6 +11,7 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { Position } from "../domain/portfolio/position.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -2374,6 +2375,104 @@ test("uses the injected strategy policy instead of a hard-coded Conservative eva
   assert.equal(orders.length, 0)
 })
 
+
+test("suppresses trailing BUY repricing while an actual active Position exists", async () => {
+  const seeded = makeSeededRecoveryState()
+  let repricingEvaluations = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluateTrailingBuyRepricing: (input) => {
+      repricingEvaluations += 1
+      return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
+    },
+  }
+  const harness = await createHarness({
+    strategyPolicy,
+    initialPortfolio: seeded.portfolio,
+  })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+
+  const upward = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  assert.equal(upward.ok, true, upward.errors?.[0]?.message)
+  const downward = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "99.90", timestamp: 3 },
+  })
+  assert.equal(downward.ok, true, downward.errors?.[0]?.message)
+
+  assert.equal(repricingEvaluations, 0, "the trailing repricing policy must not run with active inventory")
+  assert.deepEqual(harness.cancellationIds, [], "an active Position must prevent trailing cancellation")
+  assert.equal(harness.orders.filter((order) => order.side === "BUY").length, 1)
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").clientOrderId, initialBuy.clientOrderId)
+})
+
+test("reprices an active BUY normally when no Position exists", async () => {
+  const harness = await createHarness()
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+  const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+
+  const repriced = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(repriced.ok, true, repriced.errors?.[0]?.message)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.cancellationIds[0], initialBuy.brokerOrderId)
+  const activeBuys = harness.engine.getOrders().filter((order) =>
+    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeBuys.length, 1)
+  assert.notEqual(activeBuys[0].clientOrderId, initialBuy.clientOrderId)
+})
+
+test("allows trailing BUY repricing when only retained free inventory exists", async () => {
+  const portfolio = new Portfolio({
+    positions: [new Position({
+      market,
+      baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      freeBaseQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+      quoteNetCashFlow: new Money({ amount: "0", asset: quoteAsset }),
+    })],
+  })
+  const harness = await createHarness({ initialPortfolio: portfolio })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(first.ok, true, first.errors?.[0]?.message)
+
+  const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(initialBuy)
+  const repriced = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(repriced.ok, true, repriced.errors?.[0]?.message)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.cancellationIds[0], initialBuy.brokerOrderId)
+  const activeBuys = harness.engine.getOrders().filter((order) =>
+    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeBuys.length, 1)
+  assert.notEqual(activeBuys[0].clientOrderId, initialBuy.clientOrderId)
+})
 
 test("uses the injected trailing repricing policy", async () => {
   let repricingEvaluations = 0
