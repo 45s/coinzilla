@@ -83,7 +83,7 @@ async function closeObservability({ journalService, eventBus, processLock, allow
   if (errors.length > 0) {
     try {
       logger?.error?.({
-        message: "Harvester observability shutdown incomplete",
+        message: "observability shutdown incomplete",
         errorCount: errors.length,
         errors,
       })
@@ -220,7 +220,7 @@ export async function main({
               shutdownError = stopResult?.errors?.[0]
                 ?? new Error("Harvester runtime stop did not confirm shutdown")
               process.exitCode = 1
-              logger.error({ message: "Harvester shutdown was not confirmed.", error: shutdownError })
+              logger.error({ message: "shutdown was not confirmed.", error: shutdownError })
             } else {
               logSystem(logger, "Shutdown completed.")
             }
@@ -228,7 +228,7 @@ export async function main({
             shutdownError = error
             process.exitCode = 1
             try {
-              logger.error({ message: "Harvester shutdown failed.", error })
+              logger.error({ message: "shutdown failed.", error })
             } catch {
               // Logging failure must not prevent the shutdown event attempt.
             }
@@ -255,7 +255,7 @@ export async function main({
           } catch (error) {
             process.exitCode = 1
             try {
-              logger.error({ message: "Harvester log transport shutdown failed.", error })
+              logger.error({ message: "log transport shutdown failed.", error })
             } catch {
               // Logging cleanup failure must not interrupt process shutdown.
             }
@@ -285,7 +285,7 @@ export async function main({
     if (cleanupErrors.length > 0) process.exitCode = 1
     try {
       logger.error({
-        message: "Harvester startup failed.",
+        message: "startup failed.",
         error,
         errorDetails: describeError(error),
       })
@@ -297,7 +297,7 @@ export async function main({
     } catch (loggingError) {
       process.exitCode = 1
       try {
-        logger.error({ message: "Harvester log transport shutdown failed.", error: loggingError })
+        logger.error({ message: "log transport shutdown failed.", error: loggingError })
       } catch {
         // Logging cleanup failure must not hide the original startup failure.
       }
