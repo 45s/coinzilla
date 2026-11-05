@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { Asset, Market } from "@coinzilla/entities"
 import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery.js"
+import { restoreHarvesterJournalState } from "../../use-cases/restore-harvester-journal-state.js"
 
 const record = (name, data, id = name) => ({
   id,
@@ -32,7 +34,7 @@ const submitted = (overrides = {}) => record("order.submitted", {
 })
 
 const fill = (overrides = {}) => record("execution.fill_applied", {
-  fillId: "BTCUSDT:trade-1",
+  fillId: "binance:BTCUSDT:trade-1",
   tradeId: "trade-1",
   brokerOrderId: "9001",
   clientOrderId: "h-BTCUSDT-1",
@@ -42,7 +44,7 @@ const fill = (overrides = {}) => record("execution.fill_applied", {
   quantity: "0.4",
   quoteQuantity: "40",
   liquidityRole: "MAKER",
-  commissions: [{ amount: "0.0004", assetId: "BTC", asset: "BTC" }],
+  commissions: [{ amount: "0.0004", assetId: "binance:BTC", asset: "BTC" }],
   commissionStatus: "COMPLETE",
   ...overrides,
 })
@@ -211,7 +213,7 @@ test("projects recovery-cycle completions and paused strategy state", () => {
         status: "FILLED",
       }),
       record("execution.fill_applied", {
-        fillId: "market-btc-usdt:trade-2",
+        fillId: "binance:BTCUSDT:trade-2",
         tradeId: "trade-2",
         brokerOrderId: "9002",
         clientOrderId: "h-BTCUSDT-sell-1",
@@ -226,7 +228,7 @@ test("projects recovery-cycle completions and paused strategy state", () => {
       }),
       record("recovery.cycle_completed", {
         symbol: "BTCUSDT",
-        marketId: "market-btc-usdt",
+        marketId: "binance:BTCUSDT",
         freeQuantity: "0.01",
         realizedNetProfit: "0.25",
       }),
