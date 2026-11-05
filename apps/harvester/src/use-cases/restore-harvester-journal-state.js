@@ -166,6 +166,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const restoredOrders = []
     const replacementIntents = new Set()
     const trailingBuyRepriceIntents = new Set()
+    const recoveryManagedPausedMarkets = new Set()
     const latestSubmissionSequenceBySymbolSide = new Map()
     for (const order of data.orders) {
       const key = order.symbol + ":" + order.side
@@ -175,7 +176,8 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
-    const pausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
+    const durablePausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
+    const pausedMarkets = new Set(durablePausedMarkets)
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
@@ -190,11 +192,14 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
         if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
           replacementIntents.add(order.symbol)
+          recoveryManagedPausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
           trailingBuyRepriceIntents.add(order.symbol)
+          recoveryManagedPausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         } else {
+          durablePausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         }
       } else if (order.cancellationState === "CANCELED") {
@@ -209,9 +214,14 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         if (order.cancellationSequence > latestReplacementSequence) {
           if (replacementSide === "BUY") {
             trailingBuyRepriceIntents.add(order.symbol)
+            recoveryManagedPausedMarkets.add(order.symbol)
             pausedMarkets.add(order.symbol)
           }
-          if (replacementSide === "SELL") replacementIntents.add(order.symbol)
+          if (replacementSide === "SELL") {
+            replacementIntents.add(order.symbol)
+            recoveryManagedPausedMarkets.add(order.symbol)
+            pausedMarkets.add(order.symbol)
+          }
         }
       }
     }
@@ -230,6 +240,8 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         recoveryLedgers,
         orderRegistry,
         pausedMarkets,
+        durablePausedMarkets,
+        recoveryManagedPausedMarkets,
         replacementIntents,
         trailingBuyRepriceIntents,
         completedOrderClientIds,
