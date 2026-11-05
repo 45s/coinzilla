@@ -154,6 +154,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         stoppedOutcome: undefined,
         hasCompleteClosingSnapshot: false,
         closingSnapshotCount: 0,
+        lastAccountSnapshotSourceTime: undefined,
+        lastOpenOrdersObservedAt: undefined,
       }
       sessionsByFile.set(fileName, session)
 
@@ -199,6 +201,11 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (!["PREFLIGHT", "OPENING", "CLOSING"].includes(data.phase)) throw new TypeError("Account snapshot phase is invalid")
         if (!["COMPLETE", "INCOMPLETE"].includes(data.auditStatus)) throw new TypeError("Account snapshot auditStatus is invalid")
         if (!Number.isSafeInteger(data.sourceTime) || data.sourceTime < 0) throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
+        if (session.lastAccountSnapshotSourceTime !== undefined &&
+            data.sourceTime < session.lastAccountSnapshotSourceTime) {
+          throw new Error("Account snapshot sourceTime moved backwards within Journal session " + fileName)
+        }
+        session.lastAccountSnapshotSourceTime = data.sourceTime
         if (!Array.isArray(data.balances) || !Array.isArray(data.auditReasons)) throw new TypeError("Account snapshot balances and auditReasons must be arrays")
         const balances = data.balances.map((balance, index) => {
           const asset = requireString({ value: balance?.asset, field: "balances[" + index + "].asset" })
@@ -245,6 +252,11 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
         if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
         if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
+        if (session.lastOpenOrdersObservedAt !== undefined &&
+            data.observedAt < session.lastOpenOrdersObservedAt) {
+          throw new Error("Open-order snapshot observedAt moved backwards within Journal session " + fileName)
+        }
+        session.lastOpenOrdersObservedAt = data.observedAt
         if (!["READY", "RECONCILED", "BLOCKED"].includes(data.readiness)) throw new TypeError("Open-order snapshot readiness is invalid")
         if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")
         if (data.orderCount !== data.orders.length) throw new Error("Open-order snapshot orderCount does not match orders")
