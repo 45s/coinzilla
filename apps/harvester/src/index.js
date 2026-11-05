@@ -8,7 +8,6 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
-import { summarizeHarvesterJournalHistory } from "./infrastructure/journal/summarize-harvester-journal-history.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
@@ -169,17 +168,6 @@ export async function main({
         throw new Error("Conservative TESTNET trading cannot start because prior Journal history could not be read and validated")
       }
       journalRecoveryRecords = journalRecovery.records
-      const summary = summarizeHarvesterJournalHistory({ records: journalRecovery.records })
-      if (!summary.ok) {
-        throw new Error("Conservative TESTNET trading cannot start because Journal history could not be summarized")
-      }
-      if (summary.hasPriorTradingHistory) {
-        throw new Error(
-          "Conservative TESTNET trading is blocked: prior Harvester order/fill history exists " +
-          "and Portfolio, RecoveryLedger, and owned-order restart recovery are not yet implemented. " +
-          "Start in read-only mode; do not delete or rotate the Journal to bypass this safety gate.",
-        )
-      }
     }
 
     runtimeStartAttempted = true
