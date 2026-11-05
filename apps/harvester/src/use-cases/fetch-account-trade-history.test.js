@@ -188,3 +188,16 @@ test("rejects a baseline after an exchange execution timestamp", async () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /before the requested baseline/)
 })
+
+
+test("rejects account trade fills without an exchange execution timestamp", async () => {
+  const result = await fetchAccountTradeHistory({
+    broker: { getFills: async () => ({ ok: true, data: [makeFill({ tradeId: 1, executedAt: undefined })] }) },
+    markets: [market],
+    startTime: 50,
+    requestDelayMs: 0,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /timestamps are missing/)
+})
