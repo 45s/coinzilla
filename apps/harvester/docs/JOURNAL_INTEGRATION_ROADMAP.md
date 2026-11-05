@@ -334,8 +334,10 @@ Every implementation PR must:
 
 ## Explicit non-goals for this integration
 
-- Durable Portfolio/RecoveryLedger persistence or restart recovery.
-- Journal replay as a source of trading state.
+- Durable Portfolio/RecoveryLedger persistence or restart recovery within this observability integration.
+- Journal replay as a source of trading state within this observability integration.
+
+A separate Harvester P0 recovery track may consume the Journal as validated recovery evidence; that work must define its own idempotency, ownership, checkpoint, and exchange-reconciliation guarantees. The operational Journal integration remains an observer and does not independently authorize trading.
 - Exactly-once delivery.
 - Database/outbox infrastructure.
 - Every-tick market data capture.
