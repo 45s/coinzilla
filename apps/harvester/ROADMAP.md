@@ -2,7 +2,9 @@
 
 > **CURRENT DIRECTION — 2026-11-05: POST-MERGE ENGINEERING AND CONTROLLED TESTNET READINESS.**
 >
-> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is durable restart recovery and the separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
+> **2026-11-05 runtime decision:** durable Journal replay and process-restart recovery are intentionally disabled. Startup does not read historical Journal sessions, reconstruct Portfolio/RecoveryLedger/order state, or reconcile old trades. Harvester starts with fresh in-memory trading state for the current process. The separate durable account PREFLIGHT/CLOSING audit and pre-side-effect order/cancel intent flushes remain enabled. Do not reintroduce Journal replay or make it a startup prerequisite unless the user explicitly requests it.
+>
+> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
 > The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
@@ -100,8 +102,7 @@ SELL fill → profit check → free-inventory allocation. This is a fake-broker
 simulation, not evidence of exchange behavior by itself. Real Binance TESTNET
 executions have since been observed, including a completed recovery SELL, but
 the same run exposed rapid BUY re-submission and an invalid post-cycle
-MIN_NOTIONAL intent. Reservations, restart recovery, and the safe repeatable
-TESTNET acceptance cycle remain unfinished. Do not mark the first trading
+MIN_NOTIONAL intent. Reservations and the safe repeatable TESTNET acceptance cycle remain unfinished. Durable Journal replay/restart recovery is intentionally disabled and is not a blocker. Do not mark the first trading
 milestone complete until the incident fixes, reconciliation, and required CI
 checks pass.
 
@@ -1110,50 +1111,22 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Confirmed no overlapping Harvester changes while synchronizing with the latest broker roadmap update.
 
 
-## Durable restart recovery — P0, 2026-11-05
+## Journal restart recovery — intentionally disabled, 2026-11-05
 
-- [x] PR #559 merged: same-process lost-submission acknowledgement lookup and canonical order/fill reconciliation; unresolved outcomes retain commitments and keep the pair paused.
-- [x] Persist complete applied-fill identity and accounting inputs in the Journal DTO: stable trade ID, exact price/base/quote quantities, commission status, and every actual commission amount with asset ID/code.
-- [x] PR #606 merged: strict Journal projection, immutable Portfolio/RecoveryLedger restoration, canonical order/fill reconciliation, account balance/open-order auditing, and paginated symbol-scoped account trade-history parity checks.
-- [x] Preserve ambiguous cancellation outcomes as UNKNOWN with broker/client identity and cumulative executed quantity; retain commitments and pause the pair. (PR #564)
-- [x] PR #606 restores known cancel/replace intents and keeps unresolved or contradictory state blocked.
-- [x] PR #568 adds Journal-directory single-writer process ownership before Journal recovery and broker connection.
-- [ ] Prove a complete historical exchange symbol universe, including delisted markets, or provide an exchange-authoritative account-wide trade-history source.
-- [ ] Complete the crash-boundary matrix and persisted Journal truncation/missing-page fixtures.
-- [ ] Keep TESTNET trading disabled during implementation. Recovery is not accepted until joint offline-evidence review and a separately authorized controlled TESTNET session.
+PR #606 previously introduced Journal replay, domain-state restoration, and historical exchange reconciliation. That implementation is not part of the current runtime: `startHarvester` no longer projects or restores Journal records, `index.js` does not require a recovery snapshot, and the Journal service does not read previous sessions during startup.
+
+The supported runtime starts with fresh in-memory Portfolio, RecoveryLedger, and order ownership state. It does not resume prior positions or orders. Existing exchange open orders remain unowned and continue to block trading startup; the current-session PREFLIGHT/CLOSING account audit and durable order/cancel intent barriers remain active.
+
+Do not repair, expand, or re-enable restart recovery as part of the first Conservative TESTNET workflow. It is deferred unless the user explicitly requests it.
 
 
-## Durable exchange-write intent barriers — P0 prerequisite, 2026-11-05
+## Durable exchange-write intent barriers — retained P0 safety
 
 - [x] Persist and durably flush each `order.submission_requested` intent before calling the broker placement port. If publication/flush fails, remove the unsent local PENDING order, pause the pair, and do not call the broker.
-- [x] Add `order.cancel_requested` with immutable order identity, cumulative executed quantity, status, and reason; durably flush it before either recovery-SELL or trailing-BUY cancellation calls.
+- [x] Add `order.cancel_requested` with immutable order identity, cumulative executed quantity, status, and reason; durably flush it before cancellation calls.
 - [x] Fail closed on non-durable intent flushes; preserve the existing rule that unknown broker outcomes retain commitments and pause the pair.
-- [x] Review broker placement/cancellation paths and retain the durable intent barrier before exchange side effects.
-- [x] PR #606 implements strict Journal replay projection and canonical exchange reconciliation; all six required workflows passed on the exact final head before merge.
 
-These barriers deliberately await filesystem durability only immediately before exchange side effects. Ordinary market-price evaluation, strategy policy, and fill accounting remain asynchronous with respect to Journal delivery. No TESTNET exchange writes or trading-enabled restart are authorized by this work.
-
-
-## Shared account-asset reservations — P0, 2026-11-05
-
-- [x] Aggregate outstanding BUY quote commitments across all active orders sharing the same quote-asset ID, not only the current market.
-- [x] Aggregate quote cash-flow adjustments across all Portfolio positions sharing the same quote asset.
-- [x] Separate account-wide quote/base commitments from pair-specific investment and active-inventory limits in the allocator.
-- [x] Aggregate active base inventory by base-asset ID while retaining pair-specific sellable inventory limits.
-- [ ] Extend the multi-market regression matrix to cover multiple pairs sharing both quote and base assets, partial fills, UNKNOWN orders, and concurrent market events.
-
-The engine transition queue serializes decisions; this change additionally ensures serialized decisions reserve against the same account-level asset pool rather than reusing the full baseline balance for each market.
-
-
-## Restart recovery safety gate — P0, 2026-11-05
-
-- [x] Read and validate all previous Journal sessions before opening a new writer session.
-- [x] Treat a missing Journal directory as an empty first run; fail closed on malformed, truncated, unsupported, duplicate-ID, or over-limit history.
-- [x] PR #606 reconstructs and reconciles known Harvester-owned order/fill history before trading readiness; external/manual account trade history remains unresolved.
-- [x] Preserve read-only startup for inspection without treating unverified open orders as reconciled.
-- [ ] Reconcile account-wide external/manual trade history and complete the remaining crash-boundary matrix; TESTNET acceptance remains separate.
-
-The original summary-only interim gate has been superseded by the recovery bootstrap described below. Do not delete or rotate Journal files to bypass recovery validation.
+These barriers deliberately await filesystem durability only immediately before exchange side effects. Ordinary market-price evaluation, strategy policy, and fill accounting remain asynchronous with respect to Journal delivery. They do not provide restart recovery.
 
 
 ## Single-writer process ownership — P0, 2026-11-05
