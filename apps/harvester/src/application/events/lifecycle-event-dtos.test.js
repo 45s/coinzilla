@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { EventBus } from "@coinzilla/event-bus"
-import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { HARVESTER_EVENT_NAMES, HARVESTER_EVENT_SOURCE } from "./event-names.js"
 import {
   mapBrokerConnectedData,
@@ -461,7 +461,9 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     quoteQuantity: new Money({ amount: "49.97500", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 123,
-    commissions: [],
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.0005", asset: baseAsset }),
+    })],
     commissionStatus: "COMPLETE",
   })
   const result = mapFillAppliedData({
@@ -474,6 +476,7 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     ok: true,
     data: {
       fillId: fill.id,
+      tradeId: "trade-42",
       brokerOrderId: "broker-order-42",
       clientOrderId: "harvester-order-42",
       symbol: "DOGEUSDT",
@@ -483,6 +486,11 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
       quoteQuantity: "49.975",
       liquidityRole: "MAKER",
       executedAt: 123,
+      commissions: [{
+        amount: "0.0005",
+        assetId: "asset:DOGE",
+        asset: "DOGE",
+      }],
       commissionStatus: "COMPLETE",
     },
   })
