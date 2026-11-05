@@ -200,8 +200,7 @@ export class BinanceUserDataSession {
     this.#subscribePromise = (async () => {
       let subscriptionId
       try {
-        const response = await port.subscribe()
-        subscriptionId = response.data?.subscriptionId
+        subscriptionId = await port.subscribe()
       } catch (error) {
         subscriptionId = await this.#findExistingSubscription(port, error)
       }
@@ -236,17 +235,15 @@ export class BinanceUserDataSession {
   }
 
   async #findExistingSubscription(port, originalError) {
-    let response
+    let ids
     try {
-      response = await port.listSubscriptions()
+      ids = await port.listSubscriptions()
     } catch (lookupError) {
       logSafely(this.logger, "warn", "Unable to verify Binance user-data subscription after an uncertain response", lookupError)
       throw originalError
     }
 
-    if (!Array.isArray(response.data)) throw originalError
-
-    const ids = response.data.map((item) => item?.subscriptionId)
+    if (!Array.isArray(ids)) throw originalError
     if (ids.some((id) => !Number.isSafeInteger(id) || id < 0)) {
       throw new Error("Cannot safely identify the user-data subscription: malformed subscription state", {
         cause: originalError,
@@ -266,21 +263,19 @@ export class BinanceUserDataSession {
       await port.unsubscribe(subscriptionId)
       return
     } catch (originalError) {
-      let response
+      let activeIds
       try {
-        response = await port.listSubscriptions()
+        activeIds = await port.listSubscriptions()
       } catch (lookupError) {
         logSafely(this.logger, "warn", "Unable to verify Binance user-data unsubscribe outcome", lookupError)
         throw originalError
       }
 
-      if (!Array.isArray(response.data)) {
+      if (!Array.isArray(activeIds)) {
         throw new Error("Cannot safely verify the Binance user-data unsubscribe outcome", {
           cause: originalError,
         })
       }
-
-      const activeIds = response.data.map((item) => item?.subscriptionId)
       if (activeIds.some((id) => !Number.isSafeInteger(id) || id < 0)) {
         throw new Error("Cannot safely verify malformed Binance user-data subscription state", {
           cause: originalError,

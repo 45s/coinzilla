@@ -19,9 +19,9 @@ test("maps user-data port operations to the exact signed Binance RPC contract", 
   await client.connect()
   const port = createBinanceUserDataClientPort(client)
 
-  assert.deepEqual(await port.subscribe(), { data: { subscriptionId: 17 } })
-  assert.deepEqual(await port.listSubscriptions(), { data: [{ subscriptionId: 17 }] })
-  assert.deepEqual(await port.unsubscribe(17), { data: {} })
+  assert.equal(await port.subscribe(), 17)
+  assert.deepEqual(await port.listSubscriptions(), [17])
+  assert.equal(await port.unsubscribe(17), undefined)
   assert.deepEqual(client.calls, [
     {
       method: "userDataStream.subscribe.signature",
@@ -78,4 +78,18 @@ test("forwards connection state and listener lifecycle through the port", async 
 test("rejects an incompatible WebSocket API client", () => {
   assert.throws(() => createBinanceUserDataClientPort(null), /compatible Binance WebSocket API client/)
   assert.throws(() => createBinanceUserDataClientPort({ request() {} }), /compatible Binance WebSocket API client/)
+})
+
+
+test("normalizes missing subscription data without exposing Binance response envelopes", async () => {
+  const client = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => null,
+    "session.subscriptions": () => null,
+  })
+  await client.connect()
+  const port = createBinanceUserDataClientPort(client)
+
+  assert.equal(await port.subscribe(), null)
+  assert.equal(await port.listSubscriptions(), null)
+  await client.disconnect()
 })
