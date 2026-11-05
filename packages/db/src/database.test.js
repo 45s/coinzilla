@@ -81,8 +81,9 @@ test("transactions require a connected database and a callback", async () => {
   const { adapter } = createAdapter()
   const database = createDatabase({ adapter })
 
-  await assert.rejects(database.transaction(() => {}), /connected/)
-  await assert.rejects(database.connect().then(() => database.transaction(null)), /callback/)
+  assert.throws(() => database.transaction(() => {}), /connected/)
+  await database.connect()
+  assert.throws(() => database.transaction(null), /callback/)
 })
 
 test("transaction delegates its opaque context and returns the callback result", async () => {
@@ -125,7 +126,7 @@ test("close waits for active transactions and rejects new transactions", async (
   const closing = database.close()
 
   assert.equal(database.state, "closing")
-  await assert.rejects(database.transaction(() => {}), /connected/)
+  assert.throws(() => database.transaction(() => {}), /connected/)
   assert.equal(calls.close, 0)
 
   finishTransaction("committed")
@@ -180,7 +181,7 @@ test("a failed close remains retryable without reopening transactions", async ()
 
   await assert.rejects(database.close(), /close failed/)
   assert.equal(database.state, "closing")
-  await assert.rejects(database.transaction(() => {}), /connected/)
+  assert.throws(() => database.transaction(() => {}), /connected/)
 
   await database.close()
   assert.equal(database.state, "closed")
