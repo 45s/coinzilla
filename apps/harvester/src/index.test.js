@@ -733,6 +733,72 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
   }
 })
 
+test("acquires the process lock before Journal recovery and releases it after safe startup rejection", async () => {
+  const sequence = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => {
+        sequence.push("lock")
+        return {
+          ok: true,
+          release: async () => { sequence.push("release"); return { ok: true, released: true } },
+        }
+      },
+      createJournalService: () => {
+        sequence.push("journal")
+        return {
+          ready: Promise.resolve({ ok: true }),
+          recovery: Promise.resolve({
+            ok: true,
+            available: true,
+            records: [{ id: "prior", payload: { name: "account.snapshot_captured" } }],
+          }),
+          flush: async () => ({ ok: true, durable: true }),
+          close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+        }
+      },
+      start: async () => { sequence.push("start"); return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.deepEqual(sequence, ["lock", "journal", "journal-close", "release"])
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when Journal writer shutdown is not confirmed", async () => {
+  let releaseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: false, errors: [new Error("writer close failed")] }),
+      }),
+      start: async () => { throw new Error("runtime startup failed") },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(releaseCalls, 0)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("rejects disabling Journal for TESTNET trading", async () => {
   let started = false
   const previousExitCode = process.exitCode
