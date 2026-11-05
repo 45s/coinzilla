@@ -27,6 +27,22 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "reason",
 ])
 const MAX_CONSOLE_LINE_LENGTH = 200
+const LEVEL_COLORS = Object.freeze({
+  trace: "\\u001b[95m",
+  debug: "\\u001b[35m",
+  info: "\\u001b[34m",
+  success: "\\u001b[32m",
+  system: "\\u001b[36m",
+  warn: "\\u001b[33m",
+  error: "\\u001b[31m",
+})
+const ANSI_RESET = "\\u001b[0m"
+
+function formatLevel({ level, color }) {
+  const label = level.toUpperCase()
+  const code = LEVEL_COLORS[level]
+  return color && code ? code + label + ANSI_RESET : label
+}
 
 function summarizeConsoleData({ data } = {}) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
@@ -178,7 +194,10 @@ export async function configureHarvesterLogging({
       }
     },
   })
-}export function createHarvesterConsoleTransport({ output = process.stdout } = {}) {
+}export function createHarvesterConsoleTransport({
+  output = process.stdout,
+  color = Boolean(output.isTTY) && process.env.NO_COLOR === undefined,
+} = {}) {
   let previousFingerprint
   let previousTimestamp
   let suppressedCount = 0
@@ -206,11 +225,12 @@ export async function configureHarvesterLogging({
       previousTimestamp = timestamp
 
       const time = new Date(timestamp).toLocaleTimeString()
-      const prefix = time + " " + level.toUpperCase() + " " + summary.message
+      const plainPrefix = time + " " + level.toUpperCase() + " " + summary.message
+      const prefix = time + " " + formatLevel({ level, color }) + " " + summary.message
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
         : ""
-      const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - prefix.length - 1)
+      const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length - 1)
       const suffix = serializedDetails.length > availableDetailsLength
         ? (availableDetailsLength > 3
           ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
