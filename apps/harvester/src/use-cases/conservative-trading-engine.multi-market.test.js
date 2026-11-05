@@ -46,12 +46,12 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness({ quoteFreeBalance = "10000" } = {}) {
+async function createHarness({ quoteFreeBalance = "10000", portfolio: initialPortfolio } = {}) {
   const orders = []
   const pauses = []
   const accountedTradeIds = new Set()
   const accountedFills = []
-  const portfolio = new Portfolio()
+  const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.map((market) => [
     market.symbol,
     makeMarketMetadata(market),
@@ -221,6 +221,37 @@ test("shared quote-asset BUY commitments are reserved across markets", async () 
   assert.equal(orders[0].symbol, "DOGEUSDT")
   assert.equal(engine.getOrders().length, 1)
   assert.equal(orders.length, 1)
+})
+
+test("shared quote cash flow from another market reduces the account-wide BUY budget", async () => {
+  const priorDogeBuy = new Fill({
+    tradeId: "prior-doge-buy",
+    brokerOrderId: "broker-prior-doge-buy",
+    clientOrderId: "prior-doge-client",
+    market: marketsBySymbol.get("DOGEUSDT"),
+    side: "BUY",
+    price: new Money({ amount: "99.95", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: "99.95", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt: 1,
+  })
+  const portfolio = new Portfolio().applyFill({ fill: priorDogeBuy }).portfolio
+  const { engine, orders } = await createHarness({
+    quoteFreeBalance: "150",
+    portfolio,
+  })
+
+  const result = await engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.waitingForAvailableQuoteBalance, true)
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
+  assert.equal(orders.length, 0)
 })
 
 test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
