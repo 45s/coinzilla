@@ -1,5 +1,6 @@
 import { createUserDataEventDeduplicator } from "../helpers/user-data-event-deduplicator.js"
 import { adaptMsg } from "../helpers/adapters/adapt-msg.js"
+import { canCompleteUserDataRecovery } from "../../../domain/user-data-recovery-policy.js"
 
 function logSafely(logger, level, ...args) {
   try {
@@ -546,11 +547,13 @@ export class BinanceUserDataSession {
   }
 
   #completeRecoveryIfAcknowledged() {
-    if (!this.#recoveryRequired || this.#subscriptionId === null ||
-        this.#subscribers.size === 0) return false
-    const allAcknowledged = [...this.#subscribers.values()]
-      .every((subscriber) => subscriber.recoveryAcknowledged)
-    if (!allAcknowledged) return false
+    const canComplete = canCompleteUserDataRecovery({
+      recoveryRequired: this.#recoveryRequired,
+      hasActiveSubscription: this.#subscriptionId !== null,
+      subscriberAcknowledgements: [...this.#subscribers.values()]
+        .map((subscriber) => subscriber.recoveryAcknowledged),
+    })
+    if (!canComplete) return false
 
     this.#clearAcknowledgementTimer()
     this.#acknowledgementAttempts = 0
