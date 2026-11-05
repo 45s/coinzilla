@@ -129,6 +129,7 @@ Use fake broker/REST ports and controlled promises/clocks where appropriate. Tes
 - Acknowledge broker recovery only after the reconciliation and durable audits succeed.
 - Invalidate stale in-flight work when a newer disconnect/recovery/error status arrives.
 - Ignore duplicate reminders for an already acknowledged recovery generation.
+- Log RPC/recovery errors with the error name, explicit empty-message marker, stack, and Error cause details when available.
 - Keep the app readiness gate closed on any failure.
 
 **Regression tests added:** successful recovery with durable account/open-order audits; failed account snapshot does not acknowledge; a newer disconnect invalidates stale completion; duplicate reminders do not repeat completed work.
