@@ -372,7 +372,7 @@ describe('Logger transport validation and error boundaries', () => {
     assert.throws(() => logger.setLevel({ transport: '', level: 'info' }), /identifier must be a non-empty string/)
     assert.throws(() => logger.setLevel({ transport: 42, level: 'info' }), /identifier must be a non-empty string/)
     assert.throws(() => logger.setLevel({ transport: 'missing', level: 1 }), /Invalid log level/)
-    assert.throws(() => logger.removeTransport(' '), /identifier must be a non-empty string/)
+    await assert.rejects(logger.removeTransport(' '), /identifier must be a non-empty string/)
     assert.equal(await logger.removeTransport('missing'), false)
   })
 
