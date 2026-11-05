@@ -38,10 +38,9 @@ const LEVEL_COLORS = Object.freeze({
 })
 const ANSI_RESET = "\u001b[0m"
 
-function formatLevel({ level, method = level, color }) {
-  const label = method.toUpperCase()
+function formatConsoleLine({ line, level, method = level, color }) {
   const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
-  return color && code ? code + label + ANSI_RESET : label
+  return color && code ? code + line + ANSI_RESET : line
 }
 
 function summarizeConsoleData({ data } = {}) {
@@ -207,8 +206,8 @@ export async function configureHarvesterLogging({
   const flushSuppressed = () => {
     if (suppressedCount === 0) return
     const time = new Date(previousTimestamp).toLocaleTimeString()
-    const level = formatLevel({ level: "info", color })
-    output.write(time + " " + level + " Previous identical log entry repeated " + suppressedCount + " additional time(s)\n")
+    const line = time + " INFO Previous identical log entry repeated " + suppressedCount + " additional time(s)"
+    output.write(formatConsoleLine({ line, level: "info", color }) + "\n")
     suppressedCount = 0
   }
 
@@ -242,12 +241,12 @@ export async function configureHarvesterLogging({
       const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
         ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
         : plainLine
-      const label = formatLevel({ level, method, color })
-      const levelStart = time.length + 1
-      const renderedLine = color
-        ? boundedLine.slice(0, levelStart) + label + boundedLine.slice(levelStart + method.length)
-        : boundedLine
-      output.write(renderedLine + "\n")
+      output.write(formatConsoleLine({
+        line: boundedLine,
+        level,
+        method,
+        color,
+      }) + "\n")
     },
     close: flushSuppressed,
   }
