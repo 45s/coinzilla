@@ -14,7 +14,7 @@ import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js
 import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
 import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
-import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
+import { createBinanceUserDataClientPort } from "../../infrastructure/binance/user-data-client-adapter.js"
 import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
 
 function createApiClient(config) {
