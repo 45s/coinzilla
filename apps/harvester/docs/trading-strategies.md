@@ -23,8 +23,11 @@ BUY and replace it below the new last trade by the configured percentage.
 Round the replacement price down to the exchange tick. If the cancellation
 reveals any execution, reconcile those fills and pause instead of placing a
 replacement from uncertain inventory. After a BUY fully fills, the next
-standing BUY is fixed and does not trail. Trailing becomes active again after
-a profitable recovery SELL completes.
+standing BUY is fixed and does not trail while active strategy inventory
+remains. A profitable recovery SELL can restore the trailing phase, but trailing
+repricing is still suppressed until the Portfolio's active
+`baseQuantity.amount` reaches zero. Retained `freeBaseQuantity` is excluded
+from this gate, so free inventory alone does not prevent trailing.
 
 The default Harvester config enables only `ZROUSDT` while the first trading
 cycle is limited to one pair. `ZROFDUSD` remains configured but disabled until
