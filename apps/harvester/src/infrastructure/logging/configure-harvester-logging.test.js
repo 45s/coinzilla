@@ -221,7 +221,7 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct colors without r
   transport.close()
 
   assert.match(written, /\u001b\[32m.*SUCCESS Lifecycle event\u001b\[0m/)
-  assert.match(written, /\u001b\[36m.*SYSTEM Lifecycle event\u001b\[0m/)
+  assert.match(written, /\u001b\[36m.*Lifecycle event\u001b\[0m/)
   assert.match(written, /\u001b\[34m.*Lifecycle event\u001b\[0m/)
   assert.equal((written.match(/Lifecycle event/g) ?? []).length, 3)
   assert.doesNotMatch(written, /SYSTEM Lifecycle event/)
