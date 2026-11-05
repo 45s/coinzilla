@@ -214,7 +214,7 @@ export async function main({
           let runtimeStopped = false
           try {
             const stopResult = await runtime.stop()
-            runtimeStopped = stopResult?.ok === true
+            runtimeStopped = stopResult === undefined || stopResult?.ok === true
             if (!runtimeStopped) {
               shutdownError = stopResult?.errors?.[0]
                 ?? new Error("Harvester runtime stop did not confirm shutdown")
