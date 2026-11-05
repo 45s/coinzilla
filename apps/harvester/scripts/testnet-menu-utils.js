@@ -33,3 +33,7 @@ export const buildTestnetMenuArguments = ({ actionId, answers = {} }) => {
       return []
   }
 }
+
+export const normalizePromptAnswer = (answer, fallback = "") => (
+  (answer ?? "").trim() || fallback
+)
