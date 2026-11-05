@@ -3228,6 +3228,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
       orderRegistry: new OrderRegistry({ orders: [buyOwnedOrder, sellOwnedOrder] }),
       replacementIntents: new Set(["DOGEUSDT"]),
       trailingBuyRepriceIntents: new Set(["DOGEUSDT"]),
+      recoveryManagedCancellationClientOrderIds: new Set(["recovered-buy"]),
     },
   })
   harness.broker.getOpenOrders = async () => ({
