@@ -949,3 +949,48 @@ test("restores a partially filled canceled order as a paused strategy market", (
   assert.equal(restored.data.orderRegistry.orders[0].status, "CANCELED")
   assert.equal(restored.data.orderRegistry.orders[0].executedQuantity.amount, "0.4")
 })
+
+
+test("rejects a second cancellation intent while the first outcome is unresolved", () => {
+  const cancellation = record("order.cancel_requested", {
+    clientOrderId: "h-BTCUSDT-1",
+    brokerOrderId: "9001",
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "100",
+    quantity: "1",
+    executedQuantity: "0",
+    status: "OPEN",
+    reason: "TRAILING_BUY_REPRICE",
+  })
+  const result = projectHarvesterJournalRecovery({
+    records: [submissionRequested(), submitted(), cancellation, {
+      ...cancellation,
+      id: "duplicate-cancel-request",
+      payload: { ...cancellation.payload, id: "duplicate-cancel-request" },
+    }],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /cannot be retried or duplicated/)
+})
+
+test("requires a durable cancellation intent before accepting a cancellation failure", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      record("order.cancel_failed", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        outcome: "NOT_CANCELED",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /no preceding durable cancellation intent/)
+})
