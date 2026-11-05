@@ -96,11 +96,11 @@ export const runTestnetMenu = async () => {
   let selectedIndex = 0
   let menuVisible = false
   const showMenu = () => {
-    stdout.write("\\x1b[?1049h\\x1b[?25l")
+    stdout.write("\x1b[?1049h\x1b[?25l")
     menuVisible = true
   }
   const hideMenu = () => {
-    stdout.write("\\x1b[?25h\\x1b[?1049l")
+    stdout.write("\x1b[?25h\x1b[?1049l")
     menuVisible = false
   }
 
@@ -126,12 +126,14 @@ export const runTestnetMenu = async () => {
       if (action.id === "exit") return
 
       stdin.setRawMode(false)
-      stdout.write("\x1b[2J\x1b[H")
+      hideMenu()
       await runAction(action)
       stdin.setRawMode(true)
+      showMenu()
     }
   } finally {
     stdin.setRawMode(false)
+    if (menuVisible) hideMenu()
     stdout.write("\n")
   }
 }
