@@ -1157,8 +1157,9 @@ This is deliberately a fail-closed interim gate, not a claim that restart recove
 
 ## Single-writer process ownership — P0, 2026-11-05
 
-- [~] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
-- [~] Refuse a second local trading process using the same Journal directory.
-- [~] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
-- [~] Never auto-reclaim stale locks; require operator verification.
-- [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
+- [x] PR #568 acquires an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
+- [x] PR #568 refuses a second local trading process using the same Journal directory.
+- [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
+- [x] PR #568 never auto-reclaims stale locks; operator verification is required.
+- [~] Add a broker-wide host lock independent of Journal directory configuration so separate Journal directories cannot start concurrent Harvester trading processes under the same OS user.
+- [ ] Coordinate locks across different OS users or machines if multi-user or distributed same-account deployments become supported.
