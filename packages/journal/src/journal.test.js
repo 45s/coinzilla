@@ -14,6 +14,7 @@ async function createTestJournal() {
 
   const logger = {
     info: (message, context) => logs.push({ level: "info", message, context }),
+    system: (message, context) => logs.push({ level: "system", message, context }),
     error: (message, context) =>
       logs.push({ level: "error", message, context }),
   }
@@ -181,8 +182,8 @@ test("logs journal startup and shutdown", async () => {
   try {
     await context.journal.close()
 
-    assert.ok(context.logs.some(({ message }) => message === "Journal started"))
-    assert.ok(context.logs.some(({ message }) => message === "Journal closed"))
+    assert.ok(context.logs.some(({ level, message }) => level === "system" && message === "Journal started"))
+    assert.ok(context.logs.some(({ level, message }) => level === "system" && message === "Journal closed"))
   } finally {
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
