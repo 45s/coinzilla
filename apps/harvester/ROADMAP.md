@@ -1231,5 +1231,5 @@ persistence, exchange operations, or broader observability projects.
 - [x] Run Harvester tests, workspace coverage, syntax, dependency audit, and
   process-lock CI on the synchronized dependency-complete head; all required
   workflows passed. The read-only TESTNET integration job was skipped.
-- [ ] Merge the Harvester logging PR into `develop` only after the shared
-  `@coinzilla/utils` transport API PR is merged and workspace CI passes.
+- [x] PR #632 merged into `develop` after shared logger API PR #631 and workspace CI passed.
+- [x] PR #636 preserves semantic SUCCESS/SYSTEM console labels, distinguishes them during duplicate suppression, and keeps colored output within the 200-character limit.

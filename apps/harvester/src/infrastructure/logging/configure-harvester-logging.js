@@ -6,52 +6,69 @@ import { defaultLogger } from "@coinzilla/utils"
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
+const CONSOLE_DETAIL_KEYS = Object.freeze([
+  "errorName",
+  "errorMessage",
+  "orderCount",
+  "readiness",
+  "symbol",
+  "symbols",
+  "enabledSymbols",
+  "action",
+  "side",
+  "price",
+  "quantity",
+  "phase",
+  "auditStatus",
+  "balanceCount",
+  "assetCount",
+  "strategyMode",
+  "broker",
+  "reason",
+])
+const MAX_CONSOLE_LINE_LENGTH = 200
+const LEVEL_COLORS = Object.freeze({
+  trace: "\u001b[95m",
+  debug: "\u001b[35m",
+  info: "\u001b[34m",
+  success: "\u001b[32m",
+  system: "\u001b[36m",
+  warn: "\u001b[33m",
+  error: "\u001b[31m",
+})
+const ANSI_RESET = "\u001b[0m"
 
-/**
- * Create the compact, single-line Harvester console presentation.
- *
- * @param {{ output?: NodeJS.WritableStream }} input
- * @returns {{ name: string, level: string, write: (entry: object) => void }}
- */
-export function createHarvesterConsoleTransport({ output = process.stdout } = {}) {
-  let previousFingerprint
-  let previousTimestamp
-  let suppressedCount = 0
+function formatLevel({ level, method = level, color }) {
+  const label = method.toUpperCase()
+  const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
+  return color && code ? code + label + ANSI_RESET : label
+}
 
-  const flushSuppressed = () => {
-    if (suppressedCount === 0) return
-    const time = new Date(previousTimestamp).toLocaleTimeString()
-    output.write(time + " INFO Previous identical log entry repeated " + suppressedCount + " additional time(s)\n")
-    suppressedCount = 0
+function summarizeConsoleData({ data } = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { message: String(data ?? "") }
   }
 
-  return {
-    name: CONSOLE_TRANSPORT_NAME,
-    level: "info",
-    write({ timestamp, level, data }) {
-      const fingerprint = JSON.stringify({ level, data })
-      if (fingerprint === previousFingerprint) {
-        suppressedCount += 1
-        return
-      }
-
-      flushSuppressed()
-      previousFingerprint = fingerprint
-      previousTimestamp = timestamp
-      const time = new Date(timestamp).toLocaleTimeString()
-      const message = data && typeof data === "object" && !Array.isArray(data)
-        ? data.message
-        : data
-      const details = data && typeof data === "object" && !Array.isArray(data)
-        ? Object.fromEntries(Object.entries(data).filter(([key]) => key !== "message"))
-        : undefined
-      const suffix = details && Object.keys(details).length > 0
-        ? " " + JSON.stringify(details)
-        : ""
-      output.write(time + " " + level.toUpperCase() + " " + String(message ?? "").replace(/[\r\n]+/g, " ") + suffix + "\n")
-    },
-    close: flushSuppressed,
-  }
+  const message = String(data.message ?? "Harvester event")
+    .replace(/[\r\n]+/g, " ")
+  const details = Object.fromEntries(
+    CONSOLE_DETAIL_KEYS
+      .filter((key) => data[key] !== undefined && data[key] !== null)
+      .map((key) => {
+        const value = data[key]
+        if (typeof value === "string") {
+          const maxLength = key === "errorMessage" ? 72 : 100
+          if (value.length > maxLength) {
+            return [key, value.slice(0, maxLength - 3) + "..."]
+          }
+        }
+        if (Array.isArray(value)) {
+          return [key, value.slice(0, 3)]
+        }
+        return [key, value]
+      }),
+  )
+  return { message, details }
 }
 
 /**
@@ -177,4 +194,61 @@ export async function configureHarvesterLogging({
       }
     },
   })
+}export function createHarvesterConsoleTransport({
+  output = process.stdout,
+  color = process.env.NO_COLOR === undefined && (
+    process.env.HARVESTER_LOG_COLOR === "1" || Boolean(output.isTTY)
+  ),
+} = {}) {
+  let previousFingerprint
+  let previousTimestamp
+  let suppressedCount = 0
+
+  const flushSuppressed = () => {
+    if (suppressedCount === 0) return
+    const time = new Date(previousTimestamp).toLocaleTimeString()
+    const level = formatLevel({ level: "info", color })
+    output.write(time + " " + level + " Previous identical log entry repeated " + suppressedCount + " additional time(s)\n")
+    suppressedCount = 0
+  }
+
+  return {
+    name: CONSOLE_TRANSPORT_NAME,
+    level: "info",
+    write({ timestamp, level, method = level, data }) {
+      const summary = summarizeConsoleData({ data })
+      const fingerprint = JSON.stringify({ level, method, summary })
+      if (fingerprint === previousFingerprint) {
+        suppressedCount += 1
+        return
+      }
+
+      flushSuppressed()
+      previousFingerprint = fingerprint
+      previousTimestamp = timestamp
+
+      const time = new Date(timestamp).toLocaleTimeString()
+      const plainPrefix = time + " " + method.toUpperCase() + " " + summary.message
+      const serializedDetails = Object.keys(summary.details ?? {}).length > 0
+        ? " " + JSON.stringify(summary.details)
+        : ""
+      const availableDetailsLength = Math.max(0, MAX_CONSOLE_LINE_LENGTH - plainPrefix.length - 1)
+      const suffix = serializedDetails.length > availableDetailsLength
+        ? (availableDetailsLength > 3
+          ? serializedDetails.slice(0, availableDetailsLength - 3) + "..."
+          : "")
+        : serializedDetails
+      const plainLine = plainPrefix + suffix
+      const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
+        ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
+        : plainLine
+      const label = formatLevel({ level, method, color })
+      const levelStart = time.length + 1
+      const renderedLine = color
+        ? boundedLine.slice(0, levelStart) + label + boundedLine.slice(levelStart + method.length)
+        : boundedLine
+      output.write(renderedLine + "\n")
+    },
+    close: flushSuppressed,
+  }
 }
