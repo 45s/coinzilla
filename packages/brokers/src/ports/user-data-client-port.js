@@ -20,8 +20,8 @@
  * @property {(listener: (message: UserDataClientPortEvent) => void) => (() => void)|void} onEvent
  * @property {(listener: (error: Error) => void) => (() => void)|void} onError
  * @property {(listener: (event: unknown) => void) => (() => void)|void} onClose
- * @property {() => Promise<number|null>} subscribe
- * @property {() => Promise<unknown[]|null>} listSubscriptions
+ * @property {() => Promise<unknown>} subscribe
+ * @property {() => Promise<unknown>} listSubscriptions
  * @property {(subscriptionId: number) => Promise<void>} unsubscribe
  */
 
