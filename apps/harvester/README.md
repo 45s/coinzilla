@@ -482,7 +482,7 @@ thresholds. Interactive development starts with INFO on the terminal while
 `logs/harvester.log` records DEBUG and `logs/harvester-trace.log` records TRACE
 as JSONL. Use `/log debug`, `/log trace`, `/log info`, or `/log status` in
 an interactive terminal to change or inspect the console threshold; file
-thresholds are unaffected. Identical consecutive terminal entries are summarized, while changed values and every JSONL record are retained. See [Logging](./docs/LOGGING.md) for the command,
+thresholds are unaffected. INFO output is a concise summary (no stack traces or internal audit payloads); full details remain in the DEBUG/TRACE JSONL files. See [Logging](./docs/LOGGING.md) for the command,
 entry format, and shutdown behavior.
 
 This is a narrowly scoped, explicitly authorized observability task. It does
