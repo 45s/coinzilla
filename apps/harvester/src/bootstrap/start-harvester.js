@@ -152,7 +152,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     const task = updateQueue.then(() => {
       if (!(fill instanceof Fill)) {
         logger.error?.({
-          message: "Harvester accounting rejected non-canonical fill",
+          message: "accounting rejected non-canonical fill",
           fillType: fill?.constructor?.name ?? typeof fill,
         })
         return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
@@ -240,7 +240,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         })
       } else {
         logger.error?.({
-          message: "Harvester accounting execution rejected",
+          message: "accounting execution rejected",
           executionId: fill.id,
           tradeId: fill.tradeId,
           symbol: fill.market.symbol,
@@ -281,7 +281,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           minProfit,
         }
         logger.debug?.({
-          message: "Harvester recovery completion evaluation input",
+          message: "recovery completion evaluation input",
           marketId,
           symbol: recoveryLedger.market.symbol,
           completionInput,
@@ -307,7 +307,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           })
         } else {
           logger.debug?.({
-            message: "Harvester recovery cycle not completed",
+            message: "recovery cycle not completed",
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
@@ -318,7 +318,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         return toResult({ data: completion })
       } catch (error) {
         logger.error?.({
-          message: "Harvester recovery completion evaluation failed",
+          message: "recovery completion evaluation failed",
           marketId,
           errorName: error?.name,
           errorMessage: error?.message ?? String(error),
@@ -467,7 +467,6 @@ export async function startHarvester({
       eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
       dataResult: mapBrokerConnectedData({ broker: brokerName }),
     })
-    logger.system?.({ message: "Binance broker connected" })
   } catch (error) {
     publishLifecycleEvent({
       eventPublisher,
@@ -514,9 +513,9 @@ export async function startHarvester({
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
-      if (!result.ok) logger.error?.({ message: "Harvester deferred strategy evaluation failed", errors: result.errors })
+      if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
     }).catch((error) => {
-      logger.error?.({ message: "Harvester deferred strategy evaluation failed", error })
+      logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
   }
   const refreshAccountSnapshot = async () => {
@@ -713,7 +712,7 @@ export async function startHarvester({
     }
     if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
       logger.error?.({
-        message: "Harvester cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
+        message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
       })
       return
     }
@@ -724,7 +723,7 @@ export async function startHarvester({
     const recoveryTask = (async () => {
       try {
         logger.info?.({
-          message: "Harvester application recovery started after user-data transport reconnect",
+          message: "application recovery started after user-data transport reconnect",
           generation,
         })
 
@@ -786,7 +785,7 @@ export async function startHarvester({
         }
         lastAcknowledgedRecoveryGeneration = generation
         logger.info?.({
-          message: "Harvester application recovery completed and broker acknowledgement accepted",
+          message: "application recovery completed and broker acknowledgement accepted",
           generation,
           reconciledOrders: reconciliation.data?.reconciled ?? 0,
         })
@@ -797,7 +796,7 @@ export async function startHarvester({
           ? "EXECUTION_ACCOUNTING_FAILED"
           : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
         logger.error?.({
-          message: "Harvester application recovery failed; trading remains blocked",
+          message: "application recovery failed; trading remains blocked",
           generation,
           errorName: error?.name ?? "Error",
           errorMessage: error?.message || String(error),
@@ -853,7 +852,7 @@ export async function startHarvester({
       },
       isStopping: () => stopped,
       onPause: async ({ symbol, reason, error }) => {
-        logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
+        logger.error?.({ message: "paused a trading pair", symbol, reason, error })
       },
     })
     processMarketPrice = tradingEngine.processMarketPrice
@@ -864,7 +863,7 @@ export async function startHarvester({
       onMarketPriceError(details)
     } catch (error) {
       logger.error?.({
-        message: "Harvester market price error handler failed",
+        message: "market price error handler failed",
         error,
       })
     }
@@ -941,7 +940,7 @@ export async function startHarvester({
                 incomingBrokerOrderId !== undefined &&
                 order.brokerOrderId === incomingBrokerOrderId)
               logger.error?.({
-                message: "Harvester rejected an unowned or invalid order event",
+                message: "rejected an unowned or invalid order event",
                 eventType: event.eventType ?? "UNKNOWN",
                 executionType: event.executionType,
                 symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
@@ -987,7 +986,7 @@ export async function startHarvester({
             userDataReady = false
             userDataStatus = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
             logger.error?.({
-              message: "Harvester received an order report before its order-ownership registry was ready",
+              message: "received an order report before its order-ownership registry was ready",
               symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
               brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
             })
@@ -1008,7 +1007,7 @@ export async function startHarvester({
             // Observability hooks must not roll back a fill already committed
             // to both immutable accounting projections.
             logger.error?.({
-              message: "Harvester user-data observer failed",
+              message: "user-data observer failed",
               eventType: event.eventType ?? "UNKNOWN",
               error,
             })
@@ -1017,7 +1016,7 @@ export async function startHarvester({
           userDataAccountingFailed = true
           userDataReady = false
           userDataStatus = "EVENT_QUEUE_FAILED"
-          logger.error?.({ message: "Harvester user-data event queue failed", error })
+          logger.error?.({ message: "user-data event queue failed", error })
         }).finally(async () => {
           if (stopped) {
             userDataReady = false
@@ -1042,7 +1041,7 @@ export async function startHarvester({
           userDataStatus = "READY"
           if (reevaluateSymbol && tradingEngine) {
             const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-            if (!reevaluated.ok) logger.error?.({ message: "Harvester next strategy evaluation failed", errors: reevaluated.errors })
+            if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
           }
           resumeDeferredStrategyEvaluations()
         })
@@ -1170,7 +1169,7 @@ export async function startHarvester({
           userDataReady = false
           userDataAccountingFailed = true
           userDataStatus = "STATUS_HANDLER_FAILED"
-          logger.error?.({ message: "Harvester user-data status handler failed", error })
+          logger.error?.({ message: "user-data status handler failed", error })
         }
       },
       })
@@ -1278,10 +1277,10 @@ export async function startHarvester({
             onBookTicker: (bookTicker) => {
               if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
               return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
-                if (!processed.ok) logger.error?.({ message: "Harvester market book processing failed", symbol, errors: processed.errors })
+                if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
                 return processed
               }).catch((error) => {
-                logger.error?.({ message: "Harvester market book processing failed", symbol, error })
+                logger.error?.({ message: "market book processing failed", symbol, error })
                 return toResult({ error })
               })
             },
@@ -1503,7 +1502,7 @@ export async function startHarvester({
       }
     } catch (error) {
       snapshotError = error
-      logger.error?.({ message: "Harvester closing account snapshot failed", error })
+      logger.error?.({ message: "closing account snapshot failed", error })
     }
 
     userDataStatus = "STOPPED"
