@@ -35,6 +35,26 @@ describe("Binance user-data subscription setup", () => {
     }), RangeError)
   })
 
+  it("validates the injected client port before using it", async () => {
+    const client = createFakeRpcClient()
+    await client.connect()
+    const session = new UserDataSession({
+      getClient: () => client,
+      createClient: async () => client,
+      createUserDataClientPort: () => ({ state: "open" }),
+      setClient: () => {},
+      setConnected: () => {},
+      setUnavailable: () => {},
+    })
+    session.start()
+
+    await assert.rejects(
+      session.subscribe({ onEvent: () => {} }),
+      /User-data client port/,
+    )
+    await session.stop()
+  })
+
   it("requires the client port factory after validating the existing retry policy", () => {
     assert.throws(() => new UserDataSession({
       getClient() {},
