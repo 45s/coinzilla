@@ -4,7 +4,7 @@ import test from "node:test"
 import { createSqliteDatabase } from "../src/index.js"
 
 test("migrations run in ascending version order and are recorded", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -45,7 +45,7 @@ test("migrations run in ascending version order and are recorded", async () => {
 })
 
 test("migrations are idempotent and only newly pending versions are applied", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
   let executions = 0
 
@@ -68,7 +68,7 @@ test("migrations are idempotent and only newly pending versions are applied", as
 })
 
 test("a failed migration rolls back schema changes and migration records", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -103,7 +103,7 @@ test("a failed migration rolls back schema changes and migration records", async
 })
 
 test("migrations reject duplicate or invalid versions before changing the database", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -123,7 +123,7 @@ test("migrations reject duplicate or invalid versions before changing the databa
 })
 
 test("migrations reject missing names and migration functions", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -142,7 +142,7 @@ test("migrations reject missing names and migration functions", async () => {
 })
 
 test("migration history mismatches fail instead of silently changing applied schema", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -164,7 +164,7 @@ test("migration history mismatches fail instead of silently changing applied sch
 })
 
 test("migration validation rejects non-arrays and non-object entries", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
@@ -177,7 +177,7 @@ test("migration validation rejects non-arrays and non-object entries", async () 
 })
 
 test("async migration functions are rejected before execution", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
   let invoked = false
 
@@ -198,7 +198,7 @@ test("async migration functions are rejected before execution", async () => {
 })
 
 test("promise-returning migration functions roll back the migration", async () => {
-  const database = createSqliteDatabase()
+  const database = createSqliteDatabase({ filename: ":memory:" })
   await database.connect()
 
   try {
