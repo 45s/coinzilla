@@ -480,7 +480,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
       throw new TypeError("observedAt must be a non-negative safe integer")
     }
     if (!Array.isArray(orders)) throw new TypeError("orders must be an array")
-    if (!["READY", "BLOCKED"].includes(readiness)) {
+    if (!["READY", "RECONCILED", "BLOCKED"].includes(readiness)) {
       throw new TypeError("readiness must be READY or BLOCKED")
     }
     if (!Array.isArray(blockReasons) || blockReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
@@ -525,6 +525,9 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     }
     if (readiness === "READY" && (mappedOrders.length > 0 || blockReasons.length > 0)) {
       throw new TypeError("READY open-order audit requires no open orders and no block reasons")
+    }
+    if (readiness === "RECONCILED" && (mappedOrders.length === 0 || blockReasons.length > 0)) {
+      throw new TypeError("RECONCILED open-order audit requires owned open orders and no block reasons")
     }
     if (readiness === "BLOCKED" && blockReasons.length === 0) {
       throw new TypeError("BLOCKED open-order audit requires blockReasons")
