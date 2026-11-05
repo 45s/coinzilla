@@ -645,3 +645,162 @@ test("fails closed when recovery-cycle profit contradicts replayed fills", () =>
   assert.equal(restored.ok, false)
   assert.match(restored.errors[0].message, /profit conflicts/)
 })
+
+
+test("rejects a replacement submission while the previous cancellation remains unresolved", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      submitted(),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "OPEN",
+        reason: "TRAILING_BUY_REPRICE",
+      }),
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-2",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "99",
+        quantity: "1",
+        status: "PENDING",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /prior cancellation remains UNKNOWN/)
+})
+
+test("restores a replacement intent after confirmed cancellation but before the replacement submission", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "PENDING",
+      }),
+      record("order.submitted", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "NEW",
+      }),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "OPEN",
+        reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      }),
+      record("order.cancelled", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "CANCELED",
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, true)
+  assert.deepEqual([...restored.data.replacementIntents], ["BTCUSDT"])
+})
+
+test("does not restore a replacement intent after the replacement submission is journaled", () => {
+  const projection = projectHarvesterJournalRecovery({
+    records: [
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "PENDING",
+      }),
+      record("order.submitted", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "NEW",
+      }),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "OPEN",
+        reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      }),
+      record("order.cancelled", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "CANCELED",
+      }),
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-2",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "101",
+        quantity: "1",
+        status: "PENDING",
+      }),
+    ],
+  })
+  assert.equal(projection.ok, true)
+
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
+  })
+
+  assert.equal(restored.ok, true)
+  assert.deepEqual([...restored.data.replacementIntents], [])
+})
