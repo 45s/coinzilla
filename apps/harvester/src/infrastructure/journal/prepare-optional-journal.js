@@ -99,7 +99,11 @@ export function prepareOptionalJournal({
               bytesRead: readResult.bytesRead ?? 0,
               available: true,
             })
-          } else if (readResult?.errors?.some((error) => error?.code === "JOURNAL_DIRECTORY_NOT_FOUND")) {
+          } else if (
+            Array.isArray(readResult?.errors)
+            && readResult.errors.length === 1
+            && readResult.errors[0]?.code === "JOURNAL_DIRECTORY_NOT_FOUND"
+          ) {
             recoveryResult = toResult({
               records: [],
               count: 0,
