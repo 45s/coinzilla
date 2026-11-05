@@ -1,6 +1,10 @@
 import { addDecimal, assertDecimalString, compareDecimal, toResult } from "@coinzilla/utils"
 
 const EVENT = Object.freeze({
+  STARTED: "harvester.started",
+  STOPPED: "harvester.stopped",
+  ACCOUNT_SNAPSHOT: "account.snapshot_captured",
+  ACCOUNT_OPEN_ORDERS: "account.open_orders_captured",
   SUBMISSION_REQUESTED: "order.submission_requested",
   SUBMITTED: "order.submitted",
   SUBMISSION_FAILED: "order.submission_failed",
@@ -118,6 +122,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const tradeIdBySymbol = new Map()
     const cycles = []
     const pausedMarkets = new Map()
+    const sessionsByFile = new Map()
+    const accountSnapshots = []
+    const openOrderSnapshots = []
 
     const requireOrder = ({ clientOrderId, eventName }) => {
       const order = ordersByClientId.get(clientOrderId)
@@ -131,6 +138,118 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
       if (!Object.values(EVENT).includes(name)) continue
       const data = requireObject({ value: payload.data, field: name + " data" })
+      const fileName = requireString({
+        value: record.position?.fileName,
+        field: "Journal record position.fileName",
+      })
+      const session = sessionsByFile.get(fileName) ?? {
+        fileName,
+        tradingEnabled: false,
+        stoppedOutcome: undefined,
+        hasCompleteClosingSnapshot: false,
+      }
+      sessionsByFile.set(fileName, session)
+
+      if (name === EVENT.STARTED) {
+        if (typeof data.tradingEnabled !== "boolean") throw new TypeError("harvester.started tradingEnabled must be boolean")
+        if (data.tradingEnabled) {
+          if (session.tradingEnabled) throw new Error("Journal session contains multiple trading-enabled start events")
+          session.tradingEnabled = true
+        }
+        continue
+      }
+
+      if (name === EVENT.STOPPED) {
+        if (!["success", "failed"].includes(data.outcome)) throw new TypeError("harvester.stopped outcome must be success or failed")
+        if (session.stoppedOutcome !== undefined) throw new Error("Journal session contains multiple stopped events")
+        session.stoppedOutcome = data.outcome
+        continue
+      }
+
+      if (name === EVENT.ACCOUNT_SNAPSHOT) {
+        if (!["PREFLIGHT", "OPENING", "CLOSING"].includes(data.phase)) throw new TypeError("Account snapshot phase is invalid")
+        if (!["COMPLETE", "INCOMPLETE"].includes(data.auditStatus)) throw new TypeError("Account snapshot auditStatus is invalid")
+        if (!Number.isSafeInteger(data.sourceTime) || data.sourceTime < 0) throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
+        if (!Array.isArray(data.balances) || !Array.isArray(data.auditReasons)) throw new TypeError("Account snapshot balances and auditReasons must be arrays")
+        const balances = data.balances.map((balance, index) => {
+          const asset = requireString({ value: balance?.asset, field: "balances[" + index + "].asset" })
+          const free = requireDecimal({ value: balance?.free, field: "balances[" + index + "].free" })
+          const locked = requireDecimal({ value: balance?.locked, field: "balances[" + index + "].locked" })
+          const total = requireDecimal({ value: balance?.total, field: "balances[" + index + "].total" })
+          if (total !== addDecimal({ left: free, right: locked })) {
+            throw new Error("Account snapshot total does not equal free plus locked for " + asset)
+          }
+          return Object.freeze({ asset, free, locked, total })
+        })
+        if (new Set(balances.map(({ asset }) => asset)).size !== balances.length) {
+          throw new Error("Account snapshot contains duplicate asset balances")
+        }
+        const auditReasons = data.auditReasons.map((reason, index) =>
+          requireString({ value: reason, field: "auditReasons[" + index + "]" }),
+        )
+        const snapshot = Object.freeze({
+          fileName,
+          phase: data.phase,
+          sourceTime: data.sourceTime,
+          auditStatus: data.auditStatus,
+          balances: Object.freeze(balances),
+          auditReasons: Object.freeze(auditReasons),
+        })
+        accountSnapshots.push(snapshot)
+        if (data.phase === "CLOSING") {
+          session.hasCompleteClosingSnapshot = data.auditStatus === "COMPLETE" && auditReasons.length === 0
+        }
+        continue
+      }
+
+      if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
+        if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
+        if (!["READY", "BLOCKED"].includes(data.readiness)) throw new TypeError("Open-order snapshot readiness is invalid")
+        if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")
+        if (data.orderCount !== data.orders.length) throw new Error("Open-order snapshot orderCount does not match orders")
+        const orders = data.orders.map((order, index) => {
+          const brokerOrderId = requireString({ value: order?.brokerOrderId, field: "orders[" + index + "].brokerOrderId" })
+          const symbol = requireString({ value: order?.symbol, field: "orders[" + index + "].symbol" })
+          if (!ORDER_SIDES.has(order?.side)) throw new TypeError("orders[" + index + "].side must be BUY or SELL")
+          const type = requireString({ value: order?.type, field: "orders[" + index + "].type" })
+          const quantity = requireDecimal({ value: order?.quantity, field: "orders[" + index + "].quantity", positive: true })
+          const executedQuantity = requireDecimal({ value: order?.executedQuantity, field: "orders[" + index + "].executedQuantity" })
+          const price = order?.price === undefined ? undefined : requireDecimal({ value: order.price, field: "orders[" + index + "].price", positive: true })
+          if (compareDecimal({ left: executedQuantity, right: quantity }) > 0) throw new Error("Open-order snapshot executed quantity exceeds original quantity")
+          return Object.freeze({
+            ...(order?.clientOrderId === undefined ? {} : { clientOrderId: requireString({ value: order.clientOrderId, field: "orders[" + index + "].clientOrderId" }) }),
+            brokerOrderId,
+            symbol,
+            side: order.side,
+            type,
+            ...(price === undefined ? {} : { price }),
+            quantity,
+            executedQuantity,
+            status: requireString({ value: order.status, field: "orders[" + index + "].status" }),
+          })
+        })
+        const identities = orders.map(({ symbol, brokerOrderId }) => symbol + ":" + brokerOrderId)
+        if (new Set(identities).size !== identities.length) throw new Error("Open-order snapshot contains duplicate order identities")
+        const blockReasons = data.blockReasons.map((reason, index) =>
+          requireString({ value: reason, field: "blockReasons[" + index + "]" }),
+        )
+        if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
+          throw new Error("READY open-order snapshot must contain no orders or block reasons")
+        }
+        if (data.readiness === "BLOCKED" && blockReasons.length === 0) {
+          throw new Error("BLOCKED open-order snapshot must contain block reasons")
+        }
+        openOrderSnapshots.push(Object.freeze({
+          fileName,
+          phase: data.phase,
+          observedAt: data.observedAt,
+          readiness: data.readiness,
+          orders: Object.freeze(orders),
+          blockReasons: Object.freeze(blockReasons),
+        }))
+        continue
+      }
 
       if (name === EVENT.SUBMISSION_REQUESTED) {
         const intent = requireOrderIntent({ data })
@@ -316,6 +435,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       }
     }
 
+    const sessions = [...sessionsByFile.values()].map((session) => Object.freeze({
+      ...session,
+      uncleanTradingShutdown: session.tradingEnabled && (
+        session.stoppedOutcome !== "success" || !session.hasCompleteClosingSnapshot
+      ),
+    }))
     const orders = [...ordersByClientId.values()].map((order) => Object.freeze({
       ...order,
       fillIds: Object.freeze([...order.fillIds]),
@@ -330,7 +455,11 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         fills: Object.freeze(fills),
         recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
         pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
-        requiresExchangeReconciliation: orders.some((order) => order.requiresExchangeReconciliation),
+        sessions: Object.freeze(sessions),
+        accountSnapshots: Object.freeze(accountSnapshots),
+        openOrderSnapshots: Object.freeze(openOrderSnapshots),
+        requiresExchangeReconciliation: orders.some((order) => order.requiresExchangeReconciliation) ||
+          fills.length > 0 || cycles.length > 0 || sessions.some((session) => session.tradingEnabled),
       }),
     })
   } catch (error) {
