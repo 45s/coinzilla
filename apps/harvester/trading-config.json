@@ -13,7 +13,7 @@
       },
       "pairs": {
         "DOGEUSDT": {
-          "enabled": false,
+          "enabled": true,
           "investment": 100,
           "orderQuantity": 400,
           "keepQuantity": 1,

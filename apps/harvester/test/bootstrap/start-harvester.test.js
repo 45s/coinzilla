@@ -254,3 +254,98 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   assert.equal(openOrderSnapshotCalls, 2);
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
+
+
+test("allows multiple enabled markets through Conservative TESTNET engine activation", async () => {
+  const createMetadata = ({ symbol, baseCode } = {}) => {
+    const baseAsset = new Asset({ id: "asset-" + baseCode.toLowerCase(), code: baseCode })
+    const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
+    const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
+    const tradingRules = new TradingRules({
+      market,
+      constraints: [
+        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.001", asset: quoteAsset }) },
+        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
+        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
+        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1", asset: quoteAsset }) },
+      ],
+    })
+    return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"] }
+  }
+  const metadataBySymbol = new Map([
+    ["ZROUSDT", createMetadata({ symbol: "ZROUSDT", baseCode: "ZRO" })],
+    ["DOGEUSDT", createMetadata({ symbol: "DOGEUSDT", baseCode: "DOGE" })],
+  ])
+  const pairConfig = {
+    enabled: true,
+    investment: 100,
+    orderQuantity: 1,
+    keepQuantity: 0.01,
+    priceStepPercent: 0.05,
+    pricePrecision: 3,
+    quantityPrecision: 2,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+  }
+  const tradingConfig = {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: {
+          minProfit: 0.01,
+          conservative: { enabled: true },
+          aggressive: { enabled: false },
+        },
+        pairs: {
+          ZROUSDT: { ...pairConfig },
+          DOGEUSDT: { ...pairConfig },
+        },
+      },
+    },
+  }
+  const requestedSymbols = []
+  let userDataSubscriptionAttempted = false
+  const broker = {
+    connect: async () => {},
+    disconnect: async () => {},
+    placeOrder: async () => toResult({ error: new Error("Unexpected order placement") }),
+    cancelOrder: async () => toResult({ error: new Error("Unexpected order cancellation") }),
+    getOpenOrders: async () => toResult({ data: [] }),
+    getFills: async () => toResult({ data: [] }),
+    getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getCanonicalOrder: async () => toResult({ error: new Error("Order not found") }),
+    getAccountSnapshot: async () => toResult({ data: { balances: [], sourceTime: 1 } }),
+    getSymbolFilters: async ({ symbol } = {}) => {
+      requestedSymbols.push(symbol)
+      return toResult({ data: metadataBySymbol.get(symbol) })
+    },
+    getExchangeMarkets: async () => toResult({ data: [...metadataBySymbol.values()].map(({ market }) => market) }),
+    getPrices: async () => toResult({ error: new Error("Unexpected price request") }),
+    subscribeForPrices: async () => toResult({ error: new Error("Unexpected price subscription") }),
+    subscribeForBookTicker: async () => toResult({ error: new Error("Unexpected book subscription") }),
+    subscribeForUserData: async () => {
+      userDataSubscriptionAttempted = true
+      return toResult({ error: new Error("Intentional stop after engine activation") })
+    },
+  }
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      brokerAdapterFactory: () => broker,
+      env: {
+        HARVESTER_BROKER: "binance",
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+        BINANCE_API_KEY: "test-key",
+        BINANCE_API_SECRET_KEY: "test-secret",
+      },
+      logger: { debug() {}, info() {}, error() {} },
+    }),
+    /Unable to subscribe to user data/,
+  )
+
+  assert.deepEqual(requestedSymbols, ["ZROUSDT", "DOGEUSDT"])
+  assert.equal(userDataSubscriptionAttempted, true)
+})

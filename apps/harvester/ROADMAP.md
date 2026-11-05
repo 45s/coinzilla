@@ -84,7 +84,7 @@ The paragraph below was an earlier audit snapshot and is superseded by the curre
 
 ### Definition of "Harvester can trade"
 
-The first proof is deliberately scoped to one explicitly enabled TESTNET pair and a clean test account. Expand to multiple enabled pairs and shared-asset allocation after that first cycle works.
+The Conservative runtime supports multiple explicitly enabled TESTNET pairs. Each enabled market is validated and subscribed independently; per-market strategy state is isolated while account-level asset balances and active-order commitments are shared by canonical asset identity. Multi-pair TESTNET acceptance still requires dedicated regression and exchange evidence.
 
 A first-trading release is not complete until a TESTNET end-to-end scenario demonstrates:
 
@@ -138,11 +138,11 @@ when `HARVESTER_ENABLE_TRADING=true`:
 - Recovery completion: a fully filled SELL must satisfy the actual cumulative
   net-profit condition and leave at least `keepQuantity`; the retained amount
   moves to free inventory and the cycle ledger resets.
-- Startup: explicit TESTNET trading opt-in, exactly one enabled pair, a fresh
-  initial canonical account snapshot. External open orders and pre-existing
+- Startup: explicit TESTNET trading opt-in, one or more enabled pairs, a fresh
+  initial canonical account snapshot covering every enabled market's assets. External open orders and pre-existing
   inventory are not adopted; order checks use in-process cash flow, owned
   position quantity, and outstanding commitments. The default config enables
-  only `ZROUSDT`.
+  `ZROUSDT` and `DOGEUSDT`; FDUSD pairs remain disabled.
 
 Offline bootstrap coverage simulates the complete first recovery cycle:
 initial BUY → actual full BUY fill → next BUY and recovery SELL → actual full
@@ -198,11 +198,11 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [x] Load and validate exchange symbol filters for enabled markets: price tick, quantity step, min/max quantity, min/max notional, and supported order types. POST-ONLY orders require fresh best-bid/best-ask data and validate BUY below best ask / SELL above best bid at both submission gates; missing/stale/crossed books defer broker I/O. Binance Spot's exact definite POST-ONLY rejection is handled without pausing, while other/unknown failures remain fail-closed.
 - [x] Normalize broker filters into a stable Harvester-owned domain/application shape; do not leak exchange SDK payloads.
-- [~] Load account balances and distinguish free, locked, and total balances. A canonical free/locked account snapshot is loaded and checked for enabled-market assets; balance allocation and reconciliation against strategy-owned inventory/commitments remain.
-- [ ] Validate configured per-pair investment against available quote balance and coordinate shared quote assets across pairs (e.g. multiple USDT pairs).
+- [~] Load account balances and distinguish free, locked, and total balances. A canonical free/locked account snapshot is loaded and checked for every enabled-market asset; in-process allocation aggregates Harvester-owned inventory and active commitments by canonical asset ID. Periodic account refresh and external account-change reconciliation remain.
+- [x] Enforce configured per-pair investment against available quote balance while coordinating shared quote assets across enabled pairs (e.g. multiple USDT markets) through the exact-decimal allocator.
 - [x] Seed Conservative TESTNET market state after subscribing: use the existing Binance `ticker.price` request/response snapshot when no fresh aggregate-trade event arrived during startup. Reject invalid snapshots, fail startup when neither source provides a usable price, and reject WebSocket prices older than 5 seconds (or more than 1 second in the future). Enforce cached-price freshness at both order-submission gates, including after PENDING registration and before each action in a multi-order decision; defer broker I/O when the price expires.
 - [x] Subscribe to user-data events and surface connection status. Startup uses one canonical account snapshot and known enabled-pair filters. External inventory/orders remain unowned; a clean account is a controlled-test recommendation, not a launch gate. Disconnect/recovery and unknown outcomes remain fail-closed; comprehensive history reconciliation is deferred.
-- [x] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, exactly one enabled pair, active user-data stream, and a fresh account snapshot. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
+- [x] Implement minimum process readiness for the first TESTNET cycle. When trading is explicitly enabled, startup requires TESTNET mode, at least one enabled pair, exchange rules for every enabled market, an active user-data stream, and a fresh account snapshot covering every enabled market's assets. External open orders and inventory are not adopted or treated as a startup prerequisite. Read-only broker mode remains available; genuine reconnect/reconciliation requirements still fail closed.
 - [x] Enable the first TESTNET order only after explicit `HARVESTER_TRADING_MODE=testnet`, non-production NODE_ENV, validated config, enabled-pair exchange filters, fresh account snapshot, and active user-data stream. The policy prevents a new BUY from taking outstanding recovery capital plus its quote notional beyond the configured pair investment. Before submission the engine checks BUY quote notional against snapshot free quote adjusted by actual quote cash flow and active BUY commitments; SELL quantity is capped by Harvester-owned active base inventory and available free base after active SELL commitments. A balance-limited BUY is deferred while a valid recovery SELL may still proceed.
 - [~] Validate environment/config combinations; explicit trading opt-in now fails startup unless `HARVESTER_BROKER=binance` is selected, and the existing TESTNET/non-production gates remain enforced. Review remaining mode/config combinations before declaring this item complete.
 - [x] Validate enabled pair configuration against exchange assets/filters at startup: `orderQuantity` is rounded down by the actual base-asset step and checked against supported min/max quantity; quote-asset `investment` is checked against minimum notional. The symbol must match the exchange market metadata. Actual price/quantity/notional validation remains at order submission.
@@ -211,7 +211,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [~] Define canonical Harvester order intent/command contracts using existing `@coinzilla/entities` types wherever suitable. `createPendingCanonicalOrder` builds immutable PENDING canonical orders; the complete engine command contract and lifecycle integration remain.
 - [~] Implement pure order construction and validation functions for price/quantity precision, tick/step rounding, min/max quantity, min/max notional, and post-only constraints. `validateOrderAgainstTradingRules` enforces exchange increments and supported price/quantity/notional bounds with exact decimal arithmetic. Fresh book-based POST-ONLY crossing validation is enforced at both submission gates; complete order construction wiring and other runtime checks remain.
-- [~] Implement shared pre-trade safety checks: enabled pair and READY state are enforced at runtime; fresh price/book, available quote/base, pair investment headroom, and active-order commitments are enforced by the engine and exact-decimal allocator. Scope is the first single-pair Conservative runtime. Periodic account refresh/external account-change detection, multi-pair shared-asset allocation, generalized per-pair risk policy, and strategy takeover remain open.
+- [~] Implement shared pre-trade safety checks: enabled pair and READY state are enforced at runtime; fresh price/book, available quote/base, pair investment headroom, and active-order commitments are enforced by the engine and exact-decimal allocator. The Conservative engine aggregates quote cash flow, owned base inventory, and active BUY/SELL commitments across markets by canonical asset ID. Periodic account refresh/external account-change detection, generalized per-pair risk policy, and strategy takeover remain open.
 - [x] Implement in-process BUY quote and SELL base reservations using active canonical orders as the reservation source. The engine registers PENDING before broker I/O and derives remaining commitments from PENDING/OPEN/PARTIALLY_FILLED/UNKNOWN orders; confirmed fills reduce the remaining order quantity while Portfolio/RecoveryLedger apply actual execution facts.
 - [x] Use canonical order lifecycle states as reservation states rather than introducing a parallel reservation entity. PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN retain commitments; confirmed terminal states release the unfilled remainder, while late FILLED updates remain reconcilable.
 - [x] Register each PENDING canonical order before broker submission and serialize market/order/fill/cancellation transitions. Unknown submission or cancellation outcomes remain active/paused until authoritative reconciliation; commitments are not released on an unconfirmed outcome.
@@ -266,7 +266,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Add deterministic offline strategy-policy scenarios for initial BUY, duplicate suppression, combined standing BUY/recovery SELL intents, and missing exchange rules. Full broker-port lifecycle simulator scenarios remain.
 - [ ] Add opt-in Binance TESTNET integration tests that place and cancel small, bounded test orders only when explicitly enabled.
 - [~] Add a bootstrap-level TESTNET-mode fake-broker test that starts with a clean one-pair account, submits the initial Conservative BUY, applies its canonical full fill, and immediately submits the next BUY plus recovery SELL. The fake-broker bootstrap scenario now exercises the full first recovery cycle through BUY fill, simultaneous next BUY/recovery SELL placement, SELL fill, profit verification, and allocation of configured free inventory. A real Binance TESTNET run remains; the README now contains the controlled runbook, clean-account prerequisites, shutdown/restart warning, and expected order sequence.
-- [ ] For the first end-to-end proof, use one explicitly enabled TESTNET pair and verify its configured investment/balance limits. Add multi-pair shared-asset allocation after this first cycle works.
+- [ ] For end-to-end proof, exercise multiple enabled TESTNET pairs, including markets sharing quote assets and markets sharing base assets. Verify per-pair investment limits, account-level commitments, order/fill isolation, and that no pair can spend balances reserved by another.
 - [~] Offline coverage verifies pre-submit quote/investment/base budget enforcement, min-notional and precision validation, fresh-book POST-ONLY crossing checks, stale price/book deferral, stream-loss trading gates, and unknown-outcome pause/no-retry behavior. Real Binance rejection, timeout, and recovery behavior remains NOT OBSERVED until the controlled TESTNET session.
 - [ ] Verify loss protection and Conservative takeover do not force a loss-making sale or operate the same Position concurrently.
 - [~] Provide a documented, reproducible TESTNET runbook and evidence for the first successful cycle. The runbook exists; a full recovery SELL fill and `recovery.cycle_completed` are now evidenced, but the same run exposed a rapid-BUY burst and a post-cycle MIN_NOTIONAL failure. A safe next-cycle BUY and repeatable cycle are not verified.
@@ -325,7 +325,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [ ] **Portfolio is incomplete for strategy execution:** current Position stores net base quantity and signed quote cash flow only. It does not yet provide the agreed invested quote, average cost, realized profit, free/retained quantity, reserved inventory, or available inventory calculations.
 - [ ] **No complete order lifecycle:** active-order tracking, stable client order IDs, and order-to-fill coordination must be wired into the trading loop; implement the minimum in-process form needed for the first TESTNET cycle.
 - [ ] **No reservations:** open/uncertain BUY quote and SELL base commitments are not represented or enforced.
-- [ ] **No cross-pair balance allocator:** required before enabling multiple pairs that share an account asset; the first end-to-end proof is deliberately scoped to one enabled pair.
+- [x] **Cross-pair balance allocator:** the Conservative engine aggregates quote cash flow, owned base inventory, and active BUY/SELL commitments across markets by canonical asset ID. Dedicated multi-pair concurrency and TESTNET acceptance evidence remains required.
 - [~] **Durable persistence not integrated:** Journal now provides bounded read/replay with stable record IDs, but Harvester does not yet persist/replay its Portfolio, RecoveryLedger, order lifecycle, reservations, or applied execution identities; restart still loses those states.
 - [~] **No comprehensive reconciliation:** historical execution reconciliation and durable restart reconciliation are not implemented; these are deferred. The first cycle still needs a known clean TESTNET starting state and a targeted refresh after disconnect/unknown order outcomes.
 - [~] **Incomplete readiness/pause state:** minimum TESTNET readiness and safe pause-on-disconnect/unknown-outcome behavior must be connected to order submission; a broader state machine and operator controls are later hardening.
@@ -471,7 +471,7 @@ existing Conservative strategy order sequence and keeps Harvester's DDD boundari
 
 ### Out of scope for P0.7
 
-Do not add Journal/persistence/restart recovery, historical trade replay, a generic reconciliation subsystem, a generic event queue/framework, multi-pair allocation, Aggressive, dashboard/notification work, or unrelated refactors. Do not change approved Conservative financial rules without discussing the specific proposed change.
+Do not add Journal/persistence/restart recovery, historical trade replay, a generic reconciliation subsystem, a generic event queue/framework, Aggressive, dashboard/notification work, or unrelated refactors. Do not change approved Conservative financial rules without discussing the specific proposed change.
 
 ### Acceptance
 
