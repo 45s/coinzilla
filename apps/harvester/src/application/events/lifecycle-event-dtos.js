@@ -475,7 +475,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
     phase, observedAt, orders, readiness, blockReasons = [],
   }) => {
-    if (!["OPENING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING or PREFLIGHT")
+    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
     if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
       throw new TypeError("observedAt must be a non-negative safe integer")
     }
@@ -547,7 +547,7 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
     phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
   }) => {
-    if (!["OPENING", "CLOSING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, or PREFLIGHT")
+    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
     if (!snapshot || !Array.isArray(snapshot.balances) || !Number.isSafeInteger(snapshot.sourceTime)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")
