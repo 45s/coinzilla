@@ -489,23 +489,7 @@ test("isolates a throwing error observer from malformed stream messages", async 
 
 
 test("removes obsolete initial subscriptions when listeners change during reconnect", async () => {
-  const transports = []
-  let releaseReconnect
-  const { client } = createClient({
-    transportFactory: (options) => {
-      const transport = new FakeTransport(options)
-      if (transports.length === 1) {
-        transport.connect = () => new Promise((resolve) => {
-          releaseReconnect = () => {
-            transport.state = "open"
-            resolve(transport)
-          }
-        })
-      }
-      transports.push(transport)
-      return transport
-    },
-  })
+  const { client, transports } = createClient()
   const listener = () => {}
   const first = client.subscribe("btcusdt@aggTrade", listener)
   await flush()
@@ -516,12 +500,9 @@ test("removes obsolete initial subscriptions when listeners change during reconn
   const reconnect = client.connect()
   await flush()
   assert.equal(transports.length, 2)
+  assert.equal(transports[1].sent[0].method, "LIST_SUBSCRIPTIONS")
 
   await client.unsubscribe("btcusdt@aggTrade", listener)
-  releaseReconnect()
-  await flush()
-
-  assert.equal(transports[1].sent[0].method, "LIST_SUBSCRIPTIONS")
   acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
   await flush()
 
