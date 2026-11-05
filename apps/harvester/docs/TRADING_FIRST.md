@@ -73,7 +73,7 @@ Unless one narrowly scoped part is essential to prevent an immediate unsafe TEST
 - Aggressive strategy, multiple strategy modes, or additional trading features.
 - Refactoring or expanding architecture solely for theoretical future extensibility.
 
-The shared Journal package already exists and may be used later. Its existence does not make Journal integration the current task. Do not implement Journal consumers, schemas, replay, or persistence while the main trading workflow is still missing.
+The shared Journal package is used for the mandatory account PREFLIGHT safety audit: every broker-connected startup must durably record balances and account-wide open orders before market subscriptions. This narrow audit is already implemented and is not a reason to expand Journal scope. Broader Journal consumers, schemas, replay, and persistence remain secondary and must not delay the main trading workflow.
 
 ## What to do when a secondary gap is discovered
 

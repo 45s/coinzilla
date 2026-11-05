@@ -6,7 +6,7 @@ This roadmap plans a small, staged integration of the existing `@coinzilla/event
 
 **This work does not depend on trading or TESTNET progress.** EventBus and Journal provide operational observability for ordinary application lifecycle events. Harvester can record configuration validation, process startup/shutdown, and broker connectivity in read-only mode; no order, fill, position, or completed trading cycle is required.
 
-The Journal is an optional operational observer. It is not part of order execution, strategy evaluation, fill accounting, or trading readiness. **Harvester must continue trading when Journal is absent, uninitialized, slow, full, or unable to write.** An incomplete journal is preferable to delayed or blocked trading.
+The Journal is an operational observer, not trading-state authority or part of order execution, strategy evaluation, or fill accounting. Its persistence is optional only in configuration-only/no-broker mode. PR #545 added a mandatory account PREFLIGHT gate for every broker-connected startup, including read-only mode: the full account snapshot and account-wide open-order snapshot must be published and durably flushed before market subscriptions or trading-engine activation. After that gate passes, ordinary Journal event delivery remains asynchronous and must not block market, strategy, order-submission, or execution workflows. Trading-enabled graceful shutdown also requires a durable CLOSING account snapshot; failure is reported as incomplete shutdown.
 
 Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/45s/coinzilla/pull/453): the process entry point composes one EventBus and injects a best-effort publisher into bootstrap. No events are published and Journal is not initialized.
 
@@ -25,9 +25,9 @@ See [Architecture — operational event journal](./architecture.md#operational-e
 ## Hard constraints
 
 1. No trading, TESTNET, exchange credentials, orders, or fills are prerequisites for this roadmap. Use offline tests and a read-only/fake broker where useful.
-2. Journal is optional. Journal initialization or write failure must never fail Harvester startup or broker connectivity.
-3. Never await Journal I/O, `journal.flush()`, or Journal shutdown from a market-price, strategy, order-submission, or execution-processing path.
-4. Do not put Journal calls in awaited order lifecycle callbacks or the serialized user-data queue.
+2. Journal initialization is optional only when no broker is connected. Every broker-connected startup requires a ready Journal and durable PREFLIGHT account audit; a query, publication, or durability failure must stop startup before market subscriptions. Ordinary Journal write failures after the PREFLIGHT gate must not synchronously block trading workflows.
+3. Never await Journal I/O, `journal.flush()`, or Journal shutdown from a market-price, strategy, order-submission, or execution-processing path. Explicit startup PREFLIGHT and trading-enabled CLOSING audit flushes are lifecycle gates and are allowed to await durability.
+4. Do not put Journal calls in awaited order lifecycle callbacks. Startup PREFLIGHT capture is serialized with early user-data delivery so events cannot race ahead of the account/order baseline; keep this exception confined to startup. The CLOSING audit runs after accepted user-data work has drained.
 5. Event publication is best-effort. Catch both synchronous publication exceptions and failed `toResult` outcomes at the application boundary.
 6. Keep domain policies pure and broker-independent. Domain code must not import EventBus or Journal.
 7. Use object-shaped inputs and object-shaped results for functions. Use `toResult` for fallible workflows where appropriate.
@@ -136,15 +136,15 @@ Do not combine the steps into one large PR. Each PR must contain only its milest
 **Work:**
 - Add `@coinzilla/journal` as a direct dependency.
 - Construct Journal with the shared EventBus, configured directory, and logger in `prepareOptionalJournal`.
-- Start Journal asynchronously and do not await successful Journal startup before starting or continuing the trading runtime.
+- Start Journal asynchronously during process composition. Configuration-only/no-broker startup may proceed without it; broker-connected startup must complete the PREFLIGHT audit's durable flush before market subscriptions or engine activation.
 - Expose `ready`, `status`, and an explicit `close()` operation; report startup/write/close outcomes without allowing logger failures to escape.
 - The Journal subscribes only after its directory/session file is ready. Events published before that point are not captured; Steps 1–3 publish no application lifecycle events yet.
-- Journal initialization failure must not make Harvester startup fail.
-- Do not call Journal record/flush from trading callbacks. Coordinated process shutdown draining remains Step 7.
+- Journal initialization failure must fail any broker-connected startup because the mandatory PREFLIGHT audit cannot be made durable; it must not affect configuration-only/no-broker startup.
+- Do not call Journal record/flush from trading callbacks. Explicit PREFLIGHT and CLOSING account-audit flushes are lifecycle gates, not trading callbacks. Coordinated process shutdown draining remains Step 7.
 
 **Tests:** Journal ready/close; invalid directory; pending initialization; construction exception with failing logger; disabled mode; write failure reflected in health status; Harvester startup proceeds while Journal readiness is pending.
 
-**Acceptance:** With Journal unavailable, Harvester can still connect, process prices, evaluate strategy, submit orders, and process executions. No awaited dependency on Journal exists.
+**Acceptance:** With Journal unavailable, configuration-only/no-broker startup may proceed. Broker-connected startup must fail before market subscriptions if the PREFLIGHT audit cannot be durably recorded. After successful PREFLIGHT, ordinary trading callbacks do not await Journal writes.
 
 **PR boundary:** Journal construction and optional lifecycle only; no broad event instrumentation.
 

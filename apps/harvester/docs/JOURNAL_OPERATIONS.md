@@ -2,9 +2,9 @@
 
 ## Purpose and limits
 
-Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The optional Journal subscribes to that bus and appends event records to local JSONL files.
+Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal is an observer, not a trading dependency or source of truth. Portfolio and RecoveryLedger remain in-memory application state. Journal replay is not used to reconstruct trading state. There is no database, outbox, exactly-once delivery, or per-market-price capture.
+The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. Journal replay is not used to reconstruct trading state. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 
 ## Configuration
 
@@ -69,11 +69,12 @@ The broker status `recovered` means the remote user-data subscription has return
 
 A standalone read-only audit can be run while Harvester remains stopped with `pnpm run testnet:audit`. It creates its own Journal session and writes both account events with phase `PREFLIGHT`; it does not start trading or alter exchange state. Exit code 2 means the audit was persisted successfully but open orders were found.
 
-For trading-enabled startup, `main()` awaits Journal readiness before connecting the broker. Bootstrap then fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` (OPENING) and `account.open_orders_captured`, and durably flushes each audit before creating the trading engine or subscribing to market data. If the open-order query fails, any pre-existing open order is found, mapping fails, or either flush is not durable, startup fails closed. A pre-existing order is not adopted or canceled; it is preserved as external/unowned until restart recovery and explicit ownership reconciliation are implemented. Read-only operation retains the optional Journal behavior. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
+For every broker-connected startup, including read-only mode, bootstrap fetches the full account balance snapshot and account-wide open orders, publishes `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`, and durably flushes each event before market subscriptions or trading-engine activation. `main()` explicitly awaits Journal readiness before connecting when trading is enabled; in read-only mode the first required durable flush awaits readiness and fails startup if the Journal is unavailable. If either query fails, event mapping/publication fails, or either flush is not durable, startup fails closed. A pre-existing order is recorded as external/unowned; read-only startup may continue with a BLOCKED audit, while trading-enabled startup stops before market subscriptions. Harvester never adopts or cancels an existing order. Programmatic callers of `main()` can inspect `journalService.ready` and `journalService.status`.
 
 ## Write failures and durability
 
-- Event delivery to the Journal is asynchronous; trading workflows do not await the Journal subscriber or filesystem writes.
+- After the startup PREFLIGHT gate succeeds, event delivery to the Journal is asynchronous; market, strategy, order-submission, and execution workflows do not await Journal subscriber or filesystem writes.
+- The explicit startup PREFLIGHT audit and trading-enabled CLOSING balance audit are lifecycle exceptions: each awaits a durable flush. A failure in either gate fails startup or reports incomplete shutdown; this is distinct from ordinary per-event observation.
 - Journal writes are serialized. A write failure marks the session `writeFailed`; later writes in that session are rejected rather than silently retried.
 - The status becomes `degraded` and exposes `writeFailed` and `writeErrorCount` to programmatic callers.
 - A successful `record()` means the write completed; it does not mean the data was fsynced.
@@ -87,10 +88,12 @@ The implemented order is:
 
 1. Stop market-price and user-data intake; ignore late callbacks.
 2. Drain already accepted serialized user-data work.
-3. Disconnect broker resources.
-4. Publish `harvester.stopped` while EventBus and Journal are still available.
-5. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
-6. Close EventBus with its 5-second timeout.
+3. Reconcile Harvester-owned orders and determine CLOSING audit completeness.
+4. For trading-enabled runs, capture and durably flush the CLOSING account snapshot while broker access is still available. Mark it INCOMPLETE when reconciliation, intake, or accounting state is unsafe.
+5. Disconnect broker resources.
+6. Publish `harvester.stopped` while EventBus and Journal are still available.
+7. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
+8. Close EventBus with its 5-second timeout.
 
 Cleanup failures are isolated so later cleanup still runs. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
 
