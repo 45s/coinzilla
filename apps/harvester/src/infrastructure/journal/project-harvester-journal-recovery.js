@@ -186,7 +186,6 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         EVENT.CANCEL_FAILED,
         EVENT.FILL_APPLIED,
         EVENT.RECOVERY_COMPLETED,
-        EVENT.STRATEGY_PAUSED,
       ].includes(name)) {
         session.hasTradingActivity = true
       }
@@ -589,7 +588,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         accountSnapshots: Object.freeze(accountSnapshots),
         openOrderSnapshots: Object.freeze(openOrderSnapshots),
         requiresExchangeReconciliation: orders.some((order) => order.requiresExchangeReconciliation) ||
-          fills.length > 0 || cycles.length > 0 || pausedMarkets.size > 0 ||
+          fills.length > 0 || cycles.length > 0 ||
           sessions.some((session) => session.tradingEnabled || session.uncleanTradingShutdown),
       }),
     })
