@@ -4,13 +4,13 @@
 
 ## 1. Scope and hard limits
 
-The first controlled validation is one Conservative pair and one bounded recovery cycle. Do not enable multiple pairs, Aggressive mode, production credentials, or unattended/repeating operation.
+The first controlled validation covers the two configured Conservative pairs, DOGEUSDT and ZROUSDT, with one bounded recovery cycle per pair. Do not enable additional pairs, Aggressive mode, production credentials, or unattended/repeating operation.
 
 Current committed configuration to verify before the session:
 
 | Setting | Expected value |
 |---|---:|
-| Enabled pair | ZROUSDT only |
+| Enabled pairs | DOGEUSDT and ZROUSDT |
 | Conservative | enabled |
 | Aggressive | disabled |
 | Pair investment cap | 100 USDT |
@@ -20,19 +20,19 @@ Current committed configuration to verify before the session:
 | Price step | 0.05% |
 | Maker fee assumption | 0.1% |
 | Taker fee assumption | 0.1% |
-| Other pairs | disabled |
+| Other pairs (SOLFDUSD, ZROFDUSD) | disabled |
 
 These are repository configuration expectations, not proof of the live TESTNET account setting or exchange filters. Re-read the exact branch configuration and current exchange market rules at session start. If any value differs, stop and agree a revised limit before enabling trading.
 
 Hard operational limits for the first session:
 
-- Exactly one enabled symbol: ZROUSDT.
+- Exactly two enabled symbols: DOGEUSDT and ZROUSDT.
 - Exactly one Harvester process and one operator-controlled session.
-- At most one active Harvester-owned BUY and one active Harvester-owned recovery SELL at a time. A replacement SELL is allowed only after the previous SELL's cancellation is confirmed and its fills are reconciled.
+- At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after that pair's previous SELL cancellation is confirmed and its fills are reconciled.
 - No manual orders during the run. Record and classify every pre-existing/external open order before starting.
-- Never exceed the configured 100 USDT pair investment cap or available free quote balance; the smaller limit wins.
+- Never exceed the configured 100 USDT investment cap per pair, 200 USDT combined configured cap, or available free quote balance; the smallest applicable limit wins.
 - Do not increase order quantity, investment, keep quantity, or fee assumptions during the session.
-- One complete BUY → recovery SELL → cycle-completion sequence is the target. Do not continue into an additional cycle unless separately agreed after reviewing the first.
+- One complete BUY → recovery SELL → cycle-completion sequence per enabled pair is the target. Do not continue either pair into an additional cycle unless separately agreed after reviewing both.
 - No broad cancel-all command. A cancellation must identify a specific Harvester-owned order by symbol, exchange order ID, and client order ID, and be explicitly authorized during the joint session.
 - No restart after an unknown submission outcome, disconnect, pause, incomplete reconciliation, or failed audit. Stop and investigate first.
 
@@ -42,11 +42,11 @@ Hard operational limits for the first session:
 2. Confirm the Harvester process is stopped. Check for any other process that could submit or manage orders using the same TESTNET account/API keys.
 3. Confirm credentials target Binance Spot TESTNET only. Never load production credentials. Keep secrets out of logs, screenshots, commits, and chat.
 4. Verify the account's maker/taker commission setting is 0.1% / 0.1%; record the observation timestamp and evidence. This UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
-5. Verify the latest `trading-config.json` matches the table above. Verify only ZROUSDT is enabled and Conservative is the only enabled strategy.
-6. Verify current exchange symbol filters: tick size, step size, minimum quantity, minimum notional, supported order types, and current best bid/ask. Compare them with Harvester's runtime market-readiness validation. Any mismatch or unsupported rule blocks the run.
+5. Verify the latest `trading-config.json` matches the table above. Verify DOGEUSDT and ZROUSDT are enabled, SOLFDUSD and ZROFDUSD are disabled, and Conservative is the only enabled strategy.
+6. Verify current exchange symbol filters independently for DOGEUSDT and ZROUSDT: tick size, step size, minimum quantity, minimum notional, supported order types, and current best bid/ask. Compare them with Harvester's runtime market-readiness validation. Any mismatch or unsupported rule blocks that pair and therefore blocks the joint run.
 7. Verify the Journal is enabled, writable, ready, and durably flushable. Confirm the configured session directory is known, writable, and has adequate space. Every broker-connected startup, including read-only mode, must fail closed if either PREFLIGHT account event cannot be durably flushed.
 8. Verify the read-only `journal:balance-audit` and `testnet:trades` diagnostics are available. Do not execute any write-capable script as a precondition.
-9. Agree the session's start time, operator, assistant, exact symbol, quote/base limits, order-count limit, and stop conditions. If any limit is not explicit, do not start.
+9. Agree the session's start time, operator, assistant, both symbols, per-pair quote/base limits, combined quote limit, order-count limits, and stop conditions. If any limit is not explicit, do not start.
 
 ## 3. Read-only command reference
 
@@ -104,15 +104,15 @@ The account baseline is captured automatically on every broker-connected Harvest
 4. Verify both durable PREFLIGHT records (balances and account-wide open orders) are recorded and flushed before market subscriptions or trading-engine activation.
 5. Confirm the balance snapshot includes every broker-returned asset with exact free, locked, and total quantities, and that the Journal session ID and source timestamp are recorded.
 6. For trading-enabled startup, confirm `account.open_orders_captured` reports `readiness: READY`, `orderCount: 0`, and an empty `orders` array. If it reports BLOCKED or any open order, Harvester must exit without trading. Read-only startup may continue with a BLOCKED audit but must not adopt or modify any order.
-7. Confirm ZROUSDT market rules, fee configuration, balances, and readiness are accepted. Confirm all other pairs remain disabled.
+7. Confirm DOGEUSDT and ZROUSDT market rules, fee configuration, balances, and readiness are accepted. Confirm all other pairs remain disabled.
 
-**Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if readiness is not READY; if any unexpected pair is enabled; or if the process logs an unresolved error.
+**Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if readiness is not READY; if the enabled pair set differs from DOGEUSDT and ZROUSDT; or if the process logs an unresolved error.
 
 ## 6. Controlled order and execution sequence
 
 The operator and assistant explicitly authorize each phase together. Do not treat this document as standing authorization.
 
-1. Observe the initial market price and calculated BUY intent. Verify symbol, side, order type, price tick, quantity step, notional, investment cap, client order ID, and post-only constraints before allowing submission.
+1. For each enabled pair, observe its initial market price and calculated BUY intent. Verify symbol, side, order type, price tick, quantity step, notional, per-pair investment cap, client order ID, and post-only constraints before allowing submission.
 2. Verify the exchange acknowledgement and correlate it to the exact client order ID and exchange order ID. There must be no duplicate active BUY.
 2a. **Specific regression-race observation:** record each strategy evaluation ID, order intent/client order ID, BUY limit price, `lastBuyPrice` before evaluation, canonical fill trade IDs, and the weighted execution price after reconciliation. A new BUY decision must not use the previous market price or an un-reconciled/empty reference after the preceding BUY has been acknowledged FILLED. A later BUY must be based on the preceding reconciled weighted execution price. If a second BUY is submitted while the prior FILLED acknowledgement's execution history is still being fetched/applied, or if the same BUY price is resubmitted from stale state, abort immediately and preserve evidence. Do not deliberately create twelve live orders to test this; the offline twelve-sequential-immediate-fill regression already exercises twelve transitions at a fixed market input, and the live session is bounded to one recovery cycle.
 3. Reconcile every execution report against REST order/trade history. For every fill, record trade ID, order ID, client order ID, side, price, base quantity, quote quantity, commission amount/asset/status, and event time.
@@ -123,7 +123,7 @@ The operator and assistant explicitly authorize each phase together. Do not trea
 8. After the recovery SELL is fully filled, verify actual net proceeds, commissions, recovery completion, realized net profit, and allocation of exactly 0.01 ZRO to free inventory. Any additional residual must remain correctly classified; it must not create a new recovery SELL after the ledger is reset.
 9. Stop after the first completed recovery cycle. Do not allow another cycle without a separate explicit decision.
 
-Expected result: one complete controlled BUY/fill → recovery SELL/fill → recovery completion, with a single active next BUY only if the agreed scenario requires it and the operator explicitly elects to leave it open. Otherwise, the session must finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.
+Expected result: one complete controlled BUY/fill → recovery SELL/fill → recovery completion for DOGEUSDT and one for ZROUSDT, with no more than one active BUY and one active recovery SELL per pair. A next BUY may remain open only if the agreed scenario requires it and the operator explicitly elects to leave it open. Otherwise, the session must finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.
 
 ## 7. Reconciliation during and after execution
 
