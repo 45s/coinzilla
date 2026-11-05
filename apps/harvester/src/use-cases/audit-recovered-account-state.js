@@ -177,7 +177,7 @@ export function auditRecoveredAccountState({
       if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
         throw new Error("Recovered active order has no remaining quantity: " + order.clientOrderId)
       }
-      if (order.type !== "LIMIT" || !order.limitPrice) {
+      if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
         throw new Error("Recovered active order is not a supported LIMIT commitment: " + order.clientOrderId)
       }
       if (order.side === "BUY") {
