@@ -4,7 +4,7 @@
  * The positive integer version is the migration's stable identity. Applied
  * migrations must never be edited or reused for a different schema change.
  *
- * @param {{version: number, name: string, up: (transaction: {exec: Function, prepare: Function}) => void}} options
+ * @param {{version: number, name: string, up: Function}} options
  * @returns {{readonly version: number, readonly name: string, readonly up: Function}}
  */
 export function createMigration({ version, name, up } = {}) {
