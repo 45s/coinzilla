@@ -1205,6 +1205,7 @@ export async function startHarvester({
             (reconciliation?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
           )
         }
+        await publishAccountSnapshot({ phase: "PREFLIGHT" })
       }
 
       const openOrders = await publishOpenOrdersSnapshot({
