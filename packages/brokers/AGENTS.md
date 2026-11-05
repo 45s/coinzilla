@@ -24,15 +24,16 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 
 ## DDD responsibility boundaries
 
-Architecturally, `@coinzilla/brokers` is an **infrastructure adapter package**. The repository may group it under the Brokers ownership domain, but it is not the owner of portfolio, position, strategy, or trading-use-case domain logic.
+`@coinzilla/brokers` owns a **broker domain**: the exchange-neutral concepts, invariants, capability contracts, and broker application workflows needed to interact with exchanges. It also owns the infrastructure adapters that implement those contracts. It does not own portfolio/position policy, trading strategy, or bot product decisions.
 
-- `apps/harvester` owns portfolio/position domain models, strategy policy, trading orchestration, and application use cases. Keep those concepts out of broker adapters.
-- `broker-websocket/broker.js` is the Binance broker facade and composition root: preserve the public broker contract, coordinate injected clients, and enforce state-changing safety gates.
-- `methods/user-data-session.js` owns the stateful user-data subscription/recovery lifecycle and consumer reconciliation acknowledgement.
-- `helpers/adapters/` contains focused, deterministic Binance DTO/request/response mappers. Keep pure validation and mapping out of the broker facade when it forms a cohesive responsibility.
-- `utils/` owns native transport and RPC/Streams protocol clients; `shared/` owns canonical entity adapters; `test-helpers/` owns deterministic fakes.
-- Introduce a port when it creates a real side-effect boundary or allows a coordinator to be tested independently. Do not add a generic wrapper for every RPC method.
-- Do not create empty `domain/` or `application/` folders merely to imitate a template. Add them only if the broker package acquires a genuine package-owned domain concept or use case.
+- **Domain:** own broker-specific, exchange-neutral capability concepts, value objects, invariants, domain errors, and policies. Do not duplicate canonical shared entities or import Binance protocol/transport code.
+- **Application:** own broker use cases and orchestration. Coordinate domain behavior through ports; keep socket management, signing, wire formats, and protocol retry mechanics in infrastructure.
+- **Ports:** define narrow broker-owned interfaces for exchange operations, streams, user-data sessions, clocks/schedulers, and other external effects where application behavior needs them. Avoid speculative abstractions and one-wrapper-per-RPC interfaces.
+- **Infrastructure:** own Binance RPC/Streams clients, transport, signing, configuration, protocol DTOs, and Binance-to-domain/entity mapping. Infrastructure implements the package's ports.
+- **Composition/public API:** preserve the public broker contract while wiring application services to Binance adapters. Keep `src/index.js` and exchange entry points thin.
+- The existing `broker-websocket/broker.js`, `methods/user-data-session.js`, `helpers/`, `utils/`, and `shared/` are the starting implementation, not immutable architectural boundaries. Move responsibilities incrementally when tests demonstrate a better boundary.
+- `apps/harvester` owns portfolio/position policy, strategies, and bot application behavior. That boundary does not make brokers merely an infrastructure-only package.
+- Create `domain/`, `application/`, `ports/`, or `infrastructure/` modules only when they contain real responsibilities; do not create empty template folders.
 
 Keep order-changing calls gated on user-data readiness/reconciliation and marked `stateChanging: true`. An uncertain timeout/disconnect is an unknown outcome; never blindly replay the operation.
 

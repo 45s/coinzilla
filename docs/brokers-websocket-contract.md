@@ -100,39 +100,62 @@ The legacy REST broker, REST signing/query helpers, REST listen-key stream clien
 
 The package entry point currently exports `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`. `CoreBroker` is an exported compatibility base class, not a formal application-owned port; `normalizeBinanceId` is used by the Harvester infrastructure adapter. The concrete broker and config are consumed by Bot and Harvester infrastructure adapters. Preserve these exports unless a separately reviewed compatibility change proves they are unused. Do not reintroduce the removed third-party SDK.
 
-## DDD responsibility map (current implementation and target boundaries)
+## DDD responsibility map (current implementation and Phase 9 target boundaries)
 
-This package is an **exchange infrastructure adapter**, not the owner of trading strategy or portfolio policy. Align it with Harvester's domain/application/infrastructure separation without copying Harvester's directory tree mechanically.
+The first DDD/TDD tranche established deterministic tests, selected ports, and focused Binance adapters. It did **not** complete the intended DDD architecture inside `@coinzilla/brokers`. Phase 9 in [the broker roadmap](../../packages/brokers/ROADMAP.md) tracks that package-scoped refactor.
 
-### Current responsibilities
+**Scope:** `@coinzilla/brokers` owns the broker domain, broker application workflows, ports, and exchange infrastructure adapters. It does not own portfolio/position policy, trading strategies, or bot product behavior. Those concerns remain outside this package; this is not a reason to exclude broker-owned domain/application concepts from it.
 
-| Current module | Actual responsibility | DDD interpretation |
+### Current implementation (starting point, not target architecture)
+
+| Current module | Current responsibility | Refactoring consideration |
 |---|---|---|
-| `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Interface/composition boundary; keep thin |
-| `src/broker.core.js` | Exported compatibility base class with default unimplemented methods | Compatibility surface, not a formal application-owned broker port |
-| `binance/broker-websocket/broker.js` | Implements broker operations, coordinates RPC/Streams clients and user-data lifecycle, maps Binance responses to shared Entities | Binance infrastructure adapter; currently also contains orchestration and several pure validation/mapping functions |
-| `binance/broker-websocket/methods/user-data-session.js` | Owns subscriber state, reconnect scheduling, remote subscription lifecycle, and reconciliation acknowledgement | Stateful application-style lifecycle coordinator; currently coupled to Binance RPC method names and client shape |
-| `binance/broker-websocket/helpers/` | Builds exchange request parameters, adapts Binance stream/event payloads, and deduplicates events | Anti-corruption/adaptation layer; pure helpers where possible, not trading-domain policy |
-| `binance/shared/` | Maps Binance order/fill/account DTOs into shared `@coinzilla/entities` values and normalizes Binance IDs | Infrastructure translation; canonical entity invariants remain owned by Entities |
-| `config/`, `constants/` | Validates Binance connection configuration and owns endpoint constants | Infrastructure configuration |
-| `utils/` | Native WebSocket transport, RPC, Streams protocol/client, signing, and Node runtime guard | Infrastructure protocol implementation |
-| `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, and broker contract tests | Test infrastructure; never public runtime API |
+| `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Keep public API/composition thin while preserving compatibility |
+| `src/broker.core.js` | Exported compatibility base class with default unimplemented methods | Assess whether it should remain a compatibility contract or evolve into an explicit broker port; do not break consumers casually |
+| `binance/broker-websocket/broker.js` | Implements broker operations, coordinates RPC/Streams clients and user-data lifecycle, maps Binance responses | Currently mixes facade, application coordination, and infrastructure concerns; split by cohesive vertical slices |
+| `binance/broker-websocket/methods/user-data-session.js` | Subscriber state, reconnect scheduling, remote subscription lifecycle, reconciliation acknowledgement | Preserve state-machine cohesion while separating broker workflow policy from Binance RPC vocabulary |
+| `binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
+| `binance/shared/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Infrastructure anti-corruption mapping; canonical shared entity invariants remain in `@coinzilla/entities` |
+| `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
+| `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
 
-### Target boundary rules
+### Phase 9 target architecture
 
-1. **Domain:** do not add trading strategies, portfolio rules, order-selection policies, or a duplicate domain model here. Harvester owns those policies; `@coinzilla/entities` owns canonical shared values and entity invariants.
-2. **Application:** keep only coordination that expresses a broker capability lifecycle or workflow. The user-data recovery coordinator is stateful and belongs here conceptually, but its Binance RPC vocabulary should ultimately be hidden behind a narrow injected port if a tested vertical slice demonstrates that this reduces coupling.
-3. **Infrastructure:** keep Binance request names, signing, response envelopes, stream names, reconnect protocol, event DTOs, and Binance-to-Entities mapping here. These are not domain rules, even when implemented as pure functions.
-4. **Ports:** treat `CoreBroker` and the public broker method contract as the consumer-facing boundary. Add narrower internal ports only when they isolate a concrete orchestration responsibility; do not create generic exchange abstractions speculatively.
-5. **Composition:** the package entry point remains a thin export boundary. Do not create empty `domain/`, `application/`, or `infrastructure/` directories just to resemble Harvester.
+Dependency direction:
 
-### First refactoring candidates (ordered by risk)
+`Infrastructure adapters → Application use cases → Broker domain`
 
-- [x] **Candidate A — pure broker helpers:** extracted decimal-filter validators and book-ticker payload adaptation from `broker-websocket/broker.js` into `helpers/symbol-filter-adapters.js` and `helpers/adapt-book-ticker.js`. Focused tests preserve exact decimal strings, zero-optional-filter semantics, event validation, immutable output, and injected timestamp semantics.
-- [x] **Candidate B — user-data port:** introduced an injected user-data client port. `BinanceUserDataSession` no longer calls raw RPC `request()` or registers raw client listeners; `createBinanceUserDataClientPort` owns Binance RPC names, subscribe signing options, and listener/connection forwarding. Existing uncertain-outcome verification and all-subscriber acknowledgement behavior remain in the coordinator and are covered by the offline regression suite.
-- **Candidate C — broker operation slices:** separate cohesive request/response adaptation from the facade one operation family at a time (account, orders, market metadata, trades), retaining the public result envelopes and method signatures.
+Application/domain code depends on ports it owns; Binance infrastructure implements those ports. No inward dependency from domain/application to Binance wire formats, sockets, signing, or concrete clients.
 
-Do not start Candidate B or C until the relevant contract tests are green and the branch can execute the RED → GREEN → REFACTOR sequence. A structural move without a failing-first test is not evidence of behavior preservation.
+- **Domain:** exchange-neutral broker capability concepts, value objects, invariants, domain errors, and policies that genuinely belong to broker behavior. Do not duplicate shared canonical entities or import Binance protocol details.
+- **Application:** broker-owned use cases and orchestration for account, order, market-data, and user-data capabilities. Coordinate through explicit ports.
+- **Ports:** narrow interfaces for RPC capabilities, streams, user-data session behavior, clocks/schedulers, and external effects as required by actual use cases. Avoid generic abstractions without a concrete consumer.
+- **Infrastructure:** Binance RPC/Streams protocol clients, transport, signing, endpoint configuration, DTOs, event/request/response mapping, and adapters implementing broker ports.
+- **Composition/public API:** wire application services to infrastructure while preserving current public exports and consumer contracts.
+
+Do not force a directory template. Add domain/application/ports/infrastructure modules only when they contain real package-owned responsibilities.
+
+### TDD and test boundaries
+
+Each refactoring slice follows RED → GREEN → REFACTOR → VERIFY:
+
+1. Add a failing behavior or boundary test before implementation.
+2. Implement the smallest change that passes.
+3. Refactor without changing behavior.
+4. Run focused tests, package tests, coverage, and relevant workspace consumer checks.
+5. Update the architecture map and decision record to match actual code.
+
+Required test responsibilities:
+- Domain: deterministic and pure; no Binance clients, sockets, network, or credentials.
+- Application: use-case tests with fake ports; cover success, invalid states, failures, retries, timeouts, and uncertain outcomes.
+- Port/adapter contract: verify Binance infrastructure satisfies application-facing interfaces.
+- Infrastructure: protocol framing, signing, DTO mapping, transport lifecycle, reconnect, cleanup, malformed responses.
+- Public broker contract: exports, signatures, result envelopes, decimal strings, event/callback semantics, and order-safety gates.
+- Integration: opt-in, TESTNET-only, and separate from default offline tests.
+
+### Phase 9 completion criteria
+
+Do not mark the architecture refactor complete until the package has implemented and documented dependency boundaries; domain/application code is independent of concrete Binance infrastructure; ports have contract-tested Binance adapters; important failure and lifecycle behavior has deterministic coverage; public contracts remain compatible or have an approved migration; and package tests/coverage pass on the exact merged PR head.
 
 ### Verified package coverage snapshot
 
