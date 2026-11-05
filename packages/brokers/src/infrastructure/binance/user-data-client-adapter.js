@@ -1,5 +1,5 @@
-import { adaptMsg } from "./adapt-msg.js"
-import { getUserDataEventIdentity } from "../user-data-event-deduplicator.js"
+import { adaptMsg } from "../../binance/broker-websocket/helpers/adapters/adapt-msg.js"
+import { getUserDataEventIdentity } from "../../binance/broker-websocket/helpers/user-data-event-deduplicator.js"
 
 export function createBinanceUserDataClientPort(client) {
   if (!client || typeof client.request !== "function" ||
