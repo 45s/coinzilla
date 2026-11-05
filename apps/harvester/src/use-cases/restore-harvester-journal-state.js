@@ -222,7 +222,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         trailingBuyRepriceIntents,
         completedOrderClientIds,
         trailingBuySymbols,
-        requiresExchangeReconciliation: true,
+        requiresExchangeReconciliation: data.requiresExchangeReconciliation === true,
       }),
     })
   } catch (error) {
