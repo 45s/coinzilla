@@ -256,7 +256,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
 });
 
 
-test("allows multiple enabled markets through Conservative TESTNET engine activation", async () => {
+test("subscribes and submits initial BUYs independently for every enabled Conservative market", async () => {
   const createMetadata = ({ symbol, baseCode } = {}) => {
     const baseAsset = new Asset({ id: "asset-" + baseCode.toLowerCase(), code: baseCode })
     const quoteAsset = new Asset({ id: "asset-usdt", code: "USDT" })
@@ -273,20 +273,21 @@ test("allows multiple enabled markets through Conservative TESTNET engine activa
     return { market, tradingRules, supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"] }
   }
   const metadataBySymbol = new Map([
-    ["ZROUSDT", createMetadata({ symbol: "ZROUSDT", baseCode: "ZRO" })],
     ["DOGEUSDT", createMetadata({ symbol: "DOGEUSDT", baseCode: "DOGE" })],
+    ["ZROUSDT", createMetadata({ symbol: "ZROUSDT", baseCode: "ZRO" })],
   ])
-  const pairConfig = {
-    enabled: true,
-    investment: 100,
-    orderQuantity: 1,
-    keepQuantity: 0.01,
-    priceStepPercent: 0.05,
-    pricePrecision: 3,
-    quantityPrecision: 2,
-    makerPercent: 0.1,
-    takerPercent: 0.1,
-  }
+  const markets = [...metadataBySymbol.values()].map(({ market }) => market)
+  const quoteAsset = markets[0].quoteAsset
+  const balances = [
+    ...markets.map((market) => new Balance({
+      free: new Quantity({ amount: "100", asset: market.baseAsset }),
+      locked: new Quantity({ amount: "0", asset: market.baseAsset }),
+    })),
+    new Balance({
+      free: new Quantity({ amount: "1000", asset: quoteAsset }),
+      locked: new Quantity({ amount: "0", asset: quoteAsset }),
+    }),
+  ]
   const tradingConfig = {
     strategies: {
       CG_coinGrabber: {
@@ -297,55 +298,96 @@ test("allows multiple enabled markets through Conservative TESTNET engine activa
           aggressive: { enabled: false },
         },
         pairs: {
-          ZROUSDT: { ...pairConfig },
-          DOGEUSDT: { ...pairConfig },
+          DOGEUSDT: {
+            enabled: true, investment: 100, orderQuantity: 100, keepQuantity: 1,
+            priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
+            makerPercent: 0.1, takerPercent: 0.1,
+          },
+          ZROUSDT: {
+            enabled: true, investment: 100, orderQuantity: 10, keepQuantity: 0.01,
+            priceStepPercent: 0.05, pricePrecision: 3, quantityPrecision: 2,
+            makerPercent: 0.1, takerPercent: 0.1,
+          },
         },
       },
     },
   }
-  const requestedSymbols = []
-  let userDataSubscriptionAttempted = false
+  const priceSubscriptions = new Map()
+  const bookSubscriptions = []
+  const submittedSymbols = []
+  let orderSequence = 0
+  let snapshotSequence = 0
   const broker = {
     connect: async () => {},
     disconnect: async () => {},
-    placeOrder: async () => toResult({ error: new Error("Unexpected order placement") }),
-    cancelOrder: async () => toResult({ error: new Error("Unexpected order cancellation") }),
+    placeOrder: async ({ order } = {}) => {
+      submittedSymbols.push(order.market.symbol)
+      return toResult({
+        data: new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: String(++orderSequence),
+          market: order.market,
+          side: order.side,
+          type: order.type,
+          limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+          status: "OPEN",
+        }),
+      })
+    },
+    cancelOrder: async () => toResult({ error: new Error("Unexpected cancellation") }),
     getOpenOrders: async () => toResult({ data: [] }),
     getFills: async () => toResult({ data: [] }),
     getCanonicalOrderHistory: async () => toResult({ data: [] }),
-    getCanonicalOrder: async () => toResult({ error: new Error("Order not found") }),
-    getAccountSnapshot: async () => toResult({ data: { balances: [], sourceTime: 1 } }),
-    getSymbolFilters: async ({ symbol } = {}) => {
-      requestedSymbols.push(symbol)
-      return toResult({ data: metadataBySymbol.get(symbol) })
+    getCanonicalOrder: async () => toResult({ data: null }),
+    getAccountSnapshot: async () => toResult({ data: { balances, sourceTime: ++snapshotSequence } }),
+    getSymbolFilters: async ({ symbol } = {}) => toResult({ data: metadataBySymbol.get(symbol) }),
+    getExchangeMarkets: async () => toResult({ data: markets }),
+    getPrices: async ({ symbol } = {}) => toResult({
+      data: { symbol, price: symbol === "DOGEUSDT" ? "0.1" : "1" },
+    }),
+    subscribeForPrices: async ({ symbol, onPrice } = {}) => {
+      priceSubscriptions.set(symbol, onPrice)
+      return toResult({ data: { unsubscribe: async () => {} } })
     },
-    getExchangeMarkets: async () => toResult({ data: [...metadataBySymbol.values()].map(({ market }) => market) }),
-    getPrices: async () => toResult({ error: new Error("Unexpected price request") }),
-    subscribeForPrices: async () => toResult({ error: new Error("Unexpected price subscription") }),
-    subscribeForBookTicker: async () => toResult({ error: new Error("Unexpected book subscription") }),
-    subscribeForUserData: async () => {
-      userDataSubscriptionAttempted = true
-      return toResult({ error: new Error("Intentional stop after engine activation") })
+    subscribeForBookTicker: async ({ symbol, onBookTicker } = {}) => {
+      bookSubscriptions.push(symbol)
+      const price = symbol === "DOGEUSDT" ? "0.1" : "1"
+      await onBookTicker({
+        symbol,
+        bestBidPrice: String(Number(price) * 0.99),
+        bestBidQuantity: "100",
+        bestAskPrice: String(Number(price) * 1.01),
+        bestAskQuantity: "100",
+        timestamp: 10,
+      })
+      return toResult({ data: { unsubscribe: async () => {} } })
     },
+    subscribeForUserData: async () => toResult({ data: { disconnect: async () => {} } }),
   }
 
-  await assert.rejects(
-    startHarvesterForTest({
-      loadConfig: async () => tradingConfig,
-      brokerAdapterFactory: () => broker,
-      env: {
-        HARVESTER_BROKER: "binance",
-        HARVESTER_ENABLE_TRADING: "true",
-        HARVESTER_TRADING_MODE: "testnet",
-        NODE_ENV: "test",
-        BINANCE_API_KEY: "test-key",
-        BINANCE_API_SECRET_KEY: "test-secret",
-      },
-      logger: { debug() {}, info() {}, error() {} },
-    }),
-    /Unable to subscribe to user data/,
-  )
+  const context = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    brokerAdapterFactory: () => broker,
+    env: {
+      HARVESTER_BROKER: "binance",
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+      BINANCE_API_KEY: "test-key",
+      BINANCE_API_SECRET_KEY: "test-secret",
+    },
+    now: () => 10,
+    logger: { debug() {}, info() {}, error() {} },
+  })
 
-  assert.deepEqual(requestedSymbols, ["ZROUSDT", "DOGEUSDT"])
-  assert.equal(userDataSubscriptionAttempted, true)
+  assert.equal(context.userDataReady, true)
+  assert.deepEqual([...priceSubscriptions.keys()], ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual(bookSubscriptions, ["DOGEUSDT", "ZROUSDT"])
+  assert.deepEqual(submittedSymbols, ["DOGEUSDT", "ZROUSDT"])
+  assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
+  assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
+
+  await context.stop()
 })
