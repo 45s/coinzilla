@@ -199,6 +199,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if (name === EVENT.ACCOUNT_SNAPSHOT) {
         if (!["PREFLIGHT", "OPENING", "CLOSING"].includes(data.phase)) throw new TypeError("Account snapshot phase is invalid")
+        if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
+          throw new Error("PREFLIGHT account snapshot must precede trading activity in Journal session " + fileName)
+        }
         if (!["COMPLETE", "INCOMPLETE"].includes(data.auditStatus)) throw new TypeError("Account snapshot auditStatus is invalid")
         if (!Number.isSafeInteger(data.sourceTime) || data.sourceTime < 0) throw new TypeError("Account snapshot sourceTime must be a non-negative safe integer")
         if (session.lastAccountSnapshotSourceTime !== undefined &&
@@ -251,6 +254,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
         if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
+        if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
+          throw new Error("PREFLIGHT open-order snapshot must precede trading activity in Journal session " + fileName)
+        }
         if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
         if (session.lastOpenOrdersObservedAt !== undefined &&
             data.observedAt < session.lastOpenOrdersObservedAt) {
