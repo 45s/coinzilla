@@ -1159,6 +1159,6 @@ This is deliberately a fail-closed interim gate, not a claim that restart recove
 
 - [x] Acquire an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
 - [x] Refuse a second local trading process using the same Journal directory.
-- [x] Release the lock only after confirmed Journal shutdown; retain it when writer shutdown is uncertain.
+- [x] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
 - [x] Never auto-reclaim stale locks; require operator verification.
 - [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
