@@ -101,15 +101,15 @@ describe("Binance user-data subscription setup", () => {
       state: "open",
       async subscribe() {
         calls.push(["subscribe"])
-        return { data: { subscriptionId: 17 } }
+        return 17
       },
       async listSubscriptions() {
         calls.push(["listSubscriptions"])
-        return { data: [{ subscriptionId: 17 }] }
+        return [17]
       },
       async unsubscribe(subscriptionId) {
         calls.push(["unsubscribe", subscriptionId])
-        return { data: {} }
+        return undefined
       },
       onEvent(listener) {
         listeners.event.add(listener)
