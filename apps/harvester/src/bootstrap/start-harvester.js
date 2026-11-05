@@ -11,6 +11,7 @@ import { makeConservativeTradingEngine } from "../use-cases/conservative-trading
 import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../use-cases/restore-harvester-journal-state.js"
 import { auditRecoveredAccountState } from "../use-cases/audit-recovered-account-state.js"
+import { fetchAccountTradeHistory } from "../use-cases/fetch-account-trade-history.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -1242,12 +1243,57 @@ export async function startHarvester({
           recoveryLedgers: new Map(recoveredState.recoveryLedgers),
           orderRegistry: new OrderRegistry({ orders: tradingEngine.getOrders() }),
         }
+        const firstTradingSession = recoveryProjection.data.sessions.find((session) =>
+          session.tradingEnabled || session.hasTradingActivity
+        )
+        const durableBaseline = firstTradingSession
+          ? recoveryProjection.data.accountSnapshots.find((snapshot) =>
+            snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
+          )
+          : undefined
+        if (!durableBaseline) {
+          throw new Error("Conservative TESTNET startup blocked: durable PREFLIGHT baseline is unavailable for account trade-history reconciliation")
+        }
+        const exchangeMarketsResult = await broker.getExchangeMarkets()
+        if (exchangeMarketsResult?.ok !== true || !Array.isArray(exchangeMarketsResult.data)) {
+          throw new Error(
+            "Conservative TESTNET startup blocked: canonical exchange market catalog is unavailable: " +
+            (exchangeMarketsResult?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
+          )
+        }
+        const tradeMarketsBySymbol = new Map()
+        for (const market of exchangeMarketsResult.data) {
+          if (!(market instanceof Market)) {
+            throw new TypeError("Canonical exchange market catalog contains a non-Market value")
+          }
+          tradeMarketsBySymbol.set(market.symbol, market)
+        }
+        for (const { market } of marketMetadata.values()) {
+          const existing = tradeMarketsBySymbol.get(market.symbol)
+          if (existing && existing.id !== market.id) {
+            throw new Error("Canonical market catalog conflicts with recovered Journal market identity for " + market.symbol)
+          }
+          tradeMarketsBySymbol.set(market.symbol, market)
+        }
+        const tradeHistoryResult = await fetchAccountTradeHistory({
+          broker,
+          markets: [...tradeMarketsBySymbol.values()],
+          startTime: durableBaseline.sourceTime,
+          marketUniverseComplete: false,
+        })
+        if (tradeHistoryResult?.ok !== true) {
+          throw new Error(
+            "Conservative TESTNET startup blocked: account trade-history scan failed: " +
+            (tradeHistoryResult?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
+          )
+        }
         const accountAudit = auditRecoveredAccountState({
           projection: recoveryProjection,
           recoveredState: reconciledState,
           currentAccountSnapshot: accountSnapshot,
           openOrders,
           markets: [...marketMetadata.values()].map(({ market }) => market),
+          exchangeTradeHistory: tradeHistoryResult.data,
           requireCompleteTradeHistory: true,
         })
         if (accountAudit?.ok !== true) {
