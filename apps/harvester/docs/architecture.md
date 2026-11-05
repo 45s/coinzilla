@@ -97,6 +97,14 @@ Use cases are focused functions created with explicit dependencies. They coordin
 
 The engine must not contain Conservative- or Aggressive-specific trading rules. Strategies must not duplicate broker communication or order-lifecycle mechanics.
 
+**Shared repricing safety invariant:** all strategy BUY repricing paths must consult
+the latest Portfolio Position inside the serialized engine transition before
+threshold evaluation or BUY cancellation/replacement. Repricing is allowed only
+when active `baseQuantity.amount` is exactly zero (or the Position is absent);
+retained `freeBaseQuantity` does not count. Conservative trailing BUY already
+enforces this. Aggressive grid repricing is not executable yet and must use the
+same gate when implemented.
+
 ## Typical interaction
 
 ~~~text
