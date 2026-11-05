@@ -78,14 +78,14 @@ const current = defaultLogger.getConfig()
 const isolatedLogger = new Logger({ transports: [] })
 ```
 
-A transport is an object with a unique non-empty `name`, a `level` from the standard severity list, and a `write(entry)` function. Each write receives the same frozen entry shape:
+A transport is an object with a unique non-empty `name`, a `level` from the standard severity list, and a `write(entry)` function. It may also provide `shouldWrite(entry)` for an additional transport-specific filter and `close()` for resource cleanup. Each write receives the same frozen entry shape:
 
 ```js
 {
   timestamp: "2026-11-05T12:00:00.000Z",
   level: "info",       // normalized severity
   method: "success",   // called method, including semantic methods
-  data: { message: "Completed" } // detached, JSON-safe, redacted data
+  data: { message: "Completed" } // detached, frozen, JSON-safe, redacted data
 }
 ```
 
