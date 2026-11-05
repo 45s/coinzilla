@@ -1123,3 +1123,41 @@ test("rejects open-order audit timestamps that move backwards", () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /observedAt moved backwards/)
 })
+
+
+test("rejects a PREFLIGHT balance baseline written after trading activity", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances: [{ asset: "BTC", free: "1", locked: "0", total: "1" }],
+        auditReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /PREFLIGHT account snapshot must precede trading activity/)
+})
+
+test("rejects a PREFLIGHT open-order baseline written after trading activity", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /PREFLIGHT open-order snapshot must precede trading activity/)
+})
