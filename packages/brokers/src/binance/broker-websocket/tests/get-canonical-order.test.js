@@ -92,13 +92,17 @@ test("getCanonicalOrder rejects missing or ambiguous identifiers before RPC", as
 
 test("getCanonicalOrder fails closed when order status or market metadata is malformed", async () => {
   for (const handlers of [
-    { orderStatus: () => ({ ...rawOrder, executedQty: 400 }), exchangeInfo: () => ({ symbols: [symbolInfo] }) },
-    { orderStatus: () => rawOrder, exchangeInfo: () => ({ symbols: [symbolInfo, symbolInfo] }) },
+    { "order.status": () => ({ ...rawOrder, executedQty: 400 }), exchangeInfo: () => ({ symbols: [symbolInfo] }) },
+    { "order.status": () => rawOrder, exchangeInfo: () => ({ symbols: [symbolInfo, symbolInfo] }) },
   ]) {
     const broker = createBroker(handlers)
     const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", clientOrderId: "harvester-client-123" })
     assert.equal(result.ok, false)
     assert.ok(result.errors.length > 0)
+    assert.deepEqual(
+      broker.tradingConnection.calls.map(({ method }) => method),
+      ["order.status", "exchangeInfo"],
+    )
   }
 })
 
