@@ -15,7 +15,8 @@
     "testnet:history": "node --env-file=.env.development scripts/list-testnet-order-history.js",
     "testnet:trades": "node --env-file=.env.development scripts/list-testnet-trades.js",
     "journal:balance-audit": "node --env-file=.env.development scripts/reconcile-journal-account-balances.js",
-    "testnet:audit": "node --env-file=.env.development scripts/audit-testnet-account.js"
+    "testnet:audit": "node --env-file=.env.development scripts/audit-testnet-account.js",
+    "testnet": "node --env-file=.env.development scripts/testnet-menu.js"
   },
   "engines": {
     "node": ">=24"
