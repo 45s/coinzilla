@@ -2832,6 +2832,8 @@ test("limits a batch of BUY intents to the remaining quote balance and pair inve
   assert.equal(harness.orders[0].side, "BUY")
   assert.equal(harness.orders[0].price, "60")
   assert.equal(harness.orders[0].quantity, "10")
+  assert.equal(result.data.deferredActions.length, 1)
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
 })
 
 test("rejects an overcommitted batch of SELL intents before submitting any order", async () => {
