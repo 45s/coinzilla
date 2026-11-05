@@ -31,7 +31,7 @@ function createBroker(handlers) {
 
 test("getCanonicalOrder resolves a lost submission acknowledgement by client order ID", async () => {
   const broker = createBroker({
-    orderStatus(params, options) {
+    "order.status"(params, options) {
       assert.deepEqual(params, { symbol: "DOGEUSDT", origClientOrderId: "harvester-client-123" })
       assert.deepEqual(options, { signed: true })
       return rawOrder
@@ -60,7 +60,7 @@ test("getCanonicalOrder resolves a lost submission acknowledgement by client ord
 
 test("getCanonicalOrder supports exact broker order ID lookup", async () => {
   const broker = createBroker({
-    orderStatus(params) {
+    "order.status"(params) {
       assert.deepEqual(params, { symbol: "DOGEUSDT", orderId: 987654 })
       return rawOrder
     },
