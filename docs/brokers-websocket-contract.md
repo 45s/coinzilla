@@ -194,3 +194,9 @@ The policy has isolated Node.js tests for the incomplete and complete states, in
 The injected user-data client port owns unwrapping Binance RPC response envelopes for subscription setup and remote-state verification. Its application-facing contract returns a subscription ID (or `null` when absent), a list of subscription IDs (or `null` for malformed collection data), and no raw unsubscribe response envelope. The user-data session validates normalized IDs and no longer reads Binance's `response.data` shape.
 
 The existing safety behavior remains unchanged: uncertain subscribe outcomes are verified through remote subscription state; malformed IDs and ambiguous multiple subscriptions fail closed; uncertain unsubscribe outcomes are verified before retry; no state-changing order request is replayed.
+
+### Phase 9 implementation slice 3 — normalized user-data event port
+
+The Binance user-data client-port adapter translates raw WebSocket event envelopes into neutral port messages. Normal events carry the subscription ID, canonical adapted event, and an opaque stable deduplication key; the Binance-specific event identity algorithm remains in infrastructure. The Binance `eventStreamTerminated` event becomes a neutral `terminated` notification with the source event time and raw event retained for existing consumer callback compatibility.
+
+The session coordinator no longer imports Binance event adapters or Binance event identity helpers. It filters by the active subscription, handles the neutral termination notification, and retains a bounded set of opaque event identities across reconnects. The set is cleared on session stop or final-subscriber removal, preserving the previous duplicate-suppression lifetime and the 2,048-entry bound.
