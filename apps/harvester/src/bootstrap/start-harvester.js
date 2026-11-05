@@ -711,6 +711,8 @@ export async function startHarvester({
       initialState: {
         orderRegistry: recoveredState.orderRegistry,
         pausedMarkets: recoveredState.pausedMarkets,
+        durablePausedMarkets: recoveredState.durablePausedMarkets,
+        recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
         replacementIntents: recoveredState.replacementIntents,
         trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
         completedOrderClientIds: recoveredState.completedOrderClientIds,
