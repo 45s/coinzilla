@@ -22,8 +22,11 @@ const collectArguments = async (action) => {
   const answers = {}
   for (const key of action.prompts ?? []) {
     const { label, value } = PROMPT_DEFAULTS[key]
-    const answer = await prompt(`${label}${value ? ` [${value}]` : ""}: `)
-    answers[key] = answer.trim() || value
+    const actionDefault = action.id === "trades"
+      ? { symbol: "DOGEUSDT", limit: "1000" }[key] ?? value
+      : value
+    const answer = await prompt(`${label}${actionDefault ? ` [${actionDefault}]` : ""}: `)
+    answers[key] = answer.trim() || actionDefault
   }
   return buildTestnetMenuArguments({ actionId: action.id, answers })
 }
