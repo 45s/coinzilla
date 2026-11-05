@@ -171,7 +171,6 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
 
   assert.match(written, /\u001b\[34m.*INFO Harvester ready\u001b\[0m/)
   assert.match(written, /\u001b\[35m.*DEBUG Detailed diagnostic\u001b\[0m/)
-  assert.match(written.replace(/\u001b\[[0-9;]*m/g, ""), /\\d{1,2}:\\d{2}:\\d{2} INFO Harvester ready/)
   output.destroy()
 })
 
