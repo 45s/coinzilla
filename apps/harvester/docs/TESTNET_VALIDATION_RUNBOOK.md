@@ -38,13 +38,13 @@ Hard operational limits for the first session:
 
 ## 2. Preconditions — all must pass before any write
 
-1. Confirm PR #515 is merged into `develop`, the merge commit is recorded, and required CI is green on the synchronized merge result.
+1. Confirm PRs #515, #545, #546, #552, #553, and #554 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
 2. Confirm the Harvester process is stopped. Check for any other process that could submit or manage orders using the same TESTNET account/API keys.
 3. Confirm credentials target Binance Spot TESTNET only. Never load production credentials. Keep secrets out of logs, screenshots, commits, and chat.
 4. Verify the account's maker/taker commission setting is 0.1% / 0.1%; record the observation timestamp and evidence. This UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
 5. Verify the latest `trading-config.json` matches the table above. Verify only ZROUSDT is enabled and Conservative is the only enabled strategy.
 6. Verify current exchange symbol filters: tick size, step size, minimum quantity, minimum notional, supported order types, and current best bid/ask. Compare them with Harvester's runtime market-readiness validation. Any mismatch or unsupported rule blocks the run.
-7. Verify the Journal is enabled, writable, ready, and durably flushable. Confirm the configured session directory is known, writable, and has adequate space. Trading startup must fail closed if OPENING cannot be durably flushed.
+7. Verify the Journal is enabled, writable, ready, and durably flushable. Confirm the configured session directory is known, writable, and has adequate space. Every broker-connected startup, including read-only mode, must fail closed if either PREFLIGHT account event cannot be durably flushed.
 8. Verify the read-only `journal:balance-audit` and `testnet:trades` diagnostics are available. Do not execute any write-capable script as a precondition.
 9. Agree the session's start time, operator, assistant, exact symbol, quote/base limits, order-count limit, and stop conditions. If any limit is not explicit, do not start.
 
@@ -94,16 +94,16 @@ The known account is pre-funded and contains many non-zero assets; the previous 
 
 Record the exact baseline evidence and classify pre-existing orders as external. Do not cancel them as a cleanup shortcut. If an external open order could affect ZROUSDT available balance or ownership attribution, the session is blocked until the operator decides how to handle it.
 
-## 5. OPENING account audit and startup gate
+## 5. PREFLIGHT account audit and startup gate
 
-The account baseline is now captured automatically by Harvester on every trading-enabled startup. You do not need to run `pnpm run testnet:balances` or `pnpm run testnet:orders` manually. Before the engine is activated, Harvester fetches the complete account balance snapshot and account-wide open orders (without a symbol filter), writes both `account.snapshot_captured` and `account.open_orders_captured` to the Journal, and waits for durable flush/fsync. The order event includes all currently open orders and a READY/BLOCKED decision. Any pre-existing open order is currently unowned because durable restart ownership recovery is not implemented; Harvester records it and exits before market subscriptions or order submission. It does not cancel or adopt those orders. A failed or malformed balance/order query, failed event mapping, or failed Journal flush also blocks startup.
+The account baseline is captured automatically on every broker-connected Harvester startup, including read-only mode. You do not need to run `pnpm run testnet:balances` or `pnpm run testnet:orders` before a normal `dev` start. Before market subscriptions or trading-engine activation, Harvester fetches the complete account balance snapshot and account-wide open orders (without a symbol filter), writes both `account.snapshot_captured` and `account.open_orders_captured` with `phase: PREFLIGHT`, and waits for each durable flush/fsync. The order event includes all currently open orders and a READY/BLOCKED decision. Any pre-existing open order is external/unowned because durable restart ownership recovery is not implemented; read-only startup records BLOCKED and may continue without trading, while trading-enabled startup exits before market subscriptions or order submission. Harvester never cancels or adopts those orders. A failed or malformed balance/order query, failed event mapping/publication, or failed/non-durable Journal flush blocks every broker-connected startup.
 
 1. Start only the agreed TESTNET configuration during the joint session.
 2. Verify the process reports Conservative TESTNET trading enabled, not read-only or production.
 3. Verify broker connection and user-data stream readiness.
-4. Verify the durable OPENING balance snapshot and account-wide open-order snapshot are recorded and flushed before the trading engine or market subscriptions can activate.
+4. Verify both durable PREFLIGHT records (balances and account-wide open orders) are recorded and flushed before market subscriptions or trading-engine activation.
 5. Confirm the balance snapshot includes every broker-returned asset with exact free, locked, and total quantities, and that the Journal session ID and source timestamp are recorded.
-6. Confirm `account.open_orders_captured` reports `readiness: READY`, `orderCount: 0`, and an empty `orders` array. If it reports BLOCKED or any open order, Harvester must exit without trading; do not cancel the order as part of startup.
+6. For trading-enabled startup, confirm `account.open_orders_captured` reports `readiness: READY`, `orderCount: 0`, and an empty `orders` array. If it reports BLOCKED or any open order, Harvester must exit without trading. Read-only startup may continue with a BLOCKED audit but must not adopt or modify any order.
 7. Confirm ZROUSDT market rules, fee configuration, balances, and readiness are accepted. Confirm all other pairs remain disabled.
 
 **Abort before any order** if OPENING is absent, duplicated, malformed, not durable, incomplete, or cannot be tied to this session; if readiness is not READY; if any unexpected pair is enabled; or if the process logs an unresolved error.
@@ -198,7 +198,7 @@ The controlled TESTNET session passes only when:
 - Every order and trade is attributable and reconciled.
 - Actual commissions are accounted for exactly.
 - Portfolio, RecoveryLedger, Journal, and exchange execution facts agree.
-- OPENING and COMPLETE CLOSING snapshots are durable and paired.
+- PREFLIGHT and COMPLETE CLOSING snapshots are durable and paired for a trading-enabled session.
 - The read-only account balance audit has no unexplained deltas.
 - No unknown or non-terminal Harvester-owned order remains unless explicitly documented and accepted.
 - The operator and assistant review the evidence together and explicitly accept the result.
@@ -228,6 +228,6 @@ The offline regression suite also covers fill-history visibility lag: a FILLED a
 These are offline tests only. They do not authorize or substitute for the separately controlled TESTNET validation.
 
 
-## Startup PREFLIGHT account audit (all modes)
+## Startup PREFLIGHT account audit (all broker-connected modes)
 
-Before market subscriptions or trading-engine activation, Harvester uses its existing broker connection to fetch the complete account balance snapshot and account-wide open orders. It publishes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushing each event before continuing. Verify both records in the Journal for every dev startup, including read-only runs. The balance event records exact free, locked, and total quantities per asset. Existing orders are external/unowned: the audit does not adopt or change them. Read-only mode may continue with a `BLOCKED` open-order audit; trading-enabled startup must stop. Any exchange query, event publication, or durable flush failure blocks startup. This audit is observational and does not authorize TESTNET order activity.
+Before market subscriptions or trading-engine activation, Harvester uses its existing broker connection to fetch the complete account balance snapshot and account-wide open orders. It publishes `account.snapshot_captured` and `account.open_orders_captured` with phase `PREFLIGHT`, durably flushing each event before continuing. Verify both records in the Journal for every broker-connected dev startup, including read-only runs. Configuration-only startup without a broker does not query the exchange or perform this account audit. The balance event records exact free, locked, and total quantities per asset. Existing orders are external/unowned: the audit does not adopt or change them. Read-only mode may continue with a `BLOCKED` open-order audit; trading-enabled startup must stop. Any exchange query, event publication, or durable flush failure blocks startup. This audit is observational and does not authorize TESTNET order activity.

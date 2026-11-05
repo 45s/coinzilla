@@ -21,6 +21,7 @@ import {
 } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
+import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
 
 export function createMarketBook({ bookTicker } = {}) {
   if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
@@ -669,43 +670,48 @@ export function makeConservativeTradingEngine({
             right: order.executedQuantity.amount,
           }),
         }), "0")
-      const executableActions = []
-      for (const action of decision.actions) {
-        const asset = action.side === "BUY" ? metadata.market.quoteAsset : metadata.market.baseAsset
-        const snapshotBalance = accountSnapshot.getFreeBalance({ assetId: asset.id })
-        if (!snapshotBalance) throw new Error("Available balance is missing for " + asset.code)
-        const available = action.side === "BUY"
-          ? subtractDecimal({
-              left: addDecimal({ left: snapshotBalance.amount, right: quoteCashFlow }),
-              right: committedQuote,
-            })
-          : subtractDecimal({
-              left: addDecimal({
-                left: snapshotBalance.amount,
-                right: position?.baseQuantity.amount ?? "0",
-              }),
-              right: committedBase,
-            })
-        const required = action.side === "BUY"
-          ? multiplyDecimal({ left: action.price, right: action.quantity })
-          : action.quantity
-        if (compareDecimal({ left: required, right: available }) > 0) {
-          if (action.side === "BUY") continue
-          throw new Error("Strategy SELL quantity exceeds Harvester-owned free " + asset.code + " balance")
-        }
-        if (action.side === "SELL" && compareDecimal({
-          left: action.quantity,
-          right: subtractDecimal({
-            left: position?.baseQuantity.amount ?? "0",
-            right: committedBase,
-          }),
-        }) > 0) {
-          throw new Error("Strategy SELL quantity exceeds Harvester-owned active inventory")
-        }
-        executableActions.push(action)
+      const quoteBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })
+      const baseBalance = accountSnapshot.getFreeBalance({ assetId: metadata.market.baseAsset.id })
+      if (!quoteBalance || !baseBalance) {
+        throw new Error("Current account snapshot is missing an enabled market asset balance")
       }
+      const allocation = allocateOrderCommitments({
+        actions: decision.actions,
+        quoteFreeBalance: quoteBalance.amount,
+        baseFreeBalance: baseBalance.amount,
+        quoteCashFlow,
+        activeBaseQuantity: position?.baseQuantity.amount ?? "0",
+        outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
+        committedQuote,
+        committedBase,
+        investmentLimit: String(pairs[symbol].investment),
+      })
+      if (!allocation.ok) {
+        throw allocation.errors[0] ?? new Error("Unable to allocate strategy order commitments")
+      }
+      const executableActions = allocation.data.executableActions
+      const deferredActions = allocation.data.deferredActions
+      logger?.debug?.({
+        message: "Harvester strategy order commitments allocated",
+        evaluationId,
+        symbol,
+        executableActions,
+        deferredActions: allocation.data.deferredActions,
+        remainingQuoteBalance: allocation.data.remainingQuoteBalance,
+        remainingBaseBalance: allocation.data.remainingBaseBalance,
+        remainingActiveBase: allocation.data.remainingActiveBase,
+        remainingInvestment: allocation.data.remainingInvestment,
+      })
       if (executableActions.length === 0) {
-        return toResult({ data: { decision, submittedOrders: [], waitingForAvailableQuoteBalance: true } })
+        return toResult({
+          data: {
+            decision,
+            submittedOrders: [],
+            deferredActions,
+            waitingForAvailableQuoteBalance: deferredActions.some(({ reason }) => reason === "INSUFFICIENT_QUOTE_BALANCE"),
+            waitingForInvestmentLimit: deferredActions.some(({ reason }) => reason === "PAIR_INVESTMENT_LIMIT"),
+          },
+        })
       }
       publishLifecycleEvent({
         eventPublisher,
@@ -765,7 +771,7 @@ export function makeConservativeTradingEngine({
         )
         state.buyReferenceOverrides.delete(symbol)
       }
-      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders } })
+      return toResult({ data: { decision, submittedOrders: result.data.submittedOrders, deferredActions } })
     } catch (error) {
       await pause({ symbol, reason: "STRATEGY_EVALUATION_FAILED", error })
       return toResult({ error })

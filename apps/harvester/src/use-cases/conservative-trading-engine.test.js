@@ -56,7 +56,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
+async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" } } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -170,7 +170,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   }
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
-      ? new Quantity({ amount: "1000", asset: quoteAsset })
+      ? new Quantity({ amount: quoteFreeBalance, asset: quoteAsset })
       : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
   }
   let currentPortfolio = initialPortfolio ?? new Portfolio()
@@ -2805,4 +2805,63 @@ test("recovers an acknowledged fill when Binance trade history becomes visible l
   const replayed = await harness.engine.reconcileOwnedOrders()
   assert.equal(replayed.ok, true, replayed.errors?.[0]?.message)
   assert.equal(harness.accountedFills.length, 1)
+})
+
+test("limits a batch of BUY intents to the remaining quote balance and pair investment", async () => {
+  const strategyPolicy = {
+    evaluate: () => ({
+      strategy: "TEST_POLICY",
+      symbol: "DOGEUSDT",
+      action: "PLACE_ORDERS",
+      actions: [
+        { side: "BUY", type: "LIMIT_MAKER", price: "60", quantity: "10" },
+        { side: "BUY", type: "LIMIT_MAKER", price: "60", quantity: "10" },
+      ],
+    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({ strategyPolicy, quoteFreeBalance: "1000" })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.orders[0].side, "BUY")
+  assert.equal(harness.orders[0].price, "60")
+  assert.equal(harness.orders[0].quantity, "10")
+  assert.equal(result.data.deferredActions.length, 1)
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
+})
+
+test("rejects an overcommitted batch of SELL intents before submitting any order", async () => {
+  const seeded = makeSeededRecoveryState()
+  const strategyPolicy = {
+    evaluate: () => ({
+      strategy: "TEST_POLICY",
+      symbol: "DOGEUSDT",
+      action: "PLACE_ORDERS",
+      actions: [
+        { side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "0.6" },
+        { side: "SELL", type: "LIMIT_MAKER", price: "100", quantity: "0.6" },
+      ],
+    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({
+    strategyPolicy,
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "0",
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.orders.length, 0)
 })
