@@ -82,6 +82,7 @@ export function createBinanceBrokerAdapter({
     "getOpenOrders",
     "getFills",
     "getCanonicalOrderHistory",
+    "getCanonicalOrder",
     "getAccountSnapshot",
     "getSymbolFilters",
     "getPrices",
@@ -147,6 +148,7 @@ export function createBinanceBrokerAdapter({
     getOpenOrders: ({ symbol }) => client.getOpenOrders({ symbol }),
     getFills: (input) => client.getFills(input),
     getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
+    getCanonicalOrder: (input) => client.getCanonicalOrder(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: async ({ symbol }) => {
       try {

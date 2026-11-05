@@ -32,6 +32,7 @@ describe("CoreBroker", () => {
     "getMyTrades",
     "getOrderHistory",
     "getCanonicalOrderHistory",
+    "getCanonicalOrder",
     "getBalances",
     "getAccountSnapshot",
     "getServerTime",

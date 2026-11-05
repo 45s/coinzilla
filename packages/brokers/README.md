@@ -20,7 +20,7 @@ Keep exchange-specific operations behind the Binance adapter. Consumers should d
 
 ## Runtime and configuration
 
-- Node.js **22.23.4 or newer** is required. The native transport also checks the bundled Undici version at runtime.
+- Node.js **24 or newer** is required. The native transport also checks the bundled Undici version at runtime.
 - Construct the broker with non-empty `apiKey` and `apiSecret`.
 - The default endpoint pair is selected by the repository's `isProdMode` setting: production endpoints in production mode, TESTNET endpoints otherwise.
 - `websocketApiUrl` and `websocketStreamsUrl` can be supplied explicitly for controlled environments. Do not point integration tests at production.
@@ -86,7 +86,7 @@ The `onEvent` callback contract remains `onEvent({ event })`. Status notificatio
 
 The broker blocks new order-changing calls while user data is unavailable or recovery is awaiting acknowledgement. This includes `createOrder()`, `cancelOrder()`, and `cancelAllOpenOrders()`.
 
-A timeout or connection loss during a state-changing RPC can mean Binance accepted the operation but the response was lost. Such an outcome is **unknown**, not proof of failure. Do not blindly submit the same order or cancellation again. Reconcile with Binance using a client order ID, order status, open orders, and available order/trade history before deciding what action is safe.
+A timeout or connection loss during a state-changing RPC can mean Binance accepted the operation but the response was lost. Such an outcome is **unknown**, not proof of failure. Do not blindly submit the same order or cancellation again. `getCanonicalOrder({ symbol, orderId })` and `getCanonicalOrder({ symbol, clientOrderId })` perform read-only `order.status` lookups and return an exact-decimal `CanonicalOrder`; the client-ID form maps to Binance's `origClientOrderId` request parameter. A lookup result is only an identity/status observation: callers must still reconcile canonical order history and actual fills. A not-found response or lookup failure is not permission to retry.
 
 The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `recvWindow`. These are client defaults, not guarantees about Binance processing time or rate-limit capacity. Binance rate limits and account restrictions remain authoritative; handle rate-limit and API errors explicitly and do not add unbounded retry loops.
 

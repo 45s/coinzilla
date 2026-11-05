@@ -96,6 +96,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
       accountSnapshotTime += 1
@@ -836,6 +837,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     }),
     getFills: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       snapshotTime += 1
       const balances = [
@@ -1425,7 +1427,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
   const client = {
     connect: async () => {}, disconnect: async () => {}, createOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }),
+    getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
     getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),

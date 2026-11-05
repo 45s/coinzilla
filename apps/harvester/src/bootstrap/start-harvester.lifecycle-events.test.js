@@ -70,6 +70,7 @@ function createBroker({
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({
       ok: true,
       data: {
