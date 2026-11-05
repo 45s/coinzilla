@@ -200,3 +200,9 @@ The existing safety behavior remains unchanged: uncertain subscribe outcomes are
 The Binance user-data client-port adapter translates raw WebSocket event envelopes into neutral port messages. Normal events carry the subscription ID, canonical adapted event, and an opaque stable deduplication key; the Binance-specific event identity algorithm remains in infrastructure. The Binance `eventStreamTerminated` event becomes a neutral `terminated` notification with the source event time and raw event retained for existing consumer callback compatibility.
 
 The session coordinator no longer imports Binance event adapters or Binance event identity helpers. It filters by the active subscription, handles the neutral termination notification, and retains a bounded set of opaque event identities across reconnects. The set is cleared on session stop or final-subscriber removal, preserving the previous duplicate-suppression lifetime and the 2,048-entry bound.
+
+### Phase 9 implementation slice 4 — application session and explicit port
+
+The user-data lifecycle coordinator now lives at `src/application/user-data-session.js` and depends on the exchange-neutral recovery policy plus the application-owned `UserDataClientPort` contract in `src/ports/user-data-client-port.js`. The Binance broker facade composes this application service with the Binance client adapter. Runtime validation at the application boundary rejects incomplete injected ports before subscription operations begin.
+
+The package coverage command now includes `src/application/**/*.js` and `src/ports/**/*.js`, excluding their test files, so these new DDD layers remain subject to the existing coverage thresholds.
