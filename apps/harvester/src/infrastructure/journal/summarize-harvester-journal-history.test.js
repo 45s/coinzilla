@@ -22,6 +22,18 @@ test("detects prior order and fill history across Journal sessions", () => {
   assert.equal(result.counts["execution.fill_applied"], 1)
 })
 
+test("detects a prior trading-enabled startup even without persisted order intents", () => {
+  const result = summarizeHarvesterJournalHistory({
+    records: [
+      { id: "1", payload: { name: "harvester.started", source: "harvester", data: { tradingEnabled: true } } },
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.hasPriorTradingHistory, true)
+  assert.equal(result.counts["harvester.started"], 1)
+})
+
 test("allows a Journal containing only startup and account-audit events", () => {
   const result = summarizeHarvesterJournalHistory({
     records: [
