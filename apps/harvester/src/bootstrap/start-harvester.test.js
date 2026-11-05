@@ -585,7 +585,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
 })
 
 test("does not expose a broker port that could bypass the trading engine", async () => {
@@ -2030,7 +2030,7 @@ test("rejects malformed durable Journal recovery before user-data subscription",
     /Journal recovery projection failed/,
   )
 
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
 
