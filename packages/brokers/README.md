@@ -76,6 +76,7 @@ The recommended reconciliation inputs are:
 
 - `getAccountSnapshot()` for current balances and the account snapshot's source timestamp.
 - `getOpenOrders()` for the current open-order set.
+- `getExchangeMarkets()` for the complete symbol catalog returned by Binance `exchangeInfo`; this read-only method returns canonical `Market` values and primes the broker's canonical market cache. It includes the symbols in the current exchange catalog, not delisted symbols.
 `getOpenOrders({ symbol? })` accepts an omitted symbol to retrieve the account-wide open-order set. Its normalized `Order` values retain `id`, `symbol`, optional `clientOrderId`, `originalPrice`, `originalQuantity`, `executedQuantity`, and `status`. `price` remains the legacy numeric convenience field; use `originalPrice` when exact decimal fidelity is required for audit/reconciliation. `originalPrice`, original quantity, and executed quantity preserve the exchange's decimal strings.
 
 - `getMyTrades()` and `getOrderHistory()` for available symbol-scoped history, using pagination where required.
