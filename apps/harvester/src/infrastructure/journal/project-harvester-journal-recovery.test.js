@@ -821,3 +821,29 @@ test("recovers broker order identity from a durable fill when the acknowledgemen
   assert.equal(result.data.orders[0].cumulativeFillQuantity, "0.4")
   assert.equal(result.data.requiresExchangeReconciliation, true)
 })
+
+
+test("recovers broker order identity from a durable cancellation intent when the acknowledgement event was lost", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested(),
+      record("order.cancel_requested", {
+        clientOrderId: "h-BTCUSDT-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        executedQuantity: "0",
+        status: "OPEN",
+        reason: "TRAILING_BUY_REPRICE",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.orders[0].brokerOrderId, "9001")
+  assert.equal(result.data.orders[0].submissionOutcome, "ACKNOWLEDGED")
+  assert.equal(result.data.orders[0].cancellationState, "REQUESTED")
+})
