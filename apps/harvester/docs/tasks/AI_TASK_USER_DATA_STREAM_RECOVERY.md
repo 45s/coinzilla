@@ -125,7 +125,8 @@ Use fake broker/REST ports and controlled promises/clocks where appropriate. Tes
 - Start application recovery on the broker's `recovered` transport status.
 - Reconcile owned orders/fills and drain the serialized user-data event queue.
 - Capture a fresh account snapshot and durably journal only configured enabled-market assets.
-- Capture and durably journal account-wide open orders after ownership reconciliation.
+- Capture and durably journal account-wide open orders against the live engine registry after ownership reconciliation.
+- If user-data events arrive during REST reads or audit flushes, drain them and repeat both snapshots until the event sequence is stable.
 - Acknowledge broker recovery only after the reconciliation and durable audits succeed.
 - Invalidate stale in-flight work when a newer disconnect/recovery/error status arrives.
 - Ignore duplicate reminders for an already acknowledged recovery generation.
