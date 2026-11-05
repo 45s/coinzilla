@@ -1,5 +1,3 @@
-import { createUserDataEventDeduplicator } from "../helpers/user-data-event-deduplicator.js"
-import { adaptMsg } from "../helpers/adapters/adapt-msg.js"
 import { canCompleteUserDataRecovery } from "../../../domain/user-data-recovery-policy.js"
 
 function logSafely(logger, level, ...args) {
@@ -31,7 +29,6 @@ export class BinanceUserDataSession {
   #removeCloseListener = null
   #stopped = false
   #recoveryRequired = false
-  #deduplicator = createUserDataEventDeduplicator()
   #generation = 0
   #clientPorts = new WeakMap()
 
@@ -164,7 +161,6 @@ export class BinanceUserDataSession {
     this.#recoveryRequired = false
     this.setUnavailable(true)
     this.#detachClientListeners()
-    this.#deduplicator.clear()
   }
 
   #portFor(client) {
@@ -342,11 +338,7 @@ export class BinanceUserDataSession {
     if (this.#stopped || this.#subscribers.size === 0 ||
         message?.subscriptionId !== this.#subscriptionId) return
 
-    const event = message?.event && typeof message.event === "object"
-      ? message.event
-      : message
-
-    if (event.e === "eventStreamTerminated") {
+    if (message.type === "terminated") {
       logSafely(this.logger, "warn", "Binance user-data subscription terminated", {
         subscriptionId: message.subscriptionId,
       })
@@ -355,16 +347,15 @@ export class BinanceUserDataSession {
       this.#notify({
         type: "terminated",
         subscriptionId: message.subscriptionId,
-        eventTime: event.E ?? null,
+        eventTime: message.eventTime,
         recoveryRequired: true,
       })
-      this.#forwardEvent(event)
+      this.#forwardEvent(message.event)
       this.#scheduleRecovery(0)
       return
     }
 
-    if (this.#deduplicator.isDuplicate(message)) return
-    this.#forwardEvent(adaptMsg(event))
+    if (message.type === "event") this.#forwardEvent(message.event)
   }
 
   #forwardEvent(event) {
