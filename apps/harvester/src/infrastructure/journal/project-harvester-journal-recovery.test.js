@@ -994,3 +994,29 @@ test("requires a durable cancellation intent before accepting a cancellation fai
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /no preceding durable cancellation intent/)
 })
+
+
+test("rejects trading activity journaled after the closing account snapshot", () => {
+  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("account.snapshot_captured", {
+        phase: "CLOSING",
+        sourceTime: 200,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      submissionRequested(),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /after its closing account snapshot/)
+})
