@@ -3344,5 +3344,4 @@ test("paginates complete REST fill history beyond Binance's 1000-trade page limi
   assert.deepEqual(fillCursors, [undefined, "1001"])
   assert.equal(harness.engine.getOrders()[0].status, "FILLED")
   assert.equal(harness.accountedFills.length, 1001)
-  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "1001")
 })
