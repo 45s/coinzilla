@@ -570,7 +570,7 @@ export async function startHarvester({
       orders = result.data
     }
     if (!Array.isArray(orders)) throw new TypeError("publishOpenOrdersSnapshot orders must be an array")
-    const restoredOrders = recoveredState.orderRegistry?.orders ?? []
+    const restoredOrders = tradingEngine?.getOrders?.() ?? recoveredState.orderRegistry?.orders ?? []
     const matchedOwnedClientIds = new Set()
     const unownedOrders = orders.filter((order) => {
       const clientOrderId = order?.clientOrderId
