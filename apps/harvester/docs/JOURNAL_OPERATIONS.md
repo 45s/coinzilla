@@ -52,7 +52,7 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
 | `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
 | `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, outcome, optional sanitized error |
-| `execution.fill_applied` | fill/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, commission status |
+| `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, commission status |
 | `execution.unowned_order` | client/broker order IDs, symbol, side, order status, reason |
 | `execution.invalid_fill` | order facts, reason, optional Fill identity facts, sanitized error |
 | `execution.accounting_failed` | order and Fill identity facts, sanitized error |
@@ -112,4 +112,4 @@ An absent first startup event can be the documented asynchronous-subscription ga
 
 ## Security
 
-Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields; raw broker payloads and commission objects are not persisted. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
+Event DTOs do not include credentials, raw exchange messages, or SDK objects. The two explicit account-audit events intentionally include the full exchange-returned balance list and complete open-order set using allowlisted exact-decimal fields. Applied-fill events persist each actual commission as an exact decimal amount plus asset ID and code; they do not persist Commission class instances or raw broker payloads. This preserves the fee facts needed for a future deterministic recovery projection, but does not itself implement replay or restore Portfolio/RecoveryLedger state. Error DTOs contain only a bounded name/message and redact common credential assignment patterns, bearer tokens, and credential-bearing URLs. This is not a substitute for protecting the log directory: event names, market/order identifiers, and error text remain operationally sensitive.
