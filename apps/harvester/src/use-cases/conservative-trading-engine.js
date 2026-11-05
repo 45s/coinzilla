@@ -1121,6 +1121,64 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const processExecutionFillTransition = async ({ order, fill } = {}) => {
+    try {
+      if (!(fill instanceof Fill)) {
+        const error = new TypeError("TRADE event requires a canonical Fill")
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
+          dataResult: mapExecutionInvalidFillData({ order, reason: "MISSING_FILL", error }),
+        })
+        return toResult({ error })
+      }
+      if (!(order instanceof CanonicalOrder)) {
+        return toResult({ error: new TypeError("Execution fill requires its registered canonical order") })
+      }
+      const symbol = order.market.symbol
+      if (fill.market.id !== order.market.id || fill.side !== order.side ||
+          fill.brokerOrderId !== order.brokerOrderId) {
+        const error = new Error("Canonical Fill identity does not match its registered order")
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
+          dataResult: mapExecutionInvalidFillData({ order, fill, reason: "IDENTITY_MISMATCH", error }),
+        })
+        await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const accounting = await updateTradingAccounting({ fill })
+      if (!accounting?.ok) {
+        const error = accounting?.errors?.[0] ?? new Error("Execution accounting failed")
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
+          dataResult: mapExecutionAccountingFailedData({ order, fill, error }),
+        })
+        await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
+        return toResult({ errors: accounting?.errors ?? [error] })
+      }
+      if (fill.side === "BUY") recordBuyExecutionFill({ fill })
+      if (fill.side === "SELL") recordSellExecutionFill({ fill })
+      if (accounting.data?.applied === true) {
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+          dataResult: mapFillAppliedData({ fill }),
+        })
+      } else if (accounting.data?.duplicate === true) {
+        publishLifecycleEvent({
+          eventPublisher,
+          eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
+          dataResult: mapDuplicateFillData({ fill }),
+        })
+      }
+      return toResult({ data: { applied: accounting.data?.applied === true, duplicate: accounting.data?.duplicate === true } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
   const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
       const order = event?.executedOrder
@@ -1156,54 +1214,8 @@ export function makeConservativeTradingEngine({
       }
 
       if (event.executionType === "TRADE") {
-        if (!(event.fill instanceof Fill)) {
-          const error = new TypeError("TRADE event requires a canonical Fill")
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
-            dataResult: mapExecutionInvalidFillData({ order, reason: "MISSING_FILL", error }),
-          })
-          throw error
-        }
-        if (event.fill.market.id !== order.market.id || event.fill.side !== order.side ||
-            event.fill.brokerOrderId !== order.brokerOrderId) {
-          const error = new Error("Canonical Fill identity does not match its registered order")
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.EXECUTION_INVALID_FILL,
-            dataResult: mapExecutionInvalidFillData({
-              order, fill: event.fill, reason: "IDENTITY_MISMATCH", error,
-            }),
-          })
-          await pause({ symbol, reason: "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH" })
-          throw error
-        }
-        const accounting = await updateTradingAccounting({ fill: event.fill })
-        if (!accounting?.ok) {
-          const error = accounting?.errors?.[0] ?? new Error("Execution accounting failed")
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.EXECUTION_ACCOUNTING_FAILED,
-            dataResult: mapExecutionAccountingFailedData({ order, fill: event.fill, error }),
-          })
-          await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
-          return toResult({ errors: accounting?.errors ?? [error] })
-        }
-        if (event.fill.side === "BUY") recordBuyExecutionFill({ fill: event.fill })
-        if (event.fill.side === "SELL") recordSellExecutionFill({ fill: event.fill })
-        if (accounting.data?.applied === true) {
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.FILL_APPLIED,
-            dataResult: mapFillAppliedData({ fill: event.fill }),
-          })
-        } else if (accounting.data?.duplicate === true) {
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.EXECUTION_DUPLICATE_FILL,
-            dataResult: mapDuplicateFillData({ fill: event.fill }),
-          })
-        }
+        const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
+        if (!fillResult.ok) return fillResult
       }
       if (update.duplicate || update.stale) {
         const isUnprocessedFill = order.status === "FILLED" &&
@@ -1540,60 +1552,32 @@ export function makeConservativeTradingEngine({
 
       for (const { ownedOrder, historyOrder, fills } of snapshots) {
         affectedSymbol = ownedOrder.market.symbol
-        let cumulativeQuantity = "0"
-        for (let index = 0; index < fills.length; index += 1) {
-          const fill = fills[index]
-          cumulativeQuantity = addDecimal({
-            left: cumulativeQuantity,
-            right: fill.quantity.amount,
-          })
-          const isFinalExecution = compareDecimal({
-            left: cumulativeQuantity,
-            right: historyOrder.executedQuantity.amount,
-          }) === 0
-          const status = isFinalExecution
-            ? historyOrder.status
-            : "PARTIALLY_FILLED"
-          const executionOrder = new CanonicalOrder({
-            clientOrderId: ownedOrder.clientOrderId,
-            brokerOrderId: ownedOrder.brokerOrderId,
-            market: historyOrder.market,
-            side: historyOrder.side,
-            type: historyOrder.type,
-            limitPrice: historyOrder.limitPrice,
-            originalQuantity: historyOrder.originalQuantity,
-            executedQuantity: new Quantity({
-              amount: cumulativeQuantity,
-              asset: historyOrder.market.baseAsset,
-            }),
-            status,
-            createdAt: historyOrder.createdAt,
-            acknowledgedAt: historyOrder.acknowledgedAt,
-            updatedAt: historyOrder.updatedAt,
-            ...(isFinalExecution && historyOrder.completedAt !== undefined
-              ? { completedAt: historyOrder.completedAt }
-              : {}),
-          })
-          const processed = await processUserDataEventTransition({
-            event: { executionType: "TRADE", executedOrder: executionOrder, fill },
-            recoveryMode,
-          })
+        const currentOrder = state.registry.getOrder({ clientOrderId: ownedOrder.clientOrderId })
+        if (!currentOrder) {
+          throw new Error("Owned order disappeared before REST fill accounting: " + ownedOrder.brokerOrderId)
+        }
+
+        // Account every exchange fill idempotently without replaying historical
+        // cumulative order quantities into a registry that may already include
+        // later stream executions. Apply the authoritative order state once,
+        // after the complete fill history has been accounted.
+        for (const fill of fills) {
+          const processed = await processExecutionFillTransition({ order: currentOrder, fill })
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
             await pause({ symbol: ownedOrder.market.symbol, reason: "REST_FILL_RECONCILIATION_FAILED", error })
             return toResult({ errors: processed.errors ?? [error] })
           }
         }
-        if (fills.length === 0) {
-          const processed = await processUserDataEventTransition({
-            event: { executedOrder: historyOrder },
-            recoveryMode,
-          })
-          if (!processed.ok) {
-            const error = processed.errors?.[0] ?? new Error("Recovered order state could not be applied")
-            await pause({ symbol: ownedOrder.market.symbol, reason: "REST_ORDER_RECONCILIATION_FAILED", error })
-            return toResult({ errors: processed.errors ?? [error] })
-          }
+
+        const processedOrder = await processUserDataEventTransition({
+          event: { executedOrder: historyOrder },
+          recoveryMode,
+        })
+        if (!processedOrder.ok) {
+          const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
+          await pause({ symbol: ownedOrder.market.symbol, reason: "REST_ORDER_RECONCILIATION_FAILED", error })
+          return toResult({ errors: processedOrder.errors ?? [error] })
         }
       }
       return toResult({ data: { reconciled: snapshots.length, symbols } })
