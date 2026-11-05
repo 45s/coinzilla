@@ -212,6 +212,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const auditReasons = data.auditReasons.map((reason, index) =>
           requireString({ value: reason, field: "auditReasons[" + index + "]" }),
         )
+        if (data.auditStatus === "COMPLETE" && auditReasons.length > 0) {
+          throw new Error("COMPLETE account snapshot cannot contain audit reasons")
+        }
+        if (data.auditStatus === "INCOMPLETE" && auditReasons.length === 0) {
+          throw new Error("INCOMPLETE account snapshot requires audit reasons")
+        }
         const snapshot = Object.freeze({
           fileName,
           phase: data.phase,
