@@ -266,15 +266,37 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
-  async getOrder({ symbol, orderId }) {
+  async getOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("Binance order lookup requires a non-empty symbol")
+      }
+      const hasOrderId = orderId !== undefined && orderId !== null
+      const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
+      if (hasOrderId === hasClientOrderId) {
+        throw new TypeError("Provide exactly one of orderId or clientOrderId")
+      }
+
+      const params = { symbol }
+      if (hasOrderId) {
+        params.orderId = orderId
+      } else {
+        if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+          throw new TypeError("Binance clientOrderId must be a non-empty string")
+        }
+        params.origClientOrderId = clientOrderId.trim()
+      }
+
       const response = await this.tradingConnection.request(
         "order.status",
-        { symbol, orderId },
+        params,
         { signed: true },
       )
       return toResult({ data: adaptOrder(response.data) })
     } catch (error) {
+      if (error?.code === -2013 && error?.method === "order.status") {
+        return toResult({ data: null })
+      }
       handleErr({ where: "BinanceWebSocketBroker.getOrder()", error })
       return toResult({ errors: [error] })
     }
