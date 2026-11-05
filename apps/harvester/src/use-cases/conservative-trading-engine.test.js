@@ -548,14 +548,7 @@ test("publishes actionable decisions and order submission facts around broker I/
 
 test("order intent publication failure prevents a broker order", async () => {
   const { engine, orders, pauses } = await createHarness({
-    eventPublisher: {
-      publish: (event) => {
-        if (event.name === "execution.accounting_failed" || event.name === "strategy.paused") {
-          throw new Error("observer unavailable")
-        }
-        return { ok: true }
-      },
-    },
+    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -1296,7 +1289,14 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
 test("EventBus failure cannot interrupt accounting failure pause handling", async () => {
   const { engine, pauses } = await createHarness({
     accountingFailure: true,
-    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "execution.accounting_failed" || event.name === "strategy.paused") {
+          throw new Error("observer unavailable")
+        }
+        return { ok: true }
+      },
+    },
   })
   await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   const order = engine.getOrders()[0]
