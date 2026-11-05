@@ -1162,3 +1162,21 @@ This is deliberately a fail-closed interim gate, not a claim that restart recove
 - [~] Release the lock only after runtime stop and Journal shutdown are confirmed; retain it when either is uncertain.
 - [~] Never auto-reclaim stale locks; require operator verification.
 - [ ] Consider a machine/account-scoped lock independent of Journal directory configuration if multi-directory same-account deployments become supported.
+
+
+## P0 — Durable restart recovery (current engineering work)
+
+- [x] PR #568 — local single-writer process ownership; lock is acquired before Journal recovery and broker connection, and retained after uncertain runtime/Journal shutdown.
+- [x] Validate persisted Journal records into a strict immutable projection of order submission/cancellation intents, broker/client identities, exact fills, duplicate execution identities, recovery-cycle completions, strategy pauses, account snapshots, open-order snapshots, and session shutdown outcomes (PR #577).
+- [x] Rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and pending replacement intent from the validated projection (PR #577).
+- [x] Pass validated pre-start Journal records into Harvester bootstrap; reconstruct in-memory state after canonical market metadata is loaded and before user-data subscription.
+- [x] Add regression coverage proving malformed Journal recovery prevents user-data subscription and broker workflow startup.
+- [ ] Reconcile every restored owned order against canonical exchange order history and complete paginated fill history, including UNKNOWN submission/cancellation outcomes.
+- [ ] Reconcile account-wide open orders against restored ownership; reject unknown, missing, duplicate, or contradictory exchange orders.
+- [ ] Reconcile free/locked balances and aggregate reservations against replayed active Positions and pending commitments.
+- [ ] Wire recovery reconciliation into startup readiness. Keep the interim trading-history gate until every canonical read-only reconciliation succeeds.
+- [ ] Add crash-boundary/restart tests for submission, acknowledgement, fill, cancellation, replacement, cycle completion, reservation, and shutdown.
+- [ ] Add repeat-recovery idempotency and fail-closed sequence/truncation/contradiction tests.
+- [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
+
+**Current safety boundary:** PR #577 rehydrates offline domain state, but startup still blocks trading when prior trading history exists. Canonical exchange reconciliation, account-wide ownership/reservation reconciliation, and restart readiness are not complete. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
