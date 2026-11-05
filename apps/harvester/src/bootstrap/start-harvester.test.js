@@ -770,7 +770,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
     logger: {
       info() {},
       error: (entry) => {
-        if (entry?.message === "Harvester application recovery failed; trading remains blocked") {
+        if (entry?.message === "application recovery failed; trading remains blocked") {
           resolveFailure(entry)
         }
       },
@@ -830,7 +830,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
     logger: {
       info() {},
       error: (entry) => {
-        if (entry?.message === "Harvester application recovery failed; trading remains blocked") {
+        if (entry?.message === "application recovery failed; trading remains blocked") {
           resolveStaleFailure(entry)
         }
       },
@@ -1473,13 +1473,13 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     errors: runtimeErrors,
   }))
   assert.ok(runtimeDebug.some(({ message, tradeId }) =>
-    message === "Harvester accounting execution applied" && tradeId === "testnet-buy-fill"))
+    message === "Execution accounted" && tradeId === "testnet-buy-fill"))
   assert.ok(runtimeDebug.some(({ message, tradeId }) =>
-    message === "Harvester accounting execution applied" && tradeId === "testnet-sell-fill"))
+    message === "Execution accounted" && tradeId === "testnet-sell-fill"))
   assert.ok(runtimeDebug.some(({ message }) =>
-    message === "Harvester recovery completion evaluation input"))
+    message === "recovery completion evaluation input"))
   assert.ok(runtimeDebug.some(({ message }) =>
-    message === "Harvester recovery cycle completed and inventory allocated"))
+    message === "Recovery cycle completed"))
   await subscriptions.get("BTCUSDT")({
     eventType: "aggTrade",
     symbol: "BTCUSDT",
@@ -1551,12 +1551,12 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.ok(systemMessages.includes("Book ticker subscribed"))
   assert.ok(systemMessages.includes("Market data subscribed"))
   const marketEvent = debugCalls.find(({ message, price }) =>
-    message === "Harvester market price event received" && price === "65000.12")
+    message === "market price event received" && price === "65000.12")
   const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
-    message === "Harvester Conservative evaluation started" &&
+    message === "Conservative evaluation started" &&
     marketEventId === marketEvent?.marketEventId)
   const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
-    message === "Harvester Conservative evaluation decided" &&
+    message === "Conservative evaluation decided" &&
     evaluationId === evaluationStarted?.evaluationId)
   assert.ok(marketEvent)
   assert.ok(evaluationStarted)
