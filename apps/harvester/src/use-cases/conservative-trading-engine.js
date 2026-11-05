@@ -1386,6 +1386,7 @@ export function makeConservativeTradingEngine({
           })
           const processed = await processUserDataEventTransition({
             event: { executionType: "TRADE", executedOrder: executionOrder, fill },
+            recoveryMode,
           })
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
