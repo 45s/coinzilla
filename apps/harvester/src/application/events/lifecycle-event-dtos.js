@@ -475,7 +475,7 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
     phase, observedAt, orders, readiness, blockReasons = [],
   }) => {
-    if (!["OPENING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING or PREFLIGHT")
+    if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
     if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
       throw new TypeError("observedAt must be a non-negative safe integer")
     }
@@ -542,12 +542,12 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     }
   })
 
-/** Map all exchange-returned balances into an exact-decimal account audit event. */
+/** Map configured trading-pair balances into an exact-decimal account audit event. */
 export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
-    phase, snapshot, auditStatus = "COMPLETE", auditReasons = [],
+    phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
   }) => {
-    if (!["OPENING", "CLOSING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, or PREFLIGHT")
+    if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
     if (!snapshot || !Array.isArray(snapshot.balances) || !Number.isSafeInteger(snapshot.sourceTime)) {
       throw new TypeError("snapshot must contain sourceTime and canonical balances")
@@ -555,7 +555,19 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
       throw new TypeError("auditReasons must contain non-empty strings")
     }
-    const balances = snapshot.balances.map((balance, index) => {
+    if (allowedAssetCodes !== undefined && (!Array.isArray(allowedAssetCodes) || allowedAssetCodes.some((code) => typeof code !== "string" || !code.trim()))) {
+      throw new TypeError("allowedAssetCodes must contain non-empty asset codes")
+    }
+    const allowedAssets = allowedAssetCodes === undefined ? undefined : new Set(allowedAssetCodes)
+    const selectedBalances = allowedAssets === undefined
+      ? snapshot.balances
+      : snapshot.balances.filter((balance) => allowedAssets.has(balance?.asset?.code))
+    if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
+      const found = new Set(selectedBalances.map((balance) => balance.asset.code))
+      const missing = [...allowedAssets].filter((code) => !found.has(code))
+      throw new TypeError("snapshot is missing configured assets: " + missing.join(", "))
+    }
+    const balances = selectedBalances.map((balance, index) => {
       const asset = requireString({ value: balance?.asset?.code, field: "balances[" + index + "].asset.code" })
       const free = requireDecimalString({ value: balance?.free?.amount, field: "balances[" + index + "].free" })
       const locked = requireDecimalString({ value: balance?.locked?.amount, field: "balances[" + index + "].locked" })

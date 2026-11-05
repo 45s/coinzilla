@@ -476,30 +476,305 @@ test("does not adopt an external order report received before the ownership regi
   assert.ok(calls.includes("disconnect"))
 })
 
-test("requires authoritative reconciliation after a user-data stream recovery", async () => {
-  const broker = createBroker()
+test("starts application reconciliation on transport recovery and acknowledges only after durable audits", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  let openOrderReads = 0
+  const getOpenOrders = broker.getOpenOrders
+  broker.getOpenOrders = async (input) => {
+    openOrderReads += 1
+    return getOpenOrders(input)
+  }
+  const journalEvents = []
+  const eventPublisher = {
+    publish: (event) => { journalEvents.push(event); return { ok: true } },
+    flush: async () => ({ ok: true, durable: true }),
+  }
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => {
+    resolveAcknowledgement = resolve
+  })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            subscriptionId: 17,
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
-    env: binanceEnv,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: { info() {}, error() {} },
+  })
+
+  assert.equal(result.userDataReady, true)
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+
+  await waitForTestSignal(
+    acknowledged,
+    "application recovery acknowledgement",
+    () => ({ acknowledgementCount, userDataReady: result.userDataReady }),
+    2_000,
+  )
+
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(result.userDataReady, true)
+  assert.equal(calls.filter((call) => call === "account:snapshot").length, 2)
+  assert.equal(openOrderReads, 2)
+  assert.ok(journalEvents.some((event) =>
+    event.name === "account.snapshot_captured" && event.data.phase === "RECOVERY"))
+  assert.ok(journalEvents.some((event) =>
+    event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"))
+
+  // A repeated reminder for the already-acknowledged generation is stale.
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(calls.filter((call) => call === "account:snapshot").length, 2)
+  assert.equal(result.userDataReady, true)
+  await result.stop()
+})
+
+test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let accountReads = 0
+  let openOrderReads = 0
+  const getOpenOrders = broker.getOpenOrders
+  broker.getOpenOrders = async (input) => {
+    openOrderReads += 1
+    return getOpenOrders(input)
+  }
+  broker.getAccountSnapshot = async () => {
+    accountReads += 1
+    if (accountReads === 2) {
+      broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+    }
+    return getAccountSnapshot()
+  }
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     logger: { info() {}, error() {} },
   })
 
   broker.emitUserDataStatus({
     type: "recovered",
+    subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
-  assert.equal(result.userDataReady, false)
+  await waitForTestSignal(acknowledged, "recovery after user-data audit event", () => ({
+    accountReads,
+    openOrderReads,
+    acknowledgementCount,
+  }), 2_000)
+
+  assert.equal(accountReads, 3)
+  assert.equal(openOrderReads, 3)
+  assert.equal(acknowledgementCount, 1)
+  assert.equal(result.userDataReady, true)
+  await result.stop()
+})
+
+test("logs stack and cause details when a user-data RPC error has an empty message", async () => {
+  const broker = createBroker()
+  const diagnostics = []
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      error: (entry) => diagnostics.push(entry),
+    },
+  })
+  const error = new TypeError("")
+  error.cause = new Error("socket callback failed")
+  broker.emitUserDataStatus({ type: "rpcError", error, recoveryRequired: false })
+
+  const diagnostic = diagnostics.find((entry) =>
+    entry?.message === "Binance user-data transport reported an error")
+  assert.ok(diagnostic)
+  assert.equal(diagnostic.statusType, "rpcError")
+  assert.equal(diagnostic.errorName, "TypeError")
+  assert.equal(diagnostic.errorMessage, "(empty error message)")
+  assert.match(diagnostic.errorStack, /TypeError/)
+  assert.equal(diagnostic.causeName, "Error")
+  assert.equal(diagnostic.causeMessage, "socket callback failed")
+  assert.match(diagnostic.causeStack, /socket callback failed/)
+  await result.stop()
+})
+
+test("keeps recovery blocked and does not acknowledge when the fresh account snapshot fails", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let accountReads = 0
+  broker.getAccountSnapshot = async () => {
+    accountReads += 1
+    if (accountReads === 2) return { ok: false, errors: [new Error("account endpoint unavailable")] }
+    return getAccountSnapshot()
+  }
+  let acknowledgementCount = 0
+  let resolveFailure
+  const failed = new Promise((resolve) => { resolveFailure = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => { acknowledgementCount += 1; return true },
+      },
+    }
+  }
+
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      info() {},
+      error: (entry) => {
+        if (entry?.message === "Harvester application recovery failed; trading remains blocked") {
+          resolveFailure(entry)
+        }
+      },
+    },
+  })
 
   broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
   })
+  await waitForTestSignal(failed, "failed recovery audit", () => ({ accountReads, acknowledgementCount }), 2_000)
+
+  assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  assert.equal(result.placeOrder, undefined)
-  assert.equal(result.broker, undefined)
+  await result.stop()
+})
+
+test("does not acknowledge a stale recovery after a newer disconnect", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let accountReads = 0
+  let releaseRecoverySnapshot
+  let resolveRecoverySnapshotStarted
+  const recoverySnapshotStarted = new Promise((resolve) => { resolveRecoverySnapshotStarted = resolve })
+  const recoverySnapshotGate = new Promise((resolve) => { releaseRecoverySnapshot = resolve })
+  broker.getAccountSnapshot = async () => {
+    accountReads += 1
+    if (accountReads === 2) {
+      resolveRecoverySnapshotStarted()
+      await recoverySnapshotGate
+    }
+    return getAccountSnapshot()
+  }
+  let acknowledgementCount = 0
+  let resolveStaleFailure
+  const staleFailure = new Promise((resolve) => { resolveStaleFailure = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => { acknowledgementCount += 1; return true },
+      },
+    }
+  }
+
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      info() {},
+      error: (entry) => {
+        if (entry?.message === "Harvester application recovery failed; trading remains blocked") {
+          resolveStaleFailure(entry)
+        }
+      },
+    },
+  })
+
+  broker.emitUserDataStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  await waitForTestSignal(recoverySnapshotStarted, "recovery account snapshot", () => ({ accountReads }), 2_000)
+  broker.emitUserDataStatus({ type: "connectionClosed", code: 1006, recoveryRequired: true })
+  releaseRecoverySnapshot()
+  await waitForTestSignal(staleFailure, "stale recovery rejection", () => ({ accountReads, acknowledgementCount }), 2_000)
+
+  assert.equal(acknowledgementCount, 0)
+  assert.equal(result.userDataReady, false)
   await result.stop()
 })
 
@@ -1401,6 +1676,29 @@ test("logs safe correlation details when an execution report is not owned", asyn
 
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: {
@@ -1416,26 +1714,17 @@ test("reconciles the in-memory order registry before reopening trading after str
   assert.equal(result.userDataReady, true)
   broker.emitUserDataStatus({
     type: "recovered",
+    subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
   assert.equal(result.userDataReady, false)
+  await waitForTestSignal(acknowledged, "broker recovery acknowledgement", () => ({
+    acknowledgementCount,
+    userDataStatus: result.userDataStatus,
+  }), 2_000)
 
-  broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
-    reconciliationRequired: true,
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(result.userDataReady, false)
-
-  broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
-    reconciliationRequired: false,
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-
+  assert.equal(acknowledgementCount, 1)
   assert.equal(result.userDataReady, true)
   assert.equal(result.userDataStatus, "READY")
   await result.stop()
