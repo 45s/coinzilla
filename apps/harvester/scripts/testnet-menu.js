@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process"
 import { createInterface, emitKeypressEvents } from "node:readline"
+import { createInterface as createPromptInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
 import { pathToFileURL } from "node:url"
 
@@ -7,10 +8,11 @@ import {
   buildTestnetMenuArguments,
   PROMPT_DEFAULTS,
   TESTNET_MENU_ACTIONS,
+  normalizePromptAnswer,
 } from "./testnet-menu-utils.js"
 
 const prompt = async (question) => {
-  const readline = createInterface({ input: stdin, output: stdout })
+  const readline = createPromptInterface({ input: stdin, output: stdout })
   try {
     return await readline.question(question)
   } finally {
@@ -26,7 +28,7 @@ const collectArguments = async (action) => {
       ? { symbol: "DOGEUSDT", limit: "1000" }[key] ?? value
       : value
     const answer = await prompt(`${label}${actionDefault ? ` [${actionDefault}]` : ""}: `)
-    answers[key] = answer.trim() || actionDefault
+    answers[key] = normalizePromptAnswer(answer, actionDefault)
   }
   return buildTestnetMenuArguments({ actionId: action.id, answers })
 }
@@ -55,7 +57,7 @@ const runAction = async (action) => {
     stdout.write("\nWARNING: this cancels every open TESTNET order on every symbol.\n")
     stdout.write("Stop Harvester and any other trading process before continuing.\n")
     const confirmation = await prompt('Type "CANCEL ALL OPEN TESTNET ORDERS" to continue: ')
-    if (confirmation.trim() !== "CANCEL ALL OPEN TESTNET ORDERS") {
+    if (normalizePromptAnswer(confirmation) !== "CANCEL ALL OPEN TESTNET ORDERS") {
       stdout.write("\nConfirmation did not match. No orders were cancelled.\n")
       await prompt("Press Enter to return to the menu...")
       return
@@ -92,7 +94,18 @@ export const runTestnetMenu = async () => {
   stdin.resume()
 
   let selectedIndex = 0
+  let menuVisible = false
+  const showMenu = () => {
+    stdout.write("\x1b[?1049h\x1b[?25l")
+    menuVisible = true
+  }
+  const hideMenu = () => {
+    stdout.write("\x1b[?25h\x1b[?1049l")
+    menuVisible = false
+  }
+
   try {
+    showMenu()
     while (true) {
       renderMenu(selectedIndex)
       const { character, key = {} } = await waitForKeypress()
@@ -113,12 +126,14 @@ export const runTestnetMenu = async () => {
       if (action.id === "exit") return
 
       stdin.setRawMode(false)
-      stdout.write("\x1b[2J\x1b[H")
+      hideMenu()
       await runAction(action)
       stdin.setRawMode(true)
+      showMenu()
     }
   } finally {
     stdin.setRawMode(false)
+    if (menuVisible) hideMenu()
     stdout.write("\n")
   }
 }

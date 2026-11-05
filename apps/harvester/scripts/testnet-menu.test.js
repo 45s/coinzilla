@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 
 import {
   buildTestnetMenuArguments,
+  normalizePromptAnswer,
   TESTNET_MENU_ACTIONS,
 } from "./testnet-menu-utils.js"
 
@@ -58,4 +59,12 @@ test("passes an optional journal directory only when supplied", () => {
     }),
     ["test-logs"],
   )
+})
+
+test("normalizes prompt answers safely when input is missing or blank", () => {
+  assert.equal(normalizePromptAnswer(undefined), "")
+  assert.equal(normalizePromptAnswer(null), "")
+  assert.equal(normalizePromptAnswer("  "), "")
+  assert.equal(normalizePromptAnswer("  DOGEUSDT  "), "DOGEUSDT")
+  assert.equal(normalizePromptAnswer(undefined, "DOGEUSDT"), "DOGEUSDT")
 })
