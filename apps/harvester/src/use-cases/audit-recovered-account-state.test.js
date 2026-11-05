@@ -384,7 +384,7 @@ test("rejects an incomplete durable PREFLIGHT baseline even when current balance
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /baseline account snapshot is incomplete/)
+  assert.match(result.errors[0].message, /PREFLIGHT account snapshot is incomplete/)
 })
 
 
