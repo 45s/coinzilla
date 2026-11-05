@@ -1532,8 +1532,6 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
     bestAskQuantity: "1",
     timestamp: 123,
   })
-  const infoCalls = calls.filter(({ level }) => level === "info")
-  const infoMessages = infoCalls.map(({ message }) => message)
   const systemMessages = calls.filter(({ level }) => level === "system").map(({ message }) => message)
   const debugCalls = calls.filter(({ level }) => level === "debug")
   const marketEvaluations = debugCalls.filter(({ message }) => message === "Market price evaluated")
