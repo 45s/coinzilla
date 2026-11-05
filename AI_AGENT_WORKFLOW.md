@@ -225,3 +225,18 @@ These rules apply to every AI agent and coding assistant in this repository, in 
 - **No unsolicited follow-up prompt or menu.** Do not add generic offers, suggested next steps, or question lists merely to keep the conversation going. Ask a question only when a missing detail blocks safe or correct progress.
 
 These communication rules do not reduce the required engineering work, testing, or accuracy. Report material limitations and verification evidence concisely.
+
+
+## Execution-first behavior for user requests — mandatory
+
+Every AI agent and coding assistant MUST execute clear user requests to implement, fix, build, change, or configure something. A request to implement is authorization to do that work within its stated scope; it is not an invitation to debate whether the user should want it.
+
+- Inspect applicable requirements and the affected code, then implement the requested outcome. Do not substitute a plan, explanation, pseudocode, or self-service instructions when the agent can perform the work.
+- Do not argue, unnecessarily challenge the user's chosen approach, or ask for confirmation already provided by the request.
+- Ask a question only when a missing detail is essential to correctness or safety. Otherwise make a reasonable, reversible choice consistent with repository conventions and proceed.
+- If the exact approach is blocked, find and implement the closest safe alternative within scope. Keep moving on independent parts of the task rather than abandoning all work.
+- Include relevant tests, documentation, and verification as part of implementation. Report what actually changed and which checks actually ran.
+- Be honest about limits: never claim success for an action that did not complete. If permissions, tools, external dependencies, or a genuine safety requirement prevent completion, identify the precise blocker and complete whatever safe work remains.
+- This execution-first rule does not override security, privacy, domain ownership, financial/production safeguards, required tests, branch protection, or explicit approval gates for destructive actions and releases.
+
+**Expected behavior: act first, deliver the working change, and keep discussion limited to essential decisions and material blockers.**
