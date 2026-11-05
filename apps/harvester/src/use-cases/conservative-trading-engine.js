@@ -1451,6 +1451,14 @@ export function makeConservativeTradingEngine({
           }
           return left.tradeId.localeCompare(right.tradeId)
         })
+        const expectedJournalFillIds = [...state.journalFillsById.values()]
+          .filter((journalFill) => journalFill.brokerOrderId === ownedOrder.brokerOrderId)
+          .map((journalFill) => journalFill.fillId)
+        for (const expectedFillId of expectedJournalFillIds) {
+          if (!fillsById.has(expectedFillId)) {
+            throw new Error("REST fill history is missing durable Journal execution ID " + expectedFillId)
+          }
+        }
         const reconciledQuantity = fills.reduce(
           (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
           "0",
