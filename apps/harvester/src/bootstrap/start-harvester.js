@@ -18,6 +18,11 @@ import { updateTradingAccounting as applyTradingAccounting } from "../use-cases/
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
+  createPortfolioLogSummary,
+  createPositionLogSummary,
+  createRecoveryLedgerLogSummary,
+} from "../application/logging/trading-state-log-summary.js"
+import {
   mapBrokerConnectedData,
   mapBrokerConnectionFailedData,
   mapBrokerDisconnectedData,
@@ -126,8 +131,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       activeOrders: input.activeOrders,
       pairConfig: input.pairConfig,
       settings: input.settings,
-      portfolio: portfolio.value,
-      recoveryLedger: recoveryLedger?.value ?? null,
+      portfolio: createPortfolioLogSummary({ portfolio, marketId }),
+      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
     })
     const decision = evaluateStrategy(input)
     logger.debug?.({
@@ -137,7 +142,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       reason: decision?.reason,
       actions: decision?.actions,
       position: decision?.position,
-      recoveryLedger: recoveryLedger?.value ?? null,
+      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
     })
     return decision
   }
@@ -179,8 +184,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         quoteQuantity: fill.quoteQuantity?.amount,
         commissionStatus: fill.commissionStatus,
         commissions: commissionFacts,
-        previousPosition: previousPosition?.value ?? null,
-        previousRecoveryLedger: currentLedger.value,
+        previousPosition: createPositionLogSummary({ position: previousPosition }),
+        previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
       })
 
       const result = applyTradingAccounting({
@@ -200,8 +205,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           symbol: fill.market.symbol,
           applied: result.data.applied,
           duplicate: result.data.duplicate,
-          nextPosition: nextPosition?.value ?? null,
-          nextRecoveryLedger: nextLedger.value,
+          nextPosition: createPositionLogSummary({ position: nextPosition }),
+          nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: nextLedger }),
           accountingDelta: {
             portfolioActiveBase: subtractDecimal({
               left: nextPosition?.baseQuantity.amount ?? "0",
@@ -244,8 +249,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
             message: error?.message ?? String(error),
             stack: error?.stack,
           })),
-          unchangedPortfolio: previousPortfolio.value,
-          unchangedRecoveryLedger: currentLedger.value,
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId }),
+          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
         })
       }
       return result
@@ -280,8 +285,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           marketId,
           symbol: recoveryLedger.market.symbol,
           completionInput,
-          position: position.value,
-          recoveryLedger: recoveryLedger.value,
+          position: createPositionLogSummary({ position }),
+          recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
         })
         const completion = evaluateRecoveryCompletion(completionInput)
         if (completion.eligible) {
@@ -295,10 +300,10 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
-            previousPosition: previousPortfolio.getPosition({ marketId })?.value ?? null,
-            nextPosition: portfolio.getPosition({ marketId })?.value ?? null,
-            previousRecoveryLedger: previousLedger.value,
-            nextRecoveryLedger: resetLedger.value,
+            previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
+            nextPosition: createPositionLogSummary({ position: portfolio.getPosition({ marketId }) }),
+            previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
+            nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
           })
         } else {
           logger.debug?.({
@@ -306,8 +311,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
             marketId,
             symbol: recoveryLedger.market.symbol,
             completion,
-            unchangedPosition: position.value,
-            unchangedRecoveryLedger: recoveryLedger.value,
+            unchangedPosition: createPositionLogSummary({ position }),
+            unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
           })
         }
         return toResult({ data: completion })
@@ -318,8 +323,8 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           errorName: error?.name,
           errorMessage: error?.message ?? String(error),
           errorStack: error?.stack,
-          unchangedPortfolio: portfolio.value,
-          unchangedRecoveryLedger: recoveryLedger.value,
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
+          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
         })
         return toResult({ error })
       }
