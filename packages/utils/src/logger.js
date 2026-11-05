@@ -63,6 +63,14 @@ function validateTransport(transport) {
   }
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
+    return value
+  }
+  Object.values(value).forEach(deepFreeze)
+  return Object.freeze(value)
+}
+
 function createConsoleTransport() {
   return {
     name: 'console',
@@ -111,7 +119,7 @@ export class Logger {
       throw new TypeError('onTransportError must be a function')
     }
 
-    this.transports = new Map()
+    this.#transports = new Map()
     this.onTransportError = onTransportError ?? (({ transport, error }) => {
       console.error('Logger transport failed', { transport, error })
     })
@@ -187,7 +195,7 @@ export class Logger {
       return false
     }
     this.transports.delete(name)
-    await this.closeTransport({ name, transport: configuration.transport })
+    await this.#closeTransport({ name, transport: configuration.transport })
     return true
   }
 
@@ -209,12 +217,12 @@ export class Logger {
     }
     return Promise.resolve()
       .then(() => transport.close())
-      .catch((error) => this.reportTransportError({ transport: name, error }))
+      .catch((error) => this.#reportTransportError({ transport: name, error }))
   }
 
   reportTransportError(context) {
     try {
-      const result = this.onTransportError(context)
+      const result = this.#onTransportError(context)
       if (result && typeof result.then === 'function') {
         Promise.resolve(result).catch((error) => {
           try {
@@ -233,13 +241,13 @@ export class Logger {
     }
   }
 
-  log(data, method) {
+  #log(data, method) {
     const level = METHOD_LEVEL[method]
     const entry = Object.freeze({
       timestamp: new Date().toISOString(),
       level,
       method,
-      data: normalizeLogData(data),
+      data: deepFreeze(normalizeLogData(data)),
     })
 
     for (const [name, configuration] of this.transports) {
@@ -265,7 +273,7 @@ export class Logger {
   }
 
   trace(data) {
-    this.log(data, 'trace')
+    this.#log(data, 'trace')
   }
 
   debug(data) {
