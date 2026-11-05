@@ -730,6 +730,26 @@ export async function startHarvester({
   }
 
   try {
+    for (const [symbol, pairConfig] of Object.entries(pairs)) {
+      if (!pairConfig.enabled) continue
+
+      const filtersResult = await broker.getSymbolFilters({ symbol })
+      if (!filtersResult?.ok || !filtersResult.data) {
+        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error(
+          "Unable to load required exchange trading rules for " + symbol +
+          (details ? ": " + details : ""),
+        )
+      }
+      const validatedMetadata = validateMarketTradingReadiness({
+        symbol,
+        pairConfig,
+        marketMetadata: filtersResult.data,
+      })
+      marketMetadata.set(symbol, validatedMetadata)
+      logger.info?.({ message: "Exchange trading rules validated", symbol })
+    }
+
     // Durable Journal replay is intentionally disabled. Harvester starts with
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
@@ -1140,6 +1160,9 @@ export async function startHarvester({
       ])
       if (userDataAccountingFailed || unsafeUserDataStatuses.has(userDataStatus)) {
         throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
+      }
+      if (userDataRequiresReconciliation) {
+        throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
       }
       const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
       const symbol = enabledPairs[0][0]
