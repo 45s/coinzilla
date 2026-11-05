@@ -116,6 +116,7 @@ export async function main({
   let eventBus
   let journalService
   let processLock
+  let runtimeStartAttempted = false
   try {
     eventBus = createEventBus({ logger })
     if (env.HARVESTER_ENABLE_TRADING === "true") {
@@ -179,6 +180,7 @@ export async function main({
       }
     }
 
+    runtimeStartAttempted = true
     const runtime = await start({ eventPublisher })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
@@ -262,7 +264,13 @@ export async function main({
       eventName: HARVESTER_EVENT_NAMES.STARTUP_FAILED,
       dataResult: mapHarvesterStartupFailedData({ stage: "process-startup", error }),
     })
-    const cleanupErrors = await closeObservability({ journalService, eventBus, processLock, logger })
+    const cleanupErrors = await closeObservability({
+      journalService,
+      eventBus,
+      processLock,
+      allowProcessLockRelease: !runtimeStartAttempted,
+      logger,
+    })
     if (cleanupErrors.length > 0) process.exitCode = 1
     try {
       logger.error({
