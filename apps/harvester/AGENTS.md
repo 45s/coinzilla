@@ -4,6 +4,12 @@ These instructions apply to all work in `apps/harvester/` and take precedence ov
 
 
 ## Mandatory trading-only work gate
+## Mandatory documentation and requirements preflight
+
+Before every Harvester task— including investigation, debugging, tests, documentation, configuration, and implementation—complete the repository-root documentation preflight. Read in full all repository-wide governance/engineering requirements and applicable checklists, then inventory and read **all applicable Harvester documentation and requirements**, including this file, [TRADING_FIRST.md](./docs/TRADING_FIRST.md), [ROADMAP.md](./ROADMAP.md), architecture and domain specifications, broker/API contracts, operational and TESTNET runbooks, configuration documentation, and relevant test guidance. Follow their links/references recursively and inspect the affected implementation, consumers, tests, and configuration. Do not rely on summaries, prior conversations, search snippets, or another agent's claimed review.
+
+Before any implementation or state-changing action, provide a concise preflight summary: documents reviewed, understood requirements/constraints, exact acceptance criteria, planned verification, and any conflicts or blockers. **Do not begin work until the review is complete and you can explain the requirements.** If a required document is missing, inaccessible, unclear, or contradictory, stop and report it. This preflight does not relax or supersede the trading-only hard stop below.
+
 
 Before every Harvester task, follow [the non-negotiable hard stop and bulletproof acceptance gate](./docs/TRADING_FIRST.md#non-negotiable-hard-stop--trading-app-only). Until that gate passes, work ONLY on the trading workflow. Do not start Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactors, optimizations, or unrelated features. A narrow safety fix is allowed only to prevent a specific immediate material risk in the current order flow; prove the direct blocker, make the smallest fix, test it, and return to trading. Roadmap entries and old approvals do not override this gate.
 
