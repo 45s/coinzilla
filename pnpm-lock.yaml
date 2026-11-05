@@ -247,6 +247,8 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
+  packages/db: {}
+
   packages/notifiers: {}
 
   packages/utils: {}
