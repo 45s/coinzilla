@@ -2188,7 +2188,10 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
     executedQuantity: "0.5",
     updatedAt: 4,
   })
-  broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.5" })],
+  })
   broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
   broker.getFills = async () => ({ ok: true, data: [laterStreamFill, earlierFill] })
 
