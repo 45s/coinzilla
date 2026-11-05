@@ -698,4 +698,10 @@ test("maps complete account-wide open orders and blocks trading while any are un
   assert.equal(mapAccountOpenOrdersCapturedData({
     phase: "OPENING", observedAt: 1, orders: [order], readiness: "READY",
   }).ok, false)
+  assert.equal(mapAccountOpenOrdersCapturedData({
+    phase: "OPENING", observedAt: 1, orders: [order], readiness: "RECONCILED",
+  }).ok, true)
+  assert.equal(mapAccountOpenOrdersCapturedData({
+    phase: "OPENING", observedAt: 1, orders: [], readiness: "RECONCILED",
+  }).ok, false)
 })
