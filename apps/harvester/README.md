@@ -307,17 +307,19 @@ the repository root:
 # Read-only: list open orders across all symbols
 pnpm --filter @coinzilla/harvester testnet:orders
 
-# Destructive: cancel all open orders across all symbols after exact confirmation
+# Destructive: automatically cancel all open orders across all symbols
 pnpm --filter @coinzilla/harvester testnet:cancel-orders
 ```
 
 **Before cancellation:** stop Harvester and every other process that may
-submit/manage orders. The cancellation command displays the initial order
-list, requires typing `CANCEL ALL TESTNET ORDERS`, cancels per symbol, and
-queries the account again to verify the result. It targets orders from all
+submit/manage orders. Review the account first with the read-only
+`testnet:orders` command. The cancellation command automatically cancels
+orders per symbol without an interactive confirmation, then queries the
+account again to verify the result. It targets every order from all
 applications and must not be used if any open order should be preserved.
-It does not clear existing asset balances or bypass Harvester's clean-account
-checks.
+Invoking the command authorizes account-wide cancellation on Binance Spot
+TESTNET. It does not clear existing asset balances or bypass Harvester's
+clean-account checks.
 
 See [Binance TESTNET order scripts](./docs/testnet-order-tools.md) for
 permissions, exact behavior, safety warnings, and troubleshooting.
