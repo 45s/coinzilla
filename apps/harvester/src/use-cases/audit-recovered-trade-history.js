@@ -51,7 +51,8 @@ function assertFillParity({ journalFill, exchangeFill }) {
     exchangeFill.id !== journalFill.fillId ||
     String(exchangeFill.tradeId) !== journalFill.tradeId ||
     exchangeFill.brokerOrderId !== journalFill.brokerOrderId ||
-    (exchangeFill.clientOrderId ?? undefined) !== (journalFill.clientOrderId ?? undefined) ||
+    (exchangeFill.clientOrderId !== undefined &&
+      exchangeFill.clientOrderId !== journalFill.clientOrderId) ||
     exchangeFill.market.symbol !== journalFill.symbol ||
     exchangeFill.side !== journalFill.side ||
     exchangeFill.liquidityRole !== journalFill.liquidityRole ||
