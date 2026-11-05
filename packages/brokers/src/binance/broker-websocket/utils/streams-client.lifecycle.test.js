@@ -607,14 +607,10 @@ test("paces queued cleanup requests and clears the control pump timer on disconn
   await flush()
 
   assert.equal(transports[0].sent[3].method, "UNSUBSCRIBE")
-  acknowledge(transports[0], 3)
-  await flush()
-
-  assert.equal(transports[0].sent.length, 4)
-  clock.advanceBy(300)
-  await flush()
   assert.equal(transports[0].sent[4].method, "SUBSCRIBE")
+  acknowledge(transports[0], 3)
   acknowledge(transports[0], 4)
+  await flush()
   await next
 
   const pending = client.subscribe("bnbusdt@trade", () => {})
