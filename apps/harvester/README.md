@@ -14,7 +14,7 @@ These are strategy modes, not separate trading engines. Shared capabilities (mar
 ## Package
 
 - Package: `@coinzilla/harvester`
-- Runtime: Node.js `>=22.23.4`
+- Runtime: Node.js `>=24`
 - Modules: native ECMAScript modules
 - Dependencies: keep minimal; add only for an agreed requirement
 
@@ -171,7 +171,7 @@ BINANCE_API_SECRET_KEY=...
 
 ### Trading-first implementation direction
 
-Harvester implements the Conservative lifecycle: subscribe to prices, submit the initial limit BUY, account canonical TRADE fills, and manage the recovery SELL from actual in-process accounting. The initial account snapshot supplies the starting free balances; subsequent order checks subtract net quote spent, add realized quote proceeds, and reserve outstanding in-process BUY/SELL commitments. SELL quantities are additionally capped by the active base inventory in Harvester's Portfolio, so external base inventory and its free/locked balances are never adopted as strategy-owned inventory. External open orders are not registered as Harvester orders; an execution report for an unowned order after engine activation remains an ownership violation and pauses the affected pair, while an order report received before the ownership registry is ready aborts trading startup. Read-only mode does not adopt external fills into Portfolio. Ordinary TRADE fills for registered Harvester orders update Portfolio and RecoveryLedger exactly once and do not trigger full account snapshots.
+Harvester implements the Conservative lifecycle: subscribe to prices, submit the initial limit BUY, account canonical TRADE fills, and manage the recovery SELL from actual in-process accounting. The initial account snapshot supplies the starting free balances; subsequent order checks subtract net quote spent, add realized quote proceeds, and reserve outstanding in-process BUY/SELL commitments. These are order-backed commitments rather than a separate reservation store: canonical PENDING orders are registered before broker I/O, and PENDING/OPEN/PARTIALLY_FILLED/UNKNOWN orders continue consuming their remaining quote or base commitment until authoritative lifecycle updates and fill accounting reconcile them. A strategy decision containing multiple orders is allocated sequentially against the remaining quote balance, pair investment limit, and Harvester-owned active base quantity before any order in that decision is submitted. SELL quantities are additionally capped by the active base inventory in Harvester's Portfolio, so external base inventory and its free/locked balances are never adopted as strategy-owned inventory. This coordination is process-local and does not provide durable restart recovery or multi-pair shared-asset allocation. External open orders are not registered as Harvester orders; an execution report for an unowned order after engine activation remains an ownership violation and pauses the affected pair, while an order report received before the ownership registry is ready aborts trading startup. Read-only mode does not adopt external fills into Portfolio. Ordinary TRADE fills for registered Harvester orders update Portfolio and RecoveryLedger exactly once and do not trigger full account snapshots.
 
 ## Controlled TESTNET runbook
 
