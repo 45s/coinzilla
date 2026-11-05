@@ -210,7 +210,7 @@ test("publishes process started and stopped events for read-only startup without
 
   const result = await main({
     createEventBus: () => eventBus,
-    createJournalService: () => ({ status: { state: "disabled" } }),
+    createJournalService: () => ({ status: { state: "disabled" }, close: async () => ({ ok: true, closed: true }) }),
     env: {},
     start: async () => ({
       connected: false,
