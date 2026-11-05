@@ -117,3 +117,78 @@ test("suppresses consecutive duplicate console entries and reports their count",
   assert.match(written, /repeated 2 additional time\(s\)/)
   output.destroy()
 })
+
+
+test("keeps INFO output concise and excludes stack traces and audit internals", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output })
+
+  transport.write({
+    timestamp: "2026-11-05T19:57:24.000Z",
+    level: "error",
+    data: {
+      message: "Harvester broker workflow startup step failed",
+      errorName: "Error",
+      errorMessage: "Conservative TESTNET startup blocked: account has 2 open orders without matching durable Harvester ownership",
+      errorStack: "Error: full stack trace with local filesystem paths and source line numbers",
+      orderCount: 2,
+      readiness: "BLOCKED",
+      symbols: ["DOGEUSDT", "ZROUSDT"],
+      sourceAssetCount: 517,
+      auditReasons: ["UNRESOLVED_OWNED_ORDERS:2"],
+      fingerprint: "{\"internal\":\"diagnostic\"}",
+    },
+  })
+
+  const line = written.trim()
+  assert.match(line, /ERROR Harvester broker workflow startup step failed/)
+  assert.match(line, /"errorMessage"/)
+  assert.match(line, /"orderCount":2/)
+  assert.doesNotMatch(line, /errorStack|sourceAssetCount|auditReasons|fingerprint|filesystem paths/)
+  assert.ok(line.length <= 200, "console line should remain bounded")
+  output.destroy()
+})
+
+
+test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: true })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    data: { message: "Harvester ready" },
+  })
+  transport.write({
+    timestamp: "2026-11-05T12:00:01.000Z",
+    level: "debug",
+    data: { message: "Detailed diagnostic" },
+  })
+
+  assert.match(written, /\u001b\[34mINFO\u001b\[0m/)
+  assert.match(written, /\u001b\[35mDEBUG\u001b\[0m/)
+  assert.match(written, /Harvester ready/)
+  assert.match(written, /Detailed diagnostic/)
+  output.destroy()
+})
+
+test("does not emit ANSI color codes when color is disabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    data: { message: "Plain terminal output" },
+  })
+
+  assert.doesNotMatch(written, /\u001b\[/)
+  assert.match(written, /INFO Plain terminal output/)
+  output.destroy()
+})
