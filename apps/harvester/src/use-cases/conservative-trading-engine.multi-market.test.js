@@ -46,7 +46,7 @@ function makeMarketMetadata(market) {
   }
 }
 
-async function createHarness() {
+async function createHarness({ quoteFreeBalance = "10000" } = {}) {
   const orders = []
   const pauses = []
   const accountedTradeIds = new Set()
@@ -124,7 +124,7 @@ async function createHarness() {
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
-        amount: "10000",
+        amount: assetId === quoteAsset.id ? quoteFreeBalance : "10000",
         asset: assetsById.get(assetId),
       }),
     }),
@@ -201,6 +201,21 @@ function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
   })
   return { executionType: "TRADE", executedOrder, fill }
 }
+
+test("shared quote-asset BUY commitments are reserved across markets", async () => {
+  const { engine, orders } = await createHarness({ quoteFreeBalance: "150" })
+  await startBothMarkets(engine)
+
+  assert.equal(orders.length, 1)
+  assert.equal(orders[0].symbol, "DOGEUSDT")
+  assert.equal(engine.getOrders().length, 1)
+
+  const solEvaluation = await engine.evaluateLatest({ symbol: "SOLUSDT" })
+  assert.equal(solEvaluation.ok, true)
+  assert.equal(solEvaluation.data.waitingForAvailableQuoteBalance, true)
+  assert.equal(solEvaluation.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
+  assert.equal(orders.length, 1)
+})
 
 test("an unowned order in one market pauses only that market and cannot block another market fill", async () => {
   const { engine, pauses, accountedFills } = await createHarness()
