@@ -139,7 +139,7 @@ export async function main({
       }
     }
 
-    const runtime = await start({ eventPublisher, journalRecoverySummary })
+    const runtime = await start({ eventPublisher })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
