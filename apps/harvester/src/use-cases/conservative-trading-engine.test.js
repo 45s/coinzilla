@@ -3427,3 +3427,53 @@ test("processes recovery-time user-data cancellation facts without broker cancel
   assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
   assert.deepEqual(harness.engine.getPausedMarkets(), [])
 })
+
+
+test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
+  const makeOrder = ({ clientOrderId, brokerOrderId, status }) => new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const ownedOrders = [
+    makeOrder({ clientOrderId: "recovered-sell-one", brokerOrderId: "broker-sell-one", status: "UNKNOWN" }),
+    makeOrder({ clientOrderId: "recovered-sell-two", brokerOrderId: "broker-sell-two", status: "UNKNOWN" }),
+  ]
+  const canceledOrders = ownedOrders.map((order) => makeOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    status: "CANCELED",
+  }))
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: ownedOrders }),
+      pausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedCancellationClientOrderIds: new Set(ownedOrders.map((order) => order.clientOrderId)),
+      replacementIntents: new Set(["DOGEUSDT"]),
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async ({ orderId }) => ({
+    ok: true,
+    data: [canceledOrders.find((order) => order.brokerOrderId === orderId)],
+  })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, [])
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  assert.deepEqual(harness.engine.getPausedMarkets(), [])
+})
