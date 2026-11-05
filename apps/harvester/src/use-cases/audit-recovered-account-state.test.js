@@ -334,3 +334,29 @@ test("accepts the broker Order shape with exact raw quantity and price fields", 
   assert.equal(result.data.openOrdersChecked, 1)
   assert.equal(result.data.reservationsChecked, 1)
 })
+
+
+test("uses the durable PREFLIGHT baseline when a crash occurs before harvester.started is journaled", () => {
+  const { projection, restored } = restoreState()
+  const crashProjection = {
+    ...projection,
+    data: {
+      ...projection.data,
+      sessions: projection.data.sessions.map((session) => ({
+        ...session,
+        tradingEnabled: false,
+        hasTradingActivity: true,
+      })),
+    },
+  }
+  const result = auditRecoveredAccountState({
+    projection: crashProjection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.balancesChecked, 2)
+})
