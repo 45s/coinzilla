@@ -80,7 +80,7 @@ The account audit event DTOs now accept the explicit `RECOVERY` phase. Regressio
 
 ### Remaining uncertainty
 
-The Journal's empty-message `TypeError` records do not establish the underlying SDK or network exception cause. The operator-reported internet outage is consistent with the WebSocket interruption, but it does not prove the TypeError's cause. This PR does not claim that the TypeError source or TESTNET behavior has been independently reproduced or validated.
+The Journal's empty-message `TypeError` records do not establish the underlying SDK or network exception cause. The operator-reported internet outage is consistent with the WebSocket interruption, but it does not prove the TypeError's cause. Harvester now logs the error name, an explicit empty-message marker, stack, and Error cause details when supplied, so a future occurrence has actionable diagnostics. This improves observability; it does not prove the original TypeError source or independently validate TESTNET behavior.
 
 ## Remaining engineering follow-up
 
