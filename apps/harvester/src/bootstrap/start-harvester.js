@@ -659,10 +659,19 @@ export async function startHarvester({
     snapshot: suppliedSnapshot,
   } = {}) => {
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
+    const configuredAssetCodes = [...new Set([...marketMetadata.values()]
+      .filter(({ market }) => enabledSymbols.includes(market.symbol))
+      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
     const published = publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult: mapAccountSnapshotCapturedData({ phase, snapshot, auditStatus, auditReasons }),
+      dataResult: mapAccountSnapshotCapturedData({
+        phase,
+        snapshot,
+        allowedAssetCodes: configuredAssetCodes,
+        auditStatus,
+        auditReasons,
+      }),
     })
     if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
     if (typeof eventPublisher?.flush === "function") {
@@ -676,7 +685,7 @@ export async function startHarvester({
     }
     logger.info?.({
       message: "Account snapshot captured and durably journaled",
-      phase, auditStatus, assetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
+      phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
     })
     return snapshot
   }
