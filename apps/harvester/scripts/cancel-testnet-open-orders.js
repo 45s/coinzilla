@@ -1,7 +1,12 @@
+import { createInterface } from "node:readline/promises"
+import { stdin, stdout } from "node:process"
+
 import {
   cancelOpenOrdersForSymbol,
   getOpenOrders,
 } from "./binance-testnet-api.js"
+
+const CONFIRMATION = "CANCEL ALL TESTNET ORDERS"
 
 const main = async () => {
   const { orders } = await getOpenOrders()
@@ -32,7 +37,21 @@ const main = async () => {
   console.log("\nWARNING: This cancels every open order on every listed symbol.")
   console.log("It can cancel orders created manually or by other applications.")
   console.log("Stop Harvester and any other trading process before continuing.")
-  console.log("\nProceeding automatically on Binance Spot TESTNET...")
+
+  const readline = createInterface({ input: stdin, output: stdout })
+
+  try {
+    const answer = await readline.question(
+      `\nType "${CONFIRMATION}" to continue: `,
+    )
+
+    if (answer.trim() !== CONFIRMATION) {
+      console.log("\nConfirmation did not match. Nothing was canceled.")
+      return
+    }
+  } finally {
+    readline.close()
+  }
 
   let cancellationFailed = false
 
