@@ -14,7 +14,7 @@ When the CLI starts, it configures three independent destinations:
 | Development diagnostics | `logs/harvester.log` | DEBUG |
 | Detailed trace | `logs/harvester-trace.log` | TRACE |
 
-Complete console lines (timestamp, level, message, and displayed details) are colored when stdout is an interactive terminal and `NO_COLOR` is not set: INFO blue, DEBUG magenta, TRACE bright magenta, SUCCESS green, SYSTEM cyan, WARN yellow, and ERROR red. `SUCCESS` and `SYSTEM` retain their semantic method labels even though both use INFO severity for transport filtering. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
+Complete console lines (timestamp, level, message, and displayed details) are colored when stdout is an interactive terminal and `NO_COLOR` is not set. INFO is blue and its label is omitted—the color already communicates the level. DEBUG remains magenta, TRACE bright magenta, SUCCESS green, SYSTEM cyan, WARN yellow, and ERROR red. `SUCCESS` and `SYSTEM` retain their semantic method labels even though both use INFO severity for transport filtering. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
 retains its timestamp, normalized severity, logging method, and redacted,
 JSON-safe structured data. A console threshold change does not change either
 file threshold.
@@ -102,11 +102,31 @@ These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
 
+
+### SYSTEM lifecycle events
+
+Use `logger.system()` for meaningful infrastructure and process lifecycle
+transitions. These are operator-visible state changes, not routine diagnostics.
+Examples include:
+
+- Journal started and closed successfully.
+- Broker/WebSocket API connected and disconnected.
+- User-data stream established or lost, and recovery completed.
+- Market/book-ticker subscriptions established and all enabled markets ready.
+- Trading engine activated after startup checks pass.
+- Process startup readiness and shutdown completion.
+
+Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
+or repeated connection-status heartbeat. Those belong at DEBUG or INFO
+according to whether they represent an operator-relevant trading event.
+SYSTEM entries are blue? No: they are cyan and keep the visible `SYSTEM`
+label, making lifecycle events easy to distinguish from ordinary INFO output.
+
 ## Runtime commands
 
 In an interactive development terminal:
 
-- `/log info` — concise INFO-and-higher console output (default).
+- `/log info` — concise INFO-and-higher console output (default); INFO messages are blue and do not print an `INFO` prefix.
 - `/log debug` — include DEBUG on the console.
 - `/log trace` — include TRACE on the console.
 - `/log status` — print the current transport configuration.
