@@ -38,9 +38,9 @@ const LEVEL_COLORS = Object.freeze({
 })
 const ANSI_RESET = "\u001b[0m"
 
-function formatLevel({ level, color }) {
-  const label = level.toUpperCase()
-  const code = LEVEL_COLORS[level]
+function formatLevel({ level, method = level, color }) {
+  const label = method.toUpperCase()
+  const code = LEVEL_COLORS[method] ?? LEVEL_COLORS[level]
   return color && code ? code + label + ANSI_RESET : label
 }
 
@@ -215,9 +215,9 @@ export async function configureHarvesterLogging({
   return {
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
-    write({ timestamp, level, data }) {
+    write({ timestamp, level, method = level, data }) {
       const summary = summarizeConsoleData({ data })
-      const fingerprint = JSON.stringify({ level, summary })
+      const fingerprint = JSON.stringify({ level, method, summary })
       if (fingerprint === previousFingerprint) {
         suppressedCount += 1
         return
@@ -228,7 +228,7 @@ export async function configureHarvesterLogging({
       previousTimestamp = timestamp
 
       const time = new Date(timestamp).toLocaleTimeString()
-      const plainPrefix = time + " " + level.toUpperCase() + " " + summary.message
+      const plainPrefix = time + " " + method.toUpperCase() + " " + summary.message
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
         : ""
@@ -242,10 +242,10 @@ export async function configureHarvesterLogging({
       const boundedLine = plainLine.length > MAX_CONSOLE_LINE_LENGTH
         ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
         : plainLine
-      const label = formatLevel({ level, color })
+      const label = formatLevel({ level, method, color })
       const levelStart = time.length + 1
       const renderedLine = color
-        ? boundedLine.slice(0, levelStart) + label + boundedLine.slice(levelStart + level.length)
+        ? boundedLine.slice(0, levelStart) + label + boundedLine.slice(levelStart + method.length)
         : boundedLine
       output.write(renderedLine + "\n")
     },
