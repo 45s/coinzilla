@@ -28,6 +28,7 @@ test("uses the injected logger when startup succeeds without a broker", async ()
   const calls = []
   const logger = {
     info: (message) => calls.push({ level: "info", message }),
+    system: (message) => calls.push({ level: "system", message }),
     error: (data) => calls.push({ level: "error", data }),
   }
 
@@ -40,8 +41,8 @@ test("uses the injected logger when startup succeeds without a broker", async ()
     })
 
     assert.deepEqual(calls, [{
-      level: "info",
-      message: "Harvester configuration validated; broker connection and market data are disabled.",
+      level: "system",
+      message: "Configuration validated; broker and market data are disabled.",
     }])
     assert.equal(process.exitCode, 0)
   } finally {
@@ -88,10 +89,10 @@ test("reports the actual Conservative TESTNET trading mode at startup", async ()
       strategyMode: "conservative",
       subscriptions: ["ZROUSDT"],
     }),
-    logger: { info: (message) => messages.push(message), error() {} },
+    logger: { info() {}, system: (message) => messages.push(message), error() {} },
   })
   assert.deepEqual(messages, [
-    "Harvester connected and subscribed to 1 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
+    "Connected; subscribed to 1 enabled market(s). Conservative TESTNET trading is enabled; waiting for validated market prices and user-data readiness.",
   ])
 })
 
@@ -107,7 +108,7 @@ test("reports broker-connected read-only mode without claiming trading is blocke
     logger: { info: (message) => messages.push(message), error() {} },
   })
   assert.deepEqual(messages, [
-    "Harvester connected and subscribed to 1 enabled market(s) in read-only mode; order execution is disabled.",
+    "Connected; subscribed to 1 enabled market(s) in read-only mode; order execution is disabled.",
   ])
 })
 
