@@ -632,7 +632,7 @@ test("allows a trading-enabled first start only with a validated empty Journal h
   }
 })
 
-test("blocks trading-enabled startup when Journal cannot read previous sessions", async () => {
+test("does not require historical Journal reads for trading startup", async () => {
   let started = false
   const previousExitCode = process.exitCode
   process.exitCode = 0
@@ -645,42 +645,42 @@ test("blocks trading-enabled startup when Journal cannot read previous sessions"
         flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
-      start: async () => { started = true; return { connected: false } },
+      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
       registerSignalHandler() {},
       logger: { info() {}, error() {}, debug() {} },
     })
-    assert.equal(started, false)
-    assert.equal(process.exitCode, 1)
+    assert.equal(started, true)
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
 })
 
-test("passes validated prior Journal history into bootstrap for domain recovery and safety gating", async () => {
-  let receivedRecords
+test("does not pass historical Journal records into bootstrap", async () => {
+  let startupInput
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
-    const records = [
-      { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
-      { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
-    ]
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: true, available: true, records }),
+        recovery: Promise.resolve({
+          ok: true,
+          available: true,
+          records: [{ id: "old-fill", payload: { name: "execution.fill_applied" } }],
+        }),
         flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
-      start: async ({ journalRecoveryRecords }) => {
-        receivedRecords = journalRecoveryRecords
+      start: async (input) => {
+        startupInput = input
         return { connected: false, tradingEnabled: false }
       },
       logger: { info() {}, error() {}, debug() {} },
     })
-    assert.deepEqual(receivedRecords, records)
+    assert.equal(Object.hasOwn(startupInput, "journalRecoveryRecords"), false)
     assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
@@ -707,7 +707,7 @@ test("allows read-only startup when prior trading history requires recovery", as
   assert.equal(started, true)
 })
 
-test("blocks trading-enabled startup when Journal history cannot be read", async () => {
+test("ignores historical Journal read failures when starting the current trading session", async () => {
   let started = false
   const previousExitCode = process.exitCode
   process.exitCode = 0
@@ -717,15 +717,15 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({ ok: false, errors: [new Error("journal read failed")] }),
+        recovery: Promise.resolve({ ok: false, errors: [new Error("legacy history is malformed")] }),
         flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
-      start: async () => { started = true; return { connected: false } },
+      start: async () => { started = true; return { connected: false, tradingEnabled: true } },
       logger: { info() {}, error() {}, debug() {} },
     })
-    assert.equal(started, false)
-    assert.equal(process.exitCode, 1)
+    assert.equal(started, true)
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
@@ -794,7 +794,7 @@ test("releases the trading process lock only after runtime and Journal shutdown"
   }
 })
 
-test("acquires the process lock before Journal recovery and releases it only after runtime and Journal shutdown", async () => {
+test("acquires the process lock before starting Journal and releases it after clean shutdown", async () => {
   const sequence = []
   let signalHandler
   const previousExitCode = process.exitCode
@@ -818,18 +818,13 @@ test("acquires the process lock before Journal recovery and releases it only aft
         sequence.push("journal")
         return {
           ready: Promise.resolve({ ok: true }),
-          recovery: Promise.resolve({
-            ok: true,
-            available: true,
-            records: [{ id: "prior", payload: { name: "account.snapshot_captured" } }],
-          }),
           flush: async () => ({ ok: true, durable: true }),
           close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
         }
       },
-      start: async ({ journalRecoveryRecords }) => {
+      start: async (input) => {
         sequence.push("start")
-        assert.equal(journalRecoveryRecords.length, 1)
+        assert.equal(Object.hasOwn(input, "journalRecoveryRecords"), false)
         return {
           connected: true,
           tradingEnabled: false,

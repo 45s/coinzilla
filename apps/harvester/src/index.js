@@ -121,7 +121,6 @@ export async function main({
   let journalService
   let processLock
   let runtimeStartAttempted = false
-  let journalRecoveryRecords = []
   try {
     eventBus = createEventBus({ logger })
     if (env.HARVESTER_ENABLE_TRADING === "true") {
@@ -167,18 +166,10 @@ export async function main({
         const details = journalReady?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error("Conservative TESTNET trading cannot start because the Journal is unavailable" + (details ? ": " + details : ""))
       }
-      if (!journalService.recovery || typeof journalService.recovery.then !== "function") {
-        throw new Error("Conservative TESTNET trading requires a validated pre-start Journal recovery snapshot")
-      }
-      const journalRecovery = await journalService.recovery
-      if (journalRecovery?.ok !== true || journalRecovery.available !== true || !Array.isArray(journalRecovery.records)) {
-        throw new Error("Conservative TESTNET trading cannot start because prior Journal history could not be read and validated")
-      }
-      journalRecoveryRecords = journalRecovery.records
     }
 
     runtimeStartAttempted = true
-    const runtime = await start({ eventPublisher, journalRecoveryRecords })
+    const runtime = await start({ eventPublisher })
     const enabledMarkets = runtime.tradingConfig?.pairs
       ? Object.entries(runtime.tradingConfig.pairs)
         .filter(([, pairConfig]) => pairConfig.enabled)
