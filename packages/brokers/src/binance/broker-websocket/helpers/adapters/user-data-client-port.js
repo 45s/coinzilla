@@ -14,15 +14,24 @@ export function createBinanceUserDataClientPort(client) {
     onEvent: (listener) => client.onEvent(listener),
     onError: (listener) => client.onError?.(listener),
     onClose: (listener) => client.onClose(listener),
-    subscribe: () => client.request(
-      "userDataStream.subscribe.signature",
-      {},
-      { signed: true },
-    ),
-    listSubscriptions: () => client.request("session.subscriptions"),
-    unsubscribe: (subscriptionId) => client.request(
-      "userDataStream.unsubscribe",
-      { subscriptionId },
-    ),
+    subscribe: async () => {
+      const response = await client.request(
+        "userDataStream.subscribe.signature",
+        {},
+        { signed: true },
+      )
+      return response.data?.subscriptionId ?? null
+    },
+    listSubscriptions: async () => {
+      const response = await client.request("session.subscriptions")
+      if (!Array.isArray(response.data)) return null
+      return response.data.map((subscription) => subscription?.subscriptionId)
+    },
+    unsubscribe: async (subscriptionId) => {
+      await client.request(
+        "userDataStream.unsubscribe",
+        { subscriptionId },
+      )
+    },
   })
 }
