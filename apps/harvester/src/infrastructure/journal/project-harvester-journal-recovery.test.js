@@ -847,3 +847,42 @@ test("recovers broker order identity from a durable cancellation intent when the
   assert.equal(result.data.orders[0].submissionOutcome, "ACKNOWLEDGED")
   assert.equal(result.data.orders[0].cancellationState, "REQUESTED")
 })
+
+
+test("accepts a RECONCILED account open-order snapshot with durable Harvester ownership", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-open-1",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "PENDING",
+      }),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "RECONCILED",
+        orderCount: 1,
+        orders: [{
+          clientOrderId: "h-BTCUSDT-open-1",
+          brokerOrderId: "9001",
+          symbol: "BTCUSDT",
+          side: "BUY",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          executedQuantity: "0",
+          status: "NEW",
+        }],
+        blockReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.openOrderSnapshots[0].readiness, "RECONCILED")
+  assert.equal(result.data.openOrderSnapshots[0].orders.length, 1)
+})
