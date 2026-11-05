@@ -586,7 +586,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         accountSnapshots: Object.freeze(accountSnapshots),
         openOrderSnapshots: Object.freeze(openOrderSnapshots),
         requiresExchangeReconciliation: orders.some((order) => order.requiresExchangeReconciliation) ||
-          fills.length > 0 || cycles.length > 0 || sessions.some((session) => session.tradingEnabled),
+          fills.length > 0 || cycles.length > 0 || pausedMarkets.size > 0 ||
+          sessions.some((session) => session.tradingEnabled || session.uncleanTradingShutdown),
       }),
     })
   } catch (error) {
