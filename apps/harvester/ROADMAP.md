@@ -1143,3 +1143,13 @@ These barriers deliberately await filesystem durability only immediately before 
 - [ ] Extend the multi-market regression matrix to cover multiple pairs sharing both quote and base assets, partial fills, UNKNOWN orders, and concurrent market events.
 
 The engine transition queue serializes decisions; this change additionally ensures serialized decisions reserve against the same account-level asset pool rather than reusing the full baseline balance for each market.
+
+
+## Restart recovery safety gate — P0 interim protection, 2026-11-05
+
+- [x] Read and validate all previous Journal sessions before opening a new writer session.
+- [x] Treat a missing Journal directory as an empty first run; fail closed on malformed, truncated, unsupported, duplicate-ID, or over-limit history.
+- [x] Refuse trading-enabled startup when any prior order, cancellation, fill, or recovery-cycle history exists; allow read-only startup for inspection.
+- [ ] Implement idempotent Portfolio and RecoveryLedger replay, restore owned order commitments, and reconcile every restored order/fill against canonical exchange history before any trading restart can be accepted.
+
+This is deliberately a fail-closed interim gate, not a claim that restart recovery is complete. Do not delete or rotate Journal files to bypass it.
