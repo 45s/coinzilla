@@ -1,8 +1,10 @@
 import { pathToFileURL } from "node:url"
+import os from "node:os"
+import path from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal, resolveJournalDirectory } from "./infrastructure/journal/prepare-optional-journal.js"
-import { acquireHarvesterProcessLock } from "./infrastructure/process-lock/acquire-harvester-process-lock.js"
+import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
@@ -103,12 +105,15 @@ const describeError = (error) => {
   return { message: String(error) }
 }
 
+const resolveHostProcessLockDirectory = () =>
+  path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
+
 export async function main({
   start = startHarvester,
   logger = defaultLogger,
   createEventBus = ({ logger: eventBusLogger } = {}) => new EventBus({ logger: eventBusLogger }),
   createJournalService = createDefaultJournalService,
-  acquireProcessLock = acquireHarvesterProcessLock,
+  acquireProcessLock = acquireHarvesterProcessLocks,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
 } = {}) {
@@ -124,7 +129,9 @@ export async function main({
         throw new Error("Conservative TESTNET trading requires HARVESTER_JOURNAL_ENABLED=true")
       }
       const lockResult = await acquireProcessLock({
-        directory: resolveJournalDirectory({ directory: env.HARVESTER_JOURNAL_DIRECTORY }),
+        journalDirectory: resolveJournalDirectory({ directory: env.HARVESTER_JOURNAL_DIRECTORY }),
+        globalDirectory: resolveHostProcessLockDirectory(),
+        broker: env.HARVESTER_BROKER || "binance",
         logger,
       })
       if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
