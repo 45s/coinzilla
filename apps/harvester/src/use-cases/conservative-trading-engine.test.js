@@ -546,17 +546,25 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.equal(events[2].data.brokerOrderId, "broker-" + clientOrderId)
 })
 
-test("EventBus publication failure cannot prevent a broker order", async () => {
-  const { engine, orders } = await createHarness({
-    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+test("order intent publication failure prevents a broker order", async () => {
+  const { engine, orders, pauses } = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "execution.accounting_failed" || event.name === "strategy.paused") {
+          throw new Error("observer unavailable")
+        }
+        return { ok: true }
+      },
+    },
   })
   const result = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(orders.length, 1)
+  assert.equal(result.ok, false)
+  assert.equal(orders.length, 0)
+  assert.ok(pauses.includes("ORDER_INTENT_NOT_DURABLE"))
 })
 
 
@@ -1620,7 +1628,12 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    eventPublisher: { publish: () => { throw new Error("journal unavailable") } },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "recovery.cycle_completed") throw new Error("journal unavailable")
+        return { ok: true }
+      },
+    },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
