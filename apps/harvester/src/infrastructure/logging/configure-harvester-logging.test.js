@@ -169,10 +169,8 @@ test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () =
     data: { message: "Detailed diagnostic" },
   })
 
-  assert.match(written, /\u001b\[34mINFO\u001b\[0m/)
-  assert.match(written, /\u001b\[35mDEBUG\u001b\[0m/)
-  assert.match(written, /Harvester ready/)
-  assert.match(written, /Detailed diagnostic/)
+  assert.match(written, /\u001b\[34m.*INFO Harvester ready\u001b\[0m/)
+  assert.match(written, /\u001b\[35m.*DEBUG Detailed diagnostic\u001b\[0m/)
   output.destroy()
 })
 
@@ -221,9 +219,9 @@ test("renders semantic SUCCESS and SYSTEM methods with distinct labels and color
   })
   transport.close()
 
-  assert.match(written, /\u001b\[32mSUCCESS\u001b\[0m/)
-  assert.match(written, /\u001b\[36mSYSTEM\u001b\[0m/)
-  assert.match(written, /\u001b\[34mINFO\u001b\[0m/)
+  assert.match(written, /\u001b\[32m.*SUCCESS Lifecycle event\u001b\[0m/)
+  assert.match(written, /\u001b\[36m.*SYSTEM Lifecycle event\u001b\[0m/)
+  assert.match(written, /\u001b\[34m.*INFO Lifecycle event\u001b\[0m/)
   assert.equal((written.match(/Lifecycle event/g) ?? []).length, 3)
   assert.doesNotMatch(written, /repeated/)
   output.destroy()
