@@ -2376,6 +2376,136 @@ test("uses the injected strategy policy instead of a hard-coded Conservative eva
 })
 
 
+test("a partial BUY fill creates active Portfolio inventory before trailing can reprice", async () => {
+  let harness
+  let repricingEvaluations = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluateTrailingBuyRepricing: (input) => {
+      repricingEvaluations += 1
+      return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
+    },
+  }
+  harness = await createHarness({
+    strategyPolicy,
+    updateTradingAccounting: async ({ fill }) => {
+      const update = harness.getCurrentPortfolio().applyFill({ fill })
+      harness.setCurrentPortfolio(update.portfolio)
+      return { ok: true, data: { applied: true, duplicate: false } }
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(buy)
+  const partialOrder = new CanonicalOrder({
+    clientOrderId: buy.clientOrderId,
+    brokerOrderId: buy.brokerOrderId,
+    market,
+    side: "BUY",
+    type: buy.type,
+    limitPrice: buy.limitPrice,
+    originalQuantity: buy.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: buy.createdAt,
+    acknowledgedAt: buy.acknowledgedAt,
+    updatedAt: 2,
+  })
+  const fill = makeBuyFill({
+    order: buy,
+    tradeId: "trailing-partial-buy-fill",
+    price: buy.limitPrice.amount,
+    quantity: "0.1",
+    quoteQuantity: multiplyDecimal({ left: buy.limitPrice.amount, right: "0.1" }),
+  })
+  const applied = await harness.engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: partialOrder, fill },
+  })
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.1")
+
+  const update = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
+  })
+  assert.equal(update.ok, true, update.errors?.[0]?.message)
+  assert.equal(repricingEvaluations, 0)
+  assert.deepEqual(harness.cancellationIds, [])
+})
+
+test("a partial recovery SELL fill leaves active Position inventory protected from trailing repricing", async () => {
+  const seeded = makeSeededRecoveryState()
+  let harness
+  let repricingEvaluations = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluateTrailingBuyRepricing: (input) => {
+      repricingEvaluations += 1
+      return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
+    },
+  }
+  harness = await createHarness({
+    strategyPolicy,
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
+      return { ok: true, data: { applied: true, duplicate: false } }
+    },
+  })
+
+  const initial = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(initial.ok, true, initial.errors?.[0]?.message)
+  const buy = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const sell = harness.engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buy)
+  assert.ok(sell)
+
+  const partialSell = new CanonicalOrder({
+    clientOrderId: sell.clientOrderId,
+    brokerOrderId: sell.brokerOrderId,
+    market,
+    side: "SELL",
+    type: sell.type,
+    limitPrice: sell.limitPrice,
+    originalQuantity: sell.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: sell.createdAt,
+    acknowledgedAt: sell.acknowledgedAt,
+    updatedAt: 2,
+  })
+  const fill = makeSellFill({
+    order: sell,
+    tradeId: "trailing-partial-recovery-sell-fill",
+    quantity: "0.1",
+    quoteQuantity: multiplyDecimal({ left: sell.limitPrice.amount, right: "0.1" }),
+  })
+  const applied = await harness.engine.processUserDataEvent({
+    event: { executionType: "TRADE", executedOrder: partialSell, fill },
+  })
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(harness.getCurrentPortfolio().getPosition({ marketId: market.id }).baseQuantity.amount, "0.9")
+
+  const update = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
+  })
+  assert.equal(update.ok, true, update.errors?.[0]?.message)
+  assert.equal(repricingEvaluations, 0)
+  assert.deepEqual(harness.cancellationIds, [])
+})
+
 test("suppresses trailing BUY repricing while an actual active Position exists", async () => {
   const seeded = makeSeededRecoveryState()
   let repricingEvaluations = 0
