@@ -157,7 +157,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       this.connected = true
       this.userDataSession.onConnected()
       await this.userDataSession.resume()
-      this.logger.info?.("Binance WebSocket API connected; public Streams connect on demand")
+      this.logger.system?.("Binance WebSocket API connected; public Streams connect on demand")
     } catch (error) {
       this.connected = false
       await Promise.allSettled([
@@ -176,7 +176,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       Promise.resolve().then(() => this.tradingConnection?.disconnect()),
       Promise.resolve().then(() => this.marketConnection?.disconnect()),
     ])
-    this.logger.info?.("Binance native WebSocket clients disconnected")
+    this.logger.system?.("Binance native WebSocket clients disconnected")
 
     for (const result of results) {
       if (result.status === "rejected") {
