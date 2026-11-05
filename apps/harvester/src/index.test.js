@@ -655,35 +655,32 @@ test("blocks trading-enabled startup when Journal cannot read previous sessions"
   }
 })
 
-test("blocks trading-enabled restart when prior order or fill history exists", async () => {
-  let started = false
-  const errors = []
+test("passes validated prior Journal history into bootstrap for domain recovery and safety gating", async () => {
+  let receivedRecords
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
+    const records = [
+      { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
+      { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
+    ]
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({
-          ok: true,
-          available: true,
-          records: [
-            { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
-            { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
-          ],
-        }),
+        recovery: Promise.resolve({ ok: true, available: true, records }),
         flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
-      start: async () => { started = true; return { connected: false } },
-      logger: { info() {}, error: (data) => errors.push(data), debug() {} },
+      start: async ({ journalRecoveryRecords }) => {
+        receivedRecords = journalRecoveryRecords
+        return { connected: false, tradingEnabled: false }
+      },
+      logger: { info() {}, error() {}, debug() {} },
     })
-    assert.equal(started, false)
-    assert.equal(process.exitCode, 1)
-    assert.match(errors.at(-1).error.message, /prior Harvester order\/fill history exists/)
-    assert.match(errors.at(-1).error.message, /read-only mode/)
+    assert.deepEqual(receivedRecords, records)
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
@@ -796,8 +793,9 @@ test("releases the trading process lock only after runtime and Journal shutdown"
   }
 })
 
-test("acquires the process lock before Journal recovery and releases it after safe startup rejection", async () => {
+test("acquires the process lock before Journal recovery and releases it only after runtime and Journal shutdown", async () => {
   const sequence = []
+  let signalHandler
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
@@ -823,12 +821,26 @@ test("acquires the process lock before Journal recovery and releases it after sa
           close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
         }
       },
-      start: async () => { sequence.push("start"); return { connected: false } },
-      registerSignalHandler() {},
+      start: async ({ journalRecoveryRecords }) => {
+        sequence.push("start")
+        assert.equal(journalRecoveryRecords.length, 1)
+        return {
+          connected: true,
+          tradingEnabled: false,
+          subscriptions: [],
+          stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
+        }
+      },
+      registerSignalHandler: (signal, handler) => {
+        if (signal === "SIGTERM") signalHandler = handler
+      },
       logger: { info() {}, error() {}, debug() {} },
     })
-    assert.deepEqual(sequence, ["lock", "journal", "journal-close", "release"])
-    assert.equal(process.exitCode, 1)
+    assert.deepEqual(sequence, ["lock", "journal", "start"])
+    assert.equal(typeof signalHandler, "function")
+    await signalHandler()
+    assert.deepEqual(sequence, ["lock", "journal", "start", "runtime-stop", "journal-close", "release"])
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
@@ -883,6 +895,7 @@ test("retains the process lock when Journal writer shutdown is not confirmed", a
         release: async () => { releaseCalls += 1; return { ok: true, released: true } },
       }),
       createJournalService: () => ({
+        status: { started: false },
         ready: Promise.resolve({ ok: true }),
         recovery: Promise.resolve({ ok: true, available: true, records: [] }),
         flush: async () => ({ ok: true, durable: true }),
