@@ -9,7 +9,7 @@ Domain-neutral helpers shared across the Coinzilla workspace. The package uses n
 
 Import the supported API from the package entry point:
 
-- `Logger`, `defaultLogger`: console logger with `debug`, `info`, `warn`, `error`, `success`, and `system` methods. Structured payloads redact common credential field names; free-form strings must not contain secrets.
+- `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
 - `EM`: shared error-message factories.
 - `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft })` accepts `[value, rules, fieldName?]` tuples; soft mode returns structured errors and hard mode throws them.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
@@ -40,6 +40,71 @@ defaultLogger.info({
 ```
 
 Inject a logger into workflows/adapters when the dependency should be explicit or replaced in tests. Do not create an app-local logger just to wrap the shared implementation.
+
+### Severity levels and transports
+
+Standard severity order is `trace < debug < info < warn < error`. Every transport has its own minimum severity; an entry filtered by one destination is still delivered to every other eligible destination. The default console transport starts at `debug` outside production and `info` in production. The legacy testing-mode suppression of console `warn` and production suppression of console `debug` are retained. These environment defaults affect only the built-in console transport.
+
+```js
+import { Logger, defaultLogger } from "@coinzilla/utils"
+
+import { appendFile } from "node:fs/promises"
+
+defaultLogger.addTransport({
+  name: "development-file",
+  level: "debug",
+  write(entry) {
+    return appendFile("logs/development.log", `${JSON.stringify(entry)}\n`)
+  },
+})
+
+defaultLogger.addTransport({
+  name: "diagnostics",
+  level: "trace",
+  write(entry) {
+    return appendFile("logs/diagnostics.log", `${JSON.stringify(entry)}\n`)
+  },
+})
+
+// Changes only the named destination; other thresholds are unchanged.
+defaultLogger.setLevel({ transport: "console", level: "debug" })
+defaultLogger.setLevel({ transport: "console", level: "info" })
+
+const current = defaultLogger.getConfig()
+// { transports: [{ name: "console", level: "info" }, ...] }
+
+// A separate logger is useful for isolated tests or independent applications.
+const isolatedLogger = new Logger({ transports: [] })
+
+// Remove application-owned destinations during shutdown.
+await defaultLogger.removeTransport("development-file")
+await defaultLogger.removeTransport("diagnostics")
+```
+
+A transport is an object with a unique non-empty `name`, a `level` from the standard severity list, and a `write(entry)` function. It may also provide `shouldWrite(entry)` for an additional transport-specific filter and `close()` for resource cleanup. Each write receives the same frozen entry shape:
+
+```js
+{
+  timestamp: "2026-11-05T12:00:00.000Z",
+  level: "info",       // normalized severity
+  method: "success",   // called method, including semantic methods
+  data: { message: "Completed" } // detached, frozen, JSON-safe, redacted data
+}
+```
+
+The entry's `data` retains structured fields and normalized Error diagnostics (including stack, cause, and AggregateError members); common sensitive field names are redacted before any transport receives the entry. Free-form strings and stack/message text remain caller-owned and must not contain secrets.
+
+Public configuration methods:
+
+- `addTransport(transport)` validates and adds a transport; duplicate names are rejected.
+- `setLevel({ transport, level })` changes one known transport's threshold and returns the current configuration snapshot. Invalid levels and unknown transport names throw `TypeError`.
+- `getConfig()` returns a detached snapshot of transport names and thresholds.
+- `removeTransport(name)` removes a transport and awaits its optional `close()` hook. Unknown names return `false`.
+- `close()` removes all transports and awaits their optional cleanup hooks.
+
+Transport `write` and `close` may return promises. Logging methods remain synchronous; asynchronous transport failures are caught and reported through the optional `onTransportError({ transport, error })` constructor callback. Synchronous failures are reported the same way and do not prevent other transports from receiving the entry. When no callback is provided, failures are reported with `console.error`. Cleanup failures are reported without preventing other transports from closing. Applications that own file handles or other resources should implement `close()` and call logger cleanup during their own shutdown lifecycle.
+
+`Logger` accepts `new Logger({ transports, onTransportError })`. Omitting `transports` creates the built-in console destination. Supplying an array (including an empty array) explicitly controls the destinations. Configuration belongs to each Logger instance; tests that change the shared `defaultLogger` should restore its thresholds or use a separate `Logger` instance.
 
 ### Structured error diagnostics
 
