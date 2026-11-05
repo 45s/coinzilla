@@ -812,6 +812,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const submittedOrders = []
   const runtimeErrors = []
   const runtimeDebug = []
+  const runtimeInfo = []
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -938,7 +939,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     },
     now: () => 1000,
     logger: {
-      info() {},
+      info: (entry) => runtimeInfo.push(entry),
       debug: (entry) => runtimeDebug.push(entry),
       error: (entry) => runtimeErrors.push({ message: entry.message, symbol: entry.symbol, reason: entry.reason, errors: entry.errors?.map((error) => error.message ?? String(error)) }),
     },
@@ -951,6 +952,34 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   })
   assert.equal(submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
   assert.equal(submittedOrders[0].side, "BUY")
+
+  const acknowledgedBuy = new CanonicalOrder({
+    clientOrderId: submittedOrders[0].clientOrderId,
+    brokerOrderId: "broker-" + submittedOrders[0].clientOrderId,
+    market: marketMetadata.market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: submittedOrders[0].price, asset: marketMetadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: submittedOrders[0].quantity, asset: marketMetadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: marketMetadata.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  userDataHandlers.onEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: acknowledgedBuy,
+    },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  const processedOrderLog = runtimeInfo.find(({ message }) =>
+    message === "Harvester order event processed" && message !== undefined)
+  assert.ok(processedOrderLog)
+  assert.equal(processedOrderLog.price, submittedOrders[0].price)
+  assert.equal(processedOrderLog.quantity, submittedOrders[0].quantity)
 
   const submitted = calls.find((call) => typeof call === "object")
   const clientOrderId = submittedOrders[0].clientOrderId
