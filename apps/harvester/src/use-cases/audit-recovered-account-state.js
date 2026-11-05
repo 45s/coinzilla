@@ -35,7 +35,9 @@ function normalizeOrderStatus({ status }) {
 }
 
 function getInitialTradingSnapshot({ projection }) {
-  const firstTradingSession = projection.data.sessions.find((session) => session.tradingEnabled)
+  const firstTradingSession = projection.data.sessions.find((session) =>
+    session.tradingEnabled || session.hasTradingActivity
+  )
   if (!firstTradingSession) return undefined
   return projection.data.accountSnapshots.find((snapshot) =>
     snapshot.fileName === firstTradingSession.fileName && snapshot.phase === "PREFLIGHT"
