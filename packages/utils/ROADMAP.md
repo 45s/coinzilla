@@ -29,6 +29,8 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 
 ## Roadmap
 
+- [~] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (feature branch `feature/utils-logger-levels`).
+
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
