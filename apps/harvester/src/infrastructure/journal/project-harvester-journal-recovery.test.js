@@ -896,3 +896,54 @@ test("accepts a RECONCILED account open-order snapshot with durable Harvester ow
   assert.equal(result.data.openOrderSnapshots[0].readiness, "RECONCILED")
   assert.equal(result.data.openOrderSnapshots[0].orders.length, 1)
 })
+
+
+test("restores a partially filled canceled order as a paused strategy market", () => {
+  const records = [
+    submissionRequested(),
+    submitted({ status: "PARTIALLY_FILLED" }),
+    fill(),
+    record("order.cancel_requested", {
+      clientOrderId: "h-BTCUSDT-1",
+      brokerOrderId: "9001",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      price: "100",
+      quantity: "1",
+      executedQuantity: "0.4",
+      status: "PARTIALLY_FILLED",
+      reason: "TRAILING_BUY_REPRICE",
+    }),
+    record("order.cancelled", {
+      clientOrderId: "h-BTCUSDT-1",
+      brokerOrderId: "9001",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      price: "100",
+      quantity: "1",
+      executedQuantity: "0.4",
+      status: "CANCELED",
+    }),
+  ]
+  const projection = projectHarvesterJournalRecovery({ records })
+  assert.equal(projection.ok, true)
+
+  const market = new Market({
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAsset: new Asset({ id: "binance:BTC", code: "BTC" }),
+    quoteAsset: new Asset({ id: "binance:USDT", code: "USDT" }),
+  })
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", market]]),
+  })
+
+  assert.equal(restored.ok, true)
+  assert.deepEqual([...restored.data.pausedMarkets], ["BTCUSDT"])
+  assert.deepEqual([...restored.data.trailingBuyRepriceIntents], [])
+  assert.equal(restored.data.orderRegistry.orders[0].status, "CANCELED")
+  assert.equal(restored.data.orderRegistry.orders[0].executedQuantity.amount, "0.4")
+})
