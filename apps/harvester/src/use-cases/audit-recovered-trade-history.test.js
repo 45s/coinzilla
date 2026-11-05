@@ -62,6 +62,7 @@ test("accepts exact complete account trade history matching every durable Journa
     marketUniverseComplete: true,
     fillsChecked: 1,
     journalFillsChecked: 1,
+    reconciledOwnedOrderFills: 0,
   })
 })
 
@@ -74,7 +75,7 @@ test("rejects incomplete account-wide trade history even when every returned fil
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /history is incomplete/)
+  assert.match(result.errors[0].message, /history pages are incomplete/)
 })
 
 test("rejects an exchange execution absent from the Harvester Journal", () => {
@@ -190,7 +191,7 @@ test("accepts exchange fills missing from the prior Journal only when their brok
     side: "BUY",
     type: "LIMIT",
     limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    originalQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
     executedQuantity: new Quantity({ amount: "0.4", asset: baseAsset }),
     status: "FILLED",
   })
