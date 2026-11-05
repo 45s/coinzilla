@@ -733,6 +733,68 @@ test("blocks trading-enabled startup when Journal history cannot be read", async
   }
 })
 
+test("blocks a second trading process before Journal startup when the process lock is held", async () => {
+  let journalFactoryCalls = 0
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: false,
+        errors: [Object.assign(new Error("another trading process owns the lock"), { code: "HARVESTER_PROCESS_LOCK_EXISTS" })],
+      }),
+      createJournalService: () => { journalFactoryCalls += 1; return disabledJournalService() },
+      start: async () => { started = true; return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(journalFactoryCalls, 0)
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("releases the trading process lock only after runtime and Journal shutdown", async () => {
+  let signalHandler
+  const sequence = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { sequence.push("lock-release"); return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => { sequence.push("journal-close"); return { ok: true, closed: true } },
+      }),
+      start: async () => ({
+        connected: true,
+        tradingEnabled: true,
+        stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
+      }),
+      registerSignalHandler: (signal, handler) => {
+        if (signal === "SIGTERM") signalHandler = handler
+      },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(typeof signalHandler, "function")
+    await signalHandler()
+    assert.deepEqual(sequence, ["runtime-stop", "journal-close", "lock-release"])
+    assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("acquires the process lock before Journal recovery and releases it after safe startup rejection", async () => {
   const sequence = []
   const previousExitCode = process.exitCode
