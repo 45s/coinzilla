@@ -89,7 +89,14 @@ export const cancelAllOpenOrders = async ({
   } else {
     logger.warn({
       message: `Remaining open orders: ${remainingOrders.length}`,
-      remainingOrders,
+      remainingOrders: remainingOrders.map((order) => ({
+        symbol: order.symbol,
+        orderId: order.orderId,
+        side: order.side,
+        quantity: order.origQty,
+        executed: order.executedQty,
+        status: order.status,
+      })),
     })
   }
 

@@ -11,6 +11,7 @@ const createLogger = () => {
     info: (data) => entries.push({ level: "info", data }),
     warn: (data) => entries.push({ level: "warn", data }),
     error: (data) => entries.push({ level: "error", data }),
+    success: (data) => entries.push({ level: "success", data }),
   }
 }
 
