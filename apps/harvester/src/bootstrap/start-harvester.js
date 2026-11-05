@@ -362,14 +362,14 @@ export async function startHarvester({
   const enabledSymbols = Object.entries(pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
-  if (tradingRequested && enabledSymbols.length === 0) {
-    throw new Error("Conservative TESTNET trading requires at least one enabled pair")
-  }
   const brokerName = env.HARVESTER_BROKER
   if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
     throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
   }
   const tradingRequested = env.HARVESTER_ENABLE_TRADING === "true"
+  if (tradingRequested && enabledSymbols.length === 0) {
+    throw new Error("Conservative TESTNET trading requires at least one enabled pair")
+  }
   if (tradingRequested && (brokerName === undefined || brokerName === "")) {
     throw new Error("HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true")
   }
