@@ -12,6 +12,7 @@ import { BinanceUserDataSession } from "./methods/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
 import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js"
 import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
+import { normalizeBinanceId } from "../shared/normalize-binance-id.js"
 import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
 import { createBinanceUserDataClientPort } from "./helpers/adapters/user-data-client-port.js"
 import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
@@ -279,6 +280,53 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
+    try {
+      if (typeof symbol !== "string" || !symbol.trim()) {
+        throw new TypeError("Binance canonical order lookup requires a symbol")
+      }
+      const normalizedSymbol = symbol.trim().toUpperCase()
+      const hasOrderId = orderId !== undefined && orderId !== null
+      const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
+      if (hasOrderId === hasClientOrderId) {
+        throw new TypeError("Provide exactly one of orderId or clientOrderId")
+      }
+      const params = { symbol: normalizedSymbol }
+      if (hasOrderId) {
+        params.orderId = Number(normalizeBinanceId(orderId, "order ID"))
+      } else {
+        if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
+          throw new TypeError("Binance clientOrderId must be a non-empty string")
+        }
+        params.origClientOrderId = clientOrderId.trim()
+      }
+
+      const response = await this.tradingConnection.request("order.status", params, { signed: true })
+      const order = response?.data
+      if (!order || typeof order !== "object" || Array.isArray(order)) {
+        throw new TypeError("Binance order.status response must be an order object")
+      }
+      if (typeof order.symbol !== "string" || order.symbol.toUpperCase() !== normalizedSymbol) {
+        throw new Error("Binance canonical order response symbol does not match the requested symbol")
+      }
+      if (hasClientOrderId && order.clientOrderId !== params.origClientOrderId) {
+        throw new Error("Binance canonical order response clientOrderId does not match the requested clientOrderId")
+      }
+      if (hasOrderId && normalizeBinanceId(order.orderId, "response order ID") !== String(params.orderId)) {
+        throw new Error("Binance canonical order response orderId does not match the requested orderId")
+      }
+
+      const metadataResponse = await this.tradingConnection.request("exchangeInfo", { symbol: normalizedSymbol })
+      const market = createCanonicalOrderHistoryMarket({
+        symbol: normalizedSymbol,
+        exchangeInfo: metadataResponse.data,
+      })
+      return toResult({ data: adaptCanonicalOrder({ order, market }) })
+    } catch (error) {
+      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrder()", error })
+      return toResult({ errors: [error] })
+    }
+  }
   async getOrderHistory(input = {}) {
     try {
       const params = createOrderHistoryParams(input)
