@@ -1233,3 +1233,5 @@ persistence, exchange operations, or broader observability projects.
   workflows passed. The read-only TESTNET integration job was skipped.
 - [x] PR #632 merged into `develop` after shared logger API PR #631 and workspace CI passed.
 - [x] PR #636 preserves semantic SUCCESS/SYSTEM console labels, distinguishes them during duplicate suppression, and keeps colored output within the 200-character limit.
+- [x] Document concise log-message rules: omit redundant application prefixes, keep INFO operator-focused, move routine market evaluations to DEBUG, and avoid duplicate event records.
+- [x] Console INFO output omits the redundant `INFO` label; SYSTEM is used for Journal, WebSocket, subscription, readiness, and shutdown lifecycle transitions.
