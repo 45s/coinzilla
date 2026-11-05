@@ -354,7 +354,21 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
         const order = requireOrder({ clientOrderId, eventName: name })
         const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
-        if (order.brokerOrderId !== brokerOrderId) throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
+        if (order.brokerOrderId === undefined) {
+          const existingOwner = clientIdByBrokerId.get(brokerOrderId)
+          if (existingOwner && existingOwner !== order.clientOrderId) {
+            throw new Error("Cancellation intent brokerOrderId is already owned by another clientOrderId")
+          }
+          // A durable cancellation intent also proves the submission was
+          // acknowledged when the separate acknowledgement event was lost.
+          order.brokerOrderId = brokerOrderId
+          order.submissionOutcome = "ACKNOWLEDGED"
+          order.exchangeStatusHint = "UNKNOWN"
+          order.recoveryStatus = "UNKNOWN"
+          clientIdByBrokerId.set(brokerOrderId, order.clientOrderId)
+        } else if (order.brokerOrderId !== brokerOrderId) {
+          throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
+        }
         if (data.symbol !== order.symbol || data.side !== order.side || data.type !== order.type ||
             data.price !== order.price || data.quantity !== order.quantity) {
           throw new Error("Cancellation intent changed immutable order facts")
@@ -411,8 +425,20 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         if (data.symbol !== order.symbol || data.side !== order.side) {
           throw new Error("Cancellation failure conflicts with the owned order identity")
         }
-        if (data.brokerOrderId !== undefined && order.brokerOrderId !== data.brokerOrderId) {
-          throw new Error("Cancellation failure changed brokerOrderId")
+        if (data.brokerOrderId !== undefined) {
+          const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+          if (order.brokerOrderId === undefined) {
+            const existingOwner = clientIdByBrokerId.get(brokerOrderId)
+            if (existingOwner && existingOwner !== order.clientOrderId) {
+              throw new Error("Cancellation failure brokerOrderId is already owned by another clientOrderId")
+            }
+            order.brokerOrderId = brokerOrderId
+            order.submissionOutcome = "ACKNOWLEDGED"
+            order.exchangeStatusHint = "UNKNOWN"
+            clientIdByBrokerId.set(brokerOrderId, order.clientOrderId)
+          } else if (order.brokerOrderId !== brokerOrderId) {
+            throw new Error("Cancellation failure changed brokerOrderId")
+          }
         }
         order.cancellationState = "UNKNOWN"
         order.cancellationSequence = currentSequence
