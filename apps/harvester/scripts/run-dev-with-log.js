@@ -26,7 +26,6 @@ const child = spawn(
   },
 )
 
-let shutdownSignal
 let childClosed = false
 let logStreamFailed = false
 
@@ -39,8 +38,6 @@ const closeLogStream = () => new Promise((resolveClose) => {
 })
 
 const handleSignal = (signal) => {
-  shutdownSignal ??= signal
-
   // The child has its own process group on POSIX, so it needs an explicit
   // signal. On Windows, Ctrl+C is delivered to both console processes.
   if (process.platform !== "win32" && !childClosed && !child.killed) {
@@ -48,8 +45,11 @@ const handleSignal = (signal) => {
   }
 }
 
-process.once("SIGINT", () => handleSignal("SIGINT"))
-process.once("SIGTERM", () => handleSignal("SIGTERM"))
+const onSigint = () => handleSignal("SIGINT")
+const onSigterm = () => handleSignal("SIGTERM")
+
+process.once("SIGINT", onSigint)
+process.once("SIGTERM", onSigterm)
 
 const forwardOutput = (stream, output) => {
   stream.on("data", (chunk) => {
@@ -76,8 +76,8 @@ child.on("error", (error) => {
 
 child.on("close", async (code, signal) => {
   childClosed = true
-  process.removeAllListeners("SIGINT")
-  process.removeAllListeners("SIGTERM")
+  process.removeListener("SIGINT", onSigint)
+  process.removeListener("SIGTERM", onSigterm)
 
   await closeLogStream()
   if (code !== null) {
