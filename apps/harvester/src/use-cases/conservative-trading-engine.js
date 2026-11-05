@@ -7,6 +7,7 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapOrderCancelFailedData,
   mapOrderCancelledData,
+  mapOrderCancellationRequestedData,
   mapOrderSubmissionFailedData,
   mapOrderSubmissionRequestedData,
   mapOrderSubmittedData,
@@ -164,6 +165,45 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const publishDurableIntent = async ({ eventName, dataResult } = {}) => {
+    const published = publishLifecycleEvent({ eventPublisher, eventName, dataResult })
+    if (published && typeof published.then === "function") {
+      Promise.resolve(published).then(
+        (result) => {
+          if (result?.ok === false) {
+            logger?.error?.({
+              message: "Harvester durable intent publication was rejected asynchronously",
+              eventName,
+              errors: result.errors,
+            })
+          }
+        },
+        (error) => logger?.error?.({
+          message: "Harvester durable intent publication promise rejected",
+          eventName,
+          error,
+        }),
+      )
+    } else {
+      if (published?.ok === false) return published
+      if (published?.skipped === true) return toResult({ data: { skipped: true } })
+    }
+    if (typeof eventPublisher?.flush !== "function") {
+      return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
+    }
+    try {
+      const flushed = await eventPublisher.flush()
+      if (flushed?.ok !== true || flushed?.durable !== true) {
+        return flushed?.ok === false
+          ? flushed
+          : toResult({ error: new Error("Trading intent was published but not durably journaled") })
+      }
+      return toResult({ data: { durable: true } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
   const pause = async ({ symbol, reason, error }) => {
     const wasPaused = state.paused.has(symbol)
     state.paused.add(symbol)
@@ -299,13 +339,19 @@ export function makeConservativeTradingEngine({
       }
       state.deferredEvaluations.add(order.market.symbol)
     },
-    onPendingOrder: ({ order }) => {
+    onPendingOrder: async ({ order }) => {
       state.registry = state.registry.registerPending({ order }).registry
-      publishLifecycleEvent({
-        eventPublisher,
+      const persisted = await publishDurableIntent({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
         dataResult: mapOrderSubmissionRequestedData({ order }),
       })
+      if (!persisted.ok) {
+        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+        if (removal.removed) state.registry = removal.registry
+        const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
+        await pause({ symbol: order.market.symbol, reason: "ORDER_INTENT_NOT_DURABLE", error })
+        throw error
+      }
     },
     onAcknowledgedOrder: async ({ order }) => {
       if (order.status === "FILLED") {
@@ -387,6 +433,18 @@ export function makeConservativeTradingEngine({
         reason: "RECOVERY_SELL_CANCELLATION_INELIGIBLE",
       })
       if (!eligibility.ok) return eligibility
+      const cancelIntent = await publishDurableIntent({
+        eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+        dataResult: mapOrderCancellationRequestedData({
+          order,
+          reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+        }),
+      })
+      if (!cancelIntent.ok) {
+        const error = cancelIntent.errors?.[0] ?? new Error("Recovery SELL cancellation intent was not durably journaled")
+        await pause({ symbol, reason: "RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE", error })
+        return toResult({ errors: cancelIntent.errors ?? [error] })
+      }
       let cancelResult
       try {
         cancelResult = await broker.cancelOrder({ order })
@@ -465,6 +523,18 @@ export function makeConservativeTradingEngine({
       reason: "TRAILING_BUY_CANCELLATION_INELIGIBLE",
     })
     if (!eligibility.ok) return eligibility
+    const cancelIntent = await publishDurableIntent({
+      eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+      dataResult: mapOrderCancellationRequestedData({
+        order,
+        reason: "TRAILING_BUY_REPRICE",
+      }),
+    })
+    if (!cancelIntent.ok) {
+      const error = cancelIntent.errors?.[0] ?? new Error("Trailing BUY cancellation intent was not durably journaled")
+      await pause({ symbol, reason: "TRAILING_BUY_CANCEL_INTENT_NOT_DURABLE", error })
+      return toResult({ errors: cancelIntent.errors ?? [error] })
+    }
     let cancelResult
     try {
       cancelResult = await broker.cancelOrder({ order })

@@ -393,22 +393,23 @@ new BUY below the current last trade, rounded down to the exchange tick.
 
 ## Operational event journal
 
-**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal startup remains asynchronous; events published before its subscription becomes active are not captured. Initialization/write failures do not gate bootstrap. Coordinated shutdown draining remains Step 7.
+**Current status:** Harvester composes one `@coinzilla/event-bus` instance in `src/index.js`, defines stable lifecycle names and DTO mappings, and composes `@coinzilla/journal` through `src/infrastructure/journal/prepare-optional-journal.js`. Process, configuration, broker connection, subscription, and selected user-data stream recovery lifecycle events are published from application/bootstrap boundaries. Step 5a adds actionable Conservative decisions and order submission request/acknowledgement/failure events from the application engine boundary. Journal initialization is awaited for broker-connected startup and the mandatory durable PREFLIGHT account audit. Ordinary event delivery remains asynchronous, while order-submission and cancellation intent events are durably flushed immediately before their broker writes. Coordinated shutdown draining remains Step 7.
 
 Harvester may add an application-level EventBus and an optional Journal subscriber independently of trading progress. The first use case is ordinary operational visibility: configuration validated, application started/stopped, and broker connected/disconnected. This works without enabling trading and does not require TESTNET orders or fills. Composition belongs to the process/bootstrap boundary. The domain and strategy policies must remain independent of both packages. The broker adapter continues to normalize exchange messages; application workflows publish Harvester-owned, plain-object facts at meaningful lifecycle boundaries.
 
-The Journal is an observer, never a trading dependency:
+The Journal is not trading-state authority and ordinary event delivery remains asynchronous. Two narrow durability barriers are required before exchange side effects: each order-submission intent and each cancellation intent must be durably flushed before the corresponding broker call. Broker-connected startup also requires a durable PREFLIGHT account audit.
 
-- Journal initialization must not gate application startup or trading readiness.
-- Strategy evaluation, market-price handling, order submission, execution accounting, and the serialized user-data queue must never await Journal I/O, flush, or close.
-- Event publication is best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into the trading workflow.
-- EventBus subscriber delivery and Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted.
+- Journal readiness and the PREFLIGHT audit gate broker-connected startup before market subscriptions or trading-engine activation.
+- Strategy evaluation, market-price handling, fill accounting, and the serialized user-data queue must never await Journal I/O, flush, or close.
+- Immediately before broker placement/cancellation, publish the allowlisted intent event and await a successful durable flush. If it fails, do not perform the exchange write and pause the pair.
+- Ordinary event publication remains best-effort. A synchronous EventBus publication exception or failed result must be contained and reported without escaping into unrelated trading workflows.
+- EventBus subscriber delivery and ordinary Journal writes remain asynchronous. A successful publish means accepted for in-memory delivery, not durably persisted; only the explicit barriers above establish durability.
 - Only selected strategy decisions and meaningful order/execution/state transitions should be published. Do not publish every market-price update.
 - Publish small serializable DTOs with stable order/fill identifiers and exact decimal strings. Do not pass domain class instances, SDK objects, raw exchange payloads, credentials, or whole account snapshots.
 - On normal shutdown, stop trading intake and drain the existing user-data queue before publishing final lifecycle events, flushing EventBus, and closing Journal/EventBus. A failed Journal close must not skip broker/resource cleanup.
 - Document possible capture gaps before Journal becomes ready, after capacity/write failures, and on abrupt process or machine termination. Do not claim exactly-once delivery or unconditional durability.
 
-Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. In particular, Harvester must not inherit a startup sequence in which Journal initialization failure prevents trading.
+Package composition, event publication, and shutdown ordering are defined by Harvester's own architecture and application contracts. Broker-connected startup intentionally fails closed when Journal readiness or the durable PREFLIGHT audit is unavailable; order and cancellation intents likewise require a durable pre-write barrier.
 
 ### Initial lifecycle event contract
 

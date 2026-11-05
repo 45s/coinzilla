@@ -300,6 +300,25 @@ export const mapStrategyPausedData = (input = {}) =>
     ...(error === undefined ? {} : { error: safeError({ error }) }),
   }))
 
+/** Map a cancellation intent before any broker cancellation request is sent. */
+export const mapOrderCancellationRequestedData = (input = {}) =>
+  mapData(input, "Order-cancellation-requested event mapping", ({ order, reason }) => {
+    const facts = requireOrderFacts({ order })
+    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
+      throw new TypeError("order.status must be OPEN or PARTIALLY_FILLED before cancellation")
+    }
+    return {
+      ...facts,
+      brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
+      executedQuantity: requireDecimalString({
+        value: order.executedQuantity?.amount,
+        field: "executedQuantity",
+      }),
+      status: order.status,
+      reason: requireString({ value: reason, field: "reason" }),
+    }
+  })
+
 /** Map a broker-confirmed cancellation after the local order registry is updated. */
 export const mapOrderCancelledData = (input = {}) =>
   mapData(input, "Order-cancelled event mapping", ({ order }) => {

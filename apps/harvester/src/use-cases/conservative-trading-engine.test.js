@@ -182,12 +182,20 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   }
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
+  const effectiveEventPublisher = eventPublisher
+    ? {
+        ...eventPublisher,
+        flush: typeof eventPublisher.flush === "function"
+          ? eventPublisher.flush
+          : async () => ({ ok: true, durable: true }),
+      }
+    : undefined
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     isMarketPriceFresh,
     isMarketBookFresh,
-    eventPublisher,
+    eventPublisher: effectiveEventPublisher,
     tradingConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
@@ -230,6 +238,52 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     },
   }
 }
+
+test("durably journals the submission intent before calling the broker", async () => {
+  const sequence = []
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        sequence.push("publish:" + event.name)
+        return { ok: true }
+      },
+      flush: async () => {
+        sequence.push("flush")
+        return { ok: true, durable: true }
+      },
+    },
+    onPlaceOrderStarted: () => sequence.push("broker:place"),
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
+  assert.ok(sequence.indexOf("flush") > sequence.indexOf("publish:order.submission_requested"))
+  assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
+})
+
+test("does not submit an order when its durable intent flush fails", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: false, errors: [new Error("journal sync failed")] }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.orders.length, 0)
+  assert.equal(harness.engine.getOrders().length, 0)
+  assert.ok(harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"))
+})
 
 test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
   let releaseFills
@@ -492,8 +546,8 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.equal(events[2].data.brokerOrderId, "broker-" + clientOrderId)
 })
 
-test("EventBus publication failure cannot prevent a broker order", async () => {
-  const { engine, orders } = await createHarness({
+test("order intent publication failure prevents a broker order", async () => {
+  const { engine, orders, pauses } = await createHarness({
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
   const result = await engine.processMarketPrice({
@@ -501,8 +555,9 @@ test("EventBus publication failure cannot prevent a broker order", async () => {
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(orders.length, 1)
+  assert.equal(result.ok, false)
+  assert.equal(orders.length, 0)
+  assert.ok(pauses.includes("ORDER_INTENT_NOT_DURABLE"))
 })
 
 
@@ -683,9 +738,16 @@ test("publishes thrown cancellation outcomes as unconfirmed", async () => {
 })
 
 
-test("cancellation event publication failure cannot prevent cancellation or reevaluation", async () => {
-  const { engine } = await createHarness({
-    eventPublisher: { publish: () => { throw new Error("journal observer unavailable") } },
+test("cancellation intent publication failure prevents broker cancellation and pauses the pair", async () => {
+  let cancelCalls = 0
+  const { engine, pauses } = await createHarness({
+    onCancelOrderStarted: () => { cancelCalls += 1 },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "order.cancel_requested") throw new Error("journal observer unavailable")
+        return { ok: true }
+      },
+    },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -695,13 +757,15 @@ test("cancellation event publication failure cannot prevent cancellation or reev
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
-  assert.equal(result.ok, true)
-  assert.equal(result.data.trailingBuyReplaced, true)
+  assert.equal(result.ok, false)
+  assert.equal(cancelCalls, 0)
+  assert.equal(engine.getOrders()[0].status, "OPEN")
+  assert.ok(pauses.includes("TRAILING_BUY_CANCEL_INTENT_NOT_DURABLE"))
 })
 
 
-test("EventBus failure cannot prevent the pair pause callback", async () => {
-  const { engine, pauses } = await createHarness({
+test("order intent publication failure pauses the pair without calling the broker", async () => {
+  const { engine, pauses, orders } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
@@ -710,7 +774,8 @@ test("EventBus failure cannot prevent the pair pause callback", async () => {
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
-  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
+  assert.equal(orders.length, 0)
+  assert.ok(pauses.includes("ORDER_INTENT_NOT_DURABLE"))
 })
 
 
@@ -779,22 +844,31 @@ function makeBuyFill({ order, tradeId, price, quantity, quoteQuantity, executedA
   })
 }
 
-test("publishes recovery SELL cancellation only after broker confirmation and registry update", async () => {
+test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
   const events = []
+  const sequence = []
   let engine
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    eventPublisher: { publish: (event) => {
-      events.push(event)
-      if (event.name === "order.cancelled") {
-        const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
-        assert.equal(registered.status, "CANCELED")
-      }
-      return { ok: true }
-    } },
+    onCancelOrderStarted: () => sequence.push("broker:cancel"),
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
+        if (event.name === "order.cancelled") {
+          const registered = engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
+          assert.equal(registered.status, "CANCELED")
+        }
+        return { ok: true }
+      },
+      flush: async () => {
+        sequence.push("flush")
+        return { ok: true, durable: true }
+      },
+    },
   })
   engine = harness.engine
   await engine.processMarketPrice({
@@ -819,6 +893,61 @@ test("publishes recovery SELL cancellation only after broker confirmation and re
   assert.ok(cancelled)
   assert.equal(cancelled.data.side, "SELL")
   assert.equal(cancelled.data.status, "CANCELED")
+  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
+  const cancelFlushIndex = sequence.lastIndexOf("flush")
+  const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  assert.ok(cancelIntentIndex >= 0)
+  assert.ok(cancelFlushIndex > cancelIntentIndex)
+  assert.ok(brokerCancelIndex > cancelFlushIndex)
+})
+
+test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
+  let flushCount = 0
+  let cancelCalls = 0
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    onCancelOrderStarted: () => { cancelCalls += 1 },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => {
+        flushCount += 1
+        return flushCount === 3
+          ? { ok: false, errors: [new Error("journal sync failed")] }
+          : { ok: true, durable: true }
+      },
+    },
+  })
+
+  const started = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(started.ok, true)
+  assert.equal(flushCount, 2)
+
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "cancel-intent-flush-failure",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(flushCount, 3)
+  assert.equal(cancelCalls, 0)
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
 })
 
 test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
@@ -1160,7 +1289,14 @@ test("publishes accounting failures and preserves pair pause behavior", async ()
 test("EventBus failure cannot interrupt accounting failure pause handling", async () => {
   const { engine, pauses } = await createHarness({
     accountingFailure: true,
-    eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "execution.accounting_failed" || event.name === "strategy.paused") {
+          throw new Error("observer unavailable")
+        }
+        return { ok: true }
+      },
+    },
   })
   await engine.processMarketPrice({ symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 } })
   const order = engine.getOrders()[0]
@@ -1492,7 +1628,12 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    eventPublisher: { publish: () => { throw new Error("journal unavailable") } },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "recovery.cycle_completed") throw new Error("journal unavailable")
+        return { ok: true }
+      },
+    },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
