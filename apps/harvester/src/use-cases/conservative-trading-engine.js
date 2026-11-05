@@ -352,6 +352,11 @@ export function makeConservativeTradingEngine({
         state.deferredEvaluations.add(order.market.symbol)
         return
       }
+      const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+      if (!unknownResult.ok) {
+        throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
+      }
+      state.registry = unknownResult.data.registry
       await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: submissionError })
     },
   })
