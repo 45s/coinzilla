@@ -46,10 +46,11 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `broker.subscription_established` | `broker`, `stream`, optional `market` |
 | `broker.subscription_failed` | `broker`, `stream`, optional `market`, sanitized `error` |
 | `strategy.decision` | `strategy`, `symbol`, `referencePrice`, actionable `actions` (side/type/price/quantity/optional reason) |
-| `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status |
+| `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status; durably flushed before the broker placement call |
 | `order.submitted` | submission facts plus broker order ID and acknowledged status |
 | `order.submission_failed` | client order ID, symbol, side, outcome, optional sanitized error |
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
+| `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
 | `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
 | `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, outcome, optional sanitized error |
 | `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, commission status |
@@ -73,7 +74,8 @@ For every broker-connected startup, including read-only mode, bootstrap fetches 
 
 ## Write failures and durability
 
-- After the startup PREFLIGHT gate succeeds, event delivery to the Journal is asynchronous; market, strategy, order-submission, and execution workflows do not await Journal subscriber or filesystem writes.
+- After the startup PREFLIGHT gate succeeds, ordinary event delivery to the Journal is asynchronous. Market-price evaluation, strategy policy, and fill accounting do not await Journal subscriber or filesystem writes.
+- Before any broker order-placement or cancellation call, Harvester publishes the corresponding order intent (`order.submission_requested` or `order.cancel_requested`) and awaits a successful durable Journal flush. If publication or durability fails, the broker write is not attempted and the affected pair is paused.
 - The explicit startup PREFLIGHT audit and trading-enabled CLOSING balance audit are lifecycle exceptions: each awaits a durable flush. A failure in either gate fails startup or reports incomplete shutdown; this is distinct from ordinary per-event observation.
 - Journal writes are serialized. A write failure marks the session `writeFailed`; later writes in that session are rejected rather than silently retried.
 - The status becomes `degraded` and exposes `writeFailed` and `writeErrorCount` to programmatic callers.
