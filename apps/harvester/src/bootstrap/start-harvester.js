@@ -1201,7 +1201,8 @@ export async function startHarvester({
 
       if (recoveredState.requiresExchangeReconciliation) {
         startupRecoveryReconciliation = true
-        const reconciliation = await tradingEngine.reconcileOwnedOrders({
+        let reconciliation
+        reconciliation = await tradingEngine.reconcileOwnedOrders({
           recoveryMode: true,
           beforeApply: async () => {
             while (true) {
