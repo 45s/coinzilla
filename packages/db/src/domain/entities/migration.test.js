@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createMigration } from "../../entities/migration.js"
+import { createMigration } from "./migration.js"
 
 test("a migration has a positive integer version, a unique name, and an up operation", () => {
   const up = () => {}
