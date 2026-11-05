@@ -182,12 +182,20 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
   }
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
+  const effectiveEventPublisher = eventPublisher
+    ? {
+        ...eventPublisher,
+        flush: typeof eventPublisher.flush === "function"
+          ? eventPublisher.flush
+          : async () => ({ ok: true, durable: true }),
+      }
+    : undefined
   const engine = makeConservativeTradingEngine({
     broker,
     strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
     isMarketPriceFresh,
     isMarketBookFresh,
-    eventPublisher,
+    eventPublisher: effectiveEventPublisher,
     tradingConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
@@ -230,6 +238,52 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     },
   }
 }
+
+test("durably journals the submission intent before calling the broker", async () => {
+  const sequence = []
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        sequence.push("publish:" + event.name)
+        return { ok: true }
+      },
+      flush: async () => {
+        sequence.push("flush")
+        return { ok: true, durable: true }
+      },
+    },
+    onPlaceOrderStarted: () => sequence.push("broker:place"),
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
+  assert.ok(sequence.indexOf("flush") > sequence.indexOf("publish:order.submission_requested"))
+  assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
+})
+
+test("does not submit an order when its durable intent flush fails", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: false, errors: [new Error("journal sync failed")] }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.orders.length, 0)
+  assert.equal(harness.engine.getOrders().length, 0)
+  assert.ok(harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"))
+})
 
 test("waits for executions behind an immediate FILLED acknowledgement before evaluating the next market event", async () => {
   let releaseFills
