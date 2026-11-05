@@ -232,3 +232,109 @@ test("requires records to be an array", () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /must be an array/)
 })
+
+
+test("projects account audit snapshots and recognizes a complete prior trading shutdown", () => {
+  const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 101,
+        readiness: "READY",
+        orderCount: 0,
+        orders: [],
+        blockReasons: [],
+      }),
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("account.snapshot_captured", {
+        phase: "CLOSING",
+        sourceTime: 200,
+        auditStatus: "COMPLETE",
+        balances,
+        auditReasons: [],
+      }),
+      record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.accountSnapshots.length, 2)
+  assert.equal(result.data.openOrderSnapshots.length, 1)
+  assert.equal(result.data.sessions[0].tradingEnabled, true)
+  assert.equal(result.data.sessions[0].uncleanTradingShutdown, false)
+  assert.equal(result.data.requiresExchangeReconciliation, true)
+})
+
+test("marks a trading session without a complete closing audit as unclean", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("harvester.started", {
+        broker: "binance",
+        strategyMode: "conservative",
+        enabledMarkets: ["BTCUSDT"],
+        tradingEnabled: true,
+      }),
+      record("harvester.stopped", { reason: "SIGTERM", outcome: "success" }),
+    ],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.sessions[0].uncleanTradingShutdown, true)
+})
+
+test("rejects account snapshot totals that do not equal free plus locked", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.snapshot_captured", {
+        phase: "PREFLIGHT",
+        sourceTime: 100,
+        auditStatus: "COMPLETE",
+        balances: [{ asset: "BTC", free: "0.5", locked: "0.1", total: "0.5" }],
+        auditReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /free plus locked/)
+})
+
+test("rejects a READY account open-order snapshot that contains an order", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      record("account.open_orders_captured", {
+        phase: "PREFLIGHT",
+        observedAt: 100,
+        readiness: "READY",
+        orderCount: 1,
+        orders: [{
+          brokerOrderId: "9001",
+          symbol: "BTCUSDT",
+          side: "BUY",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          executedQuantity: "0",
+          status: "NEW",
+        }],
+        blockReasons: [],
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /READY open-order snapshot/)
+})
