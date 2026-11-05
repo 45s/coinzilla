@@ -208,7 +208,21 @@ export class OrderRegistry {
       if (current.status !== "PENDING") {
         return toResult({ data: { registry: this, order: current, applied: false, alreadyAcknowledged: true } })
       }
-      const unknownOrder = new CanonicalOrder({ ...current.value, status: "UNKNOWN" })
+      const unknownOrder = new CanonicalOrder({
+        clientOrderId: current.clientOrderId,
+        brokerOrderId: current.brokerOrderId,
+        market: current.market,
+        side: current.side,
+        type: current.type,
+        limitPrice: current.limitPrice,
+        originalQuantity: current.originalQuantity,
+        executedQuantity: current.executedQuantity,
+        status: "UNKNOWN",
+        createdAt: current.createdAt,
+        acknowledgedAt: current.acknowledgedAt,
+        updatedAt: current.updatedAt,
+        completedAt: current.completedAt,
+      })
       validateOrderUpdate({ current, next: unknownOrder })
       const orders = this.#orders.map((order, orderIndex) =>
         orderIndex === index ? unknownOrder : order,
