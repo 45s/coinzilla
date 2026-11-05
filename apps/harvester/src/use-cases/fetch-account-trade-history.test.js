@@ -140,7 +140,7 @@ test("rejects non-advancing cursors, backward timestamps, and unsafe pagination 
     broker: {
       getFills: async ({ fromId }) => ({
         ok: true,
-        data: [makeFill({ tradeId: fromId === undefined ? 2 : 2 })],
+        data: [makeFill({ tradeId: fromId === undefined ? 2 : 1 })],
       }),
     },
     markets: [market],
