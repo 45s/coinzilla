@@ -324,7 +324,7 @@ Immediately before submission, `validateOrderAgainstTradingRules` independently 
 
 ## Account balance snapshot
 
-After the user-data stream is established, bootstrap loads a canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The same validation is repeated after each accounted execution. A failed or stale refresh blocks further order placement. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
+After the user-data stream is established, bootstrap loads a complete canonical account snapshot and verifies that every enabled pair's base and quote assets are present. The complete snapshot remains in memory and is used for validation after each accounted execution; a failed or stale refresh blocks further order placement. Only the Journal event is filtered: it stores the de-duplicated base/quote asset balances for currently enabled pairs (including zero balances), not unrelated account assets. This filtering does not mutate or narrow the in-memory AccountSnapshot used by runtime checks. The snapshot remains a separate view of exchange availability: wallet balances, manual inventory, and deposits are **not** copied into the strategy-owned Portfolio.
 
 This does not yet solve account-wide budget allocation or order reservations. Multiple pairs can share a quote asset, and the order lifecycle must reserve and release free/locked balances before any strategy is allowed to submit orders.
 
