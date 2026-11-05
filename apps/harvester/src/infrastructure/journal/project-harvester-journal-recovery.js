@@ -125,6 +125,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     const sessionsByFile = new Map()
     const accountSnapshots = []
     const openOrderSnapshots = []
+    const lastFullyFilledSellBySymbol = new Map()
+    let journalSequence = 0
 
     const requireOrder = ({ clientOrderId, eventName }) => {
       const order = ordersByClientId.get(clientOrderId)
@@ -133,6 +135,8 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
     }
 
     for (const record of records) {
+      const currentSequence = journalSequence
+      journalSequence += 1
       const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
       const name = payload.name
       if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
@@ -443,8 +447,21 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         order.cumulativeFillQuantity = cumulativeFillQuantity
         order.fillIds.push(fill.fillId)
         order.requiresExchangeReconciliation = true
-        fillsById.set(fill.fillId, { fill, fingerprint })
+        fillsById.set(fill.fillId, { fill, fingerprint, sequence: currentSequence })
         tradeIdBySymbol.set(tradeKey, fill.fillId)
+        if (order.side === "BUY") {
+          order.lastBuyFillSequence = currentSequence
+        }
+        if (order.side === "SELL" && compareDecimal({
+          left: cumulativeFillQuantity,
+          right: order.quantity,
+        }) === 0) {
+          lastFullyFilledSellBySymbol.set(order.symbol, {
+            clientOrderId: order.clientOrderId,
+            brokerOrderId: order.brokerOrderId,
+            sequence: currentSequence,
+          })
+        }
         continue
       }
 
@@ -453,7 +470,20 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const marketId = requireString({ value: data.marketId, field: "marketId" })
         const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity", positive: true })
         const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-        cycles.push({ symbol, marketId, freeQuantity, realizedNetProfit })
+        const completedSellOrder = lastFullyFilledSellBySymbol.get(symbol)
+        if (!completedSellOrder) {
+          throw new Error("Recovery-cycle completion has no preceding fully filled Harvester SELL order for " + symbol)
+        }
+        cycles.push({
+          symbol,
+          marketId,
+          freeQuantity,
+          realizedNetProfit,
+          completedOrderClientId: completedSellOrder.clientOrderId,
+          completedOrderBrokerOrderId: completedSellOrder.brokerOrderId,
+          sequence: currentSequence,
+        })
+        lastFullyFilledSellBySymbol.delete(symbol)
         continue
       }
 
@@ -481,8 +511,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           right: order.cumulativeFillQuantity,
         }) !== 0,
     }))
-    const fills = [...fillsById.values()].map(({ fill }) => Object.freeze({
+    const fills = [...fillsById.values()].map(({ fill, sequence }) => Object.freeze({
       ...fill,
+      sequence,
       commissions: Object.freeze(fill.commissions.map((commission) => Object.freeze({ ...commission }))),
     }))
     return toResult({
