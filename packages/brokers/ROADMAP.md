@@ -636,7 +636,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
 
 ### Canonical order-history records (request #321)
-- [~] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract.
+- [x] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract. Broker implementation and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
 - Use exact `exchangeInfo` metadata for Market/Asset identity, preserve decimal strings and source timestamps, and map unsupported lifecycle states to canonical `UNKNOWN` without leaking Binance field names.
 - Reject unsupported order types, malformed records, and unsafe numeric IDs; do not convert financial values through JavaScript `Number`.
 - Consumer: Free-Roll FR-057 snapshot collection. Request: [#321](https://github.com/45s/coinzilla/issues/321).
@@ -645,7 +645,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ### Canonical fills and commissions
 
-- [~] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values.
+- [x] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values. Broker API and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
 - Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
 - Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
