@@ -1131,7 +1131,7 @@ These barriers deliberately await filesystem durability only immediately before 
 
 ## Single-writer process ownership — P0, 2026-11-05
 
-- [x] PR #568 acquires an exclusive process lock in the configured Journal directory before reading prior sessions or opening a Journal writer.
+- [x] PR #568 acquires an exclusive process lock in the configured Journal directory before opening a Journal writer.
 - [x] PR #568 refuses a second local trading process using the same Journal directory.
 - [x] PR #568 releases the lock only after runtime stop and Journal shutdown are confirmed; retains it when either is uncertain.
 - [x] PR #568 never auto-reclaims stale locks; operator verification is required.
@@ -1141,7 +1141,7 @@ These barriers deliberately await filesystem durability only immediately before 
 
 ## P0 — Durable restart recovery (current engineering work)
 
-- [x] PR #568 — local Journal-directory single-writer ownership; acquired before Journal recovery and broker connection, retained after uncertain runtime/Journal shutdown.
+- [x] PR #568 — local Journal-directory single-writer ownership; acquired before Journal writer startup and broker connection, retained after uncertain runtime/Journal shutdown.
 - [x] PR #607 — broker-wide same-host/same-OS-user/same-broker lock across different Journal directories; host lock is retained if Journal-lock release is uncertain.
 - [x] PR #606 — strict Journal projection for order intents, acknowledgements, cancellation outcomes, exact fills, duplicate execution identities, recovery cycles, pauses, account snapshots, open-order snapshots, and process sessions.
 - [x] PR #606 — rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and cancel/replace intents.
