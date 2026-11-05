@@ -40,8 +40,11 @@ function summarizeConsoleData({ data } = {}) {
       .filter((key) => data[key] !== undefined && data[key] !== null)
       .map((key) => {
         const value = data[key]
-        if (typeof value === "string" && value.length > 100) {
-          return [key, value.slice(0, 97) + "..."]
+        if (typeof value === "string") {
+          const maxLength = key === "errorMessage" ? 72 : 100
+          if (value.length > maxLength) {
+            return [key, value.slice(0, maxLength - 3) + "..."]
+          }
         }
         if (Array.isArray(value)) {
           return [key, value.slice(0, 3)]
