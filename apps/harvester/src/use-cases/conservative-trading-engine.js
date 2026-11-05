@@ -185,8 +185,8 @@ export function makeConservativeTradingEngine({
         }),
       )
     } else {
-      if (!published?.ok) return published
-      if (published.skipped === true) return toResult({ data: { skipped: true } })
+      if (published?.ok === false) return published
+      if (published?.skipped === true) return toResult({ data: { skipped: true } })
     }
     if (typeof eventPublisher?.flush !== "function") {
       return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
