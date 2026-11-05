@@ -624,6 +624,29 @@ test("allows a trading-enabled first start only with a validated empty Journal h
   }
 })
 
+test("blocks trading-enabled startup when Journal cannot read previous sessions", async () => {
+  let started = false
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => { started = true; return { connected: false } },
+      registerSignalHandler() {},
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    assert.equal(started, false)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("blocks trading-enabled restart when prior order or fill history exists", async () => {
   let started = false
   const errors = []
