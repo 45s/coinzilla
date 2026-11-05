@@ -6,21 +6,24 @@ This directory is owned by the **Database Infrastructure domain**. Read the repo
 
 Owned path: `packages/db/**`.
 
-This package owns provider-neutral database lifecycle/transaction boundaries and concrete database infrastructure adapters when a provider is deliberately selected.
+This package owns the built-in SQLite infrastructure, database lifecycle, SQL transaction boundary, and schema migration runner. The generic adapter lifecycle remains available for future database providers.
 
 Roadmap: [`ROADMAP.md`](./ROADMAP.md).
 
-Bounded contexts own their domain models, aggregate invariants, and repository interfaces. Do not move domain repository contracts into this package merely to centralize persistence. Do not let domain/application policy import database drivers, SQL, collection APIs, ORM models, or provider sessions.
+Bounded contexts own their domain models, aggregate invariants, and repository interfaces. Do not move domain repository contracts into this package merely to centralize persistence. Do not let domain/application policy import SQLite drivers, SQL, database connections, statement objects, or provider sessions.
 
 ## Architecture rules
 
 - Keep the public entry point thin and export only intentional contracts.
-- Keep provider-specific implementation behind adapters; do not select a database engine before a real consumer requirement and explicit architecture decision exist.
-- Do not build generic CRUD, table/collection, ORM, schema, migration, or query abstractions without demonstrated consumers.
-- Keep the transaction context opaque in this package; provider adapters own begin/commit/rollback semantics.
-- Fail explicitly when a provider cannot satisfy an advertised transaction guarantee.
-- Prefer Node.js built-ins and existing workspace capabilities; do not add a driver or ORM dependency speculatively.
-- Keep tests deterministic and offline. Use fake adapters for lifecycle/contract tests; provider integration tests are separate and opt-in.
+- Use Node.js built-in `node:sqlite`; do not add a third-party driver or ORM for SQLite.
+- Keep SQL and SQLite-specific APIs in infrastructure adapters/repositories, not in domain policy.
+- Use prepared statements and bound parameters for values.
+- Enable foreign-key enforcement; keep file-backed journal mode and lock timeout behavior covered by tests.
+- SQLite operations are synchronous. Transaction callbacks and migration functions must be synchronous; reject async callbacks rather than silently committing before awaited work.
+- Keep each migration immutable after application. Add a new version instead of editing migration history.
+- Fail explicitly on migration-history mismatch and transaction rollback failure.
+- Do not build generic CRUD, ORM, schema-generation, or universal query abstractions without demonstrated consumers.
+- Keep tests deterministic and offline. Use real in-memory SQLite and isolated temporary file databases; no network or credentials.
 - Apply strict RED → GREEN → REFACTOR to every behavior change.
 
 ## Workflow and verification
