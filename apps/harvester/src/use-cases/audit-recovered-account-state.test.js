@@ -169,12 +169,12 @@ const snapshot = ({ btcFree = "0.0996", btcLocked = "0", usdtFree = "1000.25", u
     ],
   })
 
-const openBuyOrder = () => new CanonicalOrder({
+const openBuyOrder = ({ type = "LIMIT" } = {}) => new CanonicalOrder({
   clientOrderId: "h-BTCUSDT-buy-open",
   brokerOrderId: "9003",
   market,
   side: "BUY",
-  type: "LIMIT",
+  type,
   limitPrice: new Money({ amount: "100", asset: market.quoteAsset }),
   originalQuantity: new Quantity({ amount: "1", asset: market.baseAsset }),
   executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
@@ -385,4 +385,24 @@ test("rejects an incomplete durable PREFLIGHT baseline even when current balance
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /baseline account snapshot is incomplete/)
+})
+
+
+test("accepts a recovered LIMIT_MAKER commitment with exact quote reservation", () => {
+  const { projection, restored } = restoreState()
+  const order = openBuyOrder({ type: "LIMIT_MAKER" })
+  const recoveredState = {
+    ...restored,
+    orderRegistry: new OrderRegistry({ orders: [order] }),
+  }
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState,
+    currentAccountSnapshot: snapshot({ usdtFree: "900.25", usdtLocked: "100" }),
+    openOrders: [order],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reservationsChecked, 1)
 })
