@@ -213,7 +213,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
   assert.ok(result.recoveredState)
   assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
-  assert.deepEqual(result.recoveredState.pausedMarkets, [])
+  assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
   assert.equal(result.recoveredState.orderRegistry, undefined)
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, false)
