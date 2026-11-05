@@ -108,15 +108,24 @@ await database.migrate([
 
 Migration functions must be synchronous. Applied versions must remain in the migration list with the same names; removing or renaming an applied migration causes a history-mismatch error. Never edit a migration after it has been applied; add a new version instead.
 
-## DDD boundaries
+## Architecture and DDD boundaries
 
-- Bounded contexts own their domain models, aggregate invariants, and repository interfaces.
-- Infrastructure repository adapters translate those contracts to SQL using this package.
-- Domain and application policy must not import `node:sqlite`, SQL statements, database connections, or SQLite statement types.
-- This package owns SQLite lifecycle, transactions, SQL execution, and migration history.
-- Do not add generic CRUD repositories or ORM-style entities. Design each repository around the aggregate and use cases it serves.
+`@coinzilla/db` is the **Database Infrastructure** bounded context. Its domain model describes database infrastructure concepts; it does not own Coinzilla business aggregates or their repository contracts.
 
-The existing `createDatabase({ adapter })` lifecycle boundary remains available for a future provider adapter. PostgreSQL or MongoDB should be added only when a real consumer's consistency, query, deployment, and operational requirements justify them. Do not pretend their capabilities are identical to SQLite.
+The source is organized by dependency direction:
+
+- `domain/entities/database.js` (`Database`): owns the provider-independent lifecycle state, transaction tracking, and shutdown invariants.
+- `domain/entities/migration.js` (`Migration`): immutable schema-change identity (positive version) and its synchronous operation.
+- `domain/services/migration-history.js`: pure policy that detects removed or renamed applied migrations and identifies pending work.
+- `application/ports/database-provider.js` (`DatabaseProvider`): the provider contract required by the lifecycle aggregate.
+- `application/use-cases/create-database.js`: constructs the lifecycle aggregate through that port.
+- `infrastructure/sqlite/`: owns `node:sqlite`, SQL execution, transaction mechanics, and the persistent migration-history table.
+
+Dependency direction is inward: SQLite infrastructure implements the application-facing provider contract; it does not leak SQLite types into the database domain model. The public `createDatabase({ adapter })` and `createSqliteDatabase(...)` entry points remain compatible.
+
+Other bounded contexts continue to own their business entities, aggregate invariants, and repository interfaces. Their infrastructure adapters may use this package, but domain/application policy must not import `node:sqlite`, SQL statements, database connections, or SQLite statement types. Do not add generic CRUD repositories or ORM abstractions.
+
+PostgreSQL or MongoDB should be added only when a real consumer's consistency, query, deployment, and operational requirements justify them. Do not pretend their capabilities are identical to SQLite.
 
 ## Development
 
