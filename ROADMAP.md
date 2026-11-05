@@ -76,6 +76,7 @@ The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is en
 ### Active package roadmaps
 
 - [Broker package roadmap](packages/brokers/ROADMAP.md) — native Binance WebSocket migration, compatibility contract, lifecycle/recovery phases, and broker-specific acceptance criteria.
+- [Database package roadmap](packages/db/ROADMAP.md) — provider-neutral database lifecycle boundary, DDD ownership, and future provider selection.
 
 
 ## 7. Agent-policy enforcement

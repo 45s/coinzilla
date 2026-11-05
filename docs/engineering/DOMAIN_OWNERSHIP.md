@@ -12,6 +12,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 | Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
 | Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
 | Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
+| Database Infrastructure | `packages/db/` | Provider-neutral database lifecycle/transaction boundary and concrete database infrastructure adapters |
 | Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
 
 ## Shared infrastructure

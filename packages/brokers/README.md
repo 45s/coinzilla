@@ -135,6 +135,12 @@ The default test command does not load `.env.development` or access the network.
 
 Both integration suites assert TESTNET WebSocket endpoints before connecting. Never change these tests to use production endpoints.
 
+## TESTNET integration
+
+The existing **Unit Tests** GitHub Actions workflow includes an opt-in `run_broker_testnet_read_only` manual-dispatch input. Select the `develop` branch, enable that input, and run the workflow using repository secrets `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET_KEY`. The job requires non-placeholder TESTNET credentials and asserts the TESTNET WebSocket endpoints.
+
+The job explicitly sets `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0` and `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`. It performs read-only account, order, trade, market-data, and user-data reconnect/reconciliation checks; it never places or cancels orders and does not wait for externally generated user-data events. Order-mutation and live-event checks remain separate, explicitly gated operations.
+
 ## Operational checklist
 
 - Confirm the deployed Node.js version is at least 22.23.4.
