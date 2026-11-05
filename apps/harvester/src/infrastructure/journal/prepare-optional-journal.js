@@ -64,6 +64,7 @@ export function prepareOptionalJournal({
           writeFailed: false,
           writeErrorCount: 0,
           closed: false,
+          recoveryAvailable: false,
         })
       },
       flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
