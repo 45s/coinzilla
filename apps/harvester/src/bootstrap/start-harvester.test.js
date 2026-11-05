@@ -2034,7 +2034,7 @@ test("rejects malformed durable Journal recovery before user-data subscription",
 })
 
 
-test("blocks trading in bootstrap itself when validated Journal history requires exchange reconciliation", async () => {
+test("blocks bootstrap when canonical lookup cannot resolve a recovered submission", async () => {
   const calls = []
   const broker = createBroker(calls)
 
@@ -2067,10 +2067,12 @@ test("blocks trading in bootstrap itself when validated Journal history requires
       }],
       logger: { info() {}, error() {} },
     }),
-    /recovered Journal history requires canonical exchange order\/fill and account-reservation reconciliation/,
+    /canonical owned-order\/fill reconciliation failed/,
   )
 
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "account:snapshot", "unsubscribe:user-data", "disconnect"])
+  assert.equal(calls.includes("placeOrder"), false)
+  assert.equal(calls.includes("cancelOrder"), false)
 })
 
 
