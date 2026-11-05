@@ -120,6 +120,7 @@ export function makeConservativeTradingEngine({
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
     replacementIntents: new Set(initialState.replacementIntents ?? []),
+    trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
@@ -1022,6 +1023,16 @@ export function makeConservativeTradingEngine({
       }
       state.registry = update.registry
 
+      if (recoveryMode && order.status === "CANCELED" &&
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
+        if (order.side === "SELL" && state.replacementIntents.delete(symbol)) {
+          state.deferredEvaluations.add(symbol)
+        }
+        if (order.side === "BUY" && state.trailingBuyRepriceIntents.delete(symbol)) {
+          state.deferredEvaluations.add(symbol)
+        }
+      }
+
       if (event.executionType === "TRADE") {
         if (!(event.fill instanceof Fill)) {
           const error = new TypeError("TRADE event requires a canonical Fill")
@@ -1526,6 +1537,12 @@ export function makeConservativeTradingEngine({
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
+    getRecoveryIntents: () => Object.freeze({
+      pausedMarkets: Object.freeze([...state.paused]),
+      replacementIntents: Object.freeze([...state.replacementIntents]),
+      trailingBuyRepriceIntents: Object.freeze([...state.trailingBuyRepriceIntents]),
+      deferredEvaluations: Object.freeze([...state.deferredEvaluations]),
+    }),
     getPausedMarkets: () => [...state.paused],
     getLastBuyPrice: ({ symbol } = {}) => state.lastBuyPrices.get(symbol),
   })
