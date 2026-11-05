@@ -191,6 +191,39 @@ test("rejects an applied fill with no durable owned-order intent", () => {
 test("projects recovery-cycle completions and paused strategy state", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
+      record("order.submission_requested", {
+        clientOrderId: "h-BTCUSDT-sell-1",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "0.4",
+        status: "PENDING",
+      }),
+      record("order.submitted", {
+        clientOrderId: "h-BTCUSDT-sell-1",
+        brokerOrderId: "9002",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        type: "LIMIT",
+        price: "100",
+        quantity: "0.4",
+        status: "FILLED",
+      }),
+      record("execution.fill_applied", {
+        fillId: "market-btc-usdt:trade-2",
+        tradeId: "trade-2",
+        brokerOrderId: "9002",
+        clientOrderId: "h-BTCUSDT-sell-1",
+        symbol: "BTCUSDT",
+        side: "SELL",
+        price: "100",
+        quantity: "0.4",
+        quoteQuantity: "40",
+        liquidityRole: "MAKER",
+        commissions: [],
+        commissionStatus: "COMPLETE",
+      }),
       record("recovery.cycle_completed", {
         symbol: "BTCUSDT",
         marketId: "market-btc-usdt",
