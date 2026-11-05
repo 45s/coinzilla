@@ -1570,8 +1570,8 @@ export function makeConservativeTradingEngine({
     runTransition({ task: () => processMarketPriceTransition({ symbol, priceEvent }) })
   const processBookTicker = ({ symbol, bookTicker } = {}) =>
     runTransition({ task: () => processMarketBookTransition({ symbol, bookTicker }) })
-  const processUserDataEvent = ({ event } = {}) =>
-    runTransition({ task: () => processUserDataEventTransition({ event }) })
+  const processUserDataEvent = ({ event, recoveryMode = false } = {}) =>
+    runTransition({ task: () => processUserDataEventTransition({ event, recoveryMode }) })
   const evaluateLatest = ({ symbol } = {}) =>
     runTransition({ task: () => evaluateLatestTransition({ symbol }) })
   const resumeDeferredEvaluations = ({} = {}) => runTransition({
