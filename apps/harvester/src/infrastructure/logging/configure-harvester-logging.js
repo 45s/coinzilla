@@ -241,8 +241,9 @@ export async function configureHarvesterLogging({
         ? plainLine.slice(0, MAX_CONSOLE_LINE_LENGTH - 3) + "..."
         : plainLine
       const label = formatLevel({ level, color })
+      const levelStart = time.length + 1
       const renderedLine = color
-        ? time + " " + label + " " + boundedLine.slice(plainPrefix.length - level.length)
+        ? boundedLine.slice(0, levelStart) + label + boundedLine.slice(levelStart + level.length)
         : boundedLine
       output.write(renderedLine + "\n")
     },
