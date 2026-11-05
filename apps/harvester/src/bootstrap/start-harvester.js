@@ -1247,13 +1247,6 @@ export async function startHarvester({
         if (unresolvedStrategyState) {
           throw new Error("Conservative TESTNET startup blocked: recovered strategy contains paused markets or unresolved cancel/replace intents")
         }
-        const unsafeUserDataStatuses = new Set([
-          "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated",
-          "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
-        ])
-        if (unsafeUserDataStatuses.has(userDataStatus) || userDataAccountingFailed) {
-          throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state after canonical recovery")
-        }
         logger.info?.({
           message: "Harvester durable restart recovery and account ownership audit completed",
           reconciledOrders: reconciliation.data?.reconciled ?? 0,
@@ -1264,6 +1257,18 @@ export async function startHarvester({
         startupRecoveryReconciliation = false
       }
 
+      while (true) {
+        const queuedEvents = userDataEventQueue
+        await queuedEvents
+        if (queuedEvents === userDataEventQueue) break
+      }
+      const unsafeUserDataStatuses = new Set([
+        "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated",
+        "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
+      ])
+      if (userDataAccountingFailed || unsafeUserDataStatuses.has(userDataStatus)) {
+        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state after canonical recovery")
+      }
       if (userDataRequiresReconciliation && !recoveredState.requiresExchangeReconciliation) {
         throw new Error("Cannot enable Conservative trading while user-data stream reconciliation is required")
       }
