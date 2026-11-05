@@ -214,7 +214,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.ok(result.recoveredState)
   assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
   assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
-  assert.equal(result.recoveredState.orderRegistry, undefined)
+  assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
@@ -585,7 +585,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "disconnect"])
 })
 
 test("does not expose a broker port that could bypass the trading engine", async () => {
