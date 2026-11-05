@@ -655,35 +655,32 @@ test("blocks trading-enabled startup when Journal cannot read previous sessions"
   }
 })
 
-test("blocks trading-enabled restart when prior order or fill history exists", async () => {
-  let started = false
-  const errors = []
+test("passes validated prior Journal history into bootstrap for domain recovery and safety gating", async () => {
+  let receivedRecords
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
+    const records = [
+      { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
+      { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
+    ]
     await main({
       env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
       acquireProcessLock,
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
-        recovery: Promise.resolve({
-          ok: true,
-          available: true,
-          records: [
-            { id: "old-order", payload: { name: "order.submission_requested", source: "harvester" } },
-            { id: "old-fill", payload: { name: "execution.fill_applied", source: "harvester" } },
-          ],
-        }),
+        recovery: Promise.resolve({ ok: true, available: true, records }),
         flush: async () => ({ ok: true, durable: true }),
         close: async () => ({ ok: true, closed: true }),
       }),
-      start: async () => { started = true; return { connected: false } },
-      logger: { info() {}, error: (data) => errors.push(data), debug() {} },
+      start: async ({ journalRecoveryRecords }) => {
+        receivedRecords = journalRecoveryRecords
+        return { connected: false, tradingEnabled: false }
+      },
+      logger: { info() {}, error() {}, debug() {} },
     })
-    assert.equal(started, false)
-    assert.equal(process.exitCode, 1)
-    assert.match(errors.at(-1).error.message, /prior Harvester order\/fill history exists/)
-    assert.match(errors.at(-1).error.message, /read-only mode/)
+    assert.deepEqual(receivedRecords, records)
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
