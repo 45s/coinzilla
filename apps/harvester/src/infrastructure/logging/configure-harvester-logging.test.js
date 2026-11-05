@@ -150,3 +150,45 @@ test("keeps INFO output concise and excludes stack traces and audit internals", 
   assert.ok(line.length <= 200, "console line should remain bounded")
   output.destroy()
 })
+
+
+test("colors INFO blue and DEBUG magenta when terminal colors are enabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: true })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    data: { message: "Harvester ready" },
+  })
+  transport.write({
+    timestamp: "2026-11-05T12:00:01.000Z",
+    level: "debug",
+    data: { message: "Detailed diagnostic" },
+  })
+
+  assert.match(written, /\u001b\[34mINFO\u001b\[0m/)
+  assert.match(written, /\u001b\[35mDEBUG\u001b\[0m/)
+  assert.match(written, /Harvester ready/)
+  assert.match(written, /Detailed diagnostic/)
+  output.destroy()
+})
+
+test("does not emit ANSI color codes when color is disabled", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-05T12:00:00.000Z",
+    level: "info",
+    data: { message: "Plain terminal output" },
+  })
+
+  assert.doesNotMatch(written, /\u001b\[/)
+  assert.match(written, /INFO Plain terminal output/)
+  output.destroy()
+})
