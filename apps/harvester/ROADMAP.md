@@ -1145,14 +1145,15 @@ These barriers deliberately await filesystem durability only immediately before 
 The engine transition queue serializes decisions; this change additionally ensures serialized decisions reserve against the same account-level asset pool rather than reusing the full baseline balance for each market.
 
 
-## Restart recovery safety gate — P0 interim protection, 2026-11-05
+## Restart recovery safety gate — P0, 2026-11-05
 
 - [x] Read and validate all previous Journal sessions before opening a new writer session.
 - [x] Treat a missing Journal directory as an empty first run; fail closed on malformed, truncated, unsupported, duplicate-ID, or over-limit history.
-- [x] Refuse trading-enabled startup when any prior account-audit, order, cancellation, fill, or recovery-cycle history exists; allow read-only startup for inspection.
-- [ ] Implement idempotent Portfolio and RecoveryLedger replay, restore owned order commitments, and reconcile every restored order/fill against canonical exchange history before any trading restart can be accepted.
+- [x] Reconstruct and reconcile prior account/order/fill history before trading readiness; block on any unresolved order, fill, balance, reservation, stream, or strategy ownership state.
+- [x] Preserve read-only startup for inspection without treating unverified open orders as reconciled.
+- [ ] Reconcile account-wide external/manual trade history and complete the remaining crash-boundary matrix; TESTNET acceptance remains separate.
 
-This is deliberately a fail-closed interim gate, not a claim that restart recovery is complete. Do not delete or rotate Journal files to bypass it.
+The original summary-only interim gate has been superseded by the recovery bootstrap described below. Do not delete or rotate Journal files to bypass recovery validation.
 
 
 ## Single-writer process ownership — P0, 2026-11-05
