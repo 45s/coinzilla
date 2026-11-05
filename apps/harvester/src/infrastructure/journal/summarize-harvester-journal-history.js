@@ -1,6 +1,7 @@
 import { toResult } from "@coinzilla/utils"
 
 const TRADING_EVENT_NAMES = new Set([
+  "harvester.started",
   "order.submission_requested",
   "order.submitted",
   "order.submission_failed",
@@ -29,6 +30,7 @@ export function summarizeHarvesterJournalHistory({ records } = {}) {
     const payload = record?.payload
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) continue
     if (typeof payload.name !== "string" || !TRADING_EVENT_NAMES.has(payload.name)) continue
+    if (payload.name === "harvester.started" && payload.data?.tradingEnabled !== true) continue
     counts[payload.name] += 1
   }
 
