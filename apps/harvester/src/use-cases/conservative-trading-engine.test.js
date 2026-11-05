@@ -737,9 +737,16 @@ test("publishes thrown cancellation outcomes as unconfirmed", async () => {
 })
 
 
-test("cancellation event publication failure cannot prevent cancellation or reevaluation", async () => {
-  const { engine } = await createHarness({
-    eventPublisher: { publish: () => { throw new Error("journal observer unavailable") } },
+test("cancellation intent publication failure prevents broker cancellation and pauses the pair", async () => {
+  let cancelCalls = 0
+  const { engine, pauses } = await createHarness({
+    onCancelOrderStarted: () => { cancelCalls += 1 },
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "order.cancel_requested") throw new Error("journal observer unavailable")
+        return { ok: true }
+      },
+    },
   })
   await engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -749,8 +756,10 @@ test("cancellation event publication failure cannot prevent cancellation or reev
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
-  assert.equal(result.ok, true)
-  assert.equal(result.data.trailingBuyReplaced, true)
+  assert.equal(result.ok, false)
+  assert.equal(cancelCalls, 0)
+  assert.equal(engine.getOrders()[0].status, "OPEN")
+  assert.ok(pauses.includes("TRAILING_BUY_CANCEL_INTENT_NOT_DURABLE"))
 })
 
 
