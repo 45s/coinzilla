@@ -3291,3 +3291,58 @@ test("clears a recovered replacement intent only after canonical history confirm
   assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, [])
   assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
 })
+
+
+test("paginates complete REST fill history beyond Binance's 1000-trade page limit", async () => {
+  const originalQuantity = "1001"
+  const makeOrder = ({ status, executedQuantity }) => new CanonicalOrder({
+    clientOrderId: "recovered-many-fills",
+    brokerOrderId: "broker-many-fills",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity, asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const ownedOrder = makeOrder({ status: "UNKNOWN", executedQuantity: "0" })
+  const historyOrder = makeOrder({ status: "FILLED", executedQuantity: originalQuantity })
+  const makeFill = ({ tradeId }) => new Fill({
+    tradeId: String(tradeId),
+    brokerOrderId: ownedOrder.brokerOrderId,
+    clientOrderId: ownedOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({ amount: "1", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "1", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const firstPage = Array.from({ length: 1000 }, (_, index) => makeFill({ tradeId: index + 1 }))
+  const secondPage = [makeFill({ tradeId: 1001 })]
+  const fillCursors = []
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: { orderRegistry: new OrderRegistry({ orders: [ownedOrder] }) },
+  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  harness.broker.getFills = async ({ fromId, limit }) => {
+    fillCursors.push(fromId)
+    assert.equal(limit, 1000)
+    return { ok: true, data: fromId === undefined ? firstPage : secondPage }
+  }
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(fillCursors, [undefined, "1001"])
+  assert.equal(harness.engine.getOrders()[0].status, "FILLED")
+  assert.equal(harness.accountedFills.length, 1001)
+  assert.equal(harness.getCurrentPortfolio().getPosition({ symbol: "DOGEUSDT" }).baseQuantity.amount, "1001")
+})
