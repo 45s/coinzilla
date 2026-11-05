@@ -68,6 +68,28 @@ test("reads and validates previous sessions before starting a new Journal writer
   assert.deepEqual(recovery.sessions, ["previous.jsonl"])
 })
 
+test("fails startup before writer creation when persisted Journal history is corrupt", async () => {
+  let startCalls = 0
+  const error = new Error("corrupt persisted history")
+  error.code = "JOURNAL_MALFORMED_RECORD"
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused-by-fake-journal",
+    logger,
+    journalFactory: () => ({
+      read: async () => ({ ok: false, errors: [error] }),
+      start: async () => { startCalls += 1; return { ok: true } },
+      close: async () => ({ ok: true, closed: true }),
+    }),
+  })
+
+  const result = await service.ready
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], error)
+  assert.equal(startCalls, 0)
+  assert.equal(service.status.state, "failed")
+})
+
 test("treats a missing Journal directory as an empty first-run history", async () => {
   const root = await createTempDirectory()
   const directory = path.join(root, "not-created-yet")
@@ -127,6 +149,9 @@ test("returns immediately while Journal initialization is still pending", async 
   resolveStart({ ok: true, filePath: "/unused-by-fake-journal/session.jsonl" })
   assert.equal((await service.ready).ok, true)
   assert.equal(service.status.state, "ready")
+  const recovery = await service.recovery
+  assert.equal(recovery.ok, true)
+  assert.equal(recovery.available, false)
   assert.equal((await service.close()).ok, true)
 })
 
