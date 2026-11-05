@@ -1,3 +1,6 @@
+import { adaptMsg } from "./adapt-msg.js"
+import { createUserDataEventDeduplicator } from "../user-data-event-deduplicator.js"
+
 export function createBinanceUserDataClientPort(client) {
   if (!client || typeof client.request !== "function" ||
       typeof client.connect !== "function" || typeof client.disconnect !== "function" ||
@@ -11,7 +14,34 @@ export function createBinanceUserDataClientPort(client) {
     },
     connect: (...args) => client.connect(...args),
     disconnect: (...args) => client.disconnect(...args),
-    onEvent: (listener) => client.onEvent(listener),
+    onEvent: (listener) => {
+      const deduplicator = createUserDataEventDeduplicator()
+      return client.onEvent((message) => {
+        if (!message || typeof message !== "object") return
+        const subscriptionId = message.subscriptionId
+        if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) return
+        const event = message.event && typeof message.event === "object"
+          ? message.event
+          : message
+
+        if (event.e === "eventStreamTerminated") {
+          listener({
+            type: "terminated",
+            subscriptionId,
+            eventTime: event.E ?? null,
+            event,
+          })
+          return
+        }
+
+        if (deduplicator.isDuplicate(message)) return
+        listener({
+          type: "event",
+          subscriptionId,
+          event: adaptMsg(event),
+        })
+      })
+    },
     onError: (listener) => client.onError?.(listener),
     onClose: (listener) => client.onClose(listener),
     subscribe: async () => {
