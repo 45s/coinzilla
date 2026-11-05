@@ -1551,12 +1551,12 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.ok(systemMessages.includes("Book ticker subscribed"))
   assert.ok(systemMessages.includes("Market data subscribed"))
   const marketEvent = debugCalls.find(({ message, price }) =>
-    message === "market price event received" && price === "65000.12")
+    message === "Harvester market price event received" && price === "65000.12")
   const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
-    message === "Conservative evaluation started" &&
+    message === "Harvester Conservative evaluation started" &&
     marketEventId === marketEvent?.marketEventId)
   const evaluationDecided = debugCalls.find(({ message, evaluationId }) =>
-    message === "Conservative evaluation decided" &&
+    message === "Harvester Conservative evaluation decided" &&
     evaluationId === evaluationStarted?.evaluationId)
   assert.ok(marketEvent)
   assert.ok(evaluationStarted)
