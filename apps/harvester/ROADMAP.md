@@ -1120,3 +1120,14 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [ ] Add single-writer process ownership protection or an equivalent startup guard before enabling recovery-based trading; Journal currently documents that its directory has no inter-process writer lock.
 - [ ] Add offline restart fixtures for crash windows before submission, after exchange acceptance/lost acknowledgement, during partial fills, during cancel/fill races, after accounting but before durable event delivery, and after recovery-cycle completion.
 - [ ] Keep TESTNET trading disabled during implementation. Recovery is not accepted until joint offline-evidence review and a separately authorized controlled TESTNET session.
+
+
+## Durable exchange-write intent barriers — P0 prerequisite, 2026-11-05
+
+- [x] Persist and durably flush each `order.submission_requested` intent before calling the broker placement port. If publication/flush fails, remove the unsent local PENDING order, pause the pair, and do not call the broker.
+- [x] Add `order.cancel_requested` with immutable order identity, cumulative executed quantity, status, and reason; durably flush it before either recovery-SELL or trailing-BUY cancellation calls.
+- [x] Fail closed on non-durable intent flushes; preserve the existing rule that unknown broker outcomes retain commitments and pause the pair.
+- [ ] Verify exact-head CI and review all direct broker place/cancel call sites to ensure no exchange write bypasses the durable intent barrier.
+- [ ] Implement strict Journal replay projection and canonical exchange reconciliation; durable intent records alone do not restore Portfolio, RecoveryLedger, or order registry state.
+
+These barriers deliberately await filesystem durability only immediately before exchange side effects. Ordinary market-price evaluation, strategy policy, and fill accounting remain asynchronous with respect to Journal delivery. No TESTNET exchange writes or trading-enabled restart are authorized by this work.
