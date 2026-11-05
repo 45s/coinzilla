@@ -807,3 +807,17 @@ test("does not restore a replacement intent after the replacement submission is 
   assert.equal(restored.ok, true)
   assert.deepEqual([...restored.data.replacementIntents], [])
 })
+
+
+test("recovers broker order identity from a durable fill when the acknowledgement event was lost", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: [submissionRequested(), fill()],
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.orders[0].brokerOrderId, "9001")
+  assert.equal(result.data.orders[0].submissionOutcome, "ACKNOWLEDGED")
+  assert.equal(result.data.orders[0].recoveryStatus, "UNKNOWN")
+  assert.equal(result.data.orders[0].cumulativeFillQuantity, "0.4")
+  assert.equal(result.data.requiresExchangeReconciliation, true)
+})
