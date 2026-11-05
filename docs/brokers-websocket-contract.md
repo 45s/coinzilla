@@ -188,3 +188,9 @@ The raw and canonical order-history paths now share a pure `helpers/adapters/ord
 The first domain extraction is `src/domain/user-data-recovery-policy.js`. It owns the exchange-neutral completion rule: recovery may complete only when recovery is required, a user-data subscription is active, at least one current subscriber exists, and every current subscriber has explicitly acknowledged reconciliation. The Binance session maps its concrete subscription ID and subscriber state into this policy, then retains responsibility for timers, notifications, state mutation, and client-port effects.
 
 The policy has isolated Node.js tests for the incomplete and complete states, including the all-subscriber requirement and strict boolean acknowledgements. This extraction does not change public APIs, event/status shapes, retry behavior, exchange request names, or order-safety gates.
+
+### Phase 9 implementation slice 2 — normalized user-data client-port responses
+
+The injected user-data client port now owns unwrapping Binance RPC response envelopes for subscription setup and remote-state verification. Its application-facing contract returns a subscription ID (or `null` when absent), a list of subscription IDs (or `null` for malformed collection data), and no raw unsubscribe response envelope. The user-data session validates normalized IDs and no longer reads Binance's `response.data` shape.
+
+The existing safety behavior remains unchanged: uncertain subscribe outcomes are verified through remote subscription state; malformed IDs and ambiguous multiple subscriptions fail closed; uncertain unsubscribe outcomes are verified before retry; no state-changing order request is replayed. PR #597 adds the test-first contract and implementation.
