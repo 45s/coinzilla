@@ -252,12 +252,14 @@ first-cycle workflow:
    threshold-crossing behavior remain to be specified.
 3. **Aggressive fallback:** behavior when the consolidated recovery SELL is
    rejected, partially filled, or cannot be placed remains to be specified.
-4. **Multi-pair shared assets:** quote-currency and inventory allocation across
-   enabled pairs remains deferred. The first TESTNET configuration enables
-   exactly one pair.
+4. **Multi-pair TESTNET acceptance:** the in-process Conservative engine
+   supports multiple enabled markets and aggregates quote cash flow, owned
+   base inventory, and active BUY/SELL commitments by canonical asset ID.
+   Concurrent multi-pair regression coverage and exchange acceptance remain
+   outstanding.
 5. **Full order reservations:** durable and exchange-reconciled reservation
    behavior for partial fills, cancellations, rejections, and uncertain
-   outcomes remains deferred beyond the current in-process single-pair flow.
+   outcomes remains deferred beyond the current process.
 6. **Restart and reconnect recovery:** persistence, historical exchange
    reconciliation, and unattended operation guarantees remain deferred until
    after the first real TESTNET cycle.
@@ -293,5 +295,6 @@ and immediate fill-driven reevaluation.
 A fake-broker integration scenario covers the complete first recovery cycle,
 including a second BUY arriving before the recovery SELL completes. This is
 offline evidence only. A real Binance TESTNET run remains outstanding.
-Aggressive, multi-pair shared-asset allocation, durable restart recovery,
-comprehensive reconnect reconciliation, and Journal remain deferred.
+Aggressive, durable restart recovery, comprehensive reconnect reconciliation,
+and broader Journal work remain deferred. Multi-pair TESTNET acceptance is not
+complete until dedicated multi-market regression and exchange checks pass.
