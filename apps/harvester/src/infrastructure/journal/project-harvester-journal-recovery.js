@@ -385,6 +385,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.CANCEL_REQUESTED) {
         const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
         const order = requireOrder({ clientOrderId, eventName: name })
+        if (order.submissionOutcome === "REJECTED") {
+          throw new Error("Cancellation intent references a definitively rejected submission: " + clientOrderId)
+        }
+        if (order.cancellationState !== "NONE") {
+          throw new Error("Cancellation intent cannot be retried or duplicated before prior cancellation resolution: " + clientOrderId)
+        }
         const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
         if (order.brokerOrderId === undefined) {
           const existingOwner = clientIdByBrokerId.get(brokerOrderId)
@@ -453,6 +459,12 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.CANCEL_FAILED) {
         const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
         const order = requireOrder({ clientOrderId, eventName: name })
+        if (order.submissionOutcome === "REJECTED") {
+          throw new Error("Cancellation failure references a definitively rejected submission: " + clientOrderId)
+        }
+        if (order.cancellationState !== "REQUESTED") {
+          throw new Error("Cancellation failure has no preceding durable cancellation intent: " + clientOrderId)
+        }
         if (!CANCEL_OUTCOMES.has(data.outcome)) throw new TypeError("Invalid order cancellation outcome")
         if (data.symbol !== order.symbol || data.side !== order.side) {
           throw new Error("Cancellation failure conflicts with the owned order identity")
