@@ -690,6 +690,11 @@ export async function startHarvester({
       )
     }
     recoveredState = restored.data
+    if (tradingEnabled && recoveredState.requiresExchangeReconciliation) {
+      throw new Error(
+        "Conservative TESTNET startup is blocked: recovered Journal history requires canonical exchange order/fill and account-reservation reconciliation before trading can resume",
+      )
+    }
     portfolioWorkflow = createPortfolioWorkflow({
       evaluateStrategy,
       logger,
