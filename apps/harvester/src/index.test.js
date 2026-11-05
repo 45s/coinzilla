@@ -833,6 +833,42 @@ test("acquires the process lock before Journal recovery and releases it after sa
   }
 })
 
+test("retains the process lock when runtime shutdown throws", async () => {
+  let signalHandler
+  let releaseCalls = 0
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      env: { HARVESTER_ENABLE_TRADING: "true", HARVESTER_JOURNAL_ENABLED: "true" },
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => { releaseCalls += 1; return { ok: true, released: true } },
+      }),
+      createJournalService: () => ({
+        ready: Promise.resolve({ ok: true }),
+        recovery: Promise.resolve({ ok: true, available: true, records: [] }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      start: async () => ({
+        connected: true,
+        tradingEnabled: true,
+        stop: async () => { throw new Error("broker intake did not stop") },
+      }),
+      registerSignalHandler: (signal, handler) => {
+        if (signal === "SIGTERM") signalHandler = handler
+      },
+      logger: { info() {}, error() {}, debug() {} },
+    })
+    await signalHandler()
+    assert.equal(releaseCalls, 0)
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("retains the process lock when Journal writer shutdown is not confirmed", async () => {
   let releaseCalls = 0
   const previousExitCode = process.exitCode
