@@ -1303,7 +1303,7 @@ export function makeConservativeTradingEngine({
             ) {
               throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
             }
-            if (typeof fill.tradeId !== "string" || !/^\\d+$/.test(fill.tradeId)) {
+            if (typeof fill.tradeId !== "string" || !/^\d+$/.test(fill.tradeId)) {
               throw new Error("REST fill history contains a non-numeric trade ID for owned order " + ownedOrder.brokerOrderId)
             }
             const tradeId = BigInt(fill.tradeId)
