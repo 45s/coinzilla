@@ -24,6 +24,10 @@ test("starts a real Journal asynchronously and closes it successfully", async ()
     assert.equal(started.ok, true)
     assert.equal(service.status.state, "ready")
     assert.equal(service.status.started, true)
+    const recovery = await service.recovery
+    assert.equal(recovery.ok, true)
+    assert.equal(recovery.available, true)
+    assert.deepEqual(recovery.records, [])
 
     const closed = await service.close()
     assert.equal(closed.ok, true)
@@ -32,6 +36,53 @@ test("starts a real Journal asynchronously and closes it successfully", async ()
     assert.equal(service.status.closed, true)
   } finally {
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("reads and validates previous sessions before starting a new Journal writer", async () => {
+  const calls = []
+  const records = [{ id: "record-1", payload: { name: "order.submission_requested" } }]
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused-by-fake-journal",
+    logger,
+    journalFactory: () => ({
+      read: async () => {
+        calls.push("read")
+        return { ok: true, records, count: 1, sessions: ["previous.jsonl"], bytesRead: 100 }
+      },
+      start: async () => {
+        calls.push("start")
+        return { ok: true, filePath: "/unused-by-fake-journal/current.jsonl" }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true)
+  assert.deepEqual(calls, ["read", "start"])
+  const recovery = await service.recovery
+  assert.equal(recovery.available, true)
+  assert.deepEqual(recovery.records, records)
+  assert.deepEqual(recovery.sessions, ["previous.jsonl"])
+})
+
+test("treats a missing Journal directory as an empty first-run history", async () => {
+  const root = await createTempDirectory()
+  const directory = path.join(root, "not-created-yet")
+  const service = prepareOptionalJournal({ eventBus: new EventBus(), directory, logger })
+
+  try {
+    assert.equal((await service.ready).ok, true)
+    const recovery = await service.recovery
+    assert.equal(recovery.ok, true)
+    assert.equal(recovery.available, true)
+    assert.equal(recovery.empty, true)
+    assert.deepEqual(recovery.records, [])
+  } finally {
+    await service.close()
+    await rm(root, { recursive: true, force: true })
   }
 })
 
