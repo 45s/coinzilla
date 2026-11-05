@@ -85,6 +85,7 @@ export function createBinanceBrokerAdapter({
     "getCanonicalOrder",
     "getAccountSnapshot",
     "getSymbolFilters",
+    "getExchangeMarkets",
     "getPrices",
     "subscribeForPrices",
     "subscribeForBookTicker",
@@ -150,6 +151,7 @@ export function createBinanceBrokerAdapter({
     getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
     getCanonicalOrder: (input) => client.getCanonicalOrder(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),
+    getExchangeMarkets: () => client.getExchangeMarkets(),
     getSymbolFilters: async ({ symbol }) => {
       try {
         return toResult({
