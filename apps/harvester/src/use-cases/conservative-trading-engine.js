@@ -352,6 +352,11 @@ export function makeConservativeTradingEngine({
         state.deferredEvaluations.add(order.market.symbol)
         return
       }
+      const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+      if (!unknownResult.ok) {
+        throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
+      }
+      state.registry = unknownResult.data.registry
       await pause({ symbol: order.market.symbol, reason: "ORDER_SUBMISSION_" + outcome, error: submissionError })
     },
   })
@@ -1250,6 +1255,61 @@ export function makeConservativeTradingEngine({
   }
 
   const reconcileOwnedOrders = async ({ beforeApply } = {}) => {
+    const initialOrdersResult = await runTransition({
+      task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
+    })
+    if (!initialOrdersResult?.ok) return initialOrdersResult
+    const pendingOrders = initialOrdersResult.data.ownedOrders.filter((order) => !order.brokerOrderId)
+
+    for (const pendingOrder of pendingOrders) {
+      try {
+        const lookupResult = await broker.getCanonicalOrder({
+          symbol: pendingOrder.market.symbol,
+          clientOrderId: pendingOrder.clientOrderId,
+        })
+        if (!lookupResult?.ok) {
+          throw lookupResult?.errors?.[0] ?? new Error("Unable to resolve order by clientOrderId")
+        }
+        const acknowledgedOrder = lookupResult.data
+        if (acknowledgedOrder?.clientOrderId !== pendingOrder.clientOrderId ||
+            acknowledgedOrder?.market?.symbol !== pendingOrder.market.symbol) {
+          throw new Error("Canonical order lookup returned an order that does not match the pending clientOrderId and symbol")
+        }
+
+        const attachmentResult = await runTransition({
+          task: async () => {
+            const currentOrder = state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId })
+            if (!currentOrder) throw new Error("Pending order disappeared before clientOrderId reconciliation")
+            if (currentOrder.brokerOrderId !== undefined) {
+              if (currentOrder.brokerOrderId !== acknowledgedOrder.brokerOrderId) {
+                throw new Error("Client-order-ID lookup conflicts with the brokerOrderId already attached to the order")
+              }
+              return toResult({ data: { order: currentOrder } })
+            }
+            const attached = state.registry.attachAcknowledgedBrokerOrderId({ order: acknowledgedOrder })
+            state.registry = attached.registry
+            return toResult({
+              data: { order: state.registry.getOrder({ clientOrderId: pendingOrder.clientOrderId }) },
+            })
+          },
+        })
+        if (!attachmentResult?.ok) {
+          throw attachmentResult?.errors?.[0] ?? new Error("Unable to attach the resolved brokerOrderId")
+        }
+      } catch (error) {
+        return runTransition({
+          task: async () => {
+            await pause({
+              symbol: pendingOrder.market.symbol,
+              reason: "RECONCILIATION_PENDING_ORDER_OUTCOME",
+              error,
+            })
+            return toResult({ error })
+          },
+        })
+      }
+    }
+
     const ownedOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
     })
@@ -1257,17 +1317,6 @@ export function makeConservativeTradingEngine({
     const ownedOrders = ownedOrdersResult.data.ownedOrders
     const symbols = [...new Set(ownedOrders.map((order) => order.market.symbol))]
     if (ownedOrders.length === 0) return toResult({ data: { reconciled: 0, symbols: [] } })
-
-    const pendingOrder = ownedOrders.find((order) => !order.brokerOrderId)
-    if (pendingOrder) {
-      const error = new Error("Cannot reconcile a Harvester order without an acknowledged broker order ID")
-      return runTransition({
-        task: async () => {
-          await pause({ symbol: pendingOrder.market.symbol, reason: "RECONCILIATION_PENDING_ORDER_OUTCOME", error })
-          return toResult({ error })
-        },
-      })
-    }
 
     let snapshots
     try {
