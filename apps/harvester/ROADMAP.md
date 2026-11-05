@@ -2,7 +2,7 @@
 
 > **CURRENT DIRECTION — 2026-11-05: POST-MERGE ENGINEERING AND CONTROLLED TESTNET READINESS.**
 >
-> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; and PR #554 fixed aggregate BUY/SELL commitment over-allocation. All changes listed above are merged into `develop`. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
+> PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for canonical reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #558 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop` when this task PR is merged. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
 > The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
