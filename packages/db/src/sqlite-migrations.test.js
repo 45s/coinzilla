@@ -27,7 +27,8 @@ test("migrations run in ascending version order and are recorded", async () => {
 
     assert.deepEqual(applied, [1, 2])
     assert.deepEqual(
-      database.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all(),
+      database.prepare("SELECT version, name FROM schema_migrations ORDER BY version").all()
+        .map((row) => ({ ...row })),
       [
         { version: 1, name: "create-records" },
         { version: 2, name: "add-status" },
@@ -135,6 +136,83 @@ test("migrations reject missing names and migration functions", async () => {
     ]), /up function/)
 
     assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
+  } finally {
+    await database.close()
+  }
+})
+
+test("migration history mismatches fail instead of silently changing applied schema", async () => {
+  const database = createSqliteDatabase()
+  await database.connect()
+
+  try {
+    const migration = {
+      version: 1,
+      name: "create-records",
+      up(transaction) {
+        transaction.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+      },
+    }
+
+    await database.migrate([migration])
+    database.prepare("UPDATE schema_migrations SET name = ? WHERE version = 1").run("renamed")
+
+    await assert.rejects(database.migrate([migration]), /history mismatch at version 1/)
+  } finally {
+    await database.close()
+  }
+})
+
+test("migration validation rejects non-arrays and non-object entries", async () => {
+  const database = createSqliteDatabase()
+  await database.connect()
+
+  try {
+    await assert.rejects(database.migrate(null), /must be an array/)
+    await assert.rejects(database.migrate([null]), /must be an object/)
+    assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
+  } finally {
+    await database.close()
+  }
+})
+
+test("async migration functions are rejected before execution", async () => {
+  const database = createSqliteDatabase()
+  await database.connect()
+  let invoked = false
+
+  try {
+    await assert.rejects(database.migrate([{
+      version: 1,
+      name: "async-migration",
+      async up() {
+        invoked = true
+      },
+    }]), /must be synchronous/)
+
+    assert.equal(invoked, false)
+    assert.throws(() => database.prepare("SELECT * FROM schema_migrations"), /no such table/)
+  } finally {
+    await database.close()
+  }
+})
+
+test("promise-returning migration functions roll back the migration", async () => {
+  const database = createSqliteDatabase()
+  await database.connect()
+
+  try {
+    await assert.rejects(database.migrate([{
+      version: 1,
+      name: "promise-migration",
+      up(transaction) {
+        transaction.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+        return Promise.resolve()
+      },
+    }]), /must be synchronous/)
+
+    assert.deepEqual(database.prepare("SELECT version FROM schema_migrations").all(), [])
+    assert.throws(() => database.prepare("SELECT * FROM records").all(), /no such table/)
   } finally {
     await database.close()
   }
