@@ -394,7 +394,6 @@ export async function startHarvester({
     replacementIntents: Object.freeze([]),
     completedOrderClientIds: Object.freeze([]),
     trailingBuySymbols: Object.freeze([]),
-    requiresExchangeReconciliation: false,
   })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
@@ -481,10 +480,9 @@ export async function startHarvester({
   let userDataSubscription
   let userDataReady = false
   let initialAccountSnapshotReady = false
-  // Startup loads an authoritative initial balance snapshot. Disconnects and
-  // explicit recovery requirements still close the gate because in-memory
-  // order/accounting state is not comprehensively reconciled across reconnects.
-  let userDataRequiresReconciliation = !tradingEnabled || recoveredState.requiresExchangeReconciliation
+  // Journal replay is disabled; only current-session state is owned. Stream
+  // disconnects and explicit broker reconciliation requirements still close the gate.
+  let userDataRequiresReconciliation = !tradingEnabled
   let userDataStreamUnsafe = false
   let userDataAccountingFailed = false
   let userDataStatus = "NOT_SUBSCRIBED"
@@ -980,7 +978,7 @@ export async function startHarvester({
           initialAccountSnapshotReady &&
           userDataRequiresReconciliation &&
           !userDataAccountingFailed &&
-          !userDataReconciliationQueued &&
+          !userDataReconciliationQueued
         ) {
           userDataReconciliationQueued = true
           logger.info?.({ message: "Harvester REST/stream order reconciliation started" })
@@ -1136,12 +1134,12 @@ export async function startHarvester({
         "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
       ])
       if (userDataAccountingFailed || unsafeUserDataStatuses.has(userDataStatus)) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state after canonical recovery")
+        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
       }
       const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
       const symbol = enabledPairs[0][0]
       logger.info?.({
-        message: "Conservative TESTNET startup checks passed; account ownership and order state are reconciled",
+        message: "Conservative TESTNET startup checks passed; current account audit is complete",
         symbol,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
       })
