@@ -69,6 +69,7 @@ export function makeConservativeTradingEngine({
   isMarketPriceFresh,
   isMarketBookFresh = () => false,
   logger,
+  initialState = {},
 } = {}) {
   const strategyConfig = tradingConfig.strategies.CG_coinGrabber
   const { settings, pairs } = strategyConfig
@@ -84,6 +85,19 @@ export function makeConservativeTradingEngine({
   }
   if (typeof isMarketPriceFresh !== "function") throw new TypeError("isMarketPriceFresh must be a function")
   if (typeof isMarketBookFresh !== "function") throw new TypeError("isMarketBookFresh must be a function")
+  if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
+    throw new TypeError("initialState must be an object")
+  }
+  const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
+  if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
+  for (const field of ["pausedMarkets", "replacementIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+    if (initialState[field] !== undefined && (
+      !Array.isArray(initialState[field]) ||
+      initialState[field].some((value) => typeof value !== "string" || !value.trim())
+    )) {
+      throw new TypeError("initialState." + field + " must contain non-empty strings")
+    }
+  }
   let transitionTail = Promise.resolve()
   let strategyEvaluationSequence = 0
   let marketPriceEventSequence = 0
@@ -93,7 +107,7 @@ export function makeConservativeTradingEngine({
     return current
   }
   const state = {
-    registry: OrderRegistry.empty(),
+    registry: initialRegistry,
     prices: new Map(),
     books: new Map(),
     lastBuyPrices: new Map(),
@@ -102,11 +116,11 @@ export function makeConservativeTradingEngine({
     processedFillIdsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
-    trailingBuy: new Map(),
-    paused: new Set(),
-    replacementIntents: new Set(),
+    trailingBuy: new Map((initialState.trailingBuySymbols ?? []).map((symbol) => [symbol, true])),
+    paused: new Set(initialState.pausedMarkets ?? []),
+    replacementIntents: new Set(initialState.replacementIntents ?? []),
     deferredEvaluations: new Set(),
-    completedOrderTransitions: new Set(),
+    completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
   }
   const rememberProcessedFill = ({ fill }) => {
@@ -987,7 +1001,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const processUserDataEventTransition = async ({ event } = {}) => {
+  const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
@@ -1084,7 +1098,7 @@ export function makeConservativeTradingEngine({
         state.completedOrderTransitions.add(order.clientOrderId)
       }
 
-      if (order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
+      if (!recoveryMode && order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
           state.replacementIntents.has(symbol)) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
@@ -1118,11 +1132,13 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "BUY_FILL_RECONCILIATION_FAILED", error })
           return toResult({ error })
         }
-        const cancellation = await cancelAndReconcileRecoverySells({
-          symbol,
-          marketId: order.market.id,
-        })
-        if (!cancellation.ok) return cancellation
+        if (!recoveryMode) {
+          const cancellation = await cancelAndReconcileRecoverySells({
+            symbol,
+            marketId: order.market.id,
+          })
+          if (!cancellation.ok) return cancellation
+        }
         state.trailingBuy.set(symbol, false)
         state.buyReferenceOverrides.delete(symbol)
         state.lastBuyPrices.set(symbol, executionPrice)
@@ -1298,7 +1314,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols } = {}) => {
+  const applyOwnedOrderSnapshotsTransition = async ({ snapshots, symbols, recoveryMode = false } = {}) => {
     let affectedSymbol = symbols[0]
     try {
       // Validate the collected REST snapshot against stream facts processed
@@ -1380,6 +1396,7 @@ export function makeConservativeTradingEngine({
         if (fills.length === 0) {
           const processed = await processUserDataEventTransition({
             event: { executedOrder: historyOrder },
+            recoveryMode,
           })
           if (!processed.ok) {
             const error = processed.errors?.[0] ?? new Error("Recovered order state could not be applied")
@@ -1395,7 +1412,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const reconcileOwnedOrders = async ({ beforeApply } = {}) => {
+  const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
     const initialOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
     })
@@ -1476,7 +1493,7 @@ export function makeConservativeTradingEngine({
       })
     }
     return runTransition({
-      task: () => applyOwnedOrderSnapshotsTransition(snapshots),
+      task: () => applyOwnedOrderSnapshotsTransition({ ...snapshots, recoveryMode }),
     })
   }
 
