@@ -3348,3 +3348,40 @@ test("paginates complete REST fill history beyond Binance's 1000-trade page limi
   assert.equal(harness.engine.getOrders()[0].status, "FILLED")
   assert.equal(harness.accountedFills.length, 1001)
 })
+
+
+test("does not clear an independently durable strategy pause when a recovery cancellation resolves", async () => {
+  const makeOrder = ({ status }) => new CanonicalOrder({
+    clientOrderId: "recovered-sell-durable-pause",
+    brokerOrderId: "broker-recovered-sell-durable-pause",
+    market,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
+      pausedMarkets: new Set(["DOGEUSDT"]),
+      durablePausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
+      replacementIntents: new Set(["DOGEUSDT"]),
+    },
+  })
+  harness.broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  harness.broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [makeOrder({ status: "CANCELED" })] })
+  harness.broker.getFills = async () => ({ ok: true, data: [] })
+
+  const result = await harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, [])
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+})
