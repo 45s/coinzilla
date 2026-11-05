@@ -79,7 +79,7 @@ test("getCanonicalOrder rejects missing or ambiguous identifiers before RPC", as
   for (const input of [
     { symbol: "DOGEUSDT" },
     { symbol: "DOGEUSDT", orderId: 987654, clientOrderId: "harvester-client-123" },
-    { symbol: "DOGEUSDT", orderId: 0 },
+    { symbol: "DOGEUSDT", orderId: -1 },
     { symbol: "", clientOrderId: "harvester-client-123" },
   ]) {
     const result = await broker.getCanonicalOrder(input)
