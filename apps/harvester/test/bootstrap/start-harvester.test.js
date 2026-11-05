@@ -153,6 +153,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       return toResult({ data: { balances, sourceTime: accountSnapshotCalls } });
     },
     getSymbolFilters: async () => toResult({ data: marketMetadata }),
+    getExchangeMarkets: async () => toResult({ data: [market] }),
     getPrices: async () => toResult({ data: { symbol: 'ZROUSDT', price: '1' } }),
     subscribeForPrices: async ({ onPrice: callback } = {}) => {
       onPrice = callback;
