@@ -64,13 +64,14 @@ The migration is complete only when all of the following are true:
 - [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml` (`run_broker_testnet_read_only` manual input). The repository owner reports that the required TESTNET secrets are configured (values intentionally uninspected); the manual run on `develop` and long-running recovery/soak validation in a controlled TESTNET session remain pending.
+- [ ] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; planned, not started. The first modernization tranche established test seams, adapters, and selected ports, but did not complete the package's domain/application/infrastructure architecture. Phase 9 will define and implement broker-owned domain concepts, application use cases, explicit ports, and exchange-specific infrastructure adapters without expanding into Harvester or other packages.
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 
-The first DDD/TDD modernization tranche is merged into `develop`. It aligns the broker package with Harvester's responsibility boundaries without a risky all-at-once directory rewrite.
+The first DDD/TDD modernization tranche is merged into `develop`. It established deterministic tests, selected ports, and focused adapters. It is a foundation—not completion of the intended DDD architecture inside `@coinzilla/brokers`. The next stage is tracked separately as Phase 9 below.
 
 - [x] Establish and execute the package-scoped coverage command in CI. Pre-threshold package coverage snapshot on PR #528 head `ba1fe560048fecd1d7d7aec83f071cf709c218da`: **83.20% lines, 85.89% branches, 80.55% functions**.
-- [x] Codify the architecture boundary in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md): brokers is an infrastructure adapter; Harvester owns portfolio/position domain policy, strategies, and application use cases. Do not create empty `domain/` or `application/` folders in brokers.
+- [x] Document the initial package boundary and selected responsibilities in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md). This first-tranche description is historical; Phase 9 supersedes its blanket instruction against package-owned `domain/` and `application/` layers.
 - [x] Add deterministic RPC/Streams failure-path characterization. The package suite has since grown to **387/387** passing tests on PR #573's synchronized head. Latest critical runtime coverage is recorded below; the RPC client remains at 99.06%/93.39%/94.12% (lines/branches/functions). PR #527 prevents late message/close callbacks from superseded Streams transports; PR #528 explicitly verifies that all four order mutation methods fail closed while user data is unavailable.
 - [x] Introduce the injected `createUserDataClientPort` boundary. The user-data session owns lifecycle/recovery and acknowledgement state; the Binance adapter owns RPC method names, signed subscription options, and client listener forwarding.
 - [x] Complete deterministic user-data lifecycle/recovery characterization. The session suite has 42 offline tests covering uncertain subscription resolution, retries, reconnect races, repeated reconciliation acknowledgement, blocked state-changing operations, stale events, listener rollback, and stale-subscription cleanup. `user-data-session.js` measures 98.11% lines / 90.05% branches / 100.00% functions on PR #555's exact CI head. The broker-level order-safety regression also verifies that `createOrder`, `createCanonicalOrder`, `cancelOrder`, and `cancelAllOpenOrders` issue no mutation RPC after stream termination.
@@ -87,6 +88,70 @@ The first DDD/TDD modernization tranche is merged into `develop`. It aligns the 
   PR #573's synchronized exact CI head `22a961bbb4565962ff86021002bbcc674c963f5c` passed 387/387 broker tests and all 5 required checks. Current runtime coverage: broker facade 97.24% lines / 92.15% branches / 96.08% functions; user-data session 99.37% / 91.28% / 100.00%; RPC client 99.06% / 93.39% / 94.12%; Streams client 98.57% / 92.80% / 82.76%; native transport 100.00% / 91.25% / 96.15%.
 
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
+
+### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (planned)
+
+**Scope is the broker package itself.** This phase is not a Harvester refactor, does not move broker responsibilities into another package, and does not authorize changes to other domains. Harvester and bot packages may be inspected only when necessary to verify existing public broker consumers; they are not implementation scope.
+
+**Architecture objective:** make `@coinzilla/brokers` a cohesive, independently testable broker domain/application package with exchange-specific infrastructure adapters. The package owns the domain of broker capabilities and exchange interaction contracts—not portfolio policy, trading strategy, or bot product decisions.
+
+Target dependency direction:
+
+`Infrastructure adapters → Application use cases → Broker domain`
+
+Ports are defined at the boundary needed by application/domain policy; infrastructure implements those ports. Dependencies and imports must not point inward from domain/application to Binance SDK/protocol/transport implementation details.
+
+**Target responsibilities (derive names and module layout from real concepts; do not create empty template folders):**
+
+- **Domain:** exchange-neutral broker concepts, capability contracts, value objects, invariants, domain errors, and policies that genuinely belong to the broker domain. Keep Binance DTOs, wire names, sockets, and protocol envelopes out.
+- **Application:** broker-owned use cases and orchestration for account, order, market-data, and user-data capabilities. Coordinate domain behavior through explicit ports; do not embed transport mechanics.
+- **Ports:** narrow interfaces for RPC operations, streams, user-data subscription/session capabilities, clocks/schedulers, and other external effects where they are real dependencies. Avoid speculative generic abstractions and one-wrapper-per-method interfaces.
+- **Infrastructure:** Binance-specific RPC/Streams clients, transport, signing, endpoint configuration, protocol DTOs, request/response/event mapping, and adapters implementing broker ports.
+- **Composition/public API:** preserve the existing public broker exports and consumer contract while composing application services with Binance infrastructure.
+
+**Implementation sequence:**
+
+1. Inventory the current package modules, imports, responsibilities, public exports, and existing tests. Produce a dependency/responsibility map before moving code.
+2. Identify concrete domain rules and application workflows currently embedded in the Binance facade, user-data session, or protocol utilities. Do not relabel pure DTO mapping as domain logic.
+3. Define broker-owned domain contracts and application use cases from actual package behavior. Record important architectural decisions and dependency rules.
+4. Add ports at demonstrated side-effect boundaries and adapt Binance infrastructure to implement them.
+5. Refactor one vertical capability slice at a time (for example account reads, order lifecycle, market metadata, or user-data lifecycle). Preserve behavior and compatibility at every slice.
+6. Remove duplicated responsibilities and accidental dependencies only when tests and the dependency map demonstrate the improvement.
+7. Update package architecture documentation and this roadmap as the implementation evolves.
+
+**TDD is mandatory for each slice:** write a failing test first (RED), implement the smallest passing behavior (GREEN), then improve structure without changing behavior (REFACTOR). Verify focused tests, package tests, coverage, and relevant workspace consumers after each slice. Do not perform a directory-only rewrite or move code without behavioral/architectural tests.
+
+**Required test boundaries:**
+
+- Domain tests: deterministic, pure, no Binance client, socket, network, or credentials.
+- Application tests: use-case behavior with fake/in-memory ports; cover success, invalid state, failures, retries, timeouts, and uncertain outcomes.
+- Port/adapter contract tests: prove Binance infrastructure satisfies the application-facing contracts.
+- Infrastructure tests: protocol framing, signing, DTO mapping, transport lifecycle, reconnect, cleanup, and malformed responses.
+- Public broker contract tests: preserve exports, signatures, result envelopes, decimal strings, callback/event semantics, and safety gates.
+- Integration tests: remain opt-in, TESTNET-only, and separate from default offline tests.
+
+**Compatibility and safety constraints:**
+
+- Preserve current public exports, method signatures, result shapes, exact decimal strings, event semantics, reconciliation acknowledgements, and order-safety gates unless a separately reviewed compatibility change is approved.
+- Never blindly replay a state-changing RPC after an uncertain timeout or disconnect.
+- Never enable live order mutations or weaken TESTNET safety controls as part of architecture work.
+- Keep portfolio/position policy, strategies, and bot product behavior outside this package; this is a scope boundary, not a reason to keep broker-owned domain/application concepts out of brokers.
+
+**Phase 9 exit criteria (all required):**
+
+- The package has a documented, implemented domain/application/ports/infrastructure responsibility map that matches actual source dependencies.
+- Domain code has no dependency on Binance protocol, transport, or concrete infrastructure.
+- Application use cases depend on explicit ports rather than concrete Binance clients.
+- Binance infrastructure implements the ports and passes adapter contract tests.
+- Domain and application tests run offline without credentials or network.
+- Important failure, retry, timeout, reconnect, cleanup, and uncertain-outcome paths have deterministic coverage.
+- Existing public broker contracts and consumers remain compatible, or an approved migration is documented and verified.
+- Package tests and the configured coverage gates pass on the exact final PR head.
+- Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
+
+**Status:** planned; no Phase 9 implementation is claimed by this documentation update.
+
+---
 
 ### Large-file review and scoped refactoring plan
 
@@ -111,7 +176,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-8. The broker package must not implement bot strategy or portfolio policy. Those remain owned by Harvester/bot application domains; preserve the callback and reconciliation-acknowledgement contract.
+9. Phase 9 is the next planned architecture work inside `@coinzilla/brokers`: define broker-owned domain/application boundaries and ports, then move Binance-specific protocol concerns behind infrastructure adapters using vertical TDD slices. Do not interpret the first tranche as completion, and do not expand this task into Harvester or other packages.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
