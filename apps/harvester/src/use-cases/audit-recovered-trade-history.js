@@ -1,4 +1,4 @@
-import { Fill } from "@coinzilla/entities"
+import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 
 function requireArray({ value, field }) {
@@ -90,6 +90,7 @@ export function auditRecoveredTradeHistory({
   exchangeFills,
   complete = false,
   marketUniverseComplete = false,
+  ownedOrders = [],
 } = {}) {
   try {
     if (complete !== true) {
@@ -97,6 +98,19 @@ export function auditRecoveredTradeHistory({
     }
     const journalRecords = requireArray({ value: journalFills, field: "journalFills" })
     const exchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
+    const ownedOrderRecords = requireArray({ value: ownedOrders, field: "ownedOrders" })
+    const ownedOrdersByBrokerId = new Map()
+    for (const [index, order] of ownedOrderRecords.entries()) {
+      if (!(order instanceof CanonicalOrder) ||
+          typeof order.brokerOrderId !== "string" ||
+          !order.brokerOrderId.trim()) {
+        throw new TypeError("ownedOrders[" + index + "] must be a canonical acknowledged order")
+      }
+      if (ownedOrdersByBrokerId.has(order.brokerOrderId)) {
+        throw new Error("Recovered order registry contains duplicate broker order ID " + order.brokerOrderId)
+      }
+      ownedOrdersByBrokerId.set(order.brokerOrderId, order)
+    }
 
     const journalById = new Map()
     const journalTradeIds = new Map()
@@ -112,6 +126,7 @@ export function auditRecoveredTradeHistory({
 
     const exchangeById = new Map()
     const exchangeTradeIds = new Map()
+    let reconciledOwnedOrderFills = 0
     for (const [index, fill] of exchangeRecords.entries()) {
       if (!(fill instanceof Fill)) {
         throw new TypeError("exchangeFills[" + index + "] must be a canonical Fill")
@@ -128,7 +143,18 @@ export function auditRecoveredTradeHistory({
     for (const [fillId, exchangeFill] of exchangeById) {
       const journalFill = journalById.get(fillId)
       if (!journalFill) {
-        throw new Error("Exchange account trade history contains an execution absent from the Harvester Journal: " + fillId)
+        const ownedOrder = ownedOrdersByBrokerId.get(exchangeFill.brokerOrderId)
+        if (
+          !ownedOrder ||
+          ownedOrder.market.symbol !== exchangeFill.market.symbol ||
+          ownedOrder.side !== exchangeFill.side ||
+          (exchangeFill.clientOrderId !== undefined &&
+            exchangeFill.clientOrderId !== ownedOrder.clientOrderId)
+        ) {
+          throw new Error("Exchange account trade history contains an execution absent from the Harvester Journal and recovered order registry: " + fillId)
+        }
+        reconciledOwnedOrderFills += 1
+        continue
       }
       assertFillParity({ journalFill, exchangeFill })
     }
@@ -148,6 +174,7 @@ export function auditRecoveredTradeHistory({
         marketUniverseComplete: true,
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
+        reconciledOwnedOrderFills,
       }),
     })
   } catch (error) {
