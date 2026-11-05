@@ -14,7 +14,7 @@ When the CLI starts, it configures three independent destinations:
 | Development diagnostics | `logs/harvester.log` | DEBUG |
 | Detailed trace | `logs/harvester-trace.log` | TRACE |
 
-Complete console lines (timestamp, level, message, and displayed details) are colored when stdout is an interactive terminal and `NO_COLOR` is not set. INFO is blue and its label is omitted—the color already communicates the level. DEBUG remains magenta, TRACE bright magenta, SUCCESS green, SYSTEM cyan, WARN yellow, and ERROR red. `SUCCESS` and `SYSTEM` retain their semantic method labels even though both use INFO severity for transport filtering. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
+Complete console lines (timestamp, level, message, and displayed details) are colored when stdout is an interactive terminal and `NO_COLOR` is not set. INFO is blue and its label is omitted—the color already communicates the level. SYSTEM is cyan and its label is also omitted for the same reason. DEBUG remains magenta, TRACE bright magenta, SUCCESS green, and WARN yellow, and ERROR red. `SUCCESS` and `SYSTEM` retain their semantic methods in structured log entries even though both use INFO severity for transport filtering. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
 retains its timestamp, normalized severity, logging method, and redacted,
 JSON-safe structured data. A console threshold change does not change either
 file threshold.
@@ -119,7 +119,7 @@ Examples include:
 Do not use SYSTEM for every incoming event, market tick, strategy evaluation,
 or repeated connection-status heartbeat. Those belong at DEBUG or INFO
 according to whether they represent an operator-relevant trading event.
-SYSTEM entries are cyan and retain the visible `SYSTEM` label, making lifecycle events easy to distinguish from blue INFO output.
+SYSTEM entries are cyan without a redundant `SYSTEM` prefix, making lifecycle events easy to distinguish from blue INFO output.
 
 ## Runtime commands
 

@@ -227,7 +227,9 @@ export async function configureHarvesterLogging({
       previousTimestamp = timestamp
 
       const time = new Date(timestamp).toLocaleTimeString()
-      const levelLabel = method === "info" ? "" : method.toUpperCase() + " "
+      const levelLabel = method === "info" || method === "system"
+        ? ""
+        : method.toUpperCase() + " "
       const plainPrefix = time + " " + levelLabel + summary.message
       const serializedDetails = Object.keys(summary.details ?? {}).length > 0
         ? " " + JSON.stringify(summary.details)
