@@ -83,6 +83,10 @@ test("missing portfolio positions and ledgers are represented as null", () => {
     portfolio: { appliedFillIds: [], getPosition: () => undefined },
     marketId: "market-zro-usdt",
   }), { position: null, appliedFillCount: 0 })
+  assert.equal("appliedFillFingerprints" in createPortfolioLogSummary({
+    portfolio: { appliedFillIds: [], getPosition: () => undefined },
+    marketId: "market-zro-usdt",
+  }), false)
   assert.equal(createPositionLogSummary({}), null)
   assert.equal(createRecoveryLedgerLogSummary({}), null)
   assert.deepEqual(createPortfolioLogSummary({
