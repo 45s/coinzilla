@@ -68,7 +68,6 @@ export async function migrateSqliteDatabase(database, migrations) {
     const newlyApplied = []
 
     for (const migration of pendingMigrations) {
-
       const result = migration.up(transaction)
       if (isThenable(result)) {
         Promise.resolve(result).catch(() => {})
