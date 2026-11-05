@@ -1167,16 +1167,19 @@ This is deliberately a fail-closed interim gate, not a claim that restart recove
 ## P0 — Durable restart recovery (current engineering work)
 
 - [x] PR #568 — local single-writer process ownership; lock is acquired before Journal recovery and broker connection, and retained after uncertain runtime/Journal shutdown.
-- [x] Validate persisted Journal records into a strict immutable projection of order submission/cancellation intents, broker/client identities, exact fills, duplicate execution identities, recovery-cycle completions, strategy pauses, account snapshots, open-order snapshots, and session shutdown outcomes (PR #577).
-- [x] Rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and pending replacement intent from the validated projection (PR #577).
-- [x] Pass validated pre-start Journal records into Harvester bootstrap; reconstruct in-memory state after canonical market metadata is loaded and before user-data subscription.
-- [x] Add regression coverage proving malformed Journal recovery prevents user-data subscription and broker workflow startup.
-- [ ] Reconcile every restored owned order against canonical exchange order history and complete paginated fill history, including UNKNOWN submission/cancellation outcomes.
-- [ ] Reconcile account-wide open orders against restored ownership; reject unknown, missing, duplicate, or contradictory exchange orders.
-- [ ] Reconcile free/locked balances and aggregate reservations against replayed active Positions and pending commitments.
-- [ ] Wire recovery reconciliation into startup readiness. Keep the interim trading-history gate until every canonical read-only reconciliation succeeds.
-- [ ] Add crash-boundary/restart tests for submission, acknowledgement, fill, cancellation, replacement, cycle completion, reservation, and shutdown.
-- [ ] Add repeat-recovery idempotency and fail-closed sequence/truncation/contradiction tests.
+- [x] PR #577 — strict Journal projection for order intents, acknowledgements, cancellation outcomes, exact fills, duplicate execution identities, recovery cycles, pauses, account snapshots, open-order snapshots, and process sessions.
+- [x] PR #577 — rehydrate canonical Fill values, Portfolio, RecoveryLedger, free inventory, OrderRegistry, paused markets, completed-cycle identities, trailing-buy state, and cancel/replace intents.
+- [x] PR #577 — load canonical Market metadata for enabled and historical symbols before restoring domain state.
+- [x] PR #577 — reconcile every restored owned order through canonical client-order lookup, canonical order history, and complete paginated REST fill history; compare exact execution totals and identities.
+- [x] PR #577 — reconcile account-wide open orders against durable Harvester ownership; reject unowned, duplicate, missing, or contradictory orders.
+- [x] PR #577 — compare current free/locked balances against the original durable PREFLIGHT baseline, replayed Portfolio cash flows/inventory, and exact active-order reservations.
+- [x] PR #577 — gate trading readiness on canonical order/fill reconciliation, account ownership audit, user-data stream safety, and absence of unresolved pause/cancel/replace intents.
+- [x] PR #577 — preserve unresolved recovery replacement intents; only clear them after canonical exchange history proves the prior order was canceled or filled.
+- [x] PR #577 — add pagination regression coverage for more than 1,000 fills and a bootstrap restart test with a previously filled order.
+- [ ] Query and reconcile account-wide trade history since the durable baseline to detect external/manual executions that net to the same balances or are not associated with a recovered Harvester order.
+- [ ] Prove repeated full recovery attempts are idempotent across process crashes during reconciliation and recovery-cycle completion.
+- [ ] Expand crash-boundary tests across submission intent, broker acknowledgement, partial/full fill, cancellation request/result, replacement intent, reservation commit/release, and shutdown.
+- [ ] Prove Journal truncation, missing pages, stale source timestamps, contradictory status transitions, and missing account baselines all fail closed under real persisted Journal files.
 - [ ] Keep TESTNET acceptance NOT ACCEPTED until the separate joint validation session.
 
-**Current safety boundary:** PR #577 rehydrates offline domain state, but startup still blocks trading when prior trading history exists. Canonical exchange reconciliation, account-wide ownership/reservation reconciliation, and restart readiness are not complete. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
+**Current safety boundary:** the recovery path is now wired into startup and has offline regression coverage, but PR #577 is not yet merged or CI-verified on its final synchronized HEAD. Account-wide external/manual trade-history reconciliation and the full crash-boundary matrix remain unresolved. No TESTNET order submission, cancellation, modification, trading-enabled restart, or account mutation is permitted during this engineering work.
