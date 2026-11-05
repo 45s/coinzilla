@@ -2888,7 +2888,7 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
     }),
     evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
   }
-  const harness = await createHarness({ strategyPolicy, placeOrderThrow: true })
+  const harness = await createHarness({ strategyPolicy, placeOrderThrow: true, accountingApplied: true })
 
   const submission = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
