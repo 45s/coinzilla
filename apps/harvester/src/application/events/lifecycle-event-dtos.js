@@ -542,10 +542,10 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     }
   })
 
-/** Map all exchange-returned balances into an exact-decimal account audit event. */
+/** Map configured trading-pair balances into an exact-decimal account audit event. */
 export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData(input, "Account-snapshot-captured event mapping", ({
-    phase, snapshot, auditStatus = "COMPLETE", auditReasons = [],
+    phase, snapshot, allowedAssetCodes, auditStatus = "COMPLETE", auditReasons = [],
   }) => {
     if (!["OPENING", "CLOSING", "PREFLIGHT"].includes(phase)) throw new TypeError("phase must be OPENING, CLOSING, or PREFLIGHT")
     if (!["COMPLETE", "INCOMPLETE"].includes(auditStatus)) throw new TypeError("auditStatus must be COMPLETE or INCOMPLETE")
@@ -555,7 +555,19 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     if (!Array.isArray(auditReasons) || auditReasons.some((reason) => typeof reason !== "string" || !reason.trim())) {
       throw new TypeError("auditReasons must contain non-empty strings")
     }
-    const balances = snapshot.balances.map((balance, index) => {
+    if (allowedAssetCodes !== undefined && (!Array.isArray(allowedAssetCodes) || allowedAssetCodes.some((code) => typeof code !== "string" || !code.trim()))) {
+      throw new TypeError("allowedAssetCodes must contain non-empty asset codes")
+    }
+    const allowedAssets = allowedAssetCodes === undefined ? undefined : new Set(allowedAssetCodes)
+    const selectedBalances = allowedAssets === undefined
+      ? snapshot.balances
+      : snapshot.balances.filter((balance) => allowedAssets.has(balance?.asset?.code))
+    if (allowedAssets !== undefined && selectedBalances.length !== allowedAssets.size) {
+      const found = new Set(selectedBalances.map((balance) => balance.asset.code))
+      const missing = [...allowedAssets].filter((code) => !found.has(code))
+      throw new TypeError("snapshot is missing configured assets: " + missing.join(", "))
+    }
+    const balances = selectedBalances.map((balance, index) => {
       const asset = requireString({ value: balance?.asset?.code, field: "balances[" + index + "].asset.code" })
       const free = requireDecimalString({ value: balance?.free?.amount, field: "balances[" + index + "].free" })
       const locked = requireDecimalString({ value: balance?.locked?.amount, field: "balances[" + index + "].locked" })
