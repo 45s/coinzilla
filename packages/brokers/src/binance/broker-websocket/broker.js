@@ -293,7 +293,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       }
       const params = { symbol: normalizedSymbol }
       if (hasOrderId) {
-        params.orderId = normalizeBinanceId(orderId, "order ID")
+        params.orderId = Number(normalizeBinanceId(orderId, "order ID"))
       } else {
         if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
           throw new TypeError("Binance clientOrderId must be a non-empty string")
