@@ -137,6 +137,23 @@ const restoreState = () => {
   return { projection, restored: restored.data }
 }
 
+const resolveRestoredOrdersAsFilled = ({ recoveredState }) => ({
+  ...recoveredState,
+  orderRegistry: new OrderRegistry({
+    orders: recoveredState.orderRegistry.orders.map((order) => new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market: order.market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      status: "FILLED",
+    })),
+  }),
+})
+
 const snapshot = ({ btcFree = "0.0996", btcLocked = "0", usdtFree = "1000.25", usdtLocked = "0", sourceTime = 3000 } = {}) =>
   new AccountSnapshot({
     sourceTime,
@@ -168,7 +185,7 @@ test("accepts balances and reservations that exactly match replayed strategy own
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({
     projection,
-    recoveredState: restored,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
     currentAccountSnapshot: snapshot(),
     openOrders: [],
     markets: [market],
@@ -198,7 +215,7 @@ test("rejects exchange open orders that are not owned by the recovered registry"
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({
     projection,
-    recoveredState: restored,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
     currentAccountSnapshot: snapshot(),
     openOrders: [openBuyOrder()],
     markets: [market],
