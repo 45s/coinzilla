@@ -112,6 +112,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { balances, sourceTime: accountSnapshotTime },
       }
     },
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async ({ symbol }) => {
       calls.push("filters:" + symbol)
       return { ok: true, data: createMarketMetadata(symbol) }
@@ -211,6 +212,10 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
     "subscribe:BTCUSDT",
   ])
   assert.equal(result.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
+  assert.ok(result.recoveredState)
+  assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
+  assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
+  assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
   assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
@@ -814,6 +819,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const broker = {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
@@ -1429,6 +1435,7 @@ test("normalizes only Binance Spot's definite POST-ONLY rejection", async () => 
     cancelOrder: async () => ({ ok: true }), getOpenOrders: async () => ({ ok: true, data: [] }),
     getFills: async () => ({ ok: true }), getCanonicalOrderHistory: async () => ({ ok: true }), getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => ({ ok: true }), getSymbolFilters: async () => ({ ok: true }),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getPrices: async () => ({ ok: true }), subscribeForPrices: async () => ({ ok: true }),
     subscribeForBookTicker: async () => ({ ok: true }), subscribeForUserData: async () => ({ ok: true }),
   }
@@ -1765,7 +1772,7 @@ test("journals account-wide open orders and blocks trading before engine activat
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: { info() {}, error() {}, debug() {} },
-  }), /startup blocked: account has 1 pre-existing open order/)
+  }), /startup blocked: account has 1 open order/)
 
   const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
@@ -2000,4 +2007,199 @@ test("blocks read-only startup when either PREFLIGHT audit event publication fai
     assert.equal(calls.includes("disconnect"), true)
     assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
   }
+})
+
+
+test("rejects malformed durable Journal recovery before user-data subscription", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords: [{
+        id: "bad-recovery-record",
+        payload: {
+          id: "bad-recovery-record",
+          name: "order.submission_requested",
+          data: { clientOrderId: "missing-required-order-fields" },
+        },
+        position: { fileName: "session.jsonl", lineNumber: 1 },
+      }],
+      logger: { info() {}, error() {} },
+    }),
+    /Journal recovery projection failed/,
+  )
+
+  assert.deepEqual(calls, ["connect", "disconnect"])
+})
+
+
+test("blocks bootstrap when canonical lookup cannot resolve a recovered submission", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => tradingConfig,
+      env: {
+        ...binanceEnv,
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+      },
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords: [{
+        id: "prior-submission",
+        payload: {
+          id: "prior-submission",
+          name: "order.submission_requested",
+          data: {
+            clientOrderId: "h-BTCUSDT-recovered-1",
+            symbol: "BTCUSDT",
+            side: "BUY",
+            type: "LIMIT",
+            price: "65000",
+            quantity: "0.01",
+            status: "PENDING",
+          },
+        },
+        position: { fileName: "session.jsonl", lineNumber: 1 },
+      }],
+      logger: { info() {}, error() {} },
+    }),
+    /canonical owned-order\/fill reconciliation failed/,
+  )
+
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "subscribe:user-data", "account:snapshot", "unsubscribe:user-data", "disconnect"])
+  assert.equal(calls.includes("placeOrder"), false)
+  assert.equal(calls.includes("cancelOrder"), false)
+})
+
+
+test("keeps restart fail-closed until complete account-wide trade history is available", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const market = createMarketMetadata("BTCUSDT").market
+  const recoveredFill = new Fill({
+    tradeId: "restart-trade-1",
+    brokerOrderId: "9001",
+    clientOrderId: "h-BTCUSDT-buy-1",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "65000", asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: "650", asset: market.quoteAsset }),
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const canonicalOrder = new CanonicalOrder({
+    clientOrderId: "h-BTCUSDT-buy-1",
+    brokerOrderId: "9001",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "65000", asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.01", asset: market.baseAsset }),
+    status: "FILLED",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  })
+  let accountSourceTime = 2000
+  broker.getAccountSnapshot = async () => ({
+    ok: true,
+    data: {
+      sourceTime: accountSourceTime++,
+      balances: [
+        new Balance({
+          free: new Quantity({ amount: "1000.01", asset: market.baseAsset }),
+          locked: new Quantity({ amount: "0", asset: market.baseAsset }),
+        }),
+        new Balance({
+          free: new Quantity({ amount: "1000", asset: new Asset({ id: "asset:ETH", code: "ETH" }) }),
+          locked: new Quantity({ amount: "0", asset: new Asset({ id: "asset:ETH", code: "ETH" }) }),
+        }),
+        new Balance({
+          free: new Quantity({ amount: "350", asset: market.quoteAsset }),
+          locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+        }),
+      ],
+    },
+  })
+  broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  broker.getCanonicalOrder = async () => ({ ok: true, data: canonicalOrder })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [canonicalOrder] })
+  broker.getFills = async () => ({ ok: true, data: [recoveredFill] })
+  broker.placeOrder = async () => {
+    calls.push("placeOrder")
+    return { ok: false, errors: [new Error("unexpected order submission in recovery test")] }
+  }
+  broker.cancelOrder = async () => {
+    calls.push("cancelOrder")
+    return { ok: false, errors: [new Error("unexpected cancellation in recovery test")] }
+  }
+
+  const record = (id, name, data, lineNumber) => ({
+    id,
+    payload: { id, name, data },
+    position: { fileName: "2026-11-05_10-00-00.jsonl", lineNumber },
+  })
+  const journalRecoveryRecords = [
+    record("baseline", "account.snapshot_captured", {
+      phase: "PREFLIGHT",
+      sourceTime: 1000,
+      auditStatus: "COMPLETE",
+      balances: [
+        { asset: "BTC", free: "1000", locked: "0", total: "1000" },
+        { asset: "ETH", free: "1000", locked: "0", total: "1000" },
+        { asset: "USDT", free: "1000", locked: "0", total: "1000" },
+      ],
+      auditReasons: [],
+    }, 1),
+    record("started", "harvester.started", {
+      broker: "binance",
+      strategyMode: "conservative",
+      enabledMarkets: ["BTCUSDT"],
+      tradingEnabled: true,
+    }, 2),
+    record("intent", "order.submission_requested", {
+      clientOrderId: "h-BTCUSDT-buy-1",
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      price: "65000",
+      quantity: "0.01",
+      status: "PENDING",
+    }, 3),
+  ]
+
+  const config = structuredClone(tradingConfig)
+  config.strategies.CG_coinGrabber.pairs.BTCUSDT.keepQuantity = 0.0099
+  config.strategies.CG_coinGrabber.pairs.BTCUSDT.quantityPrecision = 4
+
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => config,
+      env: {
+        ...binanceEnv,
+        HARVESTER_ENABLE_TRADING: "true",
+        HARVESTER_TRADING_MODE: "testnet",
+        NODE_ENV: "test",
+      },
+      brokerAdapterFactory: () => broker,
+      journalRecoveryRecords,
+      logger: { info() {}, error() {} },
+    }),
+    /Account-wide exchange trade history pages are incomplete/,
+  )
+
+  assert.deepEqual(calls.filter((call) => ["placeOrder", "cancelOrder"].includes(call)), [])
+  assert.ok(calls.includes("unsubscribe:user-data"))
+  assert.ok(calls.includes("disconnect"))
 })
