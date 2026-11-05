@@ -143,7 +143,7 @@ export function makeConservativeTradingEngine({
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
@@ -187,6 +187,7 @@ export function makeConservativeTradingEngine({
     durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
     recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
     recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
+    unrequestedTerminalOrderClientIds: new Set(initialState.unrequestedTerminalOrderClientIds ?? []),
     replacementIntents: new Set(initialState.replacementIntents ?? []),
     trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
@@ -1122,6 +1123,13 @@ export function makeConservativeTradingEngine({
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
       state.registry = update.registry
+
+      if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+          state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
+        const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
+        await pause({ symbol, reason: "UNREQUESTED_TERMINAL_ORDER_STATE_DURING_RECOVERY", error })
+        return toResult({ error })
+      }
 
       if (recoveryMode && order.status === "CANCELED" &&
           compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
