@@ -1253,6 +1253,21 @@ export async function startHarvester({
         if (unresolvedStrategyState) {
           throw new Error("Conservative TESTNET startup blocked: recovered strategy contains paused markets or unresolved cancel/replace intents")
         }
+        const enabledSymbols = new Set(
+          Object.entries(pairs)
+            .filter(([, pairConfig]) => pairConfig.enabled)
+            .map(([symbol]) => symbol),
+        )
+        const unmanagedRecoveredOrders = tradingEngine.getOrders().filter((order) =>
+          ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
+          !enabledSymbols.has(order.market.symbol)
+        )
+        if (unmanagedRecoveredOrders.length > 0) {
+          throw new Error(
+            "Conservative TESTNET startup blocked: recovered active orders belong to disabled markets: " +
+            unmanagedRecoveredOrders.map((order) => order.market.symbol + "/" + order.clientOrderId).join(", "),
+          )
+        }
         logger.info?.({
           message: "Harvester durable restart recovery and account ownership audit completed",
           reconciledOrders: reconciliation.data?.reconciled ?? 0,
