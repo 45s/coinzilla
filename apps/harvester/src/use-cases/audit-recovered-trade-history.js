@@ -95,9 +95,6 @@ export function auditRecoveredTradeHistory({
     if (complete !== true) {
       throw new Error("Account-wide exchange trade history pages are incomplete; external execution ownership cannot be proven")
     }
-    if (marketUniverseComplete !== true) {
-      throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
-    }
     const journalRecords = requireArray({ value: journalFills, field: "journalFills" })
     const exchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
 
@@ -139,6 +136,10 @@ export function auditRecoveredTradeHistory({
       if (!exchangeById.has(fillId)) {
         throw new Error("Durable Journal execution is missing from complete exchange account trade history: " + fillId)
       }
+    }
+
+    if (marketUniverseComplete !== true) {
+      throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
     }
 
     return toResult({
