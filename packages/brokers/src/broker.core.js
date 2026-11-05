@@ -16,6 +16,7 @@ export class CoreBroker {
 CoreBroker.prototype.getAssets = foo("getAssets")
 CoreBroker.prototype.cancelOrder = foo("cancelOrder")
 CoreBroker.prototype.getOpenOrders = foo("getOpenOrders")
+CoreBroker.prototype.getOrder = foo("getOrder")
 CoreBroker.prototype.getPrice = foo("getPrice")
 CoreBroker.prototype.createOrder = foo("createOrder")
 CoreBroker.prototype.subscribeForPrices = foo("subscribeForPrices")

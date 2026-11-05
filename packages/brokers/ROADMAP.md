@@ -159,7 +159,7 @@ Compatibility includes the existing Promise/result behavior, callback payload sh
 Other SDK broker methods remain compatibility candidates even if the current bot does not call them:
 - `getAssets()`
 - `getOpenOrders({ symbol? })`
-- `getOrder({ symbol, orderId })`
+- `getOrder({ symbol, orderId })` or `getOrder({ symbol, clientOrderId })`
 - `getOrderHistory({ symbol, orderId?, limit? })`
 - `cancelAllOpenOrders({ symbol })`
 - `getPrices({ symbol })`
@@ -172,7 +172,7 @@ Do not silently drop public methods because one current consumer does not call t
 |---|---|---|
 | `getAssets()` | `account.status` | USER_DATA, signed |
 | `getOpenOrders({ symbol? })` | `openOrders.status` | USER_DATA, signed |
-| `getOrder({ symbol, orderId })` | `order.status` | USER_DATA, signed |
+| `getOrder({ symbol, orderId })` / `getOrder({ symbol, clientOrderId })` | `order.status` (`orderId` or `origClientOrderId`) | USER_DATA, signed |
 | `getOrderHistory(...)` | `allOrders` | USER_DATA, signed |
 | `getMyTrades(...)` | `myTrades` | USER_DATA, signed |
 | `createOrder(input)` | `order.place` | TRADE, signed |
@@ -637,6 +637,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ### Canonical order-history records (request #321)
 - [x] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract. Broker implementation and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
+- [~] Extend `getOrder()` to accept exactly one of `orderId` or `clientOrderId`; only Binance `order.status` error `-2013` maps to a successful `data: null`. Tracked by issue #372 / PR #573; mark complete only after merge and exact-head CI.
 - Use exact `exchangeInfo` metadata for Market/Asset identity, preserve decimal strings and source timestamps, and map unsupported lifecycle states to canonical `UNKNOWN` without leaking Binance field names.
 - Reject unsupported order types, malformed records, and unsafe numeric IDs; do not convert financial values through JavaScript `Number`.
 - Consumer: Free-Roll FR-057 snapshot collection. Request: [#321](https://github.com/45s/coinzilla/issues/321).

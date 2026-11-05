@@ -88,6 +88,8 @@ The broker blocks new order-changing calls while user data is unavailable or rec
 
 A timeout or connection loss during a state-changing RPC can mean Binance accepted the operation but the response was lost. Such an outcome is **unknown**, not proof of failure. Do not blindly submit the same order or cancellation again. `getCanonicalOrder({ symbol, orderId })` and `getCanonicalOrder({ symbol, clientOrderId })` perform read-only `order.status` lookups and return an exact-decimal `CanonicalOrder`; the client-ID form maps to Binance's `origClientOrderId` request parameter. A lookup result is only an identity/status observation: callers must still reconcile canonical order history and actual fills. A not-found response or lookup failure is not permission to retry.
 
+`getOrder({ symbol, orderId })` preserves broker-order-ID lookup. `getOrder({ symbol, clientOrderId })` performs the same signed `order.status` query using Binance's `origClientOrderId`. Exactly one identifier is required. A definitive Binance `-2013` (`NO_SUCH_ORDER`) response returns `{ ok: true, data: null }`; authentication, transport, rate-limit, malformed-response, and other API failures remain errors. This null result is not permission to retry an uncertain state-changing request without reconciling the surrounding order and fill state.
+
 The RPC client uses a 10,000 ms default request timeout and a 5,000 ms default `recvWindow`. These are client defaults, not guarantees about Binance processing time or rate-limit capacity. Binance rate limits and account restrictions remain authoritative; handle rate-limit and API errors explicitly and do not add unbounded retry loops.
 
 ## Public market-data streams
