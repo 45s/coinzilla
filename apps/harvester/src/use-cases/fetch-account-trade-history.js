@@ -98,6 +98,13 @@ export async function fetchAccountTradeHistory({
             throw new TypeError("Account trade history returned a non-canonical or wrong-market fill for " + market.symbol)
           }
           const numericTradeId = requireSafeTradeId({ fill, symbol: market.symbol })
+          if (fillIds.has(fill.id)) {
+            throw new Error("Account trade history contains duplicate execution identity " + fill.id)
+          }
+          const tradeKey = market.symbol + ":" + fill.tradeId
+          if (tradeIdsBySymbol.has(tradeKey)) {
+            throw new Error("Account trade history contains duplicate trade identity " + tradeKey)
+          }
           if (numericTradeId <= lastTradeId) {
             throw new Error("Account trade history cursor did not advance strictly for " + market.symbol)
           }
@@ -109,13 +116,6 @@ export async function fetchAccountTradeHistory({
             throw new Error("Account trade history returned an execution before the requested baseline for " + market.symbol)
           }
           lastExecutedAt = fill.executedAt
-          if (fillIds.has(fill.id)) {
-            throw new Error("Account trade history contains duplicate execution identity " + fill.id)
-          }
-          const tradeKey = market.symbol + ":" + fill.tradeId
-          if (tradeIdsBySymbol.has(tradeKey)) {
-            throw new Error("Account trade history contains duplicate trade identity " + tradeKey)
-          }
           fillIds.add(fill.id)
           tradeIdsBySymbol.set(tradeKey, fill.id)
           fills.push(fill)
