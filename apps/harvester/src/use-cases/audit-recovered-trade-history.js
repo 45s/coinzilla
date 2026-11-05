@@ -89,10 +89,14 @@ export function auditRecoveredTradeHistory({
   journalFills,
   exchangeFills,
   complete = false,
+  marketUniverseComplete = false,
 } = {}) {
   try {
     if (complete !== true) {
-      throw new Error("Account-wide exchange trade history is incomplete; external execution ownership cannot be proven")
+      throw new Error("Account-wide exchange trade history pages are incomplete; external execution ownership cannot be proven")
+    }
+    if (marketUniverseComplete !== true) {
+      throw new Error("Account-wide exchange market universe is incomplete; unenumerated external executions cannot be excluded")
     }
     const journalRecords = requireArray({ value: journalFills, field: "journalFills" })
     const exchangeRecords = requireArray({ value: exchangeFills, field: "exchangeFills" })
@@ -140,6 +144,7 @@ export function auditRecoveredTradeHistory({
     return toResult({
       data: Object.freeze({
         complete: true,
+        marketUniverseComplete: true,
         fillsChecked: exchangeById.size,
         journalFillsChecked: journalById.size,
       }),
