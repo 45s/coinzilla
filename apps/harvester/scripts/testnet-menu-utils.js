@@ -2,7 +2,7 @@ export const TESTNET_MENU_ACTIONS = [
   { id: "orders", label: "List open orders", script: "list-testnet-open-orders.js" },
   { id: "cancel-orders", label: "Cancel all open orders", script: "cancel-testnet-open-orders.js" },
   { id: "balances", label: "List account balances", script: "list-testnet-balances.js" },
-  { id: "sell-zro", label: "Sell all free ZRO", script: "sell-testnet-zro.js", destructive: true },
+  { id: "sell-zro", label: "Sell all free ZRO", script: "sell-testnet-zro.js" },
   { id: "history", label: "List order history", script: "list-testnet-order-history.js", prompts: ["symbol", "limit"] },
   { id: "trades", label: "List trades", script: "list-testnet-trades.js", prompts: ["symbol", "limit", "fromId"] },
   { id: "journal-audit", label: "Reconcile journal balances", script: "reconcile-journal-account-balances.js", prompts: ["directory"] },
