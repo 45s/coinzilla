@@ -165,31 +165,46 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
 
     const restoredOrders = []
     const replacementIntents = new Set()
-    const latestSubmissionSequenceBySymbol = new Map()
+    const trailingBuyRepriceIntents = new Set()
+    const latestSubmissionSequenceBySymbolSide = new Map()
     for (const order of data.orders) {
-      const current = latestSubmissionSequenceBySymbol.get(order.symbol) ?? -1
-      latestSubmissionSequenceBySymbol.set(
-        order.symbol,
+      const key = order.symbol + ":" + order.side
+      const current = latestSubmissionSequenceBySymbolSide.get(key) ?? -1
+      latestSubmissionSequenceBySymbolSide.set(
+        key,
         Math.max(current, order.submissionSequence ?? -1),
       )
     }
+    const pausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
     for (const order of data.orders) {
       if (order.submissionOutcome === "REJECTED") continue
       const market = requireMarket({ marketMetadata, symbol: order.symbol })
       restoredOrders.push(restoreOrder({ order, market }))
       if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
-        replacementIntents.add(order.symbol)
-      } else if (
-        order.cancellationState === "CANCELED" &&
-        ["BUY_FILLED_RECALCULATE_RECOVERY_SELL", "TRAILING_BUY_REPRICE"].includes(order.cancellationReason) &&
-        order.cancellationSequence > (latestSubmissionSequenceBySymbol.get(order.symbol) ?? -1)
-      ) {
-        replacementIntents.add(order.symbol)
+        if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
+          replacementIntents.add(order.symbol)
+        } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
+          trailingBuyRepriceIntents.add(order.symbol)
+        } else {
+          pausedMarkets.add(order.symbol)
+        }
+      } else if (order.cancellationState === "CANCELED") {
+        const replacementSide = order.cancellationReason === "TRAILING_BUY_REPRICE"
+          ? "BUY"
+          : order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+            ? "SELL"
+            : undefined
+        const latestReplacementSequence = replacementSide
+          ? latestSubmissionSequenceBySymbolSide.get(order.symbol + ":" + replacementSide) ?? -1
+          : -1
+        if (order.cancellationSequence > latestReplacementSequence) {
+          if (replacementSide === "BUY") trailingBuyRepriceIntents.add(order.symbol)
+          if (replacementSide === "SELL") replacementIntents.add(order.symbol)
+        }
       }
     }
 
     const orderRegistry = new OrderRegistry({ orders: restoredOrders })
-    const pausedMarkets = new Set(data.pausedMarkets.map(({ symbol }) => symbol))
     const trailingBuySymbols = new Set()
     for (const [symbol, cycleSequence] of completedCycleSequenceBySymbol) {
       if ((trailingBuySequenceBySymbol.get(symbol) ?? -1) < cycleSequence) {
@@ -204,6 +219,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         orderRegistry,
         pausedMarkets,
         replacementIntents,
+        trailingBuyRepriceIntents,
         completedOrderClientIds,
         trailingBuySymbols,
         requiresExchangeReconciliation: true,
