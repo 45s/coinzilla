@@ -1132,3 +1132,14 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [ ] Implement strict Journal replay projection and canonical exchange reconciliation; durable intent records alone do not restore Portfolio, RecoveryLedger, or order registry state.
 
 These barriers deliberately await filesystem durability only immediately before exchange side effects. Ordinary market-price evaluation, strategy policy, and fill accounting remain asynchronous with respect to Journal delivery. No TESTNET exchange writes or trading-enabled restart are authorized by this work.
+
+
+## Shared account-asset reservations — P0, 2026-11-05
+
+- [x] Aggregate outstanding BUY quote commitments across all active orders sharing the same quote-asset ID, not only the current market.
+- [x] Aggregate quote cash-flow adjustments across all Portfolio positions sharing the same quote asset.
+- [x] Separate account-wide quote/base commitments from pair-specific investment and active-inventory limits in the allocator.
+- [x] Aggregate active base inventory by base-asset ID while retaining pair-specific sellable inventory limits.
+- [ ] Extend the multi-market regression matrix to cover multiple pairs sharing both quote and base assets, partial fills, UNKNOWN orders, and concurrent market events.
+
+The engine transition queue serializes decisions; this change additionally ensures serialized decisions reserve against the same account-level asset pool rather than reusing the full baseline balance for each market.
