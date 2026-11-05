@@ -55,6 +55,9 @@ function validateTransport(transport) {
     throw new TypeError(`Transport "${transport.name}" must provide write(entry)`)
   }
   assertLevel(transport.level)
+  if (transport.shouldWrite !== undefined && typeof transport.shouldWrite !== 'function') {
+    throw new TypeError(`Transport "${transport.name}" shouldWrite must be a function`)
+  }
   if (transport.close !== undefined && typeof transport.close !== 'function') {
     throw new TypeError(`Transport "${transport.name}" close must be a function`)
   }
@@ -69,7 +72,7 @@ function createConsoleTransport() {
       console.log(
         colors.fg.gray,
         new Date(timestamp).toLocaleTimeString(),
-        ...LEVEL_COLORS[method] ?? LEVEL_COLORS[level],
+        ...(LEVEL_COLORS[method] ?? LEVEL_COLORS[level]),
         formatLogContent(data),
         colors.reset,
       )
@@ -155,7 +158,7 @@ export class Logger {
   }
 
   /**
-   * Return an immutable snapshot of the current transport configuration.
+   * Return a detached snapshot of the current transport configuration.
    * @returns {{ transports: Array<{ name: string, level: string }> }}
    */
   getConfig() {
