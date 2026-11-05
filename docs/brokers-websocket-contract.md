@@ -113,7 +113,7 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 | `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Keep public API/composition thin while preserving compatibility |
 | `src/broker.core.js` | Exported compatibility base class with default unimplemented methods | Assess whether it should remain a compatibility contract or evolve into an explicit broker port; do not break consumers casually |
 | `binance/broker-websocket/broker.js` | Implements broker operations, coordinates RPC/Streams clients and user-data lifecycle, maps Binance responses | Currently mixes facade, application coordination, and infrastructure concerns; split by cohesive vertical slices |
-| `binance/broker-websocket/methods/user-data-session.js` | Subscriber state, reconnect scheduling, remote subscription lifecycle, reconciliation acknowledgement | Preserve state-machine cohesion while separating broker workflow policy from Binance RPC vocabulary |
+| `src/application/user-data-session.js` | Subscriber state, reconnect scheduling, remote subscription lifecycle, reconciliation acknowledgement through an injected client port | Preserve state-machine cohesion; keep Binance RPC and event vocabulary in the infrastructure adapter |
 | `binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
 | `binance/shared/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Infrastructure anti-corruption mapping; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
@@ -200,3 +200,9 @@ The existing safety behavior remains unchanged: uncertain subscribe outcomes are
 The Binance user-data client-port adapter translates raw WebSocket event envelopes into neutral port messages. Normal events carry the subscription ID, canonical adapted event, and an opaque stable deduplication key; the Binance-specific event identity algorithm remains in infrastructure. The Binance `eventStreamTerminated` event becomes a neutral `terminated` notification with the source event time and raw event retained for existing consumer callback compatibility.
 
 The session coordinator no longer imports Binance event adapters or Binance event identity helpers. It filters by the active subscription, handles the neutral termination notification, and retains a bounded set of opaque event identities across reconnects. The set is cleared on session stop or final-subscriber removal, preserving the previous duplicate-suppression lifetime and the 2,048-entry bound.
+
+### Phase 9 implementation slice 4 — application session and explicit port
+
+The user-data lifecycle coordinator now lives at `src/application/user-data-session.js` and depends on the exchange-neutral recovery policy plus the application-owned `UserDataClientPort` contract in `src/ports/user-data-client-port.js`. The Binance broker facade composes this application service with the Binance client adapter. Runtime validation at the application boundary rejects incomplete injected ports before subscription operations begin.
+
+The package coverage command now includes `src/application/**/*.js` and `src/ports/**/*.js`, excluding their test files, so these new DDD layers remain subject to the existing coverage thresholds.

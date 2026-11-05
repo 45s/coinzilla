@@ -4,7 +4,7 @@ import { BinanceSdkBroker } from "../broker.js"
 import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
-import { BinanceUserDataSession } from "./user-data-session.js"
+import { UserDataSession } from "../../../application/user-data-session.js"
 
 describe("Binance user-data subscription setup", () => {
   it("awaits asynchronous scheduled callbacks before advancing", async () => {
@@ -24,8 +24,8 @@ describe("Binance user-data subscription setup", () => {
 
 
   it("validates required dependencies and retry policy", () => {
-    assert.throws(() => new BinanceUserDataSession({}), TypeError)
-    assert.throws(() => new BinanceUserDataSession({
+    assert.throws(() => new UserDataSession({}), TypeError)
+    assert.throws(() => new UserDataSession({
       getClient() {},
       createClient() {},
       setClient() {},
@@ -35,8 +35,28 @@ describe("Binance user-data subscription setup", () => {
     }), RangeError)
   })
 
+  it("validates the injected client port before using it", async () => {
+    const client = createFakeRpcClient()
+    await client.connect()
+    const session = new UserDataSession({
+      getClient: () => client,
+      createClient: async () => client,
+      createUserDataClientPort: () => ({ state: "open" }),
+      setClient: () => {},
+      setConnected: () => {},
+      setUnavailable: () => {},
+    })
+    session.start()
+
+    await assert.rejects(
+      session.subscribe({ onEvent: () => {} }),
+      /User-data client port/,
+    )
+    await session.stop()
+  })
+
   it("requires the client port factory after validating the existing retry policy", () => {
-    assert.throws(() => new BinanceUserDataSession({
+    assert.throws(() => new UserDataSession({
       getClient() {},
       createClient() {},
       setClient() {},
@@ -47,7 +67,7 @@ describe("Binance user-data subscription setup", () => {
 
   it("rejects invalid event and status callbacks before accessing the client port", async () => {
     let portFactoryCalls = 0
-    const session = new BinanceUserDataSession({
+    const session = new UserDataSession({
       getClient: () => null,
       createClient: () => null,
       createUserDataClientPort: () => {
@@ -73,7 +93,7 @@ describe("Binance user-data subscription setup", () => {
 
   it("rejects a subscription when no API client exists without constructing a port", async () => {
     let portFactoryCalls = 0
-    const session = new BinanceUserDataSession({
+    const session = new UserDataSession({
       getClient: () => null,
       createClient: () => null,
       createUserDataClientPort: () => {
@@ -99,6 +119,8 @@ describe("Binance user-data subscription setup", () => {
     const listeners = { event: new Set(), error: new Set(), close: new Set() }
     const port = {
       state: "open",
+      async connect() {},
+      async disconnect() {},
       async subscribe() {
         calls.push(["subscribe"])
         return 17
@@ -124,7 +146,7 @@ describe("Binance user-data subscription setup", () => {
         return () => listeners.close.delete(listener)
       },
     }
-    const session = new BinanceUserDataSession({
+    const session = new UserDataSession({
       getClient: () => rawClient,
       createClient: () => rawClient,
       createUserDataClientPort: (client) => {

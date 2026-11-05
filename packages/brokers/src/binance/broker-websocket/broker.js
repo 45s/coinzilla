@@ -8,7 +8,7 @@ import { adaptPublicStreamMessage } from "./helpers/public-stream-adapters.js"
 import { createStreamName } from "./utils/streams-protocol.js"
 import { BinanceStreamsClient } from "./utils/streams-client.js"
 import { NativeWebSocketTransport } from "./utils/transport.js"
-import { BinanceUserDataSession } from "./methods/user-data-session.js"
+import { UserDataSession } from "../../application/user-data-session.js"
 import { createMyTradesParams, createOrderHistoryParams } from "./helpers/history-query-params.js"
 import { adaptSymbolFiltersResponse } from "./helpers/adapters/symbol-filters.js"
 import { adaptCanonicalFills, createCanonicalFillMarket } from "./helpers/adapters/canonical-fills.js"
@@ -124,7 +124,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     this.userDataUnavailable = false
     this.canonicalMarkets = new Map()
     this.canonicalMarketRequests = new Map()
-    this.userDataSession = new BinanceUserDataSession({
+    this.userDataSession = new UserDataSession({
       getClient: () => this.tradingConnection,
       createClient: () => this.apiClientFactory(this.config),
       createUserDataClientPort: createBinanceUserDataClientPort,

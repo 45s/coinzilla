@@ -1,4 +1,5 @@
-import { canCompleteUserDataRecovery } from "../../../domain/user-data-recovery-policy.js"
+import { canCompleteUserDataRecovery } from "../domain/user-data-recovery-policy.js"
+import { assertUserDataClientPort } from "../ports/user-data-client-port.js"
 
 function logSafely(logger, level, ...args) {
   try {
@@ -14,7 +15,7 @@ function validateCallback(callback, name) {
   }
 }
 
-export class BinanceUserDataSession {
+export class UserDataSession {
   #subscribers = new Map()
   #nextSubscriberId = 0
   #subscriptionId = null
@@ -168,7 +169,7 @@ export class BinanceUserDataSession {
   #portFor(client) {
     let port = this.#clientPorts.get(client)
     if (!port) {
-      port = this.createUserDataClientPort(client)
+      port = assertUserDataClientPort(this.createUserDataClientPort(client))
       this.#clientPorts.set(client, port)
     }
     return port
