@@ -362,6 +362,9 @@ export async function startHarvester({
   const enabledSymbols = Object.entries(pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
+  if (tradingRequested && enabledSymbols.length === 0) {
+    throw new Error("Conservative TESTNET trading requires at least one enabled pair")
+  }
   const brokerName = env.HARVESTER_BROKER
   if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
     throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
@@ -686,10 +689,6 @@ export async function startHarvester({
 
   const activateTradingEngine = () => {
     if (!tradingEnabled) return
-    const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
-    if (enabledPairs.length !== 1) {
-      throw new Error("The first Conservative TESTNET trading cycle requires exactly one enabled pair")
-    }
     tradingEngine = makeConservativeTradingEngine({
       broker,
       strategyPolicy: conservativeStrategyPolicy,
@@ -1172,11 +1171,9 @@ export async function startHarvester({
       if (userDataRequiresReconciliation) {
         throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
       }
-      const enabledPairs = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled)
-      const symbol = enabledPairs[0][0]
       logger.info?.({
         message: "Conservative TESTNET startup checks passed; current account audit is complete",
-        symbol,
+        enabledSymbols,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
       })
       userDataRequiresReconciliation = false
