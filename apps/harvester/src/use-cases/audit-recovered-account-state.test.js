@@ -201,7 +201,7 @@ test("rejects unexplained external balance changes", () => {
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({
     projection,
-    recoveredState: restored,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
     currentAccountSnapshot: snapshot({ usdtFree: "1001" }),
     openOrders: [],
     markets: [market],
@@ -290,7 +290,7 @@ test("rejects a current account snapshot older than the latest durable Journal s
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({
     projection,
-    recoveredState: restored,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
     currentAccountSnapshot: snapshot({ sourceTime: 1500 }),
     openOrders: [],
     markets: [market],
