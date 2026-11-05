@@ -561,6 +561,9 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
           left: cumulativeFillQuantity,
           right: order.quantity,
         }) === 0) {
+          if (lastFullyFilledSellBySymbol.has(order.symbol)) {
+            throw new Error("Multiple fully filled Harvester SELL orders precede a recovery-cycle completion for " + order.symbol)
+          }
           lastFullyFilledSellBySymbol.set(order.symbol, {
             clientOrderId: order.clientOrderId,
             brokerOrderId: order.brokerOrderId,
