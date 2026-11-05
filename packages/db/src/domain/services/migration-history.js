@@ -15,7 +15,7 @@ export function findPendingMigrations(registeredMigrations, appliedMigrations) {
     const registered = migrationByVersion.get(applied.version)
     if (!registered || registered.name !== applied.name) {
       throw new Error(
-        `SQLite migration history mismatch at version ${applied.version}`,
+        `Migration history mismatch at version ${applied.version}`,
       )
     }
   }
