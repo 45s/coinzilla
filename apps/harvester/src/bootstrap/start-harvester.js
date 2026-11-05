@@ -7,6 +7,8 @@ import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-acc
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
+import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
+import { restoreHarvesterJournalState } from "../use-cases/restore-harvester-journal-state.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -345,7 +347,11 @@ export async function startHarvester({
   onUserDataEvent = async () => {},
   onUserDataStatus = () => {},
   now = Date.now,
+  journalRecoveryRecords = [],
 } = {}) {
+  if (!Array.isArray(journalRecoveryRecords)) {
+    throw new TypeError("journalRecoveryRecords must be an array")
+  }
   const tradingConfig = await loadConfig(configSource)
   const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
   if (strategyConfig?.enabled !== true) {
@@ -386,6 +392,16 @@ export async function startHarvester({
   })
 
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
+  let recoveredState = Object.freeze({
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: undefined,
+    pausedMarkets: Object.freeze([]),
+    replacementIntents: Object.freeze([]),
+    completedOrderClientIds: Object.freeze([]),
+    trailingBuySymbols: Object.freeze([]),
+    requiresExchangeReconciliation: journalRecoveryRecords.length > 0,
+  })
   let processMarketPrice = (...args) => portfolioWorkflow.processMarketPrice(...args)
   let processMarketBook = () => toResult({ data: { skipped: true, reason: "TRADING_DISABLED" } })
   const updatePortfolio = (...args) => portfolioWorkflow.updatePortfolio(...args)
@@ -632,6 +648,40 @@ export async function startHarvester({
       marketMetadata.set(symbol, validatedMetadata)
       logger.info?.({ message: "Exchange trading rules validated", symbol })
     }
+
+    const recoveryProjection = projectHarvesterJournalRecovery({
+      records: journalRecoveryRecords,
+    })
+    if (!recoveryProjection?.ok) {
+      throw new Error(
+        "Harvester Journal recovery projection failed; trading state cannot be reconstructed: " +
+        (recoveryProjection?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
+      )
+    }
+    const restored = restoreHarvesterJournalState({
+      projection: recoveryProjection,
+      marketMetadata,
+    })
+    if (!restored?.ok) {
+      throw new Error(
+        "Harvester Journal domain-state restoration failed; trading state cannot be reconstructed: " +
+        (restored?.errors ?? []).map((error) => error?.message ?? String(error)).join("; "),
+      )
+    }
+    recoveredState = restored.data
+    portfolioWorkflow = createPortfolioWorkflow({
+      evaluateStrategy,
+      logger,
+      initialPortfolio: recoveredState.portfolio,
+      initialRecoveryLedgers: recoveredState.recoveryLedgers,
+    })
+    logger.info?.({
+      message: "Harvester Journal state restored in memory; canonical exchange reconciliation remains mandatory",
+      recoveredOrders: recoveredState.orderRegistry?.orders?.length ?? 0,
+      recoveredMarkets: recoveredState.recoveryLedgers.size,
+      recoveredPausedMarkets: recoveredState.pausedMarkets.length,
+      requiresExchangeReconciliation: recoveredState.requiresExchangeReconciliation,
+    })
 
     logger.info?.({ message: "Subscribing to Binance user-data events" })
 
@@ -1036,6 +1086,13 @@ export async function startHarvester({
         isMarketPriceFresh,
         isMarketBookFresh,
         logger,
+        initialState: {
+          orderRegistry: recoveredState.orderRegistry,
+          pausedMarkets: recoveredState.pausedMarkets,
+          replacementIntents: recoveredState.replacementIntents,
+          completedOrderClientIds: recoveredState.completedOrderClientIds,
+          trailingBuySymbols: recoveredState.trailingBuySymbols,
+        },
         isStopping: () => stopped,
         onPause: async ({ symbol, reason, error }) => {
           logger.error?.({ message: "Harvester paused a trading pair", symbol, reason, error })
@@ -1270,6 +1327,7 @@ export async function startHarvester({
     processMarketPrice,
     updatePortfolio,
     get portfolio() { return getPortfolio() },
+    get recoveredState() { return recoveredState },
     getRecoveryLedger,
     getMarketMetadata,
     getAccountSnapshot,
