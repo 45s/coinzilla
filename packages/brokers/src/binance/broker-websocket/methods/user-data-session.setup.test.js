@@ -119,6 +119,8 @@ describe("Binance user-data subscription setup", () => {
     const listeners = { event: new Set(), error: new Set(), close: new Set() }
     const port = {
       state: "open",
+      async connect() {},
+      async disconnect() {},
       async subscribe() {
         calls.push(["subscribe"])
         return 17
