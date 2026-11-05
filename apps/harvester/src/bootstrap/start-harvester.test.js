@@ -250,6 +250,81 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   ])
 })
 
+test("subscribes every enabled market before waiting for the first market's REST ticker seed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  let resolveFirstTicker
+  const firstTicker = new Promise((resolve) => { resolveFirstTicker = resolve })
+  broker.getPrices = async ({ symbol }) => {
+    calls.push("prices:" + symbol)
+    if (symbol === "BTCUSDT") return firstTicker
+    return { ok: true, data: { symbol, price: "65000" } }
+  }
+  let accountSnapshotTime = 0
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotTime += 1
+    const balances = ["BTC", "ETH", "USDT"].map((code) => {
+      const asset = new Asset({ id: "asset:" + code, code })
+      return new Balance({
+        free: new Quantity({ amount: "0", asset }),
+        locked: new Quantity({ amount: "0", asset }),
+      })
+    })
+    return { ok: true, data: { balances, sourceTime: accountSnapshotTime } }
+  }
+  let placeOrderCalls = 0
+  broker.placeOrder = async () => {
+    placeOrderCalls += 1
+    return { ok: true }
+  }
+  const strategy = tradingConfig.strategies.CG_coinGrabber
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...strategy,
+        pairs: {
+          ...strategy.pairs,
+          ETHUSDT: { ...strategy.pairs.ETHUSDT, enabled: true },
+        },
+      },
+    },
+  }
+  const startup = startHarvesterForTest({
+    loadConfig: async () => config,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  await waitForTestSignal(
+    new Promise((resolve) => {
+      const check = () => {
+        if (calls.includes("subscribe:ETHUSDT")) resolve()
+        else setImmediate(check)
+      }
+      check()
+    }),
+    "second enabled market subscription",
+    () => ({ calls }),
+  )
+  assert.ok(calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"))
+  assert.ok(calls.includes("subscribe:book:BTCUSDT"))
+  assert.ok(calls.includes("subscribe:book:ETHUSDT"))
+
+  resolveFirstTicker({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } })
+  const runtime = await startup
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
+  assert.equal(placeOrderCalls, 0)
+  await runtime.stop()
+})
+
 test("uses Conservative by default and passes updated Portfolio after a fill", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
