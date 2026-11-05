@@ -14,9 +14,10 @@ test("SQLite connects and executes parameterized SQL", async () => {
     database.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
     database.prepare("INSERT INTO users (name) VALUES (?)").run("Morty")
 
-    assert.deepEqual(database.prepare("SELECT id, name FROM users").all(), [
-      { id: 1, name: "Morty" },
-    ])
+    assert.deepEqual(
+      database.prepare("SELECT id, name FROM users").all().map((row) => ({ ...row })),
+      [{ id: 1, name: "Morty" }],
+    )
     assert.equal(database.state, "connected")
   } finally {
     await database.close()
@@ -117,10 +118,10 @@ test("SQLite file databases persist data after closing and reopening", async () 
     const second = createSqliteDatabase({ filename })
     await second.connect()
     try {
-      assert.deepEqual(second.prepare("SELECT key, value FROM settings").get(), {
-        key: "mode",
-        value: "test",
-      })
+      assert.deepEqual(
+        { ...second.prepare("SELECT key, value FROM settings").get() },
+        { key: "mode", value: "test" },
+      )
     } finally {
       await second.close()
     }
