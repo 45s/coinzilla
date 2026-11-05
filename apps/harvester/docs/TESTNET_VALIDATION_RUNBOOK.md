@@ -38,7 +38,7 @@ Hard operational limits for the first session:
 
 ## 2. Preconditions — all must pass before any write
 
-1. Confirm PRs #513, #515, #545, #546, #552, #553, #554, and #558 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
+1. Confirm PRs #513, #515, #545, #546, #552, #553, #554, and #559 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
 2. Confirm the Harvester process is stopped. Check for any other process that could submit or manage orders using the same TESTNET account/API keys.
 3. Confirm credentials target Binance Spot TESTNET only. Never load production credentials. Keep secrets out of logs, screenshots, commits, and chat.
 4. Verify the account's maker/taker commission setting is 0.1% / 0.1%; record the observation timestamp and evidence. This UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
