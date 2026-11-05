@@ -1,0 +1,339 @@
+import { addDecimal, assertDecimalString, compareDecimal, toResult } from "@coinzilla/utils"
+
+const EVENT = Object.freeze({
+  SUBMISSION_REQUESTED: "order.submission_requested",
+  SUBMITTED: "order.submitted",
+  SUBMISSION_FAILED: "order.submission_failed",
+  CANCEL_REQUESTED: "order.cancel_requested",
+  CANCELLED: "order.cancelled",
+  CANCEL_FAILED: "order.cancel_failed",
+  FILL_APPLIED: "execution.fill_applied",
+  RECOVERY_COMPLETED: "recovery.cycle_completed",
+  STRATEGY_PAUSED: "strategy.paused",
+})
+
+const ORDER_SIDES = new Set(["BUY", "SELL"])
+const SUBMISSION_OUTCOMES = new Set(["REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
+const CANCEL_OUTCOMES = new Set(["ORDER_STATE_UNKNOWN", "UNCONFIRMED", "NOT_REGISTERED", "NOT_CANCELED"])
+
+function requireObject({ value, field }) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(field + " must be an object")
+  }
+  return value
+}
+
+function requireString({ value, field }) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(field + " must be a non-empty string")
+  }
+  return value.trim()
+}
+
+function requireDecimal({ value, field, positive = false }) {
+  if (typeof value !== "string") throw new TypeError(field + " must be an exact decimal string")
+  assertDecimalString({ value, field })
+  if (compareDecimal({ left: value, right: "0" }) < (positive ? 1 : 0)) {
+    throw new RangeError(field + (positive ? " must be positive" : " must be non-negative"))
+  }
+  return value
+}
+
+function requireOrderIntent({ data }) {
+  const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) throw new TypeError("order side must be BUY or SELL")
+  const type = requireString({ value: data.type, field: "type" })
+  const price = requireDecimal({ value: data.price, field: "price", positive: true })
+  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
+  return { clientOrderId, symbol, side: data.side, type, price, quantity }
+}
+
+function assertSameIntent({ current, next }) {
+  for (const field of ["clientOrderId", "symbol", "side", "type", "price", "quantity"]) {
+    if (current[field] !== next[field]) {
+      throw new Error("Journal order event changed immutable " + field + " for " + current.clientOrderId)
+    }
+  }
+}
+
+function requireFill({ data }) {
+  const fillId = requireString({ value: data.fillId, field: "fillId" })
+  const tradeId = requireString({ value: data.tradeId, field: "tradeId" })
+  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+  const clientOrderId = data.clientOrderId === undefined
+    ? undefined
+    : requireString({ value: data.clientOrderId, field: "clientOrderId" })
+  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) throw new TypeError("fill side must be BUY or SELL")
+  const price = requireDecimal({ value: data.price, field: "price", positive: true })
+  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
+  const quoteQuantity = requireDecimal({ value: data.quoteQuantity, field: "quoteQuantity", positive: true })
+  const liquidityRole = requireString({ value: data.liquidityRole, field: "liquidityRole" })
+  const commissionStatus = requireString({ value: data.commissionStatus, field: "commissionStatus" })
+  if (!Array.isArray(data.commissions)) throw new TypeError("fill commissions must be an array")
+  const commissions = data.commissions.map((commission, index) => ({
+    amount: requireDecimal({ value: commission?.amount, field: "commissions[" + index + "].amount" }),
+    assetId: requireString({ value: commission?.assetId, field: "commissions[" + index + "].assetId" }),
+    asset: requireString({ value: commission?.asset, field: "commissions[" + index + "].asset" }),
+  }))
+  if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
+    throw new TypeError("fill duplicate marker must be a boolean")
+  }
+  return {
+    fillId,
+    tradeId,
+    brokerOrderId,
+    ...(clientOrderId === undefined ? {} : { clientOrderId }),
+    symbol,
+    side: data.side,
+    price,
+    quantity,
+    quoteQuantity,
+    liquidityRole,
+    ...(data.executedAt === undefined ? {} : { executedAt: data.executedAt }),
+    commissions,
+    commissionStatus,
+    ...(data.duplicate === true ? { duplicate: true } : {}),
+  }
+}
+
+function fillFingerprint({ fill }) {
+  const { duplicate, ...facts } = fill
+  return JSON.stringify(facts)
+}
+
+/**
+ * Build a strict, immutable replay projection from validated Journal records.
+ * This does not open the trading gate: every projected order still requires
+ * canonical exchange reconciliation before it can be restored as actionable.
+ */
+export function projectHarvesterJournalRecovery({ records } = {}) {
+  try {
+    if (!Array.isArray(records)) throw new TypeError("Harvester Journal recovery records must be an array")
+
+    const ordersByClientId = new Map()
+    const clientIdByBrokerId = new Map()
+    const fillsById = new Map()
+    const tradeIdBySymbol = new Map()
+    const cycles = []
+    const pausedMarkets = new Map()
+
+    const requireOrder = ({ clientOrderId, eventName }) => {
+      const order = ordersByClientId.get(clientOrderId)
+      if (!order) throw new Error(eventName + " references an unknown clientOrderId " + clientOrderId)
+      return order
+    }
+
+    for (const record of records) {
+      const payload = requireObject({ value: record?.payload, field: "Journal record payload" })
+      const name = payload.name
+      if (typeof name !== "string") throw new TypeError("Journal event name must be a string")
+      if (!Object.values(EVENT).includes(name)) continue
+      const data = requireObject({ value: payload.data, field: name + " data" })
+
+      if (name === EVENT.SUBMISSION_REQUESTED) {
+        const intent = requireOrderIntent({ data })
+        if (data.status !== "PENDING") throw new Error("Submission intent must record PENDING status")
+        const existing = ordersByClientId.get(intent.clientOrderId)
+        if (existing) {
+          assertSameIntent({ current: existing, next: intent })
+          if (existing.submissionRequested) continue
+          throw new Error("Conflicting duplicate submission intent for " + intent.clientOrderId)
+        }
+        ordersByClientId.set(intent.clientOrderId, {
+          ...intent,
+          brokerOrderId: undefined,
+          submissionRequested: true,
+          submissionOutcome: "PENDING",
+          exchangeStatusHint: "PENDING",
+          cancellationState: "NONE",
+          cancellationExecutedQuantity: undefined,
+          cumulativeFillQuantity: "0",
+          fillIds: [],
+          requiresExchangeReconciliation: true,
+        })
+        continue
+      }
+
+      if (name === EVENT.SUBMITTED) {
+        const intent = requireOrderIntent({ data })
+        const order = requireOrder({ clientOrderId: intent.clientOrderId, eventName: name })
+        assertSameIntent({ current: order, next: intent })
+        const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+        const status = requireString({ value: data.status, field: "status" })
+        const existingOwner = clientIdByBrokerId.get(brokerOrderId)
+        if (existingOwner && existingOwner !== order.clientOrderId) {
+          throw new Error("Broker order ID is assigned to multiple Harvester client order IDs: " + brokerOrderId)
+        }
+        if (order.brokerOrderId !== undefined && order.brokerOrderId !== brokerOrderId) {
+          throw new Error("Journal acknowledgement changed brokerOrderId for " + order.clientOrderId)
+        }
+        if (order.submissionOutcome === "REJECTED") {
+          throw new Error("Rejected submission later received an acknowledgement for " + order.clientOrderId)
+        }
+        order.brokerOrderId = brokerOrderId
+        order.submissionOutcome = "ACKNOWLEDGED"
+        order.exchangeStatusHint = status
+        order.recoveryStatus = "UNKNOWN"
+        order.requiresExchangeReconciliation = true
+        clientIdByBrokerId.set(brokerOrderId, order.clientOrderId)
+        continue
+      }
+
+      if (name === EVENT.SUBMISSION_FAILED) {
+        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId, eventName: name })
+        const intent = requireOrderIntent({ data: { ...data, price: order.price, quantity: order.quantity, type: order.type } })
+        assertSameIntent({ current: order, next: intent })
+        if (!SUBMISSION_OUTCOMES.has(data.outcome)) throw new TypeError("Invalid order submission outcome")
+        if (order.brokerOrderId !== undefined && data.outcome === "REJECTED") {
+          throw new Error("Acknowledged order cannot later have a definite submission rejection")
+        }
+        order.submissionOutcome = data.outcome
+        order.recoveryStatus = data.outcome === "REJECTED" ? "REJECTED" : "UNKNOWN"
+        order.exchangeStatusHint = data.outcome === "REJECTED" ? "REJECTED" : "UNKNOWN"
+        order.requiresExchangeReconciliation = data.outcome !== "REJECTED"
+        continue
+      }
+
+      if (name === EVENT.CANCEL_REQUESTED) {
+        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId, eventName: name })
+        const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+        if (order.brokerOrderId !== brokerOrderId) throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
+        if (data.symbol !== order.symbol || data.side !== order.side || data.type !== order.type ||
+            data.price !== order.price || data.quantity !== order.quantity) {
+          throw new Error("Cancellation intent changed immutable order facts")
+        }
+        if (!["OPEN", "PARTIALLY_FILLED"].includes(data.status)) {
+          throw new Error("Cancellation intent must record an active order status")
+        }
+        const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
+        if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+          throw new Error("Cancellation intent executed quantity is behind journaled fills")
+        }
+        order.cancellationState = "REQUESTED"
+        order.cancellationExecutedQuantity = executedQuantity
+        order.requiresExchangeReconciliation = true
+        continue
+      }
+
+      if (name === EVENT.CANCELLED) {
+        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId, eventName: name })
+        if (order.cancellationState !== "REQUESTED") {
+          throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
+        }
+        if (data.brokerOrderId !== order.brokerOrderId || data.symbol !== order.symbol ||
+            data.side !== order.side || data.type !== order.type ||
+            data.price !== order.price || data.quantity !== order.quantity || data.status !== "CANCELED") {
+          throw new Error("Confirmed cancellation conflicts with the owned order identity")
+        }
+        const executedQuantity = requireDecimal({ value: data.executedQuantity, field: "executedQuantity" })
+        if (compareDecimal({ left: executedQuantity, right: order.cumulativeFillQuantity }) < 0) {
+          throw new Error("Confirmed cancellation executed quantity is behind journaled fills")
+        }
+        order.cancellationState = "CANCELED"
+        order.cancellationExecutedQuantity = executedQuantity
+        order.exchangeStatusHint = "CANCELED"
+        order.recoveryStatus = "UNKNOWN"
+        order.requiresExchangeReconciliation = true
+        continue
+      }
+
+      if (name === EVENT.CANCEL_FAILED) {
+        const clientOrderId = requireString({ value: data.clientOrderId, field: "clientOrderId" })
+        const order = requireOrder({ clientOrderId, eventName: name })
+        if (!CANCEL_OUTCOMES.has(data.outcome)) throw new TypeError("Invalid order cancellation outcome")
+        if (data.symbol !== order.symbol || data.side !== order.side) {
+          throw new Error("Cancellation failure conflicts with the owned order identity")
+        }
+        if (data.brokerOrderId !== undefined && order.brokerOrderId !== data.brokerOrderId) {
+          throw new Error("Cancellation failure changed brokerOrderId")
+        }
+        order.cancellationState = "UNKNOWN"
+        order.recoveryStatus = "UNKNOWN"
+        order.requiresExchangeReconciliation = true
+        continue
+      }
+
+      if (name === EVENT.FILL_APPLIED) {
+        const fill = requireFill({ data })
+        const clientOrderId = fill.clientOrderId ?? clientIdByBrokerId.get(fill.brokerOrderId)
+        if (!clientOrderId) throw new Error("Applied fill cannot be assigned to a journaled Harvester order: " + fill.fillId)
+        const order = requireOrder({ clientOrderId, eventName: name })
+        if (order.brokerOrderId !== fill.brokerOrderId || order.symbol !== fill.symbol || order.side !== fill.side) {
+          throw new Error("Applied fill identity conflicts with its journaled order: " + fill.fillId)
+        }
+        if (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId) {
+          throw new Error("Applied fill clientOrderId conflicts with its journaled order")
+        }
+        const fingerprint = fillFingerprint({ fill })
+        const existing = fillsById.get(fill.fillId)
+        if (existing) {
+          if (existing.fingerprint !== fingerprint || fill.duplicate !== true) {
+            throw new Error("Duplicate execution ID has conflicting or unmarked replay facts: " + fill.fillId)
+          }
+          continue
+        }
+        if (fill.duplicate === true) {
+          throw new Error("Duplicate fill marker has no original execution record: " + fill.fillId)
+        }
+        const tradeKey = fill.symbol + ":" + fill.tradeId
+        const existingTrade = tradeIdBySymbol.get(tradeKey)
+        if (existingTrade && existingTrade !== fill.fillId) {
+          throw new Error("Exchange trade ID maps to multiple execution IDs: " + tradeKey)
+        }
+        const cumulativeFillQuantity = addDecimal({
+          left: order.cumulativeFillQuantity,
+          right: fill.quantity,
+        })
+        if (compareDecimal({ left: cumulativeFillQuantity, right: order.quantity }) > 0) {
+          throw new Error("Journaled fills exceed original order quantity for " + order.clientOrderId)
+        }
+        order.cumulativeFillQuantity = cumulativeFillQuantity
+        order.fillIds.push(fill.fillId)
+        order.requiresExchangeReconciliation = true
+        fillsById.set(fill.fillId, { fill, fingerprint })
+        tradeIdBySymbol.set(tradeKey, fill.fillId)
+        continue
+      }
+
+      if (name === EVENT.RECOVERY_COMPLETED) {
+        const symbol = requireString({ value: data.symbol, field: "symbol" })
+        const marketId = requireString({ value: data.marketId, field: "marketId" })
+        const freeQuantity = requireDecimal({ value: data.freeQuantity, field: "freeQuantity", positive: true })
+        const realizedNetProfit = requireDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+        cycles.push({ symbol, marketId, freeQuantity, realizedNetProfit })
+        continue
+      }
+
+      if (name === EVENT.STRATEGY_PAUSED) {
+        const symbol = requireString({ value: data.symbol, field: "symbol" })
+        const reason = requireString({ value: data.reason, field: "reason" })
+        pausedMarkets.set(symbol, reason)
+      }
+    }
+
+    const orders = [...ordersByClientId.values()].map((order) => Object.freeze({
+      ...order,
+      fillIds: Object.freeze([...order.fillIds]),
+    }))
+    const fills = [...fillsById.values()].map(({ fill }) => Object.freeze({
+      ...fill,
+      commissions: Object.freeze(fill.commissions.map((commission) => Object.freeze({ ...commission }))),
+    }))
+    return toResult({
+      data: Object.freeze({
+        orders: Object.freeze(orders),
+        fills: Object.freeze(fills),
+        recoveryCycles: Object.freeze(cycles.map((cycle) => Object.freeze({ ...cycle }))),
+        pausedMarkets: Object.freeze([...pausedMarkets].map(([symbol, reason]) => Object.freeze({ symbol, reason }))),
+        requiresExchangeReconciliation: orders.some((order) => order.requiresExchangeReconciliation),
+      }),
+    })
+  } catch (error) {
+    return toResult({ error })
+  }
+}
