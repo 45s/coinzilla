@@ -52,7 +52,7 @@ All events use source `harvester`. Payloads are created by Harvester-owned allow
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
 | `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
 | `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
-| `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, outcome, optional sanitized error |
+| `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, current order status (including UNKNOWN), outcome, optional sanitized error |
 | `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, commission status |
 | `execution.unowned_order` | client/broker order IDs, symbol, side, order status, reason |
 | `execution.invalid_fill` | order facts, reason, optional Fill identity facts, sanitized error |
