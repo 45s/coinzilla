@@ -43,6 +43,40 @@ test("exposes the current Position and blocks unresolved SELL pricing", () => {
   assert.ok(decision.blockers.includes("SELL_PRICE_FORMULA_UNRESOLVED"))
 })
 
+test("treats zero active quantity with retained free inventory as no active Position", () => {
+  const portfolioWithFreeInventory = new Portfolio()
+    .applyFill({ fill: buyFill })
+    .portfolio
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+
+  const decision = evaluateAggressiveStrategy({
+    marketPrice,
+    pairConfig: { makerPercent: 0, orderQuantity: 0.01 },
+    portfolio: portfolioWithFreeInventory,
+  })
+
+  assert.equal(decision.action, "NO_ACTION")
+  assert.equal(decision.position.baseQuantity.amount, "0")
+  assert.equal(decision.position.freeBaseQuantity.amount, "0.5")
+  assert.deepEqual(decision.blockers, ["BUY_GRID_DEPTH_NOT_CONFIGURED"])
+})
+
+test("uses exact decimal active-quantity comparison for Aggressive inventory gating", () => {
+  const zeroQuantityPosition = new Portfolio()
+    .applyFill({ fill: buyFill })
+    .portfolio
+    .allocateFreeQuantity({ marketId: market.id, quantity: "0.5" })
+  const decision = evaluateAggressiveStrategy({
+    marketPrice,
+    pairConfig: { makerPercent: 0 },
+    portfolio: zeroQuantityPosition,
+  })
+
+  assert.equal(decision.position.baseQuantity.amount, "0")
+  assert.ok(!decision.blockers.includes("SELL_PRICE_FORMULA_UNRESOLVED"))
+  assert.ok(decision.blockers.includes("BUY_GRID_DEPTH_NOT_CONFIGURED"))
+})
+
 test("requires a Portfolio input", () => {
   assert.throws(
     () => evaluateAggressiveStrategy({ marketPrice, pairConfig: {}, portfolio: {} }),
