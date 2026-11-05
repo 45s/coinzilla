@@ -183,8 +183,10 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
         if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
           replacementIntents.add(order.symbol)
+          pausedMarkets.add(order.symbol)
         } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
           trailingBuyRepriceIntents.add(order.symbol)
+          pausedMarkets.add(order.symbol)
           pausedMarkets.add(order.symbol)
         } else {
           pausedMarkets.add(order.symbol)
