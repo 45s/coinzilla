@@ -204,16 +204,22 @@ function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
 
 test("shared quote-asset BUY commitments are reserved across markets", async () => {
   const { engine, orders } = await createHarness({ quoteFreeBalance: "150" })
-  await startBothMarkets(engine)
+  const dogeResult = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const solResult = await engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 1 },
+  })
 
+  assert.equal(dogeResult.ok, true)
+  assert.equal(solResult.ok, true)
+  assert.equal(solResult.data.waitingForAvailableQuoteBalance, true)
+  assert.equal(solResult.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
   assert.equal(orders.length, 1)
   assert.equal(orders[0].symbol, "DOGEUSDT")
   assert.equal(engine.getOrders().length, 1)
-
-  const solEvaluation = await engine.evaluateLatest({ symbol: "SOLUSDT" })
-  assert.equal(solEvaluation.ok, true)
-  assert.equal(solEvaluation.data.waitingForAvailableQuoteBalance, true)
-  assert.equal(solEvaluation.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
   assert.equal(orders.length, 1)
 })
 
