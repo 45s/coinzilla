@@ -196,7 +196,9 @@ export async function configureHarvesterLogging({
   })
 }export function createHarvesterConsoleTransport({
   output = process.stdout,
-  color = Boolean(output.isTTY) && process.env.NO_COLOR === undefined,
+  color = process.env.NO_COLOR === undefined && (
+    process.env.HARVESTER_LOG_COLOR === "1" || Boolean(output.isTTY)
+  ),
 } = {}) {
   let previousFingerprint
   let previousTimestamp
