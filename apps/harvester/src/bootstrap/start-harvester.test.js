@@ -568,6 +568,35 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await result.stop()
 })
 
+test("logs stack and cause details when a user-data RPC error has an empty message", async () => {
+  const broker = createBroker()
+  const diagnostics = []
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      error: (entry) => diagnostics.push(entry),
+    },
+  })
+  const error = new TypeError("")
+  error.cause = new Error("socket callback failed")
+  broker.emitUserDataStatus({ type: "rpcError", error, recoveryRequired: false })
+
+  const diagnostic = diagnostics.find((entry) =>
+    entry?.message === "Binance user-data transport reported an error")
+  assert.ok(diagnostic)
+  assert.equal(diagnostic.statusType, "rpcError")
+  assert.equal(diagnostic.errorName, "TypeError")
+  assert.equal(diagnostic.errorMessage, "(empty error message)")
+  assert.match(diagnostic.errorStack, /TypeError/)
+  assert.equal(diagnostic.causeName, "Error")
+  assert.equal(diagnostic.causeMessage, "socket callback failed")
+  assert.match(diagnostic.causeStack, /socket callback failed/)
+  await result.stop()
+})
+
 test("keeps recovery blocked and does not acknowledge when the fresh account snapshot fails", async () => {
   const broker = createBroker()
   const getAccountSnapshot = broker.getAccountSnapshot
