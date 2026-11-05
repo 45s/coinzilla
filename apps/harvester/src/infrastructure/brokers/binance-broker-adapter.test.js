@@ -17,6 +17,7 @@ const createClient = () => {
     getCanonicalOrder: async (input) => { calls.push(["getCanonicalOrder", input]); return result },
     getAccountSnapshot: async () => { calls.push(["getAccountSnapshot"]); return result },
     getSymbolFilters: async (input) => { calls.push(["getSymbolFilters", input]); return result },
+    getExchangeMarkets: async () => { calls.push(["getExchangeMarkets"]); return result },
     getPrices: async (input) => { calls.push(["getPrices", input]); return result },
     subscribeForPrices: async (input) => { calls.push(["subscribeForPrices", input]); return result },
     subscribeForBookTicker: async (input) => { calls.push(["subscribeForBookTicker", input]); return result },
@@ -63,6 +64,7 @@ test("maps object-shaped application inputs to the broker package methods", asyn
   assert.equal(await broker.getOpenOrders({ symbol: "BTCUSDT" }), result)
   assert.equal(await broker.getFills({ symbol: "BTCUSDT", limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
+  assert.equal(await broker.getExchangeMarkets(), result)
   const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
   assert.equal(marketMetadata.ok, true)
   assert.ok(marketMetadata.data.market instanceof Market)
@@ -75,6 +77,7 @@ test("maps object-shaped application inputs to the broker package methods", asyn
     ["getOpenOrders", { symbol: "BTCUSDT" }],
     ["getFills", { symbol: "BTCUSDT", limit: 10 }],
     ["getAccountSnapshot"],
+    ["getExchangeMarkets"],
     ["getSymbolFilters", { symbol: "BTCUSDT" }],
     ["getPrices", { symbol: "BTCUSDT" }],
   ])
