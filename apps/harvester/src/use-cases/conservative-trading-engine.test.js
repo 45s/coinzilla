@@ -763,8 +763,8 @@ test("cancellation intent publication failure prevents broker cancellation and p
 })
 
 
-test("EventBus failure cannot prevent the pair pause callback", async () => {
-  const { engine, pauses } = await createHarness({
+test("order intent publication failure pauses the pair without calling the broker", async () => {
+  const { engine, pauses, orders } = await createHarness({
     placeOrderFailure: true,
     eventPublisher: { publish: () => { throw new Error("observer unavailable") } },
   })
@@ -773,7 +773,8 @@ test("EventBus failure cannot prevent the pair pause callback", async () => {
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
   assert.equal(result.ok, false)
-  assert.ok(pauses.includes("ORDER_SUBMISSION_REJECTED_OR_UNKNOWN"))
+  assert.equal(orders.length, 0)
+  assert.ok(pauses.includes("ORDER_INTENT_NOT_DURABLE"))
 })
 
 
