@@ -524,12 +524,13 @@ test("removes obsolete initial subscriptions when listeners change during reconn
 
   assert.equal(transports[1].sent[0].method, "LIST_SUBSCRIPTIONS")
   acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
+  clock.advanceBy(300)
   await flush()
 
   assert.deepEqual(transports[1].sent[1], {
     method: "UNSUBSCRIBE",
     params: ["btcusdt@aggTrade"],
-    id: 2,
+    id: 3,
   })
   acknowledge(transports[1], 1)
   await reconnect
