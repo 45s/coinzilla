@@ -537,7 +537,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
 
       const markets = []
       const seenSymbols = new Set()
-      for (const [index, symbolInfo] of symbolInfos.entries()) {
+      for (const symbolInfo of symbolInfos) {
         const market = createCanonicalMarket({ symbolInfo })
         if (seenSymbols.has(market.symbol)) {
           throw new Error("Binance exchangeInfo contains duplicate market symbol " + market.symbol)
