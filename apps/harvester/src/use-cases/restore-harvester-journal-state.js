@@ -167,6 +167,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const replacementIntents = new Set()
     const trailingBuyRepriceIntents = new Set()
     const recoveryManagedPausedMarkets = new Set()
+    const recoveryManagedCancellationClientOrderIds = new Set()
     const latestSubmissionSequenceBySymbolSide = new Map()
     for (const order of data.orders) {
       const key = order.symbol + ":" + order.side
@@ -194,6 +195,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
           replacementIntents.add(order.symbol)
           recoveryManagedPausedMarkets.add(order.symbol)
+          recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
           pausedMarkets.add(order.symbol)
         } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
           trailingBuyRepriceIntents.add(order.symbol)
@@ -219,6 +221,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
           if (replacementSide === "BUY") {
             trailingBuyRepriceIntents.add(order.symbol)
             recoveryManagedPausedMarkets.add(order.symbol)
+            recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
             pausedMarkets.add(order.symbol)
           }
           if (replacementSide === "SELL") {
@@ -246,6 +249,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
         pausedMarkets,
         durablePausedMarkets,
         recoveryManagedPausedMarkets,
+        recoveryManagedCancellationClientOrderIds,
         replacementIntents,
         trailingBuyRepriceIntents,
         completedOrderClientIds,
