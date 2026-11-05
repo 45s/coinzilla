@@ -23,9 +23,9 @@ test("menu exposes all existing TESTNET and journal operations", () => {
   )
 })
 
-test("marks order cancellation and ZRO sale as destructive", () => {
-  assert.equal(TESTNET_MENU_ACTIONS.find(({ id }) => id === "cancel-orders").destructive, true)
-  assert.equal(TESTNET_MENU_ACTIONS.find(({ id }) => id === "sell-zro").destructive, true)
+test("does not mark order cancellation or ZRO sale for interactive confirmation", () => {
+  assert.equal(TESTNET_MENU_ACTIONS.find(({ id }) => id === "cancel-orders").destructive, undefined)
+  assert.equal(TESTNET_MENU_ACTIONS.find(({ id }) => id === "sell-zro").destructive, undefined)
 })
 
 test("builds order-history arguments with defaults and supplied values", () => {
