@@ -1215,3 +1215,21 @@ These barriers deliberately await filesystem durability only immediately before 
 - [x] PR #618 merged the explicitly invoked Spot TESTNET cancel-all command's non-interactive behavior, with an explicit account-wide warning.
 - [x] Route script diagnostics through the shared `defaultLogger`, preserve per-symbol failure handling and final account-wide verification, and cover the workflow with deterministic offline tests; all required CI checks passed on the merged head.
 - [x] Update the README and TESTNET operator runbook. No TESTNET account operation was performed; the controlled TESTNET acceptance gate remains separately closed.
+
+## Scoped development logging — explicitly authorized 2026-11-05
+
+This work is an explicit user-authorized exception to the general observability
+deferral, limited to developer diagnostics. It does not reopen Journal recovery,
+persistence, exchange operations, or broader observability projects.
+
+- [x] Configure shared `@coinzilla/utils` transports: compact INFO console,
+  DEBUG `logs/harvester.log`, and TRACE `logs/harvester-trace.log`.
+- [x] Add interactive `/log info|debug|trace|status` console-level controls.
+- [x] Keep commands disabled for non-interactive stdin and close diagnostic
+  transports after existing SIGINT/SIGTERM runtime, Journal, and EventBus cleanup.
+- [x] Add structured JSONL, console formatting, command, and shutdown-order tests.
+- [x] Run Harvester tests, workspace coverage, syntax, dependency audit, and
+  process-lock CI on the synchronized dependency-complete head; all required
+  workflows passed. The read-only TESTNET integration job was skipped.
+- [ ] Merge the Harvester logging PR into `develop` only after the shared
+  `@coinzilla/utils` transport API PR is merged and workspace CI passes.

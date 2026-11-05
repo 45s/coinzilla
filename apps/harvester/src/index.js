@@ -10,6 +10,8 @@ import { publishLifecycleEvent } from "./application/events/publish-lifecycle-ev
 import { mapHarvesterStartedData, mapHarvesterStartupFailedData, mapHarvesterStoppedData } from "./application/events/lifecycle-event-dtos.js"
 import { defaultLogger } from "@coinzilla/utils"
 import { startHarvester } from "./bootstrap/start-harvester.js"
+import { configureHarvesterLogging } from "./infrastructure/logging/configure-harvester-logging.js"
+import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 
@@ -115,6 +117,7 @@ export async function main({
   acquireProcessLock = acquireHarvesterProcessLocks,
   env = process.env,
   registerSignalHandler = (signal, handler) => process.once(signal, handler),
+  closeLogger = async () => {},
 } = {}) {
   let eventPublisher
   let eventBus
@@ -239,11 +242,23 @@ export async function main({
             logger,
           })
           if (cleanupErrors.length > 0) process.exitCode = 1
+          try {
+            await closeLogger()
+          } catch (error) {
+            process.exitCode = 1
+            try {
+              logger.error({ message: "Harvester log transport shutdown failed.", error })
+            } catch {
+              // Logging cleanup failure must not interrupt process shutdown.
+            }
+          }
         })()
         return shutdownPromise
       }
       registerSignalHandler("SIGINT", () => shutdown("SIGINT"))
       registerSignalHandler("SIGTERM", () => shutdown("SIGTERM"))
+    } else {
+      await closeLogger()
     }
     return { runtime, journalService }
   } catch (error) {
@@ -269,6 +284,16 @@ export async function main({
     } catch {
       // Logging failure must not hide the original startup failure.
     }
+    try {
+      await closeLogger()
+    } catch (loggingError) {
+      process.exitCode = 1
+      try {
+        logger.error({ message: "Harvester log transport shutdown failed.", error: loggingError })
+      } catch {
+        // Logging cleanup failure must not hide the original startup failure.
+      }
+    }
     process.exitCode = 1
   }
 }
@@ -276,4 +301,14 @@ export async function main({
 const isDirectExecution = process.argv[1]
   && pathToFileURL(process.argv[1]).href === import.meta.url
 
-if (isDirectExecution) await main()
+if (isDirectExecution) {
+  const logging = await configureHarvesterLogging({ logger: defaultLogger })
+  const commandInterface = createLogCommandInterface({ logger: defaultLogger })
+
+  await main({
+    closeLogger: async () => {
+      commandInterface.close()
+      await logging.close()
+    },
+  })
+}

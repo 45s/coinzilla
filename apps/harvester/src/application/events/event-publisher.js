@@ -26,7 +26,18 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
   const publish = (event = {}) => {
     try {
       const result = eventBus.publish(event)
-      if (result?.ok === true) return result
+      if (result?.ok === true) {
+        try {
+          logger?.trace?.({
+            message: "Harvester event published",
+            eventName: event?.name,
+            source: event?.source,
+          })
+        } catch {
+          // Diagnostic logging must not change event publication semantics.
+        }
+        return result
+      }
 
       const errors = Array.isArray(result?.errors) && result.errors.length > 0
         ? result.errors
@@ -47,7 +58,14 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
     }
     try {
       const result = await flushEvents()
-      if (result?.ok === true) return result
+      if (result?.ok === true) {
+        try {
+          logger?.trace?.({ message: "Harvester event publisher flush completed" })
+        } catch {
+          // Diagnostic logging must not change durable flush semantics.
+        }
+        return result
+      }
       const errors = Array.isArray(result?.errors) && result.errors.length > 0
         ? result.errors
         : [new Error("Harvester event journal flush failed")]
