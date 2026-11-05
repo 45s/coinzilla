@@ -111,6 +111,9 @@ function createConsoleTransport() {
  * @param {{ transports?: LoggerTransport[], onTransportError?: (context: { transport: string, error: * }) => (void|Promise<void>) }} [options]
  */
 export class Logger {
+  #transports = new Map()
+  #onTransportError
+
   constructor({ transports = [createConsoleTransport()], onTransportError } = {}) {
     if (!Array.isArray(transports)) {
       throw new TypeError('Logger transports must be an array')
@@ -119,8 +122,7 @@ export class Logger {
       throw new TypeError('onTransportError must be a function')
     }
 
-    this.#transports = new Map()
-    this.onTransportError = onTransportError ?? (({ transport, error }) => {
+    this.#onTransportError = onTransportError ?? (({ transport, error }) => {
       console.error('Logger transport failed', { transport, error })
     })
 
@@ -137,10 +139,10 @@ export class Logger {
    */
   addTransport(transport) {
     validateTransport(transport)
-    if (this.transports.has(transport.name)) {
+    if (this.#transports.has(transport.name)) {
       throw new TypeError(`Transport already exists: ${transport.name}`)
     }
-    this.transports.set(transport.name, {
+    this.#transports.set(transport.name, {
       transport,
       level: transport.level,
     })
@@ -158,7 +160,7 @@ export class Logger {
       throw new TypeError('Transport identifier must be a non-empty string')
     }
     const normalizedLevel = assertLevel(level)
-    const configuration = this.transports.get(transport)
+    const configuration = this.#transports.get(transport)
     if (!configuration) {
       throw new TypeError(`Unknown transport: ${transport}`)
     }
@@ -172,7 +174,7 @@ export class Logger {
    */
   getConfig() {
     return {
-      transports: [...this.transports].map(([name, configuration]) => ({
+      transports: [...this.#transports].map(([name, configuration]) => ({
         name,
         level: configuration.level,
       })),
@@ -190,11 +192,11 @@ export class Logger {
     if (typeof name !== 'string' || name.trim() === '') {
       throw new TypeError('Transport identifier must be a non-empty string')
     }
-    const configuration = this.transports.get(name)
+    const configuration = this.#transports.get(name)
     if (!configuration) {
       return false
     }
-    this.transports.delete(name)
+    this.#transports.delete(name)
     await this.#closeTransport({ name, transport: configuration.transport })
     return true
   }
@@ -204,14 +206,14 @@ export class Logger {
    * @returns {Promise<void>}
    */
   async close() {
-    const transports = [...this.transports]
-    this.transports.clear()
+    const transports = [...this.#transports]
+    this.#transports.clear()
     await Promise.all(transports.map(([name, configuration]) =>
-      this.closeTransport({ name, transport: configuration.transport }),
+      this.#closeTransport({ name, transport: configuration.transport }),
     ))
   }
 
-  closeTransport({ name, transport }) {
+  #closeTransport({ name, transport }) {
     if (typeof transport.close !== 'function') {
       return Promise.resolve()
     }
@@ -220,7 +222,7 @@ export class Logger {
       .catch((error) => this.#reportTransportError({ transport: name, error }))
   }
 
-  reportTransportError(context) {
+  #reportTransportError(context) {
     try {
       const result = this.#onTransportError(context)
       if (result && typeof result.then === 'function') {
@@ -250,7 +252,7 @@ export class Logger {
       data: deepFreeze(normalizeLogData(data)),
     })
 
-    for (const [name, configuration] of this.transports) {
+    for (const [name, configuration] of this.#transports) {
       if (LEVEL_RANK[level] < LEVEL_RANK[configuration.level]) {
         continue
       }
@@ -263,11 +265,11 @@ export class Logger {
         const result = transport.write(entry)
         if (result && typeof result.then === 'function') {
           Promise.resolve(result).catch((error) =>
-            this.reportTransportError({ transport: name, error }),
+            this.#reportTransportError({ transport: name, error }),
           )
         }
       } catch (error) {
-        this.reportTransportError({ transport: name, error })
+        this.#reportTransportError({ transport: name, error })
       }
     }
   }
@@ -277,27 +279,27 @@ export class Logger {
   }
 
   debug(data) {
-    this.log(data, 'debug')
+    this.#log(data, 'debug')
   }
 
   info(data) {
-    this.log(data, 'info')
+    this.#log(data, 'info')
   }
 
   warn(data) {
-    this.log(data, 'warn')
+    this.#log(data, 'warn')
   }
 
   error(data) {
-    this.log(data, 'error')
+    this.#log(data, 'error')
   }
 
   success(data) {
-    this.log(data, 'success')
+    this.#log(data, 'success')
   }
 
   system(data) {
-    this.log(data, 'system')
+    this.#log(data, 'system')
   }
 }
 
