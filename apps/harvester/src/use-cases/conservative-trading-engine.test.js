@@ -3227,6 +3227,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     initialState: {
       orderRegistry: new OrderRegistry({ orders: [buyOwnedOrder, sellOwnedOrder] }),
       replacementIntents: new Set(["DOGEUSDT"]),
+      trailingBuyRepriceIntents: new Set(["DOGEUSDT"]),
     },
   })
   harness.broker.getOpenOrders = async () => ({
@@ -3250,6 +3251,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-buy").status, "FILLED")
   assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === "recovered-sell").status, "OPEN")
   assert.deepEqual(harness.engine.getRecoveryIntents().replacementIntents, ["DOGEUSDT"])
+  assert.deepEqual(harness.engine.getRecoveryIntents().trailingBuyRepriceIntents, [])
 })
 
 test("clears a recovered replacement intent only after canonical history confirms cancellation", async () => {
