@@ -861,6 +861,16 @@ test("accepts a RECONCILED account open-order snapshot with durable Harvester ow
         quantity: "1",
         status: "PENDING",
       }),
+      record("order.submitted", {
+        clientOrderId: "h-BTCUSDT-open-1",
+        brokerOrderId: "9001",
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: "100",
+        quantity: "1",
+        status: "NEW",
+      }),
       record("account.open_orders_captured", {
         phase: "PREFLIGHT",
         observedAt: 100,
