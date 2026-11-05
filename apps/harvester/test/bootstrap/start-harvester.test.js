@@ -147,6 +147,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     },
     getFills: async () => toResult({ data: [] }),
     getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getCanonicalOrder: async () => toResult({ error: new Error("order not found") }),
     getAccountSnapshot: async () => {
       accountSnapshotCalls += 1;
       return toResult({ data: { balances, sourceTime: accountSnapshotCalls } });
