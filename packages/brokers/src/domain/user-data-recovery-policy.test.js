@@ -6,7 +6,7 @@ describe("user-data recovery domain policy", () => {
   it("does not complete when recovery is not required", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: false,
-      subscriptionId: 17,
+      hasActiveSubscription: true,
       subscriberAcknowledgements: [true],
     }), false)
   })
@@ -14,7 +14,7 @@ describe("user-data recovery domain policy", () => {
   it("does not complete before a remote subscription is established", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: true,
-      subscriptionId: null,
+      hasActiveSubscription: false,
       subscriberAcknowledgements: [true],
     }), false)
   })
@@ -22,7 +22,7 @@ describe("user-data recovery domain policy", () => {
   it("does not complete without active subscribers", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: true,
-      subscriptionId: 17,
+      hasActiveSubscription: true,
       subscriberAcknowledgements: [],
     }), false)
   })
@@ -30,7 +30,7 @@ describe("user-data recovery domain policy", () => {
   it("waits until every active subscriber acknowledges reconciliation", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: true,
-      subscriptionId: 17,
+      hasActiveSubscription: true,
       subscriberAcknowledgements: [true, false],
     }), false)
   })
@@ -38,7 +38,7 @@ describe("user-data recovery domain policy", () => {
   it("completes only when every active subscriber explicitly acknowledges", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: true,
-      subscriptionId: 17,
+      hasActiveSubscription: true,
       subscriberAcknowledgements: [true, true],
     }), true)
   })
@@ -46,7 +46,7 @@ describe("user-data recovery domain policy", () => {
   it("does not treat truthy non-boolean values as acknowledgements", () => {
     assert.equal(canCompleteUserDataRecovery({
       recoveryRequired: true,
-      subscriptionId: 17,
+      hasActiveSubscription: true,
       subscriberAcknowledgements: [true, "yes"],
     }), false)
   })
