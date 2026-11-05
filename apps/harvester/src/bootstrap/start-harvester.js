@@ -1215,6 +1215,8 @@ export async function startHarvester({
       if (recoveredState.requiresExchangeReconciliation) {
         const reconciledState = {
           ...recoveredState,
+          portfolio: getPortfolio(),
+          recoveryLedgers: new Map(recoveredState.recoveryLedgers),
           orderRegistry: new OrderRegistry({ orders: tradingEngine.getOrders() }),
         }
         const accountAudit = auditRecoveredAccountState({
