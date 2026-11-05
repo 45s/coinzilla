@@ -8,9 +8,10 @@ Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../
 
 ## Principles
 
-- Bounded contexts own their aggregate and repository contracts.
-- Application workflows depend on domain-owned ports, not database connections.
-- Infrastructure adapters implement repository ports and translate domain operations to SQL.
+- This package's domain is database infrastructure: database lifecycle and immutable schema migrations.
+- Business bounded contexts own their business aggregates and repository contracts.
+- Application use cases depend on the database provider port, not SQLite connections.
+- SQLite infrastructure owns SQL, driver APIs, transaction mechanics, and migration persistence.
 - Keep database lifecycle, transaction, and migration behavior explicit.
 - Use prepared statements and bound parameters for values.
 - Do not build a generic CRUD/query API or ORM abstraction.
@@ -25,10 +26,15 @@ Read [package instructions](./AGENTS.md) and the [domain ownership guide](../../
 - [x] Implement explicit synchronous transactions with commit/rollback and nested/async callback rejection.
 - [x] Implement ordered, atomic, versioned schema migrations and migration-history validation.
 - [x] Add deterministic integration tests using real in-memory and temporary file-backed SQLite databases.
+- [~] Separate the database infrastructure domain model, application provider port/use case, and SQLite infrastructure adapter without changing the public API.
 - [ ] Integrate the first domain-owned repository contract with a real application consumer.
 - [ ] Add domain-specific repositories and schema migrations alongside their owning bounded contexts.
 - [ ] Reassess PostgreSQL or MongoDB only if deployment, concurrency, scale, or query requirements outgrow embedded SQLite.
 - [ ] Document backup/restore and operational procedures for the first persistent application deployment.
+
+## Architecture status
+
+The database lifecycle aggregate owns provider-independent lifecycle state and transaction draining. Immutable migration entities own schema-change identity; a pure migration-history service enforces the rule that an applied version cannot be removed or renamed. SQLite-specific SQL and `node:sqlite` behavior live under `src/infrastructure/sqlite/`. The package does not own business aggregates or generic repositories.
 
 ## Implemented public API
 
