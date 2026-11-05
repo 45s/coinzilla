@@ -90,7 +90,7 @@ export function makeConservativeTradingEngine({
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
@@ -119,11 +119,24 @@ export function makeConservativeTradingEngine({
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
     paused: new Set(initialState.pausedMarkets ?? []),
+    durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
+    recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
     replacementIntents: new Set(initialState.replacementIntents ?? []),
     trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
+  }
+  const releaseRecoveryManagedPause = ({ symbol } = {}) => {
+    if (!state.recoveryManagedPausedMarkets.delete(symbol)) return false
+    if (
+      !state.durablePausedMarkets.has(symbol) &&
+      !state.replacementIntents.has(symbol) &&
+      !state.trailingBuyRepriceIntents.has(symbol)
+    ) {
+      state.paused.delete(symbol)
+    }
+    return true
   }
   const rememberProcessedFill = ({ fill }) => {
     const fillIds = state.processedFillIdsByOrder.get(fill.brokerOrderId) ?? new Set()
@@ -1025,10 +1038,10 @@ export function makeConservativeTradingEngine({
 
       if (recoveryMode && order.status === "CANCELED" &&
           compareDecimal({ left: order.executedQuantity.amount, right: "0" }) === 0) {
-        if (order.side === "SELL" && state.replacementIntents.delete(symbol)) {
-          state.deferredEvaluations.add(symbol)
-        }
-        if (order.side === "BUY" && state.trailingBuyRepriceIntents.delete(symbol)) {
+        const resolvedSellIntent = order.side === "SELL" && state.replacementIntents.delete(symbol)
+        const resolvedBuyIntent = order.side === "BUY" && state.trailingBuyRepriceIntents.delete(symbol)
+        if (resolvedSellIntent || resolvedBuyIntent) {
+          releaseRecoveryManagedPause({ symbol })
           state.deferredEvaluations.add(symbol)
         }
       }
@@ -1136,7 +1149,9 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, waitingForTerminalState: true } })
       }
       if (order.status === "FILLED" && order.side === "BUY") {
-        if (recoveryMode) state.trailingBuyRepriceIntents.delete(symbol)
+        if (recoveryMode && state.trailingBuyRepriceIntents.delete(symbol)) {
+          releaseRecoveryManagedPause({ symbol })
+        }
         if (isStopping?.()) return toResult({ data: { order, shutdown: true } })
         let executionPrice
         try {
@@ -1159,6 +1174,7 @@ export function makeConservativeTradingEngine({
       }
       if (order.status === "FILLED" && order.side === "SELL") {
         state.replacementIntents.delete(symbol)
+        if (recoveryMode) releaseRecoveryManagedPause({ symbol })
         try {
           assertReconciledSellExecution({ order })
         } catch (error) {
