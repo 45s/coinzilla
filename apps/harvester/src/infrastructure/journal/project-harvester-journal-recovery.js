@@ -426,6 +426,23 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const clientOrderId = fill.clientOrderId ?? clientIdByBrokerId.get(fill.brokerOrderId)
         if (!clientOrderId) throw new Error("Applied fill cannot be assigned to a journaled Harvester order: " + fill.fillId)
         const order = requireOrder({ clientOrderId, eventName: name })
+        if (order.submissionOutcome === "REJECTED") {
+          throw new Error("Applied fill references a definitively rejected submission: " + fill.fillId)
+        }
+        if (order.brokerOrderId === undefined) {
+          const existingOwner = clientIdByBrokerId.get(fill.brokerOrderId)
+          if (existingOwner && existingOwner !== order.clientOrderId) {
+            throw new Error("Applied fill brokerOrderId is already owned by another clientOrderId")
+          }
+          // A fill can reach the Journal before the broker acknowledgement event
+          // is durable. The fill's clientOrderId and brokerOrderId then provide
+          // the only durable evidence that the submission was accepted.
+          order.brokerOrderId = fill.brokerOrderId
+          order.submissionOutcome = "ACKNOWLEDGED"
+          order.exchangeStatusHint = "UNKNOWN"
+          order.recoveryStatus = "UNKNOWN"
+          clientIdByBrokerId.set(fill.brokerOrderId, order.clientOrderId)
+        }
         if (order.brokerOrderId !== fill.brokerOrderId || order.symbol !== fill.symbol || order.side !== fill.side) {
           throw new Error("Applied fill identity conflicts with its journaled order: " + fill.fillId)
         }
