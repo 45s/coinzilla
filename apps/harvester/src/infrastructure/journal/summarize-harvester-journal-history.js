@@ -9,6 +9,8 @@ const TRADING_EVENT_NAMES = new Set([
   "order.cancel_failed",
   "execution.fill_applied",
   "recovery.cycle_completed",
+  "account.snapshot_captured",
+  "account.open_orders_captured",
 ])
 
 /**
