@@ -48,14 +48,13 @@ Standard severity order is `trace < debug < info < warn < error`. Every transpor
 ```js
 import { Logger, defaultLogger } from "@coinzilla/utils"
 
-const developmentEntries = []
-const diagnosticEntries = []
+import { appendFile } from "node:fs/promises"
 
 defaultLogger.addTransport({
   name: "development-file",
   level: "debug",
   write(entry) {
-    developmentEntries.push(entry)
+    return appendFile("logs/development.log", `${JSON.stringify(entry)}\\n`)
   },
 })
 
@@ -63,7 +62,7 @@ defaultLogger.addTransport({
   name: "diagnostics",
   level: "trace",
   write(entry) {
-    diagnosticEntries.push(entry)
+    return appendFile("logs/diagnostics.log", `${JSON.stringify(entry)}\\n`)
   },
 })
 
@@ -76,6 +75,10 @@ const current = defaultLogger.getConfig()
 
 // A separate logger is useful for isolated tests or independent applications.
 const isolatedLogger = new Logger({ transports: [] })
+
+// Remove destinations and close their file handles during application shutdown.
+await defaultLogger.removeTransport("development-file")
+await defaultLogger.removeTransport("diagnostics")
 ```
 
 A transport is an object with a unique non-empty `name`, a `level` from the standard severity list, and a `write(entry)` function. It may also provide `shouldWrite(entry)` for an additional transport-specific filter and `close()` for resource cleanup. Each write receives the same frozen entry shape:
