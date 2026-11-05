@@ -4,7 +4,7 @@ import assert from "node:assert/strict"
 import {
   buildTestnetMenuArguments,
   TESTNET_MENU_ACTIONS,
-} from "./testnet-menu.js"
+} from "./testnet-menu-utils.js"
 
 test("menu exposes all existing TESTNET and journal operations", () => {
   assert.deepEqual(
