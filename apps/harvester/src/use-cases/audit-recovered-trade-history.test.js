@@ -143,3 +143,17 @@ test("rejects non-canonical exchange fill records", () => {
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /must be a canonical Fill/)
 })
+
+
+test("accepts canonical account trade fills that omit clientOrderId when broker and trade identities match", () => {
+  const journalExecution = makeFill()
+  const exchangeFill = makeFill({ clientOrderId: undefined })
+  const result = auditRecoveredTradeHistory({
+    journalFills: [journalFill(journalExecution)],
+    exchangeFills: [exchangeFill],
+    complete: true,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.fillsChecked, 1)
+})
