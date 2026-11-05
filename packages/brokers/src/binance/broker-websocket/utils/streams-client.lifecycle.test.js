@@ -572,3 +572,53 @@ test("clears the control pump timer when its only queued request times out", asy
   await client.disconnect()
   assert.equal(clock.pendingCount, 0)
 })
+
+
+test("paces queued cleanup requests and clears the control pump timer on disconnect", async () => {
+  const { client, clock, transports } = createClient()
+  const first = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
+
+  const batchStreams = Array.from(
+    { length: 201 },
+    (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`,
+  )
+  const batch = client.subscribe(batchStreams, () => {})
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+  assert.equal(transports[0].sent[1].method, "SUBSCRIBE")
+  acknowledge(transports[0], 1)
+  await flush()
+
+  clock.advanceBy(300)
+  await flush()
+  assert.equal(transports[0].sent[2].method, "SUBSCRIBE")
+  acknowledge(transports[0], 2, { code: 2, msg: "second batch failed" })
+  await assert.rejects(batch, /second batch failed/)
+
+  const next = client.subscribe("ethusdt@trade", () => {})
+  await flush()
+  clock.advanceBy(300)
+  await flush()
+
+  assert.equal(transports[0].sent[3].method, "UNSUBSCRIBE")
+  assert.equal(transports[0].sent[4].method, "SUBSCRIBE")
+  acknowledge(transports[0], 3)
+  acknowledge(transports[0], 4)
+  await flush()
+  await next
+
+  const pending = client.subscribe("bnbusdt@trade", () => {})
+  await flush()
+  assert.equal(transports[0].sent.length, 5)
+
+  await client.disconnect()
+  await assert.rejects(pending, /client disconnected/)
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(client.state, "closed")
+})
