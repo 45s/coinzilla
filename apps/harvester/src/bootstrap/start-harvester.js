@@ -2,6 +2,7 @@ import { Fill, Market } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
 import { defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
@@ -9,6 +10,7 @@ import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/re
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery.js"
 import { restoreHarvesterJournalState } from "../use-cases/restore-harvester-journal-state.js"
+import { auditRecoveredAccountState } from "../use-cases/audit-recovered-account-state.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -539,13 +541,21 @@ export async function startHarvester({
     return nextSnapshot
   }
 
-  const publishOpenOrdersSnapshot = async ({ phase = "PREFLIGHT", blockOnExistingOrders = tradingEnabled } = {}) => {
-    const result = await broker.getOpenOrders({})
-    if (!result?.ok || !Array.isArray(result.data)) {
-      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
+  const publishOpenOrdersSnapshot = async ({
+    phase = "PREFLIGHT",
+    blockOnExistingOrders = tradingEnabled,
+    orders: suppliedOrders,
+  } = {}) => {
+    let orders = suppliedOrders
+    if (orders === undefined) {
+      const result = await broker.getOpenOrders({})
+      if (!result?.ok || !Array.isArray(result.data)) {
+        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+        throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
+      }
+      orders = result.data
     }
-    const orders = result.data
+    if (!Array.isArray(orders)) throw new TypeError("publishOpenOrdersSnapshot orders must be an array")
     const restoredOrders = recoveredState.orderRegistry?.orders ?? []
     const matchedOwnedClientIds = new Set()
     const unownedOrders = orders.filter((order) => {
@@ -621,8 +631,13 @@ export async function startHarvester({
     return orders
   }
 
-  const publishAccountSnapshot = async ({ phase, auditStatus = "COMPLETE", auditReasons = [] } = {}) => {
-    const snapshot = await refreshAccountSnapshot()
+  const publishAccountSnapshot = async ({
+    phase,
+    auditStatus = "COMPLETE",
+    auditReasons = [],
+    snapshot: suppliedSnapshot,
+  } = {}) => {
+    const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
     const published = publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
