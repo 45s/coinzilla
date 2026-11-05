@@ -101,3 +101,43 @@ test("getCanonicalOrder fails closed when order status or market metadata is mal
     assert.ok(result.errors.length > 0)
   }
 })
+
+test("rejects order.status responses whose symbol or client order ID does not match the query", async () => {
+  const mismatches = [
+    { ...rawOrder, symbol: "BTCUSDT" },
+    { ...rawOrder, clientOrderId: "foreign-client-id" },
+  ]
+
+  for (const order of mismatches) {
+    const broker = createBroker({
+      "order.status": () => order,
+      exchangeInfo: () => ({ symbols: [symbolInfo] }),
+    })
+    const result = await broker.getCanonicalOrder({
+      symbol: "DOGEUSDT",
+      clientOrderId: "harvester-client-123",
+    })
+    assert.equal(result.ok, false)
+  }
+})
+
+test("rejects an order.status response with a different broker order ID", async () => {
+  const broker = createBroker({
+    "order.status": () => ({ ...rawOrder, orderId: 987655 }),
+    exchangeInfo: () => ({ symbols: [symbolInfo] }),
+  })
+
+  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", orderId: 987654 })
+
+  assert.equal(result.ok, false)
+})
+
+test("rejects a non-object order.status response", async () => {
+  const broker = createBroker({
+    "order.status": () => null,
+  })
+
+  const result = await broker.getCanonicalOrder({ symbol: "DOGEUSDT", clientOrderId: "harvester-client-123" })
+
+  assert.equal(result.ok, false)
+})
