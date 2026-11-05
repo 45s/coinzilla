@@ -64,7 +64,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 6 — user-data session lifecycle and recovery; deterministic offline coverage characterizes subscription setup and uncertain outcomes, termination/reconnect retries, repeated reconciliation acknowledgements, state-changing request gates, stale events, listener rollback, and stale-subscription cleanup. Opt-in live TESTNET/soak validation remains in Phase 8.
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml` (`run_broker_testnet_read_only` manual input). The repository owner reports that the required TESTNET secrets are configured (values intentionally uninspected); the manual run on `develop` and long-running recovery/soak validation in a controlled TESTNET session remain pending.
-- [~] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; in progress. First vertical slice: extract and test the exchange-neutral user-data recovery acknowledgement invariant while preserving the existing session lifecycle. The first modernization tranche established test seams, adapters, and selected ports, but did not complete the package's domain/application/infrastructure architecture. Phase 9 will define and implement broker-owned domain concepts, application use cases, explicit ports, and exchange-specific infrastructure adapters without expanding into Harvester or other packages.
+- [~] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; in progress. Slice 1 (exchange-neutral recovery invariant) merged in PR #596; slice 2 (normalized user-data client-port responses) is underway. The first modernization tranche established test seams, adapters, and selected ports, but did not complete the package's domain/application/infrastructure architecture. Phase 9 will define and implement broker-owned domain concepts, application use cases, explicit ports, and exchange-specific infrastructure adapters without expanding into Harvester or other packages.
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 
@@ -89,7 +89,7 @@ The first DDD/TDD modernization tranche is merged into `develop`. It established
 
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
-### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (planned)
+### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (in progress)
 
 **Scope is the broker package itself.** This phase is not a Harvester refactor, does not move broker responsibilities into another package, and does not authorize changes to other domains. Harvester and bot packages may be inspected only when necessary to verify existing public broker consumers; they are not implementation scope.
 
@@ -149,7 +149,11 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. The first test-first domain slice extracts the exchange-neutral user-data recovery acknowledgement invariant into `src/domain/user-data-recovery-policy.js`; the existing Binance session remains responsible for subscriber state, timers, and effects.
+**Status:** in progress. Slice 1 (exchange-neutral user-data recovery completion policy) merged via PR #596. Slice 2 normalizes user-data subscription RPC results at the injected port boundary so the session no longer reads Binance `{ data: ... }` response envelopes.
+
+**Progress**
+- [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged into `develop` via PR #596. Six pure domain tests; package tests and domain coverage gate passed on the exact PR head.
+- [~] Slice 2 — normalize user-data client-port subscription results. The Binance adapter unwraps raw RPC response envelopes; the session consumes subscription IDs and ID arrays only. TDD and implementation are in progress.
 
 ---
 
@@ -176,7 +180,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. The first domain slice isolates the rule that recovery can complete only when a remote user-data subscription is active and every current subscriber explicitly acknowledges reconciliation. Next, continue with application-owned orchestration and port boundaries, one tested capability slice at a time; do not expand into Harvester or other packages.
+9. Phase 9 is in progress. Slice 1 isolates the rule that recovery completes only when a user-data subscription is active and every current subscriber explicitly acknowledges reconciliation (PR #596). Slice 2 moves raw Binance RPC response-envelope unwrapping into the Binance client-port adapter, leaving the session to consume normalized subscription IDs. Next, separate Binance event adaptation/termination detection from the application-style session coordinator, preserving event fan-out and deduplication.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
