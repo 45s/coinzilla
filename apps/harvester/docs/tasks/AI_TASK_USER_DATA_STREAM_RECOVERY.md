@@ -114,3 +114,23 @@ Use fake broker/REST ports and controlled promises/clocks where appropriate. Tes
 - No duplicate recovery work or repeated unchanged status spam.
 - Documentation reflects actual implemented behavior.
 - Exact-head CI passes.
+
+
+## Implementation update — PR #627
+
+**Source-confirmed root cause:** the broker emitted `recovered` with reconciliation still required and waited for subscriber acknowledgement before emitting `reconciled`; Harvester only began reconciliation after `reconciled`. This circular wait prevented the acknowledgement from ever being reached and caused the broker's 30-second recovery reminders to repeat.
+
+**Implemented in this PR:**
+
+- Start application recovery on the broker's `recovered` transport status.
+- Reconcile owned orders/fills and drain the serialized user-data event queue.
+- Capture a fresh account snapshot and durably journal only configured enabled-market assets.
+- Capture and durably journal account-wide open orders after ownership reconciliation.
+- Acknowledge broker recovery only after the reconciliation and durable audits succeed.
+- Invalidate stale in-flight work when a newer disconnect/recovery/error status arrives.
+- Ignore duplicate reminders for an already acknowledged recovery generation.
+- Keep the app readiness gate closed on any failure.
+
+**Regression tests added:** successful recovery with durable account/open-order audits; failed account snapshot does not acknowledge; a newer disconnect invalidates stale completion; duplicate reminders do not repeat completed work.
+
+**Verification status:** GitHub Actions is running on the PR head. No TESTNET acceptance is claimed. The empty-message TypeError cause remains unproven and is not represented as fixed.
