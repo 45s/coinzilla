@@ -114,7 +114,7 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
     assert.equal(blocked.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
 
     assert.equal((await first.release({})).ok, true)
-    assert.equal((await first.release({})).data?.alreadyReleased ?? false, false)
+    assert.equal((await first.release({})).alreadyReleased, true)
 
     const afterRelease = await acquireHarvesterProcessLocks({
       globalDirectory,
