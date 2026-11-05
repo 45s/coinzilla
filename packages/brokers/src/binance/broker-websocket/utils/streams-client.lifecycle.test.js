@@ -486,3 +486,89 @@ test("isolates a throwing error observer from malformed stream messages", async 
   assert.equal(client.state, "open")
   await client.disconnect()
 })
+
+
+test("removes obsolete initial subscriptions when listeners change during reconnect", async () => {
+  const transports = []
+  let releaseReconnect
+  const { client, clock } = createClient({
+    transportFactory: (options) => {
+      const transport = new FakeTransport(options)
+      if (transports.length === 1) {
+        transport.connect = () => new Promise((resolve) => {
+          releaseReconnect = () => {
+            transport.state = "open"
+            resolve(transport)
+          }
+        })
+      }
+      transports.push(transport)
+      return transport
+    },
+  })
+  const listener = () => {}
+  const first = client.subscribe("btcusdt@aggTrade", listener)
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
+
+  transports[0].serverClose()
+  const reconnect = client.connect()
+  await flush()
+  assert.equal(transports.length, 2)
+
+  await client.unsubscribe("btcusdt@aggTrade", listener)
+  releaseReconnect()
+  clock.advanceBy(300)
+  await flush()
+
+  assert.equal(transports[1].sent[0].method, "LIST_SUBSCRIPTIONS")
+  acknowledge(transports[1], 0, { result: ["btcusdt@aggTrade"] })
+  clock.advanceBy(300)
+  await flush()
+
+  assert.deepEqual(transports[1].sent[1], {
+    method: "UNSUBSCRIBE",
+    params: ["btcusdt@aggTrade"],
+    id: 3,
+  })
+  acknowledge(transports[1], 1)
+  await reconnect
+
+  assert.deepEqual(client.subscriptions, [])
+  await client.disconnect()
+})
+
+test("does not issue obsolete-subscription cleanup after disconnect during initial acknowledgement", async () => {
+  const { client, transports, clock } = createClient()
+  const subscription = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await client.disconnect()
+
+  await assert.rejects(subscription, /connection was superseded/)
+  assert.equal(transports[0].sent.length, 1)
+  assert.equal(clock.pendingCount, 0)
+  assert.equal(client.state, "closed")
+})
+
+test("clears the control pump timer when its only queued request times out", async () => {
+  const { client, clock, transports } = createClient({ ackTimeout: 100 })
+  const first = client.subscribe("btcusdt@aggTrade", () => {})
+  await flush()
+  acknowledge(transports[0], 0, { result: ["btcusdt@aggTrade"] })
+  await first
+  const baselineTimers = clock.pendingCount
+
+  const second = client.subscribe("ethusdt@trade", () => {})
+  await flush()
+  assert.equal(clock.pendingCount, baselineTimers + 2)
+
+  clock.advanceBy(100)
+  await assert.rejects(second, /acknowledgement timed out/)
+  assert.equal(clock.pendingCount, baselineTimers)
+  assert.equal(client.state, "open")
+  await client.disconnect()
+  assert.equal(clock.pendingCount, 0)
+})

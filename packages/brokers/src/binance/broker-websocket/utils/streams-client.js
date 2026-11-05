@@ -279,6 +279,9 @@ export class BinanceStreamsClient {
 
       const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
       const listedStreams = await this.#request("LIST_SUBSCRIPTIONS")
+      if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
+        throw new Error("Binance Streams connection was superseded")
+      }
       if (!Array.isArray(listedStreams) || !initialBatch.every((stream) => listedStreams.includes(stream))) {
         throw new Error("Binance combined-stream connection did not confirm its initial subscriptions")
       }
@@ -287,6 +290,9 @@ export class BinanceStreamsClient {
       const obsoleteInitialStreams = initialBatch.filter((stream) => !desiredStreams.has(stream))
       if (obsoleteInitialStreams.length > 0) {
         await this.#request("UNSUBSCRIBE", obsoleteInitialStreams)
+        if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
+          throw new Error("Binance Streams connection was superseded")
+        }
       }
       for (const stream of initialBatch) {
         if (desiredStreams.has(stream)) this.#activeStreams.add(stream)
@@ -297,6 +303,9 @@ export class BinanceStreamsClient {
         .filter((stream) => desiredStreams.has(stream))
       for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
         await this.#request("SUBSCRIBE", batch)
+        if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
+          throw new Error("Binance Streams connection was superseded")
+        }
         for (const stream of batch) this.#activeStreams.add(stream)
       }
 
@@ -356,6 +365,7 @@ export class BinanceStreamsClient {
         this.#pending.delete(id)
         this.#ackTimeouts.delete(timeout)
         this.#controlQueue = this.#controlQueue.filter((item) => item.id !== id)
+        if (this.#controlQueue.length === 0) this.#clearPumpTimer()
         reject(new Error(`Binance Streams ${method} acknowledgement timed out`))
       }, this.ackTimeout)
       this.#ackTimeouts.add(timeout)
