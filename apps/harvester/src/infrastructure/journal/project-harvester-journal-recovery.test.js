@@ -871,24 +871,27 @@ test("accepts a RECONCILED account open-order snapshot with durable Harvester ow
         quantity: "1",
         status: "NEW",
       }),
-      record("account.open_orders_captured", {
-        phase: "PREFLIGHT",
-        observedAt: 100,
-        readiness: "RECONCILED",
-        orderCount: 1,
-        orders: [{
-          clientOrderId: "h-BTCUSDT-open-1",
-          brokerOrderId: "9001",
-          symbol: "BTCUSDT",
-          side: "BUY",
-          type: "LIMIT",
-          price: "100",
-          quantity: "1",
-          executedQuantity: "0",
-          status: "NEW",
-        }],
-        blockReasons: [],
-      }),
+      {
+        ...record("account.open_orders_captured", {
+          phase: "PREFLIGHT",
+          observedAt: 100,
+          readiness: "RECONCILED",
+          orderCount: 1,
+          orders: [{
+            clientOrderId: "h-BTCUSDT-open-1",
+            brokerOrderId: "9001",
+            symbol: "BTCUSDT",
+            side: "BUY",
+            type: "LIMIT",
+            price: "100",
+            quantity: "1",
+            executedQuantity: "0",
+            status: "NEW",
+          }],
+          blockReasons: [],
+        }),
+        position: { fileName: "restart-session.jsonl", lineNumber: 1 },
+      },
     ],
   })
 
@@ -1071,21 +1074,15 @@ test("rejects account snapshots whose exchange source time moves backwards", () 
   const balances = [{ asset: "BTC", free: "0.5", locked: "0", total: "0.5" }]
   const result = projectHarvesterJournalRecovery({
     records: [
-      record("harvester.started", {
-        broker: "binance",
-        strategyMode: "conservative",
-        enabledMarkets: ["BTCUSDT"],
-        tradingEnabled: true,
-      }),
       record("account.snapshot_captured", {
-        phase: "PREFLIGHT",
+        phase: "OPENING",
         sourceTime: 200,
         auditStatus: "COMPLETE",
         balances,
         auditReasons: [],
       }),
       record("account.snapshot_captured", {
-        phase: "CLOSING",
+        phase: "OPENING",
         sourceTime: 100,
         auditStatus: "COMPLETE",
         balances,
