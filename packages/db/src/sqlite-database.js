@@ -134,7 +134,7 @@ export function createSqliteDatabase({
 
   const database = createDatabase({ adapter })
 
-  return Object.freeze({
+  const sqliteDatabase = Object.freeze({
     connect: database.connect,
     transaction: database.transaction,
     close: database.close,
@@ -148,7 +148,9 @@ export function createSqliteDatabase({
       return requireConnection().prepare(sql)
     },
     migrate(migrations) {
-      return migrateSqliteDatabase(this, migrations)
+      return migrateSqliteDatabase(sqliteDatabase, migrations)
     },
   })
+
+  return sqliteDatabase
 }
