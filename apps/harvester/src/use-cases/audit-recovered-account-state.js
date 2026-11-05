@@ -1,3 +1,4 @@
+import { Market } from "@coinzilla/entities"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -88,8 +89,18 @@ export function auditRecoveredAccountState({
 
     const expectedDeltas = new Map()
     const marketsById = new Map()
+    for (const position of recoveredState.portfolio.value.positions) {
+      if (!markets.some((market) => market.id === position.market.id)) {
+        throw new Error("Canonical Market metadata is missing for restored Position " + position.market.symbol)
+      }
+    }
+    for (const order of recoveredState.orderRegistry.orders) {
+      if (!markets.some((market) => market.id === order.market.id)) {
+        throw new Error("Canonical Market metadata is missing for restored order " + order.clientOrderId)
+      }
+    }
     for (const market of markets) {
-      if (!market || typeof market.id !== "string" || typeof market.symbol !== "string") {
+      if (!(market instanceof Market)) {
         throw new TypeError("markets must contain canonical Market values")
       }
       if (marketsById.has(market.id)) throw new Error("Duplicate canonical Market metadata for " + market.id)
