@@ -238,7 +238,7 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
       if (name === EVENT.ACCOUNT_OPEN_ORDERS) {
         if (!["OPENING", "PREFLIGHT"].includes(data.phase)) throw new TypeError("Open-order snapshot phase is invalid")
         if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
-        if (!["READY", "BLOCKED"].includes(data.readiness)) throw new TypeError("Open-order snapshot readiness is invalid")
+        if (!["READY", "RECONCILED", "BLOCKED"].includes(data.readiness)) throw new TypeError("Open-order snapshot readiness is invalid")
         if (!Array.isArray(data.orders) || !Array.isArray(data.blockReasons)) throw new TypeError("Open-order snapshot orders and blockReasons must be arrays")
         if (data.orderCount !== data.orders.length) throw new Error("Open-order snapshot orderCount does not match orders")
         const orders = data.orders.map((order, index) => {
@@ -267,8 +267,11 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
         const blockReasons = data.blockReasons.map((reason, index) =>
           requireString({ value: reason, field: "blockReasons[" + index + "]" }),
         )
-        if (data.readiness === "READY" && blockReasons.length > 0) {
-          throw new Error("READY open-order snapshot cannot contain block reasons")
+        if (data.readiness === "READY" && (orders.length > 0 || blockReasons.length > 0)) {
+          throw new Error("READY open-order snapshot requires no orders and no block reasons")
+        }
+        if (data.readiness === "RECONCILED" && (orders.length === 0 || blockReasons.length > 0)) {
+          throw new Error("RECONCILED open-order snapshot requires owned orders and no block reasons")
         }
         if (data.readiness === "BLOCKED" && blockReasons.length === 0) {
           throw new Error("BLOCKED open-order snapshot must contain block reasons")
