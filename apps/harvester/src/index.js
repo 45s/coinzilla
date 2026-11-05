@@ -16,7 +16,7 @@ function createDefaultJournalService({ eventBus, logger, enabled, directory }) {
   return prepareOptionalJournal({ eventBus, logger, enabled, directory })
 }
 
-async function closeObservability({ journalService, eventBus, processLock, logger }) {
+async function closeObservability({ journalService, eventBus, processLock, allowProcessLockRelease = true, logger }) {
   const errors = []
   let journalClosed = !journalService
   if (typeof journalService?.close === "function") {
@@ -50,7 +50,7 @@ async function closeObservability({ journalService, eventBus, processLock, logge
     }
   }
   if (processLock) {
-    if (journalClosed) {
+    if (allowProcessLockRelease && journalClosed) {
       try {
         const result = await processLock.release()
         if (result?.ok !== true) {
@@ -62,7 +62,11 @@ async function closeObservability({ journalService, eventBus, processLock, logge
         errors.push(error)
       }
     } else {
-      errors.push(new Error("Harvester trading process lock retained because Journal shutdown was not confirmed"))
+      errors.push(new Error(
+        !allowProcessLockRelease
+          ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
+          : "Harvester trading process lock retained because Journal shutdown was not confirmed",
+      ))
     }
   }
   if (errors.length > 0) {
@@ -207,9 +211,18 @@ export async function main({
         if (shutdownPromise) return shutdownPromise
         shutdownPromise = (async () => {
           let shutdownError
+          let runtimeStopped = false
           try {
-            await runtime.stop()
-            logger.info("Harvester shutdown completed.")
+            const stopResult = await runtime.stop()
+            runtimeStopped = stopResult?.ok === true
+            if (!runtimeStopped) {
+              shutdownError = stopResult?.errors?.[0]
+                ?? new Error("Harvester runtime stop did not confirm shutdown")
+              process.exitCode = 1
+              logger.error({ message: "Harvester shutdown was not confirmed.", error: shutdownError })
+            } else {
+              logger.info("Harvester shutdown completed.")
+            }
           } catch (error) {
             shutdownError = error
             process.exitCode = 1
@@ -228,7 +241,13 @@ export async function main({
               error: shutdownError,
             }),
           })
-          const cleanupErrors = await closeObservability({ journalService, eventBus, processLock, logger })
+          const cleanupErrors = await closeObservability({
+            journalService,
+            eventBus,
+            processLock,
+            allowProcessLockRelease: runtimeStopped,
+            logger,
+          })
           if (cleanupErrors.length > 0) process.exitCode = 1
         })()
         return shutdownPromise
