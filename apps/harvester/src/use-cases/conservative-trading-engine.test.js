@@ -223,7 +223,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     getCurrentRecoveryLedger: () => currentRecoveryLedger,
     setCurrentPortfolio: (next) => { currentPortfolio = next },
     setCurrentRecoveryLedger: (next) => { currentRecoveryLedger = next },
-    setCanonicalOrderLookup: ({ order }) => canonicalOrdersByClientId.set(order.clientOrderId, order),
+    setCanonicalOrderLookup: ({ order, clientOrderId = order.clientOrderId }) => canonicalOrdersByClientId.set(clientOrderId, order),
     setAcknowledgedOrder: ({ order, fills = [] }) => {
       acknowledgedOrdersById.set(order.brokerOrderId, order)
       acknowledgedFillsByOrder.set(order.brokerOrderId, fills)
@@ -2951,4 +2951,66 @@ test("keeps a pending submission UNKNOWN when client-order-ID lookup cannot reso
   assert.equal(harness.engine.getOrders()[0].brokerOrderId, undefined)
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
   assert.equal(harness.orders.length, 1)
+})
+
+test("does not adopt a client-order lookup response with a mismatched client ID", async () => {
+  const harness = await createHarness({ placeOrderThrow: true })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const pendingOrder = harness.engine.getOrders()[0]
+  const foreignOrder = new CanonicalOrder({
+    clientOrderId: "foreign-client-id",
+    brokerOrderId: "foreign-broker-order",
+    market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  harness.setCanonicalOrderLookup({ clientOrderId: pendingOrder.clientOrderId, order: foreignOrder })
+
+  const result = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.engine.getOrders()[0].brokerOrderId, undefined)
+  assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+})
+
+test("does not attach a client-ID lookup that changes immutable order intent", async () => {
+  const harness = await createHarness({ placeOrderThrow: true })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const pendingOrder = harness.engine.getOrders()[0]
+  const conflictingOrder = new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId: "conflicting-broker-order",
+    market,
+    side: "SELL",
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  harness.setCanonicalOrderLookup({ order: conflictingOrder })
+
+  const result = await harness.engine.reconcileOwnedOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.engine.getOrders()[0].brokerOrderId, undefined)
+  assert.equal(harness.engine.getOrders()[0].status, "UNKNOWN")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
 })
