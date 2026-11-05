@@ -504,6 +504,12 @@ test("starts application reconciliation on transport recovery and acknowledges o
         ...result.data,
         acknowledgeRecovery: () => {
           acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            subscriptionId: 17,
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
           resolveAcknowledgement()
           return true
         },
@@ -1575,6 +1581,29 @@ test("logs safe correlation details when an execution report is not owned", asyn
 
 test("reconciles the in-memory order registry before reopening trading after stream recovery", async () => {
   const broker = createBroker()
+  let acknowledgementCount = 0
+  let resolveAcknowledgement
+  const acknowledged = new Promise((resolve) => { resolveAcknowledgement = resolve })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          acknowledgementCount += 1
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveAcknowledgement()
+          return true
+        },
+      },
+    }
+  }
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfig,
     env: {
@@ -1590,26 +1619,17 @@ test("reconciles the in-memory order registry before reopening trading after str
   assert.equal(result.userDataReady, true)
   broker.emitUserDataStatus({
     type: "recovered",
+    subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
   })
   assert.equal(result.userDataReady, false)
+  await waitForTestSignal(acknowledged, "broker recovery acknowledgement", () => ({
+    acknowledgementCount,
+    userDataStatus: result.userDataStatus,
+  }), 2_000)
 
-  broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
-    reconciliationRequired: true,
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(result.userDataReady, false)
-
-  broker.emitUserDataStatus({
-    type: "reconciled",
-    recoveryRequired: false,
-    reconciliationRequired: false,
-  })
-  await new Promise((resolve) => setImmediate(resolve))
-
+  assert.equal(acknowledgementCount, 1)
   assert.equal(result.userDataReady, true)
   assert.equal(result.userDataStatus, "READY")
   await result.stop()
