@@ -1283,7 +1283,6 @@ export async function startHarvester({
           openOrdersChecked: accountAudit.data?.openOrdersChecked ?? 0,
           reservationsChecked: accountAudit.data?.reservationsChecked ?? 0,
         })
-        startupRecoveryReconciliation = false
       }
 
       while (true) {
@@ -1308,6 +1307,7 @@ export async function startHarvester({
         symbol,
         accountSnapshotSourceTime: accountSnapshot.sourceTime,
       })
+      startupRecoveryReconciliation = false
       userDataRequiresReconciliation = false
       userDataReady = true
       userDataStatus = "READY"
