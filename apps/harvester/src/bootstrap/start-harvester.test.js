@@ -1326,7 +1326,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   })
   await new Promise((resolve) => setImmediate(resolve))
   const processedOrderLog = runtimeInfo.find(({ message }) =>
-    message === "Harvester order event processed" && message !== undefined)
+    message === "Order update processed" && message !== undefined)
   assert.ok(processedOrderLog)
   assert.equal(processedOrderLog.price, submittedOrders[0].price)
   assert.equal(processedOrderLog.quantity, submittedOrders[0].quantity)
@@ -1499,7 +1499,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
 })
 
 
-test("logs readiness at info and traces Conservative strategy input and decision at debug level", async () => {
+test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG", async () => {
   const calls = []
   const broker = createBroker()
   broker.getOpenOrders = async () => ({ ok: true, data: [] })
@@ -1512,6 +1512,7 @@ test("logs readiness at info and traces Conservative strategy input and decision
     logger: {
       debug: (data) => calls.push({ level: "debug", ...data }),
       info: (data) => calls.push({ level: "info", ...data }),
+      system: (data) => calls.push({ level: "system", ...data }),
       error: (data) => calls.push({ level: "error", ...data }),
     },
   })
@@ -1533,25 +1534,24 @@ test("logs readiness at info and traces Conservative strategy input and decision
   })
   const infoCalls = calls.filter(({ level }) => level === "info")
   const infoMessages = infoCalls.map(({ message }) => message)
-  const marketEvaluations = infoCalls.filter(({ message }) => message === "Market price evaluated")
+  const systemMessages = calls.filter(({ level }) => level === "system").map(({ message }) => message)
+  const debugCalls = calls.filter(({ level }) => level === "debug")
+  const marketEvaluations = debugCalls.filter(({ message }) => message === "Market price evaluated")
   const targetMarketEvaluation = marketEvaluations.find(({ price }) => price === "65000.12")
   assert.ok(marketEvaluations.length >= 1)
   assert.ok(targetMarketEvaluation)
-  assert.equal(targetMarketEvaluation.level, "info")
+  assert.equal(targetMarketEvaluation.level, "debug")
   assert.equal(targetMarketEvaluation.message, "Market price evaluated")
   assert.equal(targetMarketEvaluation.symbol, "BTCUSDT")
   assert.equal(targetMarketEvaluation.price, "65000.12")
   assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
-  assert.ok(infoMessages.includes("Harvester trading configuration validated"))
-  assert.ok(infoMessages.includes("Binance broker connected"))
-  assert.ok(infoMessages.includes("Exchange trading rules validated"))
-  assert.ok(infoMessages.includes("Binance user-data subscription established"))
-  assert.ok(infoMessages.includes("Exchange account snapshot loaded"))
-  assert.ok(infoMessages.includes("Conservative TESTNET trading engine activated"))
-  assert.ok(infoMessages.includes("Harvester subscribed to book ticker"))
-  assert.ok(infoMessages.includes("Harvester subscribed to market prices"))
-  const debugCalls = calls.filter(({ level }) => level === "debug")
+  assert.ok(systemMessages.includes("Trading configuration validated"))
+  assert.ok(systemMessages.includes("Binance user-data subscription established"))
+  assert.ok(systemMessages.includes("Exchange account snapshot loaded"))
+  assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
+  assert.ok(systemMessages.includes("Book ticker subscribed"))
+  assert.ok(systemMessages.includes("Market data subscribed"))
   const marketEvent = debugCalls.find(({ message, price }) =>
     message === "Harvester market price event received" && price === "65000.12")
   const evaluationStarted = debugCalls.find(({ message, marketEventId }) =>
@@ -1731,7 +1731,7 @@ test("logs safe correlation details when an execution report is not owned", asyn
   await new Promise((resolve) => setImmediate(resolve))
 
   const diagnostic = errors.find((entry) =>
-    entry.message === "Harvester rejected an unowned or invalid order event")
+    entry.message === "rejected an unowned or invalid order event")
   assert.ok(diagnostic)
   assert.equal(diagnostic.symbol, "BTCUSDT")
   assert.equal(diagnostic.brokerOrderId, "987654")
@@ -1889,9 +1889,9 @@ test("emits per-execution debug audit records with commission and before/after a
 
   assert.equal(applied.ok, true)
   const received = debugRecords.find((record) =>
-    record.message === "Harvester accounting execution received")
+    record.message === "Execution received")
   const committed = debugRecords.find((record) =>
-    record.message === "Harvester accounting execution applied")
+    record.message === "Execution accounted")
 
   assert.equal(received.executionId, fill.id)
   assert.equal(received.tradeId, "audited-trade")
