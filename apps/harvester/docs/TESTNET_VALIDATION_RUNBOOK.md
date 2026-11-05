@@ -38,7 +38,7 @@ Hard operational limits for the first session:
 
 ## 2. Preconditions — all must pass before any write
 
-1. Confirm PRs #515, #545, #546, #552, #553, and #554 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
+1. Confirm PRs #513, #515, #545, #546, #552, #553, and #554 are merged into `develop`; record the latest merge commit and verify required CI is green on the exact synchronized `develop` head. A historical green run on an earlier PR head is not sufficient.
 2. Confirm the Harvester process is stopped. Check for any other process that could submit or manage orders using the same TESTNET account/API keys.
 3. Confirm credentials target Binance Spot TESTNET only. Never load production credentials. Keep secrets out of logs, screenshots, commits, and chat.
 4. Verify the account's maker/taker commission setting is 0.1% / 0.1%; record the observation timestamp and evidence. This UI setting is only an expectation: actual per-trade commission amount and asset returned by Binance remain authoritative.
@@ -78,7 +78,7 @@ The trade command accepts an optional third `FROM_ID` argument:
 
 **Never run `pnpm run testnet:cancel-orders` as part of this runbook.** That script cancels every open order across every symbol, including manual/external orders. It violates this runbook's ownership and exact-order cancellation rules. No command in the precondition/baseline procedure is allowed to perform an exchange write.
 
-The recommended single preflight is `pnpm run testnet:audit`: it reads balances and all open orders through Binance WebSocket API, writes both PREFLIGHT events into a new Journal session, flushes them, and disconnects without starting Harvester or changing exchange state. Exit code 2 means open orders were found and the account is BLOCKED, not that the audit failed. The individual balances/orders commands remain optional diagnostics; you do not need to paste their output into chat. Preserve the Journal session and classify pre-existing inventory/orders as external unless separately evidenced as Harvester-owned. The separate `journal:balance-audit` report is still for a closed Harvester session and is not a substitute for this live preflight.
+The primary account-audit evidence is the automatic PREFLIGHT audit performed by the normal broker-connected `pnpm run dev` startup. Do not run `pnpm run testnet:balances` or `pnpm run testnet:orders` repeatedly, and do not require a separate audit command before every dev start. `pnpm run testnet:audit` is an optional standalone read-only diagnostic only when an independent snapshot is specifically needed without starting Harvester; it creates a separate Journal session, flushes the two PREFLIGHT events, and disconnects without changing exchange state. Exit code 2 means open orders were found and the account is BLOCKED, not that the audit failed. The individual balances/orders commands remain optional diagnostics; their output does not replace the automatic startup Journal evidence. Preserve the Journal session and classify pre-existing inventory/orders as external unless separately evidenced as Harvester-owned. The separate `journal:balance-audit` report is still for a closed Harvester session and is not a substitute for this live preflight.
 
 ## 4. Account baseline and ownership boundary
 
