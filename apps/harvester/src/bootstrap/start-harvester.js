@@ -546,8 +546,37 @@ export async function startHarvester({
       throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
     }
     const orders = result.data
-    const blockReasons = orders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + orders.length]
+    const restoredOrders = recoveredState.orderRegistry?.orders ?? []
+    const matchedOwnedClientIds = new Set()
+    const unownedOrders = orders.filter((order) => {
+      const clientOrderId = order?.clientOrderId
+      const brokerOrderId = order?.brokerOrderId
+      const symbol = order?.market?.symbol
+      if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
+          typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
+          typeof symbol !== "string" || !symbol.trim()) return true
+      const owned = restoredOrders.find((candidate) =>
+        candidate.clientOrderId === clientOrderId ||
+        (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId)
+      )
+      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) return true
+      if (owned.status === "CANCELED" || owned.status === "REJECTED") return true
+      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) return true
+      const actualPrice = order.limitPrice?.amount ?? order.price?.amount
+      const expectedPrice = owned.limitPrice?.amount
+      if (
+        owned.clientOrderId !== clientOrderId ||
+        owned.market.symbol !== symbol ||
+        owned.side !== order.side ||
+        owned.type !== order.type ||
+        owned.originalQuantity.amount !== order.originalQuantity?.amount ||
+        expectedPrice !== actualPrice
+      ) return true
+      matchedOwnedClientIds.add(owned.clientOrderId)
+      return false
+    })
+    const blockReasons = unownedOrders.length > 0
+      ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
       : []
     const published = publishLifecycleEvent({
       eventPublisher,
@@ -574,17 +603,19 @@ export async function startHarvester({
       throw new Error("Harvester startup requires a durable open-orders audit before market subscriptions")
     }
     logger.info?.({
-      message: orders.length === 0
-        ? "Account-wide open-orders audit complete; no open orders found"
+      message: blockReasons.length === 0
+        ? (orders.length === 0
+          ? "Account-wide open-orders audit complete; no open orders found"
+          : "Account-wide open-orders audit complete; all open orders match restored Harvester ownership")
         : "Account-wide open-orders audit blocked trading because open orders are unowned",
       orderCount: orders.length,
       readiness: blockReasons.length === 0 ? "READY" : "BLOCKED",
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
-    if (orders.length > 0 && blockOnExistingOrders) {
+    if (blockReasons.length > 0 && blockOnExistingOrders) {
       throw new Error(
-        "Conservative TESTNET startup blocked: account has " + orders.length +
-        " pre-existing open order(s) with no restored Harvester ownership state; inspect account.open_orders_captured in Journal",
+        "Conservative TESTNET startup blocked: account has " + unownedOrders.length +
+        " open order(s) without matching durable Harvester ownership; inspect account.open_orders_captured in Journal",
       )
     }
     return orders
