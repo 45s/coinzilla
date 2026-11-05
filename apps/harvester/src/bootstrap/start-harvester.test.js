@@ -1769,7 +1769,7 @@ test("journals account-wide open orders and blocks trading before engine activat
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: { info() {}, error() {}, debug() {} },
-  }), /startup blocked: account has 1 pre-existing open order/)
+  }), /startup blocked: account has 1 open order/)
 
   const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
