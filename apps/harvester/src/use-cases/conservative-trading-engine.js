@@ -1303,15 +1303,6 @@ export function makeConservativeTradingEngine({
             ) {
               throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
             }
-            if (typeof fill.tradeId !== "string" || !/^\d+$/.test(fill.tradeId)) {
-              throw new Error("REST fill history contains a non-numeric trade ID for owned order " + ownedOrder.brokerOrderId)
-            }
-            const tradeId = BigInt(fill.tradeId)
-            if (lastTradeId !== undefined && tradeId <= lastTradeId) {
-              throw new Error("REST fill pagination did not advance strictly by trade ID for owned order " + ownedOrder.brokerOrderId)
-            }
-            lastTradeId = tradeId
-            pageLastTradeId = tradeId
             const previous = fillsById.get(fill.id)
             if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
               throw new Error("REST returned conflicting payloads for execution ID " + fill.id)
@@ -1321,6 +1312,17 @@ export function makeConservativeTradingEngine({
           if (fillsResult.data.length < fillPageLimit) {
             fillsComplete = true
             break
+          }
+          for (const fill of fillsResult.data) {
+            if (typeof fill.tradeId !== "string" || !/^\d+$/.test(fill.tradeId)) {
+              throw new Error("REST fill history cannot be paginated safely because trade ID is non-numeric for owned order " + ownedOrder.brokerOrderId)
+            }
+            const tradeId = BigInt(fill.tradeId)
+            if (lastTradeId !== undefined && tradeId <= lastTradeId) {
+              throw new Error("REST fill pagination did not advance strictly by trade ID for owned order " + ownedOrder.brokerOrderId)
+            }
+            lastTradeId = tradeId
+            pageLastTradeId = tradeId
           }
           if (pageLastTradeId === undefined) {
             throw new Error("REST fill pagination returned a full empty page for owned order " + ownedOrder.brokerOrderId)
