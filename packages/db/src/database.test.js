@@ -28,7 +28,8 @@ function createAdapter(overrides = {}) {
   }
 }
 
-test("createDatabase rejects an incomplete adapter", () => {
+test("createDatabase rejects a missing or incomplete adapter", () => {
+  assert.throws(() => createDatabase(), /adapter object/)
   assert.throws(
     () => createDatabase({ adapter: { connect() {} } }),
     /close.*withTransaction/,
@@ -57,6 +58,18 @@ test("connect coalesces concurrent calls and exposes connected state", async () 
   await Promise.all([first, second])
 
   assert.equal(database.state, "connected")
+})
+
+test("synchronous connection failures restore the disconnected state", async () => {
+  const { adapter } = createAdapter({
+    connect: () => {
+      throw new Error("synchronous connection failure")
+    },
+  })
+  const database = createDatabase({ adapter })
+
+  await assert.rejects(database.connect(), /synchronous connection failure/)
+  assert.equal(database.state, "disconnected")
 })
 
 test("a failed connection can be retried", async () => {
@@ -99,6 +112,19 @@ test("transaction delegates its opaque context and returns the callback result",
   assert.equal(calls.transactions, 1)
 })
 
+test("synchronous transaction failures propagate without changing connection state", async () => {
+  const { adapter } = createAdapter({
+    withTransaction: () => {
+      throw new Error("synchronous transaction failure")
+    },
+  })
+  const database = createDatabase({ adapter })
+  await database.connect()
+
+  await assert.rejects(database.transaction(() => "unused"), /synchronous transaction failure/)
+  assert.equal(database.state, "connected")
+})
+
 test("transaction errors propagate without changing connection state", async () => {
   const { adapter } = createAdapter({
     withTransaction: async () => {
@@ -124,6 +150,7 @@ test("close waits for active transactions and rejects new transactions", async (
 
   const transaction = database.transaction(() => "committed")
   const closing = database.close()
+  const closingAgain = database.close()
 
   assert.equal(database.state, "closing")
   assert.throws(() => database.transaction(() => {}), /connected/)
@@ -131,10 +158,35 @@ test("close waits for active transactions and rejects new transactions", async (
 
   finishTransaction("committed")
   assert.equal(await transaction, "committed")
-  await closing
+  await Promise.all([closing, closingAgain])
 
   assert.equal(database.state, "closed")
   assert.equal(calls.close, 1)
+})
+
+test("a closed database cannot reconnect", async () => {
+  const { adapter } = createAdapter()
+  const database = createDatabase({ adapter })
+  await database.close()
+
+  await assert.rejects(database.connect(), /closed/)
+})
+
+test("close marks a failed connection as closed without calling adapter close", async () => {
+  const { adapter, calls } = createAdapter({
+    connect: () => {
+      throw new Error("connection failed")
+    },
+  })
+  const database = createDatabase({ adapter })
+  const connecting = database.connect()
+  const closing = database.close()
+
+  await assert.rejects(connecting, /connection failed/)
+  await closing
+
+  assert.equal(database.state, "closed")
+  assert.equal(calls.close, 0)
 })
 
 test("close is idempotent and closes a disconnected database without connecting", async () => {
