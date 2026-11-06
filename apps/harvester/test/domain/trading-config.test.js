@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { validateTradingConfig } from '../../src/domain/trading-config.js';
-const configUrl = new URL('../fixtures/trading-config.json', import.meta.url);
+const configUrl = new URL('../../trading-config.json', import.meta.url);
 const validConfig = JSON.parse(await readFile(configUrl, 'utf8'));
 const strategy = (config) => config.strategies.CG_coinGrabber;
 
