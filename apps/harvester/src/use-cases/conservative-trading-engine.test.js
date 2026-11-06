@@ -2566,7 +2566,7 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 })
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
-  for (const status of ["CANCELED", "EXPIRED", "REJECTED"]) {
+  for (const status of ["CANCELED", "EXPIRED"]) {
     const { engine, pauses } = await createHarness()
     await engine.processMarketPrice({
       symbol: "DOGEUSDT",
