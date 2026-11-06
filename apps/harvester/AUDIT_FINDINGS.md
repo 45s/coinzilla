@@ -293,3 +293,18 @@ Closure: one test proves partial execution, replacement, terminal replay, exact-
 **Status: PASS for the observed in-memory accounting transition.**
 
 Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied exactly once, Portfolio active quantity 0.05 ZRO and quote cash flow +0.01136454 USDT, RecoveryLedger proceeds 64.03136454 USDT and outstanding 0, followed by eligible completion allocating 0.01 ZRO free, retaining 0.04 active residual, and resetting cycle totals. The following evaluation retains active 0.04/free 0.01/total 0.05. This directly establishes the runtime state previously inferred from Journal and arithmetic. It does not establish full account settlement or TESTNET acceptance. Full detail: [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md).
+
+
+## F-010 — post-CLOSING exchange fills are not reflected in the stopped runtime snapshot
+
+**Classification:** PARTIAL (exchange-side terminal executions confirmed; internal post-shutdown reconciliation unverified). **Scope:** DOGEUSDT order 1276698 and ZROUSDT order 727905.
+
+**Expected:** order/trade history, runtime state, and account snapshots must be compared on a common timeline; later fills must be reconciled before any subsequent trading readiness or accounting claim.
+
+**Observed:** DOGE order 1276698 was OPEN/0 executed at the final runtime evaluations (~07:57:19Z) and remained in the ~07:58:11Z CLOSING snapshot; actual SELL trades 221990/221991 executed at 08:03:01.841Z and 08:03:18.202Z for 1,196 DOGE. ZRO order 727905 was NEW with 7.98 USDT locked at CLOSING; actual BUY trade 12182 executed at 08:38:24.782Z for 5 ZRO less 0.005 ZRO commission.
+
+**Independent calculations:** DOGE gross proceeds 85.93260000 USDT less 0.08593260 USDT quote commission = 85.84666740 USDT net. ZRO BUY 727905: 5.00000000 gross base less 0.00500000 ZRO commission = 4.99500000 net base; quote debit 7.98000000 USDT.
+
+**Impact:** the earlier apparent DOGE runtime/order-history conflict is explained by event chronology, not a same-time contradiction. However, the fills occurred after Harvester shutdown; internal Portfolio/RecoveryLedger processing, later account balances, and any subsequent controller reconciliation are not proven. The later ZRO BUY also resolves only one of two CLOSING unresolved orders; the other identity remains unknown.
+
+**Next action:** obtain fresh read-only balances/open orders and canonical order detail; inspect any subsequent Journal/runtime session for processing of these post-shutdown fills. Keep TESTNET acceptance closed until account-wide reconciliation is complete. Raw 50-row exports and calculations are in the two linked trade-evidence addenda.
