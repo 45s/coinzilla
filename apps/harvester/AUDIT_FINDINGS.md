@@ -88,8 +88,14 @@ The evidence inventory in #645 records:
 
 The original conversation attachments were not mounted/exposed to the current tool session. These files were not read, their checksums were not recomputed, and no excerpts were substituted. The full-log correlation requirement remains open.
 
-## F-009 — No confirmed runtime fix or additional test-gap issue from accessible evidence
+## F-009 — Exact-once full-cycle recovery coverage is a concrete test gap
+
+**Status:** PARTIAL; tracked in [#648](https://github.com/45s/coinzilla/issues/648).
+
+The reviewed `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md` §9 marks two gaps: exact-once recovery completion/ledger reset, and one complete BUY → partial fills → SELL partial/replacement → completion → next BUY contract test. Source inspection found substantial component coverage in `recovery-completion.test.js`, `conservative-trading-engine.test.js`, and `start-harvester.test.js`, including multiple SELL fills, publication after reset, cancel/replace, and residual inventory. However, the exact-once boundary and a single end-to-end partial-fill/replacement cycle are not directly asserted together. Issue #648 requests offline deterministic test-only coverage; it does not allege a runtime defect or authorize a behavior change. Tests were inspected, not run in this audit.
+
+## F-010 — No runtime defect is confirmed from the accessible evidence
 
 **Status:** PARTIAL.
 
-The accessible evidence establishes a DOGE order/account conflict, not its cause. The relevant recovery/commission/duplicate/account-audit tests are present in source, but not executed here. Do not create a speculative runtime defect issue or implement a speculative reconciliation change. The only child issue opened is the confirmed specification/documentation alignment item #646.
+The accessible evidence establishes a DOGE order/account conflict, not its cause. Do not create a speculative runtime defect issue or implement a speculative reconciliation change. The only follow-ups opened are #646 for confirmed spec/config-boundary drift and #648 for the documented regression-test gap.
