@@ -1427,9 +1427,9 @@ The owner decisions above are approved requirements, not pending questions. Star
 
 ### P0 — sell all sellable Conservative inventory except the configured reserve
 - [x] Verified Harvester's current config uses pair-level `keepQuantity`; no `coinToKeep` key exists in the Harvester config/source search. Treat `keepQuantity` as the current configured retained-coin amount. Do not introduce a second setting or rename config silently.
-- [x] Traced the recovery SELL → fill → completion → next-evaluation path. Planner already maximizes sellable quantity above `keepQuantity`; completion allocates exactly `keepQuantity`. The only additional remainder is constrained by base-fee allowance/quantity-step rounding and is not sellable under the exchange rules.
-- [x] Preserve exchange quantity-step and base-fee constraints. Exchange-constrained remainder is dust, not part of the configured reserve.
-- [~] Existing tests cover base-fee reserve, maximum quantity without crossing `keepQuantity`, and exact reserve allocation. Add/verify explicit quantity-step dust and post-completion repeated-evaluation regression before closing this item. Do not alter the configured reserve amount.
+- [FAIL] The planner maximizes quantity for one recovery SELL, but the full lifecycle does not sell residual inventory after completion resets the ledger. `evaluateConservativeStrategy` gates SELL creation on positive outstanding recovery; active inventory above `keepQuantity` is therefore suppressed on subsequent evaluations. The existing test explicitly expects this suppression.
+- [ ] Preserve the original cost/profit basis across residual SELLs; enforce the $0.01 net floor after actual commissions; preserve minimum-notional, post-only, quantity-step, base-fee, and exact-`keepQuantity` constraints.
+- [ ] Classify only provably unsellable quantity-step/minimum-quantity/minimum-notional/commission remainder as dust, with amount and reason. Add residual sell-through, base-asset commission, quantity-step dust, exact retained quantity, repeated evaluation, and duplicate-order prevention regressions.
 
 ### Delivery rules
 - Implement source + focused tests first, then align specification/README/ROADMAP and update #646/#645/PR #653 with exact commits and CI.
@@ -1442,7 +1442,7 @@ The owner decisions above are approved requirements, not pending questions. Star
 - Implemented the 0.01 minimum in config validation, recovery SELL planning, and recovery completion; added zero/sub-cent rejection tests and exact 0.01 acceptance.
 - Updated the Conservative specification and README with the owner-approved net-profit and retained-inventory rules.
 - Verified the current Harvester config key is `keepQuantity`; the requested `coinToKeep` name is not present in Harvester's current config/source. No duplicate config field was introduced.
-- Verified the planner already sells the maximum exchange-valid quantity above the reserve after base-fee allowance and quantity-step rounding. Any extra remainder is exchange-constrained dust; exact dust/repeated-evaluation regression coverage remains in progress.
+- Correction: a single SELL plan rounds down and reserves for fees, but that does not prove lifecycle sell-through. The post-completion strategy gate leaves active residual unsold. Dust is not established until each residual is checked against all applicable exchange filters.
 
 ---
 
@@ -1487,3 +1487,28 @@ The owner decisions above are approved requirements, not pending questions. Star
 **Reclassification of 2026-11-06 evidence:** DOGE SELL 1276698 filled at 08:03:01.841Z and 08:03:18.202Z after the ~07:58Z CLOSING snapshot / ~07:58:16Z process stop; ZRO BUY 727905 filled at 08:38:24.782Z. These are expected exchange-side events during operator downtime. The absence of same-session post-fill Portfolio/RecoveryLedger updates is therefore NOT a defect and NOT an acceptance blocker by itself. The relevant engineering question is whether the next Harvester startup reliably discovers and applies these fills before trading resumes. That restart-reconciliation behavior still needs source/test evidence and, where appropriate, controlled TESTNET validation.
 
 Do not request the operator to keep the PC/process online continuously, nor request a restart or new exchange action as a prerequisite for offline code investigation. No live exchange action is authorized by this clarification.
+
+
+## Audit continuation — source-verified residual and restart blockers (2026-11-06)
+
+### Residual sell-through — implementation FAIL
+
+Source review at branch HEAD before this documentation update:
+- `apps/harvester/src/domain/strategies/conservative/conservative-strategy.js` creates a recovery SELL only when `outstandingRecovery > 0`.
+- `recovery-completion.js` permits completion when the SELL is fully filled, realized net profit meets `minProfit`, and active inventory covers `keepQuantity`; it allocates exactly `keepQuantity`.
+- Bootstrap completion resets the recovery cycle ledger. Any active quantity above the retained amount is therefore left without the original cost/proceeds basis; repeated evaluation does not create another SELL because outstanding recovery is zero.
+- `conservative-strategy.test.js` currently asserts that no second SELL is created from residual active inventory after ledger reset. That assertion encodes behavior contrary to the owner-approved sell-all contract.
+
+Do not replace the guard with an unpriced SELL, a one-tick price, or a new zero-cost cycle. The implementation must preserve the original aggregate cost/profit basis until sell-through is complete or the remainder is explicitly classified as unsellable dust. It must also preserve actual commission accounting, minimum-notional and post-only constraints, quantity steps, and exactly the configured `keepQuantity`.
+
+### Restart reconciliation — integration FAIL / safety gate required
+
+Source review of `apps/harvester/src/bootstrap/start-harvester.js` finds the explicit comment that durable Journal replay is disabled and startup begins with fresh in-process trading state. The startup path does not invoke `restoreHarvesterJournalState`, nor does it connect the restored Portfolio/RecoveryLedger to the startup trading engine. The separate recovery projection and audit use cases exist, but existence is not integration.
+
+Required before any new trading after a process restart: replay the last durable checkpoint; enumerate complete exchange fill history since that checkpoint; correlate owned orders, partial/terminal statuses and actual commissions; atomically apply missing fills to Portfolio and RecoveryLedger exactly once; reconcile current account balances, locked funds and all open orders; persist the reconciled checkpoint; and remain fail-closed on missing pages, unknown ownership, conflicting facts, or any balance/order mismatch. Offline exchange fills are expected; continuous uptime is not required.
+
+### Work ordering
+1. Implement and test durable restart replay/reconciliation and fail-closed startup gating.
+2. Design and implement residual SELL-through while preserving original basis and all exchange constraints.
+3. Add the requested residual and restart regression matrices; run relevant package tests and exact-final-HEAD CI.
+4. Keep PR #653 open/unmerged. TESTNET acceptance remains NOT ACCEPTED absent actual authorized evidence.
