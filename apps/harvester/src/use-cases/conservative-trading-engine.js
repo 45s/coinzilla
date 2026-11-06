@@ -1308,9 +1308,29 @@ export function makeConservativeTradingEngine({
           keepQuantity: String(pairs[symbol].keepQuantity),
           minProfit: String(settings.minProfit),
         })
-        if (!completion?.ok || !completion.data?.eligible) {
+        if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
-          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle did not meet completion conditions")] })
+          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
+        }
+        if (!completion.data?.eligible) {
+          if (completion.data?.reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
+              completion.data?.pause === false) {
+            // Keep the original cost/proceeds basis. The next serialized
+            // evaluation will plan another SELL for any residual that still
+            // satisfies current exchange filters; untradeable remainder is
+            // reported as dust by the pure strategy until it can be combined.
+            state.sellExecutionTotals.delete(order.brokerOrderId)
+            return toResult({
+              data: {
+                order,
+                reevaluate: true,
+                residualSellThrough: true,
+                realizedNetProfit: completion.data.realizedNetProfit,
+              },
+            })
+          }
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED" })
+          return toResult({ error: new Error("Recovery cycle did not meet completion conditions") })
         }
         publishLifecycleEvent({
           eventPublisher,
