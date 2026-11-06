@@ -662,6 +662,7 @@ export function makeConservativeTradingEngine({
           return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
         }
         state.replacementIntents.delete(symbol)
+        state.completedOrderTransitions.add(canceledOrder.clientOrderId)
         state.sellExecutionTotals.delete(order.brokerOrderId)
       } else if (
         compareDecimal({

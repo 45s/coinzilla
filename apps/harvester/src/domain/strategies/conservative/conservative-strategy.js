@@ -265,6 +265,9 @@ export function evaluateConservativeStrategy({
   }
 
   if (!hasActiveBuy) {
+    if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 && lastBuyPrice === undefined) {
+      throw new Error("Conservative active Position requires the reconciled completed-BUY VWAP before placing the next standing BUY")
+    }
     const referencePrice = lastBuyPrice ?? marketPrice.price
     assertDecimalString({ value: referencePrice, field: "lastBuyPrice" })
     const buyPrice = calculateInitialBuyPrice({
