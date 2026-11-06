@@ -58,7 +58,7 @@ The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. 
 
 Source inspection found bootstrap CLOSING-audit logic and regression coverage for an unresolved owned order / reconciliation failure. Tests were not run in this audit.
 
-## F-006 — Conservative specification and Portfolio documentation are stale against current source
+## F-006 — Conservative contract documents conflict with current implementation and roadmap
 
 **Status:** CONFLICT (documentation/source mismatch); follow-up issue [#646](https://github.com/45s/coinzilla/issues/646).
 
