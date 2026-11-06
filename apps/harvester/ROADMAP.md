@@ -1516,3 +1516,18 @@ The RecoveryLedger's legacy `buyCost` remains a compatibility projection for his
 These arithmetic checks establish exchange-side cash/base flows only. They do not by themselves prove that the original strategy decision, planned order quantity/price, internal state transition, or post-shutdown processing was correct. The two trade exports are bounded 50-row queries, not exhaustive all-time history.
 
 **Scope boundary:** process-restart reconstruction remains deferred to #654. This active work uses the already supplied session decisions and actual fills to validate Conservative strategy calculations and lifecycle; it does not expand into restart implementation or require 24/7 uptime. No TESTNET writes or bot restart are authorized by this plan.
+
+ 
+## 2026-11-06 — actual DOGE/ZRO conformance checkpoint
+
+**Completed investigation:** actual DOGE/ZRO SELL quantities and prices were recalculated from the audit-baseline config and canonical Conservative equations. Both planned orders match the exchange order parameters exactly. DOGE: 1,196 @ 0.07185; ZRO: 39.91 @ 1.606. Both use ordinary LIMIT with 0.1% planning reserve, exact `keepQuantity` (DOGE 1, ZRO 0.01), and `minProfit=0.01).
+
+**Confirmed discrepancy:** ZRO order 727904 filled profitably (+0.01136454 USDT), but historical recovery completion allocated 0.01 ZRO and reset the ledger while 0.04 ZRO remained active. Baseline root cause: completion accepted active quantity greater than keepQuantity; strategy suppressed residual SELL once outstanding recovery reached zero. The current branch implementation corrects both: defer completion while any active residual exceeds keepQuantity, continue residual SELL planning after profit is secured, and classify exchange-constrained dust without resetting cost/proceeds basis.
+
+**DOGE disposition:** order 1276698's two distinct SELL fills occurred after shutdown. Exchange-side profit is +0.01066740 USDT and remaining quantity is 2.8 DOGE (1 keep + 1.8 excess). The stopped process was not expected to account for those fills. Historical decision-time exchange filters are not preserved, so the 1.8 excess dust classification and any later in-process application remain UNVERIFIED; restart reconciliation remains deferred to #654.
+
+**Regression work:** added actual DOGE trade-ID/commission fixture, actual ZRO eight-BUY/one-SELL fixture, exact residual/dust assertions, and an exact ZRO completion-gate regression. Current branch source contains the residual sell-through and exact-keep completion correction. No strategy specification change was needed; the canonical specification remains the only rule authority.
+
+**Verification:** test changes were committed on the audit branch (latest test commits: `4915171b8c136ae44892d230e403289fe256dc8d`, `030f93feb765cdc68ccf75f3ae8b0cbf6c81c331`, `ecc8196c1c50a9d09a06cec3c17b297017805b84`). Local repository execution is unavailable in this environment because the GitHub clone could not resolve `github.com`; GitHub Actions/commit statuses have not appeared for these commits. Do not report the new tests as passed. Re-run focused tests and the complete Harvester/CI matrix on the exact final branch HEAD before acceptance.
+
+PR #653 remains OPEN and UNMERGED. #654 remains deferred and out of scope. No TESTNET writes, cancellations, new orders, or bot restarts were performed.
