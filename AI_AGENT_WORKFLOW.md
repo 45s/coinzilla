@@ -258,3 +258,17 @@ These rules apply to **every repository task, project, workflow, and conversatio
 
 These are collaboration requirements, not permission to bypass security, privacy, domain ownership, tests, branch protection, or explicit approval gates.
 
+## Global collaboration and continuity rules — every task
+
+The following requirements apply to every project, domain, repository task, workflow, and conversation handled under this repository's AI-agent workflow. They are not Harvester-specific.
+
+1. After each useful user-provided fact, clarification, decision, constraint, or evidence, update every affected shared document and GitHub issue/PR record in the same work session.
+2. Keep affected requirements, specifications, plans/roadmaps, issues, and PRs synchronized. Mark superseded statements clearly; never leave contradictory guidance presented as current.
+3. Before editing, inspect the latest file and branch state. Make narrow changes, preserve parallel work, and resolve conflicting requirements/acceptance criteria before implementation.
+4. Preserve decisions and rationale. Do not reopen settled decisions or ask the user to repeat information already supplied unless new evidence creates a genuine conflict.
+5. Execute requested work with available tools instead of substituting advice or instructions for work the agent can perform.
+6. Communicate concisely: outcome first, no repeated explanations or oversized reports. Ask one concise question only when an essential missing detail blocks safe or correct progress.
+7. Claim an update or check only after it succeeds. State exact blockers and verification gaps honestly.
+8. Provide a continuation prompt only when the user explicitly asks for one; make it self-contained and carry forward current state, decisions, constraints, completed work, blockers, and next action.
+
+These rules supplement, and do not override, security, privacy, domain ownership, tests, branch protection, or explicit approval gates.
