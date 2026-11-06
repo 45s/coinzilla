@@ -8,6 +8,20 @@ The former blanket TESTNET acceptance gate is removed. Explicitly selected user 
 
 This does not authorize live trading, exchange writes, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. Live trading remains disabled unless separately and explicitly authorized. Keep TESTNET-only runtime protections and exact-order ownership safeguards intact.
 
+## Journal contract boundary
+
+Journal is not wholly optional during trading. These existing durability barriers remain mandatory and fail closed:
+
+- **Startup audit:** before trading-engine activation or market subscriptions, capture the full account-wide balance and open-order audit. Preserve every returned asset's exact free, locked, and total quantities, the complete open-order facts, session identity, and source timestamps; durably flush the required PREFLIGHT/OPENING audit. Trading-enabled startup must not proceed if the Journal or required durable flush is unavailable. Read-only operation may continue without Journal where the runtime permits it.
+- **Closing audit:** after shutdown intake is stopped and accepted user-data work is drained, reconcile owned orders and capture/flush the CLOSING audit while broker REST is still connected. Mark the audit INCOMPLETE when any owned order or accounting state remains unresolved.
+- **Order submission:** durably flush `order.submission_requested` before calling the broker placement operation.
+- **Order cancellation:** durably flush `order.cancel_requested` before calling the broker cancellation operation.
+- **Failure behavior:** if a required record cannot be durably written, do not perform the corresponding exchange side effect and surface the failure.
+
+These are existing requirements, not permission to add more blocking Journal I/O. Additional investigation evidence in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md) remains best-effort and must not make strategy evaluation, market processing, broker-event handling, or fill accounting wait for Journal persistence. Any optional evidence loss must be observable as an evidence gap.
+
+Journal records are not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
+
 ---
 
 ## The mission

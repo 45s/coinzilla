@@ -8,7 +8,7 @@ This contract covers the current selected evidence work in [issue #650](https://
 
 ## Safety and delivery
 
-- Keep the existing durable PREFLIGHT/CLOSING account audits and pre-side-effect `order.submission_requested` / `order.cancel_requested` flushes mandatory and fail-closed.
+- Preserve the mandatory durability boundary defined once in [TRADING_FIRST.md — Journal contract boundary](./TRADING_FIRST.md#journal-contract-boundary); do not weaken or extend it as part of optional evidence work.
 - All additional evidence is best-effort. Do not await Journal I/O from strategy evaluation, market processing, broker-event callbacks, or fill accounting.
 - Keep evidence DTOs plain, bounded, allowlisted, versioned, and serializable. Never serialize arbitrary SDK/request/response objects.
 - Never persist API keys, secrets, signatures, listen keys, authorization headers, or credentials.
