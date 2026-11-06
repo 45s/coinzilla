@@ -697,6 +697,110 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
   assert.equal(cancelled.data.executedQuantity, "0")
 })
 
+test("treats decimal-formatted zero as no execution in trailing BUY cancellation reconciliation", async () => {
+  const harness = await createHarness({ cancelExecutedQuantity: "0.0" })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.orders.length, 2)
+  assert.deepEqual(harness.pauses, [])
+})
+
+test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    accountingApplied: true,
+    cancelExecutedQuantity: "0.0",
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const fill = new Fill({
+    tradeId: "decimal-zero-cancel-buy-fill",
+    brokerOrderId: buyOrder.brokerOrderId,
+    market,
+    side: "BUY",
+    price: buyOrder.limitPrice,
+    quantity: buyOrder.originalQuantity,
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: buyOrder.originalQuantity.amount,
+      }),
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt: 3,
+  })
+  const filledOrder = new CanonicalOrder({
+    clientOrderId: buyOrder.clientOrderId,
+    brokerOrderId: buyOrder.brokerOrderId,
+    market,
+    side: "BUY",
+    type: buyOrder.type,
+    limitPrice: buyOrder.limitPrice,
+    originalQuantity: buyOrder.originalQuantity,
+    executedQuantity: buyOrder.originalQuantity,
+    status: "FILLED",
+    createdAt: buyOrder.createdAt,
+    acknowledgedAt: buyOrder.acknowledgedAt,
+    updatedAt: 3,
+    completedAt: 3,
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: filledOrder, fill },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.cancellationIds, [sellOrder.brokerOrderId])
+  assert.equal(harness.engine.getOrders().find((order) => order.brokerOrderId === sellOrder.brokerOrderId).status, "CANCELED")
+  assert.deepEqual(harness.pauses, [])
+})
+
+test("treats decimal-formatted zero as no execution in terminal CANCELED order events", async () => {
+  const harness = await createHarness()
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const order = harness.engine.getOrders()[0]
+  const canceledOrder = new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0.0", asset: baseAsset }),
+    status: "CANCELED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "CANCELED", executedOrder: canceledOrder },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(harness.pauses, [])
+})
+
 test("publishes an unconfirmed cancellation and pause without changing the order flow", async () => {
   const events = []
   const { engine, orders } = await createHarness({
