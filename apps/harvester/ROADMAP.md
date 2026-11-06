@@ -1253,3 +1253,68 @@ DOGE remains **CONFLICT**: order history reports SELL 1276698 / client suffix -1
 The original `harvester.log` and `harvester-trace.log` attachments, whose byte sizes and SHA-256 values are preserved in #645, were not accessible in the current execution session and were not parsed. Full log correlation and the DOGE conflict therefore remain UNVERIFIED / CONFLICT. No source fix is justified by the currently accessible evidence; no TESTNET orders, cancellations, or restarts were performed.
 
 The specification/config-boundary drift in fee-reserve policy, residual-inventory behavior, Portfolio recovery allocation, and zero-value input acceptance is tracked in [#646](https://github.com/45s/coinzilla/issues/646). The exact-once completion and full partial-fill/replacement lifecycle test gaps identified in `ACCOUNTING_INVARIANTS.md` are tracked in [#648](https://github.com/45s/coinzilla/issues/648). Keep the TESTNET gate closed until the DOGE order lifecycle and CLOSING account state are correlated against the original logs and any resulting defect is reproduced with deterministic offline regression coverage.
+
+
+## Conservative audit closure sequence — 2026-11-06
+
+**Status:** overall PARTIAL; DOGE SELL CONFLICT; ZRO arithmetic PASS; CLOSING audit INCOMPLETE; TESTNET acceptance NOT ACCEPTED. See [AUDIT.md](./AUDIT.md), [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md), [AUDIT_EXECUTION_HISTORY.md](./AUDIT_EXECUTION_HISTORY.md), and parent [#645](https://github.com/45s/coinzilla/issues/645).
+
+### Gate 0 — evidence integrity
+
+- [ ] Obtain original harvester.log and harvester-trace.log read-only. Do not edit or re-export before hashing.
+- [ ] Verify SHA-256 against #645: harvester.log 5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d; harvester-trace.log 4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3.
+- [ ] Record bytes, line count, encoding, timestamp format, rotation/truncation. Stop on checksum mismatch.
+- [ ] Obtain full CLOSING snapshot including both unresolved orders, reservations, free/locked balances, source timestamps, and reconciliation diagnostics.
+- [ ] Preserve full DOGE/ZRO order and trade history with commission asset/amount, redacted runtime config, and timestamped exchange filters.
+
+### Gate 1 — reconstruct each order
+
+- [ ] Parse all 114 Journal records, both 100-row order-history exports, and every original log line after checksum verification.
+- [ ] Retain source filename/line, original timestamp/timezone/milliseconds, and normalized UTC.
+- [ ] Correlate by symbol, clientOrderId, orderId, tradeId, event type, and timestamp; never by price/quantity alone.
+- [ ] Build a per-order timeline: decision intent → submission → acknowledgement → user-data update → cancel request/confirmation → fills → REST terminal state → closing reconciliation.
+- [ ] Separate strategy decision from broker side effect, order status from trade execution, and Journal time from exchange time.
+- [ ] Identify both unresolved orders and reconcile remaining quantity/reservation to free/locked balances.
+
+### Gate 2 — accounting
+
+- [ ] Resolve DOGE SELL 1276698 / suffix -11 against exchange trades and actual commissions. Explain history FILLED vs Journal OPEN vs 1,196 DOGE locked.
+- [ ] Reconcile free/locked/total DOGE and USDT. Book SELL proceeds/PnL only after actual trade/commission evidence.
+- [ ] Preserve DOGE BUY reconciliation: 1,200 gross, 1.2 fee, 1,198.8 net, 85.836 USDT debit.
+- [ ] Preserve ZRO reconciliation: 40 gross BUY, 0.04 fee, 39.91 SELL, 0.05 residual, +0.01136454 USDT net.
+- [ ] Verify 0.01 free allocation and 0.04 active residual against Portfolio/RecoveryLedger state.
+- [ ] Verify ZRO order 727905 (5 @ 1.596, NEW, 7.98 USDT locked) at closing and identify whether it is one of the two unresolved orders.
+- [ ] Rule out deposits, withdrawals, transfers, or manual trades before attributing all USDT movement to Harvester.
+
+### Gate 3 — contract decision (#646)
+
+- [ ] Decide planned SELL reserve: makerPercent only or max(makerPercent,takerPercent). Actual commissions remain per-fill facts either way.
+- [ ] Decide whether minProfit=0 and keepQuantity=0 are valid; align config validation and domain preconditions.
+- [ ] Align Conservative spec, trading-strategies, Accounting Invariants, Portfolio docs, README, and roadmap.
+- [ ] Correct stale matrix: residual-inventory test already exists; fee tests cover configured maker/taker maximum, not observed commission-rate history.
+- [ ] No runtime behavior change until contract is explicit and test-first work is approved.
+
+### Gate 4 — regression coverage (#648)
+
+- [ ] Offline complete cycle: partial BUY fills, actual commissions, partial SELL fills, cancel/replace, next standing BUY.
+- [ ] Exercise cancel/fill race permutations and assert reservations are never double-counted or released early.
+- [ ] Assert exactly one completion, keep/free allocation, RecoveryLedger reset, and next-cycle transition.
+- [ ] Replay terminal events and canonical fills; assert no duplicate inventory/cash, allocation, reset, or order intent.
+- [ ] Assert minimum-profit gate uses actual net proceeds/commissions and failed eligibility does not reset/allocate.
+- [ ] Assert residual active inventory alone does not trigger another recovery SELL.
+- [ ] Run focused tests, Harvester suite, workspace coverage, syntax, and exact-head CI; record commit and outcomes.
+
+### Gate 5 — user-data recovery (#626)
+
+- [ ] Re-read original #626 acceptance criteria; #627/#629 merges are not acceptance evidence.
+- [ ] Map each criterion to source, deterministic regression, failure mode, and exact CI head.
+- [ ] Cover reconnect/resubscribe, REST reconciliation, lost/late/duplicate/reordered fills, unknown submission outcomes, cancel/fill races, and interrupted recovery boundaries.
+- [ ] Keep #626 open until every criterion has a verified disposition and owner acceptance.
+
+### Gate 6 — release decision
+
+- [ ] Update #645 and all audit docs from verified evidence and exact tested commits.
+- [ ] If a runtime defect is confirmed, create a focused issue and minimal regression-backed PR.
+- [ ] Keep TESTNET acceptance closed until DOGE is explained, both unresolved orders are identified, critical offline tests pass, and a separate controlled session is explicitly authorized.
+
+**Priority:** evidence integrity → exchange/order facts → accounting → domain decision → regression coverage → confirmed fixes → exact-head CI → parent/roadmap update → separately authorized TESTNET acceptance. No later gate passes while an earlier critical conflict remains open.
