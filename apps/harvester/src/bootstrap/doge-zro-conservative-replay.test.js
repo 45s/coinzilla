@@ -15,15 +15,6 @@ const binanceEnv = {
   BINANCE_API_SECRET_KEY: "secret",
 }
 
-async function waitFor(predicate, label, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  assert.fail(label + " was not observed before timeout")
-}
-
 const config = {
     strategies: {
       CG_coinGrabber: {
@@ -191,10 +182,7 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
       })
     }
 
-    await waitFor(
-      () => submitted.filter((order) => order.side === "BUY").length >= 2,
-      "two strategy-generated BUY submissions",
-    )
+    assert.equal(submitted.filter((order) => order.side === "BUY").length, 2)
     const buys = submitted
       .filter((order) => order.side === "BUY")
       .sort((a, b) => a.market.symbol.localeCompare(b.market.symbol))
