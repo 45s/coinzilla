@@ -10,6 +10,7 @@ import {
   Quantity,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { divideDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
@@ -224,16 +225,148 @@ test("replays ZROUSDT trade 11666 without completing recovery while 0.05 ZRO rem
   assert.equal(recoveryLedger.netSellProceeds, "64.03136454")
 })
 
-test("loads and exposes the enabled DOGEUSDT pair from the production trading config", () => {
+test("replays a DOGEUSDT BUY through the engine using the production pair config", async () => {
   const dogePairConfig = tradingConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT
-
   assert.ok(dogePairConfig)
   assert.equal(dogePairConfig.enabled, true)
-  assert.equal(dogePairConfig.orderQuantity > 0, true)
-  assert.equal(dogePairConfig.keepQuantity >= 0, true)
-  assert.equal(dogePairConfig.pricePrecision >= 0, true)
-  assert.equal(dogePairConfig.quantityPrecision >= 0, true)
-  assert.equal(dogePairConfig.makerPercent >= 0, true)
-  assert.equal(dogePairConfig.takerPercent >= 0, true)
-})
 
+  // Market assets come from this market-metadata fixture; they are not
+  // duplicated in trading-config.json because that file owns strategy settings.
+  const dogeAsset = new Asset({ id: "doge", code: "DOGE" })
+  const dogeMarket = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset: dogeAsset,
+    quoteAsset,
+  })
+  const buyQuantity = String(dogePairConfig.orderQuantity)
+  const buyPrice = "0.1"
+  const buyQuoteQuantity = multiplyDecimal({ left: buyQuantity, right: buyPrice })
+  const buyCommission = divideDecimal({
+    left: multiplyDecimal({
+      left: buyQuantity,
+      right: String(dogePairConfig.takerPercent),
+    }),
+    right: "100",
+    scale: 18,
+    rounding: "half-up",
+  })
+  const openBuy = new CanonicalOrder({
+    clientOrderId: "doge-config-replay-buy",
+    brokerOrderId: "doge-config-replay-order",
+    market: dogeMarket,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: buyPrice, asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: buyQuantity, asset: dogeAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: dogeAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const fill = new Fill({
+    tradeId: "doge-config-replay-trade",
+    brokerOrderId: openBuy.brokerOrderId,
+    clientOrderId: openBuy.clientOrderId,
+    market: dogeMarket,
+    side: "BUY",
+    price: openBuy.limitPrice,
+    quantity: new Quantity({ amount: buyQuantity, asset: dogeAsset }),
+    quoteQuantity: new Money({ amount: buyQuoteQuantity, asset: quoteAsset }),
+    commissions: [
+      new Commission({
+        amount: new Money({ amount: buyCommission, asset: dogeAsset }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+  const filledBuy = new CanonicalOrder({
+    clientOrderId: openBuy.clientOrderId,
+    brokerOrderId: openBuy.brokerOrderId,
+    market: dogeMarket,
+    side: "BUY",
+    type: openBuy.type,
+    limitPrice: openBuy.limitPrice,
+    originalQuantity: openBuy.originalQuantity,
+    executedQuantity: openBuy.originalQuantity,
+    status: "FILLED",
+    createdAt: openBuy.createdAt,
+    acknowledgedAt: openBuy.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market: dogeMarket })
+  const accountedFills = []
+  const engine = makeConservativeTradingEngine({
+    broker: {
+      placeOrder: async () => ({ ok: false, errors: [new Error("Unexpected order submission")] }),
+      cancelOrder: async () => ({ ok: false, errors: [new Error("Unexpected cancellation")] }),
+      getFills: async ({ orderId }) => ({
+        ok: true,
+        data: accountedFills.filter((accountedFill) => accountedFill.brokerOrderId === orderId),
+      }),
+      getCanonicalOrder: async () => ({ ok: false, errors: [new Error("Unexpected order lookup")] }),
+      getOpenOrders: async () => ({ ok: true, data: [] }),
+      getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    },
+    strategyPolicy: conservativeStrategyPolicy,
+    tradingConfig,
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: () => recoveryLedger,
+    getMarketMetadata: () => ({ market: dogeMarket }),
+    getAccountSnapshot: () => ({
+      getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
+        ? new Quantity({ amount: "1000", asset: quoteAsset })
+        : new Quantity({ amount: "0", asset: dogeAsset }),
+    }),
+    updateTradingAccounting: async ({ fill: execution }) => {
+      const portfolioUpdate = portfolio.applyFill({ fill: execution })
+      const ledgerUpdate = recoveryLedger.applyFill({ fill: execution })
+      portfolio = portfolioUpdate.portfolio
+      recoveryLedger = ledgerUpdate.ledger
+      if (portfolioUpdate.applied && ledgerUpdate.applied) accountedFills.push(execution)
+      return {
+        ok: true,
+        data: {
+          applied: portfolioUpdate.applied && ledgerUpdate.applied,
+          duplicate: portfolioUpdate.duplicate || ledgerUpdate.duplicate,
+        },
+      }
+    },
+    completeRecoveryCycle: async () => ({ ok: true, data: { eligible: false } }),
+    canTrade: () => true,
+    onPause: async () => {},
+    isStopping: () => false,
+    isMarketPriceFresh: () => true,
+    initialState: { orderRegistry: new OrderRegistry({ orders: [openBuy] }) },
+  })
+
+  const event = {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: filledBuy,
+    fill,
+  }
+  const result = await engine.processUserDataEvent({ event })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  const position = portfolio.getPosition({ marketId: dogeMarket.id })
+  const expectedNetBaseQuantity = subtractDecimal({
+    left: buyQuantity,
+    right: buyCommission,
+  })
+  assert.equal(position.baseQuantity.amount, expectedNetBaseQuantity)
+  assert.equal(position.spent.amount, buyQuoteQuantity)
+  assert.equal(recoveryLedger.buyCost, buyQuoteQuantity)
+  assert.equal(portfolio.appliedFillIds.length, 1)
+  assert.equal(recoveryLedger.appliedFillIds.length, 1)
+
+  const duplicate = await engine.processUserDataEvent({ event })
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.ignored, true)
+  assert.equal(portfolio.appliedFillIds.length, 1)
+  assert.equal(recoveryLedger.appliedFillIds.length, 1)
+})
