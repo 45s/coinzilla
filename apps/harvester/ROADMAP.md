@@ -1,6 +1,6 @@
 # Harvester Roadmap
 
-> **CURRENT DIRECTION — 2026-11-06: CONSERVATIVE STRATEGY EVIDENCE AUDIT AND CONTROLLED TESTNET READINESS.**
+> **CURRENT DIRECTION — 2026-11-06: CONSERVATIVE STRATEGY/POLICY AUDIT.** The active task is to find and fix Conservative decision, inventory, profit, fee, exchange-filter, and order-lifecycle defects, with regression tests. Process-restart recovery is deferred to the final roadmap section and is not a blocker for this audit.
 >
 > **2026-11-05 runtime decision:** durable Journal replay and process-restart recovery are intentionally disabled. Startup does not read historical Journal sessions, reconstruct Portfolio/RecoveryLedger/order state, or reconcile old trades. Harvester starts with fresh in-memory trading state for the current process. The separate durable account PREFLIGHT/CLOSING audit and pre-side-effect order/cancel intent flushes remain enabled. Do not reintroduce Journal replay or make it a startup prerequisite unless the user explicitly requests it.
 >
@@ -1500,14 +1500,17 @@ Source review at branch HEAD before this documentation update:
 
 Do not replace the guard with an unpriced SELL, a one-tick price, or a new zero-cost cycle. The implementation must preserve the original aggregate cost/profit basis until sell-through is complete or the remainder is explicitly classified as unsellable dust. It must also preserve actual commission accounting, minimum-notional and post-only constraints, quantity steps, and exactly the configured `keepQuantity`.
 
-### Restart reconciliation — integration FAIL / safety gate required
+### Current audit work ordering
+1. Fix Conservative policy and lifecycle defects, starting with residual sell-through while preserving the original cost/profit basis.
+2. Verify actual base/quote commission accounting, exact `keepQuantity`, quantity-step handling, minimum quantity/notional, post-only behavior, and explicit dust classification.
+3. Add focused regression tests for residual sell-through, base-asset commissions, quantity-step/minimum-notional dust, exact retained quantity, repeated evaluation, and duplicate-order prevention.
+4. Run the Harvester tests and exact-final-HEAD CI; update the Conservative specification, audit findings, ROADMAP, issue #646, parent issue #645, and PR #653.
+5. Keep PR #653 open/unmerged until Conservative policy acceptance criteria are met. Do not make TESTNET acceptance claims without actual evidence.
 
-Source review of `apps/harvester/src/bootstrap/start-harvester.js` finds the explicit comment that durable Journal replay is disabled and startup begins with fresh in-process trading state. The startup path does not invoke `restoreHarvesterJournalState`, nor does it connect the restored Portfolio/RecoveryLedger to the startup trading engine. The separate recovery projection and audit use cases exist, but existence is not integration.
+Process-restart reconciliation is explicitly deferred and is not part of the active Conservative strategy implementation sequence.
 
-Required before any new trading after a process restart: replay the last durable checkpoint; enumerate complete exchange fill history since that checkpoint; correlate owned orders, partial/terminal statuses and actual commissions; atomically apply missing fills to Portfolio and RecoveryLedger exactly once; reconcile current account balances, locked funds and all open orders; persist the reconciled checkpoint; and remain fail-closed on missing pages, unknown ownership, conflicting facts, or any balance/order mismatch. Offline exchange fills are expected; continuous uptime is not required.
+## Deferred — process-restart recovery (last roadmap item; not an active audit blocker)
 
-### Work ordering
-1. Implement and test durable restart replay/reconciliation and fail-closed startup gating.
-2. Design and implement residual SELL-through while preserving original basis and all exchange constraints.
-3. Add the requested residual and restart regression matrices; run relevant package tests and exact-final-HEAD CI.
-4. Keep PR #653 open/unmerged. TESTNET acceptance remains NOT ACCEPTED absent actual authorized evidence.
+**Status: DEFERRED. Do not implement as part of the current Conservative strategy/policy audit.** The current work is limited to making Conservative strategy decisions and order lifecycle behave according to the owner-approved policy. This item must not interrupt, delay, or become an acceptance prerequisite for the current audit.
+
+When separately prioritized in the future, the restart-recovery work may cover the workstation-offline lifecycle: exchange orders may fill while Harvester is stopped; on a later startup, reconcile those fills, actual commissions, order states, and balances before new trading. No 24/7 uptime is required. Preserve historical shutdown snapshots. Track the deferred investigation in [issue #654](https://github.com/45s/coinzilla/issues/654).
