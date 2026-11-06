@@ -465,3 +465,11 @@ Existing tests directly exercise unfilled CANCELED/EXPIRED and REJECTED **BUY** 
 **Next test-only action:** add focused offline engine cases for SELL CANCELED, EXPIRED, and REJECTED; include zero-fill and partial-execution cases where valid, complete actual commission facts, and missing/conflicting fill-history failures. Assert no replacement occurs until reconciliation succeeds, then assert replacement uses the updated full Position.spent and cumulative net proceeds. Run focused tests and exact-head CI before changing this finding to PASS.
 
 No recovery, Journal, broker, or exchange implementation changes are authorized by this finding. No test was added or executed in this pass.
+
+## F-011 — Terminal recovery-SELL outcome regression coverage (updated 2026-11-06)
+
+**Status: TESTS ADDED — execution pending. No source defect confirmed.**
+
+Offline engine tests now cover partial terminal SELL fills for CANCELED, EXPIRED, and REJECTED. They verify fill quantity and actual quote commission are reconciled before subsequent strategy action; Position quantity and cumulative net SELL proceeds update, while accumulated Position.spent remains unchanged. REJECTED retains the existing fail-closed pause after reconciliation. Separate missing-history and conflicting-duplicate cases assert no accounting mutation and no replacement SELL.
+
+Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. These tests have not yet been executed in a local environment or verified by exact-head CI. Do not mark F-011 PASS until focused tests and the Harvester suite pass on the exact PR head.
