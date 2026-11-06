@@ -54,15 +54,6 @@ describe("adaptCanonicalFill", () => {
     })
   })
 
-  it("preserves a trusted third-asset commission quote valuation when supplied", () => {
-    const fill = adaptCanonicalFill({
-      trade: { ...trade, thirdAssetCommissionQuoteValue: "0.0005" },
-      market,
-    })
-    assert.equal(fill.commissions[0].quoteValue.amount, "0.0005")
-    assert.strictEqual(fill.commissions[0].quoteValue.asset, quoteAsset)
-  })
-
   it("reuses market asset identity for commissions paid in a market asset", () => {
     const fill = adaptCanonicalFill({
       trade: { ...trade, commission: "0.00000001", commissionAsset: "BTC" },

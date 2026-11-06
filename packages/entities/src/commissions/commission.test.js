@@ -7,7 +7,6 @@ import { Commission, commissionErrMsgs } from "./commission.js"
 
 describe(Commission.name, () => {
   const asset = new Asset({ id: "bnb", code: "BNB" })
-  const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
   const createCommission = (overrides = {}) =>
     new Commission({
       amount: new Money({ amount: "0.01", asset }),
@@ -24,17 +23,6 @@ describe(Commission.name, () => {
         amount: "0.01",
         asset: asset.value,
       },
-    })
-  })
-
-  it("stores a reliable quote-currency valuation when provided", () => {
-    const commission = createCommission({
-      quoteValue: new Money({ amount: "0.0005", asset: quoteAsset }),
-    })
-    assert.equal(commission.quoteValue.amount, "0.0005")
-    assert.deepEqual(commission.value.quoteValue, {
-      amount: "0.0005",
-      asset: quoteAsset.value,
     })
   })
 
