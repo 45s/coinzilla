@@ -9,7 +9,7 @@
 Until Harvester has passed the complete real Binance Spot TESTNET acceptance gate defined below, the ONLY permitted Harvester work is work that directly implements, fixes, tests, or verifies the live trading workflow.
 
 **Do not start, continue, expand, or prioritize any of the following before that gate passes:**
-- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration.
+- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration beyond the existing mandatory durability barriers defined below.
 - New databases, database migrations, persistence layers, storage abstractions, or durable-state projects.
 - New infrastructure, observability, dashboards, analytics, reporting, generic frameworks, or architecture redesign.
 - Refactoring, cleanup, optimization, new strategy modes, or features that do not directly unblock or verify the trading workflow.
@@ -44,6 +44,20 @@ Until every criterion is evidenced and reviewed, the first milestone remains OPE
 ## The mission
 
 **Current runtime decision (2026-11-05): Journal replay and process-restart recovery are disabled.** Every process starts with fresh in-memory trading state. Do not read prior Journal sessions, restore old Portfolio/RecoveryLedger/order state, or require historical trade reconciliation before startup. Keep only the narrowly required durable PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes. Existing exchange open orders are still unowned and must not be silently adopted.
+
+## Journal contract boundary
+
+Journal is **not wholly optional** during the trading-first phase. The existing, narrowly scoped durability barriers are mandatory trading safeguards and must remain intact:
+
+- Capture and durably flush the required account-wide startup audit (balances and open orders) before market subscriptions or trading-engine activation.
+- Capture and durably flush the required closing account audit after shutdown intake is drained and owned-order reconciliation is attempted.
+- Durably flush `order.submission_requested` before calling the broker placement operation.
+- Durably flush `order.cancel_requested` before calling the broker cancellation operation.
+- If a required record cannot be durably written, preserve the existing fail-closed behavior: do not perform the corresponding exchange side effect and surface the failure.
+
+These are existing requirements, not authorization for a broader Journal project. Until the TESTNET acceptance gate passes, do not add new blocking flushes or make strategy evaluation, market-event processing, fill accounting, or other broker-event handling wait for optional diagnostic evidence. Additional evidence delivery remains best-effort and any persistence gap must be observable rather than reported as successfully persisted.
+
+The deferred category is broader Journal work: replay/recovery, reconstruction, migrations, schema/consumer expansion, comprehensive raw broker-payload retention, and additional investigation evidence. Preserve the mandatory barriers above while keeping that broader work deferred. Issue [#650](https://github.com/45s/coinzilla/issues/650) must follow this boundary; its optional/best-effort rule applies only to additional evidence, never to the existing required barriers.
 
 
 **FIRST MAKE IT WORK. THEN MAKE IT BETTER.**
@@ -106,7 +120,7 @@ These are execution safeguards, not a demand to build a comprehensive production
 
 Unless one narrowly scoped part is essential to prevent an immediate unsafe TESTNET action, agents MUST NOT prioritize or block trading implementation on:
 
-- Journal read/replay integration or a comprehensive event/audit journal. The minimal durable OPENING/CLOSING balance snapshots required for TESTNET account audit are NOT deferred: trading fails closed without them.
+- Journal read/replay integration, broader event/evidence coverage, or a comprehensive event/audit journal. The existing durable startup/closing account snapshots and pre-side-effect order/cancel intent flushes are NOT deferred: preserve their current fail-closed behavior.
 - Durable Portfolio, RecoveryLedger, reservation, and execution-identity persistence.
 - Full process-restart recovery and exactly-once delivery guarantees.
 - Comprehensive reconciliation of all historical exchange executions and long-term account history.
