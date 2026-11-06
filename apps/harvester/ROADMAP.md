@@ -1612,3 +1612,11 @@ These are test-only changes. No production, Journal, broker, exchange, restart, 
 - [ ] Resolve the canonical requirement to durably record exact dust quantity and limiting filter. This requires a separately authorized in-scope production change; it was not implemented here.
 
 The checked items above indicate source/test inventory review and test presence only, **not passing test execution**. Local cloning is unavailable because github.com DNS resolution failed; exact-head Actions/status queries currently return no runs/statuses. PR #653 stays OPEN and UNMERGED. The canonical specification remains the sole rule authority; it is unchanged.
+
+## Conservative Strategy owner clarification — dust is a retained keep bonus (2026-11-06)
+
+The canonical rule is **unsellable exchange-constrained dust is retained on top of configured `keepQuantity`**. Example: `keepQuantity = 1.00` plus `0.04` unsellable dust means retain `1.04` total. Do not discard dust, force an exchange-invalid SELL, or count it as sold. After all exchange-sellable quantity is sold and the other completion conditions pass, retain `keepQuantity + dust`; dust alone does not block completion/reset. Preserve the dust quantity and its accounting provenance.
+
+This supersedes older roadmap/audit wording that required above-keep dust to remain active, block completion/reset, or wait for a later BUY to make it sellable. The sole rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+
+**Next audit action:** verify source completion/accounting behavior and regression tests against this clarified rule. Separately, durable recording of exact dust quantity and limiting exchange filter remains unresolved. This update is documentation-only; no production, Journal, event DTO, broker, recovery, or exchange changes were made. PR #653 remains open/unmerged.
