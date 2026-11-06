@@ -350,3 +350,14 @@ The historical runtime allocated 0.01 ZRO free and reset the recovery ledger whi
 ### Confirmed implementation root cause and correction
 
 At baseline `4af3434f788b87139513921f220294ae90daf4d5`, completion rejected only `activeQuantity < keepQuantity` and incorrectly allowed `activeQuantity > keepQuantity`; the strategy also stopped creating SELL intents when outstanding recovery reached zero. Current branch code now defers completion for any residual above keepQuantity and continues residual SELL planning with current-market pricing, filter checks, and explicit dust. Exact DOGE/ZRO actual-fill regressions and an exact ZRO completion-gate regression were added. These new tests are not yet verified by local execution or GitHub Actions.
+
+
+## 2026-11-06 lifecycle audit — partial BUY while recovery SELL is open
+
+**Confirmed source finding — VIOLATED:** `processUserDataEventTransition()` in `src/use-cases/conservative-trading-engine.js` accounts a BUY TRADE fill but returns from the generic `PARTIALLY_FILLED` branch before canceling an active recovery SELL. Cancellation currently occurs only in the later FILLED-BUY path. The canonical specification requires the existing SELL to be canceled and fully reconciled after any new BUY fill, including a partial BUY fill, before recalculating SELL quantity/price.
+
+**Fix and regression added:** commit `9c054725e03a751b06b8a3421e859201640c6469` adds cancellation/reconciliation/replanning for a partial BUY while a recovery SELL is active; commit `3cfc085d0caecc9a74ca9cb279298dde7c6075df` adds a regression asserting the BUY remains PARTIALLY_FILLED, the old SELL is canceled, and a replacement SELL is opened only after reconciliation. Exact-head GitHub Actions had no runs at the time of this update; test and fix are therefore **PENDING VERIFICATION**, not passed.
+
+**Related lifecycle checks:** partial SELL fills are applied through the paired idempotent accounting transition and do not trigger completion; the cancellation-race regression at test line 2551 proves one application when a raced SELL fill is replayed. Dust becoming sellable after a later BUY still requires a dedicated regression. Completion must continue to require exact keepQuantity and preserve above-keep dust/basis without allocation/reset.
+
+The canonical specification remains the sole source of truth and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No TESTNET writes, cancellations, new orders, or bot restarts were performed.
