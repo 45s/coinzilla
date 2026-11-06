@@ -1,5 +1,8 @@
 # AI task — Harvester incident follow-up: lifecycle and account reconciliation
 
+> **Historical task record.** Its former strategy assertions and implementation snapshots are not current Conservative requirements. The sole current rule source is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Where this task's older statements conflict (especially residual suppression or third-asset fee rejection), the canonical specification supersedes them.
+
+
 > **Branch state (2026-11-04):** PR #513 has been merged into `develop`. This follow-up branch has already been synchronized with that merge and is based on the resulting `develop` head. Do not repeat the prerequisite branch-update step unless `develop` advances again; before each push/merge, verify the branch is not behind `develop`.
 >
 > **Safety:** Harvester must remain stopped. Do not restart the process, submit/cancel TESTNET orders, change account settings, or perform any exchange write operation. This task is offline source investigation, deterministic tests, and read-only reconciliation only. A future TESTNET run requires a separate explicit operator authorization after all acceptance gates pass.
@@ -12,7 +15,7 @@ Finish the verification work deliberately split out of PR #513. Do not reimpleme
 
 - The apparent `0.20730 USDT` difference was a scope mismatch: previous four recovery cycles total `+0.20730`; all five cycles total `+0.57065 USDT`. The `+0.36335` value was only the final cycle.
 - Twelve DOGEUSDT BUYs were distinct exchange orders, not duplicate IDs. Journal ordering showed all twelve FILLED acknowledgements before the first corresponding execution fill was applied. The immediate-FILLED acknowledgement path now retrieves, validates, and applies complete canonical fill history before releasing the serialized strategy transition.
-- Post-cycle residual active inventory alone no longer creates a recovery SELL after the RecoveryLedger is reset. Invalid strategy order validation pauses the pair.
+- Historical residual-suppression behavior described here is superseded. The current contract requires sell-through of all sellable inventory above exact keepQuantity, explicit dust classification, and preservation of the full cost basis; see the canonical specification.
 - Recovery SELL fee reservation uses the greater of configured maker/taker rates.
 - Durable OPENING/CLOSING all-account snapshots, fail-closed Journal readiness/flush, and read-only per-session `journal:balance-audit` tooling are implemented.
 - Historical exchange fills reported zero commission. The later account-level 0.1% maker/taker setting is not retroactive.
@@ -44,7 +47,7 @@ Trace actual fill application end to end through normalized Fill, Portfolio, Rec
 
 - Quote-asset commission: exact BUY cost / SELL proceeds and recovery obligation adjustment, exactly once.
 - Base-asset commission: exact net received BUY quantity and SELL inventory consumption.
-- Unsupported third-asset commission: reject atomically and pause safely; never partially update projections.
+- Third-asset commissions: use a reliable quote-currency valuation; if unavailable, fail closed atomically and never partially update projections.
 - Missing, malformed, or unknown commission status: fail closed where net accounting cannot be established.
 - Duplicate and replayed executions: no double counting in Portfolio, RecoveryLedger, or Journal.
 - Per-fill deltas sum exactly to per-cycle values; per-cycle values sum to session totals.
@@ -102,7 +105,7 @@ Do not execute this package in this PR. Prepare a safe runbook for a separately 
 
 - [x] All lifecycle/interleaving cases above have deterministic regression coverage, including immediate FILLED, streamed partials, duplicate/conflicting/out-of-order events, cancel/fill races, REST/stream overlap, pending acknowledgements/cancellations, and shutdown reconciliation.
 - [x] Portfolio and RecoveryLedger remain atomic and exactly-once across duplicate, partial, out-of-order, cancel/fill, and REST/stream overlap cases; multi-fill, cycle-profit, and per-session reconciliation tests pass.
-- [x] Base/quote commission behavior and unsupported third-asset commission rejection are explicit and tested, including combined base/quote fees and replay atomicity.
+- [x] Base/quote commission behavior is covered. Third-asset commissions must be reliably valued in quote currency or fail closed atomically; see the canonical specification for the contract and remaining implementation evidence.
 - [x] Fee policy callers and conservative reserve behavior are verified end to end; maker/taker percentages are validated in [0,100), USDT pairs reflect 0.1%/0.1%, and FDUSD pairs retain the configured zero-maker policy with 0.1% taker.
 - [x] OPENING/CLOSING lifecycle and balance-audit failure modes are covered, including duplicate/malformed endpoints, reconciliation failure, and OPENING/CLOSING durability failure.
 - [x] Historical-session eligibility was reviewed: the incident Journal predates OPENING snapshots, so no eligible historical session exists for an actual opening/closing delta audit.
