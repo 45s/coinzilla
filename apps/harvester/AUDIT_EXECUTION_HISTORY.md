@@ -68,7 +68,7 @@ Execution times below are Binance trade timestamps in epoch milliseconds; Journa
 | ZROUSDT | 11665 | 727892 | BUY | 1.597 | 5 | 7.985 | ZRO 0.005 |
 | ZROUSDT | 11666 | 727904 | SELL | 1.606 | 39.91 | 64.09546 | USDT 0.06409546 |
 
-Journal applied-fill identity is `binance:<symbol>:<tradeId>`. The Journal also records 13 duplicate-fill notifications. Duplicate events do not increase any totals in this ledger.
+Journal applied-fill identity is `binance:<symbol>:<tradeId>`. The Journal records 13 duplicate-fill notifications: ZRO trade 11661 is replayed at 07:02:40.928Z, then all 12 applied fills are replayed again at CLOSING (07:58:11.075–07:58:11.077Z). No duplicate replay adds another execution to the ledger.
 
 ## Strategy decision to order correlation
 
