@@ -33,6 +33,7 @@ import {
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
   mapMarketTradingRulesCapturedData,
+  mapBrokerExecutionReportData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 function logSystem(logger, data) {
