@@ -1413,3 +1413,26 @@ The strategy owner confirmed the following policies for #646:
 - Before implementation, verify the exact mapping between the user's `coinToKeep` setting and the current pair-level `keepQuantity` field; do not silently rename or reinterpret configuration.
 
 These decisions close the owner-input questions in #646. Remaining work is engineering/documentation alignment and tests. No runtime settings or exchange state were changed.
+
+
+## Active Conservative audit fixes — implementation authorized (2026-11-06)
+
+The owner decisions above are approved requirements, not pending questions. Start implementation immediately on this audit branch and keep the work limited to the Conservative trading path.
+
+### P0 — enforce the minimum net-profit floor
+- [ ] Enforce `minProfit >= 0.01` in Harvester trading-config validation. Reject zero and every value below 0.01.
+- [ ] Enforce the same floor in the pure recovery SELL planner and recovery completion boundary so direct callers cannot bypass config validation.
+- [ ] Add exact-boundary tests: 0 and 0.009 rejected; 0.01 accepted; realized net profit below 0.01 must not complete a cycle.
+- [ ] Align Conservative specification, README/config guidance, and test matrix with the rule: **never close at a loss or break-even; require at least 0.01 net quote profit after actual commissions**.
+
+### P0 — sell all sellable Conservative inventory except the configured reserve
+- [ ] Harvester's current config uses pair-level `keepQuantity`; no `coinToKeep` key exists in the Harvester config/source search. Treat `keepQuantity` as the current configured retained-coin amount unless source inspection proves a distinct existing mapping. Do not introduce a second setting or rename config silently.
+- [ ] Trace the full recovery SELL → fill → completion → next-evaluation path. The approved outcome is that only the configured reserve remains; do not leave additional sellable residual inventory stranded after a successful recovery.
+- [ ] Preserve exchange quantity-step and base-fee constraints. If true dust cannot be sold under exchange rules, report it explicitly and never classify it as the configured reserve.
+- [ ] Add focused tests for base-fee reserve, quantity-step dust, exact reserve preservation, and repeated evaluation after completion. Do not alter the configured reserve amount.
+
+### Delivery rules
+- Implement source + focused tests first, then align specification/README/ROADMAP and update #646/#645/PR #653 with exact commits and CI.
+- No TESTNET order placement/cancellation, account/config mutation, bot restart, live trading, or merge is authorized by this work.
+- Preserve original audit snapshots and chronology. Keep PR #653 open and TESTNET acceptance NOT ACCEPTED until all evidence and acceptance criteria pass.
+- Do not ask the owner to repeat already supplied balances, open orders, trade history, logs, or the two strategy decisions.
