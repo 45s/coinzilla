@@ -82,7 +82,7 @@ The 13 `strategy.decision` events produced 23 order intents. The initial decisio
 | USDT | 8,954.11668541 | 8,860.31204995 | 7.98 | 8,868.29204995 | −85.82463546 |
 | ZRO | 245.125 | 245.175 | 0 | 245.175 | +0.05 |
 
-ZRO order 727905 is consistent across order history, the supplied open-orders snapshot, and the 7.98 USDT locked balance. DOGE order 1276698 is not consistent across order history, Journal state, and the 1,196 DOGE locked balance.
+ZRO order 727905 is consistent across order history, the supplied open-orders snapshot, and the 7.98 USDT locked balance. DOGE order 1276698 is not consistent across order history, Journal state, and the 1,196 DOGE locked balance. The CLOSING account event's exchange sourceTime (1793948926965 / 2026-11-06T07:08:46.965Z) exactly matches ZRO SELL trade 11666's executedAt; the CLOSING Journal event timestamp is 07:58:11.370Z. Treat these as distinct source/event timestamps; do not infer snapshot query time from sourceTime.
 
 ## Evidence not available
 
