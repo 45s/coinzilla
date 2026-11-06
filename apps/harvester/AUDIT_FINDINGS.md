@@ -380,3 +380,23 @@ The bounded ZRO trade export confirms BUY cost 64.02 USDT, net acquired quantity
 ## Required next action — DOGE/ZRO expected-versus-actual matrix
 
 For each symbol and each decision/order, produce a compact row set containing: config snapshot; pre-decision Position.quantity and Position.spent; cumulative net SELL proceeds; strategy intent quantity/limit price/order type; exchange filters and fee reserve; broker order lifecycle; distinct actual fills and actual commissions; post-fill quantity/spent/proceeds; exact keepQuantity/dust disposition; and realized net profit. Label each comparison FOLLOWED / VIOLATED / UNVERIFIED. Every VIOLATED row requires root-cause identification, a regression test, and a code fix before acceptance. Raw trade exports remain immutable; this finding register records only derived interpretation.
+
+ 
+## F-012 — actual DOGE/ZRO outcome conformance and ZRO premature completion
+
+**Status:** DOGE SELL planning FOLLOWED; DOGE post-shutdown accounting/dust UNVERIFIED. ZRO SELL planning and arithmetic FOLLOWED; ZRO completion VIOLATED. Root cause confirmed; correction and exact-evidence regressions added on the audit branch.
+
+The audit-baseline config confirms DOGE `keepQuantity=1`, ZRO `keepQuantity=0.01`, `minProfit=0.01`, and 0.1% maker/taker rates. Both actual ordinary LIMIT SELLs match the canonical 0.1%-reserve calculation exactly: DOGE 1,196 @ 0.07185; ZRO 39.91 @ 1.606.
+
+DOGE: 1,200 gross BUY less 1.2 DOGE base fees = 1,198.8 net; spent 85.836 USDT. Order 1276698 filled in two distinct post-CLOSING trades (221990: 278; 221991: 918). Gross 85.9326, actual quote fees 0.0859326, net proceeds 85.8466674, net profit +0.0106674, remaining 2.8 DOGE. Planning/order FOLLOWED. Because the fills happened after the local process stopped, same-session Portfolio/RecoveryLedger application is not expected. The 1.8 DOGE above keepQuantity has no preserved historical filter snapshot, so final dust classification is UNVERIFIED and restart reconciliation remains deferred to #654.
+
+ZRO: 40 gross BUY less 0.04 ZRO base fees = 39.96 net; spent 64.02 USDT. Order 727904 sold 39.91; gross 64.09546, actual quote fee 0.06409546, net proceeds 64.03136454, profit +0.01136454, remaining 0.05 ZRO. The runtime recorded free allocation 0.01 and RecoveryLedger reset while 0.04 remained active. This violates the canonical exact-keep completion gate and preservation of basis for dust/residual.
+
+**Root cause proven against the audit baseline:** the old completion predicate checked only `activeQuantity < keepQuantity`; any larger active balance was eligible. The old strategy also gated SELL creation on `outstandingRecovery > 0`, preventing sell-through after the profit target was secured. The current branch corrects both conditions: completion is deferred whenever active quantity exceeds keepQuantity, and the strategy plans residual SELLs above keepQuantity even after profit is secured, subject to exchange filters and explicit dust classification.
+
+Regression coverage added:
+- Exact historical ZRO completion inputs (spent 64.02, proceeds 64.03136454, active 0.05, keep 0.01) must defer completion.
+- Actual DOGE fill identities/commissions and 2.8 remaining quantity; no residual SELL below MIN_NOTIONAL, with 1.8 excess explicitly classified as dust in the test filter fixture.
+- Actual ZRO eight BUY fills and SELL fill/quote commission; 0.04 excess remains active and is classified as MIN_NOTIONAL dust in the test filter fixture.
+
+The actual historical MIN_NOTIONAL/quantity-step snapshots were not preserved in the supplied logs, so the test fixture proves current policy behavior under the stated filter values, not the exact historical exchange filter snapshot. No exchange writes or bot restarts were performed.
