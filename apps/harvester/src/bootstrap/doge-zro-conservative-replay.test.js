@@ -84,15 +84,9 @@ const marketFilters = (symbol) => {
   }
 }
 
-const waitForOrderCount = (submitted, expected) => {
+const waitForOrderCount = (submitted, waiters, expected) => {
   if (submitted.length >= expected) return Promise.resolve()
-  return new Promise((resolve) => {
-    const check = () => {
-      if (submitted.length >= expected) resolve()
-      else setImmediate(check)
-    }
-    check()
-  })
+  return new Promise((resolve) => waiters.push({ expected, resolve }))
 }
 
 test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", { timeout: 30_000 }, async () => {
@@ -106,7 +100,12 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
   let nextBrokerOrderId = 1
 
   const notifyOrderWaiters = () => {
-    for (const waiter of orderWaiters.splice(0)) waiter()
+    for (let index = orderWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = orderWaiters[index]
+      if (submitted.length < waiter.expected) continue
+      orderWaiters.splice(index, 1)
+      waiter.resolve()
+    }
   }
   const waitForCycle = (symbol) => {
     if (cycleCompletions.has(symbol)) return Promise.resolve(cycleCompletions.get(symbol))
@@ -287,9 +286,9 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
 
     // The initial market references and resulting BUY orders are from issue #645.
     await triggerPrice("DOGEUSDT", "0.07161000")
-    await waitForOrderCount(submitted, 1)
+    await waitForOrderCount(submitted, orderWaiters, 1)
     await triggerPrice("ZROUSDT", "1.60500000")
-    await waitForOrderCount(submitted, 2)
+    await waitForOrderCount(submitted, orderWaiters, 2)
 
     const dogeBuy = submitted.find((order) =>
       order.market.symbol === "DOGEUSDT" && order.side === "BUY")
@@ -305,7 +304,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     )
 
     // Trigger each BUY fill at its submitted limit; exchange reports actual fills/fees.
-    const dogeSellSubmitted = waitForOrderCount(submitted, 4)
+    const dogeSellSubmitted = waitForOrderCount(submitted, orderWaiters, 4)
     await triggerPrice("DOGEUSDT", "0.07157")
     fillOrder({
       order: dogeBuy,
@@ -316,7 +315,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     })
     await dogeSellSubmitted
 
-    const zroSellSubmitted = waitForOrderCount(submitted, 6)
+    const zroSellSubmitted = waitForOrderCount(submitted, orderWaiters, 6)
     await triggerPrice("ZROUSDT", "1.604")
     fillOrder({
       order: zroBuy,
