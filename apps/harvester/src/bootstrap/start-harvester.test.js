@@ -86,6 +86,7 @@ const createMarketMetadata = (symbol) => {
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
+  const fillHistoryByOrder = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
@@ -94,7 +95,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
+    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(orderId) ?? [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
@@ -139,7 +140,16 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { disconnect: async () => calls.push("unsubscribe:user-data") },
       }
     },
-    emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
+    emitUserDataEvent: (event) => {
+      const fill = event?.fill
+      if (fill instanceof Fill) {
+        const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+        if (!existing.some((item) => item.id === fill.id)) {
+          fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+        }
+      }
+      return userDataHandlers?.onEvent({ event })
+    },
     emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
     emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
