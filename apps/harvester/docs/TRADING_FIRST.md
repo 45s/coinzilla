@@ -49,7 +49,7 @@ Until every criterion is evidenced and reviewed, the first milestone remains OPE
 
 Journal is **not wholly optional** during the trading-first phase. The following existing durability barriers are mandatory and retain their current fail-closed behavior:
 
-- **Startup audit:** trading-enabled startup requires a successfully started Journal with durable `flush()`. Capture the full account-wide snapshot as `account.snapshot_captured / OPENING`, including every asset's exact free, locked, and total quantity, and durably flush it before market subscriptions or trading-engine activation. Read-only mode may continue without Journal.
+- **Startup audit:** trading-enabled startup requires a successfully started Journal with durable `flush()`. Capture the full account-wide audit (balances and open orders); record every asset's exact free, locked, and total quantity in `account.snapshot_captured / OPENING`, and durably flush the audit before market subscriptions or trading-engine activation. Read-only mode may continue without Journal.
 - **Closing audit:** after shutdown intake is drained and owned-order reconciliation is attempted, capture and durably flush `CLOSING` while broker REST remains connected. Mark the audit INCOMPLETE if any owned order or accounting state remains unresolved.
 - **Order submission:** durably flush `order.submission_requested` before calling the broker placement operation.
 - **Order cancellation:** durably flush `order.cancel_requested` before calling the broker cancellation operation.
