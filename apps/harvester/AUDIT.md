@@ -3,7 +3,7 @@
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
 **Audit baseline:** `develop` at `4af3434f788b87139513921f220294ae90daf4d5` (2026-11-06; PR #644 merge commit)  
 **Evidence session:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
-**Status:** PARTIAL — ZRO arithmetic reconciles; DOGE execution/order state conflicts; original application logs were not accessible in this execution session.  
+**Status:** PARTIAL — original application logs integrity-verified and parsed; ZRO runtime Portfolio/RecoveryLedger state PASS; DOGE SELL/order state remains CONFLICT; CLOSING audit INCOMPLETE.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
 ## Executive result
@@ -22,10 +22,10 @@ Do not treat the session as a successful two-symbol reconciliation.
 | DOGEUSDT order history, 100 rows | [#645 DOGE order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680477550) | All 100 rows parsed; six current-session orders isolated |
 | ZROUSDT order history, 100 rows | [#645 ZRO order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680478011) | All 100 rows parsed; seventeen current-session orders isolated |
 | Latest open-orders snapshot | [#645 evidence inventory](https://github.com/45s/coinzilla/issues/645#issuecomment-6680483675) | One ZRO BUY order 727905 NEW, corroborated |
-| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 lines | UNVERIFIED — not mounted/exposed in this execution session; not substituted with excerpts |
-| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 lines | UNVERIFIED — not mounted/exposed in this execution session; not substituted with excerpts |
+| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
+| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 
-Original log checksums recorded in #645 (not recomputed here):
+Original log checksums recorded in #645 and independently recomputed against the original attachments:
 - `harvester.log`: `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`
 - `harvester-trace.log`: `4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3`
 
@@ -94,7 +94,7 @@ The DOGE total balance delta (+1,198.8) equals the three net BUY fills exactly a
 - Base inventory and BUY cash debit reconcile.
 - SELL execution, SELL commission, realized net PnL, and final sellable/free DOGE are UNVERIFIED / CONFLICT.
 - Do not book the order-history quote amount as realized proceeds or assume a commission asset/rate.
-- The 1,196 DOGE locked and order 1276698's FILLED status are mutually inconsistent in the supplied evidence. Original application logs are required to establish the timeline and identity; they were not available here.
+- The parsed TRACE log shows order 1276698 OPEN with zero executed and 1,196 remaining at the last DOGE evaluations; the shutdown execution set contains no DOGE SELL fill. This strongly favors OPEN/unfilled at the last observed runtime point, but the separate order-history row says FILLED. Keep the order state CONFLICT until complete DOGE trade history, canonical order detail, and the full CLOSING open-order payload reconcile it.
 
 DOGE order lifecycle from the current-session history:
 - 1276628 BUY 400 @ 0.07157 — FILLED.
@@ -184,14 +184,14 @@ Two focused child issues were created: [#646 — Align Conservative specificatio
 | DOGE BUY inventory/cash debit | PASS | Three fills and account deltas reconcile |
 | DOGE SELL/order/balance state | CONFLICT | History FILLED vs Journal OPEN, no applied SELL fill, 1,196 DOGE locked |
 | DOGE realized net PnL | UNVERIFIED | Missing applied SELL fill/actual commission correlation |
-| Full application-log correlation | UNVERIFIED | Original log attachments unavailable in this execution session |
+| Original log integrity and parsing | PASS | Both original files independently hashed and parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 | Source behavior review | PARTIAL | Relevant code inspected; no full runtime execution |
 | Regression coverage | PARTIAL | Relevant tests inspected, not run |
 | Live TESTNET acceptance | UNVERIFIED | No new exchange operation authorized or performed |
 
 ## Safety decision
 
-Keep the existing TESTNET execution gate closed. Do not restart Harvester or submit/cancel orders to resolve this audit. The next engineering step is to obtain access to the original log attachments in a context where they can be read without altering them, verify their recorded SHA-256 checksums, and correlate the DOGE order 1276698 lifecycle with the account closing snapshot and the two unresolved owned-order records. Until that is done, DOGE SELL execution and realized PnL remain CONFLICT / UNVERIFIED.
+Keep the existing TESTNET execution gate closed. Do not restart Harvester or submit/cancel orders to resolve this audit. The logs are now integrity-verified and parsed; next obtain complete DOGE `myTrades` with commission facts, canonical order detail for 1276698, and the full CLOSING open-order payload/reconciliation diagnostics. DOGE SELL execution and realized PnL remain CONFLICT / UNVERIFIED.
 
 ## Lifecycle reconstruction and decision-by-decision assessment
 
@@ -278,7 +278,7 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 1. DOGE initial evaluation 07:00:08.056Z: reference 0.07161000; BUY 400 at 0.07157, suffix -1 / order 1276628. Trade 221733 applies 400 with 0.4 DOGE commission; net contribution 399.6 DOGE.
 2. ZRO initial evaluation 07:00:08.661Z: reference 1.605; BUY 5 at 1.604, suffix -2 / order 727817. Trade 11658 applies 5 with 0.005 ZRO commission; net contribution 4.995 ZRO.
 3. Subsequent BUY-fill decisions create a recovery SELL intent and, where shown, a next standing BUY. The ledger lists SELL before paired BUY; this proves decision ordering, not atomic exchange-side behavior.
-4. Nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) have Journal cancel requests and confirmations; history says CANCELED with zero execution. Replacements appear in later decisions. Without DEBUG/TRACE logs, all asynchronous cancel/fill races remain unverified.
+4. Nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) have Journal cancel requests and confirmations; history says CANCELED with zero execution. Replacements appear in later decisions. The DEBUG/TRACE logs are now available for correlation; this audit does not claim that every asynchronous cancel/fill race was exercised or proven by this single session.
 5. DOGE final recovery SELL: decision 07:02:31.008Z creates SELL 1,196 at 0.07185, suffix -11 / order 1276698. History says FILLED; Journal acknowledgement says OPEN; no DOGE SELL fill is applied; closing has 1,196 DOGE locked. This is a blocker, not a PASS.
 6. ZRO final recovery SELL and standing BUY: decision 07:04:46.922Z creates SELL 39.91 at 1.606, suffix -22 / order 727904, and BUY 5 at 1.596, suffix -23 / order 727905. SELL trade 11666 executes 07:08:46.965Z; recovery completion is journaled 07:08:47.127Z. Paired BUY remains NEW with 7.98 USDT locked at close.
 7. Shutdown: CLOSING snapshot 07:58:11.370Z is INCOMPLETE with two unresolved owned orders; process stop is 07:58:16.387Z. Successful process exit does not mean reconciliation passed.
@@ -322,3 +322,8 @@ ZRO arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; 
 ### Status and evidence discipline
 
 Observed fact is from Journal/order-history/account records. Source behavior is inspected code, not proof it ran. Test coverage means assertion exists, not that it passed. Hypotheses are not accounting inputs. PASS requires independent reconciliation or verified test; PARTIAL means incomplete lifecycle; CONFLICT means sources disagree; UNVERIFIED means evidence is absent. No global strategy-pass conclusion is supported: overall PARTIAL, ZRO arithmetic PASS, DOGE SELL CONFLICT, closing audit INCOMPLETE, TESTNET acceptance UNVERIFIED.
+
+
+## Verified original application-log addendum — 2026-11-06
+
+The former evidence-access blocker is resolved. Both original files were read-only hashed and parsed; byte counts, physical line counts, newline termination, and SHA-256 values are recorded in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). The trace directly records ZRO Portfolio and RecoveryLedger before/after SELL accounting and cycle completion (0.01 free + 0.04 active residual). It also records DOGE order 1276698 OPEN with zero executed at the final runtime evaluations and no DOGE SELL among the 12 shutdown execution records. This strengthens, but does not resolve, the conflict with the separate exchange order-history FILLED row. The second unresolved order remains unidentified; DOGE order 1276698 is only a candidate. Do not book DOGE SELL proceeds or PnL. See the addendum for exact line references, timestamps, and remaining evidence.
