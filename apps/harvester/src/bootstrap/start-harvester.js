@@ -228,9 +228,9 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
               left: nextPosition?.quoteNetCashFlow.amount ?? "0",
               right: previousPosition?.quoteNetCashFlow.amount ?? "0",
             }),
-            buyCost: subtractDecimal({
-              left: nextLedger.buyCost,
-              right: currentLedger.buyCost,
+            positionSpent: subtractDecimal({
+              left: nextPosition?.spent.amount ?? "0",
+              right: previousPosition?.spent.amount ?? "0",
             }),
             netSellProceeds: subtractDecimal({
               left: nextLedger.netSellProceeds,
@@ -303,6 +303,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
             portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
           }
+          portfolio = portfolio.resetRecoveryBasis({ marketId })
           const resetLedger = recoveryLedger.resetCycle()
           recoveryLedgers.set(marketId, resetLedger)
           logger.debug?.({

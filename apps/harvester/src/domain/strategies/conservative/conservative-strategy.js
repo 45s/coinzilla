@@ -78,7 +78,8 @@ export function evaluateConservativeStrategy({
   const maxQuantity = getOptionalRuleAmount({ type: "MAX_QUANTITY" })
   const maxNotional = getOptionalRuleAmount({ type: "MAX_NOTIONAL" })
   const position = portfolio.getPosition({ symbol: marketPrice.symbol })
-  const activeQuantity = position?.baseQuantity.amount ?? "0"
+  const activeQuantity = position?.quantity.amount ?? "0"
+  const positionSpent = position?.spent.amount ?? "0"
   const ledger = recoveryLedger ?? {
     buyCost: "0",
     netSellProceeds: "0",
@@ -86,9 +87,13 @@ export function evaluateConservativeStrategy({
   if (recoveryLedger && recoveryLedger.market?.id !== marketMetadata.market.id) {
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
+  if (recoveryLedger && position &&
+      compareDecimal({ left: ledger.buyCost, right: positionSpent }) !== 0) {
+    throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
+  }
   if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
-      compareDecimal({ left: ledger.buyCost, right: "0" }) <= 0) {
-    throw new Error("Conservative active inventory has no recovery cost/profit basis")
+      compareDecimal({ left: positionSpent, right: "0" }) <= 0) {
+    throw new Error("Conservative active inventory has no Position.spent recovery basis")
   }
   if (!position &&
       (compareDecimal({ left: ledger.buyCost, right: "0" }) > 0 ||
@@ -117,9 +122,9 @@ export function evaluateConservativeStrategy({
   // The recovery ledger remains open until every exchange-sellable unit above
   // keepQuantity has been sold. This includes residual sell-through after the
   // cycle has already reached its minimum net-profit target.
-  const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
+  const outstandingRecovery = maxDecimal({
     left: "0",
-    right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
+    right: subtractDecimal({ left: positionSpent, right: ledger.netSellProceeds }),
   })
   let inventoryDisposition
   let buyDisposition
@@ -134,7 +139,7 @@ export function evaluateConservativeStrategy({
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
       keepQuantity: String(pairConfig.keepQuantity),
-      cycleCost: ledger.buyCost,
+      cycleCost: positionSpent,
       saleProceeds: ledger.netSellProceeds,
       minProfit: String(settings.minProfit),
       feeRate,
@@ -150,13 +155,10 @@ export function evaluateConservativeStrategy({
         left: sellPlan.requiredNetProceeds,
         right: "0",
       }) === 0
-        ? maxDecimal({
-          left: sellPlan.price,
-          right: roundDecimalToIncrement({
-            value: marketPrice.price,
-            increment: priceTickSize,
-            direction: "up",
-          }),
+        ? roundDecimalToIncrement({
+          value: marketPrice.price,
+          increment: priceTickSize,
+          direction: "up",
         })
         : sellPlan.price
       if (minPrice && compareDecimal({ left: residualPrice, right: minPrice }) < 0) {

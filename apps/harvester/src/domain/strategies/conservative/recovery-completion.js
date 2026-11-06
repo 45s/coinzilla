@@ -12,7 +12,7 @@ import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla
  *
  * @param {object} input
  * @param {boolean} input.sellOrderFullyFilled Final reconciled recovery SELL state.
- * @param {string} input.buyCost Cumulative quote BUY cost including quote fees.
+ * @param {string} input.spent Position.spent, the full accumulated BUY cost including actual quote-valued fees.
  * @param {string} input.netSellProceeds Cumulative confirmed net quote SELL proceeds.
  * @param {string} input.activeQuantity Active base inventory after all SELL fills.
  * @param {string} input.keepQuantity Exact free quantity to allocate.
@@ -21,7 +21,7 @@ import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla
  */
 export function evaluateRecoveryCompletion({
   sellOrderFullyFilled,
-  buyCost,
+  spent,
   netSellProceeds,
   activeQuantity,
   keepQuantity,
@@ -31,7 +31,7 @@ export function evaluateRecoveryCompletion({
     throw new TypeError("sellOrderFullyFilled must be a boolean")
   }
   for (const [field, value] of Object.entries({
-    buyCost,
+    spent,
     netSellProceeds,
     activeQuantity,
     keepQuantity,
@@ -40,7 +40,7 @@ export function evaluateRecoveryCompletion({
     assertDecimalString({ value, field })
   }
   if (
-    compareDecimal({ left: buyCost, right: "0" }) < 0 ||
+    compareDecimal({ left: spent, right: "0" }) < 0 ||
     compareDecimal({ left: netSellProceeds, right: "0" }) < 0 ||
     compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
     compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
@@ -51,7 +51,7 @@ export function evaluateRecoveryCompletion({
 
   const realizedNetProfit = subtractDecimal({
     left: netSellProceeds,
-    right: buyCost,
+    right: spent,
   })
 
   if (!sellOrderFullyFilled) {

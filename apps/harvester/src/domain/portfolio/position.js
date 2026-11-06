@@ -14,7 +14,7 @@ export class Position {
     baseQuantity,
     freeBaseQuantity,
     quoteNetCashFlow,
-    spent = new Money({ amount: "0", asset: market?.quoteAsset }),
+    spent,
   } = {}) {
     if (!(market instanceof Market)) throw new TypeError("Position.market must be a canonical Market")
     if (!(baseQuantity instanceof Quantity) || baseQuantity.asset.id !== market.baseAsset.id) {
@@ -33,17 +33,18 @@ export class Position {
     if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
       throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
     }
-    if (!(spent instanceof Money) || spent.asset.id !== market.quoteAsset.id) {
+    const normalizedSpent = spent ?? new Money({ amount: "0", asset: market.quoteAsset })
+    if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
       throw new TypeError("Position.spent must use the market quote Asset")
     }
-    if (spent.amount.startsWith("-")) {
+    if (normalizedSpent.amount.startsWith("-")) {
       throw new RangeError("Position.spent must be non-negative")
     }
     this.#market = market
     this.#baseQuantity = baseQuantity
     this.#freeBaseQuantity = normalizedFreeBaseQuantity
     this.#quoteNetCashFlow = quoteNetCashFlow
-    this.#spent = spent
+    this.#spent = normalizedSpent
     Object.freeze(this)
   }
 
