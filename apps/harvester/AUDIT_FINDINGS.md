@@ -482,3 +482,11 @@ The current branch regression inventory now includes the formerly missing focuse
 This supersedes earlier historical statements in this file that terminal SELL cases or the dust-plus-later-BUY regression were still missing. It does **not** mean tests passed: no focused or full test suite has been executed on the current code head, and no exact-head Actions runs or commit statuses are reported.
 
 The canonical durable-dust-recording requirement remains an unresolved audit gap: exact dust quantity and limiting filter are calculated in the domain but are not persisted in the no-action log/lifecycle event. No Journal, event DTO, broker, exchange, or other production change was made. PR #653 remains OPEN and UNMERGED.
+
+## Owner clarification — dust is retained above keepQuantity (2026-11-06)
+
+**Canonical rule:** exchange-constrained dust is a bonus on top of configured `keepQuantity`. If `K = 1.00` and unsellable dust is `0.04`, retain `1.04`. Do not discard it, force a SELL that violates exchange filters, or count it as sold. Dust does not itself block recovery completion after all exchange-sellable quantity has been sold and the other completion conditions pass. Preserve the retained dust quantity and its accounting provenance.
+
+This supersedes older findings text that treated above-`keepQuantity` dust as active recovery inventory that must block completion/reset or await a later BUY. Such text is historical, not the current contract.
+
+**Remaining audit work:** inspect the current completion/accounting implementation and tests against this rule; update them only within the approved scope. The separate durable-evidence gap (exact dust amount and limiting filter not persisted in the current decision log/event path) remains unresolved. This documentation-only update does not claim implementation or test conformance.
