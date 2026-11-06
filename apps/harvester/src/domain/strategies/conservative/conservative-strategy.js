@@ -66,10 +66,18 @@ export function evaluateConservativeStrategy({
     buyCost: "0",
     netSellProceeds: "0",
   }
+  if (recoveryLedger && recoveryLedger.market?.id !== marketMetadata.market.id) {
+    throw new Error("Conservative RecoveryLedger market does not match strategy market")
+  }
   if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
       compareDecimal({ left: ledger.buyCost, right: "0" }) === 0 &&
       compareDecimal({ left: ledger.netSellProceeds, right: "0" }) === 0) {
     throw new Error("Conservative active inventory has no recovery cost/profit basis")
+  }
+  if (!position &&
+      (compareDecimal({ left: ledger.buyCost, right: "0" }) > 0 ||
+       compareDecimal({ left: ledger.netSellProceeds, right: "0" }) > 0)) {
+    throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
   }
   const orders = activeOrders.filter((order) => order?.market?.symbol === marketPrice.symbol)
   const hasActiveBuy = orders.some((order) =>
@@ -98,6 +106,7 @@ export function evaluateConservativeStrategy({
     right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
   })
   let inventoryDisposition
+  let buyDisposition
   // Submit recovery SELL first. Active orders suppress duplicate SELL intents.
   if (!hasActiveSell &&
       compareDecimal({ left: activeQuantity, right: String(pairConfig.keepQuantity) }) > 0) {
@@ -195,23 +204,40 @@ export function evaluateConservativeStrategy({
       increment: quantityStepSize,
       direction: "down",
     })
-    if (compareDecimal({ left: buyQuantity, right: "0" }) <= 0) {
-      throw new RangeError("Configured BUY quantity is below the exchange quantity step")
-    }
-    const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
     const investmentLimit = pairConfig.investment === undefined ? undefined : String(pairConfig.investment)
-    const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
-      left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
-      right: investmentLimit,
-    }) <= 0
-    if (withinInvestmentLimit) {
-      actions.push(Object.freeze({
-        side: "BUY",
-        type: marketMetadata.orderType,
-        price: buyPrice,
-        quantity: buyQuantity,
-        reason: position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
-      }))
+    if (compareDecimal({ left: buyQuantity, right: "0" }) <= 0) {
+      buyDisposition = Object.freeze({
+        status: "EXCHANGE_CONSTRAINED_BUY",
+        reason: "QUANTITY_INCREMENT",
+        configuredQuantity: String(pairConfig.orderQuantity),
+        quantityStepSize,
+      })
+    } else {
+      const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
+      const quantityMeetsMinimum = compareDecimal({ left: buyQuantity, right: minQuantity }) >= 0
+      const notionalMeetsMinimum = compareDecimal({ left: buyNotional, right: minNotional }) >= 0
+      const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
+        left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
+        right: investmentLimit,
+      }) <= 0
+      if (!quantityMeetsMinimum || !notionalMeetsMinimum) {
+        buyDisposition = Object.freeze({
+          status: "EXCHANGE_CONSTRAINED_BUY",
+          reason: !quantityMeetsMinimum ? "MIN_QUANTITY" : "MIN_NOTIONAL",
+          quantity: buyQuantity,
+          notional: buyNotional,
+          minimumQuantity: minQuantity,
+          minimumNotional: minNotional,
+        })
+      } else if (withinInvestmentLimit) {
+        actions.push(Object.freeze({
+          side: "BUY",
+          type: marketMetadata.orderType,
+          price: buyPrice,
+          quantity: buyQuantity,
+          reason: position ? "NEXT_STANDING_BUY" : "INITIAL_BUY",
+        }))
+      }
     }
   }
   return Object.freeze({
@@ -220,10 +246,13 @@ export function evaluateConservativeStrategy({
     action: actions.length === 0 ? "NO_ACTION" : "PLACE_ORDERS",
     actions: Object.freeze(actions),
     ...(inventoryDisposition ? { inventoryDisposition } : {}),
+    ...(buyDisposition ? { buyDisposition } : {}),
     reason: actions.length === 0
       ? inventoryDisposition
         ? "Residual inventory is currently below exchange SELL filters and is classified as dust"
-        : "Required standing orders are already active or no sellable recovery inventory is available"
+        : buyDisposition
+          ? "Configured BUY is currently below exchange filters and was deferred"
+          : "Required standing orders are already active or no sellable recovery inventory is available"
       : null,
   })
 }
