@@ -1711,11 +1711,18 @@ test("ignores an out-of-order OPEN update after the BUY has already filled", asy
 
 test("reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle", async () => {
   const seeded = makeSeededRecoveryState()
-  const harness = await createHarness({
+  let harness
+  harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    accountingApplied: true,
+    updateTradingAccounting: async ({ fill }) => {
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
+      return { ok: true, data: { applied: true, duplicate: false } }
+    },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
