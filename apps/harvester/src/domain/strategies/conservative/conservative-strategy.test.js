@@ -5,6 +5,7 @@ import { multiplyDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { RecoveryLedger } from "./recovery-ledger.js"
 import { evaluateConservativeStrategy } from "./conservative-strategy.js"
+import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
 const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
