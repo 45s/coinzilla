@@ -6,7 +6,7 @@ const baseInput = {
   sellOrderFullyFilled: true,
   buyCost: "10",
   netSellProceeds: "10.01",
-  activeQuantity: "1.2",
+  activeQuantity: "1",
   keepQuantity: "1",
   minProfit: "0.01",
 }
@@ -56,14 +56,19 @@ test("pauses when actual remaining inventory is below keepQuantity", () => {
   assert.equal(result.freeQuantity, "0")
 })
 
-test("does not allocate fee-reserve residual above keepQuantity as free inventory", () => {
+test("defers completion while any active residual remains above keepQuantity", () => {
   const result = evaluateRecoveryCompletion({
     ...baseInput,
     activeQuantity: "1.25",
     keepQuantity: "1",
   })
-  assert.equal(result.freeQuantity, "1")
-  assert.equal(result.eligible, true)
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    freeQuantity: "0",
+    realizedNetProfit: "0.01",
+  })
 })
 
 test("rejects invalid completion inputs", () => {
