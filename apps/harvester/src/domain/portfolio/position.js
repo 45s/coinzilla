@@ -7,12 +7,14 @@ export class Position {
   #baseQuantity
   #freeBaseQuantity
   #quoteNetCashFlow
+  #spent
 
   constructor({
     market,
     baseQuantity,
     freeBaseQuantity,
     quoteNetCashFlow,
+    spent = new Money({ amount: "0", asset: market?.quoteAsset }),
   } = {}) {
     if (!(market instanceof Market)) throw new TypeError("Position.market must be a canonical Market")
     if (!(baseQuantity instanceof Quantity) || baseQuantity.asset.id !== market.baseAsset.id) {
@@ -31,10 +33,17 @@ export class Position {
     if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
       throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
     }
+    if (!(spent instanceof Money) || spent.asset.id !== market.quoteAsset.id) {
+      throw new TypeError("Position.spent must use the market quote Asset")
+    }
+    if (spent.amount.startsWith("-")) {
+      throw new RangeError("Position.spent must be non-negative")
+    }
     this.#market = market
     this.#baseQuantity = baseQuantity
     this.#freeBaseQuantity = normalizedFreeBaseQuantity
     this.#quoteNetCashFlow = quoteNetCashFlow
+    this.#spent = spent
     Object.freeze(this)
   }
 
@@ -42,6 +51,9 @@ export class Position {
   // baseQuantity is the active strategy inventory. Free inventory is never
   // included in this quantity and cannot be sold by strategy order planning.
   get baseQuantity() { return this.#baseQuantity }
+  // Canonical strategy fields. baseQuantity remains a compatibility alias.
+  get quantity() { return this.#baseQuantity }
+  get spent() { return this.#spent }
   get freeBaseQuantity() { return this.#freeBaseQuantity }
   get totalBaseQuantity() {
     return new Quantity({
@@ -62,6 +74,7 @@ export class Position {
       market: this.#market,
       baseQuantity: this.#baseQuantity.amount,
       quoteNetCashFlow: this.#quoteNetCashFlow.amount,
+      spent: this.#spent.amount,
       fill,
     })
 
@@ -70,6 +83,7 @@ export class Position {
       baseQuantity: new Quantity({ amount: accounting.baseQuantity, asset: this.#market.baseAsset }),
       freeBaseQuantity: this.#freeBaseQuantity,
       quoteNetCashFlow: new Money({ amount: accounting.quoteNetCashFlow, asset: this.#market.quoteAsset }),
+      spent: new Money({ amount: accounting.spent, asset: this.#market.quoteAsset }),
     })
   }
 
@@ -97,12 +111,29 @@ export class Position {
         asset: this.#market.baseAsset,
       }),
       quoteNetCashFlow: this.#quoteNetCashFlow,
+      spent: this.#spent,
+    })
+  }
+
+  /**
+   * Reset only the completed recovery cost basis. The caller must first prove
+   * canonical recovery completion and allocate exact retained inventory.
+   */
+  resetRecoveryBasis() {
+    return new Position({
+      market: this.#market,
+      baseQuantity: this.#baseQuantity,
+      freeBaseQuantity: this.#freeBaseQuantity,
+      quoteNetCashFlow: this.#quoteNetCashFlow,
+      spent: new Money({ amount: "0", asset: this.#market.quoteAsset }),
     })
   }
 
   get value() {
     return Object.freeze({
       market: this.#market.value,
+      quantity: this.#baseQuantity.value,
+      spent: this.#spent.value,
       baseQuantity: this.#baseQuantity.value,
       freeBaseQuantity: this.#freeBaseQuantity.value,
       totalBaseQuantity: this.totalBaseQuantity.value,
@@ -117,6 +148,7 @@ export class Position {
       baseQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
       freeBaseQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
       quoteNetCashFlow: new Money({ amount: "0", asset: market.quoteAsset }),
+      spent: new Money({ amount: "0", asset: market.quoteAsset }),
     })
   }
 }
