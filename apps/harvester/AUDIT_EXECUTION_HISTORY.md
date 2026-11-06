@@ -297,3 +297,19 @@ This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is 
 - Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
 
 The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## Post-CLOSING exchange execution addendum — supersedes the preliminary DOGE conflict (2026-11-06)
+
+The FILLED* order-history annotation for DOGE order 1276698 above records the original evidence-stage conflict only. The later preserved 50-row actual-trade export resolves the chronology:
+
+| Trade ID | Order ID | UTC execution time | Side | Base quantity | Gross quote | Commission |
+|---:|---:|---|---|---:|---:|---:|
+| 221990 | 1276698 | 08:03:01.841Z | SELL | 278 DOGE | 19.97430000 USDT | 0.01997430 USDT |
+| 221991 | 1276698 | 08:03:18.202Z | SELL | 918 DOGE | 65.95830000 USDT | 0.06595830 USDT |
+
+Total exchange execution: 1,196 DOGE; gross 85.93260000 USDT; quote commission 0.08593260 USDT; net proceeds 85.84666740 USDT. Both fills postdate the final runtime evaluation (~07:57:19Z), CLOSING snapshot (~07:58:11Z), and process stop (~07:58:16Z). The order was open/unfilled at the last observed runtime point and filled later; these are not contradictory same-time facts.
+
+ZRO BUY order 727905 likewise filled after CLOSING: trade 12182 at 08:38:24.782Z, 5 ZRO gross less 0.005 ZRO base commission = 4.995 ZRO net, with 7.98 USDT quote debit.
+
+The later fills do not rewrite the earlier CLOSING balances/open-order state and do not prove a later Harvester process applied them to Portfolio/RecoveryLedger. A post-fill account/open-orders snapshot and later Journal/runtime evidence remain unavailable. The complete historical CLOSING open-orders payload is still required to prove both unresolved order identities. The two trade exports are bounded 50-row responses with no fromId, not exhaustive all-time histories.
