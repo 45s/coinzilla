@@ -226,6 +226,31 @@ const requireCount = ({ value, field }) => {
   return value
 }
 
+const mapStrategyDecisionInputs = (inputs) => {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new TypeError("inputs must be an object")
+  }
+  const mapped = {}
+  for (const field of [
+    "lastBuyPrice", "activeBaseQuantity", "activeBaseBalance", "freeQuoteBalance",
+    "freeBaseBalance", "quoteCashFlow", "committedQuote", "committedQuoteBalance",
+    "committedBase", "committedBaseBalance", "outstandingRecoveryAmount",
+    "investmentLimit", "orderQuantity", "keepQuantity", "priceStepPercent",
+    "makerPercent", "takerPercent", "minProfit",
+  ]) {
+    if (inputs[field] === undefined) continue
+    mapped[field] = field === "lastBuyPrice" && inputs[field] === null
+      ? null
+      : requireDecimalString({ value: inputs[field], field: "inputs." + field })
+  }
+  for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
+    if (inputs[field] !== undefined) {
+      mapped[field] = requireCount({ value: inputs[field], field: "inputs." + field })
+    }
+  }
+  return mapped
+}
+
 const requireOrderFacts = ({ order }) => {
   if (!order || typeof order !== "object" || !order.market?.symbol) {
     throw new TypeError("order must contain canonical market facts")
@@ -254,31 +279,7 @@ export const mapStrategyDecisionData = (input = {}) =>
       symbol: requireString({ value: symbol, field: "symbol" }),
       referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
       ...(reason === undefined ? {} : { reason: requireString({ value: reason, field: "reason" }).slice(0, 160) }),
-      ...(inputs === undefined ? {} : {
-        inputs: {
-          lastBuyPrice: inputs.lastBuyPrice == null ? null : requireDecimalString({ value: inputs.lastBuyPrice, field: "inputs.lastBuyPrice" }),
-          activeOrderCount: requireCount({ value: inputs.activeOrderCount, field: "inputs.activeOrderCount" }),
-          activeBuyCount: requireCount({ value: inputs.activeBuyCount, field: "inputs.activeBuyCount" }),
-          activeSellCount: requireCount({ value: inputs.activeSellCount, field: "inputs.activeSellCount" }),
-          activeBaseQuantity: requireDecimalString({ value: inputs.activeBaseQuantity, field: "inputs.activeBaseQuantity" }),
-          activeBaseBalance: requireDecimalString({ value: inputs.activeBaseBalance, field: "inputs.activeBaseBalance" }),
-          freeQuoteBalance: requireDecimalString({ value: inputs.freeQuoteBalance, field: "inputs.freeQuoteBalance" }),
-          freeBaseBalance: requireDecimalString({ value: inputs.freeBaseBalance, field: "inputs.freeBaseBalance" }),
-          quoteCashFlow: requireDecimalString({ value: inputs.quoteCashFlow, field: "inputs.quoteCashFlow" }),
-          committedQuote: requireDecimalString({ value: inputs.committedQuote, field: "inputs.committedQuote" }),
-          committedQuoteBalance: requireDecimalString({ value: inputs.committedQuoteBalance, field: "inputs.committedQuoteBalance" }),
-          committedBase: requireDecimalString({ value: inputs.committedBase, field: "inputs.committedBase" }),
-          committedBaseBalance: requireDecimalString({ value: inputs.committedBaseBalance, field: "inputs.committedBaseBalance" }),
-          outstandingRecoveryAmount: requireDecimalString({ value: inputs.outstandingRecoveryAmount, field: "inputs.outstandingRecoveryAmount" }),
-          investmentLimit: requireDecimalString({ value: inputs.investmentLimit, field: "inputs.investmentLimit" }),
-          orderQuantity: requireDecimalString({ value: inputs.orderQuantity, field: "inputs.orderQuantity" }),
-          keepQuantity: requireDecimalString({ value: inputs.keepQuantity, field: "inputs.keepQuantity" }),
-          priceStepPercent: requireDecimalString({ value: inputs.priceStepPercent, field: "inputs.priceStepPercent" }),
-          makerPercent: requireDecimalString({ value: inputs.makerPercent, field: "inputs.makerPercent" }),
-          takerPercent: requireDecimalString({ value: inputs.takerPercent, field: "inputs.takerPercent" }),
-          minProfit: requireDecimalString({ value: inputs.minProfit, field: "inputs.minProfit" }),
-        },
-      }),
+      ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
       actions: actions.map((action, index) => ({
         side: action?.side === "BUY" || action?.side === "SELL"
           ? action.side
