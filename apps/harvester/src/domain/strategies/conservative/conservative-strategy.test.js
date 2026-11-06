@@ -139,16 +139,15 @@ test("rejects missing exchange increments and invalid strategy context", () => {
   }), /requires a Portfolio/)
 })
 
-test("waits for a partially filled order before advancing either side of the strategy", () => {
+test("keeps the partial BUY active while continuing recovery SELL planning", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice, pairConfig, settings, portfolio, recoveryLedger, marketMetadata,
     activeOrders: [{ market, side: "BUY", status: "PARTIALLY_FILLED" }],
     lastBuyPrice: "0.1",
   })
-  assert.equal(decision.action, "NO_ACTION")
-  assert.equal(decision.reason, "WAIT_FOR_ORDER_TO_FINISH_AFTER_PARTIAL_FILL")
-  assert.deepEqual(decision.actions, [])
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
 })
 
 test("does not create another BUY when outstanding recovery plus the next order exceeds investment", () => {
