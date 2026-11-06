@@ -35,7 +35,7 @@ const config = {
           quantityPrecision: 0,
           makerPercent: 0.1,
           takerPercent: 0.1,
-          },
+        },
         ZROUSDT: {
           enabled: true,
           investment: 100,
@@ -46,7 +46,7 @@ const config = {
           quantityPrecision: 1,
           makerPercent: 0.1,
           takerPercent: 0.1,
-          },
+        },
       },
     },
   },
