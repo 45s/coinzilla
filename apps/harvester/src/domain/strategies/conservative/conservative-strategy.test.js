@@ -644,19 +644,24 @@ test("reconciles actual DOGE fills and keeps the 1.8 DOGE excess as MIN_NOTIONAL
     }))
   }
 
-  apply(new Fill({
-    tradeId: "221990-221991",
-    brokerOrderId: "1276698",
-    market: dogeMarket,
-    side: "SELL",
-    price: new Money({ amount: "0.07185", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1196", asset: dogeBase }),
-    quoteQuantity: new Money({ amount: "85.9326", asset: quoteAsset }),
-    commissions: [
-      new Commission({ amount: new Money({ amount: "0.0859326", asset: quoteAsset }) }),
-    ],
-    commissionStatus: "COMPLETE",
-  }))
+  for (const [tradeId, quantity, quote, commission] of [
+    ["221990", "278", "19.9743", "0.0199743"],
+    ["221991", "918", "65.9583", "0.0659583"],
+  ]) {
+    apply(new Fill({
+      tradeId,
+      brokerOrderId: "1276698",
+      market: dogeMarket,
+      side: "SELL",
+      price: new Money({ amount: "0.07185", asset: quoteAsset }),
+      quantity: new Quantity({ amount: quantity, asset: dogeBase }),
+      quoteQuantity: new Money({ amount: quote, asset: quoteAsset }),
+      commissions: [
+        new Commission({ amount: new Money({ amount: commission, asset: quoteAsset }) }),
+      ],
+      commissionStatus: "COMPLETE",
+    }))
+  }
 
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
   assert.equal(position.quantity.amount, "2.8")
