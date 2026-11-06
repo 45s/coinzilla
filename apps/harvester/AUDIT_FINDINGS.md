@@ -450,3 +450,18 @@ A second stale test was found in the full-cycle `conservative-trading-engine.tes
 ## 2026-11-06 audit continuation — lifecycle regression precision
 
 After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
+
+
+## F-011 — Terminal recovery-SELL outcome regression coverage
+
+**Status: PARTIAL — source path present; focused regression coverage missing.**
+
+At audited HEAD `8c1bdfda34c9f3e9fc0aaf4a5635ecf7cbb570ff`, `processUserDataEventTransition` routes terminal orders through `reconcileTerminalOrderFills` before further strategy action. For SELL orders with CANCELED, EXPIRED, or REJECTED status, it then reevaluates the strategy. The reconciliation helper checks complete distinct fill quantity against the broker-reported executed quantity and verifies terminal status/quantity consistency before applying fills.
+
+Existing tests directly exercise unfilled CANCELED/EXPIRED and REJECTED **BUY** orders, recovery SELL fill-during-cancel, FILLED SELL completion, and terminal fill reconciliation failures. They do not directly exercise the terminal CANCELED, EXPIRED, and REJECTED **SELL** branches or assert that partial terminal SELL executions and actual commissions are reconciled before replacement.
+
+**Impact:** this is a proof gap, not a confirmed runtime defect. The implementation appears to perform the required reconciliation, but the critical SELL-specific terminal branches are not independently regression-proven.
+
+**Next test-only action:** add focused offline engine cases for SELL CANCELED, EXPIRED, and REJECTED; include zero-fill and partial-execution cases where valid, complete actual commission facts, and missing/conflicting fill-history failures. Assert no replacement occurs until reconciliation succeeds, then assert replacement uses the updated full Position.spent and cumulative net proceeds. Run focused tests and exact-head CI before changing this finding to PASS.
+
+No recovery, Journal, broker, or exchange implementation changes are authorized by this finding. No test was added or executed in this pass.
