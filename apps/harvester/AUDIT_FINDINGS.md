@@ -308,3 +308,12 @@ Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied e
 **Impact:** the earlier apparent DOGE runtime/order-history conflict is explained by event chronology, not a same-time contradiction. However, the fills occurred after Harvester shutdown; internal Portfolio/RecoveryLedger processing, later account balances, and any subsequent controller reconciliation are not proven. The later ZRO BUY also resolves only one of two CLOSING unresolved orders; the other identity remains unknown.
 
 **Next action:** obtain fresh read-only balances/open orders and canonical order detail; inspect any subsequent Journal/runtime session for processing of these post-shutdown fills. Keep TESTNET acceptance closed until account-wide reconciliation is complete. Raw 50-row exports and calculations are in the two linked trade-evidence addenda.
+
+
+## Verification appendix — 2026-11-06 11:57 UTC
+
+**Repository/PR verification:** PR #653 remains open and unmerged on `docs/harvester-log-evidence-2026-11-06`; the branch matched HEAD `94650284a05e0e18cda662d5a41bce0a47788ac8` when checked. All seven expected evidence/audit files are in the PR diff and were fetched from the branch. Five exact-HEAD PR workflow runs completed successfully (JavaScript Syntax, Test Coverage, Dependency Audit, Unit Tests, Utils Unit Tests). The read-only Binance TESTNET integration job was skipped. The separate commit-status endpoint reports pending with zero statuses; this is not conflated with Actions conclusions. No PR review or inline review thread was present.
+
+**Current evidence gaps remain unchanged:** later DOGE 1276698 and ZRO 727905 exchange fills are verified by bounded 50-row exports, but later Harvester processing and current balances are UNVERIFIED. The full historical CLOSING open-order payload is still absent, so the complete two-order identity set is not proven. No all-time trade-history claim is made. The original CLOSING snapshot is not rewritten.
+
+**Cross-workstream state:** #649 is closed/merged with exact-once regression coverage; #646 is open pending explicit product decisions (maker-only versus max maker/taker reserve and zero-value input semantics); #626 is open pending original empty-TypeError cause disposition and controlled TESTNET/owner acceptance. TESTNET acceptance remains NOT ACCEPTED.
