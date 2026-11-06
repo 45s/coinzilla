@@ -999,7 +999,7 @@ export function makeConservativeTradingEngine({
           strategy: decision.strategy,
           symbol,
           referencePrice: marketPrice.price,
-          reason: decision.reason,
+          reason: decision.reason ?? executableActions[0]?.reason,
           inputs: {
             lastBuyPrice: lastBuyPrice ?? null,
             activeOrderCount: activeOrdersBefore.length,
