@@ -23,7 +23,18 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal('pairs' in validConfig, false);
 });
 
-test('requires at least 0.01 net quote profit', () => {\n  for (const minProfit of [0, 0.009, -0.01]) {\n    const config = structuredClone(validConfig);\n    strategy(config).settings.minProfit = minProfit;\n    assert.throws(() => validateTradingConfig(config), /minProfit.*greater than or equal to 0.01/);\n  }\n  const boundary = structuredClone(validConfig);\n  strategy(boundary).settings.minProfit = 0.01;\n  assert.equal(validateTradingConfig(boundary), boundary);\n});\n\ntest('rejects enabling the deferred Aggressive mode', () => {
+test('requires at least 0.01 net quote profit', () => {
+  for (const minProfit of [0, 0.009, -0.01]) {
+    const config = structuredClone(validConfig);
+    strategy(config).settings.minProfit = minProfit;
+    assert.throws(() => validateTradingConfig(config), /minProfit.*greater than or equal to 0.01/);
+  }
+  const boundary = structuredClone(validConfig);
+  strategy(boundary).settings.minProfit = 0.01;
+  assert.equal(validateTradingConfig(boundary), boundary);
+});
+
+test('rejects enabling the deferred Aggressive mode', () => {
   const config = structuredClone(validConfig);
   strategy(config).settings.aggressive.enabled = true;
   assert.throws(() => validateTradingConfig(config), /settings.*aggressive.*enabled.*Aggressive strategy is deferred/);
