@@ -10,7 +10,7 @@ import {
   Quantity,
 } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
-import { multiplyDecimal } from "@coinzilla/utils"
+import { multiplyDecimal, percentageToRate } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
 
@@ -33,6 +33,10 @@ const binanceEnv = {
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
+
+// The exchange simulator applies its own fee schedule to executions. This is deliberately
+// separate from the strategy's makerPercent/takerPercent planning inputs.
+const exchangeCommissionRate = percentageToRate({ percent: "0.1" })
 
 const config = {
   strategies: {
@@ -215,10 +219,18 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     })
   }
 
-  const fillOrder = ({ order, price, tradeId, commissionAmount, commissionAsset }) => {
+  const fillOrder = ({ order, price, tradeId }) => {
     const market = order.market
     const quantity = order.originalQuantity.amount
     const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
+    // Simulate Binance's reported commission from the exchange fee schedule:
+    // BUY fees are charged in base; SELL fees are charged in quote.
+    const commissionAsset = order.side === "BUY" ? market.baseAsset : market.quoteAsset
+    const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
+    const commissionAmount = multiplyDecimal({
+      left: commissionBasis,
+      right: exchangeCommissionRate,
+    })
     const timestamp = Date.now()
     const executedOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
@@ -235,16 +247,12 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       updatedAt: timestamp,
       completedAt: timestamp,
     })
-    const commissions = commissionAmount
-      ? [new Commission({
-          amount: new Money({
-            amount: commissionAmount,
-            asset: commissionAsset === market.baseAsset.code
-              ? market.baseAsset
-              : market.quoteAsset,
-          }),
-        })]
-      : []
+    const commissions = [new Commission({
+      amount: new Money({
+        amount: commissionAmount,
+        asset: commissionAsset,
+      }),
+    })]
     const fill = new Fill({
       tradeId,
       brokerOrderId: order.brokerOrderId,
@@ -323,8 +331,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: dogeBuy,
       price: "0.07157",
       tradeId: "645-doge-buy",
-      commissionAmount: "0.4",
-      commissionAsset: "DOGE",
+    
     })
     const dogeSell = await dogeSellSubmitted
 
@@ -337,8 +344,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: zroBuy,
       price: "1.604",
       tradeId: "645-zro-buy",
-      commissionAmount: "0.005",
-      commissionAsset: "ZRO",
+    
     })
     const zroSell = await zroSellSubmitted
     assert.deepEqual(
@@ -358,8 +364,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: dogeSell,
       price: "0.07204",
       tradeId: "645-doge-sell",
-      commissionAmount: "0.02867192",
-      commissionAsset: "USDT",
+    
     })
     const zroCycle = waitForCycle("ZROUSDT")
     await triggerPrice("ZROUSDT", "1.615")
@@ -367,8 +372,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: zroSell,
       price: "1.615",
       tradeId: "645-zro-sell",
-      commissionAmount: "0.0080427",
-      commissionAsset: "USDT",
+    
     })
 
     const [dogeCompletion, zroCompletion] = await Promise.all([dogeCycle, zroCycle])
