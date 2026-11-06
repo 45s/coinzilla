@@ -1,6 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Money, Quantity } from "@coinzilla/entities"
+import { BinanceWebSocketBroker } from "@coinzilla/brokers"
+import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
 
 const eventPublisher = {
@@ -12,6 +14,7 @@ const binanceEnv = {
   BINANCE_API_KEY: "key",
   BINANCE_API_SECRET_KEY: "secret",
 }
+
 async function waitFor(predicate, label, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -21,7 +24,7 @@ async function waitFor(predicate, label, timeoutMs = 15_000) {
   assert.fail(label + " was not observed before timeout")
 }
 
-test("starts Conservative DOGE/ZRO strategies from a deterministic config and submits their initial BUYs", { timeout: 30_000 }, async () => {
+test("starts Conservative DOGE/ZRO strategies from deterministic market prices and submits their initial BUYs", { timeout: 30_000 }, async () => {
   const config = {
     strategies: {
       CG_coinGrabber: {
@@ -58,98 +61,89 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
       },
     },
   }
-  const strategy = config.strategies.CG_coinGrabber
-  assert.equal(strategy.enabled, true)
-  assert.equal(strategy.settings.conservative.enabled, true)
-  assert.equal(strategy.settings.aggressive.enabled, false)
-  assert.deepEqual(
-    Object.keys(strategy.pairs).filter((symbol) => strategy.pairs[symbol].enabled).sort(),
-    ["DOGEUSDT", "ZROUSDT"],
-  )
 
   const submitted = []
   const priceHandlers = new Map()
   let userData
-  const metadata = (symbol) => {
-    const base = symbol.slice(0, -4)
-    const baseAsset = new Asset({ id: "asset:" + base, code: base })
-    const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
-    const market = new Market({ venue: "binance", symbol, baseAsset, quoteAsset })
-    const priceIncrement = symbol === "DOGEUSDT" ? "0.00001" : "0.001"
-    const quantityIncrement = symbol === "DOGEUSDT" ? "1" : "0.1"
+  const symbolFilters = (symbol) => {
+    const baseAsset = symbol.slice(0, -4)
     return {
-      market,
-      tradingRules: new TradingRules({ market, constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: priceIncrement, asset: quoteAsset }) },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: quantityIncrement, asset: baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: quantityIncrement, asset: baseAsset }) },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
-      ] }),
+      symbol,
+      baseAsset,
+      quoteAsset: "USDT",
+      tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
+      stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
+      minQuantity: symbol === "DOGEUSDT" ? "1" : "0.1",
+      minNotional: "5",
       supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
     }
   }
-  const broker = {
-    connect: async () => {},
-    disconnect: async () => {},
-    getExchangeMarkets: async () => ({ ok: true, data: [] }),
-    getSymbolFilters: async ({ symbol }) => ({ ok: true, data: metadata(symbol) }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
-    getCanonicalOrder: async () => ({ ok: false, errors: [new Error("not found")] }),
-    getAccountSnapshot: async () => ({
-      ok: true,
-      data: {
-        sourceTime: Date.now(),
-        balances: ["DOGE", "ZRO", "USDT"].map((code) => {
-          const asset = new Asset({ id: "asset:" + code, code })
-          return new Balance({
-            free: new Quantity({ amount: code === "USDT" ? "1000" : "0", asset }),
-            locked: new Quantity({ amount: "0", asset }),
-          })
-        }),
-      },
-    }),
-    subscribeForUserData: async (handlers) => {
-      userData = handlers
-      return { ok: true, data: { disconnect: async () => {} } }
+
+  // Keep the production Binance broker and Harvester adapter. Stub only exchange I/O.
+  const broker = new BinanceWebSocketBroker({
+    apiKey: binanceEnv.BINANCE_API_KEY,
+    apiSecret: binanceEnv.BINANCE_API_SECRET_KEY,
+  })
+  broker.connect = async () => {}
+  broker.disconnect = async () => {}
+  broker.getExchangeMarkets = async () => ({ ok: true, data: [] })
+  broker.getSymbolFilters = async ({ symbol }) => ({ ok: true, data: symbolFilters(symbol) })
+  broker.getOpenOrders = async () => ({ ok: true, data: [] })
+  broker.getFills = async () => ({ ok: true, data: [] })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [] })
+  broker.getCanonicalOrder = async () => ({ ok: false, errors: [new Error("not found")] })
+  broker.getAccountSnapshot = async () => ({
+    ok: true,
+    data: {
+      sourceTime: Date.now(),
+      balances: ["DOGE", "ZRO", "USDT"].map((code) => {
+        const asset = new Asset({ id: code.toLowerCase(), code })
+        return new Balance({
+          free: new Quantity({ amount: code === "USDT" ? "1000" : "0", asset }),
+          locked: new Quantity({ amount: "0", asset }),
+        })
+      }),
     },
-    subscribeForPrices: async ({ symbol, onPrice }) => {
-      priceHandlers.set(symbol, onPrice)
-      return { ok: true, data: { unsubscribe: async () => {} } }
-    },
-    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
-      books.set(symbol, onBookTicker)
-      return { ok: true, data: { unsubscribe: async () => {} } }
-    },
-    getPrices: async ({ symbol }) => ({
-      ok: true,
-      data: { symbol, price: symbol === "DOGEUSDT" ? "0.07161000" : "1.60400000" },
-    }),
-    placeOrder: async ({ order }) => {
-      submitted.push(order)
-      const market = metadata(order.market.symbol).market
-      const timestamp = Date.now()
-      return {
-        ok: true,
-        data: new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: "ack-" + order.clientOrderId,
-          market,
-          side: order.side,
-          type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-          status: "OPEN",
-          createdAt: timestamp,
-          acknowledgedAt: timestamp,
-          updatedAt: timestamp,
-        }),
-      }
-    },
-    cancelOrder: async () => ({ ok: false, errors: [new Error("not requested")] }),
+  })
+  broker.subscribeForUserData = async (handlers) => {
+    userData = handlers
+    return { ok: true, data: { disconnect: async () => {} } }
   }
+  broker.subscribeForPrices = async ({ symbol, onPrice }) => {
+    priceHandlers.set(symbol, onPrice)
+    return { ok: true, data: { unsubscribe: async () => {} } }
+  }
+  broker.subscribeForBookTicker = async () => ({
+    ok: true,
+    data: { unsubscribe: async () => {} },
+  })
+  broker.getPrices = async ({ symbol }) => ({
+    ok: true,
+    data: { symbol, price: symbol === "DOGEUSDT" ? "0.07161000" : "1.60400000" },
+  })
+  // This is the state-changing boundary: capture the canonical order instead of sending it.
+  broker.createCanonicalOrder = async (order) => {
+    submitted.push(order)
+    const timestamp = Date.now()
+    return {
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "ack-" + order.clientOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+        status: "OPEN",
+        createdAt: timestamp,
+        acknowledgedAt: timestamp,
+        updatedAt: timestamp,
+      }),
+    }
+  }
+  broker.cancelOrder = async () => ({ ok: false, errors: [new Error("not requested")] })
 
   const runtime = await startHarvester({
     loadConfig: async () => config,
@@ -159,10 +153,16 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
       HARVESTER_TRADING_MODE: "testnet",
       HARVESTER_ENABLE_TRADING: "true",
     },
-    brokerAdapterFactory: () => broker,
+    brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
+      createBinanceBrokerAdapter({
+        config: brokerConfig,
+        logger,
+        brokerFactory: () => broker,
+      }),
     eventPublisher,
     logger: { info() {}, debug() {}, error() {} },
   })
+
   try {
     assert.equal(runtime.userDataReady, true)
     const timestamp = Date.now()
@@ -186,7 +186,11 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
         lastId: timestamp,
       })
     }
-    await waitFor(() => submitted.filter((order) => order.side === "BUY").length >= 2, "two strategy-generated BUY submissions")
+
+    await waitFor(
+      () => submitted.filter((order) => order.side === "BUY").length >= 2,
+      "two strategy-generated BUY submissions",
+    )
     const buys = submitted
       .filter((order) => order.side === "BUY")
       .sort((a, b) => a.market.symbol.localeCompare(b.market.symbol))
