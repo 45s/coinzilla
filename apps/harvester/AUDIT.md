@@ -302,7 +302,10 @@ New read-only exports are preserved verbatim, including all 50 rows each, in [DO
 The CLOSING snapshot remains a valid historical point-in-time record. Later exchange fills must not be retroactively inserted into that snapshot or treated as proof the stopped Harvester processed them. TESTNET acceptance remains NOT ACCEPTED; no exchange writes or bot restart were performed.
 
 
-## 2026-11-06 repository and exact-head verification follow-up
+## Historical 2026-11-06 repository and exact-head verification checkpoint (superseded by later docs commits)
+
+> This is a point-in-time snapshot from 11:57 UTC before the canonical-specification consolidation. Its PR head, workflow results, and issue states below are historical. The later documentation commits and current CI state are recorded in the current ROADMAP and PR #653.
+
 
 At the follow-up verification session (2026-11-06 11:57 UTC), the live GitHub PR metadata, branch ref, changed-file inventory, workflow runs, job results, issue states, and review state were rechecked. PR #653 remains OPEN and unmerged, targets `develop`, and its branch ref matched the previously recorded HEAD `94650284a05e0e18cda662d5a41bce0a47788ac8` at the start of this verification. The PR diff lists all seven expected audit artifacts, and each was fetched successfully from the PR branch. The DOGE/ZRO trade addenda preserve the bounded 50-row exports; neither query is represented as exhaustive all-time history.
 
@@ -310,7 +313,7 @@ All five PR-triggered workflow runs associated with that exact HEAD completed su
 
 The repository connector provides read-only GitHub access and cannot read GitHub secret values or dispatch the repository's secret-backed exchange-history workflow. No fresh Binance balances, open orders, complete historical CLOSING open-order payload, or later Harvester Journal/runtime session was available in this session. Accordingly, current DOGE/ZRO/USDT free, locked, and total balances and post-CLOSING Portfolio/RecoveryLedger processing remain UNVERIFIED. Do not infer them from trade exports. The historical CLOSING snapshot remains unchanged.
 
-Related workstream cross-check: #649 is CLOSED after its exact-once regression was merged; #646 remains OPEN pending explicit product decisions on fee-reserve policy and zero-value input semantics; #626 remains OPEN pending disposition of its original empty-TypeError cause and controlled TESTNET/owner acceptance. No exchange writes, order changes, cancellations, withdrawals, account-setting changes, or bot restarts were performed. TESTNET acceptance remains NOT ACCEPTED.
+Historical cross-workstream cross-check at 11:57 UTC: #649 was CLOSED; #626 remained open. The earlier statement that #646 awaited product decisions is superseded: all Conservative owner decisions are now closed and recorded only in the canonical specification. #654 remains the separate restart-reconciliation scope. No exchange writes, order changes, cancellations, withdrawals, account-setting changes, or bot restarts were performed. TESTNET acceptance remains NOT ACCEPTED.
 
 
 ## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
