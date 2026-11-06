@@ -1409,8 +1409,7 @@ This supersedes the earlier same-time DOGE conflict interpretation. It does not 
 The strategy owner confirmed the following policies for #646:
 
 - `minProfit` must be at least **$0.01 net after all applicable fees/commissions**. Never close a position at a loss or break-even. Zero and values below $0.01 are not acceptable.
-- Sell the entire Conservative position except the amount explicitly reserved by configured `coinToKeep`. No additional residual inventory should be retained. Preserve the configured reserve.
-- Before implementation, verify the exact mapping between the user's `coinToKeep` setting and the current pair-level `keepQuantity` field; do not silently rename or reinterpret configuration.
+- Sell the entire Conservative position except exactly the amount configured in the existing pair-level `keepQuantity` field. No additional residual inventory should be retained. `coinToKeep` is not a Harvester config key; do not add a duplicate setting or rename `keepQuantity`.
 
 These decisions close the owner-input questions in #646. Remaining work is engineering/documentation alignment and tests. No runtime settings or exchange state were changed.
 
