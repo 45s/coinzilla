@@ -506,3 +506,11 @@ This is a source/test coverage review, **not a test execution or PASS claim**. F
 The separate canonical requirement to durably record exact dust quantity and limiting filter remains unresolved. The current domain decision computes that disposition, but the no-action log/lifecycle event does not persist it. No Journal, event DTO, broker, exchange, or other production change was made to address it.
 
 PR #653 remains OPEN and UNMERGED. No TESTNET or exchange actions were performed.
+
+## Owner clarification — exchange-constrained dust is a keepQuantity bonus (2026-11-06)
+
+The canonical rule is now explicit: unsellable exchange-constrained dust is retained **in addition to** configured `keepQuantity`, not treated as outstanding inventory that must later be sold before completion. Example: `keepQuantity = 1.00` and `dust = 0.04` means retain `1.04` total. Never discard dust, force an invalid SELL, or count dust as sold. Once all sellable quantity is sold and the other completion conditions pass, retain `keepQuantity + dust` and preserve the dust quantity/accounting provenance.
+
+This supersedes older audit wording that required above-keep dust to remain active, block completion/reset, or wait for a later BUY to become sellable. Those statements are historical and are not the current owner-approved contract. The canonical authority is `docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
+
+**Implementation/audit status:** documentation is aligned; source behavior and regression coverage still need to be checked against this clarification. The previously identified missing durable dust quantity/filter evidence remains a separate audit gap. No production code, Journal, event DTO, broker, recovery, or exchange behavior was changed by this documentation update. PR #653 remains open and unmerged.
