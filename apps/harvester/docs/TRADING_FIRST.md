@@ -1,6 +1,6 @@
 # Harvester: Trading Workflow and Safety Requirements
 
-**This document is a mandatory execution-priority rule for every AI agent working on Harvester. It overrides any roadmap ordering, architecture ambition, optional capability, or agent preference that would delay the first working trading workflow.**
+**This document is the source of truth for Harvester trading behavior and exchange-safety requirements.** The work-selection section above governs task priority: explicitly selected engineering issues may proceed independently of the TESTNET operational milestone.
 
 ## Work selection
 
@@ -33,7 +33,7 @@ Journal records are not trading-state authority. Replay and process-restart reco
 
 Harvester's first product deliverable is a running trading application that can repeatedly execute its selected strategy on Binance TESTNET. The main task is TRADING: read configuration, receive prices, decide, place orders, process executions, and repeat.
 
-Do not turn the first trading milestone into a persistence, journal, recovery-framework, observability, architecture, or optimization project. Those are secondary. They must not be prerequisites for implementing or demonstrating the first working trading cycle unless a specific minimal safety requirement makes a particular capability unavoidable.
+Do not make persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. The separately selected Journal evidence scope in issue [#650](https://github.com/45s/coinzilla/issues/650) may proceed independently; its additional evidence remains best-effort and must not block trading.
 
 ## Current TESTNET incident safety gate — 2026-11-04 (post-PR #515)
 
@@ -43,9 +43,9 @@ The historical incident facts remain: twelve distinct 400-DOGE BUY orders at 0.0
 
 **Operational stop remains mandatory:** Harvester stays stopped until the operator and assistant explicitly begin the joint TESTNET session. Do not submit/cancel orders, change account settings, or perform exchange writes during preparation. The current one-pair/one-cycle runbook is [TESTNET_VALIDATION_RUNBOOK.md](./TESTNET_VALIDATION_RUNBOOK.md). Actual per-trade commission amount/asset remains authoritative; historical zero-commission fills remain zero and must not be recalculated at the later 0.1% setting. The account's 12,321 free DOGE and 517 non-zero assets are external/unowned baseline inventory unless separately attributed; never adopt them as Harvester inventory.
 
-## Mandatory implementation order
+## Trading runtime implementation order
 
-Agents MUST work in this order:
+When implementing or changing the trading runtime, follow this order:
 
 1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
