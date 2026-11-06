@@ -471,3 +471,15 @@ Latest exact-head Actions/workflow runs and legacy statuses remain empty; no tes
 ## 2026-11-06 audit continuation — lifecycle regression precision
 
 After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
+
+
+## Focused lifecycle source audit — 2026-11-06 21:05 +02:00
+
+**Audited ref:** `8c1bdfda34c9f3e9fc0aaf4a5635ecf7cbb570ff`  
+**Canonical specification:** unchanged, SHA `7e85f077a0722fff8ee386c3ddba53754ffa313c`.
+
+Rule-by-rule source/test inspection confirms the following current coverage: partial BUY suppresses duplicate BUY while allowing recovery SELL; a BUY partial fill triggers SELL cancellation/reconciliation without advancing the BUY lifecycle; a partial SELL without a new BUY remains the same order/price/original quantity; residual inventory continues sell-through after the profit target; MAX_QUANTITY/MAX_NOTIONAL cap residual SELLs; dust can combine with a later BUY without losing the full cost basis; completion is blocked while inventory remains above exact keepQuantity.
+
+**New coverage gap:** the engine has a terminal SELL path for CANCELED, EXPIRED, and REJECTED: it reconciles terminal fill history before reevaluation. Existing generic terminal-state tests exercise BUY orders, while the recovery-SELL tests cover fill-during-cancel and FILLED completion. No focused test directly exercises each terminal SELL outcome (including a partial execution reported with a non-FILLED terminal status) and proves that complete fill/commission reconciliation precedes replacement. See F-011.
+
+No concrete source/spec behavior mismatch was confirmed in the lifecycle paths inspected in this pass. This is not an overall audit PASS. Exact-head Actions query returned no PR-triggered workflow runs; no tests were executed in this session. Keep PR #653 open/unmerged and TESTNET closed. Exact dust quantity/filter durability remains the previously recorded out-of-scope gap; no Journal/event changes were made.
