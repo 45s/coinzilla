@@ -87,8 +87,7 @@ export function evaluateConservativeStrategy({
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
   if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
-      compareDecimal({ left: ledger.buyCost, right: "0" }) === 0 &&
-      compareDecimal({ left: ledger.netSellProceeds, right: "0" }) === 0) {
+      compareDecimal({ left: ledger.buyCost, right: "0" }) <= 0) {
     throw new Error("Conservative active inventory has no recovery cost/profit basis")
   }
   if (!position &&
