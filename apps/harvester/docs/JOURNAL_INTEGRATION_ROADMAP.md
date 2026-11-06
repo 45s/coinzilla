@@ -2,9 +2,9 @@
 
 ## Purpose and priority
 
-This roadmap plans a small, staged integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages into Harvester.
+This roadmap records the Harvester integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages. The current evidence contract and coverage matrix live in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md).
 
-**This work does not depend on trading or TESTNET progress.** EventBus and Journal provide operational observability for ordinary application lifecycle events. Harvester can record configuration validation, process startup/shutdown, and broker connectivity in read-only mode; no order, fill, position, or completed trading cycle is required.
+**This work does not depend on trading or TESTNET acceptance.** EventBus and Journal record operational lifecycle facts and the selected trading-investigation evidence in issue [#650](https://github.com/45s/coinzilla).
 
 The Journal is an operational observer, not trading-state authority or part of order execution, strategy evaluation, or fill accounting. Its persistence is optional only in configuration-only/no-broker mode. PR #545 added a mandatory account PREFLIGHT gate for every broker-connected startup, including read-only mode: the full account snapshot and account-wide open-order snapshot must be published and durably flushed before market subscriptions or trading-engine activation. After that gate passes, ordinary Journal event delivery remains asynchronous. The separate trading-safety contract requires order-submission and cancellation intent records to be durably flushed before the corresponding broker write; no other Journal I/O is awaited by market, strategy, or fill-accounting workflows. Trading-enabled graceful shutdown also requires a durable CLOSING account snapshot; failure is reported as incomplete shutdown.
 
@@ -32,7 +32,7 @@ See [Architecture — operational event journal](./architecture.md#operational-e
 6. Keep domain policies pure and broker-independent. Domain code must not import EventBus or Journal.
 7. Use object-shaped inputs and object-shaped results for functions. Use `toResult` for fallible workflows where appropriate.
 8. Map application facts to small, plain, serializable DTOs. Never publish class instances, SDK objects, secrets, or whole account snapshots.
-9. Do not journal every market-price update. Start with process/configuration/broker lifecycle events; add selected trading events later.
+9. Do not journal every market-price update. Persist meaningful decisions, order transitions, executions, broker acknowledgements, and errors; keep high-frequency market ticks out of the Journal.
 10. Keep live trading disabled by default. Default tests remain offline and credential-free.
 11. Do not modify shared Journal/EventBus packages unless implementation reveals a reproducible, Harvester-blocking defect. Any such change needs a separate, explicitly justified cross-package task.
 12. Every implementation PR must be small, independently testable, and update the relevant documentation and this roadmap in the same PR.
@@ -52,10 +52,12 @@ All events use the existing EventBus envelope: generated event ID and timestamp,
 | `broker.status_changed` | Broker/application boundary on meaningful stream transition | stream kind, status, safe reason | Include if source exposes transitions |
 | `broker.subscription_established` / `broker.subscription_failed` | Bootstrap around subscriptions | market or stream kind, outcome | Include |
 | `market.price_invalid` | Market-data boundary on rejected external data | market, validation reason, safe timestamp | Include |
-| `strategy.decision` | Trading engine after meaningful policy result | strategy, market, reference price, action summary, reason | Include |
+| `strategy.decision` | Trading engine after meaningful policy result | strategy, market, reference price, reason, allowlisted decision inputs, action summary | Include |
 | `strategy.paused` / `strategy.resumed` | Trading engine on actual state transition | market, reason | Include if transition exists |
 | `order.submission_requested` | Order use case after local pending registration, before broker call | client order ID, market, side, type, price, quantity | Include |
 | `order.submitted` | Order use case after verified canonical acknowledgement | client/exchange order IDs, status | Include |
+| `order.updated` | Trading engine after an applied canonical order-state transition | client/exchange order IDs, status, original/executed quantities, cumulative quote quantity where supplied | Include |
+| `broker.execution_report` | User-data boundary for each Binance executionReport | versioned allowlisted broker facts, event/transaction times, identifiers, per-event and cumulative quantities, commissions, liquidity flag | Include |
 | `order.submission_failed` | Order use case on rejected/unknown outcome | identifiers, classified outcome, safe error | Include |
 | `order.cancelled` / `order.cancel_failed` | Cancellation workflow after confirmed outcome | order IDs, final status, reason | Include |
 | `execution.fill_applied` | Accounting workflow after successful Fill application | stable fill ID, order ID, market, side, actual price/quantity/fees | Include |

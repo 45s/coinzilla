@@ -11,6 +11,28 @@ export const wsEventsMap = Object.freeze({
   listStatus: "listStatus",
 })
 
+const EXECUTION_REPORT_EVIDENCE_FIELDS = Object.freeze({
+  eventTime: "E", transactionTime: "T", symbol: "s", clientOrderId: "c",
+  originalClientOrderId: "C", side: "S", orderType: "o", timeInForce: "f",
+  orderQuantity: "q", orderPrice: "p", executionType: "x", orderStatus: "X",
+  orderId: "i", orderListId: "g", orderCreationTime: "O", workingTime: "W",
+  lastExecutedQuantity: "l", cumulativeExecutedQuantity: "z", lastExecutedPrice: "L",
+  commissionAmount: "n", commissionAsset: "N", tradeId: "t", executionId: "I",
+  tradeGroupId: "M", isMaker: "m", cumulativeQuoteQuantity: "Z",
+  lastQuoteQuantity: "Y", quoteOrderQuantity: "Q", stopPrice: "P",
+  icebergQuantity: "F", selfTradePreventionMode: "V", matchType: "k",
+  working: "w", rejectReason: "r",
+})
+const createExecutionReportEvidence = (message) => ({
+  schemaVersion: 1,
+  source: "binance.spot.userData.executionReport",
+  ...Object.fromEntries(Object.entries(EXECUTION_REPORT_EVIDENCE_FIELDS).flatMap(([field, key]) => {
+    const value = message[key]
+    if (value === undefined) return []
+    if (value !== null && !["string", "number", "boolean"].includes(typeof value)) return []
+    return [[field, typeof value === "string" ? value.slice(0, 256) : value]]
+  })),
+})
 const adaptExecutedOrder = (message) => {
   const report = adaptUser.executionReport(message)
   const executedOrder = {
@@ -55,6 +77,7 @@ const adaptExecutedOrder = (message) => {
     originalClientOrderId: report.originalClientOrderId,
     executedOrder,
     ...(fill ? { fill } : {}),
+    brokerEvidence: createExecutionReportEvidence(message),
   }
 }
 

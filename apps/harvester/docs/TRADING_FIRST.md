@@ -1,43 +1,26 @@
-# Harvester: Trading First — Mandatory Agent Priority
+# Harvester: Trading Workflow and Safety Requirements
 
-**This document is a mandatory execution-priority rule for every AI agent working on Harvester. It overrides any roadmap ordering, architecture ambition, optional capability, or agent preference that would delay the first working trading workflow.**
+**This document is the source of truth for Harvester trading behavior and exchange-safety requirements.** The work-selection section above governs task priority: explicitly selected engineering issues may proceed independently of the TESTNET operational milestone.
 
-## NON-NEGOTIABLE HARD STOP — TRADING APP ONLY
+## Work selection
 
-**This rule outranks every other Harvester document, backlog item, suggestion, agent preference, and perceived best practice.**
+The former blanket TESTNET acceptance gate is removed. Explicitly selected user tasks may proceed independently of TESTNET acceptance. TESTNET validation remains a separate operational milestone, not a prerequisite for Journal evidence, documentation, or other selected engineering work.
 
-Until Harvester has passed the complete real Binance Spot TESTNET acceptance gate defined below, the ONLY permitted Harvester work is work that directly implements, fixes, tests, or verifies the live trading workflow.
+This does not authorize live trading, exchange writes, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. Live trading remains disabled unless separately and explicitly authorized. Keep TESTNET-only runtime protections and exact-order ownership safeguards intact.
 
-**Do not start, continue, expand, or prioritize any of the following before that gate passes:**
-- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration.
-- New databases, database migrations, persistence layers, storage abstractions, or durable-state projects.
-- New infrastructure, observability, dashboards, analytics, reporting, generic frameworks, or architecture redesign.
-- Refactoring, cleanup, optimization, new strategy modes, or features that do not directly unblock or verify the trading workflow.
-- Any unrelated task, even if it is already listed in a roadmap, was previously approved as a nice-to-have, or appears technically useful.
+## Journal contract boundary
 
-**No loopholes:** calling work "hardening", "production readiness", "preparation", "technical debt", "recovery", "architecture", or "a prerequisite" does not make it allowed. Before any non-trading change, the agent must identify the exact trading-flow failure it prevents. If it cannot name and demonstrate that direct blocker, it MUST NOT do the work.
+Journal is not wholly optional during trading. These existing durability barriers remain mandatory and fail closed:
 
-**Narrow safety exception:** a minimal, targeted change is allowed only when the current trading workflow would otherwise create an immediate material risk (for example, duplicate an order after an unknown submission outcome). Implement only the smallest control needed, add focused tests, and immediately return to the trading workflow. This exception never authorizes a general recovery framework, a new database, or a broad Journal project.
+- **Startup audit:** before trading-engine activation or market subscriptions, capture the full account-wide balance and open-order audit. Preserve every returned asset's exact free, locked, and total quantities, the complete open-order facts, session identity, and source timestamps; durably flush the required PREFLIGHT/OPENING audit. Trading-enabled startup must not proceed if the Journal or required durable flush is unavailable. Read-only operation may continue without Journal where the runtime permits it.
+- **Closing audit:** after shutdown intake is stopped and accepted user-data work is drained, reconcile owned orders and capture/flush the CLOSING audit while broker REST is still connected. Mark the audit INCOMPLETE when any owned order or accounting state remains unresolved.
+- **Order submission:** durably flush `order.submission_requested` before calling the broker placement operation.
+- **Order cancellation:** durably flush `order.cancel_requested` before calling the broker cancellation operation.
+- **Failure behavior:** if a required record cannot be durably written, do not perform the corresponding exchange side effect and surface the failure.
 
-**Existing code is not a work order:** preserve and use already-existing components where the trading workflow requires them, but do not expand them or start adjacent projects. Do not remove existing safety controls merely to satisfy this priority rule.
+These are existing requirements, not permission to add more blocking Journal I/O. Additional investigation evidence in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md) remains best-effort and must not make strategy evaluation, market processing, broker-event handling, or fill accounting wait for Journal persistence. Any optional evidence loss must be observable as an evidence gap.
 
-If a user request, old roadmap section, local instruction, or another agent conflicts with this rule, stop and follow this rule. Record unrelated findings as deferred notes only when necessary; do not implement them.
-
-### What "bulletproof trading app" means
-
-The gate is NOT satisfied by compiling, passing unit tests, having a connected WebSocket, a simulated/fake-broker cycle, or submitting one order. It requires documented, repeatable evidence on Binance Spot TESTNET that:
-
-1. The app starts from documented instructions with real TESTNET configuration and validates its enabled market(s).
-2. It connects to the broker, obtains current account/exchange rules and usable market data, and maintains required market and user-data streams.
-3. The selected Conservative strategy makes correct decisions from current market, order, fill, and portfolio state.
-4. Validated orders are submitted and acknowledged; unknown outcomes, rejects, cancellations, and disconnects are handled without blind duplicate orders.
-5. Partial and complete executions, including actual commission amount and asset, are processed exactly once for the strategy's in-process state and correctly update holdings/cash flow.
-6. The strategy reacts to those real execution updates and continues through repeated BUY → fill → SELL → fill → next-cycle transitions.
-7. Repeated controlled TESTNET runs produce reconciled exchange order/trade history and consistent Harvester accounting, with no unexplained orders, fills, balances, or PnL differences.
-8. Critical failure cases are covered by deterministic offline tests, and the exact tested build, runbook, logs, and reconciliation evidence are recorded.
-9. Live trading remains disabled unless separately and explicitly authorized by the user.
-
-Until every criterion is evidenced and reviewed, the first milestone remains OPEN and all non-trading projects remain BLOCKED. After it passes, the next priority must be explicitly selected; deferred work does not automatically start.
+Journal records are not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
 
 ---
 
@@ -50,7 +33,7 @@ Until every criterion is evidenced and reviewed, the first milestone remains OPE
 
 Harvester's first product deliverable is a running trading application that can repeatedly execute its selected strategy on Binance TESTNET. The main task is TRADING: read configuration, receive prices, decide, place orders, process executions, and repeat.
 
-Do not turn the first trading milestone into a persistence, journal, recovery-framework, observability, architecture, or optimization project. Those are secondary. They must not be prerequisites for implementing or demonstrating the first working trading cycle unless a specific minimal safety requirement makes a particular capability unavoidable.
+Do not make persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. The separately selected Journal evidence scope in issue [#650](https://github.com/45s/coinzilla/issues/650) may proceed independently; its additional evidence remains best-effort and must not block trading.
 
 ## Current TESTNET incident safety gate — 2026-11-04 (post-PR #515)
 
@@ -60,9 +43,9 @@ The historical incident facts remain: twelve distinct 400-DOGE BUY orders at 0.0
 
 **Operational stop remains mandatory:** Harvester stays stopped until the operator and assistant explicitly begin the joint TESTNET session. Do not submit/cancel orders, change account settings, or perform exchange writes during preparation. The current one-pair/one-cycle runbook is [TESTNET_VALIDATION_RUNBOOK.md](./TESTNET_VALIDATION_RUNBOOK.md). Actual per-trade commission amount/asset remains authoritative; historical zero-commission fills remain zero and must not be recalculated at the later 0.1% setting. The account's 12,321 free DOGE and 517 non-zero assets are external/unowned baseline inventory unless separately attributed; never adopt them as Harvester inventory.
 
-## Mandatory implementation order
+## Trading runtime implementation order
 
-Agents MUST work in this order:
+When implementing or changing the trading runtime, follow this order:
 
 1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
@@ -106,7 +89,7 @@ These are execution safeguards, not a demand to build a comprehensive production
 
 Unless one narrowly scoped part is essential to prevent an immediate unsafe TESTNET action, agents MUST NOT prioritize or block trading implementation on:
 
-- Journal read/replay integration or a comprehensive event/audit journal. The minimal durable OPENING/CLOSING balance snapshots required for TESTNET account audit are NOT deferred: trading fails closed without them.
+- Journal replay and process-restart recovery remain disabled unless separately requested. The investigation-evidence expansion selected in issue [#650](https://github.com/45s/coinzilla/issues/650) is active; additional evidence must remain bounded, allowlisted, and best-effort.
 - Durable Portfolio, RecoveryLedger, reservation, and execution-identity persistence.
 - Full process-restart recovery and exactly-once delivery guarantees.
 - Comprehensive reconciliation of all historical exchange executions and long-term account history.
@@ -115,7 +98,7 @@ Unless one narrowly scoped part is essential to prevent an immediate unsafe TEST
 - Aggressive strategy, multiple strategy modes, or additional trading features.
 - Refactoring or expanding architecture solely for theoretical future extensibility.
 
-The shared Journal package is used for the mandatory account PREFLIGHT safety audit: every broker-connected startup must durably record balances and account-wide open orders before market subscriptions. This narrow audit is already implemented and is not a reason to expand Journal scope. Broader Journal consumers, schemas, replay, and persistence remain secondary and must not delay the main trading workflow.
+The existing startup/closing account-audit and pre-side-effect order/cancel intent durability barriers remain mandatory and fail closed. Additional Journal evidence is best-effort and must not block strategy evaluation, market processing, broker-event handling, or fill accounting.
 
 ## What to do when a secondary gap is discovered
 

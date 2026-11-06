@@ -32,6 +32,8 @@ import {
   mapConfigValidatedData,
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
+  mapMarketTradingRulesCapturedData,
+  mapBrokerExecutionReportData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 function logSystem(logger, data) {
@@ -895,6 +897,11 @@ export async function startHarvester({
         marketMetadata: filtersResult.data,
       })
       marketMetadata.set(symbol, validatedMetadata)
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
+        dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
+      })
       logSystem(logger, { message: "Exchange trading rules validated", symbol })
     }
 
@@ -1057,6 +1064,13 @@ export async function startHarvester({
       },
       onStatus: (status = {}) => {
         if (stopped) return
+        if (status.brokerEvidence) {
+          publishLifecycleEvent({
+            eventPublisher,
+            eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT,
+            dataResult: mapBrokerExecutionReportData({ evidence: status.brokerEvidence }),
+          })
+        }
         if (status.type === "recovered" &&
             lastAcknowledgedRecoveryGeneration === userDataRecoveryGeneration) return
         if ([

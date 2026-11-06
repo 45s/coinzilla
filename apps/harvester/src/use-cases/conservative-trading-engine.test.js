@@ -531,18 +531,20 @@ test("publishes actionable decisions and order submission facts around broker I/
     "order.submission_requested",
     "order.submitted",
   ])
-  assert.deepEqual(events[0].data, {
-    strategy: "CONSERVATIVE",
-    symbol: "DOGEUSDT",
-    referencePrice: "100",
-    actions: [{
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      price: "99.95",
-      quantity: "1",
-      reason: "INITIAL_BUY",
-    }],
-  })
+  assert.equal(events[0].data.strategy, "CONSERVATIVE")
+  assert.equal(events[0].data.symbol, "DOGEUSDT")
+  assert.equal(events[0].data.referencePrice, "100")
+  assert.equal(events[0].data.reason, "INITIAL_BUY")
+  assert.equal(events[0].data.inputs.freeQuoteBalance, "1000")
+  assert.equal(events[0].data.inputs.investmentLimit, "1000")
+  assert.equal(events[0].data.inputs.priceStepPercent, "0.05")
+  assert.deepEqual(events[0].data.actions, [{
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    price: "99.95",
+    quantity: "1",
+    reason: "INITIAL_BUY",
+  }])
   assert.equal(events[1].data.status, "PENDING")
   const clientOrderId = events[1].data.clientOrderId
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
@@ -4309,4 +4311,69 @@ test("pauses a recovered order canceled without a durable Harvester cancellation
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
   assert.deepEqual(harness.cancellationIds, [])
   assert.deepEqual(harness.orders, [])
+})
+
+test("journals broker execution reports and applied canonical order transitions", async () => {
+  const events = []
+  const strategyPolicy = {
+    evaluate: () => ({
+      strategy: "CONSERVATIVE", symbol: "DOGEUSDT", action: "PLACE_ORDERS",
+      reason: "INITIAL_BUY",
+      actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1", reason: "INITIAL_BUY" }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({ shouldReplace: false, adjustmentThreshold: "0" }),
+  }
+  const harness = await createHarness({
+    strategyPolicy,
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  const submitted = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT", priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(submitted.ok, true)
+  const current = harness.engine.getOrders().find((order) => order.side === "BUY")
+  assert.ok(current)
+  const canceled = new CanonicalOrder({
+    clientOrderId: current.clientOrderId, brokerOrderId: current.brokerOrderId,
+    market, side: current.side, type: current.type, limitPrice: current.limitPrice,
+    originalQuantity: current.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "CANCELED", updatedAt: 2,
+  })
+  const brokerEvidence = {
+    schemaVersion: 1, source: "binance.spot.userData.executionReport",
+    eventTime: 2, transactionTime: 2, symbol: "DOGEUSDT",
+    clientOrderId: current.clientOrderId, originalClientOrderId: current.clientOrderId,
+    side: "BUY", orderType: "LIMIT_MAKER", orderQuantity: "1", orderPrice: "99.95",
+    executionType: "CANCELED", orderStatus: "CANCELED", orderId: current.brokerOrderId,
+    lastExecutedQuantity: "0", cumulativeExecutedQuantity: "0",
+    cumulativeQuoteQuantity: "0", commissionAmount: "0", commissionAsset: null,
+    tradeId: "-1", isMaker: false,
+  }
+  const result = await harness.engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "CANCELED", executedOrder: canceled, brokerEvidence },
+  })
+  assert.equal(result.ok, true)
+  assert.ok(events.some((event) => event.name === "broker.execution_report" && event.data.cumulativeQuoteQuantity === "0"))
+  assert.ok(events.some((event) => event.name === "order.updated" && event.data.status === "CANCELED"))
+})
+
+
+test("best-effort strategy evidence failure does not block order submission", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === HARVESTER_EVENT_NAMES.STRATEGY_DECISION) {
+          throw new Error("optional Journal evidence unavailable")
+        }
+        return { ok: true }
+      },
+    },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(harness.orders.length, 1)
 })

@@ -693,6 +693,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
               brokerOrderId: event.executedOrder?.id ?? event.fill?.orderId,
               clientOrderId: event.clientOrderId ?? event.executedOrder?.clientOrderId,
               executionId: event.fill?.id ?? event.executionId,
+              brokerEvidence: event.brokerEvidence,
               error,
             }, this.logger)
             logSafely(this.logger, "error", "Unable to normalize Binance user-data execution", error)
