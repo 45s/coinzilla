@@ -162,7 +162,7 @@ No package tests were executed in this documentation audit. Do not report these 
 ## Related issue and PR history
 
 - #626 documents a prior user-data recovery deadlock.
-- PR #627 merged the recovery orchestration fix. Its exact PR head `d3307e473cb67b0a76dacb39fb2a0dd40935480b` has recorded success for Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit.
+- Issue #626 remains OPEN as of this audit despite merged PR #627; the issue's acceptance/closure is not assumed. PR #627 merged the recovery orchestration fix. Its exact PR head `d3307e473cb67b0a76dacb39fb2a0dd40935480b` has recorded success for Unit Tests, Test Coverage, JavaScript Syntax, Utils Unit Tests, and Dependency Audit.
 - PR #629 merged the all-enabled-market subscription ordering fix. Its exact PR head `77572649559efada881e3da7bbf958329f84b870` has the same five recorded successful workflows.
 - These historical PR checks do not verify this session's exchange behavior or the current audit branch.
 
