@@ -26,10 +26,6 @@ const binanceEnv = {
   BINANCE_API_SECRET_KEY: "secret",
 }
 
-// The exchange simulator applies its own fee schedule to executions. This is deliberately
-// separate from the strategy's makerPercent/takerPercent planning inputs.
-const exchangeCommissionRate = percentageToRate({ percent: "0.1" })
-
 const config = {
   strategies: {
     CG_coinGrabber: {
@@ -259,11 +255,15 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
     // Simulate Binance's reported commission from the exchange fee schedule:
     // BUY fees are charged in base; SELL fees are charged in quote.
+    const pairConfig = config.strategies.CG_coinGrabber.pairs[market.symbol]
+    const isMaker = order.type === "LIMIT_MAKER"
+    const commissionPercent = isMaker ? pairConfig.makerPercent : pairConfig.takerPercent
+    const commissionRate = percentageToRate({ percent: String(commissionPercent) })
     const commissionAsset = order.side === "BUY" ? market.baseAsset : market.quoteAsset
     const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
     const commissionAmount = multiplyDecimal({
       left: commissionBasis,
-      right: exchangeCommissionRate,
+      right: commissionRate,
     })
     const timestamp = Date.now()
     openOrders.delete(order.clientOrderId)
@@ -290,7 +290,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
           orderId: order.brokerOrderId,
           commissionAmount,
           commissionAsset: commissionAsset.code,
-          isMaker: order.type === "LIMIT_MAKER",
+          isMaker,
           price,
           quantity,
           quoteQuantity,
