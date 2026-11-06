@@ -377,3 +377,24 @@ This resolves the apparent runtime-versus-history contradiction by chronology. I
 For DOGE order 1276698, the final runtime/CLOSING observations correctly showed OPEN / zero executed before shutdown; exchange trades 221990 and 221991 filled the order later. For ZRO BUY 727905, the order was NEW at CLOSING and filled later as trade 12182. Neither later fill should be inserted into the earlier CLOSING snapshot. The absence of an in-process Portfolio/RecoveryLedger update while the process was stopped is expected.
 
 **Audit classification:** downgrade/remove “post-CLOSING Portfolio/RecoveryLedger application not evidenced” as a same-session defect or operator acceptance blocker. Keep a distinct restart-reconciliation verification item: on next startup Harvester must fetch and idempotently apply all owned fills since its last durable checkpoint, reconcile current balances/open orders/commissions, and keep trading disabled until complete. Classify this behavior UNVERIFIED until source/tests or a controlled restart scenario establish it; do not claim failure based solely on missing post-shutdown runtime logs.
+
+
+## F-011 — durable restart reconciliation is not integrated (2026-11-06)
+
+**Status: FAIL — source-proven startup integration gap.**
+
+**Owner-approved lifecycle:** Harvester runs on a personal workstation and may be stopped while Binance orders remain open. Exchange orders can partially or fully fill while Harvester is offline. This is expected. On the next startup, before any new trading, Harvester must reconcile every owned fill since the last durable checkpoint, actual commissions, partial/terminal order states, balances, locked funds, and open orders; update Portfolio/RecoveryLedger exactly once; restore reservations; and remain fail-closed until all checks succeed.
+
+**Source observation:** `apps/harvester/src/bootstrap/start-harvester.js` explicitly states that durable Journal replay is disabled and that startup uses fresh in-process trading state. The startup path does not invoke `restoreHarvesterJournalState` or wire its restored Portfolio, RecoveryLedger, and OrderRegistry into the trading engine. The repository contains separate offline primitives (`projectHarvesterJournalRecovery`, `restoreHarvesterJournalState`, `auditRecoveredTradeHistory`, and `auditRecoveredAccountState`), but no proof that these are integrated into process startup. This is stronger than an absence of later runtime logs: the inspected startup path explicitly bypasses replay.
+
+**Impact:** a process restart after DOGE SELL 1276698 and ZRO BUY 727905 filled while offline cannot currently be claimed to reconstruct those fills from durable state before trading. The historical CLOSING snapshot remains correct and immutable; no same-session update was expected while the process was stopped. This is a startup-safety defect, not an operator uptime issue.
+
+**Required fix and tests:**
+- Restore the durable Journal projection before activating the trading engine.
+- Fetch complete exchange trade history since the durable checkpoint for every relevant symbol/market, with pagination exhaustion and market-universe completeness proven.
+- Correlate fills to owned broker/client order IDs; apply each missing fill atomically to Portfolio and RecoveryLedger exactly once, including base/quote commission amounts and assets.
+- Reconcile partial and terminal order states, canceled orders with late fills, open-order reservations, account free/locked/total balances, and snapshot timestamps.
+- Durably record successful reconciliation/checkpoint before opening the trading gate. Missing/incomplete history, unknown ownership, duplicate-ID conflicts, unsupported commissions, or contradictory balances/orders must leave trading blocked.
+- Add deterministic restart tests for offline DOGE/ZRO fills, partial fills, terminal orders, commissions, repeated startup/replay, duplicate prevention, balance/open-order mismatch, incomplete pagination, and fail-closed readiness.
+
+**Evidence discipline:** no TESTNET acceptance is inferred from source inspection or offline tests. No exchange writes, bot restarts, or account mutations were performed.
