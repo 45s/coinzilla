@@ -304,14 +304,8 @@ Before D2 can pass:
 - Keep exactly the configured `keepQuantity`; do not classify an order-rounding remainder as dust unless it is proven unsellable under the applicable exchange filters.
 - Repeated evaluation with an active residual SELL must not create another SELL. A confirmed residual fill is applied once; only then may the remaining quantity be replanned.
 
-### Restart reconciliation
-- A process may be offline while exchange orders continue to fill. In-memory state not changing while stopped is expected.
-- On restart, replay durable Journal state before activating the trading engine; backfill all owned exchange fills since the last durable checkpoint.
-- Reconcile actual commissions, partial/terminal orders, open-order reservations, and free/locked/total account balances before readiness.
-- Identical fill replay is idempotent across both Portfolio and RecoveryLedger; conflicting facts for a reused fill ID fail closed.
-- Incomplete trade-history pagination, incomplete market universe, unknown ownership, missing commission facts, or balance/order mismatch prevents new order submission.
-- Persist the reconciled checkpoint before enabling trading; never rewrite the prior shutdown snapshot.
-
 ### Current verification status
 
-The current strategy still suppresses residual SELLs after ledger reset, and the existing strategy test asserts that suppression. The current bootstrap explicitly disables durable Journal replay and starts with fresh in-process state. These are implementation gaps, not satisfied invariants. Required regression coverage is tracked in ROADMAP and audit issue #645; TESTNET acceptance remains separate.
+Residual sell-through implementation is in progress on the Conservative audit branch. The strategy now emits residual SELL intents above `keepQuantity` even after the cumulative recovery obligation reaches zero, preserves the RecoveryLedger until exact reserve completion, uses the current market reference rather than a one-tick price for already-profitable residuals, and reports current quantity-step/MIN_QUANTITY/MIN_NOTIONAL dust without submitting invalid orders. The engine defers completion without pausing while residual remains.
+
+This is not yet accepted: exact-head Harvester tests and CI must pass, and the remaining regression matrix must be reviewed. Process-restart recovery is deferred to the final item in `ROADMAP.md` and is outside this audit.
