@@ -400,3 +400,14 @@ A second stale test was found in the full-cycle `conservative-trading-engine.tes
 ## 2026-11-06 audit continuation — lifecycle regression precision
 
 After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
+
+
+## Source lifecycle audit — 2026-11-06 21:05 +02:00
+
+Audited PR #653 HEAD `8c1bdfda34c9f3e9fc0aaf4a5635ecf7cbb570ff` against canonical specification SHA `7e85f077a0722fff8ee386c3ddba53754ffa313c`.
+
+Reviewed Conservative policy, recovery SELL planner, recovery completion, serialized engine transition handling, and focused regression test names/assertions. Verified source/test coverage for partial BUY with active recovery SELL, partial SELL without a new BUY, dust plus later BUY, residual sell-through, maximum SELL quantity/notional caps, and completion blocked by excess inventory.
+
+Identified F-011: focused regression coverage is missing for terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED (including partial terminal execution and reconciliation-before-replacement). Source currently reconciles terminal fill history before its SELL terminal reevaluation path; no runtime mismatch was established in this pass.
+
+Exact-HEAD workflow lookup returned zero PR-triggered runs. No package test command was run. Do not claim tests pass. No TESTNET or exchange actions occurred.
