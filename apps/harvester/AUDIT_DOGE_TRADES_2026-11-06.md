@@ -88,3 +88,12 @@ The net proceeds above are exchange-trade-history arithmetic. Do not automatical
 - The two fills for order `1276698` are direct evidence of its execution after the observed 07:58 CLOSING snapshot.
 - The 07:58 CLOSING audit still reports two unresolved owned orders. ZRO BUY `727905` is identified; the second identity remains unproven from the available full open-order payload.
 - No order, cancellation, replacement, withdrawal, account-setting change, or bot restart was performed as part of this evidence capture.
+
+ 
+## Conservative strategy reconciliation
+
+Audit-baseline configuration: keepQuantity=1 DOGE, minProfit=0.01 USDT, maker/taker reserve=0.1%; order 1276698 was an ordinary LIMIT at 0.07185. Under the candidate quantity-step assumption of 1 DOGE, the canonical fee-reserved sell quantity is 1,196 DOGE, matching the submitted order. The exact historical exchange filter payload is not preserved in the raw runtime logs (they only record that trading rules were validated), so the historical quantity-step/tick calculation is UNVERIFIED; exchange acceptance confirms the submitted order passed the exchange's actual filters.
+
+BUY accounting: 1,200 gross DOGE less 1.2 DOGE base commissions = 1,198.8 net DOGE; full accumulated quote cost=85.836 USDT. SELL accounting is detailed above: net quote proceeds=85.84666740 USDT; realized net profit=+0.01066740 USDT. Exchange-side post-SELL quantity=2.8 DOGE, comprising 1 configured keep and 1.8 excess.
+
+The SELL fills occurred after CLOSING and process shutdown. They are not expected in the stopped process's closing Position/RecoveryLedger; at shutdown the observed active position remained 1,198.8 DOGE with 85.836 USDT spent and no SELL proceeds applied. The post-shutdown 1.8 DOGE excess has not been proven exchange-constrained dust because the exact historical MIN_NOTIONAL/quantity-step snapshot is absent. Its value at the fill price is 0.12933 USDT. Verdicts: submitted SELL/exchange execution FOLLOWED; exact historical filter-based plan and final post-shutdown in-process residual disposition UNVERIFIED. Restart reconciliation remains deferred to #654.
