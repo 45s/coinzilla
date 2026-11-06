@@ -466,3 +466,8 @@ Source/spec review found and corrected stale tests that contradicted the canonic
 **Remaining audit gap:** exact `EXCHANGE_CONSTRAINED_DUST` quantity and limiting filter are computed by the domain but omitted from the no-action evaluation log and lifecycle decision event. This violates the canonical requirement to record dust disposition. It is documented as unresolved and intentionally not implemented under the current scope restriction.
 
 Latest exact-head Actions/workflow runs and legacy statuses remain empty; no tests are claimed as passing. PR #653 remains open/unmerged. No TESTNET or exchange actions were performed.
+
+
+## 2026-11-06 audit continuation — lifecycle regression precision
+
+After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
