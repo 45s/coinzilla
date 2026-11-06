@@ -39,8 +39,8 @@ The adapter emits a fixed allowlist only. Unknown input properties are discarded
 
 Fields may be absent when Binance does not supply them:
 
-- Identity/time: `eventTime`, `transactionTime`, `symbol`, `orderId`, `clientOrderId`, `originalClientOrderId`, `tradeId`.
-- Order facts: `side`, `orderType`, `timeInForce`, `orderQuantity`, `orderPrice`, `executionType`, `orderStatus`, `working`, `rejectReason`.
+- Identity/time: `eventTime`, `transactionTime`, `orderCreationTime`, `workingTime`, `symbol`, `orderId`, `orderListId`, `clientOrderId`, `originalClientOrderId`, `tradeId`, `executionId`, `tradeGroupId`.
+- Order facts: `side`, `orderType`, `timeInForce`, `orderQuantity`, `orderPrice`, `stopPrice`, `icebergQuantity`, `quoteOrderQuantity`, `executionType`, `orderStatus`, `working`, `selfTradePreventionMode`, `matchType`, `rejectReason`.
 - Execution facts: `lastExecutedQuantity`, `cumulativeExecutedQuantity`, `lastExecutedPrice`, `cumulativeQuoteQuantity`, `lastQuoteQuantity`.
 - Fee/liquidity facts: `commissionAmount`, `commissionAsset`, `isMaker`.
 

@@ -624,7 +624,7 @@ export const mapBrokerExecutionReportData = (input = {}) =>
       throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
     }
     const data = { schemaVersion: 1, source: "binance.spot.userData.executionReport" }
-    for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason"]) {
+    for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason", "selfTradePreventionMode", "matchType"]) {
       if (evidence[field] !== undefined) {
         if (typeof evidence[field] !== "string") throw new TypeError("evidence." + field + " must be a string")
         data[field] = evidence[field].slice(0, 256)
@@ -634,13 +634,13 @@ export const mapBrokerExecutionReportData = (input = {}) =>
       if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") throw new TypeError("evidence.commissionAsset must be a string or null")
       data.commissionAsset = evidence.commissionAsset
     }
-    for (const field of ["orderId", "tradeId"]) {
+    for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
       if (evidence[field] !== undefined) data[field] = String(evidence[field])
     }
-    for (const field of ["orderQuantity", "orderPrice", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
+    for (const field of ["orderQuantity", "orderPrice", "stopPrice", "icebergQuantity", "quoteOrderQuantity", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
       if (evidence[field] !== undefined) data[field] = requireDecimalString({ value: evidence[field], field: "evidence." + field })
     }
-    for (const field of ["eventTime", "transactionTime"]) {
+    for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
       if (evidence[field] !== undefined) {
         if (!Number.isSafeInteger(evidence[field]) || evidence[field] < 0) throw new TypeError("evidence." + field + " must be a non-negative safe integer")
         data[field] = evidence[field]

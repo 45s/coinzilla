@@ -719,6 +719,7 @@ test("maps versioned broker execution evidence and rejects untrusted payloads", 
     eventTime: 1730000000000, transactionTime: 1730000000001,
     symbol: "DOGEUSDT", clientOrderId: "h-DOGEUSDT-8", side: "SELL",
     executionType: "TRADE", orderStatus: "PARTIALLY_FILLED", orderId: 12345,
+    executionId: 987654, orderCreationTime: 1729999999000,
     orderQuantity: "10", lastExecutedQuantity: "4", cumulativeExecutedQuantity: "4",
     commissionAmount: "0.0006", commissionAsset: "USDT", tradeId: 98765,
     cumulativeQuoteQuantity: "0.6", isMaker: true, apiKey: "not-copied",
@@ -727,6 +728,8 @@ test("maps versioned broker execution evidence and rejects untrusted payloads", 
   assert.equal(result.data.cumulativeQuoteQuantity, "0.6")
   assert.equal(result.data.commissionAmount, "0.0006")
   assert.equal(result.data.tradeId, "98765")
+  assert.equal(result.data.executionId, "987654")
+  assert.equal(result.data.orderCreationTime, 1729999999000)
   assert.equal("apiKey" in result.data, false)
   assert.equal(mapBrokerExecutionReportData({ evidence: { schemaVersion: 1, source: "wrong" } }).ok, false)
   assert.equal(mapBrokerExecutionReportData({ evidence: {

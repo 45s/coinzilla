@@ -15,10 +15,13 @@ const EXECUTION_REPORT_EVIDENCE_FIELDS = Object.freeze({
   eventTime: "E", transactionTime: "T", symbol: "s", clientOrderId: "c",
   originalClientOrderId: "C", side: "S", orderType: "o", timeInForce: "f",
   orderQuantity: "q", orderPrice: "p", executionType: "x", orderStatus: "X",
-  orderId: "i", lastExecutedQuantity: "l", cumulativeExecutedQuantity: "z",
-  lastExecutedPrice: "L", commissionAmount: "n", commissionAsset: "N",
-  tradeId: "t", isMaker: "m", cumulativeQuoteQuantity: "Z",
-  lastQuoteQuantity: "Y", working: "w", rejectReason: "r",
+  orderId: "i", orderListId: "g", orderCreationTime: "O", workingTime: "W",
+  lastExecutedQuantity: "l", cumulativeExecutedQuantity: "z", lastExecutedPrice: "L",
+  commissionAmount: "n", commissionAsset: "N", tradeId: "t", executionId: "I",
+  tradeGroupId: "M", isMaker: "m", cumulativeQuoteQuantity: "Z",
+  lastQuoteQuantity: "Y", quoteOrderQuantity: "Q", stopPrice: "P",
+  icebergQuantity: "F", selfTradePreventionMode: "V", matchType: "k",
+  working: "w", rejectReason: "r",
 })
 const createExecutionReportEvidence = (message) => ({
   schemaVersion: 1,
