@@ -63,7 +63,7 @@ const forwardOutput = async (stream, output) => {
     })
   } catch (error) {
     if (!logStreamFailed) {
-      process.stderr.write(`Failed to forward Harvester output: ${error.message}\\n`)
+      process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
       process.exitCode = 1
       if (!childClosed && !child.killed) child.kill("SIGTERM")
     }
@@ -78,13 +78,13 @@ const outputForwarding = [
 logStream.on("error", (error) => {
   if (logStreamFailed) return
   logStreamFailed = true
-  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\\n`)
+  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
   if (!childClosed && !child.killed) child.kill("SIGTERM")
 })
 
 child.on("error", (error) => {
-  process.stderr.write(`Failed to start Harvester: ${error.message}\\n`)
+  process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
   process.exitCode = 1
 })
 
