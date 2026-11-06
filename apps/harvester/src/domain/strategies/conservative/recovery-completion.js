@@ -43,7 +43,7 @@ export function evaluateRecoveryCompletion({
     compareDecimal({ left: netSellProceeds, right: "0" }) < 0 ||
     compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
     compareDecimal({ left: keepQuantity, right: "0" }) <= 0 ||
-    compareDecimal({ left: minProfit, right: "0" }) <= 0
+    compareDecimal({ left: minProfit, right: "0.01" }) < 0
   ) {
     throw new RangeError("Invalid recovery completion inputs")
   }
