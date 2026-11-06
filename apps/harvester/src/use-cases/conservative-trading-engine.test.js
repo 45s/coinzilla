@@ -821,6 +821,53 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   assert.deepEqual(harness.pauses, [])
 })
 
+test("rejects a stream fill whose optional clientOrderId conflicts with its registered order", async () => {
+  const harness = await createHarness()
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const order = harness.engine.getOrders()[0]
+  const fillQuantity = "0.1"
+  const fill = new Fill({
+    tradeId: "wrong-client-fill",
+    clientOrderId: "h-foreign-client-order",
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    price: order.limitPrice,
+    quantity: new Quantity({ amount: fillQuantity, asset: baseAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({ left: order.limitPrice.amount, right: fillQuantity }),
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt: 2,
+  })
+  const partialOrder = new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({ amount: fillQuantity, asset: baseAsset }),
+    status: "PARTIALLY_FILLED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: { eventType: "executionReport", executionType: "TRADE", executedOrder: partialOrder, fill },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.accountedFills.length, 0)
+  assert.ok(harness.pauses.includes("EXECUTION_FILL_ORDER_IDENTITY_MISMATCH"))
+})
+
 test("treats decimal-formatted zero as no execution in terminal CANCELED order events", async () => {
   const harness = await createHarness()
   await harness.engine.processMarketPrice({
