@@ -192,6 +192,10 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         quoteQuantity: fill.quoteQuantity?.amount,
         commissionStatus: fill.commissionStatus,
         commissions: commissionFacts,
+        thirdAssetCommissionQuoteValues: (fill.commissions ?? [])
+          .filter(({ amount } = {}) => amount?.asset?.id !== fill.market.baseAsset.id &&
+            amount?.asset?.id !== fill.market.quoteAsset.id)
+          .map(({ quoteValue } = {}) => quoteValue?.amount ?? null),
         previousPosition: createPositionLogSummary({ position: previousPosition }),
         previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
       })

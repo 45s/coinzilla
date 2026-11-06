@@ -20,7 +20,7 @@ import {
  * @param {object} input
  * @param {string} input.activeQuantity Current strategy-owned base quantity.
  * @param {string} input.keepQuantity Base quantity retained after recovery.
- * @param {string} input.cycleCost Cumulative eligible BUY cost for this cycle.
+ * @param {string} input.positionSpent Position.spent, the full accumulated BUY cost for this cycle.
  * @param {string} input.saleProceeds Confirmed net SELL proceeds already credited.
  * @param {string} input.minProfit Required minimum net quote profit.
  * @param {string} input.feeRate Conservative fee rate as a decimal fraction.
@@ -31,7 +31,7 @@ import {
 export function calculateRecoverySellPlan({
   activeQuantity,
   keepQuantity,
-  cycleCost,
+  positionSpent,
   saleProceeds,
   minProfit,
   feeRate,
@@ -41,7 +41,7 @@ export function calculateRecoverySellPlan({
   const values = {
     activeQuantity,
     keepQuantity,
-    cycleCost,
+    positionSpent,
     saleProceeds,
     minProfit,
     feeRate,
@@ -56,7 +56,7 @@ export function calculateRecoverySellPlan({
   if (
     compareDecimal({ left: activeQuantity, right: "0" }) <= 0 ||
     compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
-    compareDecimal({ left: cycleCost, right: "0" }) < 0 ||
+    compareDecimal({ left: positionSpent, right: "0" }) < 0 ||
     compareDecimal({ left: saleProceeds, right: "0" }) < 0 ||
     compareDecimal({ left: minProfit, right: "0.01" }) < 0 ||
     compareDecimal({ left: feeRate, right: "0" }) < 0 ||
@@ -85,7 +85,7 @@ export function calculateRecoverySellPlan({
   const requiredNetProceeds = maxDecimal({
     left: "0",
     right: subtractDecimal({
-      left: addDecimal({ left: cycleCost, right: minProfit }),
+      left: addDecimal({ left: positionSpent, right: minProfit }),
       right: saleProceeds,
     }),
   })
@@ -96,6 +96,10 @@ export function calculateRecoverySellPlan({
       price: null,
       requiredNetProceeds,
     })
+  }
+
+  if (compareDecimal({ left: requiredNetProceeds, right: "0" }) === 0) {
+    return Object.freeze({ quantity, price: null, requiredNetProceeds })
   }
 
   const netSellRate = subtractDecimal({ left: "1", right: feeRate })
@@ -109,15 +113,8 @@ export function calculateRecoverySellPlan({
     scale: 36,
     rounding: "away-from-zero",
   })
-  // If earlier confirmed SELLs have already recovered the required amount,
-  // the remaining recovery quantity still needs a positive valid limit price
-  // so the cycle can finish and only then allocate keepQuantity.
-  const positiveMinimumPrice = maxDecimal({
-    left: minimumPrice,
-    right: priceTickSize,
-  })
   const price = roundDecimalToIncrement({
-    value: positiveMinimumPrice,
+    value: minimumPrice,
     increment: priceTickSize,
     direction: "up",
   })

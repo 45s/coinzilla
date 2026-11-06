@@ -87,6 +87,10 @@ export function evaluateConservativeStrategy({
   if (recoveryLedger && recoveryLedger.market?.id !== marketMetadata.market.id) {
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
+  if ((compareDecimal({ left: activeQuantity, right: "0" }) > 0 ||
+       compareDecimal({ left: positionSpent, right: "0" }) > 0) && !recoveryLedger) {
+    throw new Error("Conservative active Position requires its recovery proceeds ledger")
+  }
   if (recoveryLedger && position &&
       compareDecimal({ left: ledger.buyCost, right: positionSpent }) !== 0) {
     throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
@@ -139,7 +143,7 @@ export function evaluateConservativeStrategy({
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
       keepQuantity: String(pairConfig.keepQuantity),
-      cycleCost: positionSpent,
+      positionSpent,
       saleProceeds: ledger.netSellProceeds,
       minProfit: String(settings.minProfit),
       feeRate,
