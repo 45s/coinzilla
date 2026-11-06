@@ -360,3 +360,98 @@ test("fails closed when active inventory has lost its recovery cost/profit basis
     lastBuyPrice: "0.1",
   }), /no recovery cost\/profit basis/)
 })
+
+
+test("defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, orderQuantity: 1 },
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  assert.deepEqual(decision.buyDisposition, {
+    status: "EXCHANGE_CONSTRAINED_BUY",
+    reason: "MIN_NOTIONAL",
+    quantity: "1",
+    notional: "0.099",
+    minimumQuantity: "1",
+    minimumNotional: "5",
+  })
+})
+
+test("defers a BUY below MIN_QUANTITY without emitting an invalid order", () => {
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, orderQuantity: 0.5 },
+    settings,
+    portfolio: new Portfolio(),
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule,
+        ),
+      },
+    },
+  })
+
+  assert.deepEqual(decision.actions, [])
+  assert.equal(decision.buyDisposition.reason, "MIN_QUANTITY")
+  assert.equal(decision.buyDisposition.quantity, "0.5")
+})
+
+test("defers a BUY that rounds to zero at the exchange quantity step", () => {
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, orderQuantity: 0.5 },
+    settings,
+    portfolio: new Portfolio(),
+    marketMetadata,
+  })
+
+  assert.deepEqual(decision.actions, [])
+  assert.deepEqual(decision.buyDisposition, {
+    status: "EXCHANGE_CONSTRAINED_BUY",
+    reason: "QUANTITY_INCREMENT",
+    configuredQuantity: "0.5",
+    quantityStepSize: "1",
+  })
+})
+
+test("rejects a RecoveryLedger belonging to a different market", () => {
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDC",
+    baseAsset,
+    quoteAsset: new Asset({ id: "asset:USDC", code: "USDC" }),
+  })
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: otherMarket }),
+    marketMetadata,
+  }), /RecoveryLedger market does not match/)
+})
+
+test("fails closed when RecoveryLedger has cycle accounting but Portfolio has no Position", () => {
+  const { recoveryLedger } = makeBoughtState()
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio: new Portfolio(),
+    recoveryLedger,
+    marketMetadata,
+  }), /cycle accounting without an active Position/)
+})
