@@ -6,16 +6,16 @@
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
 **Audit baseline:** `develop` at `4af3434f788b87139513921f220294ae90daf4d5` (2026-11-06; PR #644 merge commit)  
 **Evidence session:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
-**Status:** PARTIAL — original application logs integrity-verified and parsed; ZRO runtime Portfolio/RecoveryLedger state PASS; DOGE SELL/order state remains CONFLICT; CLOSING audit INCOMPLETE.  
+**Status:** PARTIAL — original application logs integrity-verified and parsed; ZRO pre-CLOSING Portfolio/RecoveryLedger arithmetic PASS; DOGE SELL fills are now chronologically reconciled as post-CLOSING exchange executions; DOGE strategy quantity/keepQuantity conformance and final inventory disposition remain to be verified; CLOSING audit was INCOMPLETE at its historical capture.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
 ## Executive result
 
 The accessible Journal and the two verbatim 100-row order-history comments establish 23 Harvester order submissions in the 07:00 session: six DOGEUSDT orders and seventeen ZROUSDT orders. The Journal records 12 applied fills, 13 duplicate-fill events, nine cancellation requests and nine confirmed cancellations, and one ZRO recovery-cycle completion.
 
-ZRO independently reconciles at the execution and account-balance levels. DOGE does not: order history reports the final 1,196-DOGE SELL as FILLED, while the Journal retains its order as OPEN, the closing account snapshot contains 1,196 DOGE locked, and no DOGE SELL fill is applied in the Journal. The closing account audit correctly reports INCOMPLETE with two unresolved owned orders.
+ZRO's pre-CLOSING recovery SELL reconciles at the execution and account-balance levels. The later bounded trade export establishes that DOGE SELL order 1276698 filled 1,196 DOGE at 08:03:01.841Z and 08:03:18.202Z, after the ~07:58Z CLOSING snapshot and process stop. The earlier Journal OPEN/zero-executed observation and later exchange FILLED state are therefore chronologically consistent, not a same-time conflict. DOGE exchange-side proceeds/commission arithmetic is now known; the remaining C-strategy question is whether the planned 1,196 quantity/0.07185 price and resulting 2.8 DOGE simple remainder conformed to decision-time config, exact keepQuantity, fee reserve and exchange filters. The historical CLOSING audit remains INCOMPLETE with two unresolved owned orders; do not rewrite that snapshot.
 
-Do not treat the session as a successful two-symbol reconciliation.
+The actual DOGE/ZRO exchange outcomes must now be compared against the canonical Conservative contract before declaring strategy conformance.
 
 ## Evidence and provenance
 
