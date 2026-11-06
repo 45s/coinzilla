@@ -411,3 +411,9 @@ Reviewed Conservative policy, recovery SELL planner, recovery completion, serial
 Identified F-011: focused regression coverage is missing for terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED (including partial terminal execution and reconciliation-before-replacement). Source currently reconciles terminal fill history before its SELL terminal reevaluation path; no runtime mismatch was established in this pass.
 
 Exact-HEAD workflow lookup returned zero PR-triggered runs. No package test command was run. Do not claim tests pass. No TESTNET or exchange actions occurred.
+
+## 2026-11-06 — F-011 terminal recovery-SELL regression tests added
+
+Added offline engine tests for partial terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED. The valid cases verify exact fill application, quote commission preservation, Position quantity reduction, unchanged accumulated Position.spent, and cumulative RecoveryLedger net proceeds before the event can advance; REJECTED then pauses under existing policy. Missing fill history and conflicting duplicate fill IDs must fail closed before accounting or replacement.
+
+Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. No production implementation changes. Tests and exact-head CI are not yet verified.
