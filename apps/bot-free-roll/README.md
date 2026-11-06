@@ -1,7 +1,5 @@
 # Coinzilla — Free-Roll Strategy
 
-> **Historical predecessor.** This application is not the authoritative definition of Harvester Conservative Strategy. Its old strategy rules, fee assumptions, and implementation are historical reference only and are superseded for Harvester by [apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md](../harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not copy rules from this application into Harvester or treat this README as a competing source of truth.
-
 **Document version:** `v0.014`
 **Application:** `coinzilla/apps/bot-free-roll`
 **Status:** Initial strategy specification
