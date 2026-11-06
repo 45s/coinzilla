@@ -656,3 +656,34 @@ export const mapOrderUpdatedData = (input = {}) =>
       ...(typeof evidence?.transactionTime === "number" ? { brokerTransactionTime: evidence.transactionTime } : {}),
     }
   })
+
+
+/** Capture the exact validated exchange filters used by Harvester order planning. */
+export const mapMarketTradingRulesCapturedData = (input = {}) =>
+  mapData(input, "Market trading-rules event mapping", ({ metadata }) => {
+    const market = metadata?.market
+    const tradingRules = metadata?.tradingRules
+    if (!market || typeof market !== "object" || !Array.isArray(tradingRules?.constraints)) {
+      throw new TypeError("metadata must contain a canonical market and trading rules")
+    }
+    if (!Array.isArray(metadata.supportedOrderTypes) || metadata.supportedOrderTypes.length === 0) {
+      throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
+    }
+    return {
+      venue: requireString({ value: market.venue, field: "market.venue" }),
+      symbol: requireString({ value: market.symbol, field: "market.symbol" }),
+      baseAsset: requireString({ value: market.baseAsset?.code, field: "market.baseAsset.code" }),
+      quoteAsset: requireString({ value: market.quoteAsset?.code, field: "market.quoteAsset.code" }),
+      orderType: requireString({ value: metadata.orderType, field: "metadata.orderType" }),
+      supportedOrderTypes: metadata.supportedOrderTypes.map((type, index) =>
+        requireString({ value: type, field: "supportedOrderTypes[" + index + "]" })),
+      constraints: tradingRules.constraints.map((constraint, index) => ({
+        type: requireString({ value: constraint?.type, field: "constraints[" + index + "].type" }),
+        status: requireString({ value: constraint?.status, field: "constraints[" + index + "].status" }),
+        ...(constraint?.value === undefined ? {} : {
+          amount: requireDecimalString({ value: constraint.value.amount, field: "constraints[" + index + "].amount" }),
+          asset: requireString({ value: constraint.value.asset?.code, field: "constraints[" + index + "].asset" }),
+        }),
+      })),
+    }
+  })

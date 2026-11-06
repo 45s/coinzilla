@@ -29,6 +29,7 @@ This contract covers the current selected evidence work in [issue #650](https://
 | Cancellation intent/outcome | Conservative trading engine | `order.cancel_requested`, `order.cancelled`, `order.cancel_failed` | client + broker order IDs |
 | Individual applied execution | Accounting boundary | `execution.fill_applied`: trade/execution IDs, order IDs, side, price, base/quote quantities, actual commission amount/asset, liquidity role, transaction time | fill ID + trade ID + order IDs |
 | Duplicate/invalid/unowned execution | User-data/accounting boundary | Existing duplicate, invalid, unowned, and accounting-failed events | fill/order IDs |
+| Exchange trading-rule snapshot | Bootstrap after exchange metadata validation | `market.trading_rules_captured`: venue, symbol, base/quote assets, selected order type, supported order types, every supported/unsupported filter and exact decimal value | symbol + event ID/time |
 | Account baseline and closing state | Bootstrap account audit | `account.snapshot_captured` and `account.open_orders_captured` | Journal session ID, phase, source timestamp |
 | Broker connectivity/readiness | Bootstrap/user-data status callback | Existing connection, subscription, and status-change events with safe error facts | broker + stream + event time |
 
@@ -50,5 +51,5 @@ The broker evidence record is stored separately from normalized `order.updated` 
 - High-frequency market ticks are intentionally not journaled; the decision record captures the price used for an actionable decision.
 - The current evidence path preserves executionReport broker facts, not unrestricted WebSocket frames or signed RPC traffic.
 - Broker acknowledgements are recorded as canonical order facts; arbitrary raw RPC response objects are not retained.
-- Exchange trading-rule snapshots are not yet part of this event contract. Add them only with an explicit allowlist and focused evidence tests if investigation demonstrates a gap.
+- Trading-rule snapshots are captured after validation and before engine activation. Later exchange filter changes are not currently streamed or refreshed as Journal events.
 - Journal write failure for optional evidence is an observable evidence gap, not a trading-state failure. Existing required durability barriers retain their current fail-closed semantics.

@@ -10,6 +10,7 @@ import {
   mapBrokerStatusChangedData,
   mapBrokerExecutionReportData,
   mapOrderUpdatedData,
+  mapMarketTradingRulesCapturedData,
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
@@ -54,6 +55,7 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
     STRATEGY_DECISION: "strategy.decision",
+    MARKET_TRADING_RULES_CAPTURED: "market.trading_rules_captured",
     BROKER_EXECUTION_REPORT: "broker.execution_report",
     ORDER_UPDATED: "order.updated",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
@@ -756,4 +758,25 @@ test("retains a safe structured broker error code", () => {
   })
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.error, { name: "Error", message: "order rejected", code: -1013 })
+})
+
+
+test("maps the exact validated exchange trading rules as a bounded plain DTO", () => {
+  const result = mapMarketTradingRulesCapturedData({
+    metadata: {
+      market: {
+        venue: "binance", symbol: "DOGEUSDT",
+        baseAsset: { code: "DOGE" }, quoteAsset: { code: "USDT" },
+      },
+      orderType: "LIMIT_MAKER",
+      supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+      tradingRules: { constraints: [
+        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.00001", asset: { code: "USDT" } } },
+        { type: "MAX_NOTIONAL", status: "UNSUPPORTED" },
+      ] },
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.constraints[0].amount, "0.00001")
+  assert.equal(result.data.constraints[1].status, "UNSUPPORTED")
 })

@@ -32,6 +32,7 @@ import {
   mapConfigValidatedData,
   mapAccountSnapshotCapturedData,
   mapAccountOpenOrdersCapturedData,
+  mapMarketTradingRulesCapturedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 function logSystem(logger, data) {
@@ -895,6 +896,11 @@ export async function startHarvester({
         marketMetadata: filtersResult.data,
       })
       marketMetadata.set(symbol, validatedMetadata)
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
+        dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
+      })
       logSystem(logger, { message: "Exchange trading rules validated", symbol })
     }
 
