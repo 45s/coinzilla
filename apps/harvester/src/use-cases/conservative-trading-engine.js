@@ -608,13 +608,23 @@ export function makeConservativeTradingEngine({
         return toResult({ error })
       }
       state.registry = update.registry
+      const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+      if (!terminalStatuses.has(canceledOrder.status)) {
+        publishOrderCancelFailed({
+          order: canceledOrder,
+          outcome: "CANCELLATION_UNCONFIRMED",
+          error: new Error("Recovery SELL did not reach an authoritative terminal state"),
+        })
+        await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED" })
+        return toResult({ error: new Error("Recovery SELL cancellation did not reach a terminal state") })
+      }
       if (canceledOrder.status === "CANCELED") {
         publishOrderCancelled({ order: canceledOrder })
       } else {
         publishOrderCancelFailed({
           order: canceledOrder,
-          outcome: "NOT_CANCELED",
-          error: new Error("Recovery SELL completed instead of being canceled"),
+          outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
+          error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
         })
       }
 
@@ -636,6 +646,7 @@ export function makeConservativeTradingEngine({
           await pause({ symbol, reason: "RECOVERY_SELL_FILL_IDENTITY_MISMATCH" })
           return toResult({ error: new Error("Recovered SELL fill does not match the canceled order") })
         }
+        recordSellExecutionFill({ fill })
         const accounting = await updateTradingAccounting({ fill })
         if (!accounting?.ok) {
           await pause({ symbol, reason: "RECOVERY_SELL_FILL_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
@@ -650,9 +661,44 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "RECOVERY_SELL_EXECUTED_QUANTITY_MISMATCH" })
         return toResult({ error: new Error("Canceled SELL cumulative execution does not match reconciled fills") })
       }
-      if (canceledOrder.status !== "CANCELED") {
-        await pause({ symbol, reason: "RECOVERY_SELL_FILLED_DURING_CANCEL" })
-        return toResult({ error: new Error("Recovery SELL completed while cancellation was being processed; pair paused for reconciliation") })
+      if (canceledOrder.status === "FILLED") {
+        if (compareDecimal({
+          left: canceledOrder.executedQuantity.amount,
+          right: canceledOrder.originalQuantity.amount,
+        }) !== 0) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILLED_QUANTITY_MISMATCH" })
+          return toResult({ error: new Error("FILLED recovery SELL does not reconcile to its original quantity") })
+        }
+        try {
+          assertReconciledSellExecution({ order: canceledOrder })
+        } catch (error) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED", error })
+          return toResult({ error })
+        }
+        const completion = await completeRecoveryCycle({
+          marketId: canceledOrder.market.id,
+          keepQuantity: String(pairs[symbol].keepQuantity),
+          minProfit: String(settings.minProfit),
+        })
+        if (!completion?.ok) {
+          await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
+          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
+        }
+        if (!completion.data?.eligible &&
+            !["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason)) {
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
+          return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
+        }
+        state.replacementIntents.delete(symbol)
+        state.sellExecutionTotals.delete(order.brokerOrderId)
+      } else if (
+        compareDecimal({
+          left: canceledOrder.executedQuantity.amount,
+          right: canceledOrder.originalQuantity.amount,
+        }) === 0
+      ) {
+        await pause({ symbol, reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH" })
+        return toResult({ error: new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed") })
       }
     }
     return toResult({ data: { canceled: activeSells.length } })
