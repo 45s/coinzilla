@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { addDecimal, compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, defaultLogger, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"

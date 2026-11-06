@@ -97,10 +97,10 @@ If either boundary is reached:
 2. Cancel all active BUY orders.
 3. Cancel all active SELL orders.
 4. Reconcile any executions that occur while cancellation is in progress; cancellations do not undo fills.
-5. Combine the remaining available position into one SELL order.
-6. Use Conservative behavior to try to sell the entire position with that single order.
+5. Transfer pair control to Conservative and reconcile any outstanding Aggressive orders/fills.
+6. Let Conservative plan recovery SELL intents under its canonical specification; exchange filters, partial fills, and constrained residuals may require more than one SELL.
 
-After the fallback, control remains with Conservative until the entire position is sold and the invested quote capital has been recovered. The Trading Engine then returns control to Aggressive. A reduction in position size, including a reduction below the 20% takeover threshold, does not release control. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Do not force a sale at a loss merely to close the position or switch strategies. Existing SELL orders may execute; the strategy must wait for a recovery rather than realize a loss.
+After the fallback, control remains with Conservative until recovery completion under [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Exact configured keepQuantity may remain as retained inventory. The Trading Engine then returns control to Aggressive. A reduction in position size, including a reduction below the 20% takeover threshold, does not release control. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Do not force a sale at a loss merely to close the position or switch strategies. Existing SELL orders may execute; the strategy must wait for a recovery rather than realize a loss.
 
 This is a strategy-mode transition, not a restart of the Harvester process. Shared execution safety, fill accounting, and broker constraints continue to apply during the transition.
 

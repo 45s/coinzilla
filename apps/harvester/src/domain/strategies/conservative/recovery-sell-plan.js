@@ -10,7 +10,7 @@ import {
 } from "@coinzilla/utils"
 
 /**
- * Calculate a Free-Roll recovery SELL plan using exact decimal arithmetic.
+ * Calculate a Conservative recovery SELL plan using exact decimal arithmetic.
  *
  * feeRate is the conservative execution-fee rate resolved by the strategy's
  * commission policy. It reserves for a possible base-asset SELL fee and
@@ -64,7 +64,7 @@ export function calculateRecoverySellPlan({
     compareDecimal({ left: priceTickSize, right: "0" }) <= 0 ||
     compareDecimal({ left: quantityStepSize, right: "0" }) <= 0
   ) {
-    throw new RangeError("Invalid Free-Roll recovery SELL plan inputs")
+    throw new RangeError("Invalid Conservative recovery SELL plan inputs")
   }
 
   const sellableQuantity = maxDecimal({
