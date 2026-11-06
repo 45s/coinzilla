@@ -457,3 +457,12 @@ Current lifecycle classifications:
 - Exact keepQuantity on completion: FOLLOWED by the completion predicate and tests; above-keep residual/dust defers free allocation and both Position/RecoveryLedger reset.
 
 Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac99765e3a310`. No GitHub Actions runs were visible for that exact head. Do not claim tests passed. The canonical specification remains the only source of strategy rules and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No exchange or TESTNET actions were performed.
+
+
+## 2026-11-06 continuation — Conservative regression audit
+
+Source/spec review found and corrected stale tests that contradicted the canonical partial-BUY lifecycle: an active PARTIALLY_FILLED BUY suppresses duplicate BUY intent but does not suppress recovery SELL planning; if a recovery SELL is already OPEN/PARTIALLY_FILLED, any new BUY fill requires cancel/reconcile/replace even while the BUY remains partial. Added/updated domain and full-cycle regression assertions. Dust-plus-later-BUY accounting regression is also added. These are test-only changes; no recovery, Journal, or broker implementation was changed.
+
+**Remaining audit gap:** exact `EXCHANGE_CONSTRAINED_DUST` quantity and limiting filter are computed by the domain but omitted from the no-action evaluation log and lifecycle decision event. This violates the canonical requirement to record dust disposition. It is documented as unresolved and intentionally not implemented under the current scope restriction.
+
+Latest exact-head Actions/workflow runs and legacy statuses remain empty; no tests are claimed as passing. PR #653 remains open/unmerged. No TESTNET or exchange actions were performed.
