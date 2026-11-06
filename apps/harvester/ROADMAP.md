@@ -1395,14 +1395,18 @@ All owner-approved decisions are recorded in [CONSERVATIVE_DOMAIN_SPECIFICATION.
 
 The canonical specification is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). All owner decisions are closed; do not reopen them. This roadmap records implementation status and evidence only.
 
-### Documentation gate — must pass before runtime implementation
+### Documentation consistency gate — PASS (2026-11-06)
 
-- [ ] Rewrite the canonical specification so its earlier sections contain no obsolete or conflicting rules.
-- [ ] Convert README, trading-strategies, ACCOUNTING_INVARIANTS, Portfolio notes, and all relevant roadmap sections to references/evidence only.
-- [ ] Mark historical decisions and implementation snapshots as superseded where they conflict.
-- [ ] Reconcile #645, #646, #653, and #655 references with the canonical contract.
-- [ ] Search the repository for old coinToKeep/keepCoinQuantity, proportional cost recovery, maker-only fee assumptions, residual-suppression, and partial SELL repricing rules.
-- [ ] Record the search scope and results. Do not start runtime implementation until no active contradictory strategy definitions remain.
+- [x] Rewrite the canonical specification so earlier sections contain no obsolete or conflicting rules; keep one derived Mermaid algorithm in that document.
+- [x] Convert README, trading-strategies, Accounting Invariants, Portfolio notes, glossary, behavior baseline, runbook, delivery plan, broker guide, and relevant roadmap sections to reference/evidence roles.
+- [x] Mark historical decisions, implementation snapshots, and legacy Free-Roll artifacts as superseded/historical where they conflict.
+- [x] Reconcile #645, #646, #653, and #655 references with the canonical contract; remove duplicate owner-decision summaries from issue trackers.
+- [x] Search the repository for coinToKeep/keepCoinQuantity, proportional cost recovery, maker-only fee assumptions, residual-suppression, partial SELL repricing, third-asset commission handling, and unresolved zero-value decisions.
+- [x] Review the Conservative-matching documentation and README/roadmap results, plus the relevant source/test references. No active competing Conservative rule definition remains.
+
+**Search/evidence scope:** the current PR tree contains 86 Markdown/MDX/text documents. Repository-wide Conservative search returned 32 matching files, including Harvester implementation/tests and relevant Harvester/legacy documentation. The matching documentation was reviewed and either converted to a canonical reference, reduced to implementation/test evidence, or explicitly marked historical. Root agent/workflow guidance contains no separate Conservative rules. The old behavior baseline is now a pointer only. Issues #645/#646 and PRs #653/#655 point to the same canonical document.
+
+**Gate result:** PASS. Runtime implementation against the canonical specification is now authorized. This documentation result does not imply implementation, test, CI, or TESTNET acceptance.
 
 ### Implementation and regression gate
 
@@ -1472,6 +1476,6 @@ The sole authoritative rule definition is [CONSERVATIVE_DOMAIN_SPECIFICATION.md]
 
 Owner decision B is final: a new BUY fill while a recovery SELL is open requires cancellation, terminal-state and complete fill/commission reconciliation, accounting update, then replacement planning from the updated position. Incomplete reconciliation fails closed. A partial SELL without a new BUY remains the same exchange order at the same price.
 
-The active audit must pass the repository-wide documentation consistency gate before runtime implementation proceeds. The required implementation and regression scope is defined by the canonical specification. Restart reconciliation remains separately tracked in #654.
+The repository-wide documentation consistency gate passed in commit 9c3691c9546dc35ec0c92e7e7e33912a13fca1c8. Runtime implementation against the canonical specification may now proceed. The required implementation and regression scope is defined by the canonical specification. Restart reconciliation remains separately tracked in #654.
 
 At the exact starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2, Unit Tests and Test Coverage failed; JavaScript Syntax, Utils Unit Tests, and Dependency Audit passed. The legacy commit-status endpoint reported no statuses. Do not infer completion from prior CI checkpoints. PR #653 remains open and unmerged; no merge is authorized.
