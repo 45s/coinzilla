@@ -887,9 +887,16 @@ export function makeConservativeTradingEngine({
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
       const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
       const allPositions = portfolioBefore.positions
-      const quoteCashFlow = allPositions
+      const portfolioQuoteCashFlow = allPositions
         .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
         .reduce((total, item) => addDecimal({ left: total, right: item.quoteNetCashFlow.amount }), "0")
+      const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
+        assetId: metadata.market.quoteAsset.id,
+      }) ?? "0"
+      const quoteCashFlow = subtractDecimal({
+        left: portfolioQuoteCashFlow,
+        right: quoteCashFlowBaseline,
+      })
       const activeBaseBalance = allPositions
         .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
@@ -1013,6 +1020,8 @@ export function makeConservativeTradingEngine({
           quoteFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })?.amount ?? null,
         },
         quoteCashFlow,
+        portfolioQuoteCashFlow,
+        quoteCashFlowBaseline,
         committedQuote,
         committedQuoteBalance,
         committedBase,
