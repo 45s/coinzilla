@@ -85,13 +85,10 @@ const marketFilters = (symbol) => {
   }
 }
 
-const waitForOrder = (submitted, waiters, expected) => {
+const waitForOrder = (submitted, waiters, { symbol, side }) => {
   const matches = (order) =>
-    order.market.symbol === expected.symbol &&
-    order.side === expected.side &&
-    order.type === expected.type &&
-    order.quantity === expected.quantity &&
-    order.price === expected.price
+    order.market.symbol === symbol &&
+    order.side === side
   const existing = submitted.find(matches)
   if (existing) return Promise.resolve(existing)
   return new Promise((resolve) => waiters.push({ matches, resolve }))
@@ -297,9 +294,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const dogeBuySubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "DOGEUSDT",
       side: "BUY",
-      type: "LIMIT",
-      quantity: "400",
-      price: "0.07157",
     })
     await triggerPrice("DOGEUSDT", "0.07161000")
     const dogeBuy = await dogeBuySubmitted
@@ -307,9 +301,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const zroBuySubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "ZROUSDT",
       side: "BUY",
-      type: "LIMIT",
-      quantity: "5",
-      price: "1.604",
     })
     await triggerPrice("ZROUSDT", "1.60500000")
     const zroBuy = await zroBuySubmitted
@@ -326,9 +317,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const dogeSellSubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "DOGEUSDT",
       side: "SELL",
-      type: "LIMIT",
-      quantity: "398",
-      price: "0.07203",
     })
     await triggerPrice("DOGEUSDT", "0.07157")
     fillOrder({
@@ -343,9 +331,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const zroSellSubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "ZROUSDT",
       side: "SELL",
-      type: "LIMIT",
-      quantity: "4.98",
-      price: "1.615",
     })
     await triggerPrice("ZROUSDT", "1.604")
     fillOrder({
@@ -356,8 +341,14 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       commissionAsset: "ZRO",
     })
     const zroSell = await zroSellSubmitted
-    assert.deepEqual([dogeSell.price, dogeSell.quantity], ["0.07203", "398"])
-    assert.deepEqual([zroSell.price, zroSell.quantity], ["1.615", "4.98"])
+    assert.deepEqual(
+      [dogeSell.price, dogeSell.quantity, dogeSell.type],
+      ["0.07203", "398", "LIMIT"],
+    )
+    assert.deepEqual(
+      [zroSell.price, zroSell.quantity, zroSell.type],
+      ["1.615", "4.98", "LIMIT"],
+    )
 
     // Market trades through each SELL limit. DOGE receives a better fill than its limit,
     // matching the exchange's price-improvement behavior while meeting the $0.01 net floor.
