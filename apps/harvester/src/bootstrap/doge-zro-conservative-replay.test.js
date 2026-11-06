@@ -24,8 +24,7 @@ async function waitFor(predicate, label, timeoutMs = 15_000) {
   assert.fail(label + " was not observed before timeout")
 }
 
-test("starts Conservative DOGE/ZRO strategies from deterministic market prices and submits their initial BUYs", { timeout: 30_000 }, async () => {
-  const config = {
+const config = {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -62,6 +61,7 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
     },
   }
 
+test("starts Conservative DOGE/ZRO strategies from deterministic market prices and submits their initial BUYs", { timeout: 30_000 }, async () => {
   const submitted = []
   const priceHandlers = new Map()
   let userData
@@ -80,70 +80,74 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
   }
 
   // Keep the production Binance broker and Harvester adapter. Stub only exchange I/O.
-  const broker = new BinanceWebSocketBroker({
-    apiKey: binanceEnv.BINANCE_API_KEY,
-    apiSecret: binanceEnv.BINANCE_API_SECRET_KEY,
-  })
-  broker.connect = async () => {}
-  broker.disconnect = async () => {}
-  broker.getExchangeMarkets = async () => ({ ok: true, data: [] })
-  broker.getSymbolFilters = async ({ symbol }) => ({ ok: true, data: symbolFilters(symbol) })
-  broker.getOpenOrders = async () => ({ ok: true, data: [] })
-  broker.getFills = async () => ({ ok: true, data: [] })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [] })
-  broker.getCanonicalOrder = async () => ({ ok: false, errors: [new Error("not found")] })
-  broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      sourceTime: Date.now(),
-      balances: ["DOGE", "ZRO", "USDT"].map((code) => {
-        const asset = new Asset({ id: code.toLowerCase(), code })
-        return new Balance({
-          free: new Quantity({ amount: code === "USDT" ? "1000" : "0", asset }),
-          locked: new Quantity({ amount: "0", asset }),
-        })
-      }),
-    },
-  })
-  broker.subscribeForUserData = async (handlers) => {
-    userData = handlers
-    return { ok: true, data: { disconnect: async () => {} } }
-  }
-  broker.subscribeForPrices = async ({ symbol, onPrice }) => {
-    priceHandlers.set(symbol, onPrice)
-    return { ok: true, data: { unsubscribe: async () => {} } }
-  }
-  broker.subscribeForBookTicker = async () => ({
-    ok: true,
-    data: { unsubscribe: async () => {} },
-  })
-  broker.getPrices = async ({ symbol }) => ({
-    ok: true,
-    data: { symbol, price: symbol === "DOGEUSDT" ? "0.07161000" : "1.60400000" },
-  })
-  // This is the state-changing boundary: capture the canonical order instead of sending it.
-  broker.createCanonicalOrder = async (order) => {
-    submitted.push(order)
-    const timestamp = Date.now()
-    return {
+  const brokerFactory = ({ config: brokerConfig, logger }) => {
+    const broker = new BinanceWebSocketBroker({
+      apiKey: brokerConfig.apiKey,
+      apiSecret: brokerConfig.apiSecret,
+      logger,
+    })
+    broker.connect = async () => {}
+    broker.disconnect = async () => {}
+    broker.getExchangeMarkets = async () => ({ ok: true, data: [] })
+    broker.getSymbolFilters = async ({ symbol }) => ({ ok: true, data: symbolFilters(symbol) })
+    broker.getOpenOrders = async () => ({ ok: true, data: [] })
+    broker.getFills = async () => ({ ok: true, data: [] })
+    broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [] })
+    broker.getCanonicalOrder = async () => ({ ok: false, errors: [new Error("not found")] })
+    broker.getAccountSnapshot = async () => ({
       ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: "ack-" + order.clientOrderId,
-        market: order.market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
-        status: "OPEN",
-        createdAt: timestamp,
-        acknowledgedAt: timestamp,
-        updatedAt: timestamp,
-      }),
+      data: {
+        sourceTime: Date.now(),
+        balances: ["DOGE", "ZRO", "USDT"].map((code) => {
+          const asset = new Asset({ id: code.toLowerCase(), code })
+          return new Balance({
+            free: new Quantity({ amount: code === "USDT" ? "1000" : "0", asset }),
+            locked: new Quantity({ amount: "0", asset }),
+          })
+        }),
+      },
+    })
+    broker.subscribeForUserData = async (handlers) => {
+      userData = handlers
+      return { ok: true, data: { disconnect: async () => {} } }
     }
+    broker.subscribeForPrices = async ({ symbol, onPrice }) => {
+      priceHandlers.set(symbol, onPrice)
+      return { ok: true, data: { unsubscribe: async () => {} } }
+    }
+    broker.subscribeForBookTicker = async () => ({
+      ok: true,
+      data: { unsubscribe: async () => {} },
+    })
+    broker.getPrices = async ({ symbol }) => ({
+      ok: true,
+      data: { symbol, price: symbol === "DOGEUSDT" ? "0.07161000" : "1.60400000" },
+    })
+    // This is the state-changing boundary: capture the canonical order instead of sending it.
+    broker.createCanonicalOrder = async (order) => {
+      submitted.push(order)
+      const timestamp = Date.now()
+      return {
+        ok: true,
+        data: new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: "ack-" + order.clientOrderId,
+          market: order.market,
+          side: order.side,
+          type: order.type,
+          limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
+          originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
+          executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
+          status: "OPEN",
+          createdAt: timestamp,
+          acknowledgedAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      }
+    }
+    broker.cancelOrder = async () => ({ ok: false, errors: [new Error("not requested")] })
+    return broker
   }
-  broker.cancelOrder = async () => ({ ok: false, errors: [new Error("not requested")] })
 
   const runtime = await startHarvester({
     loadConfig: async () => config,
@@ -157,7 +161,7 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
       createBinanceBrokerAdapter({
         config: brokerConfig,
         logger,
-        brokerFactory: () => broker,
+        brokerFactory,
       }),
     eventPublisher,
     logger: { info() {}, debug() {}, error() {} },
