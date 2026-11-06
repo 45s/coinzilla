@@ -1443,3 +1443,32 @@ The owner decisions above are approved requirements, not pending questions. Star
 - Updated the Conservative specification and README with the owner-approved net-profit and retained-inventory rules.
 - Verified the current Harvester config key is `keepQuantity`; the requested `coinToKeep` name is not present in Harvester's current config/source. No duplicate config field was introduced.
 - Verified the planner already sells the maximum exchange-valid quantity above the reserve after base-fee allowance and quantity-step rounding. Any extra remainder is exchange-constrained dust; exact dust/repeated-evaluation regression coverage remains in progress.
+
+---
+
+## Conservative strategy audit — 2026-11-06 continuation
+
+**Owner-approved contract (not open decisions):**
+- A completed Conservative position must realize at least `0.01` quote-currency net profit after actual commissions; no loss or break-even close.
+- Sell all exchange-sellable active inventory except the exact pair-level `keepQuantity`. Do not add a duplicate `coinToKeep` setting.
+- Quantity-step, base-commission, and minimum-notional remainders must be measured and reported as exchange-constrained dust, not silently retained as extra reserve.
+
+**Verified implementation state at `c9e6500926b540dcfe9ea914ae83b03b9ae6967c`:**
+- `minProfit >= 0.01` is enforced in configuration validation, recovery SELL planning, and recovery completion.
+- SELL fee reserve uses `max(makerPercent, takerPercent)`; actual fill commission amount and asset remain authoritative for accounting.
+- Recovery completion allocates exactly `keepQuantity` and resets the cycle ledger while preserving fill identities.
+- **FAIL:** after that reset, `evaluateConservativeStrategy` requires positive outstanding recovery before planning a SELL. Any active residual above `keepQuantity` is therefore not sold by repeated evaluation. The existing regression explicitly expects suppression, which conflicts with the owner-approved sell-all contract.
+- **GAP:** safe residual pricing, cost/profit basis retention, quantity-step/base-fee dust handling, exact retained quantity after residual fills, repeated-evaluation idempotency, and duplicate-order prevention need implementation and regression coverage. Do not replace the recovery guard with a blind SELL or a one-tick price.
+
+**Audit evidence state:**
+- Original Journal, historical PREFLIGHT/CLOSING balances, supplied latest ZRO open-order snapshot, 100-order histories, bounded 50-row trade exports, and original log evidence are preserved in the audit evidence documents/issues. Do not request them again.
+- Post-CLOSING DOGE 1276698 and ZRO 727905 fills are confirmed from supplied trade exports; later Harvester Portfolio/RecoveryLedger application and post-fill account snapshot remain unverified. The complete historical CLOSING open-orders payload identifying both unresolved orders remains unavailable.
+- TESTNET acceptance remains **NOT ACCEPTED**. Offline CI is not exchange acceptance.
+
+**Required next engineering steps (blocking):**
+1. Implement residual SELL-through while preserving the net-profit floor, actual commission accounting, minimum notional, post-only checks, quantity steps, and exact `keepQuantity`.
+2. Explicitly classify unsellable exchange dust and prevent repeated/duplicate SELL submissions.
+3. Replace the current residual-suppression regression with tests for residual sell-through, base-asset commissions, quantity-step dust, exact retained quantity, repeated evaluation, and duplicate-order prevention.
+4. Complete the #646 specification/test matrix and #626 recovery disposition; retain the unknown original empty-`TypeError` cause as unknown unless trace evidence proves it.
+5. Reconcile remaining post-CLOSING evidence gaps without rewriting historical snapshots.
+6. Run all required CI on the exact final HEAD. Keep PR #653 open/unmerged and TESTNET acceptance NOT ACCEPTED until separately evidenced.
