@@ -408,3 +408,70 @@ Every residual SELL must still preserve aggregate realized net profit of at leas
 ### 13.2 Exchange-constrained dust
 
 Dust is the exact active quantity above `keepQuantity` for which the maximum fee-adjusted, quantity-step-rounded candidate cannot satisfy the current exchange `MIN_QUANTITY` or `MIN_NOTIONAL` filter. The decision reports the quantity and limiting rule. Dust is not silently transferred to the retained reserve. It remains in active inventory with the recovery basis intact, so a later BUY fill can make the combined amount sellable. Never sell or consume the configured `keepQuantity`.
+
+
+---
+
+## Owner-approved canonical contract — 2026-11-06 (authoritative precedence)
+
+**This section is the current authoritative Conservative Strategy contract.** If any earlier paragraph in this document or any other repository artifact conflicts with this section, this section prevails until deliberately amended by the owner. Other documents, issues, PRs, READMEs, roadmaps, implementation notes, and tests are references/evidence only; they must not define competing strategy rules. This file is the sole source of truth.
+
+### Position accounting
+
+- Position `quantity` is gross executed BUY base quantity less BUY commissions charged in base.
+- Position `spent` is gross executed BUY quote notional plus BUY commissions charged in quote.
+- Aggregate confirmed BUY fills. Exchange-reported commission amount and asset are authoritative; never infer actual commissions from configured rates.
+- Third-asset commissions require reliable quote valuation. If valuation is unavailable, fail closed.
+
+### Recovery SELL economics
+
+- Minimum realized net profit is **$0.01**. Never close at a loss or break-even.
+- SELL quantity is `position.quantity - keepQuantity`, subject to exchange filters. `keepQuantity` is the only configuration name; do not introduce `coinToKeep`.
+- Price the SELL to recover the **entire accumulated `position.spent`** plus at least $0.01 net after applicable SELL commissions. Do not prorate/reduce the cost target because `keepQuantity` is retained.
+- Planning fee reserves are estimates for safe order placement only. Actual exchange-reported SELL commissions determine final realized-profit verification.
+- Exchange-constrained dust retains its accounting basis and must be explicitly classified; it is not silently counted as retained inventory.
+
+### Fee and order-type policy
+
+- `LIMIT_MAKER` reserves configured maker fee.
+- Regular `LIMIT` can execute as maker or taker; reserve the higher applicable configured rate.
+- Preserve existing policy: `makerPercent=0` selects `LIMIT_MAKER`; nonzero selects regular `LIMIT`. Changing this requires owner approval.
+
+### SELL order lifecycle (including owner decision B)
+
+- A partial SELL fill alone never triggers cancellation, replacement, repricing, or recalculation. Keep the same exchange order at the same price while it remains open; let the exchange maintain its remaining quantity. Record every actual partial fill and commission.
+- **If a new BUY fill occurs while a SELL is open (including partially filled), cancel the existing SELL, reconcile its terminal exchange state and every fill/commission, update the position/accounting, then calculate and submit a replacement SELL for the updated sellable position under this specification.** Do not plan the replacement from stale pre-cancel quantities or before cancellation/fill reconciliation completes. Fail closed if terminal state or cumulative fills cannot be reliably reconciled.
+- Partial SELL fills with no intervening BUY fill do not replan; continue waiting on the same order.
+- Terminal SELL behavior (FILLED, CANCELED, EXPIRED, REJECTED, or other terminal outcomes) is evaluated separately from the partial-open-order rule. Never infer final profit or recovery completion from requested quantity or acknowledgement alone; use confirmed fills, actual commissions, and reconciled terminal status.
+
+### Runtime, configuration, and scope
+
+- Harvester runs on the owner's personal PC; 24/7 uptime is not required. Resting exchange orders may fill while the process is stopped. Restart reconciliation remains separately tracked in #654 and is not a reason to block unrelated strategy implementation.
+- `keepQuantity=0` is supported only when complete workflow verification (including end-to-end regression) confirms it; otherwise fail closed and report the exact unsupported boundary.
+- Existing order type policy is unchanged. No exchange writes or TESTNET run are authorized by this specification update.
+
+### Canonical decision flow (derived visualization; this diagram does not define additional rules)
+
+```mermaid
+flowchart TD
+  A[Confirmed BUY fill arrives] --> B[Apply actual fill and commission facts]
+  B --> C{Open recovery SELL exists?}
+  C -- No --> D[Calculate sellable quantity: position.quantity - keepQuantity]
+  C -- Yes --> E[Request cancellation of existing SELL]
+  E --> F[Reconcile terminal order state and all SELL fills/fees]
+  F --> G{Reconciliation complete?}
+  G -- No --> H[Fail closed; do not place replacement]
+  G -- Yes --> D
+  D --> I{Sellable quantity passes exchange filters?}
+  I -- No --> J[Classify dust/residual with accounting basis; no silent inventory]
+  I -- Yes --> K[Calculate price recovering full position.spent + $0.01 net]
+  K --> L[Apply planning fee reserve and order-type policy]
+  L --> M[Place recovery SELL]
+  M --> N{SELL remains open?}
+  N -- Partial fill only; no new BUY --> O[Keep same order and same price; record actual fills/fees]
+  O --> N
+  N -- New BUY fill --> E
+  N -- Terminal --> P[Verify realized result from actual fills/fees and terminal state]
+```
+
+**Change control:** only the owner-approved canonical specification may change these rules. Update implementation, tests, and reference documents to conform; do not copy rule definitions into them.
