@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { multiplyDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { RecoveryLedger } from "./recovery-ledger.js"
 import { evaluateConservativeStrategy } from "./conservative-strategy.js"
