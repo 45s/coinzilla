@@ -18,6 +18,8 @@ const eventPublisher = {
   publish: (event) => {
     if (event.name === "recovery.cycle_completed") {
       cycleCompletions.set(event.data.symbol, event.data)
+      cycleWaiters.get(event.data.symbol)?.(event.data)
+      cycleWaiters.delete(event.data.symbol)
     }
     return { ok: true }
   },
