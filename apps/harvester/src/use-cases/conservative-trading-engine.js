@@ -880,7 +880,7 @@ export function makeConservativeTradingEngine({
           message: "Harvester Conservative evaluation submitted no orders",
           evaluationId,
           symbol,
-          reason: decision.reason,
+          reason: decision.reason ?? executableActions[0]?.reason,
           activeOrders: activeOrdersBefore.map((order) => order.value),
         })
         return toResult({ data: { decision, submittedOrders: [] } })
