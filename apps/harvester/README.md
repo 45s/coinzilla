@@ -216,23 +216,26 @@ The detailed joint-session procedure, explicit limits, reconciliation requiremen
    enabled pair receives prices. The first Conservative BUY is submitted below
    the current last trade by `priceStepPercent`, rounded down to the exchange
    tick.
-7. When the BUY fills, Harvester accounts the actual fill and places the next
-   standing BUY plus the recovery SELL. If another BUY fills while that SELL
-   is open, Harvester cancels it, reconciles its fill history, and places a
-   recalculated SELL only after the cancellation is confirmed.
-8. After the recovery SELL fills, Harvester verifies actual net proceeds and
-   moves exactly `keepQuantity` into free inventory. Confirm the next BUY
-   remains active and the free amount is excluded from invested-position
-   calculations.
+7. When the BUY fills, Harvester accounts the actual fill and follows the
+   canonical Conservative lifecycle. A new BUY fill while a recovery SELL is
+   open triggers decision B: cancel, reconcile terminal state and all fills/
+   commissions, update accounting, then plan the replacement. A SELL that
+   becomes FILLED during cancellation is processed as FILLED. Incomplete
+   reconciliation fails closed.
+8. After a SELL reaches a terminal state, verify actual fills/commissions,
+   full accumulated cost recovery, at least $0.01 realized net profit, and
+   sell-through of all sellable quantity above exact configured `keepQuantity`.
+   Classify exchange-constrained dust explicitly and preserve its basis. Do not
+   allocate/reset until position quantity equals `keepQuantity`.
 
 **Shutdown/restart warning:** stopping Harvester does not cancel exchange
-orders. Before restarting, inspect the TESTNET account and reconcile any
-outstanding Harvester orders or uncertain outcomes. External orders and
-pre-existing inventory are not adopted by Harvester; they may affect available
-balances but are not automatically sold. A clean account is recommended for a
-controlled first-cycle test, but it is not a startup requirement. If Harvester
-pauses because an order outcome or fill history is uncertain, do not restart
-and blindly resubmit; inspect the account and reconcile it first.
+orders. Personal-PC downtime is expected; 24/7 uptime is not required. However,
+the current bootstrap does not replay prior-session Journal state or restore
+owned orders/fills after restart. Safe restart reconciliation is deferred to
+[#654](https://github.com/45s/coinzilla). Until that work is complete, do not
+resume trading after a prior session with owned resting orders or unresolved
+fills merely because a manual account inspection was performed. External
+orders and pre-existing inventory remain unowned.
 
 This runbook is for TESTNET only. It does not enable live trading or claim
 durable restart recovery.

@@ -222,7 +222,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 - [x] Normalize user-data order/execution events at the broker adapter boundary. Binance TRADE execution reports are converted into canonical `Fill` entities using cached symbol metadata; non-trade order events remain normalized broker events. Normalization failures now include execution context and close the user-data trading gate.
 - [x] Normalize actual fills with stable execution IDs, market, side, executed base and quote quantities, timestamps, and exchange-charged commission amount/asset. Missing/invalid execution IDs and incomplete fee facts fail closed.
-- [x] Reject malformed, incomplete, or unsupported fills visibly; validate aggregate base/quote commission bounds and surface Binance normalization failures with an actionable pause reason.
+- [x] Reject malformed or incomplete fills visibly; validate aggregate base/quote commission bounds and surface Binance normalization failures with an actionable pause reason. Third-asset commission quote valuation or fail-closed behavior is defined in the canonical specification and remains an implementation verification item.
 - [x] Deduplicate fills using stable exchange execution identity and conflicting-fact fingerprints; serialize user-data event handling and Portfolio/RecoveryLedger updates in process memory. Fingerprint tests cover every mutable canonical execution fact and commission-entry order. Durable deduplication is explicitly deferred; it is not a P0.4 prerequisite.
 - [x] **Verify order ownership before accounting:** the in-process engine applies updates only to orders registered with Harvester; unknown/manual executions pause only the affected pair and are not accounted. Deterministic multi-market tests cover cross-pair isolation, duplicate fills, and stale out-of-order order updates.
 - [x] Handle NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and exchange-specific terminal/unknown states. Adapter mapping, engine wait/pause/reevaluation behavior, and late FILLED-after-EXPIRED races have deterministic offline coverage.
@@ -246,7 +246,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [~] Replace the current price-only callback flow with the actual decision-to-order execution pipeline. A tested application use case now converts pure Conservative intents into registered, exchange-rule-validated broker submissions; bootstrap composition and event-driven lifecycle integration remain.
 - [x] Do not expose `runtime.placeOrder` or `runtime.broker`; all order submission remains private to the composed Conservative engine and its broker port.
 
-### Deferred follow-up (not a P0 gate) — Persistence, restart, and comprehensive recovery
+### Separate deferred workstream #654 — Persistence, restart, and comprehensive recovery (outside this audit)
 
 - [ ] Decide the minimum durable state required before enabling unattended trading: orders/client IDs, fills/deduplication IDs, reservations, Portfolio/Position, strategy control state, and relevant configuration/version.
 - [ ] Integrate the already available shared Journal read/replay capability into Harvester's domain-specific durable state. This is deferred until after the first successful TESTNET trading cycle; do not implement it as a prerequisite.
@@ -256,7 +256,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 - [ ] Test crash/restart at each order/fill transition and ensure no duplicate order or fill application.
 - [ ] Do not claim exactly-once delivery; guarantee idempotent accounting through durable execution identity and reconciliation.
 
-### P0.7 — First strategy end-to-end verification
+### Historical P0.7 — First strategy end-to-end verification (superseded status; evidence only)
 
 - [x] Verify Conservative recovery SELL quantity/price rounding against actual base/quote commission fills at quantity-step, price-tick, and exact minProfit boundaries. Tests assert post-fill active inventory and realized net profit using exact decimal strings.
 
@@ -341,15 +341,15 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [x] Harvester owns its application-facing broker port and adapts `@coinzilla/brokers`.
 - [x] One shared Position per market; Conservative and Aggressive share accounting but only one controls the pair at a time.
 - [x] Confirmed canonical fills, including exchange-charged commissions, are the only source of Portfolio holdings changes.
-- [x] Third-asset commission fills are rejected for now; they must never be silently ignored.
+- [x] Third-asset commissions require reliable quote valuation or fail-closed handling; see the canonical Conservative specification.
 - [x] BUY prices round down and SELL prices round up to exchange tick rules.
 - [x] Live exchange tests are opt-in and TESTNET-only; default tests never need credentials or network access.
 - [x] Use shared `@coinzilla/utils` decimal functions and `defaultLogger`; do not duplicate generic utilities or call global console from Harvester.
 
 ## Open product decisions
 
-- [ ] Complete the remaining strategy-specific questions in [Trading strategies](./docs/trading-strategies.md), but prioritize only decisions that block the first executable cycle.
-- [ ] Finalize reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders.
+- [x] Conservative owner decisions are closed and recorded in the canonical specification. No additional Conservative product decisions are pending.
+- [ ] Finalize shared application reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders; do not duplicate Conservative strategy policy.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
 - [ ] Implement optional operational journaling as a separate observability task; no successful TESTNET cycle is required. Separately decide whether Journal read/replay should later participate in durable Harvester state/restart recovery. The staged operational event-journal plan does not implement replay or restart recovery.
 - [ ] Decide whether strategy-specific P/L attribution is required.

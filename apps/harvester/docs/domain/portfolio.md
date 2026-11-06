@@ -93,7 +93,7 @@ The agreed Position accounting responsibility includes:
 
 These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. The active strategy must consult and respect this accounting and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting. The Trading Engine grants operational control to only one strategy for a pair at a time; the inactive strategy must not submit or manage orders for that Position.
 
-A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule.
+A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule. Conservative position quantity/spent, actual commission valuation, SELL proceeds, and recovery basis are defined only in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### Aggressive strategy inventory
 
@@ -167,19 +167,11 @@ The authoritative Conservative contract, including the quantity/spent model, act
 The following decisions have been agreed:
 
 1. **Position ownership — one position per trading pair.** `BTCUSDT` and `ETHUSDT` have separate positions. A Position is not account-wide per asset and is not split into separate strategy-owned positions.
-**Cross-strategy BUY repricing invariant:** Conservative trailing BUY and
-Aggressive BUY-grid upward repricing are both allowed only while the matching
-Portfolio Position has zero active `baseQuantity.amount`. A positive active
-quantity suppresses repricing before trigger evaluation and prevents repricing-
-driven BUY cancellation/replacement. A missing or zero-quantity Position is
-eligible; retained `freeBaseQuantity` is excluded. This is an engine-level
-safety invariant, not a strategy-local flag. Aggressive grid repricing is not
-yet executable, so its implementation must adopt this invariant before it
-introduces any grid replacement behavior.
+**Cross-strategy BUY repricing invariant:** Conservative trailing-BUY repricing eligibility is defined only in the canonical Conservative specification. The shared engine must enforce that gate against active Position quantity; retained free inventory is excluded. Any future Aggressive BUY-grid repricing requires its own approved strategy specification before becoming executable. This paragraph records the engine boundary only; it does not define Conservative behavior.
 
 2. **Cross-strategy control — exclusive, with shared accounting.** Conservative and Aggressive use the same Position and inventory for a pair, but only one strategy controls it at a time. Each pair has a planned total quote budget. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). When actual executed BUY investment exceeds that percentage of the pair's planned total quote budget, the Trading Engine automatically hands control from Aggressive to Conservative. Only executed BUY fills count: unfilled/open BUY orders and their reserved quote commitment are excluded. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; a position becoming smaller than the takeover threshold does not return control to Aggressive. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Never force a sale at a loss to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. The inactive strategy must not operate the Position.
-3. **Accounting — complete shared accounting.** Position is the authoritative source for actual holdings, invested quote, average entry cost, realized profit, commissions, reserved inventory, and available inventory. Both strategies use this shared accounting.
-4. **Third-asset commissions — reject for now.** A fill whose commission is charged in an asset other than the pair's base or quote asset is unsupported and must be rejected visibly. It must never be silently ignored or valued using an invented conversion.
+3. **Accounting — shared pair projection.** Portfolio is the shared source for actual pair holdings and reservations. Conservative quantity/spent and recovery cost/proceeds semantics are defined only in the canonical Conservative specification.
+4. **Third-asset commissions.** Conservative third-asset commissions require a reliable quote-currency valuation; otherwise fail closed. The canonical specification defines this rule. Do not silently ignore the debit or invent a conversion.
 
 These decisions define pair-level accounting and exclusive strategy control for each pair. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
 
