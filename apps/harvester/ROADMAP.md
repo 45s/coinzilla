@@ -1420,19 +1420,26 @@ These decisions close the owner-input questions in #646. Remaining work is engin
 The owner decisions above are approved requirements, not pending questions. Start implementation immediately on this audit branch and keep the work limited to the Conservative trading path.
 
 ### P0 — enforce the minimum net-profit floor
-- [ ] Enforce `minProfit >= 0.01` in Harvester trading-config validation. Reject zero and every value below 0.01.
-- [ ] Enforce the same floor in the pure recovery SELL planner and recovery completion boundary so direct callers cannot bypass config validation.
-- [ ] Add exact-boundary tests: 0 and 0.009 rejected; 0.01 accepted; realized net profit below 0.01 must not complete a cycle.
-- [ ] Align Conservative specification, README/config guidance, and test matrix with the rule: **never close at a loss or break-even; require at least 0.01 net quote profit after actual commissions**.
+- [x] Enforce `minProfit >= 0.01` in Harvester trading-config validation. Reject zero and every value below 0.01.
+- [x] Enforce the same floor in the pure recovery SELL planner and recovery completion boundary so direct callers cannot bypass config validation.
+- [x] Add exact-boundary tests: 0 and 0.009 rejected; 0.01 accepted; realized net profit below 0.01 must not complete a cycle.
+- [x] Align Conservative specification and README/config guidance with the rule: **never close at a loss or break-even; require at least 0.01 net quote profit after actual commissions**. Accounting matrix update remains to verify.
 
 ### P0 — sell all sellable Conservative inventory except the configured reserve
-- [ ] Harvester's current config uses pair-level `keepQuantity`; no `coinToKeep` key exists in the Harvester config/source search. Treat `keepQuantity` as the current configured retained-coin amount unless source inspection proves a distinct existing mapping. Do not introduce a second setting or rename config silently.
-- [ ] Trace the full recovery SELL → fill → completion → next-evaluation path. The approved outcome is that only the configured reserve remains; do not leave additional sellable residual inventory stranded after a successful recovery.
-- [ ] Preserve exchange quantity-step and base-fee constraints. If true dust cannot be sold under exchange rules, report it explicitly and never classify it as the configured reserve.
-- [ ] Add focused tests for base-fee reserve, quantity-step dust, exact reserve preservation, and repeated evaluation after completion. Do not alter the configured reserve amount.
+- [x] Verified Harvester's current config uses pair-level `keepQuantity`; no `coinToKeep` key exists in the Harvester config/source search. Treat `keepQuantity` as the current configured retained-coin amount. Do not introduce a second setting or rename config silently.
+- [x] Traced the recovery SELL → fill → completion → next-evaluation path. Planner already maximizes sellable quantity above `keepQuantity`; completion allocates exactly `keepQuantity`. The only additional remainder is constrained by base-fee allowance/quantity-step rounding and is not sellable under the exchange rules.
+- [x] Preserve exchange quantity-step and base-fee constraints. Exchange-constrained remainder is dust, not part of the configured reserve.
+- [~] Existing tests cover base-fee reserve, maximum quantity without crossing `keepQuantity`, and exact reserve allocation. Add/verify explicit quantity-step dust and post-completion repeated-evaluation regression before closing this item. Do not alter the configured reserve amount.
 
 ### Delivery rules
 - Implement source + focused tests first, then align specification/README/ROADMAP and update #646/#645/PR #653 with exact commits and CI.
 - No TESTNET order placement/cancellation, account/config mutation, bot restart, live trading, or merge is authorized by this work.
 - Preserve original audit snapshots and chronology. Keep PR #653 open and TESTNET acceptance NOT ACCEPTED until all evidence and acceptance criteria pass.
 - Do not ask the owner to repeat already supplied balances, open orders, trade history, logs, or the two strategy decisions.
+
+
+### Implementation progress — 2026-11-06
+- Implemented the 0.01 minimum in config validation, recovery SELL planning, and recovery completion; added zero/sub-cent rejection tests and exact 0.01 acceptance.
+- Updated the Conservative specification and README with the owner-approved net-profit and retained-inventory rules.
+- Verified the current Harvester config key is `keepQuantity`; the requested `coinToKeep` name is not present in Harvester's current config/source. No duplicate config field was introduced.
+- Verified the planner already sells the maximum exchange-valid quantity above the reserve after base-fee allowance and quantity-step rounding. Any extra remainder is exchange-constrained dust; exact dust/repeated-evaluation regression coverage remains in progress.
