@@ -254,14 +254,15 @@ test("omits INFO labels while retaining DEBUG, WARN, and ERROR labels", () => {
   const transport = createHarvesterConsoleTransport({ output, color: false })
 
   for (const [level, message] of [
-    ["info", "Informational event"],
-    ["debug", "Debug detail"],
-    ["warn", "Warning event"],
-    ["error", "Failure event"],
+    ["INFO", "Informational event"],
+    ["DEBUG", "Debug detail"],
+    ["WARN", "Warning event"],
+    ["ERROR", "Failure event"],
   ]) {
     transport.write({
       timestamp: "2026-11-05T12:00:00.000Z",
-      level,
+      level: level.toLowerCase(),
+      method: level,
       data: { message },
     })
   }
