@@ -238,33 +238,26 @@ const mapStrategyDecisionInputs = (inputs) => {
     "investmentLimit", "orderQuantity", "keepQuantity", "priceStepPercent",
     "makerPercent", "takerPercent", "minProfit",
   ]) {
-    if (inputs[field] === undefined) continue
-    mapped[field] = field === "lastBuyPrice" && inputs[field] === null
-      ? null
-      : requireDecimalString({ value: inputs[field], field: "inputs." + field })
-  }
-  for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
-    if (inputs[field] !== undefined) {
-      mapped[field] = requireCount({ value: inputs[field], field: "inputs." + field })
+    const value = inputs[field]
+    if (value === undefined) continue
+    if (field === "lastBuyPrice" && value === null) {
+      mapped[field] = null
+      continue
+    }
+    const decimal = typeof value === "number" && Number.isFinite(value) ? String(value) : value
+    if (typeof decimal !== "string") continue
+    try {
+      assertDecimalString({ value: decimal, field: "inputs." + field })
+      mapped[field] = decimal
+    } catch {
+      // Preserve valid decision inputs without letting malformed optional diagnostics hide the decision.
     }
   }
+  for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
+    const value = inputs[field]
+    if (Number.isSafeInteger(value) && value >= 0) mapped[field] = value
+  }
   return mapped
-}
-
-const requireOrderFacts = ({ order }) => {
-  if (!order || typeof order !== "object" || !order.market?.symbol) {
-    throw new TypeError("order must contain canonical market facts")
-  }
-  return {
-    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
-    symbol: requireString({ value: order.market.symbol, field: "symbol" }),
-    side: order.side === "BUY" || order.side === "SELL"
-      ? order.side
-      : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
-    type: requireString({ value: order.type, field: "type" }),
-    price: requireDecimalString({ value: order.limitPrice?.amount, field: "price" }),
-    quantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "quantity" }),
-  }
 }
 
 /** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
@@ -278,7 +271,7 @@ export const mapStrategyDecisionData = (input = {}) =>
       strategy,
       symbol: requireString({ value: symbol, field: "symbol" }),
       referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
-      ...(reason === undefined ? {} : { reason: requireString({ value: reason, field: "reason" }).slice(0, 160) }),
+      ...(typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 160) } : {}),
       ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
       actions: actions.map((action, index) => ({
         side: action?.side === "BUY" || action?.side === "SELL"

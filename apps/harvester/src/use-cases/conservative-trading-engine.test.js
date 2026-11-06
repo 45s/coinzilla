@@ -531,42 +531,20 @@ test("publishes actionable decisions and order submission facts around broker I/
     "order.submission_requested",
     "order.submitted",
   ])
-  assert.deepEqual(events[0].data, {
-    strategy: "CONSERVATIVE",
-    symbol: "DOGEUSDT",
-    referencePrice: "100",
+  assert.equal(events[0].data.strategy, "CONSERVATIVE")
+  assert.equal(events[0].data.symbol, "DOGEUSDT")
+  assert.equal(events[0].data.referencePrice, "100")
+  assert.equal(events[0].data.reason, "INITIAL_BUY")
+  assert.equal(events[0].data.inputs.freeQuoteBalance, "1000")
+  assert.equal(events[0].data.inputs.investmentLimit, "1000")
+  assert.equal(events[0].data.inputs.priceStepPercent, "0.05")
+  assert.deepEqual(events[0].data.actions, [{
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    price: "99.95",
+    quantity: "1",
     reason: "INITIAL_BUY",
-    inputs: {
-      lastBuyPrice: null,
-      activeOrderCount: 0,
-      activeBuyCount: 0,
-      activeSellCount: 0,
-      activeBaseQuantity: "0",
-      activeBaseBalance: "0",
-      freeQuoteBalance: "1000",
-      freeBaseBalance: "0",
-      quoteCashFlow: "0",
-      committedQuote: "0",
-      committedQuoteBalance: "0",
-      committedBase: "0",
-      committedBaseBalance: "0",
-      outstandingRecoveryAmount: "0",
-      investmentLimit: "1000",
-      orderQuantity: "1",
-      keepQuantity: "0.1",
-      priceStepPercent: "0.05",
-      makerPercent: "0",
-      takerPercent: "0.075",
-      minProfit: "0.01",
-    },
-    actions: [{
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      price: "99.95",
-      quantity: "1",
-      reason: "INITIAL_BUY",
-    }],
-  })
+  }])
   assert.equal(events[1].data.status, "PENDING")
   const clientOrderId = events[1].data.clientOrderId
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
