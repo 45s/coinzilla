@@ -401,3 +401,33 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 
 
 **Priority correction (2026-11-06):** This finding is retained only as a future roadmap note. Do not implement restart recovery during the current audit. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
+
+
+## F-012 — Conservative residual sell-through defect: first fix implemented, offline regressions pass (2026-11-06)
+
+**Status: IMPLEMENTED / OFFLINE CI PASS; overall audit remains OPEN.**
+
+The prior implementation gated recovery SELL creation on positive `outstandingRecoveryAmount`. After the first profitable SELL, cycle completion could reset the ledger while leaving active inventory above `keepQuantity`; the strategy then suppressed further SELLs. That behavior contradicted the owner-approved sell-all policy.
+
+### Code changes
+- The Conservative policy now plans SELLs whenever active inventory exceeds exact `keepQuantity`, including after cumulative proceeds have already secured the minimum net profit.
+- The RecoveryLedger is retained until active quantity reaches exact `keepQuantity`; completion returns a non-pausing residual-sell-through outcome while inventory remains above the reserve.
+- The engine handles that outcome as a normal strategy continuation and reevaluates rather than pausing or resetting the cycle.
+- Once cumulative proceeds cover cost plus `minProfit`, the residual SELL price uses the current market reference rounded up to the price tick, not an artificial one-tick price.
+- The policy checks `MIN_QUANTITY` and `MIN_NOTIONAL` before emitting a residual SELL. A currently untradeable remainder is exposed as `EXCHANGE_CONSTRAINED_DUST` with exact quantity and limiting rule; no invalid order is emitted.
+- Active SELL detection continues to suppress duplicate residual SELL intents. Missing cost/profit basis with active inventory fails closed.
+
+### Regression coverage added/updated
+- Profitable residual sell-through after `outstandingRecoveryAmount` reaches zero.
+- Current-market residual pricing (no one-tick floor).
+- Quantity-step and MIN_NOTIONAL dust classification.
+- Exact `keepQuantity` completion and delayed completion while residual remains.
+- Duplicate residual SELL suppression and missing-basis fail-closed behavior.
+- Engine behavior: profitable residual keeps its basis, returns reevaluate, and does not pause when the remaining amount is exchange-constrained.
+- Existing accounting tests cover actual base- and quote-asset commissions; existing planner tests cover fee reserve and quantity-step boundaries.
+
+### Verification
+Exact code HEAD `1e4bf3272983411b5e8c2224b3fd4371baec86f9` passed all five configured workflows: JavaScript Syntax, Unit Tests, Utils Unit Tests, Dependency Audit, and Test Coverage. Read-only Binance TESTNET integration was SKIPPED. This is offline evidence only; no TESTNET acceptance is claimed.
+
+### Still open
+Continue auditing the rest of Conservative policy and lifecycle: BUY/SELL coexistence and sequencing, investment/commitment calculations, order replacement and cancellation races, all commission assets/statuses, price/quantity filter boundaries, post-only behavior, exact reserve under base-asset fees, and repeated-evaluation idempotency. Do not close #645/#646 or PR #653 based on this first fix alone.
