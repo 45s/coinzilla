@@ -414,3 +414,14 @@ The operator runs Harvester on a personal PC and is not expected to maintain a 2
 The required safety behavior is **restart reconciliation before trading resumes**: discover owned open orders and fills since the last durable checkpoint, reconcile partial/terminal states, commissions and authoritative balances, apply executions idempotently to Portfolio/RecoveryLedger, restore reservations, and keep trading fail-closed until reconciliation completes. Historical CLOSING snapshots remain immutable; later fills belong to the next-session reconciliation.
 
 Accordingly, DOGE 1276698 (1,196 DOGE SELL at 08:03Z) and ZRO 727905 (5 ZRO BUY at 08:38Z) filling after the ~07:58Z shutdown is expected and must not be described as a runtime contradiction or as a requirement for 24/7 uptime. Lack of a later same-session Journal update is **not** a defect. Whether startup recovery correctly imports these offline fills remains an engineering behavior to verify; do not claim it failed without a restart/reconciliation test or source-level proof.
+
+
+## 2026-11-06 source audit — startup replay and residual sell-through
+
+The workstation lifecycle clarification remains authoritative: offline fills are expected and do not require 24/7 uptime or same-session in-memory accounting. DOGE SELL 1276698 and ZRO BUY 727905 must be imported on the next startup before any new trading.
+
+A source review now establishes a concrete restart blocker: `start-harvester.js` explicitly disables durable Journal replay and initializes fresh in-process trading state. The startup path does not call `restoreHarvesterJournalState` or attach its restored Portfolio/RecoveryLedger/OrderRegistry to the trading engine. Separate projection, restoration, trade-history audit, and account-audit helpers exist, but are not proof of startup integration. Classify restart reconciliation as **FAIL at the inspected startup integration**, not merely unknown due to absent runtime logs.
+
+The residual sell-through defect is also source-confirmed: after recovery completion allocates exactly `keepQuantity` and resets the ledger, strategy evaluation suppresses SELL intents when outstanding recovery is zero, even if active inventory remains above `keepQuantity`. The existing test asserts this suppression. Do not make a blind residual SELL; preserve original cycle basis and actual commission facts, and check minimum notional, post-only, quantity steps, and explicit dust before implementing.
+
+Required next work: implement durable replay/reconciliation and fail-closed readiness; implement safe residual sell-through with exact reserve/dust behavior; add the full requested regression matrix; run relevant tests and exact-final-HEAD CI. PR #653 stays open/unmerged. TESTNET acceptance remains **NOT ACCEPTED**. No exchange writes, cancellations, withdrawals, account/config changes, live trades, or bot restarts were performed.
