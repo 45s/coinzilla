@@ -488,3 +488,10 @@ entry format, and shutdown behavior.
 This is a narrowly scoped, explicitly authorized observability task. It does
 not change the general TESTNET acceptance gate, authorize exchange writes, or
 modify trading/Journal behavior.
+
+
+## Conservative profitability and retained inventory rules
+
+- `strategies.CG_coinGrabber.settings.minProfit` must be at least `0.01` in the pair's quote currency. This is **net profit after applicable commissions**; zero, break-even, and loss-making recovery completion are rejected.
+- A recovery SELL must sell all exchange-sellable strategy inventory except the configured retained amount. In the current Harvester pair config, that amount is `keepQuantity`. The planner respects base-asset commission reserves and exchange quantity steps; any remainder that cannot meet exchange rules is dust, not an extra configured reserve.
+- Recovery completion is based on actual confirmed fills and net proceeds, not the submitted order price or requested quantity.
