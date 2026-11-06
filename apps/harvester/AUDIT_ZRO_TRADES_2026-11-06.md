@@ -87,3 +87,16 @@ time,tradeId,orderId,side,liquidity,price,quantity,quoteQuantity,commission,comm
 - Do not merge the 08:38 fill into the 07:58 snapshot's inventory as if it had occurred before shutdown.
 - The query returned 50 rows at its requested limit with no `fromId`; it is not guaranteed all-time history.
 - No orders, cancellations, replacements, withdrawals, account settings, or bot process state were changed during this read-only evidence capture.
+
+ 
+## Conservative strategy reconciliation — order 727904
+
+Audit-baseline configuration: keepQuantity=0.01 ZRO, minProfit=0.01 USDT, maker/taker reserve=0.1%; order 727904 was an ordinary LIMIT at 1.606. Under the candidate quantity-step assumption of 0.01 ZRO, the canonical fee-reserved sell quantity is 39.91 ZRO, matching the submitted order. The exact historical exchange filter payload is not preserved in the raw runtime logs; historical tick/step/minimum-filter conformance is therefore UNVERIFIED, although exchange acceptance proves the submitted order passed the actual filters.
+
+BUY accounting: 40 gross ZRO less 0.04 ZRO base commissions = 39.96 net ZRO; Position.spent=64.02 USDT. SELL accounting: 39.91 ZRO; gross 64.09546 USDT; actual quote commission 0.06409546 USDT; net proceeds 64.03136454 USDT; realized net profit +0.01136454 USDT. Position after SELL: 0.05 ZRO active.
+
+**Historical strategy VIOLATION:** the trace records completion input activeQuantity=0.05, keepQuantity=0.01, spent=64.02, netSellProceeds=64.03136454, minProfit=0.01. It then records completion eligible=true, allocation of 0.01 free ZRO, active quantity 0.04, and RecoveryLedger reset to zero. Repeated immediate evaluations returned NO_ACTION with actions=[] while 0.04 remained active. This violates exact-keep completion and basis preservation. Whether 0.04 ZRO was historically blocked by MIN_NOTIONAL is UNVERIFIED because the exchange-filter snapshot is not preserved; at 1.606 its notional is only 0.06424 USDT. That uncertainty does not change the completion violation.
+
+Confirmed baseline root cause: completion accepted active inventory greater than keepQuantity, while the strategy stopped creating recovery SELLs once outstanding recovery reached zero. Current audit-branch implementation defers completion while active quantity exceeds keepQuantity and continues residual SELL planning above the exact reserve, classifying filter-constrained dust without resetting accounting. Regression tests now reproduce the actual ZRO fills, commission, residual, and completion input.
+
+The later BUY 727905 / trade 12182 is a separate post-CLOSING event and is not part of the 39.96-ZRO pre-SELL position or this recovery calculation.
