@@ -432,3 +432,14 @@ ZRO BUY order 727905 (5 gross ZRO, 0.005 ZRO base commission, 4.995 net) filled 
 - ZRO recovery completion/reset with 0.04 active residual: VIOLATED; root cause confirmed and implementation corrected on this branch.
 - Partial SELL stability, decision-B cancel/reconcile/replacement, and other terminal states are not proven by these two final SELLs; continue focused source/test audit rather than infer them from this outcome.
 - No TESTNET writes, cancellations, new orders, bot restarts, or merges were performed.
+
+
+## 2026-11-06 lifecycle audit — partial BUY while recovery SELL is open
+
+**Confirmed source finding — VIOLATED:** `processUserDataEventTransition()` in `src/use-cases/conservative-trading-engine.js` accounts a BUY TRADE fill but returns from the generic `PARTIALLY_FILLED` branch before canceling an active recovery SELL. Cancellation currently occurs only in the later FILLED-BUY path. The canonical specification requires the existing SELL to be canceled and fully reconciled after any new BUY fill, including a partial BUY fill, before recalculating SELL quantity/price.
+
+**Fix and regression added:** commit `9c054725e03a751b06b8a3421e859201640c6469` adds cancellation/reconciliation/replanning for a partial BUY while a recovery SELL is active; commit `3cfc085d0caecc9a74ca9cb279298dde7c6075df` adds a regression asserting the BUY remains PARTIALLY_FILLED, the old SELL is canceled, and a replacement SELL is opened only after reconciliation. Exact-head GitHub Actions had no runs at the time of this update; test and fix are therefore **PENDING VERIFICATION**, not passed.
+
+**Related lifecycle checks:** partial SELL fills are applied through the paired idempotent accounting transition and do not trigger completion; the cancellation-race regression at test line 2551 proves one application when a raced SELL fill is replayed. Dust becoming sellable after a later BUY still requires a dedicated regression. Completion must continue to require exact keepQuantity and preserve above-keep dust/basis without allocation/reset.
+
+The canonical specification remains the sole source of truth and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No TESTNET writes, cancellations, new orders, or bot restarts were performed.
