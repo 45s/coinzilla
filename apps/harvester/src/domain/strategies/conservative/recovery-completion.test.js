@@ -123,3 +123,23 @@ test("completes a profitable cycle when keepQuantity is configured as zero", () 
     realizedNetProfit: "0.01",
   })
 })
+
+
+test("does not complete the actual ZRO recovery while the 0.04 residual remains above keepQuantity", () => {
+  const result = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: "64.02",
+    netSellProceeds: "64.03136454",
+    activeQuantity: "0.05",
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+  })
+
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    freeQuantity: "0",
+    realizedNetProfit: "0.01136454",
+  })
+})
