@@ -1892,7 +1892,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     order: recoverySell,
     tradeId: "cycle-recovery-sell-final",
     quantity: finalSellQuantity,
-    commissionAsset: "QUOTE",
+    commissionAsset: "BASE",
     executedAt: 16,
   })
   const recoverySellCompleted = await engine.processUserDataEvent({
@@ -1913,7 +1913,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
 
   const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
   assert.equal(completedPosition.freeBaseQuantity.amount, "0.1")
-  assert.ok(compareDecimal({ left: completedPosition.baseQuantity.amount, right: "0" }) > 0)
+  assert.equal(completedPosition.baseQuantity.amount, "0")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
   assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
@@ -1921,7 +1921,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
   assert.equal(currentRecoveryLedger.appliedFillIds.length, 7)
   assert.equal(events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
 
-  // Residual active inventory is not a new recovery obligation after reset.
+  // Only the exact configured reserve remains, in the separate free bucket.
   const afterCompletionEvaluation = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
   assert.equal(afterCompletionEvaluation.ok, true, afterCompletionEvaluation.errors?.[0]?.message)
   assert.equal(harness.orders.length, 5)
@@ -3275,7 +3275,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
 })
 
 
-test("keeps post-recovery residual active inventory and does not issue another recovery SELL", async () => {
+test("keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL", async () => {
   const seeded = makeSeededRecoveryState()
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
@@ -3342,13 +3342,21 @@ test("keeps post-recovery residual active inventory and does not issue another r
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.residualSellThrough, true)
+  assert.equal(result.data.reevaluate, true)
   assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
+  assert.equal(currentRecoveryLedger.buyCost, "100")
+  assert.ok(Number(currentRecoveryLedger.netSellProceeds) > 100.01)
   const position = currentPortfolio.getPosition({ marketId: market.id })
-  assert.equal(position.freeBaseQuantity.amount, "0.1")
-  assert.ok(Number(position.baseQuantity.amount) > 0)
+  assert.equal(position.freeBaseQuantity.amount, "0")
+  assert.ok(Number(position.baseQuantity.amount) > 0.1)
   const sellOrders = harness.engine.getOrders().filter((order) => order.side === "SELL")
   assert.equal(sellOrders.length, 1)
   assert.equal(sellOrders[0].status, "FILLED")
+  const nextEvaluation = await harness.engine.evaluateLatest({ symbol: "DOGEUSDT" })
+  assert.equal(nextEvaluation.ok, true, nextEvaluation.errors?.[0]?.message)
+  assert.equal(nextEvaluation.data.decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(nextEvaluation.data.decision.inventoryDisposition.reason, "QUANTITY_INCREMENT")
   assert.deepEqual(harness.pauses, [])
 })
 
