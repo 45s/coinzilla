@@ -75,17 +75,37 @@ const config = {
   },
 }
 
-const marketFilters = (symbol) => {
+// Binance exchangeInfo payload: the real broker's symbol-filter adapter and
+// Harvester's canonical metadata converter must both process this response.
+const exchangeInfoResponse = (symbol) => {
   const baseAsset = symbol.slice(0, -4)
   return {
-    symbol,
-    baseAsset,
-    quoteAsset: "USDT",
-    tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
-    stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
-    minQuantity: symbol === "DOGEUSDT" ? "1" : "0.1",
-    minNotional: "5",
-    supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    symbols: [{
+      symbol,
+      baseAsset,
+      quoteAsset: "USDT",
+      orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+      filters: [
+        {
+          filterType: "PRICE_FILTER",
+          minPrice: "0",
+          maxPrice: "100000",
+          tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
+        },
+        {
+          filterType: "LOT_SIZE",
+          minQty: symbol === "DOGEUSDT" ? "1" : "0.1",
+          maxQty: "100000000",
+          stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
+        },
+        {
+          filterType: "MIN_NOTIONAL",
+          minNotional: "5",
+          applyToMarket: true,
+          avgPriceMins: 5,
+        },
+      ],
+    }],
   }
 }
 
@@ -132,7 +152,12 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     broker.connect = async () => {}
     broker.disconnect = async () => {}
     broker.getExchangeMarkets = async () => ({ ok: true, data: [] })
-    broker.getSymbolFilters = async ({ symbol }) => ({ ok: true, data: marketFilters(symbol) })
+    // Mock only the external WebSocket API response. Keep the real broker's
+    // getSymbolFilters() and adaptSymbolFiltersResponse() implementation.
+    broker.tradingConnection.request = async (method, { symbol }) => {
+      assert.equal(method, "exchangeInfo")
+      return { data: exchangeInfoResponse(symbol) }
+    }
     broker.getOpenOrders = async () => ({ ok: true, data: [] })
     broker.getFills = async () => ({ ok: true, data: [] })
     broker.getCanonicalOrderHistory = async ({ symbol, orderId } = {}) => ({
@@ -374,8 +399,8 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const [dogeCompletion, zroCompletion] = await Promise.all([dogeCycle, zroCycle])
     assert.equal(dogeCompletion.freeQuantity, "1.6")
     assert.equal(zroCompletion.freeQuantity, "0.015")
-    assert.ok(Number(dogeCompletion.realizedNetProfit) >= 0.01)
-    assert.ok(Number(zroCompletion.realizedNetProfit) >= 0.01)
+    assert.equal(dogeCompletion.realizedNetProfit, "0.01524808")
+    assert.equal(zroCompletion.realizedNetProfit, "0.0146573")
 
     const dogePosition = runtime.portfolio.getPosition({ symbol: "DOGEUSDT" })
     const zroPosition = runtime.portfolio.getPosition({ symbol: "ZROUSDT" })
