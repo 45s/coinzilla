@@ -73,6 +73,10 @@ test("rejects invalid completion inputs", () => {
   }))
   assert.throws(() => evaluateRecoveryCompletion({
     ...baseInput,
+    minProfit: "0.009",
+  }))
+  assert.throws(() => evaluateRecoveryCompletion({
+    ...baseInput,
     keepQuantity: "-1",
   }))
   assert.throws(() => evaluateRecoveryCompletion({
