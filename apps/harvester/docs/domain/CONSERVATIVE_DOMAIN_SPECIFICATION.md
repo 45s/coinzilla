@@ -186,7 +186,7 @@ flowchart TD
   G -- Yes --> G2[Apply all raced SELL fills exactly once]
   G2 --> H
   H --> I[Calculate sellable quantity above exact keepQuantity]
-  I --> J{Quantity and price valid under exchange filters?}
+  I --> J{Excess quantity satisfies quantity and minimum-notional filters?}
   J -- No --> K[Classify exact unsellable dust as retained bonus]
   J -- Yes --> L[Recover full accumulated spent plus at least 0.01 net]
   L --> M[Apply order-type-specific fee reserve and POST-ONLY checks]
