@@ -393,3 +393,15 @@ This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is 
 - Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
 
 The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## Superseding chronology clarification — post-CLOSING DOGE/ZRO fills (2026-11-06)
+
+The preliminary DOGE order-state conflict described above is superseded for the exchange execution chronology by the preserved 50-row actual-trade exports. The original application logs and CLOSING snapshot end around 07:58:11Z; they show DOGE order 1276698 OPEN with zero executed at the last runtime evaluations. The exchange-side fills occurred later:
+
+- DOGE order 1276698: trade 221990, SELL 278 DOGE at 08:03:01.841Z, and trade 221991, SELL 918 DOGE at 08:03:18.202Z. Total 1,196 DOGE; 85.93260000 USDT gross; 0.08593260 USDT quote commission; 85.84666740 USDT net proceeds.
+- ZRO BUY 727905: trade 12182 at 08:38:24.782Z, gross 5 ZRO, 0.005 ZRO base commission, 4.995 ZRO net credit, 7.98000000 USDT quote debit.
+
+Thus the runtime OPEN/zero-executed state and later exchange FILLED history are chronologically consistent, not contradictory same-time observations. The eventual exchange-side DOGE execution is confirmed; the earlier ~07:58 CLOSING snapshot remains historically valid and must not be rewritten.
+
+This does not prove that a later Harvester process applied either post-CLOSING fill to Portfolio/RecoveryLedger. No timestamped post-fill account/open-orders snapshot or later Journal/runtime session has been located. The complete historical CLOSING open-orders payload identifying both unresolved orders is also still absent. ZRO 727905 is one identified CLOSING unresolved order; the second identity remains unproven. Keep account-wide settlement and TESTNET acceptance PARTIAL/NOT ACCEPTED.
