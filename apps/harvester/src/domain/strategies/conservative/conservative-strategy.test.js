@@ -241,7 +241,7 @@ test("continues selling residual inventory after cumulative recovery profit is a
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT"
+          rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
             ? { ...rule, value: { amount: "0.1" } }
             : rule.type === "MIN_NOTIONAL"
               ? { ...rule, value: { amount: "0.05" } }
@@ -305,7 +305,7 @@ test("classifies residual quantity below MIN_NOTIONAL instead of submitting an i
       ...marketMetadata,
       tradingRules: {
         constraints: marketMetadata.tradingRules.constraints.map((rule) =>
-          rule.type === "QUANTITY_INCREMENT"
+          rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
             ? { ...rule, value: { amount: "0.1" } }
             : rule,
         ),
