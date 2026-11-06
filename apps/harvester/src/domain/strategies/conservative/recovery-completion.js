@@ -6,8 +6,9 @@ import { assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla
  *
  * This function does not mutate Position or RecoveryLedger. It allocates only
  * the configured keepQuantity after recovery obligations and minimum profit
- * are satisfied. Any additional active residual remains active inventory and
- * must not become a new recovery obligation after the ledger is reset.
+ * are satisfied AND no active inventory remains above that exact reserve.
+ * Exchange-constrained residuals must be classified by the strategy before
+ * cycle completion; they are not silently converted into free inventory.
  *
  * @param {object} input
  * @param {boolean} input.sellOrderFullyFilled Final reconciled recovery SELL state.
@@ -76,6 +77,15 @@ export function evaluateRecoveryCompletion({
       eligible: false,
       pause: true,
       reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
+      freeQuantity: "0",
+      realizedNetProfit,
+    })
+  }
+  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0) {
+    return Object.freeze({
+      eligible: false,
+      pause: false,
+      reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
       freeQuantity: "0",
       realizedNetProfit,
     })
