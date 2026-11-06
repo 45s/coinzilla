@@ -76,7 +76,7 @@ No trading behavior was changed to resolve this documentation conflict. Issue #6
 
 **Status:** PARTIAL.
 
-Issue #626 documents the 2026-11-05 repeated `recovered` / `recoveryRequired=true` deadlock. PR #627's merged implementation starts application reconciliation on `recovered`, drains accepted user-data events, durably audits account/open-order state, and acknowledges only after stable success. Five required workflows passed on PR head `d3307e473cb67b0a76dacb39fb2a0dd40935480b`.
+Issue #626 remains OPEN as of this audit and documents the 2026-11-05 repeated `recovered` / `recoveryRequired=true` deadlock. PR #627's merged implementation starts application reconciliation on `recovered`, drains accepted user-data events, durably audits account/open-order state, and acknowledges only after stable success. Five required workflows passed on PR head `d3307e473cb67b0a76dacb39fb2a0dd40935480b`.
 
 The 2026-11-06 Journal contains no observed reconnect/recovery sequence; therefore live recovery behavior remains UNVERIFIED by this session.
 
