@@ -21,7 +21,7 @@ export function validateTradingConfig(config) {
   if (!strategy.enabled) fail('strategies.CG_coinGrabber.enabled', 'CG_coinGrabber must remain enabled');
   requireRecord(strategy.settings, 'strategies.CG_coinGrabber.settings');
   const settingsPath = 'strategies.CG_coinGrabber.settings';
-  requireNumber(strategy.settings.minProfit, `${settingsPath}.minProfit`, { min: 0 });
+  requireNumber(strategy.settings.minProfit, `${settingsPath}.minProfit`, { min: 0.01 });
   requireRecord(strategy.settings.conservative, `${settingsPath}.conservative`);
   requireBoolean(strategy.settings.conservative.enabled, `${settingsPath}.conservative.enabled`);
   if (!strategy.settings.conservative.enabled) fail(`${settingsPath}.conservative.enabled`, 'Conservative must remain enabled');
