@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
@@ -977,7 +977,13 @@ export function makeConservativeTradingEngine({
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
         activeBaseBalance,
-        outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
+        outstandingRecoveryAmount: maxDecimal({
+          left: "0",
+          right: subtractDecimal({
+            left: position?.spent.amount ?? "0",
+            right: recoveryLedgerBefore?.netSellProceeds ?? "0",
+          }),
+        }),
         committedQuote,
         committedQuoteBalance,
         committedBase,
