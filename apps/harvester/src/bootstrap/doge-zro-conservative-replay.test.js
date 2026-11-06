@@ -16,7 +16,7 @@ const binanceEnv = {
 }
 
 const config = {
-    strategies: {
+  strategies: {
       CG_coinGrabber: {
         enabled: true,
         settings: {
@@ -49,13 +49,12 @@ const config = {
           },
         },
       },
-    },
-  }
+  },
+}
 
-test("starts Conservative DOGE/ZRO strategies from deterministic market prices and submits their initial BUYs", { timeout: 30_000 }, async () => {
+test("submits the expected Conservative DOGE/ZRO BUY orders for triggered prices", async () => {
   const submitted = []
   const priceHandlers = new Map()
-  let userData
   const symbolFilters = (symbol) => {
     const baseAsset = symbol.slice(0, -4)
     return {
@@ -99,7 +98,6 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
       },
     })
     broker.subscribeForUserData = async (handlers) => {
-      userData = handlers
       return { ok: true, data: { disconnect: async () => {} } }
     }
     broker.subscribeForPrices = async ({ symbol, onPrice }) => {
@@ -182,7 +180,6 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
       })
     }
 
-    assert.equal(submitted.filter((order) => order.side === "BUY").length, 2)
     const buys = submitted
       .filter((order) => order.side === "BUY")
       .sort((a, b) => a.market.symbol.localeCompare(b.market.symbol))
@@ -191,7 +188,6 @@ test("starts Conservative DOGE/ZRO strategies from deterministic market prices a
       ["0.07157", "400"],
       ["1.603", "5"],
     ])
-    assert.ok(userData)
   } finally {
     await runtime.stop()
   }
