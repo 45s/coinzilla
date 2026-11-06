@@ -274,6 +274,19 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
     brokerOrderId: "102",
     executionId: "402",
     error: new TypeError("Binance fill is missing trade id"),
+    brokerEvidence: {
+      schemaVersion: 1,
+      source: "binance.spot.userData.executionReport",
+      symbol: "BTCUSDT",
+      orderId: "102",
+      clientOrderId: "h-BTCUSDT-1",
+      executionId: "402",
+      tradeId: "502",
+      lastExecutedQuantity: "1",
+      cumulativeExecutedQuantity: "1",
+      commissionAmount: "0.001",
+      commissionAsset: "BTC",
+    },
   })
 
   assert.equal(runtime.userDataStatus, "EXECUTION_NORMALIZATION_FAILED")
@@ -283,6 +296,9 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
     event.data.status === "executionNormalizationFailed"
   )
   assert.equal(statusEvent.data.error.message, "Binance fill is missing trade id")
+  const rawEvidenceEvent = eventPublisher.events.find((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT)
+  assert.equal(rawEvidenceEvent.data.executionId, "402")
+  assert.equal(rawEvidenceEvent.data.commissionAmount, "0.001")
   assert.ok(logs.some((entry) =>
     entry.message === "Binance execution normalization failed" &&
     entry.symbol === "BTCUSDT" &&
