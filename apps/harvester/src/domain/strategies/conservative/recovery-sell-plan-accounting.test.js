@@ -167,7 +167,7 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
 
   assert.equal(belowTick.recoveryLedger.netSellProceeds, "9.9")
   assert.equal(belowCompletion.eligible, false)
-  assert.equal(belowCompletion.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
+  assert.equal(belowCompletion.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
   assert.equal(belowCompletion.realizedNetProfit, "1.02")
 })
 
