@@ -58,7 +58,7 @@ export function calculateRecoverySellPlan({
     compareDecimal({ left: keepQuantity, right: "0" }) < 0 ||
     compareDecimal({ left: cycleCost, right: "0" }) < 0 ||
     compareDecimal({ left: saleProceeds, right: "0" }) < 0 ||
-    compareDecimal({ left: minProfit, right: "0" }) <= 0 ||
+    compareDecimal({ left: minProfit, right: "0.01" }) < 0 ||
     compareDecimal({ left: feeRate, right: "0" }) < 0 ||
     compareDecimal({ left: feeRate, right: "1" }) >= 0 ||
     compareDecimal({ left: priceTickSize, right: "0" }) <= 0 ||
