@@ -379,9 +379,9 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Audit classification:** downgrade/remove “post-CLOSING Portfolio/RecoveryLedger application not evidenced” as a same-session defect or operator acceptance blocker. Keep a distinct restart-reconciliation verification item: on next startup Harvester must fetch and idempotently apply all owned fills since its last durable checkpoint, reconcile current balances/open orders/commissions, and keep trading disabled until complete. Classify this behavior UNVERIFIED until source/tests or a controlled restart scenario establish it; do not claim failure based solely on missing post-shutdown runtime logs.
 
 
-## F-011 — durable restart reconciliation is not integrated (2026-11-06)
+## F-011 — durable restart reconciliation (2026-11-06)
 
-**Status: FAIL — source-proven startup integration gap.**
+**Status: DEFERRED — outside the active Conservative strategy/policy audit. Not a blocker for issue #645, issue #646, or PR #653 acceptance.**
 
 **Owner-approved lifecycle:** Harvester runs on a personal workstation and may be stopped while Binance orders remain open. Exchange orders can partially or fully fill while Harvester is offline. This is expected. On the next startup, before any new trading, Harvester must reconcile every owned fill since the last durable checkpoint, actual commissions, partial/terminal order states, balances, locked funds, and open orders; update Portfolio/RecoveryLedger exactly once; restore reservations; and remain fail-closed until all checks succeed.
 
@@ -398,3 +398,6 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 - Add deterministic restart tests for offline DOGE/ZRO fills, partial fills, terminal orders, commissions, repeated startup/replay, duplicate prevention, balance/open-order mismatch, incomplete pagination, and fail-closed readiness.
 
 **Evidence discipline:** no TESTNET acceptance is inferred from source inspection or offline tests. No exchange writes, bot restarts, or account mutations were performed.
+
+
+**Priority correction (2026-11-06):** This finding is retained only as a future roadmap note. Do not implement restart recovery during the current audit. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
