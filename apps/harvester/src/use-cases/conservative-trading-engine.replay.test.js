@@ -92,6 +92,7 @@ function createMockBroker() {
         }),
       },
     }),
+    cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("not found")] }),
@@ -99,6 +100,7 @@ function createMockBroker() {
       ok: true,
       data: fillHistory.filter((fill) => fill.brokerOrderId === orderId),
     }),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getPrices: async ({ symbol }) => ({ ok: true, data: { symbol, price: "65000" } }),
     subscribeForPrices: async ({ symbol, onPrice }) => {
       priceHandlers.set(symbol, onPrice)
