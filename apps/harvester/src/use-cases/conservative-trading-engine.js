@@ -631,7 +631,8 @@ export function makeConservativeTradingEngine({
       const seenFillIds = new Set()
       for (const fill of fillsResult.data) {
         if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-            fill.side !== "SELL" || fill.brokerOrderId !== order.brokerOrderId) {
+            fill.side !== "SELL" || fill.brokerOrderId !== order.brokerOrderId ||
+            (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
           await pause({ symbol, reason: "RECOVERY_SELL_FILL_IDENTITY_MISMATCH" })
           return toResult({ error: new Error("Recovered SELL fill does not match the canceled order") })
         }
@@ -725,7 +726,8 @@ export function makeConservativeTradingEngine({
     const seenFillIds = new Set()
     for (const fill of fillsResult.data) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId) {
+          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         await pause({ symbol, reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH" })
         return toResult({ error: new Error("Recovered BUY fill does not match the canceled order") })
       }
@@ -1148,7 +1150,8 @@ export function makeConservativeTradingEngine({
       }
       const symbol = order.market.symbol
       if (fill.market.id !== order.market.id || fill.side !== order.side ||
-          fill.brokerOrderId !== order.brokerOrderId) {
+          fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         const error = new Error("Canonical Fill identity does not match its registered order")
         publishLifecycleEvent({
           eventPublisher,
@@ -1469,7 +1472,8 @@ export function makeConservativeTradingEngine({
             if (
               fill.market.id !== ownedOrder.market.id ||
               fill.brokerOrderId !== ownedOrder.brokerOrderId ||
-              fill.side !== ownedOrder.side
+              fill.side !== ownedOrder.side ||
+              (fill.clientOrderId !== undefined && fill.clientOrderId !== ownedOrder.clientOrderId)
             ) {
               throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
             }
