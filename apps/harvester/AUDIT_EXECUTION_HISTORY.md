@@ -72,7 +72,25 @@ Journal applied-fill identity is `binance:<symbol>:<tradeId>`. The Journal recor
 
 ## Strategy decision to order correlation
 
-The 13 `strategy.decision` events produced 23 order intents. The initial decision created DOGE BUY suffix -1 and ZRO BUY suffix -2. Each subsequent BUY fill caused a recovery SELL intent followed by a standing BUY intent for that symbol. When the next BUY filled, the previous recovery SELL was canceled with zero execution and a larger replacement SELL was submitted. The final ZRO SELL suffix -22 filled; ZRO BUY suffix -23 remained NEW. The final DOGE SELL suffix -11 is the unresolved cross-source status conflict described in AUDIT.md.
+The 13 Journal `strategy.decision` records map to the 23 order intents as follows. Client suffixes are the final sequence component of `h-971fc65d9a264984ab8aa7-<n>`.
+
+| Decision time UTC | Symbol | Reference price | Action(s) and matching client suffix |
+|---|---|---:|---|
+| 07:00:08.056 | DOGEUSDT | 0.07161000 | BUY 400 @ 0.07157 — -1 INITIAL_BUY |
+| 07:00:08.661 | ZROUSDT | 1.60500000 | BUY 5 @ 1.604 — -2 INITIAL_BUY |
+| 07:01:41.006 | DOGEUSDT | 0.07157000 | SELL 398 @ 0.07203 — -3 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 400 @ 0.07153 — -4 NEXT_STANDING_BUY |
+| 07:01:47.376 | ZROUSDT | 1.60400000 | SELL 4.98 @ 1.615 — -5 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.603 — -6 NEXT_STANDING_BUY |
+| 07:02:05.052 | ZROUSDT | 1.60300000 | SELL 9.97 @ 1.611 — -7 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.602 — -8 NEXT_STANDING_BUY |
+| 07:02:14.833 | DOGEUSDT | 0.07153000 | SELL 797 @ 0.07191 — -9 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 400 @ 0.07149 — -10 NEXT_STANDING_BUY |
+| 07:02:31.008 | DOGEUSDT | 0.07149000 | SELL 1,196 @ 0.07185 — -11 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT |
+| 07:02:37.604 | ZROUSDT | 1.60200000 | SELL 14.96 @ 1.61 — -12 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.601 — -13 NEXT_STANDING_BUY |
+| 07:02:40.312 | ZROUSDT | 1.60200000 | SELL 19.95 @ 1.609 — -14 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.600 — -15 NEXT_STANDING_BUY |
+| 07:02:53.814 | ZROUSDT | 1.60000000 | SELL 24.94 @ 1.608 — -16 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.599 — -17 NEXT_STANDING_BUY |
+| 07:03:09.962 | ZROUSDT | 1.59900000 | SELL 29.93 @ 1.608 — -18 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.598 — -19 NEXT_STANDING_BUY |
+| 07:04:14.631 | ZROUSDT | 1.59800000 | SELL 34.92 @ 1.607 — -20 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.597 — -21 NEXT_STANDING_BUY |
+| 07:04:46.922 | ZROUSDT | 1.59700000 | SELL 39.91 @ 1.606 — -22 RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT; BUY 5 @ 1.596 — -23 NEXT_STANDING_BUY |
+
+The initial decision created one BUY per enabled market. Subsequent filled BUY transitions produced a recovery SELL intent first and, where present, the next standing BUY intent. The nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) were canceled with zero execution before their replacements. The final ZRO SELL (-22) filled; its paired standing BUY (-23) remained NEW. The final DOGE SELL (-11) remains the cross-source status conflict described in AUDIT.md.
 
 ## Balance and order-state cross-check
 
