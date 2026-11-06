@@ -6,7 +6,7 @@
 
 ## F-001 — DOGE SELL order state conflicts with closing account state
 
-<badge-placeholder>CONFLICT</badge-placeholder>
+**Status: CONFLICT**
 
 **Evidence**
 - DOGE order history reports order 1276698 / client ID `h-971fc65d9a264984ab8aa7-11` as FILLED for 1,196 DOGE and 85.9326 USDT.
