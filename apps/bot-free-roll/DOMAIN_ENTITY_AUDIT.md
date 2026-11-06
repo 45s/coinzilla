@@ -1,7 +1,5 @@
 # Free-Roll domain entity and broker contract audit
 
-> **Historical Free-Roll predecessor artifact.** This document describes the legacy bot, not Harvester Conservative Strategy. For Harvester, the only authoritative Conservative rules are in [apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md](../harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Legacy rules and implementation notes here must not be copied into Harvester or treated as competing authority.
-
 **Roadmap:** FR-007  
 **Audited against:** `main` at the base commit of this PR  
 **Scope:** `packages/entities`, `packages/brokers`, and `apps/bot-free-roll/package.json`  
