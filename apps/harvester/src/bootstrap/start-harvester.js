@@ -1086,9 +1086,20 @@ export async function startHarvester({
         logger.info?.({
           message: "User-data stream status changed",
           statusType: status.type ?? "UNKNOWN",
+          subscriptionId: status.subscriptionId,
+          attempt: status.attempt,
           recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
+          reconciliationRequired: status.reconciliationRequired === true,
           executionPending: status.executionPending === true,
           orderUpdatePending: status.orderUpdatePending === true,
+          code: status.code,
+          reason: status.reason,
+          symbol: status.symbol,
+          brokerOrderId: status.brokerOrderId,
+          clientOrderId: status.clientOrderId,
+          executionId: status.executionId,
+          errorName: status.error?.name,
+          errorMessage: status.error?.message,
         })
         userDataStatus = status.type ?? "UNKNOWN"
         if (status.type === "rpcError" || status.type === "recoveryFailed") {
