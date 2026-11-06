@@ -162,6 +162,7 @@ test("replays ZROUSDT trade 11666 without completing recovery while 0.05 ZRO rem
   })
 
   const completionEvaluations = []
+  const accountedFills = []
   const pauses = []
   const accountSnapshot = {
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
@@ -173,7 +174,10 @@ test("replays ZROUSDT trade 11666 without completing recovery while 0.05 ZRO rem
     broker: {
       placeOrder: async () => ({ ok: false, errors: [new Error("Unexpected order submission in fill replay")] }),
       cancelOrder: async () => ({ ok: false, errors: [new Error("Unexpected cancellation in fill replay")] }),
-      getFills: async () => ({ ok: true, data: [] }),
+      getFills: async ({ orderId }) => ({
+        ok: true,
+        data: accountedFills.filter((fill) => fill.brokerOrderId === orderId),
+      }),
       getCanonicalOrder: async () => ({ ok: false, errors: [new Error("Unexpected canonical-order lookup")] }),
       getOpenOrders: async () => ({ ok: true, data: [] }),
       getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
@@ -189,6 +193,7 @@ test("replays ZROUSDT trade 11666 without completing recovery while 0.05 ZRO rem
       const ledgerUpdate = recoveryLedger.applyFill({ fill })
       portfolio = portfolioUpdate.portfolio
       recoveryLedger = ledgerUpdate.ledger
+      if (portfolioUpdate.applied && ledgerUpdate.applied) accountedFills.push(fill)
       return {
         ok: true,
         data: {
