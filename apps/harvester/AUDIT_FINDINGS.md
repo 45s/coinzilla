@@ -44,7 +44,7 @@ DOGE BUY quote debit = 85.836 USDT. ZRO net quote cash flow = +0.01136454 USDT. 
 
 This account-level match is a cross-check, not a substitute for execution-level accounting or external activity attribution. In particular, it does not validate the DOGE SELL.
 
-## F-004 — CLOSING audit correctly remains incomplete with unresolved owned orders
+## F-004 — Duplicate-fill replay is detected without additional balance delta\n\n**Status:** PASS for the observed accounting result; PARTIAL for runtime behavior beyond the Journal evidence.\n\nThe Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at 07:02:40.928Z, and all 12 distinct applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No additional applied-fill records are created for those replays. The account balance deltas match the 12 unique fills (with the separate DOGE SELL conflict), and source tests cover idempotent duplicate application and conflicting replay identities. Tests were inspected, not executed.\n\n## F-005 — CLOSING audit correctly remains incomplete with unresolved owned orders
 
 **Status:** PASS for the observed fail-closed audit result; PARTIAL for identifying both orders.
 
@@ -52,7 +52,7 @@ The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. 
 
 Source inspection found bootstrap CLOSING-audit logic and regression coverage for an unresolved owned order / reconciliation failure. Tests were not run in this audit.
 
-## F-005 — Conservative specification and Portfolio documentation are stale against current source
+## F-006 — Conservative specification and Portfolio documentation are stale against current source
 
 **Status:** CONFLICT (documentation/source mismatch); follow-up issue [#646](https://github.com/45s/coinzilla/issues/646).
 
@@ -63,7 +63,7 @@ Confirmed mismatches:
 
 No trading behavior was changed to resolve this documentation conflict. Issue #646 requests explicit specification alignment.
 
-## F-006 — Prior user-data recovery fix is merged, but this run does not prove reconnect acceptance
+## F-007 — Prior user-data recovery fix is merged, but this run does not prove reconnect acceptance
 
 **Status:** PARTIAL.
 
@@ -71,7 +71,7 @@ Issue #626 documents the 2026-11-05 repeated `recovered` / `recoveryRequired=tru
 
 The 2026-11-06 Journal contains no observed reconnect/recovery sequence; therefore live recovery behavior remains UNVERIFIED by this session.
 
-## F-007 — Original application logs not parsed in this execution session
+## F-008 — Original application logs not parsed in this execution session
 
 **Status:** UNVERIFIED.
 
@@ -81,7 +81,7 @@ The evidence inventory in #645 records:
 
 The original conversation attachments were not mounted/exposed to the current tool session. These files were not read, their checksums were not recomputed, and no excerpts were substituted. The full-log correlation requirement remains open.
 
-## F-008 — No confirmed runtime fix or additional test-gap issue from accessible evidence
+## F-009 — No confirmed runtime fix or additional test-gap issue from accessible evidence
 
 **Status:** PARTIAL.
 
