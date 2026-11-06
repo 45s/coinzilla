@@ -1520,7 +1520,7 @@ These arithmetic checks establish exchange-side cash/base flows only. They do no
  
 ## 2026-11-06 — actual DOGE/ZRO conformance checkpoint
 
-**Completed investigation:** actual DOGE/ZRO SELL quantities and prices were recalculated from the audit-baseline config and canonical Conservative equations. Both planned orders match the exchange order parameters exactly. DOGE: 1,196 @ 0.07185; ZRO: 39.91 @ 1.606. Both use ordinary LIMIT with 0.1% planning reserve, exact `keepQuantity` (DOGE 1, ZRO 0.01), and `minProfit=0.01).
+**Completed investigation:** actual DOGE/ZRO SELL quantities and prices were recalculated from the audit-baseline config and canonical Conservative equations. Under candidate quantity-step assumptions (DOGE 1, ZRO 0.01), the calculations match the submitted order parameters: DOGE 1,196 @ 0.07185; ZRO 39.91 @ 1.606. Both use ordinary LIMIT with 0.1% planning reserve, exact keepQuantity (DOGE 1, ZRO 0.01), and minProfit=0.01. The original logs only say `Exchange trading rules validated`; exact historical tick/step/minimum-filter values are not preserved, so historical filter-based calculation and residual dust classification remain UNVERIFIED.
 
 **Confirmed discrepancy:** ZRO order 727904 filled profitably (+0.01136454 USDT), but historical recovery completion allocated 0.01 ZRO and reset the ledger while 0.04 ZRO remained active. Baseline root cause: completion accepted active quantity greater than keepQuantity; strategy suppressed residual SELL once outstanding recovery reached zero. The current branch implementation corrects both: defer completion while any active residual exceeds keepQuantity, continue residual SELL planning after profit is secured, and classify exchange-constrained dust without resetting cost/proceeds basis.
 
