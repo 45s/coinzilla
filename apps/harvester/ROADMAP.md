@@ -1490,15 +1490,18 @@ Do not request the operator to keep the PC/process online continuously, nor requ
 
 ## Audit continuation — source-verified residual and restart blockers (2026-11-06)
 
-### Residual sell-through — implementation FAIL
+### Residual sell-through — implementation IN PROGRESS
 
-Source review at branch HEAD before this documentation update:
-- `apps/harvester/src/domain/strategies/conservative/conservative-strategy.js` creates a recovery SELL only when `outstandingRecovery > 0`.
-- `recovery-completion.js` permits completion when the SELL is fully filled, realized net profit meets `minProfit`, and active inventory covers `keepQuantity`; it allocates exactly `keepQuantity`.
-- Bootstrap completion resets the recovery cycle ledger. Any active quantity above the retained amount is therefore left without the original cost/proceeds basis; repeated evaluation does not create another SELL because outstanding recovery is zero.
-- `conservative-strategy.test.js` currently asserts that no second SELL is created from residual active inventory after ledger reset. That assertion encodes behavior contrary to the owner-approved sell-all contract.
+The original defect was source-confirmed: the strategy gated SELL creation on positive `outstandingRecovery`; completion allocated `keepQuantity` and reset the ledger while leaving active residual above the reserve. The old regression encoded the unwanted suppression.
 
-Do not replace the guard with an unpriced SELL, a one-tick price, or a new zero-cost cycle. The implementation must preserve the original aggregate cost/profit basis until sell-through is complete or the remainder is explicitly classified as unsellable dust. It must also preserve actual commission accounting, minimum-notional and post-only constraints, quantity steps, and exactly the configured `keepQuantity`.
+**First implementation pass committed:**
+- Removed the positive-outstanding-recovery gate for active inventory above exact `keepQuantity`; the original cost/proceeds basis remains required.
+- When cumulative net proceeds already cover cycle cost plus `minProfit`, residual SELL pricing uses the current market reference rounded up to the price tick, not an artificial one-tick floor.
+- Added pre-intent `MIN_QUANTITY` and `MIN_NOTIONAL` checks. Untradeable quantity-step/minimum-filter remainder is reported as `EXCHANGE_CONSTRAINED_DUST` with exact quantity and limiting rule; no invalid SELL is emitted.
+- Recovery completion now waits without pausing or resetting the ledger while active quantity remains above `keepQuantity`; the engine requests another serialized strategy evaluation after the completed SELL.
+- Added strategy and completion regressions for profitable residual sell-through, quantity-step dust, minimum-notional dust, exact reserve completion, duplicate SELL suppression, and missing cost/profit basis. Existing accounting tests already cover actual base- and quote-asset commissions.
+
+**Not yet accepted:** exact-head CI exposed additional test fixtures that assumed a completed cycle could leave residual active inventory. Those fixtures are being corrected to distinguish exact reserve, sellable residual, and exchange-constrained dust. Do not mark this fix PASS until the full Harvester suite and exact-final-HEAD CI pass.
 
 ### Current audit work ordering
 1. Fix Conservative policy and lifecycle defects, starting with residual sell-through while preserving the original cost/profit basis.
