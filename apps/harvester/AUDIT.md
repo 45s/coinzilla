@@ -393,3 +393,42 @@ Required next work: implement durable replay/reconciliation and fail-closed read
 ## Audit priority correction — 2026-11-06
 
 Process-restart reconciliation is deferred to the final item in `ROADMAP.md`. It is not an active implementation task, blocker, or acceptance criterion for the current Conservative strategy/policy audit. Do not spend further audit time implementing restart recovery. Continue with Conservative policy defects, sell-through, commission accounting, exact `keepQuantity`, exchange filters/dust, and regression tests.
+
+ 
+## 2026-11-06 actual DOGE/ZRO Conservative conformance reconciliation
+
+**Decision-time configuration:** the audit-baseline `trading-config.json` at `4af3434f788b87139513921f220294ae90daf4d5` matches the current audit branch configuration: `minProfit=0.01`; DOGE `keepQuantity=1`, maker/taker reserve 0.1%; ZRO `keepQuantity=0.01`, maker/taker reserve 0.1%. Both submitted recovery orders were ordinary `LIMIT` orders, so the applicable planning reserve is 0.1%.
+
+| Symbol / order | Expected vs actual SELL quantity and price | Exchange-side result | Strategy verdict |
+|---|---|---|---|
+| DOGE 1276698 | Expected 1,196 @ 0.07185; actual 1,196 @ 0.07185 | Two distinct post-CLOSING fills; net proceeds 85.84666740 USDT; profit +0.01066740 USDT; remaining 2.8 DOGE | FOLLOWED for planning and exchange execution |
+| ZRO 727904 | Expected 39.91 @ 1.606; actual 39.91 @ 1.606 | One pre-CLOSING fill; net proceeds 64.03136454 USDT; profit +0.01136454 USDT; remaining 0.05 ZRO | FOLLOWED for planning and SELL execution; VIOLATED for recovery completion |
+
+Independent quantity/price calculation using the canonical 0.1% reserve, exact keep quantities, and exchange steps (DOGE 1; ZRO 0.01) reproduces both order quantities and limit prices. The decision-time configuration is directly confirmed at the audit baseline. The order history confirms both actual orders were `LIMIT`; actual trade commissions, not configured rates, determine the realized results.
+
+### DOGE — post-CLOSING SELL, not a runtime contradiction
+
+Three BUY fills acquired 1,198.8 DOGE net after 1.2 DOGE base commissions, with full cost 85.836 USDT. Order 1276698 then filled as two distinct trades after shutdown: trade 221990 sold 278 DOGE and trade 221991 sold 918 DOGE, both at 0.07185. Combined gross proceeds were 85.93260000 USDT, actual quote commission 0.08593260 USDT, and net proceeds 85.84666740 USDT. Net profit is +0.01066740 USDT. Exchange-side remaining inventory is 2.8 DOGE: exact configured keep quantity 1 plus 1.8 excess.
+
+The order quantity/price FOLLOWED the canonical calculation. Both executions occurred after the ~07:58Z CLOSING snapshot and process stop, so no same-session Portfolio/RecoveryLedger update was expected. The 1.8 DOGE excess has not been proven as dust from a preserved decision-time exchange-filter snapshot; its value at 0.07185 is 0.12933 USDT. Final in-process disposition remains UNVERIFIED and belongs to the separately deferred restart scope #654, not this active audit.
+
+### ZRO — confirmed historical completion violation
+
+Eight BUY fills acquired 39.96 ZRO net after 0.04 ZRO base commissions; Position.spent was 64.02 USDT. SELL order 727904 sold 39.91 ZRO at 1.606; gross proceeds were 64.09546000 USDT, actual quote commission 0.06409546 USDT, net proceeds 64.03136454 USDT, and realized net profit +0.01136454 USDT. Position quantity after the SELL was 0.05 ZRO.
+
+The historical runtime then allocated 0.01 ZRO to free inventory and reset the RecoveryLedger while 0.04 ZRO remained active. This is **VIOLATED** regardless of whether the 0.04 remainder was exchange-constrained dust: canonical completion requires active quantity to equal keepQuantity, and dust above keepQuantity must remain active with its original cost basis and must not trigger ledger reset. At 1.606, 0.04 ZRO is worth 0.06424 USDT; whether it failed the exact historical MIN_NOTIONAL filter is UNVERIFIED because that decision-time filter snapshot was not preserved.
+
+**Confirmed root cause at the audit baseline:** `evaluateRecoveryCompletion` rejected active quantity below keepQuantity but accepted any amount above it; it did not require equality. Separately, `evaluateConservativeStrategy` emitted recovery SELL only while outstanding recovery was positive, so after the profit target was met it could not sell residual inventory. Together these conditions allowed premature allocation/reset and stranded active residual without its original recovery basis.
+
+**Implementation correction already present on the audit branch:** completion now returns `RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH` whenever active quantity exceeds keepQuantity; the strategy continues planning SELLs above keepQuantity after the profit target is secured, prices that residual from the current market reference, checks exchange filters, and classifies exact constrained dust without resetting the basis. Added actual-fill regression fixtures for both DOGE and ZRO plus an exact ZRO completion-gate regression. These new tests have not yet been executed locally or by GitHub Actions.
+
+ZRO BUY order 727905 (5 gross ZRO, 0.005 ZRO base commission, 4.995 net) filled at 08:38:24.782Z after CLOSING and is a separate later exchange event. It is not included in the 39.96-ZRO pre-SELL position above.
+
+### Current verdict and verification boundary
+
+- DOGE recovery SELL calculation/order: FOLLOWED.
+- DOGE post-shutdown fill accounting inside Harvester and final dust disposition: UNVERIFIED; #654 is deferred.
+- ZRO recovery SELL calculation/order and actual fee/profit arithmetic: FOLLOWED.
+- ZRO recovery completion/reset with 0.04 active residual: VIOLATED; root cause confirmed and implementation corrected on this branch.
+- Partial SELL stability, decision-B cancel/reconcile/replacement, and other terminal states are not proven by these two final SELLs; continue focused source/test audit rather than infer them from this outcome.
+- No TESTNET writes, cancellations, new orders, bot restarts, or merges were performed.
