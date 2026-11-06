@@ -3,19 +3,18 @@
 These instructions apply to all work in `apps/harvester/` and take precedence over generic agent defaults. Follow repository-wide guidance (including root `AGENTS.md`, contribution docs, and existing conventions) as well.
 
 
-## Mandatory trading-only work gate
 ## Mandatory documentation and requirements preflight
 
 Before every Harvester task— including investigation, debugging, tests, documentation, configuration, and implementation—complete the repository-root documentation preflight. Read in full all repository-wide governance/engineering requirements and applicable checklists, then inventory and read **all applicable Harvester documentation and requirements**, including this file, [TRADING_FIRST.md](./docs/TRADING_FIRST.md), [ROADMAP.md](./ROADMAP.md), architecture and domain specifications, broker/API contracts, operational and TESTNET runbooks, configuration documentation, and relevant test guidance. Follow their links/references recursively and inspect the affected implementation, consumers, tests, and configuration. Do not rely on summaries, prior conversations, search snippets, or another agent's claimed review.
 
-Before any implementation or state-changing action, provide a concise preflight summary: documents reviewed, understood requirements/constraints, exact acceptance criteria, planned verification, and any conflicts or blockers. **Do not begin work until the review is complete and you can explain the requirements.** If a required document is missing, inaccessible, unclear, or contradictory, stop and report it. This preflight does not relax or supersede the trading-only hard stop below.
+Before any implementation or state-changing action, provide a concise preflight summary: documents reviewed, understood requirements/constraints, exact acceptance criteria, planned verification, and any conflicts or blockers. **Do not begin work until the review is complete and you can explain the requirements.** If a required document is missing, inaccessible, unclear, or contradictory, stop and report it. Explicitly selected user tasks define the work scope; a TESTNET acceptance milestone is not a blanket prerequisite for Journal or engineering work.
 
 
-Before every Harvester task, follow [the non-negotiable hard stop and bulletproof acceptance gate](./docs/TRADING_FIRST.md#non-negotiable-hard-stop--trading-app-only). Until that gate passes, work ONLY on the trading workflow. Do not start Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactors, optimizations, or unrelated features. A narrow safety fix is allowed only to prevent a specific immediate material risk in the current order flow; prove the direct blocker, make the smallest fix, test it, and return to trading. Roadmap entries and old approvals do not override this gate.
+Follow the selected issue's scope and repository task workflow. Journal evidence is an explicitly selected Harvester workstream; it must not change strategy decisions, become trading-state authority, or add blocking I/O to market, broker-event, or fill-accounting paths.
 
 ## Product priority
 
-The single source of truth for Harvester's execution order, first TESTNET milestone, and deferred work is [TRADING_FIRST.md](./docs/TRADING_FIRST.md). Read it before planning or editing Harvester tasks.
+[TRADING_FIRST.md](./docs/TRADING_FIRST.md) remains the source of truth for trading behavior and exchange-safety requirements. It does not impose a blanket acceptance gate on separately selected engineering work.
 
 
 ## Before changing code
