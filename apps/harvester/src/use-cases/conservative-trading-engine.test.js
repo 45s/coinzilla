@@ -2130,7 +2130,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
   assert.equal(allocationCount, 1)
   assert.equal(resetCount, 1)
   assert.ok(completionSnapshot)
-  assert.ok(compareDecimal({ left: completionSnapshot.buyCost, right: "0" }) > 0)
+  assert.ok(compareDecimal({ left: completionSnapshot.spent, right: "0" }) > 0)
   assert.ok(compareDecimal({ left: completionSnapshot.netSellProceeds, right: "0" }) > 0)
   assert.ok(compareDecimal({ left: completionSnapshot.realizedNetProfit, right: "0.01" }) >= 0)
 
@@ -3528,7 +3528,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
       const position = currentPortfolio.getPosition({ marketId })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
-        buyCost: currentRecoveryLedger.buyCost,
+        spent: position.spent.amount,
         netSellProceeds: currentRecoveryLedger.netSellProceeds,
         activeQuantity: position.baseQuantity.amount,
         keepQuantity: "0.1",
