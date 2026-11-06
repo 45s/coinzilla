@@ -79,7 +79,7 @@ test("does not deduct base SELL commission from quote recovery proceeds", () => 
   })
 })
 
-test("rejects incomplete commission data and third-asset fees", () => {
+test("rejects incomplete commission data and unvalued third-asset fees", () => {
   assert.throws(
     () => calculateRecoveryFillAccounting({
       market,
@@ -92,11 +92,11 @@ test("rejects incomplete commission data and third-asset fees", () => {
       market,
       fill: makeFill({
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
         ],
       }),
     }),
-    /third-asset commission/,
+    /reliable quote-currency valuation/,
   )
 })
 
@@ -161,4 +161,19 @@ test("checks aggregated commissions against the executed amount", () => {
     }),
     /quote commission exceeds executed quote notional/i,
   )
+})
+
+test("deducts a reliable third-asset quote valuation from SELL proceeds", () => {
+  const fill = makeFill({
+    side: "SELL",
+    quoteQuantity: "12",
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.01", asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.03", asset: quoteAsset }),
+    })],
+  })
+  assert.deepEqual(calculateRecoveryFillAccounting({ market, fill }), {
+    buyCost: "0",
+    netSellProceeds: "11.97",
+  })
 })

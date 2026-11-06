@@ -40,7 +40,7 @@ function createPlan({ minProfit }) {
   return calculateRecoverySellPlan({
     activeQuantity: "11.1",
     keepQuantity: "1",
-    cycleCost: "8.88",
+    positionSpent: "8.88",
     saleProceeds: "0",
     minProfit,
     feeRate: "0.01",
@@ -87,7 +87,7 @@ function evaluateCompletion(state, minProfit) {
   const position = state.portfolio.getPosition({ marketId: market.id })
   return evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
-    buyCost: state.recoveryLedger.buyCost,
+    spent: state.recoveryLedger.buyCost,
     netSellProceeds: state.recoveryLedger.netSellProceeds,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",

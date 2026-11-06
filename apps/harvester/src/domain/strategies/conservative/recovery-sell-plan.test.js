@@ -6,7 +6,7 @@ import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 const basePlan = {
   activeQuantity: "100",
   keepQuantity: "1",
-  cycleCost: "10",
+  positionSpent: "10",
   saleProceeds: "0",
   minProfit: "0.01",
   feeRate: "0",
@@ -61,7 +61,7 @@ test("does not create a SELL when no quantity remains above keepQuantity", () =>
   })
 })
 
-test("continues the recovery SELL at a positive tick when proceeds already cover cost and minProfit", () => {
+test("uses market reference pricing when proceeds already cover cost and minProfit", () => {
   const plan = calculateRecoverySellPlan({
     ...basePlan,
     saleProceeds: "10.01",
@@ -69,7 +69,7 @@ test("continues the recovery SELL at a positive tick when proceeds already cover
 
   assert.deepEqual(plan, {
     quantity: "99",
-    price: "0.001",
+    price: null,
     requiredNetProceeds: "0",
   })
 })
@@ -78,7 +78,7 @@ test("rejects invalid financial inputs and missing exchange increments", () => {
   for (const overrides of [
     { activeQuantity: "0" },
     { keepQuantity: "-1" },
-    { cycleCost: "-1" },
+    { positionSpent: "-1" },
     { saleProceeds: "-1" },
     { minProfit: "0" },
     { minProfit: "0.009" },
@@ -98,11 +98,11 @@ test("rejects invalid financial inputs and missing exchange increments", () => {
 test("rounds the minimum SELL price up only when the exact fee-adjusted price exceeds a tick", () => {
   const exactTick = calculateRecoverySellPlan({
     ...basePlan,
-    cycleCost: "9.89",
+    positionSpent: "9.89",
   })
   const aboveTick = calculateRecoverySellPlan({
     ...basePlan,
-    cycleCost: "9.8900001",
+    positionSpent: "9.8900001",
   })
 
   assert.equal(exactTick.requiredNetProceeds, "9.9")

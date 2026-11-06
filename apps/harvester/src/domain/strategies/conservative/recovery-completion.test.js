@@ -4,7 +4,7 @@ import { evaluateRecoveryCompletion } from "./recovery-completion.js"
 
 const baseInput = {
   sellOrderFullyFilled: true,
-  buyCost: "10",
+  spent: "10",
   netSellProceeds: "10.01",
   activeQuantity: "1",
   keepQuantity: "1",
