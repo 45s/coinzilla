@@ -1395,3 +1395,10 @@ This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is 
 - Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
 
 The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## Evidence chronology correction — post-CLOSING DOGE/ZRO executions (2026-11-06)
+
+The exchange-side DOGE SELL order 1276698 did fill, but only after the Harvester runtime's final OPEN/zero-executed observation and the ~07:58 UTC CLOSING snapshot: trade 221990 (278 DOGE) at 08:03:01.841Z and trade 221991 (918 DOGE) at 08:03:18.202Z. Net proceeds were 85.84666740 USDT after 0.08593260 USDT quote commission. ZRO BUY 727905 also filled after CLOSING at 08:38:24.782Z, crediting 4.995 net ZRO after base commission.
+
+This supersedes the earlier same-time DOGE conflict interpretation. It does not close the account settlement gap: post-shutdown Harvester Portfolio/RecoveryLedger application and post-fill balances/open orders remain UNVERIFIED. The complete historical CLOSING open-orders payload identifying both unresolved orders remains outstanding. Preserve the original CLOSING snapshot unchanged and keep TESTNET acceptance NOT ACCEPTED.
