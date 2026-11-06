@@ -187,7 +187,7 @@ flowchart TD
   G2 --> H
   H --> I[Calculate sellable quantity above exact keepQuantity]
   I --> J{Quantity and price valid under exchange filters?}
-  J -- No --> K[Classify exact exchange-constrained dust; preserve cost basis]
+  J -- No --> K[Classify exact unsellable dust as retained bonus]
   J -- Yes --> L[Recover full accumulated spent plus at least 0.01 net]
   L --> M[Apply order-type-specific fee reserve and POST-ONLY checks]
   M --> N[Submit recovery SELL]
@@ -201,11 +201,12 @@ flowchart TD
   R -- Yes --> S[Update position quantity and cumulative net SELL proceeds]
   S --> T{Sellable quantity remains above keepQuantity?}
   T -- Yes --> H
-  T -- No --> U{Position quantity equals keepQuantity?}
-  U -- No --> V[Keep dust active and preserve basis; wait for sellable quantity]
-  U -- Yes --> W{Actual cumulative net profit at least 0.01?}
+  T -- No --> U{Only exchange-constrained dust remains above keepQuantity?}
+  U -- Yes --> K
+  U -- No --> W{Actual cumulative net profit at least 0.01?}
+  K --> W
   W -- No --> X
-  W -- Yes --> Y[Preserve exact keepQuantity; complete once; reset completed basis]
+  W -- Yes --> Y[Retain keepQuantity plus dust; complete once; preserve retained basis]
 \`\`\`
 
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
