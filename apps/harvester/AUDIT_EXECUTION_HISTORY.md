@@ -428,3 +428,11 @@ A local clone attempt failed because github.com could not be resolved from this 
 Scope cleanup restored six changed files outside apps/harvester to byte-identical develop versions: AI_AGENT_WORKFLOW.md, two Binance shared fill-adapter files, and three shared commission/fill entity files. The PR changed-file inventory now contains 51 files, all under apps/harvester. PR #653 remains OPEN and UNMERGED. No TESTNET/exchange action, merge, Journal, broker, or out-of-app production change was performed in this continuation.
 
 The canonical specification is unchanged. Exact dust quantity/limiting-filter persistence remains unresolved and was not implemented under the explicit scope restriction.
+
+## Owner clarification — dust retention semantics (2026-11-06)
+
+The owner clarified that unsellable exchange-constrained dust is a **bonus to configured `keepQuantity`**. Example: `keepQuantity = 1.00`, unsellable dust `0.04` → retain `1.04` total. Do not discard dust, force an invalid SELL, or count it as sold. Once all sellable excess has been sold and other completion conditions pass, dust is retained with keepQuantity; it does not independently block completion/reset. Preserve its quantity and accounting provenance.
+
+This supersedes prior notes in this history that required above-keep dust to remain active, block completion/reset, or await a later BUY. Those notes record the earlier interpretation and are not current acceptance criteria. The canonical specification was updated accordingly.
+
+No source, test, Journal, event DTO, broker, recovery, or exchange code was changed in this documentation update. Source/test conformance and the separate durable dust quantity/filter evidence gap remain open.
