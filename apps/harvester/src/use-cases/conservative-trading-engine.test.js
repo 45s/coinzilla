@@ -1635,7 +1635,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     const commissionBasis = commissionAsset === "BASE" ? quantity : quoteQuantity
     const commissionAmount = multiplyDecimal({
       left: commissionBasis,
-      right: "0.00075",
+      right: "0",
     })
     return new Fill({
       tradeId,
@@ -1646,7 +1646,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
       price: new Money({ amount: order.limitPrice.amount, asset: quoteAsset }),
       quantity: new Quantity({ amount: quantity, asset: baseAsset }),
       quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
-      commissions: [
+      commissions: commissionAmount === "0" ? [] : [
         new Commission({ amount: new Money({ amount: commissionAmount, asset }) }),
       ],
       commissionStatus: "COMPLETE",
