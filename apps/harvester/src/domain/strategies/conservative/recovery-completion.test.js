@@ -89,3 +89,20 @@ test("rejects invalid completion inputs", () => {
     sellOrderFullyFilled: "true",
   }))
 })
+
+
+test("completes a profitable cycle when keepQuantity is configured as zero", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "0",
+    keepQuantity: "0",
+  })
+
+  assert.deepEqual(result, {
+    eligible: true,
+    pause: false,
+    reason: null,
+    freeQuantity: "0",
+    realizedNetProfit: "0.01",
+  })
+})
