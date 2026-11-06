@@ -1,5 +1,7 @@
 # Free-Roll Engineering Roadmap
 
+> **Historical Free-Roll predecessor artifact.** This document describes the legacy bot, not Harvester Conservative Strategy. For Harvester, the only authoritative Conservative rules are in [apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md](../harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Legacy rules and implementation notes here must not be copied into Harvester or treated as competing authority.
+
 **Application:** `apps/bot-free-roll`  
 **Status:** Active engineering plan — implementation not yet production-ready  
 **Principles:** SOLID · stable · simple · exchange-agnostic · test-first  

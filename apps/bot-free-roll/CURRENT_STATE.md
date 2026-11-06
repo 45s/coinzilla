@@ -1,5 +1,7 @@
 # Free-Roll Current-State Audit
 
+> **Historical Free-Roll predecessor artifact.** This document describes the legacy bot, not Harvester Conservative Strategy. For Harvester, the only authoritative Conservative rules are in [apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md](../harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Legacy rules and implementation notes here must not be copied into Harvester or treated as competing authority.
+
 **Roadmap item:** FR-002  
 **Application:** `apps/bot-free-roll`  
 **Audited ref:** `main` at `8a1471b01d9e96a457aef58fa3836fb78aaa323c` (merge of PR #229)  
