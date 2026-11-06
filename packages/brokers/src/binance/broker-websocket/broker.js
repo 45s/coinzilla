@@ -692,7 +692,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
               symbol: event.executedOrder?.symbol ?? event.fill?.symbol,
               brokerOrderId: event.executedOrder?.id ?? event.fill?.orderId,
               clientOrderId: event.clientOrderId ?? event.executedOrder?.clientOrderId,
-              executionId: event.brokerEvidence?.executionId ?? event.fill?.id ?? event.executionId,
+              executionId: event.fill?.id ?? event.executionId,
               brokerEvidence: event.brokerEvidence,
               error,
             }, this.logger)
