@@ -17,10 +17,10 @@ test("forwards each chunk to every destination", async () => {
     source,
     destinations: () => [destination],
   })
-  source.end("first\nsecond\n")
+  source.end("first\\nsecond\\n")
   await forwarding
 
-  assert.deepEqual(received, ["first\nsecond\n"])
+  assert.deepEqual(received, ["first\\nsecond\\n"])
   destination.end()
 })
 
@@ -82,6 +82,7 @@ test("resolves destinations for each chunk", async () => {
   })
 
   source.write("first")
+  await new Promise((resolve) => setImmediate(resolve))
   activeDestinations = [
     new Writable({
       write(chunk, encoding, callback) {
