@@ -2,7 +2,7 @@
 
 **Phase:** Conservative domain specification  
 **Purpose:** Define accounting truths that D1 implementation and D2 tests must preserve.  
-**Status:** Proposed invariants; fee and strategy-policy decisions remain subject to approval in `CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
+**Status:** Approved Conservative accounting contract. Owner-approved policy: minimum realized net profit is at least 0.01 quote currency after actual commissions; sell all sellable active inventory except configured `keepQuantity`. Implementation gaps are tracked explicitly below and in parent audit #645.
 
 ## 1. Units and representation
 
@@ -121,11 +121,11 @@ $$
 
 When `Q > 0`, the limit price is rounded up to a valid tick. If the required net proceeds are already covered, the plan still uses a positive price (at least one tick in the current Harvester planner) so that the SELL order can finish and recovery completion can be confirmed.
 
-Planning fee policy:
-- `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER` and a zero planning fee reserve.
-- Non-zero `makerPercent` selects regular `LIMIT`; the planning reserve is `makerPercent / 100` as a decimal fraction.
-- `takerPercent`, observed maker/taker liquidity role, and historical commission rates never change the planning reserve.
-- The same order-type and planning rule is required for Conservative and Aggressive. Aggressive order planning remains deferred while its strategy returns `NO_ACTION`.
+Planning fee policy (current implementation):
+- `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`.
+- The SELL planning reserve is `max(makerPercent, takerPercent) / 100`, regardless of the eventual liquidity role. `sell-fee-rate.js` implements this maximum and its tests cover zero, maker-higher, taker-higher, equal, and invalid rates.
+- Actual commission amounts/assets on each confirmed fill remain authoritative for accounting; the configured maximum is only a planning reserve.
+- The same order-type and planning rule is intended for Conservative and future Aggressive planning; Aggressive remains deferred.
 
 Required properties:
 - `Q ≥ 0` and `Q` is an exact multiple of `s`.
@@ -137,7 +137,7 @@ Required properties:
 - A plan with no sellable quantity produces no SELL intent.
 - Price/quantity increments must be valid positive normalized rules; the domain does not discover exchange rules.
 
-**Fee-boundary caution:** the formula is the existing Conservative strategy/Harvester formula. The exact interpretation of base-asset commission relative to gross order quantity and exchange fee rounding must be approved and tested (D-05).
+**Fee-boundary:** the planner reserves for possible base-asset commission by dividing sellable inventory by `1 + feeRate` and rounds down to the exchange quantity step. Actual base commission is applied to Portfolio on each fill. Residual quantity caused by step rounding must be explicitly classified as sellable follow-through or exchange-constrained dust; the current post-completion strategy does not yet prove sell-through.
 
 ## 6. Recovery completion invariants
 
@@ -273,7 +273,11 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
 | Completion | Exact minProfit equality passes and one tick below fails | `recovery-sell-plan-accounting.test.js` | Existing |
 | Completion | Completion invoked exactly once and ledger reset only once | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
-| Completion | Residual active inventory after allocation does not create another recovery SELL | `keeps post-recovery residual active inventory and does not issue another recovery SELL` | Existing |
+| Sell-through | After recovery profit is secured, continue selling active inventory above `keepQuantity` at a price that does not violate net-profit, exchange-filter, or post-only constraints | Current strategy suppresses SELL when the ledger resets; existing test explicitly asserts suppression | Gap / FAIL against owner-approved contract |
+| Sell-through | Repeat evaluation after a residual fill without duplicating an active SELL | No regression proving repeated evaluation and duplicate-order prevention for residual sell-through | Gap |
+| Sell-through | Quantity-step remainder is either sold in a later valid order or explicitly classified as exchange-constrained dust | No complete residual/dust regression | Gap |
+| Sell-through | Base-asset SELL commission leaves exactly the configured retained quantity when exchange rules permit | Existing planner reserves a fee but no end-to-end exact-retained-quantity proof | Gap |
+| Sell-through | Retained `keepQuantity` is never sold; no extra active inventory is intentionally retained | Existing completion allocates exact `keepQuantity` but leaves additional active inventory | Gap / FAIL against owner-approved contract |
 | Ordering | Out-of-order fills with deterministic execution-time policy | no explicit test | Gap |
 | Failure | Invalid fill quantity/notional/commission, unsupported asset, wrong market | several focused tests | Partial |
 | Failure | Cross-projection partial failure leaves neither projection committed | `update-trading-accounting.test.js` | Existing |
