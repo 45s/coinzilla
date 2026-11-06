@@ -92,7 +92,7 @@ test("rejects incomplete commission data and unvalued third-asset fees", () => {
       market,
       fill: makeFill({
         commissions: [
-          new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }), quoteValue: new Money({ amount: "0.02", asset: quoteAsset }) }),
+          new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) }),
         ],
       }),
     }),
