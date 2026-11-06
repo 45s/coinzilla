@@ -80,7 +80,7 @@ test("rejects invalid financial inputs and missing exchange increments", () => {
     { keepQuantity: "-1" },
     { cycleCost: "-1" },
     { saleProceeds: "-1" },
-    { minProfit: "0" },
+    { minProfit: "0" },\n    { minProfit: "0.009" },
     { feeRate: "-0.1" },
     { feeRate: "1" },
     { priceTickSize: "0" },
