@@ -6,7 +6,7 @@
 >
 > PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
-> The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
+> The Journal has a narrow mandatory role in the current trading workflow; it is not wholly optional. The full startup account audit (balances and account-wide open orders) and closing account audit remain durably captured, and `order.submission_requested` / `order.cancel_requested` must be durably flushed before their corresponding broker side effects. Failures retain the existing fail-closed behavior. Beyond these established barriers, Journal delivery remains asynchronous/best-effort during trading and is not trading-state authority. Do not add further blocking Journal dependencies before the TESTNET acceptance gate passes; see [TRADING_FIRST.md — Journal contract boundary](./docs/TRADING_FIRST.md#journal-contract-boundary).
 >
 > **The remaining critical milestone is joint Binance Spot TESTNET validation.** Offline CI is not exchange acceptance. Follow [TESTNET_VALIDATION_RUNBOOK.md](./docs/TESTNET_VALIDATION_RUNBOOK.md); keep Harvester stopped during preparation. No order submission/cancellation or account-setting change is authorized until the operator and assistant explicitly begin the joint session.
 >
@@ -23,7 +23,7 @@
 Until Harvester has passed the complete real Binance Spot TESTNET acceptance gate defined below, the ONLY permitted Harvester work is work that directly implements, fixes, tests, or verifies the live trading workflow.
 
 **Do not start, continue, expand, or prioritize any of the following before that gate passes:**
-- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration.
+- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration beyond the existing mandatory durability barriers in [TRADING_FIRST.md](./docs/TRADING_FIRST.md#journal-contract-boundary).
 - New databases, database migrations, persistence layers, storage abstractions, or durable-state projects.
 - New infrastructure, observability, dashboards, analytics, reporting, generic frameworks, or architecture redesign.
 - Refactoring, cleanup, optimization, new strategy modes, or features that do not directly unblock or verify the trading workflow.
@@ -72,7 +72,7 @@ Every item below is subordinate to the hard stop above. While the bulletproof TE
 
 ## Deferred: Journal, databases, and unrelated observability
 
-**BLOCKED until the bulletproof TESTNET acceptance gate in [TRADING_FIRST.md](./docs/TRADING_FIRST.md) passes.** No staged EventBus/Journal project, Journal integration expansion, Journal recovery/replay, database, new persistence layer, or observability project may be started during the trading-first phase. Existing minimal safety controls required by the current runtime must be preserved, but their presence does not authorize expanding them.
+**BLOCKED until the bulletproof TESTNET acceptance gate in [TRADING_FIRST.md](./docs/TRADING_FIRST.md) passes.** No staged EventBus/Journal project, Journal integration expansion, Journal recovery/replay, database, new persistence layer, or observability project may be started during the trading-first phase. This deferral does not make Journal wholly optional: preserve the existing mandatory startup/closing account-audit durability and pre-side-effect order/cancel intent flushes, with their current fail-closed behavior. Do not add further blocking Journal work. Additional investigation evidence remains deferred and, when later authorized, must not add trading-blocking dependencies.
 
 ## Mission and delivery priority
 
