@@ -12,7 +12,7 @@ const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
 
-function createInitialAccounting(tradeId) {
+function createInitialAccounting(tradeId, { baseCommission = "0" } = {}) {
   const result = updateTradingAccounting({
     portfolio: new Portfolio(),
     recoveryLedger: RecoveryLedger.empty({ market }),
@@ -25,7 +25,9 @@ function createInitialAccounting(tradeId) {
       price: new Money({ amount: "0.8", asset: quoteAsset }),
       quantity: new Quantity({ amount: "11.1", asset: baseAsset }),
       quoteQuantity: new Money({ amount: "8.88", asset: quoteAsset }),
-      commissions: [],
+      commissions: baseCommission === "0" ? [] : [
+        new Commission({ amount: new Money({ amount: baseCommission, asset: baseAsset }) }),
+      ],
       commissionStatus: "COMPLETE",
       executedAt: 1,
     }),
@@ -149,7 +151,9 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
   const completion = evaluateCompletion(completed, "1.021")
 
   assert.equal(completed.recoveryLedger.netSellProceeds, "9.9099")
-  assert.equal(completion.eligible, true)
+  assert.equal(completion.eligible, false)
+  assert.equal(completion.pause, false)
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
   assert.equal(completion.realizedNetProfit, "1.0299")
 
   const oneTickLower = subtractDecimal({ left: plan.price, right: "0.001" })
@@ -172,7 +176,7 @@ test("exact minProfit equality remains eligible after actual quote commission", 
   assert.equal(plan.price, "1")
   assert.equal(plan.requiredNetProceeds, "9.9")
 
-  const initial = createInitialAccounting("exact-profit-buy")
+  const initial = createInitialAccounting("exact-profit-buy", { baseCommission: "0.1" })
   const completed = applySellFill(initial, {
     tradeId: "exact-profit-sell",
     price: plan.price,
