@@ -266,21 +266,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       right: exchangeCommissionRate,
     })
     const timestamp = Date.now()
-    const executedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: order.brokerOrderId,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: order.limitPrice,
-      originalQuantity: order.originalQuantity,
-      executedQuantity: order.originalQuantity,
-      status: "FILLED",
-      createdAt: order.createdAt,
-      acknowledgedAt: order.acknowledgedAt,
-      updatedAt: timestamp,
-      completedAt: timestamp,
-    })
     openOrders.delete(order.clientOrderId)
     userDataHandlers.onEvent({
       event: {
@@ -294,7 +279,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
           side: order.side,
           quantity,
           executedQuantity: quantity,
-          price: order.price,
+          price: order.limitPrice.amount,
           status: "FILLED",
           createdAt: order.createdAt,
           updatedAt: timestamp,
