@@ -1250,7 +1250,7 @@ The 2026-11-06 Journal (114 records) and the 100-row DOGEUSDT and ZROUSDT order-
 
 DOGE remains **CONFLICT**: order history reports SELL 1276698 / client suffix -11 FILLED for 1,196 DOGE, while the Journal has no applied DOGE SELL fill and retains the order acknowledgement as OPEN; the CLOSING snapshot has 1,196 DOGE locked. The DOGE total balance delta exactly matches the three net BUY fills, not the reported SELL. The CLOSING account audit is INCOMPLETE with two unresolved owned orders. No cause or realized DOGE SELL PnL is asserted.
 
-The original `harvester.log` and `harvester-trace.log` attachments, whose byte sizes and SHA-256 values are preserved in #645, were not accessible in the current execution session and were not parsed. Full log correlation and the DOGE conflict therefore remain UNVERIFIED / CONFLICT. No source fix is justified by the currently accessible evidence; no TESTNET orders, cancellations, or restarts were performed.
+The original `harvester.log` and `harvester-trace.log` attachments have now been read-only integrity-verified and parsed; see [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO Portfolio/RecoveryLedger runtime accounting is directly observed and reconciles. DOGE order 1276698 is OPEN with zero executed at the final runtime evaluations and absent from the 12 shutdown execution records, strongly favoring open/unfilled, but the separate exchange order-history row reports FILLED. DOGE remains CONFLICT; CLOSING remains INCOMPLETE with two unresolved orders, and the second order identity is not proven. No source fix is justified by current evidence; no TESTNET orders, cancellations, or restarts were performed.
 
 The specification/config-boundary drift in fee-reserve policy, residual-inventory behavior, Portfolio recovery allocation, and zero-value input acceptance is tracked in [#646](https://github.com/45s/coinzilla/issues/646). The exact-once completion and full partial-fill/replacement lifecycle test gaps identified in `ACCOUNTING_INVARIANTS.md` are tracked in [#648](https://github.com/45s/coinzilla/issues/648). Keep the TESTNET gate closed until the DOGE order lifecycle and CLOSING account state are correlated against the original logs and any resulting defect is reproduced with deterministic offline regression coverage.
 
@@ -1261,15 +1261,15 @@ The specification/config-boundary drift in fee-reserve policy, residual-inventor
 
 ### Gate 0 — evidence integrity
 
-- [ ] Obtain original harvester.log and harvester-trace.log read-only. Do not edit or re-export before hashing.
-- [ ] Verify SHA-256 against #645: harvester.log 5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d; harvester-trace.log 4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3.
-- [ ] Record bytes, line count, encoding, timestamp format, rotation/truncation. Stop on checksum mismatch.
-- [ ] Obtain full CLOSING snapshot including both unresolved orders, reservations, free/locked balances, source timestamps, and reconciliation diagnostics.
+- [x] Obtain original harvester.log and harvester-trace.log read-only; preserve original attachments unchanged.
+- [x] Independently verify SHA-256 against #645: harvester.log 5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d; harvester-trace.log 4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3.
+- [x] Record exact bytes, physical line counts, newline termination, timestamps, and key source-line ranges in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md).
+- [ ] Obtain the full CLOSING snapshot/open-order payload including both unresolved order identities, reservations, free/locked balances, source timestamps, and reconciliation diagnostics.
 - [ ] Preserve full DOGE/ZRO order and trade history with commission asset/amount, redacted runtime config, and timestamped exchange filters.
 
 ### Gate 1 — reconstruct each order
 
-- [ ] Parse all 114 Journal records, both 100-row order-history exports, and every original log line after checksum verification.
+- [x] Parse all 114 Journal records, both 100-row order-history exports, and every original application-log line after checksum verification.
 - [ ] Retain source filename/line, original timestamp/timezone/milliseconds, and normalized UTC.
 - [ ] Correlate by symbol, clientOrderId, orderId, tradeId, event type, and timestamp; never by price/quantity alone.
 - [ ] Build a per-order timeline: decision intent → submission → acknowledgement → user-data update → cancel request/confirmation → fills → REST terminal state → closing reconciliation.
@@ -1318,3 +1318,8 @@ The specification/config-boundary drift in fee-reserve policy, residual-inventor
 - [ ] Keep TESTNET acceptance closed until DOGE is explained, both unresolved orders are identified, critical offline tests pass, and a separate controlled session is explicitly authorized.
 
 **Priority:** evidence integrity → exchange/order facts → accounting → domain decision → regression coverage → confirmed fixes → exact-head CI → parent/roadmap update → separately authorized TESTNET acceptance. No later gate passes while an earlier critical conflict remains open.
+
+
+## 2026-11-06 original-log verification update
+
+The previous statement that the application logs were inaccessible is superseded. Both original attachments have been parsed and checksum-verified; the durable derived evidence is in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO in-memory Portfolio and RecoveryLedger state is now a direct PASS. DOGE SELL 1276698 remains CONFLICT: runtime shows OPEN/zero executed and the shutdown execution inventory has no DOGE SELL, while exchange order history reports FILLED. The 1,196 DOGE locked and CLOSING `UNRESOLVED_OWNED_ORDERS:2` still require full closing open-orders and canonical trade/order facts. The ZRO BUY 727905 is one confirmed unresolved order; the identity of the second is not proven. Keep TESTNET acceptance NOT ACCEPTED and do not submit/cancel orders or restart Harvester to investigate.
