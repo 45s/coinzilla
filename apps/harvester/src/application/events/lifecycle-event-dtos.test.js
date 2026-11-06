@@ -8,6 +8,9 @@ import {
   mapBrokerConnectionFailedData,
   mapBrokerDisconnectedData,
   mapBrokerStatusChangedData,
+  mapBrokerExecutionReportData,
+  mapOrderUpdatedData,
+  mapMarketTradingRulesCapturedData,
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
@@ -52,6 +55,9 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
     STRATEGY_DECISION: "strategy.decision",
+    MARKET_TRADING_RULES_CAPTURED: "market.trading_rules_captured",
+    BROKER_EXECUTION_REPORT: "broker.execution_report",
+    ORDER_UPDATED: "order.updated",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_CANCELLATION_REQUESTED: "order.cancel_requested",
@@ -704,4 +710,80 @@ test("maps complete account-wide open orders and blocks trading while any are un
   assert.equal(mapAccountOpenOrdersCapturedData({
     phase: "OPENING", observedAt: 1, orders: [], readiness: "RECONCILED",
   }).ok, false)
+})
+
+
+test("maps versioned broker execution evidence and rejects untrusted payloads", () => {
+  const result = mapBrokerExecutionReportData({ evidence: {
+    schemaVersion: 1, source: "binance.spot.userData.executionReport",
+    eventTime: 1730000000000, transactionTime: 1730000000001,
+    symbol: "DOGEUSDT", clientOrderId: "h-DOGEUSDT-8", side: "SELL",
+    executionType: "TRADE", orderStatus: "PARTIALLY_FILLED", orderId: 12345,
+    executionId: 987654, orderCreationTime: 1729999999000,
+    orderQuantity: "10", lastExecutedQuantity: "4", cumulativeExecutedQuantity: "4",
+    commissionAmount: "0.0006", commissionAsset: "USDT", tradeId: 98765,
+    cumulativeQuoteQuantity: "0.6", isMaker: true, apiKey: "not-copied",
+  } })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.cumulativeQuoteQuantity, "0.6")
+  assert.equal(result.data.commissionAmount, "0.0006")
+  assert.equal(result.data.tradeId, "98765")
+  assert.equal(result.data.executionId, "987654")
+  assert.equal(result.data.orderCreationTime, 1729999999000)
+  assert.equal("apiKey" in result.data, false)
+  assert.equal(mapBrokerExecutionReportData({ evidence: { schemaVersion: 1, source: "wrong" } }).ok, false)
+  assert.equal(mapBrokerExecutionReportData({ evidence: {
+    schemaVersion: 1, source: "binance.spot.userData.executionReport", orderQuantity: "NaN",
+  } }).ok, false)
+})
+
+test("strategy decision event retains reason and exact decision inputs", () => {
+  const result = mapStrategyDecisionData({
+    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100",
+    reason: "INITIAL_BUY",
+    inputs: {
+      lastBuyPrice: null, activeOrderCount: 0, activeBuyCount: 0, activeSellCount: 0,
+      activeBaseQuantity: "0", activeBaseBalance: "0",
+      freeQuoteBalance: "1000", freeBaseBalance: "0", quoteCashFlow: "0",
+      committedQuote: "0", committedQuoteBalance: "0", committedBase: "0",
+      committedBaseBalance: "0", outstandingRecoveryAmount: "0", investmentLimit: "1000",
+      orderQuantity: "1", keepQuantity: "0.1", priceStepPercent: "0.05",
+      makerPercent: "0", takerPercent: "0.075", minProfit: "0.01",
+    },
+    actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reason, "INITIAL_BUY")
+  assert.equal(result.data.inputs.freeQuoteBalance, "1000")
+})
+
+
+test("retains a safe structured broker error code", () => {
+  const result = mapBrokerConnectionFailedData({
+    broker: "binance",
+    error: Object.assign(new Error("order rejected"), { code: -1013 }),
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.error, { name: "Error", message: "order rejected", code: -1013 })
+})
+
+
+test("maps the exact validated exchange trading rules as a bounded plain DTO", () => {
+  const result = mapMarketTradingRulesCapturedData({
+    metadata: {
+      market: {
+        venue: "binance", symbol: "DOGEUSDT",
+        baseAsset: { code: "DOGE" }, quoteAsset: { code: "USDT" },
+      },
+      orderType: "LIMIT_MAKER",
+      supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+      tradingRules: { constraints: [
+        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.00001", asset: { code: "USDT" } } },
+        { type: "MAX_NOTIONAL", status: "UNSUPPORTED" },
+      ] },
+    },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.constraints[0].amount, "0.00001")
+  assert.equal(result.data.constraints[1].status, "UNSUPPORTED")
 })
