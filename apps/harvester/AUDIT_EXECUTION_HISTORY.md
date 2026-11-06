@@ -105,3 +105,60 @@ ZRO order 727905 is consistent across order history, the supplied open-orders sn
 ## Evidence not available
 
 The original `harvester.log` and `harvester-trace.log` are referenced by #645 and their sizes/line counts/checksums are recorded in its evidence inventory. They were not accessible to this execution session and were not parsed. Consequently, this derived ledger does not claim to correlate all application DEBUG/TRACE records or establish the cause of the DOGE conflict. No excerpts were substituted for the original files.
+
+## Expanded per-symbol decision and lifecycle interpretation
+
+### DOGEUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.056 | Initial BUY, reference 0.07161000 | BUY 400 @ 0.07157, suffix -1 | 1276628 FILLED; trade 221733 applied; 0.4 DOGE fee | PASS |
+| 2 | 07:01:41.006 | BUY-fill transition, reference 0.07157000 | SELL 398 @ 0.07203 (-3); BUY 400 @ 0.07153 (-4) | SELL 1276663 canceled zero; BUY 1276664 filled | PASS observed |
+| 3 | 07:02:14.833 | BUY-fill transition, reference 0.07153000 | SELL 797 @ 0.07191 (-9); BUY 400 @ 0.07149 (-10) | SELL 1276683 canceled zero; BUY 1276684 filled | PASS observed |
+| 4 | 07:02:31.008 | BUY-fill transition, reference 0.07149000 | SELL 1,196 @ 0.07185 (-11) | History FILLED; Journal OPEN; no applied SELL fill; 1,196 DOGE locked at close | CONFLICT |
+
+DOGE BUY checkpoint: 1,200 gross - 1.2 DOGE BUY fees = 1,198.8 net. The SELL is excluded from realized accounting until conflict is resolved. The account DOGE delta +1,198.8 matches BUY net exactly.
+
+### ZROUSDT decision sequence
+
+| # | Decision UTC | Strategy decision | Order action | Observed result | Status |
+|---:|---|---|---|---|---|
+| 1 | 07:00:08.661 | Initial BUY, reference 1.605 | BUY 5 @ 1.604 (-2) | 727817 / trade 11658 filled; 0.005 ZRO fee | PASS |
+| 2 | 07:01:47.376 | BUY transition, reference 1.604 | SELL 4.98 (-5); BUY 5 @ 1.603 (-6) | SELL 727837 canceled zero; BUY 727838 filled | PASS observed |
+| 3 | 07:02:05.052 | BUY transition, reference 1.603 | SELL 9.97 (-7); BUY 5 @ 1.602 (-8) | SELL 727846 canceled zero; BUY 727847 filled | PASS |
+| 4 | 07:02:37.604 | BUY transition, reference 1.602 | SELL 14.96 (-12); BUY 5 @ 1.601 (-13) | SELL 727858 canceled zero; BUY 727859 filled | PASS |
+| 5 | 07:02:40.312 | BUY transition, reference 1.602 | SELL 19.95 (-14); BUY 5 @ 1.600 (-15) | SELL 727860 canceled zero; BUY 727861 filled | PASS |
+| 6 | 07:02:53.814 | BUY transition, reference 1.600 | SELL 24.94 (-16); BUY 5 @ 1.599 (-17) | SELL 727866 canceled zero; BUY 727867 filled | PASS |
+| 7 | 07:03:09.962 | BUY transition, reference 1.599 | SELL 29.93 (-18); BUY 5 @ 1.598 (-19) | SELL 727875 canceled zero; BUY 727876 filled | PASS |
+| 8 | 07:04:14.631 | BUY transition, reference 1.598 | SELL 34.92 (-20); BUY 5 @ 1.597 (-21) | SELL 727891 canceled zero; BUY 727892 filled | PASS |
+| 9 | 07:04:46.922 | BUY transition, reference 1.597 | SELL 39.91 @ 1.606 (-22); BUY 5 @ 1.596 (-23) | SELL 727904 filled; trade 11666 applied; completion recorded; BUY 727905 remains NEW | PARTIAL |
+
+The nine canceled SELLs are not executions. Their zero executed quantities contribute no base debit, quote proceeds, or realized PnL.
+
+## Order-state vocabulary
+
+- INITIAL_BUY: first BUY intent after initial market evaluation.
+- NEXT_STANDING_BUY: subsequent BUY intent after a BUY-fill decision; intent does not mean filled.
+- RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT: strategy SELL intent; intent does not mean execution.
+- NEW: order-history/open-order state with zero execution in this run.
+- CANCELED: terminal history state; all nine canceled SELLs report zero executed.
+- FILLED*: history reports FILLED but Journal/account contradict it; not a reconciled fill.
+- execution.fill_applied: canonical fill applied to Journal/accounting.
+- execution.duplicate_fill: duplicate notification; must not change balances twice.
+- recovery.cycle_completed: completion event; still requires eligibility, commission, Portfolio, and RecoveryLedger verification.
+
+## Explicit event gaps
+
+1. Original app logs were unavailable. No exact DEBUG/TRACE decision rationale, market tick, filter response, retry timing, WebSocket reconnect, or cancel/replace interleaving is claimed.
+2. Full CLOSING open-order payload is absent. ZRO 727905 is identified; the second unresolved order is unknown.
+3. DOGE order 1276698 history creation time is 07:02:31.151Z; decision time is 07:02:31.008Z. Neither proves when terminal status changed. Need order update time and trade execution timestamps.
+4. ZRO trade 11666 exchange executedAt 07:08:46.965Z; Journal fill applied 07:08:47.124Z; completion 07:08:47.127Z. CLOSING event at 07:58:11.370Z carries sourceTime equal to the earlier trade timestamp; do not treat sourceTime as snapshot event time.
+5. Journal shows one early duplicate for ZRO trade 11661 and duplicate replays of all 12 applied fills during CLOSING. This does not prove all crash/reconnect permutations.
+
+## Reconciliation equations
+
+DOGE BUY: gross 400 + 400 + 400 = 1,200 DOGE; fees 0.4 + 0.4 + 0.4 = 1.2; net 1,198.8 DOGE; quote debit 28.628 + 28.612 + 28.596 = 85.836 USDT. Closing DOGE delta = (19,122.6 free + 1,196 locked) - 19,119.8 = +1,198.8 DOGE. Exclude SELL from realized accounting until resolved.
+
+ZRO: gross BUY 8 × 5 = 40; BUY fees 8 × 0.005 = 0.04; SELL 39.91; residual 40 - 0.04 - 39.91 = 0.05 ZRO. Gross SELL quote 39.91 × 1.606 = 64.09546; quote fee 0.06409546; net proceeds 64.03136454; BUY cost 64.02; realized net +0.01136454 USDT. Combined USDT delta -85.836 + 0.01136454 = -85.82463546, matching account total change.
+
+These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve DOGE SELL or prove complete in-memory ownership state.
