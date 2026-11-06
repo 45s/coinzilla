@@ -348,7 +348,7 @@ test("does not create a duplicate residual SELL while one is active", () => {
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
 })
 
-test("fails closed when active inventory has lost its recovery cost/profit basis", () => {
+test("fails closed when active inventory has no positive recovery cost basis", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   assert.throws(() => evaluateConservativeStrategy({
     marketPrice,
@@ -356,6 +356,21 @@ test("fails closed when active inventory has lost its recovery cost/profit basis
     settings,
     portfolio,
     recoveryLedger: recoveryLedger.resetCycle(),
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  }), /no recovery cost\/profit basis/)
+
+  const proceedsOnlyLedger = new RecoveryLedger({
+    market,
+    buyCost: "0",
+    netSellProceeds: "1",
+  })
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger: proceedsOnlyLedger,
     marketMetadata,
     lastBuyPrice: "0.1",
   }), /no recovery cost\/profit basis/)
