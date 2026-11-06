@@ -1328,7 +1328,7 @@ export function makeConservativeTradingEngine({
           return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
         }
         if (!completion.data?.eligible) {
-          if (completion.data?.reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
+          if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
               completion.data?.pause === false) {
             // Keep the original cost/proceeds basis. The next serialized
             // evaluation will plan another SELL for any residual that still
