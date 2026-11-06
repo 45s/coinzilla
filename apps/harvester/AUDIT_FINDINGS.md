@@ -363,3 +363,20 @@ This is not a claim that the full Conservative contract is implemented. Remainin
 The older exact code head 1e4bf3272983411b5e8c2224b3fd4371baec86f9 passed five workflows; the read-only TESTNET integration job was skipped. That historical checkpoint does not establish current-head acceptance. At the starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2, Unit Tests and Test Coverage failed; JavaScript Syntax, Utils Unit Tests, and Dependency Audit passed. Re-run every required check on the exact final head.
 
 Restart reconciliation remains separate in #654. PR #653 remains open and unmerged; no TESTNET acceptance or merge is authorized.
+
+
+## F-001 follow-up — post-CLOSING DOGE execution established; strategy conformance still to be checked
+
+**Updated status:** exchange execution arithmetic RESOLVED; C-strategy quantity/price/inventory conformance PARTIAL pending comparison with the exact session configuration and decision inputs.
+
+The bounded DOGE trade export establishes that order 1276698 filled after the ~07:58 UTC CLOSING snapshot: 278 + 918 = 1,196 DOGE, gross quote 85.93260000 USDT, actual quote commission 0.08593260 USDT, net proceeds 85.84666740 USDT. The three preceding BUY fills acquired 1,198.8 net DOGE after 1.2 DOGE base commissions and cost 85.836 USDT. Exchange-side arithmetic therefore gives +0.01066740 USDT net profit and a simple remaining-quantity difference of 2.8 DOGE.
+
+This supersedes the earlier interpretation that the exchange order-history FILLED state directly conflicted with the ~07:58 runtime OPEN/zero-executed observation: the fills happened later. It does **not** establish whether the submitted 1,196-DOGE quantity and 0.07185 price conformed to the exact configured keepQuantity, fee reserve, symbol filters, and Conservative calculation at decision time. Reconstruct those inputs and compare them. Do not book post-shutdown fills into the earlier in-memory state.
+
+## F-002 follow-up — ZRO completion arithmetic and residual disposition
+
+The bounded ZRO trade export confirms BUY cost 64.02 USDT, net acquired quantity 39.96 ZRO, SELL net proceeds 64.03136454 USDT, and realized profit +0.01136454 USDT. The historical completion record retained 0.01 ZRO while 0.04 ZRO remained. The audit must now prove whether that 0.04 remainder was exchange-constrained dust under the actual ZROUSDT quantity/notional filters or a strategy sell-through defect; do not assume either outcome without filter and decision evidence. Later BUY order 727905 (4.995 net ZRO credited) filled after CLOSING and is a separate post-snapshot event.
+
+## Required next action — DOGE/ZRO expected-versus-actual matrix
+
+For each symbol and each decision/order, produce a compact row set containing: config snapshot; pre-decision Position.quantity and Position.spent; cumulative net SELL proceeds; strategy intent quantity/limit price/order type; exchange filters and fee reserve; broker order lifecycle; distinct actual fills and actual commissions; post-fill quantity/spent/proceeds; exact keepQuantity/dust disposition; and realized net profit. Label each comparison FOLLOWED / VIOLATED / UNVERIFIED. Every VIOLATED row requires root-cause identification, a regression test, and a code fix before acceptance. Raw trade exports remain immutable; this finding register records only derived interpretation.
