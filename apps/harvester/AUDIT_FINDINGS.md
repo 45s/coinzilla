@@ -54,7 +54,7 @@ The Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at
 
 **Status:** PASS for the observed `auditStatus=INCOMPLETE` snapshot; PARTIAL for source/test proof of shutdown fail-closed behavior and identification of both orders.
 
-The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. The ZRO BUY 727905 is independently confirmed NEW and has 7.98 USDT locked. The DOGE 1,196 locked amount and order-history FILLED status conflict; without the raw logs and a CLOSING open-order identity list, do not assert that order 1276698 is definitively the second unresolved order.
+The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. The ZRO BUY 727905 is independently confirmed NEW and has 7.98 USDT locked. Parsed TRACE records show DOGE SELL 1276698 OPEN/zero-executed at the last runtime evaluations, while the closing snapshot has 1,196 DOGE locked and exchange order history reports FILLED. DOGE 1276698 is a strong candidate for the second unresolved order, but without the full CLOSING open-order identity list do not assert it is definitively that order.
 
 Source inspection found bootstrap CLOSING-audit logic and regression coverage for an unresolved owned order / reconciliation failure. Tests were not run in this audit.
 
@@ -80,15 +80,15 @@ Issue #626 remains OPEN as of this audit and documents the 2026-11-05 repeated `
 
 The 2026-11-06 Journal contains no observed reconnect/recovery sequence; therefore live recovery behavior remains UNVERIFIED by this session.
 
-## F-008 — Original application logs not parsed in this execution session
+## F-008 — Original application logs integrity-verified and parsed
 
-**Status:** UNVERIFIED.
+**Status: PASS for file integrity and parsing; PARTIAL for complete incident resolution.**
 
-The evidence inventory in #645 records:
-- `harvester.log`: 16,878,030 bytes; 4,880 lines; SHA-256 `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`.
-- `harvester-trace.log`: 17,021,746 bytes; 5,739 lines; SHA-256 `4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3`.
+The original attachments were read-only inspected and independently hashed:
+- `harvester.log`: 16,878,030 bytes; 4,880 physical lines; SHA-256 `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`.
+- `harvester-trace.log`: 17,021,746 bytes; 5,739 physical lines; SHA-256 `4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3`.
 
-The original conversation attachments were not mounted/exposed to the current tool session. These files were not read, their checksums were not recomputed, and no excerpts were substituted. The full-log correlation requirement remains open.
+Both files end with a newline and their checksums match #645. The logs were parsed; key source-line ranges and derived findings are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). The ZRO Portfolio/RecoveryLedger transition is directly observed. DOGE order 1276698 is OPEN/zero-executed at the final runtime evaluations and absent from the 12 shutdown execution records, which favors open/unfilled, but exchange order history separately reports FILLED. Therefore log integrity/parsing passes while DOGE terminal-state and complete CLOSING-order reconciliation remain unresolved.
 
 ## F-009 — Exact-once full-cycle recovery coverage is a concrete test gap
 
@@ -286,3 +286,10 @@ Closure: one test proves partial execution, replacement, terminal replay, exact-
 4. Regression coverage: implement #648 test-only and update invariant matrix.
 5. Runtime fix only if a reproduced invariant violation is confirmed.
 6. Exact-head CI, then update audit/roadmap/#645 to the same commit.
+
+
+## F-011 — ZRO runtime Portfolio and RecoveryLedger cycle state directly observed
+
+**Status: PASS for the observed in-memory accounting transition.**
+
+Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied exactly once, Portfolio active quantity 0.05 ZRO and quote cash flow +0.01136454 USDT, RecoveryLedger proceeds 64.03136454 USDT and outstanding 0, followed by eligible completion allocating 0.01 ZRO free, retaining 0.04 active residual, and resetting cycle totals. The following evaluation retains active 0.04/free 0.01/total 0.05. This directly establishes the runtime state previously inferred from Journal and arithmetic. It does not establish full account settlement or TESTNET acceptance. Full detail: [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md).
