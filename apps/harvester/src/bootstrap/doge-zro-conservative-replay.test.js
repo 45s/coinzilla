@@ -85,9 +85,13 @@ const marketFilters = (symbol) => {
   }
 }
 
-const waitForOrder = (submitted, waiters, { symbol, side }) => {
+const waitForOrder = (submitted, waiters, expected) => {
   const matches = (order) =>
-    order.market.symbol === symbol && order.side === side
+    order.market.symbol === expected.symbol &&
+    order.side === expected.side &&
+    order.type === expected.type &&
+    order.quantity === expected.quantity &&
+    order.price === expected.price
   const existing = submitted.find(matches)
   if (existing) return Promise.resolve(existing)
   return new Promise((resolve) => waiters.push({ matches, resolve }))
@@ -293,6 +297,9 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const dogeBuySubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "DOGEUSDT",
       side: "BUY",
+      type: "LIMIT",
+      quantity: "400",
+      price: "0.07157",
     })
     await triggerPrice("DOGEUSDT", "0.07161000")
     const dogeBuy = await dogeBuySubmitted
@@ -300,6 +307,9 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const zroBuySubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "ZROUSDT",
       side: "BUY",
+      type: "LIMIT",
+      quantity: "5",
+      price: "1.604",
     })
     await triggerPrice("ZROUSDT", "1.60500000")
     const zroBuy = await zroBuySubmitted
@@ -316,6 +326,9 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const dogeSellSubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "DOGEUSDT",
       side: "SELL",
+      type: "LIMIT",
+      quantity: "398",
+      price: "0.07203",
     })
     await triggerPrice("DOGEUSDT", "0.07157")
     fillOrder({
@@ -330,6 +343,9 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     const zroSellSubmitted = waitForOrder(submitted, orderWaiters, {
       symbol: "ZROUSDT",
       side: "SELL",
+      type: "LIMIT",
+      quantity: "4.98",
+      price: "1.615",
     })
     await triggerPrice("ZROUSDT", "1.604")
     fillOrder({
