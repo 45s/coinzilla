@@ -59,7 +59,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -167,6 +167,7 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
         data: [
           ...accountedFills.filter((fill) => fill.brokerOrderId === orderId),
           ...cancelFill,
+          ...getTerminalFills({ orderId }),
         ],
       }
     },
@@ -1026,7 +1027,7 @@ const makeFilledOrder = ({ order }) => new CanonicalOrder({
   completedAt: 3,
 })
 
-function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount, quoteQuantity = "100" }) {
+function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount, quoteQuantity = "100", commissionAmount = "0" }) {
   return new Fill({
     tradeId,
     brokerOrderId: order.brokerOrderId,
@@ -1036,7 +1037,9 @@ function makeSellFill({ order, tradeId, quantity = order.originalQuantity.amount
     price: order.limitPrice,
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
-    commissions: [],
+    commissions: commissionAmount === "0" ? [] : [
+      new Commission({ amount: new Money({ amount: commissionAmount, asset: quoteAsset }) }),
+    ],
     commissionStatus: "COMPLETE",
   })
 }
@@ -2612,6 +2615,128 @@ test("pauses on an exchange REJECTED order update", async () => {
   assert.deepEqual(pauses, ["ORDER_REJECTED"])
 })
 
+
+test("terminal recovery SELL reconciles partial fills and commissions before reevaluation", async () => {
+  for (const status of ["CANCELED", "EXPIRED"]) {
+    const seeded = makeSeededRecoveryState()
+    let currentPortfolio = seeded.portfolio
+    let currentRecoveryLedger = seeded.recoveryLedger
+    let sellFill
+    const harness = await createHarness({
+      initialPortfolio: seeded.portfolio,
+      initialRecoveryLedger: seeded.recoveryLedger,
+      baseFreeBalance: "1",
+      getPortfolio: () => currentPortfolio,
+      getRecoveryLedger: () => currentRecoveryLedger,
+      getTerminalFills: ({ orderId }) => sellFill?.brokerOrderId === orderId ? [sellFill] : [],
+      updateTradingAccounting: async ({ fill }) => {
+        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        return { ok: true, data: { applied: true, duplicate: false } }
+      },
+    })
+    await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+    const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+    const quoteQuantity = multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.2" })
+    sellFill = makeSellFill({
+      order: sellOrder,
+      tradeId: "terminal-recovery-sell-" + status.toLowerCase(),
+      quantity: "0.2",
+      quoteQuantity,
+      commissionAmount: "0.01",
+    })
+    const terminalOrder = makeOrderStatusUpdate({
+      order: sellOrder,
+      status,
+      executedQuantity: "0.2",
+    })
+
+    const result = await harness.engine.processUserDataEvent({
+      event: { executedOrder: terminalOrder },
+    })
+
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+    assert.equal(result.data.reevaluate, true)
+    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
+    assert.equal(currentPortfolio.positions[0].spent.amount, "100")
+    assert.equal(
+      currentPortfolio.positions[0].quoteNetCashFlow.amount,
+      subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+    )
+    assert.equal(
+      currentRecoveryLedger.netSellProceeds,
+      subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+    )
+    assert.equal(harness.accountedFills.length, 1)
+    assert.equal(harness.accountedFills[0].commissions[0].amount.amount, "0.01")
+    assert.deepEqual(harness.pauses, [])
+  }
+})
+
+test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
+  for (const fillHistory of [[], "conflicting"]) {
+    const seeded = makeSeededRecoveryState()
+    let currentPortfolio = seeded.portfolio
+    let currentRecoveryLedger = seeded.recoveryLedger
+    let sellFill
+    const harness = await createHarness({
+      initialPortfolio: seeded.portfolio,
+      initialRecoveryLedger: seeded.recoveryLedger,
+      baseFreeBalance: "1",
+      getPortfolio: () => currentPortfolio,
+      getRecoveryLedger: () => currentRecoveryLedger,
+      getTerminalFills: ({ orderId }) => {
+        if (sellFill?.brokerOrderId !== orderId) return []
+        return fillHistory === "conflicting" ? [sellFill, makeSellFill({
+          order: sellOrderRef,
+          tradeId: sellFill.tradeId,
+          quantity: "0.1",
+          quoteQuantity: "1",
+        })] : []
+      },
+      updateTradingAccounting: async ({ fill }) => {
+        currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
+        currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        return { ok: true, data: { applied: true, duplicate: false } }
+      },
+    })
+    await harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    })
+    const sellOrderRef = harness.engine.getOrders().find((order) => order.side === "SELL")
+    const sellOrder = sellOrderRef
+    sellFill = makeSellFill({
+      order: sellOrder,
+      tradeId: "invalid-terminal-sell-" + (fillHistory === "conflicting" ? "conflict" : "missing"),
+      quantity: "0.2",
+      quoteQuantity: "20",
+    })
+    const result = await harness.engine.processUserDataEvent({
+      event: {
+        executedOrder: makeOrderStatusUpdate({
+          order: sellOrder,
+          status: "CANCELED",
+          executedQuantity: "0.2",
+        }),
+      },
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(harness.accountedFills.length, 0)
+    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "1")
+    assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+    assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
+    assert.ok(harness.pauses.includes(
+      fillHistory === "conflicting"
+        ? "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE"
+        : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH",
+    ))
+  }
+})
 
 test("accounts a recovery SELL fill during cancellation once when its late stream event is replayed", async () => {
   let releaseCancel
