@@ -416,7 +416,7 @@ The order quantity/price FOLLOWED the canonical calculation. Both executions occ
 
 Eight BUY fills acquired 39.96 ZRO net after 0.04 ZRO base commissions; Position.spent was 64.02 USDT. SELL order 727904 sold 39.91 ZRO at 1.606; gross proceeds were 64.09546000 USDT, actual quote commission 0.06409546 USDT, net proceeds 64.03136454 USDT, and realized net profit +0.01136454 USDT. Position quantity after the SELL was 0.05 ZRO.
 
-The historical runtime then allocated 0.01 ZRO to free inventory and reset the RecoveryLedger while 0.04 ZRO remained active. This is **VIOLATED** regardless of whether the 0.04 remainder was exchange-constrained dust: canonical completion requires active quantity to equal keepQuantity, and dust above keepQuantity must remain active with its original cost basis and must not trigger ledger reset. At 1.606, 0.04 ZRO is worth 0.06424 USDT; whether it failed the exact historical MIN_NOTIONAL filter is UNVERIFIED because that decision-time filter snapshot was not preserved.
+The historical runtime then allocated 0.01 ZRO to free inventory and reset the RecoveryLedger while 0.04 ZRO remained active. Immediately afterward, repeated Conservative evaluations (07:08:47.129Z through 07:09:04.750Z) returned NO_ACTION with an empty actions array despite the 0.04 active remainder. This directly proves the old strategy did not create a residual SELL. This is **VIOLATED** regardless of whether the 0.04 remainder was exchange-constrained dust: canonical completion requires active quantity to equal keepQuantity, and dust above keepQuantity must remain active with its original cost basis and must not trigger ledger reset. At 1.606, 0.04 ZRO is worth 0.06424 USDT; whether it failed the exact historical MIN_NOTIONAL filter is UNVERIFIED because that decision-time filter snapshot was not preserved.
 
 **Confirmed root cause at the audit baseline:** `evaluateRecoveryCompletion` rejected active quantity below keepQuantity but accepted any amount above it; it did not require equality. Separately, `evaluateConservativeStrategy` emitted recovery SELL only while outstanding recovery was positive, so after the profit target was met it could not sell residual inventory. Together these conditions allowed premature allocation/reset and stranded active residual without its original recovery basis.
 
@@ -426,9 +426,9 @@ ZRO BUY order 727905 (5 gross ZRO, 0.005 ZRO base commission, 4.995 net) filled 
 
 ### Current verdict and verification boundary
 
-- DOGE recovery SELL calculation/order: FOLLOWED.
+- DOGE submitted SELL order and exchange execution: FOLLOWED; exact filter-based calculation and post-shutdown residual disposition: UNVERIFIED.
 - DOGE post-shutdown fill accounting inside Harvester and final dust disposition: UNVERIFIED; #654 is deferred.
-- ZRO recovery SELL calculation/order and actual fee/profit arithmetic: FOLLOWED.
+- ZRO submitted SELL order and actual fee/profit arithmetic: FOLLOWED; exact historical filter-based calculation: UNVERIFIED.
 - ZRO recovery completion/reset with 0.04 active residual: VIOLATED; root cause confirmed and implementation corrected on this branch.
 - Partial SELL stability, decision-B cancel/reconcile/replacement, and other terminal states are not proven by these two final SELLs; continue focused source/test audit rather than infer them from this outcome.
 - No TESTNET writes, cancellations, new orders, bot restarts, or merges were performed.
