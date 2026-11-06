@@ -9,7 +9,7 @@
 Until Harvester has passed the complete real Binance Spot TESTNET acceptance gate defined below, the ONLY permitted Harvester work is work that directly implements, fixes, tests, or verifies the live trading workflow.
 
 **Do not start, continue, expand, or prioritize any of the following before that gate passes:**
-- Journal recovery, replay, reconstruction, migration, schema expansion, or additional Journal integration beyond the existing mandatory durability barriers defined below.
+- Journal expansion beyond the existing safeguards is deferred; see the [Journal contract boundary](#journal-contract-boundary).
 - New databases, database migrations, persistence layers, storage abstractions, or durable-state projects.
 - New infrastructure, observability, dashboards, analytics, reporting, generic frameworks, or architecture redesign.
 - Refactoring, cleanup, optimization, new strategy modes, or features that do not directly unblock or verify the trading workflow.
