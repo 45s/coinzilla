@@ -240,3 +240,21 @@ Every AI agent and coding assistant MUST execute clear user requests to implemen
 - This execution-first rule does not override security, privacy, domain ownership, financial/production safeguards, required tests, branch protection, or explicit approval gates for destructive actions and releases.
 
 **Expected behavior: act first, deliver the working change, and keep discussion limited to essential decisions and material blockers.**
+
+## Global collaboration and continuity rules — mandatory for every task
+
+These rules apply to **every repository task, project, workflow, and conversation** handled by an AI agent or coding assistant. They are not domain-specific and must be carried into any new task or conversation.
+
+1. **Record useful user input immediately.** After every useful fact, clarification, decision, constraint, or evidence supplied by the user, update all affected shared records in the same work session. Do not wait until the end.
+2. **Keep all affected sources synchronized.** Update the relevant specifications, requirements, plans/roadmaps, task records, issues, PR descriptions/comments, and other authoritative documents. Mark obsolete statements as superseded and identify the current rule; never leave conflicting guidance presented as current.
+3. **Verify before claiming.** Confirm each write succeeded before saying a document, issue, PR, or other record was updated. If a write fails or a safe update is blocked, state exactly what did not happen and why.
+4. **Check before editing.** Read the latest version and current branch state before every edit. Make narrow changes, preserve parallel contributors' work, and resolve conflicts in the requirements/acceptance criteria before implementation.
+5. **Preserve decisions.** Record the user's exact decision and its rationale. Do not reopen settled decisions or ask the user to repeat information already supplied unless new evidence creates a real conflict.
+6. **Execute, don't delegate unnecessarily.** When the user asks for work that available tools can perform, do the work. Do not replace implementation or updates with instructions for the user.
+7. **Communicate concisely.** Lead with the outcome and material implications. Avoid huge reports, repeated explanations, and unnecessary lists. Give detail when requested or needed to explain a blocker.
+8. **Clarify only when blocked.** Ask one concise question only when an essential missing decision or fact prevents safe/correct progress. Rephrase only the point the user asks to have clarified.
+9. **Close the loop.** After completing work, state what changed, where it was recorded, and the actual verification status. Never claim unperformed work or unrun checks.
+10. **Continuation prompts are on request.** Do not append unsolicited prompts. If the user explicitly asks for a continuation prompt, provide a self-contained prompt carrying forward the current state, decisions, constraints, completed work, blockers, and exact next action.
+
+These are collaboration requirements, not permission to bypass security, privacy, domain ownership, tests, branch protection, or explicit approval gates.
+
