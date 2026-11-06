@@ -106,7 +106,7 @@ A POST-ONLY order must pass the existing fresh, same-symbol best-bid/best-ask cr
 
 Every candidate SELL must satisfy current price, quantity, and notional filters, including tick size, quantity step, minimum/maximum quantity, and minimum/maximum notional.
 
-Sell all quantity that can legally be sold above K. A remainder is EXCHANGE_CONSTRAINED_DUST only when the exact amount cannot currently satisfy the applicable quantity-step, minimum-quantity, or minimum-notional rules. Record its exact quantity and limiting filter. Dust is not an additional retained reserve, must not be silently moved into keepQuantity, and must retain its accounting basis so later inventory can make it sellable.
+Sell all quantity that can legally be sold above K. A remainder is EXCHANGE_CONSTRAINED_DUST only when the exact amount cannot currently satisfy the applicable quantity-step, minimum-quantity, or minimum-notional rules. Record its exact quantity and limiting filter. **Unsellable dust is retained as a bonus on top of configured keepQuantity.** If configured K is 1.00 and 0.04 is exchange-constrained dust, retain 1.04 total; do not discard it, force an invalid SELL, or treat it as sold. Dust is not a reason to keep submitting futile SELLs or to block completion once all other completion conditions pass. Preserve its quantity and accounting provenance when transferring the completed retained inventory.
 
 A price-filter or fee-valuation failure is not dust; it is a blocked/unsafe decision and must fail closed.
 
@@ -153,11 +153,11 @@ Recovery is complete only when all of the following are true:
 
 1. The relevant SELL order is authoritatively terminal and its complete distinct fill history reconciles to broker-reported execution facts.
 2. Every BUY and SELL fill and every actual commission has been applied exactly once.
-3. Position quantity equals exactly keepQuantity. All exchange-sellable quantity above it has been sold. If exchange-constrained dust remains above keepQuantity, classify its exact quantity and limiting rule, keep it active with its original accounting basis, and do not allocate/reset the recovery position yet. A later BUY may make that remainder sellable.
+3. All exchange-sellable quantity above keepQuantity has been sold. Any remaining exchange-constrained dust is classified by exact quantity and limiting filter, then retained in addition to keepQuantity. The retained total is keepQuantity + dust (for example, 1.00 + 0.04 = 1.04); dust is not discarded, force-sold, or counted as sold.
 4. Actual cumulative net SELL proceeds minus the full accumulated BUY spent are at least 0.01 quote currency.
 5. The exact configured keepQuantity is preserved and is never sold.
 
-Only after these conditions pass may the exact keepQuantity be allocated as retained/free inventory and the completed recovery basis be reset. If profit is below 0.01, fill history is incomplete, inventory accounting is inconsistent, or the retained quantity cannot be preserved, fail closed and do not reset.
+Only after these conditions pass may keepQuantity plus any classified exchange-constrained dust be allocated as retained/free inventory, preserving the dust quantity and its accounting provenance, and the completed recovery basis be reset. If profit is below 0.01, fill history is incomplete, inventory accounting is inconsistent, or the full retained total cannot be preserved, fail closed and do not reset.
 
 keepQuantity = 0 is permitted only after the complete workflow—including BUY, partial SELL, cancellation/reconciliation, terminal SELL, dust, profit verification, and exact-once completion—has passed end-to-end regression. Until then, fail closed at the precise unsupported boundary.
 
