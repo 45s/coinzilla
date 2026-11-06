@@ -8,7 +8,6 @@ import {
   Market,
   Money,
   Quantity,
-  TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -26,31 +25,7 @@ const market = new Market({
   quoteAsset,
 })
 
-const marketMetadata = {
-  market,
-  orderType: "LIMIT_MAKER",
-  supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
-  tradingRules: new TradingRules({
-    market,
-    constraints: [
-      {
-        type: "PRICE_INCREMENT",
-        status: "SUPPORTED",
-        value: new Money({ amount: "0.001", asset: quoteAsset }),
-      },
-      {
-        type: "QUANTITY_INCREMENT",
-        status: "SUPPORTED",
-        value: new Quantity({ amount: "0.01", asset: baseAsset }),
-      },
-      {
-        type: "MIN_QUANTITY",
-        status: "SUPPORTED",
-        value: new Quantity({ amount: "0.01", asset: baseAsset }),
-      },
-    ],
-  }),
-}
+const marketMetadata = { market }
 
 const tradingConfig = {
   strategies: {
