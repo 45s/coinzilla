@@ -10,127 +10,19 @@ Conservative is not merely the first policy to document: it is the first strateg
 
 ### Conservative
 
-This policy is implemented as a broker-independent pure function in
-`src/domain/strategies/conservative/conservative-strategy.js`. It emits order
-intents only; the application engine validates and submits them.
+The Conservative strategy's complete and exclusive rule definition is [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-The first connected policy behavior is:
+This page intentionally does not restate Conservative BUY/SELL rules, accounting formulas, fee reserves, retained inventory, partial-fill behavior, cancellation/replacement behavior, or completion criteria. Older Conservative-specific text in this file is superseded by the canonical specification.
 
-The initial BUY is placed one configured step below the first valid market price and trails upward until filled or safely replaced. While the strategy
-is in its trailing phase, if the last traded price rises by at least one full
-compounded `priceStepPercent` from the last BUY reference, cancel the current
-BUY and replace it below the new last trade by the configured percentage.
-Round the replacement price down to the exchange tick. If the cancellation
-reveals any execution, reconcile those fills and pause instead of placing a
-replacement from uncertain inventory. After a BUY fully fills, the next
-standing BUY is fixed and does not trail while active strategy inventory
-remains. A profitable recovery SELL can restore the trailing phase, but trailing
-repricing is still suppressed until the Portfolio's active
-`baseQuantity.amount` reaches zero. Retained `freeBaseQuantity` is excluded
-from this gate, so free inventory alone does not prevent trailing.
-
-The default Harvester config enables only `ZROUSDT` while the first trading
-cycle is limited to one pair. `ZROFDUSD` remains configured but disabled until
-cross-pair shared-asset allocation is implemented.
-
-- With no active strategy inventory and no active BUY, create one BUY at the
-  last traded price reduced by `priceStepPercent`, rounded down to the
-  exchange price tick. Quantity is `orderQuantity`, rounded down to the
-  exchange quantity step.
-- Use `LIMIT_MAKER` when `makerPercent` is zero; otherwise use `LIMIT`, with
-  exchange time-in-force and filter requirements handled by the broker adapter.
-- When another BUY fully fills while a recovery SELL is open, cancel the old
-  SELL, query and account all canonical fills for that order, verify the
-  cumulative filled quantity, and then recalculate the recovery SELL. If the
-  cancellation or fill history is ambiguous, pause rather than guessing.
-- With active inventory, create a recovery SELL when no SELL is already active.
-  The existing exact-decimal recovery planner preserves `keepQuantity`, covers
-  cumulative BUY cost plus `minProfit`, credits only confirmed net SELL
-  proceeds, and rounds the SELL price up to the exchange tick.
-- A recovery SELL can complete a cycle only when distinct canonical SELL fill
-  quantities sum exactly to both the broker-reported executed quantity and
-  original order quantity. All fills must already be accounted. Missing or
-  inconsistent fill history pauses the pair without free-inventory allocation
-  or ledger reset.
-- When inventory exists, also maintain the next standing BUY unless one is
-  already active. Its reference is the volume-weighted average execution price
-  across all fills of the last completed BUY order (total executed quote
-  notional divided by total executed base quantity). Do not use the submitted
-  limit price or only the final partial fill. Before a completed BUY reference
-  exists, the current last traded price is used.
-- Active PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN orders suppress duplicate
-  intents on subsequent market events. A new BUY is omitted when outstanding
-  recovery capital plus the new order notional would exceed the pair investment cap.
-- A strategy decision can therefore request both a BUY and a SELL. The recovery
-  SELL intent is first; the executor must receive its successful broker
-  acknowledgement before submitting the next standing BUY. A failed or unknown
-  SELL submission pauses the pair and prevents the BUY submission.
-- A fully reconciled BUY fill triggers a new evaluation immediately from the
-  serialized user-data event flow; no additional market-price event is required.
-  The policy does not submit orders, mutate Portfolio, or infer fills from acknowledgements.
-
-The domain policy is composed by the Harvester trading engine. Offline
-bootstrap and engine tests cover BUY submission, trailing replacement,
-BUY-driven recovery-SELL replacement, fill accounting, recovery completion,
-and free-inventory allocation. A real Binance TESTNET run is still required
-to verify the broker integration against the exchange.
-
-
-This is Harvester's standing-order accumulation and capital-recovery strategy.
-
-Its defining objective is to recover invested quote capital while accumulating free base-asset quantity from realized net profit.
-
-Key characteristics:
-
-- Maintain cumulative BUY cost, net SELL proceeds, exchange-charged commissions, minimum profit, and retained base inventory.
-- Sell only when the required net-profit condition is satisfied.
-- Keep the configured reserve/free quantity out of subsequent invested-position calculations.
-- Use actual fills and commissions for accounting.
-- Preserve the order lifecycle and safety rules defined in the Conservative Domain Specification.
-
-The [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the enduring source of truth for strategy rules. Configuration values alone do not implement the strategy.
+Implementation code is under src/domain/strategies/conservative/ and src/use-cases/conservative-trading-engine.js. Its behavior is implementation evidence, not an alternate rule source. Current blockers and verification status are tracked in [ROADMAP](../ROADMAP.md).
 
 ### Shared commission and order-type policy — Conservative and Aggressive
 
-The same commission and order-type policy applies to Conservative and Aggressive. Shared market readiness selects the order type from `makerPercent`. Aggressive currently returns `NO_ACTION`; when its order planner is implemented, it must use this same fee rule.
-
-- If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
-- If `makerPercent` is non-zero, submit a regular `LIMIT` order.
-- Use configured `makerPercent` as the commission estimate for planning in both cases. For recovery SELL planning, `f = makerPercent / 100` (for example, `0.1` means `0.001`); zero `makerPercent` means a zero reserve. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
-- The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
-- Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
-- Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
-
-Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
+For Conservative, the canonical specification is authoritative. This section does not define or override Conservative fee reserves or order selection. Aggressive is not currently executable; any future Aggressive fee policy requires its own approved specification before implementation.
 
 ### Shared BUY repricing safety — Conservative and Aggressive
 
-The active-Position gate applies to **every strategy's upward BUY repricing**, not only
-Conservative trailing BUY. Before evaluating a repricing threshold or initiating
-any BUY cancellation/replacement, the engine must read the latest Portfolio
-Position for the canonical market and compare `baseQuantity.amount` to zero
-using exact decimal arithmetic.
-
-- If active `baseQuantity.amount` is greater than zero, do not evaluate the
-  upward repricing trigger and do not cancel or replace any BUY order as part
-  of repricing.
-- If the Position is absent or active quantity is zero, repricing is eligible.
-- `freeBaseQuantity` is retained inventory, not active strategy inventory,
-  and must never block repricing.
-- This gate is independent of strategy-local trailing/grid flags. Such flags
-  remain additional controls, never substitutes for current Portfolio state.
-- A recovery SELL or strategy handover does not bypass the gate. Repricing
-  becomes eligible again only when the actual active Position quantity reaches
-  zero.
-
-Conservative currently implements this gate in its serialized engine
-transition. Aggressive's executable order planner and grid-repricing lifecycle
-are **not implemented yet**: `evaluateAggressiveStrategy` currently returns
-`NO_ACTION` with explicit blockers and submits no orders. When Aggressive grid
-placement/repricing is implemented, the shared engine boundary must enforce
-this exact same Portfolio gate before any grid BUY cancellation/replacement.
-Do not interpret the existing Aggressive grid specification below as evidence
-that grid repricing is currently executable.
+Conservative repricing eligibility is defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine's current implementation is evidence to be tested against that contract, not a second rule definition. Any future Aggressive repricing policy must be specified separately before it becomes executable.
 
 ### Aggressive — grid-style trading
 
@@ -292,13 +184,11 @@ first-cycle workflow:
 5. **Full order reservations:** durable and exchange-reconciled reservation
    behavior for partial fills, cancellations, rejections, and uncertain
    outcomes remains deferred beyond the current process.
-6. **Restart reconciliation:** this is a P0 startup safety requirement, not a deferred feature. The owner may stop Harvester on a personal PC while exchange orders remain open and may fill offline. Before any new trading after restart, durable Journal replay, complete exchange-fill backfill, actual commission accounting, order/balance/reservation reconciliation, and fail-closed readiness are mandatory. The current bootstrap explicitly disables durable replay; see audit finding F-011. Continuous 24/7 uptime is not required.
+6. **Restart reconciliation:** tracked separately in [#654](https://github.com/45s/coinzilla/issues/654); it is outside the active Conservative strategy implementation scope. Harvester is expected to run on a personal PC and does not require 24/7 uptime.
 7. **Performance attribution:** strategy-specific attribution is optional and
    must not split the actual shared Position.
 
-Third-asset commissions are explicitly unsupported for now and cause the
-affected execution to fail closed. BUY and SELL commissions in the market's
-base or quote asset are accounted from actual fills.
+Conservative third-asset commissions require reliable quote valuation; otherwise the canonical specification requires fail-closed handling. See the [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ## Guidance for continuing the strategy discussion
 
@@ -315,12 +205,7 @@ The user is making product decisions, not taking a trading terminology test. Con
 ## Current implementation status
 
 Conservative is the first executable strategy. The bootstrap composes it when
-TESTNET trading is explicitly enabled. The current implementation includes
-initial and standing BUY orders, upward trailing in the initial/post-recovery
-phase, fixed next-BUY behavior after a BUY fill, recovery SELL planning,
-cancel-and-reconcile replacement of an active SELL after a new BUY fills,
-actual fill/commission accounting, profit-gated free-inventory allocation,
-and immediate fill-driven reevaluation.
+TESTNET trading is explicitly enabled. The current implementation is being audited against the canonical Conservative contract. This status is not a rule definition or acceptance claim.
 
 A fake-broker integration scenario covers the complete first recovery cycle,
 including a second BUY arriving before the recovery SELL completes. This is

@@ -58,19 +58,13 @@ The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. 
 
 Source inspection found bootstrap CLOSING-audit logic and regression coverage for an unresolved owned order / reconciliation failure. Tests were not run in this audit.
 
-## F-006 — Conservative contract documents conflict with current implementation and roadmap
+## F-006 — Historical Conservative documentation conflict (superseded 2026-11-06)
 
-**Status:** CONFLICT (documentation/source mismatch); follow-up issue [#646](https://github.com/45s/coinzilla/issues/646).
+**Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
 
-Confirmed mismatches:
-1. Conservative domain specification says use makerPercent alone for recovery SELL fee reserve; current code calls `calculateSellFeeRate` with makerPercent and takerPercent, and roadmap/README state the higher of the two is reserved.
-2. Specification comparison table still describes a possible post-reset recovery SELL from residual inventory; current strategy requires positive outstanding recovery and a test covers residual inventory after ledger reset.
-3. Portfolio documentation says automatic free allocation after recovery completion is not implemented; current bootstrap completion path allocates the exact free quantity and resets the ledger after eligibility.
-4. The trading-config validator accepts `minProfit=0` and `keepQuantity=0`, while the recovery SELL planner requires positive minProfit and the recovery completion evaluator requires both positive minProfit and positive keepQuantity. The current TESTNET config uses positive values, so this did not affect the observed run; the accepted-input contract is inconsistent.
-5. `ACCOUNTING_INVARIANTS.md` §9 still marks post-allocation residual-inventory strategy coverage as a gap, but `conservative-trading-engine.test.js` now contains `keeps post-recovery residual active inventory and does not issue another recovery SELL`. The matrix should be reconciled with the existing test, while preserving the separate exact-once/full-cycle gaps tracked in #648.
-6. `ACCOUNTING_INVARIANTS.md` §9 labels `sell-fee-rate.test.js` as covering observed actual fee rates, configured ceilings, and actual-above-ceiling behavior. The current `sell-fee-rate.js` accepts only configured maker/taker percentages and returns their maximum; its tests cover zero, maker-higher, taker-higher, equality, and invalid percentages. Actual commission amounts are accounted per fill, but no observed fee-rate history is used by the planner. Correct the matrix to describe the current contract or approve a separate behavior change with tests.
+Owner decisions are closed: minProfit >= 0.01 net after actual commissions; exact keepQuantity only; recover the full accumulated spent without proportional reduction; maker fee reserve for LIMIT_MAKER and higher applicable maker/taker reserve for regular LIMIT; actual commissions authoritative; reliable third-asset quote valuation or fail closed; sell-through/dust; unchanged partial SELL absent a new BUY; decision B for new BUY during open SELL; and keepQuantity=0 requires complete workflow verification.
 
-No trading behavior was changed to resolve this documentation conflict. Issue #646 requests explicit specification alignment.
+Issue #646 and PR #653 track implementation conformance, documentation consolidation, and regression verification—not unresolved product decisions. This finding remains as historical provenance only.
 
 ## F-007 — Prior user-data recovery fix is merged, but this run does not prove reconnect acceptance
 
@@ -96,7 +90,7 @@ Both files end with a newline and their checksums match #645. The logs were pars
 
 The reviewed `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md` §9 marks two gaps: exact-once recovery completion/ledger reset, and one complete BUY → partial fills → SELL partial/replacement → completion → next BUY contract test. Source inspection found substantial component coverage in `recovery-completion.test.js`, `conservative-trading-engine.test.js`, and `start-harvester.test.js`, including multiple SELL fills, publication after reset, cancel/replace, and residual inventory. However, the exact-once boundary and a single end-to-end partial-fill/replacement cycle are not directly asserted together. Issue #648 requests offline deterministic test-only coverage; it does not allege a runtime defect or authorize a behavior change. Tests were inspected, not run in this audit.
 
-## F-010 — No runtime defect is confirmed from the accessible evidence
+## F-010 — Historical evidence snapshot: no runtime defect confirmed from the then-accessible evidence (superseded)
 
 **Status:** PARTIAL.
 
@@ -150,19 +144,9 @@ Closure: same canonical trade changes state once in all supported delivery/resta
 
 Closure: both orders and reservations identified and reconciled, else remain INCOMPLETE.
 
-### F-006 — fee/config contract (#646, CONFLICT)
+### F-006 — fee/config contract (#646; historical, superseded)
 
-1. Product/strategy owner chooses planned reserve: makerPercent only or max(makerPercent,takerPercent). Actual fill commissions remain authoritative either way.
-2. Decide whether minProfit=0 and keepQuantity=0 are legal.
-3. Align config validator with planner/completion preconditions so invalid values fail at config load, or explicitly support them end-to-end.
-4. Align Conservative spec, trading-strategies, Accounting Invariants, Portfolio docs, README, and roadmap.
-5. Correct test matrix: current fee tests cover configured maker/taker maximum, not observed commission-rate history. Actual fill fees are applied per trade.
-6. Correct stale residual-inventory matrix: engine test already covers residual active inventory not creating a new recovery SELL.
-7. Run focused tests and exact-head CI only after contract decision.
-
-Closure: one approved policy, no contradictory docs, validator and domain support same values, test matrix reflects assertions.
-
-### F-007 — full-cycle exact-once regression (#648)
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).### F-007 — full-cycle exact-once regression (#648)
 
 1. Use deterministic offline engine + fake broker port; no network or credentials.
 2. Submit initial BUY and apply multiple partial BUY fills with actual base/quote fees.
@@ -243,19 +227,9 @@ Closure: same canonical trade changes state once in all supported delivery/resta
 
 Closure: both orders and reservations identified and reconciled, else remain INCOMPLETE.
 
-### F-006 — fee/config contract (#646, CONFLICT)
+### F-006 — fee/config contract (#646; historical, superseded)
 
-1. Product/strategy owner chooses planned reserve: makerPercent only or max(makerPercent,takerPercent). Actual fill commissions remain authoritative either way.
-2. Decide whether minProfit=0 and keepQuantity=0 are legal.
-3. Align config validator with planner/completion preconditions so invalid values fail at config load, or explicitly support them end-to-end.
-4. Align Conservative spec, trading-strategies, Accounting Invariants, Portfolio docs, README, and roadmap.
-5. Correct test matrix: current fee tests cover configured maker/taker maximum, not observed commission-rate history. Actual fill fees are applied per trade.
-6. Correct stale residual-inventory matrix: engine test already covers residual active inventory not creating a new recovery SELL.
-7. Run focused tests and exact-head CI only after contract decision.
-
-Closure: one approved policy, no contradictory docs, validator and domain support same values, test matrix reflects assertions.
-
-### F-007 — full-cycle exact-once regression (#648)
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).### F-007 — full-cycle exact-once regression (#648)
 
 1. Use deterministic offline engine + fake broker port; no network or credentials.
 2. Submit initial BUY and apply multiple partial BUY fills with actual base/quote fees.
@@ -403,31 +377,23 @@ For DOGE order 1276698, the final runtime/CLOSING observations correctly showed 
 **Priority correction (2026-11-06):** This finding is retained only as a future roadmap note. Do not implement restart recovery during the current audit. The active work is Conservative strategy/policy correctness, residual sell-through, actual commission accounting, exact `keepQuantity`, exchange filters/dust, and order lifecycle regression coverage. See the final Deferred section in `ROADMAP.md`.
 
 
-## F-012 — Conservative residual sell-through defect: first fix implemented, offline regressions pass (2026-11-06)
+## F-012 — Conservative residual sell-through and lifecycle conformance (2026-11-06)
 
-**Status: IMPLEMENTED / OFFLINE CI PASS; overall audit remains OPEN.**
+**Status: IMPLEMENTATION PRESENT; ACCEPTANCE NOT VERIFIED.**
 
-The prior implementation gated recovery SELL creation on positive `outstandingRecoveryAmount`. After the first profitable SELL, cycle completion could reset the ledger while leaving active inventory above `keepQuantity`; the strategy then suppressed further SELLs. That behavior contradicted the owner-approved sell-all policy.
+The branch contains a residual sell-through implementation that plans SELLs above exact keepQuantity after cumulative proceeds secure the minimum profit, retains the original cost/proceeds basis while residual remains, uses current-market residual pricing, checks minimum quantity/notional, reports exchange-constrained dust, and suppresses duplicate active SELL intents. Existing focused tests cover several of these paths.
 
-### Code changes
-- The Conservative policy now plans SELLs whenever active inventory exceeds exact `keepQuantity`, including after cumulative proceeds have already secured the minimum net profit.
-- The RecoveryLedger is retained until active quantity reaches exact `keepQuantity`; completion returns a non-pausing residual-sell-through outcome while inventory remains above the reserve.
-- The engine handles that outcome as a normal strategy continuation and reevaluates rather than pausing or resetting the cycle.
-- Once cumulative proceeds cover cost plus `minProfit`, the residual SELL price uses the current market reference rounded up to the price tick, not an artificial one-tick price.
-- The policy checks `MIN_QUANTITY` and `MIN_NOTIONAL` before emitting a residual SELL. A currently untradeable remainder is exposed as `EXCHANGE_CONSTRAINED_DUST` with exact quantity and limiting rule; no invalid order is emitted.
-- Active SELL detection continues to suppress duplicate residual SELL intents. Missing cost/profit basis with active inventory fails closed.
+This is not a claim that the full Conservative contract is implemented. Remaining audit scope includes:
 
-### Regression coverage added/updated
-- Profitable residual sell-through after `outstandingRecoveryAmount` reaches zero.
-- Current-market residual pricing (no one-tick floor).
-- Quantity-step and MIN_NOTIONAL dust classification.
-- Exact `keepQuantity` completion and delayed completion while residual remains.
-- Duplicate residual SELL suppression and missing-basis fail-closed behavior.
-- Engine behavior: profitable residual keeps its basis, returns reevaluate, and does not pause when the remaining amount is exchange-constrained.
-- Existing accounting tests cover actual base- and quote-asset commissions; existing planner tests cover fee reserve and quantity-step boundaries.
+- Actual base/quote/third-asset commission valuation and fail-closed behavior when third-asset quote valuation is unavailable.
+- Full accumulated cost recovery without proportional reduction.
+- Exact keepQuantity and keepQuantity=0 complete workflow verification.
+- Decision B across OPEN and PARTIALLY_FILLED SELLs, including PENDING acknowledgement, fill-during-cancel, terminal FILLED during cancellation, complete fill/commission reconciliation, and replacement from updated accounting.
+- Same SELL order and same price after a partial SELL when no new BUY has filled.
+- Terminal FILLED/CANCELED/EXPIRED/REJECTED/UNKNOWN outcomes, dust, duplicate prevention, and exact-once completion.
 
-### Verification
-Exact code HEAD `1e4bf3272983411b5e8c2224b3fd4371baec86f9` passed all five configured workflows: JavaScript Syntax, Unit Tests, Utils Unit Tests, Dependency Audit, and Test Coverage. Read-only Binance TESTNET integration was SKIPPED. This is offline evidence only; no TESTNET acceptance is claimed.
+### Verification status
 
-### Still open
-Continue auditing the rest of Conservative policy and lifecycle: BUY/SELL coexistence and sequencing, investment/commitment calculations, order replacement and cancellation races, all commission assets/statuses, price/quantity filter boundaries, post-only behavior, exact reserve under base-asset fees, and repeated-evaluation idempotency. Do not close #645/#646 or PR #653 based on this first fix alone.
+The older exact code head 1e4bf3272983411b5e8c2224b3fd4371baec86f9 passed five workflows; the read-only TESTNET integration job was skipped. That historical checkpoint does not establish current-head acceptance. At the starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2, Unit Tests and Test Coverage failed; JavaScript Syntax, Utils Unit Tests, and Dependency Audit passed. Re-run every required check on the exact final head.
+
+Restart reconciliation remains separate in #654. PR #653 remains open and unmerged; no TESTNET acceptance or merge is authorized.

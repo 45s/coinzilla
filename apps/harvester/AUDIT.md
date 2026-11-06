@@ -1,5 +1,8 @@
 # Harvester Conservative Strategy Audit
 
+> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
+
+
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
 **Audit baseline:** `develop` at `4af3434f788b87139513921f220294ae90daf4d5` (2026-11-06; PR #644 merge commit)  
 **Evidence session:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
@@ -219,18 +222,11 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 
 ### 3. Recovery SELL calculation and completion contract
 
-Inspected source behavior, not runtime proof:
-1. Apply BUY fills by canonical exchange trade identity; actual base/quote commission affects inventory and cash.
-2. Conservative policy considers active inventory, active SELL state, and outstanding recovery amount.
-3. Positive residual inventory alone is insufficient to create another recovery SELL; outstanding recovery must also be positive and no active SELL may exist.
-4. Planner reserves base for configured fee, divides sellable quantity by 1 + feeRate, rounds quantity down to exchange step, and rounds price up to tick. Current code uses max(makerPercent, takerPercent), while multiple domain documents say maker-only. This is a contract conflict tracked in #646, not an approved product decision.
-5. Apply actual broker commission asset/amount per SELL fill; planned reserve is not a substitute.
-6. Completion requires a fully filled SELL, sufficient active inventory, and actual net proceeds meeting cost plus minProfit.
-7. Bootstrap completion allocates configured keepQuantity to Portfolio and resets RecoveryLedger only after eligibility succeeds.
-8. Residual active inventory after reset does not itself trigger a new recovery SELL. Existing engine test covers this; it was inspected, not run here.
-9. A standing BUY can be paired with a recovery SELL intent; exact-once completion and ownership of outstanding orders must remain intact.
+The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
 
-ZRO observed arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; completion records 0.01 free and 0.04 active residual. Net quote result +0.01136454 USDT. DOGE evidence does not establish SELL completion or realized PnL.
+Historical source observations in the original audit baseline are superseded by the current canonical contract and current source. Implementation conformance remains unaccepted until focused regressions and exact-head CI pass.
+
+ZRO observed arithmetic in the historical session remains an immutable evidence fact: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; the recorded quote result was +0.01136454 USDT. DOGE historical evidence and chronology are documented separately in the audit addenda; do not infer current balances or runtime state from those snapshots.
 
 ### 4. Shutdown and unresolved-order decision
 
@@ -249,7 +245,7 @@ ZRO observed arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO re
 | Second unresolved order | Identity and reserved asset of second unresolved order. | Full CLOSING openOrders payload and reconciliation diagnostics. | Name both orders and reconcile remaining quantity/reservations. |
 | Cancel/replace races | Whether replacement always waited for confirmed cancellation/canonical reconciliation. | DEBUG/TRACE timeline and deterministic cancel/fill race replay. | No over-reservation or unsafe overlapping live SELLs. |
 | Duplicate fills | Whether exact-once holds across reconnect/restart permutations. | Offline duplicate, reorder, reconnect, REST/stream overlap, restart tests. | Canonical trade changes state once; conflicting same-identity payload fails closed. |
-| Fee/config contract | Maker-only or max maker/taker; are zero minProfit/keepQuantity valid? | Explicit decision in #646, then aligned docs, validator, tests. | One contract across config, planner, completion, docs, tests. |
+| Conservative contract | Strategy rules and accepted configuration | Sole authority: canonical Conservative Domain Specification; owner decisions closed | Every other artifact references it; implementation and exact-head tests conform. |
 | Completion | Exactly-once allocation/reset across full partial-fill/replacement lifecycle. | #648 full-cycle offline regression. | Duplicate terminal update cannot allocate/reset/issue next BUY twice. |
 | #626 recovery | Do #627/#629 satisfy all original acceptance criteria? | Re-read #626 criteria; map to tests and exact CI. | Keep #626 open until each criterion has disposition. |
 | Log provenance | Full 4,880-line and 5,739-line log correlation. | Original files read-only; verify SHA-256 before parsing. | Checksum mismatch means stop and record provenance issue. |

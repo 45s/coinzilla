@@ -1,5 +1,8 @@
 # Harvester Roadmap
 
+> **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
+
+
 > **CURRENT DIRECTION — 2026-11-06: CONSERVATIVE STRATEGY/POLICY AUDIT.** The active task is to find and fix Conservative decision, inventory, profit, fee, exchange-filter, and order-lifecycle defects, with regression tests. Process-restart recovery is deferred to the final roadmap section and is not a blocker for this audit.
 >
 > **2026-11-05 runtime decision:** durable Journal replay and process-restart recovery are intentionally disabled. Startup does not read historical Journal sessions, reconstruct Portfolio/RecoveryLedger/order state, or reconcile old trades. Harvester starts with fresh in-memory trading state for the current process. The separate durable account PREFLIGHT/CLOSING audit and pre-side-effect order/cancel intent flushes remain enabled. Do not reintroduce Journal replay or make it a startup prerequisite unless the user explicitly requests it.
@@ -179,20 +182,14 @@ checks pass.
 
 Work through these items in dependency order. Keep the scope limited to what is necessary to execute and verify the first strategy safely.
 
-### P0.1 — Freeze the first executable strategy scope: Conservative Conservative strategy
+### P0.1 — Conservative strategy contract and implementation
 
-- [x] Select Conservative as the first executable strategy; Aggressive remains deferred until Conservative is proven end to end on TESTNET.
-- [~] Port the Conservative strategy business rules into Harvester domain policies without copying the old app's broker/runtime implementation. Exact-decimal pricing, recovery planning, fee-policy, fill-accounting, and completion primitives now exist; they are not yet connected to the Trading Engine or order execution.
-- [x] Define the first Conservative order-intent contract and pure strategy evaluation context (last traded price, pair config, active Position/recovery ledger, active orders, and exchange filters). The policy emits initial/standing BUY and recovery SELL intents without broker I/O.
-- [~] Preserve initial BUY pricing: last traded price multiplied by `(1 - priceStepPercent / 100)`, rounded down to the broker tick. A pure exact-decimal calculator and boundary tests have been added on the current task branch; broker-rule loading and strategy integration remain.
-- [~] Preserve standing-order behavior: the pure Conservative policy now emits both a recovery SELL and next standing BUY when inventory exists, and suppresses duplicate intents for active orders. Engine submission, fill lifecycle, balance reservations, and cycle completion remain.
-- [~] Preserve pooled recovery accounting across partial/cancelled/replaced SELLs; only confirmed net SELL proceeds reduce outstanding recovery cost. Harvester now has a quote-currency fill projection and immutable `RecoveryLedger` that accumulates actual BUY costs and confirmed net SELL proceeds across fills. Order lifecycle integration, durable deduplication, and restart recovery remain.
-- [x] Shared commission/order policy for Conservative and Aggressive: `makerPercent = 0` selects POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` selects regular `LIMIT`. Conservative recovery SELL planning now reserves the higher of configured `makerPercent` and `takerPercent` because the eventual execution role is not guaranteed before placement. Accounting uses actual exchange-reported commissions on every confirmed fill. Aggressive still returns `NO_ACTION`; its future planner must use the same rule. Verified by merged PR #489.
-- [~] Preserve free-coin rules: `Position` now separates active and free base inventory, and `Portfolio` supports transferring exactly `keepQuantity` between those buckets. A pure completion gate requires a fully filled SELL, sufficient actual cumulative net profit, and enough residual active inventory. The order-lifecycle trigger and ledger reset are not yet integrated.
-- [ ] Preserve partial-fill policy: capture each execution accurately, but do not advance the strategy until the relevant order is fully filled and reconciled. Fill-level ledger updates are implemented as domain primitives; gating strategy advancement on final order reconciliation remains.
-- [ ] Preserve external inventory separation; never adopt wallet balances/deposits/manual trades as strategy inventory without explicit reconciliation.
-- [x] Ensure all deterministic strategy calculations and decisions are plain pure functions; the Conservative policy is a broker-independent pure function and never calls the broker or performs I/O.
-- [ ] Record only behavior that cannot be inferred from the approved Conservative contract; discuss it one item at a time.
+- [x] Select Conservative as the first executable strategy; Aggressive remains deferred.
+- [x] Establish one authoritative strategy contract: [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+- [~] Align domain policy, application order lifecycle, configuration validation, and regression tests with that canonical contract.
+- [ ] Complete repository-wide documentation consolidation; no active competing Conservative rule definitions may remain.
+- [ ] Pass the focused regression matrix and all required exact-head CI checks before acceptance.
+- [ ] Keep PR #653 open and unmerged until acceptance criteria pass and the owner explicitly authorizes merging.
 
 ### P0.2 — Trading rules, account state, and startup readiness
 
@@ -380,7 +377,7 @@ empty form matching the root manifest; the full CI suite must be rerun on the
 updated PR head before treating this repair as verified.
 
 
-## P0.7 — Restore the simple Conservative strategy execution lifecycle (IN PROGRESS)
+## Historical P0.7 implementation record — superseded by the canonical Conservative specification
 
 ### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
 
@@ -414,16 +411,9 @@ existing Conservative strategy order sequence and keeps Harvester's DDD boundari
 
 **Priority: immediate. This task is about making the existing app trade reliably, not adding another architecture layer.** The latest `develop` includes PR #462 (`fix(harvester): serialize order lifecycle and preserve diagnostics`). Continue from that state; do not repeat already-merged work.
 
-### Required working behaviour
+### Historical behavior summary — rules now defined only by the canonical specification
 
-1. Load and validate the configured pair/strategy.
-2. Connect the broker and subscribe to enabled-market prices.
-3. On a usable price, evaluate Conservative and submit the initial BUY through the existing engine/broker port.
-4. Process Binance order acknowledgements and execution reports.
-5. Apply each actual fill exactly once to the in-process Portfolio/RecoveryLedger.
-6. When a BUY fill changes the recovery SELL target, reconcile the existing SELL safely: if it is still PENDING, wait for its submission acknowledgement; do not send cancellation without a valid broker order ID. Once acknowledged and cancellable, cancel it, process fills that raced with cancellation, then place the correctly recalculated SELL.
-7. Trigger the next strategy decision from the relevant order/fill transition; do not wait for an unrelated market tick.
-8. Keep running the strategy cycle.
+This implementation record is retained for provenance, not as an independent strategy contract. Current BUY/SELL, partial-fill, BUY-during-open-SELL, cancellation/reconciliation, commission, and terminal-order rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### Scope A — Remove unnecessary execution-readiness barriers
 
@@ -1187,7 +1177,7 @@ These barriers deliberately await filesystem durability only immediately before 
 - [ ] Coordinate locks across different OS users or machines if multi-user or distributed same-account deployments become supported.
 
 
-## P0 — Durable restart recovery (current engineering work)
+## P0 — Durable restart recovery (separate deferred scope #654; not this audit)
 
 - [x] PR #568 — local Journal-directory single-writer ownership; acquired before Journal writer startup and broker connection, retained after uncertain runtime/Journal shutdown.
 - [x] PR #607 — broker-wide same-host/same-OS-user/same-broker lock across different Journal directories; host lock is retained if Journal-lock release is uncertain.
@@ -1237,7 +1227,7 @@ persistence, exchange operations, or broader observability projects.
 - [x] Console INFO output omits the redundant `INFO` label; SYSTEM is used for Journal, WebSocket, subscription, readiness, and shutdown lifecycle transitions.
 - [x] The `pnpm run dev` child-process runner respects stdout/stderr and `logs_harvester/terminal.log` backpressure, pausing reads until writable destinations drain; focused tests cover forwarding, backpressure, and destination changes. This protects the development terminal/log mirror only and does not change Harvester trading or Journal transports.
 
-## Conservative strategy evidence audit — 2026-11-06
+## Historical Conservative strategy evidence audit — 2026-11-06 (evidence snapshot; contract superseded)
 
 **Audit:** [AUDIT.md](./AUDIT.md)  
 **Findings register:** [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md)  
@@ -1286,13 +1276,9 @@ The specification/config-boundary drift in fee-reserve policy, residual-inventor
 - [ ] Verify ZRO order 727905 (5 @ 1.596, NEW, 7.98 USDT locked) at closing and identify whether it is one of the two unresolved orders.
 - [ ] Rule out deposits, withdrawals, transfers, or manual trades before attributing all USDT movement to Harvester.
 
-### Gate 3 — contract decision (#646)
+### Gate 3 — canonical contract and documentation consolidation (#646)
 
-- [ ] Decide planned SELL reserve: makerPercent only or max(makerPercent,takerPercent). Actual commissions remain per-fill facts either way.
-- [ ] Decide whether minProfit=0 and keepQuantity=0 are valid; align config validation and domain preconditions.
-- [ ] Align Conservative spec, trading-strategies, Accounting Invariants, Portfolio docs, README, and roadmap.
-- [ ] Correct stale matrix: residual-inventory test already exists; fee tests cover configured maker/taker maximum, not observed commission-rate history.
-- [ ] No runtime behavior change until contract is explicit and test-first work is approved.
+Owner decisions are closed and recorded in the canonical specification. This historical checklist is superseded: do not reopen maker/taker fee policy, the $0.01 minimum profit, exact keepQuantity, full accumulated cost recovery, residual sell-through, partial SELL behavior, or decision B. The active gate is to remove contradictory rule definitions, make every other artifact reference the canonical specification, and pass the repository-wide documentation audit before implementation.
 
 ### Gate 4 — regression coverage (#648)
 
@@ -1348,7 +1334,7 @@ The live GitHub verification confirms PR #653 is still open/unmerged and its bra
 1. Obtain a fresh read-only TESTNET account-balance and open-order snapshot, including DOGE/ZRO/USDT free, locked, and total amounts, plus canonical order detail/trades/commissions. Do not infer later balances from the bounded 50-row trade exports.
 2. Obtain the complete historical ~07:58 UTC CLOSING open-order payload to prove the identities and reservations of both unresolved owned orders.
 3. Inspect any later Harvester Journal/runtime session for DOGE order 1276698 and ZRO order 727905; prove whether post-CLOSING fills were applied to Portfolio and RecoveryLedger. Until direct evidence exists, this remains UNVERIFIED.
-4. Continue #646 only after explicit product decisions on fee-reserve policy (maker-only versus max maker/taker) and zero-value configuration semantics; keep this documentation/contract work separate from runtime changes.
+4. Owner decisions are now closed. #646 tracks implementation/specification conformance and regression verification against the canonical specification; no further owner input is required.
 5. Continue #626 with the existing fail-closed recovery contract; disposition the original empty TypeError cause and obtain controlled TESTNET/owner acceptance without weakening the gate or implying process-restart Journal replay.
 6. Retain #649's merged exact-once regression as delivered coverage; map remaining lifecycle gaps to tests and acceptance evidence.
 
@@ -1414,65 +1400,35 @@ The strategy owner confirmed the following policies for #646:
 These decisions close the owner-input questions in #646. Remaining work is engineering/documentation alignment and tests. No runtime settings or exchange state were changed.
 
 
-## Active Conservative audit fixes — implementation authorized (2026-11-06)
+## Conservative Strategy audit — current implementation gate (2026-11-06)
 
-The owner decisions above are approved requirements, not pending questions. Start implementation immediately on this audit branch and keep the work limited to the Conservative trading path.
+The canonical specification is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). All owner decisions are closed; do not reopen them. This roadmap records implementation status and evidence only.
 
-### P0 — enforce the minimum net-profit floor
-- [x] Enforce `minProfit >= 0.01` in Harvester trading-config validation. Reject zero and every value below 0.01.
-- [x] Enforce the same floor in the pure recovery SELL planner and recovery completion boundary so direct callers cannot bypass config validation.
-- [x] Add exact-boundary tests: 0 and 0.009 rejected; 0.01 accepted; realized net profit below 0.01 must not complete a cycle.
-- [x] Align Conservative specification and README/config guidance with the rule: **never close at a loss or break-even; require at least 0.01 net quote profit after actual commissions**. Accounting matrix update remains to verify.
+### Documentation gate — must pass before runtime implementation
 
-### P0 — sell all sellable Conservative inventory except the configured reserve
-- [x] Verified Harvester's current config uses pair-level `keepQuantity`; no `coinToKeep` key exists in the Harvester config/source search. Treat `keepQuantity` as the current configured retained-coin amount. Do not introduce a second setting or rename config silently.
-- [FAIL] The planner maximizes quantity for one recovery SELL, but the full lifecycle does not sell residual inventory after completion resets the ledger. `evaluateConservativeStrategy` gates SELL creation on positive outstanding recovery; active inventory above `keepQuantity` is therefore suppressed on subsequent evaluations. The existing test explicitly expects this suppression.
-- [ ] Preserve the original cost/profit basis across residual SELLs; enforce the $0.01 net floor after actual commissions; preserve minimum-notional, post-only, quantity-step, base-fee, and exact-`keepQuantity` constraints.
-- [ ] Classify only provably unsellable quantity-step/minimum-quantity/minimum-notional/commission remainder as dust, with amount and reason. Add residual sell-through, base-asset commission, quantity-step dust, exact retained quantity, repeated evaluation, and duplicate-order prevention regressions.
+- [ ] Rewrite the canonical specification so its earlier sections contain no obsolete or conflicting rules.
+- [ ] Convert README, trading-strategies, ACCOUNTING_INVARIANTS, Portfolio notes, and all relevant roadmap sections to references/evidence only.
+- [ ] Mark historical decisions and implementation snapshots as superseded where they conflict.
+- [ ] Reconcile #645, #646, #653, and #655 references with the canonical contract.
+- [ ] Search the repository for old coinToKeep/keepCoinQuantity, proportional cost recovery, maker-only fee assumptions, residual-suppression, and partial SELL repricing rules.
+- [ ] Record the search scope and results. Do not start runtime implementation until no active contradictory strategy definitions remain.
 
-### Delivery rules
-- Implement source + focused tests first, then align specification/README/ROADMAP and update #646/#645/PR #653 with exact commits and CI.
-- No TESTNET order placement/cancellation, account/config mutation, bot restart, live trading, or merge is authorized by this work.
-- Preserve original audit snapshots and chronology. Keep PR #653 open and TESTNET acceptance NOT ACCEPTED until all evidence and acceptance criteria pass.
-- Do not ask the owner to repeat already supplied balances, open orders, trade history, logs, or the two strategy decisions.
+### Implementation and regression gate
 
+- [ ] Recover the full accumulated spent basis plus at least 0.01 net after actual commissions; never prorate cost for retained inventory.
+- [ ] Sell all sellable quantity above exact keepQuantity; explicitly classify exchange-constrained dust and preserve its basis.
+- [ ] Verify actual base, quote, and reliably valued third-asset commissions; fail closed when valuation is unavailable.
+- [ ] Implement decision B: cancel the open SELL on a new BUY fill, reconcile terminal state and all fills/fees, update accounting, then replace from updated position.
+- [ ] Prove partial SELL without a new BUY keeps the same exchange order and same price.
+- [ ] Cover FILLED, CANCELED, EXPIRED, REJECTED, UNKNOWN, fill-during-cancel, and incomplete-history outcomes.
+- [ ] Verify keepQuantity=0 only through the complete end-to-end workflow.
+- [ ] Run focused Harvester unit/integration/syntax/coverage checks and exact-head CI. No TESTNET acceptance is implied by offline checks.
 
-### Implementation progress — 2026-11-06
-- Implemented the 0.01 minimum in config validation, recovery SELL planning, and recovery completion; added zero/sub-cent rejection tests and exact 0.01 acceptance.
-- Updated the Conservative specification and README with the owner-approved net-profit and retained-inventory rules.
-- Verified the current Harvester config key is `keepQuantity`; the requested `coinToKeep` name is not present in Harvester's current config/source. No duplicate config field was introduced.
-- Correction: a single SELL plan rounds down and reserves for fees, but that does not prove lifecycle sell-through. The post-completion strategy gate leaves active residual unsold. Dust is not established until each residual is checked against all applicable exchange filters.
+### Current CI baseline
 
----
+At starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2: Unit Tests FAIL; Test Coverage FAIL; JavaScript Syntax PASS; Utils Unit Tests PASS; Dependency Audit PASS. The legacy commit-status endpoint reported zero statuses. These are the baseline to improve, not a passing acceptance result.
 
-## Conservative strategy audit — 2026-11-06 continuation
-
-**Owner-approved contract (not open decisions):**
-- A completed Conservative position must realize at least `0.01` quote-currency net profit after actual commissions; no loss or break-even close.
-- Sell all exchange-sellable active inventory except the exact pair-level `keepQuantity`. Do not add a duplicate `coinToKeep` setting.
-- Quantity-step, base-commission, and minimum-notional remainders must be measured and reported as exchange-constrained dust, not silently retained as extra reserve.
-
-**Verified implementation state at `c9e6500926b540dcfe9ea914ae83b03b9ae6967c`:**
-- `minProfit >= 0.01` is enforced in configuration validation, recovery SELL planning, and recovery completion.
-- SELL fee reserve uses `max(makerPercent, takerPercent)`; actual fill commission amount and asset remain authoritative for accounting.
-- Recovery completion allocates exactly `keepQuantity` and resets the cycle ledger while preserving fill identities.
-- **FAIL:** after that reset, `evaluateConservativeStrategy` requires positive outstanding recovery before planning a SELL. Any active residual above `keepQuantity` is therefore not sold by repeated evaluation. The existing regression explicitly expects suppression, which conflicts with the owner-approved sell-all contract.
-- **GAP:** safe residual pricing, cost/profit basis retention, quantity-step/base-fee dust handling, exact retained quantity after residual fills, repeated-evaluation idempotency, and duplicate-order prevention need implementation and regression coverage. Do not replace the recovery guard with a blind SELL or a one-tick price.
-
-**Audit evidence state:**
-- Original Journal, historical PREFLIGHT/CLOSING balances, supplied latest ZRO open-order snapshot, 100-order histories, bounded 50-row trade exports, and original log evidence are preserved in the audit evidence documents/issues. Do not request them again.
-- Post-CLOSING DOGE 1276698 and ZRO 727905 fills are confirmed from supplied trade exports; later Harvester Portfolio/RecoveryLedger application and post-fill account snapshot remain unverified. The complete historical CLOSING open-orders payload identifying both unresolved orders remains unavailable.
-- TESTNET acceptance remains **NOT ACCEPTED**. Offline CI is not exchange acceptance.
-
-**Required next engineering steps (blocking):**
-1. Implement residual SELL-through while preserving the net-profit floor, actual commission accounting, minimum notional, post-only checks, quantity steps, and exact `keepQuantity`.
-2. Explicitly classify unsellable exchange dust and prevent repeated/duplicate SELL submissions.
-3. Replace the current residual-suppression regression with tests for residual sell-through, base-asset commissions, quantity-step dust, exact retained quantity, repeated evaluation, and duplicate-order prevention.
-4. Complete the #646 specification/test matrix and #626 recovery disposition; retain the unknown original empty-`TypeError` cause as unknown unless trace evidence proves it.
-5. Reconcile remaining post-CLOSING evidence gaps without rewriting historical snapshots.
-6. Run all required CI on the exact final HEAD. Keep PR #653 open/unmerged and TESTNET acceptance NOT ACCEPTED until separately evidenced.
-
-
+PR #653 must remain open and unmerged until all acceptance criteria pass and the owner explicitly authorizes merging. Restart reconciliation remains separate in #654.
 ## Operator workstation lifecycle clarification — 2026-11-06
 
 **Owner clarification:** Harvester runs on the operator's personal PC, not an always-on server. The operator may stop the process while exchange orders remain open. Binance orders can continue resting and may fill while Harvester is offline. This is an expected operating condition, not by itself a strategy defect, policy violation, failed order, or missing owner action. Do not require 24/7 uptime or treat post-shutdown fills as evidence that the operator did something wrong.
@@ -1488,7 +1444,7 @@ The owner decisions above are approved requirements, not pending questions. Star
 Do not request the operator to keep the PC/process online continuously, nor request a restart or new exchange action as a prerequisite for offline code investigation. No live exchange action is authorized by this clarification.
 
 
-## Audit continuation — source-verified residual and restart blockers (2026-11-06)
+## Historical audit continuation — source-verified residual and restart blockers (2026-11-06; superseded status)
 
 ### Residual sell-through — implementation IN PROGRESS
 
@@ -1519,10 +1475,12 @@ Process-restart reconciliation is explicitly deferred and is not part of the act
 When separately prioritized in the future, the restart-recovery work may cover the workstation-offline lifecycle: exchange orders may fill while Harvester is stopped; on a later startup, reconcile those fills, actual commissions, order states, and balances before new trading. No 24/7 uptime is required. Preserve historical shutdown snapshots. Track the deferred investigation in [issue #654](https://github.com/45s/coinzilla/issues/654).
 
 
-## Conservative Strategy audit — canonical authority (2026-11-06)
+## Conservative Strategy audit — canonical authority and current status (2026-11-06)
 
-The sole authoritative rule definition is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). All other Harvester documents, issues, PRs, tests, and implementation notes are references, evidence, or derived artifacts; they must not independently define strategy behavior. The canonical specification includes an owner-approved algorithm flowchart as a visualization, not a second source of truth.
+The sole authoritative rule definition is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). All other docs, READMEs, issues, PRs, tests, and implementation notes are references, evidence, or derived artifacts only. The canonical Mermaid algorithm is a visualization of its written rules, not a second source of truth.
 
-Owner decision recorded: **B** — when a new BUY fill occurs while a recovery SELL is open (including partially filled), cancel the existing SELL, reconcile its terminal state and every actual fill/commission, update accounting, then plan and submit a replacement against the updated position. If reconciliation is incomplete, fail closed. Partial SELL fills without a new BUY do not alter the open order or its price.
+Owner decision B is final: a new BUY fill while a recovery SELL is open requires cancellation, terminal-state and complete fill/commission reconciliation, accounting update, then replacement planning from the updated position. Incomplete reconciliation fails closed. A partial SELL without a new BUY remains the same exchange order at the same price.
 
-The implementation and documentation consistency audit remain in progress. Latest verified PR #653 head had failing Unit Tests and Test Coverage workflows; do not describe the strategy as accepted or merge PR #653. Restart reconciliation remains separate in #654. See the canonical specification for all rules and precedence.
+The active audit must pass the repository-wide documentation consistency gate before runtime implementation proceeds. The required implementation and regression scope is defined by the canonical specification. Restart reconciliation remains separately tracked in #654.
+
+At the exact starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2, Unit Tests and Test Coverage failed; JavaScript Syntax, Utils Unit Tests, and Dependency Audit passed. The legacy commit-status endpoint reported no statuses. Do not infer completion from prior CI checkpoints. PR #653 remains open and unmerged; no merge is authorized.
