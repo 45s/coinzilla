@@ -372,3 +372,14 @@ Do not turn every difference into a new business decision. Work in this order:
 Do not redesign the strategy, introduce a recovery-first restriction, or change order coexistence as an incidental refactor. A standing BUY and recovery SELL may coexist. After a BUY is fully reconciled, submit/replace the recovery SELL first; submit the next standing BUY only after that SELL submission succeeds. The recovery SELL need not finish before the next BUY becomes active.
 
 **D0 outcome:** the Conservative strategy contract is documented in Harvester terminology. D1 should now address the next single verified implementation gap, not reopen the entire strategy for approval all at once.
+
+
+## 12. Owner-approved Conservative policy — minimum profit and retained coin (2026-11-06)
+
+The strategy owner explicitly approved these requirements:
+
+- `minProfit` must be at least **0.01 quote currency net profit after applicable commissions**. The strategy must never close a recovery position at a loss or at break-even. A configured value below 0.01, including zero, is invalid.
+- Sell all inventory that can be sold under exchange quantity-step and commission-asset constraints, except the explicitly configured retained-coin reserve. Harvester's current pair configuration names this reserve `keepQuantity`; no `coinToKeep` field exists in the current Harvester config. Do not add or rename a config field without a separate explicit requirement.
+- The planner must maximize the valid SELL quantity without consuming the retained reserve, accounting for possible base-asset commission and rounding down to the exchange quantity step. Any remainder that cannot legally be sold because of exchange lot/fee constraints is exchange-constrained dust, not an additional intentional reserve. It must be visible and must not silently be added to the configured retained amount.
+
+The minimum-profit floor is enforced at configuration validation, recovery planning, and recovery completion boundaries. Actual confirmed net proceeds and commissions remain authoritative; the configured floor is not a substitute for fill accounting.
