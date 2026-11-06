@@ -221,6 +221,22 @@ const requireDecimalString = ({ value, field }) => {
   return value
 }
 
+const requireOrderFacts = ({ order }) => {
+  if (!order || typeof order !== "object" || !order.market?.symbol) {
+    throw new TypeError("order must contain canonical market facts")
+  }
+  return {
+    clientOrderId: requireString({ value: order.clientOrderId, field: "clientOrderId" }),
+    symbol: requireString({ value: order.market.symbol, field: "symbol" }),
+    side: order.side === "BUY" || order.side === "SELL"
+      ? order.side
+      : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+    type: requireString({ value: order.type, field: "type" }),
+    price: requireDecimalString({ value: order.limitPrice?.amount, field: "price" }),
+    quantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "quantity" }),
+  }
+}
+
 const requireCount = ({ value, field }) => {
   if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(field + " must be a non-negative safe integer")
   return value
