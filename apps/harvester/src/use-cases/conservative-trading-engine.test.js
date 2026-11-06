@@ -4357,3 +4357,23 @@ test("journals broker execution reports and applied canonical order transitions"
   assert.ok(events.some((event) => event.name === "broker.execution_report" && event.data.cumulativeQuoteQuantity === "0"))
   assert.ok(events.some((event) => event.name === "order.updated" && event.data.status === "CANCELED"))
 })
+
+
+test("best-effort strategy evidence failure does not block order submission", async () => {
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === HARVESTER_EVENT_NAMES.STRATEGY_DECISION) {
+          throw new Error("optional Journal evidence unavailable")
+        }
+        return { ok: true }
+      },
+    },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(harness.orders.length, 1)
+})
