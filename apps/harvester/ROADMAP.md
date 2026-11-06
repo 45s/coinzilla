@@ -1479,3 +1479,15 @@ Owner decision B is final: a new BUY fill while a recovery SELL is open requires
 The repository-wide documentation consistency gate passed in commit 9c3691c9546dc35ec0c92e7e7e33912a13fca1c8. Runtime implementation against the canonical specification may now proceed. The required implementation and regression scope is defined by the canonical specification. Restart reconciliation remains separately tracked in #654.
 
 At the exact starting PR #653 head 5f2b88f1697b36225c4579212bf8044c2527c2f2, Unit Tests and Test Coverage failed; JavaScript Syntax, Utils Unit Tests, and Dependency Audit passed. The legacy commit-status endpoint reported no statuses. Do not infer completion from prior CI checkpoints. PR #653 remains open and unmerged; no merge is authorized.
+
+
+## Conservative accounting conformance follow-up — 2026-11-06
+
+The latest source inspection found that the implementation still consumed the RecoveryLedger's legacy `buyCost` projection in two decision-critical paths: recovery completion in `start-harvester.js`, and order-commitment allocation in `conservative-trading-engine.js`. The engine integration test also passed the obsolete `buyCost` argument to `evaluateRecoveryCompletion`. These paths now use `Position.spent` as the authoritative accumulated cost basis and `RecoveryLedger.netSellProceeds` only for confirmed cumulative SELL proceeds. Accounting-delta diagnostics now derive outstanding recovery and realized profit from Position.spent plus ledger net proceeds.
+
+Changes committed on this branch:
+- `4ba244b6680ddd0279e3570abeb4bbfd965b910f` — recovery completion now supplies `position.spent.amount`.
+- `50116cd09526bac563dfe7887aeb5a00b27821e1` — order-commitment allocation derives outstanding recovery from Position.spent minus confirmed net SELL proceeds; diagnostics derive the same projections.
+- `b5cd59a05da69830242f16c282e2ddc237d38edb` — corrected the engine regression to assert/use `spent` rather than `buyCost`.
+
+The RecoveryLedger's legacy `buyCost` remains a compatibility projection for historical serialization/restart scope (#654), not a strategy decision input. Remaining references must be reviewed to ensure they are compatibility/diagnostic assertions only. No local test execution is claimed. The GitHub commit workflow/status endpoints currently return no runs and no statuses for the final commit; exact-head test/CI verification remains outstanding. PR #653 remains open and unmerged. Restart reconciliation remains deferred to #654.
