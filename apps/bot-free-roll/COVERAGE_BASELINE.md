@@ -1,5 +1,7 @@
 # Free-Roll coverage baseline
 
+> **Historical Free-Roll predecessor artifact.** This coverage baseline belongs to the legacy bot, not Harvester Conservative Strategy. It is retained as historical test evidence only; Harvester's sole Conservative rule authority is [apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md](../harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not use this file as Harvester acceptance criteria.
+
 **Captured:** 2026-10-31  
 **Commit:** `e90d093302366ba7d62565d93c2ab6f54dd823ce` (PR #282 head)  
 **Workflow:** [Test Coverage run](https://github.com/45s/coinzilla/actions/runs/41190093220)  
