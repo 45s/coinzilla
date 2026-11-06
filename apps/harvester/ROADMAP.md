@@ -1592,3 +1592,10 @@ After aligning the full-cycle partial-BUY scenario with owner decision B, its fi
 - [ ] Resolve exact dust quantity/limiting-filter durable recording only within the separately approved scope; do not expand Journal/event infrastructure under this audit instruction.
 
 This pass found a regression-proof gap, not a confirmed source/spec runtime mismatch. PR #653 remains open and unmerged. The canonical specification is unchanged and remains the sole rule authority. Restart durability, Journal/event infrastructure, brokers, exchange integrations, and TESTNET operations remain outside this audit.
+
+## Conservative audit — F-011 test coverage added (2026-11-06)
+
+- [x] Add focused terminal recovery-SELL regression cases for CANCELED, EXPIRED, and REJECTED, including partial execution, actual quote commission, missing history, and conflicting duplicate fill facts.
+- [ ] Execute focused engine tests and the complete Harvester test suite on the exact current PR head; verify exact-head CI before marking F-011 complete.
+
+These are test-only changes. No production, Journal, broker, exchange, restart, or TESTNET work is included. PR #653 remains open and unmerged.
