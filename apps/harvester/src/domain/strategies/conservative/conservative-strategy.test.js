@@ -557,7 +557,7 @@ test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL",
       tradingRules: {
         constraints: [
           ...marketMetadata.tradingRules.constraints,
-          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "10" } },
+          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "50" } },
         ],
       },
     },
