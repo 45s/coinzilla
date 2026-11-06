@@ -2098,6 +2098,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
   assert.equal(secondBuyPartial.ok, true, secondBuyPartial.errors?.[0]?.message)
   assert.equal(secondBuyPartial.data.waitingForFullFill, true)
   assert.equal(secondBuyPartial.data.recoverySellReplaced, true)
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status, "PARTIALLY_FILLED")
   assert.deepEqual(harness.cancellationIds, [firstRecoverySell.brokerOrderId])
   const partialBuyReplacementSell = engine.getOrders().filter((order) => order.side === "SELL").at(-1)
   assert.ok(partialBuyReplacementSell)
