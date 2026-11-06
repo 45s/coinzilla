@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, compareDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, roundDecimalToIncrement, subtractDecimal } from "@coinzilla/utils"
 import { Portfolio } from "../../portfolio/portfolio.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
@@ -56,10 +56,27 @@ export function evaluateConservativeStrategy({
     return rule.value.amount
   }
 
+  const getOptionalRuleAmount = ({ type }) => {
+    const rule = marketMetadata.tradingRules.constraints.find((item) =>
+      item.type === type && item.status === "SUPPORTED")
+    if (!rule) return undefined
+    if (!rule.value || typeof rule.value.amount !== "string") {
+      throw new Error("Supported exchange trading rule has no amount: " + type)
+    }
+    assertDecimalString({ value: rule.value.amount, field: type })
+    return compareDecimal({ left: rule.value.amount, right: "0" }) > 0
+      ? rule.value.amount
+      : undefined
+  }
+
   const priceTickSize = getRuleAmount({ type: "PRICE_INCREMENT" })
   const quantityStepSize = getRuleAmount({ type: "QUANTITY_INCREMENT" })
   const minQuantity = getRuleAmount({ type: "MIN_QUANTITY" })
   const minNotional = getRuleAmount({ type: "MIN_NOTIONAL" })
+  const minPrice = getOptionalRuleAmount({ type: "MIN_PRICE" })
+  const maxPrice = getOptionalRuleAmount({ type: "MAX_PRICE" })
+  const maxQuantity = getOptionalRuleAmount({ type: "MAX_QUANTITY" })
+  const maxNotional = getOptionalRuleAmount({ type: "MAX_NOTIONAL" })
   const position = portfolio.getPosition({ symbol: marketPrice.symbol })
   const activeQuantity = position?.baseQuantity.amount ?? "0"
   const ledger = recoveryLedger ?? {
@@ -129,7 +146,7 @@ export function evaluateConservativeStrategy({
       // residual at the current market reference, never at an artificial
       // one-tick floor. The cycle's actual cumulative net profit remains the
       // accounting authority.
-      const residualPrice = compareDecimal({
+      let residualPrice = compareDecimal({
         left: sellPlan.requiredNetProceeds,
         right: "0",
       }) === 0
@@ -142,41 +159,91 @@ export function evaluateConservativeStrategy({
           }),
         })
         : sellPlan.price
-      const sellNotional = multiplyDecimal({
-        left: residualPrice,
-        right: sellPlan.quantity,
-      })
-      const quantityMeetsMinimum = compareDecimal({
-        left: sellPlan.quantity,
-        right: minQuantity,
-      }) >= 0
-      const notionalMeetsMinimum = compareDecimal({
-        left: sellNotional,
-        right: minNotional,
-      }) >= 0
-      if (quantityMeetsMinimum && notionalMeetsMinimum) {
-        actions.push(Object.freeze({
-          side: "SELL",
-          type: marketMetadata.orderType,
-          price: residualPrice,
-          quantity: sellPlan.quantity,
-          reason: compareDecimal({ left: outstandingRecovery, right: "0" }) > 0
-            ? "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT"
-            : "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
-          requiredNetProceeds: sellPlan.requiredNetProceeds,
-        }))
-      } else {
-        inventoryDisposition = Object.freeze({
-          status: "EXCHANGE_CONSTRAINED_DUST",
-          quantity: subtractDecimal({
-            left: activeQuantity,
-            right: String(pairConfig.keepQuantity),
-          }),
-          reason: !quantityMeetsMinimum ? "MIN_QUANTITY" : "MIN_NOTIONAL",
-          minimumQuantity: minQuantity,
-          minimumNotional: minNotional,
-          evaluatedNotional: sellNotional,
+      if (minPrice && compareDecimal({ left: residualPrice, right: minPrice }) < 0) {
+        residualPrice = roundDecimalToIncrement({
+          value: minPrice,
+          increment: priceTickSize,
+          direction: "up",
         })
+      }
+
+      if (maxPrice && compareDecimal({ left: residualPrice, right: maxPrice }) > 0) {
+        inventoryDisposition = Object.freeze({
+          status: "PRICE_FILTER_BLOCKED",
+          quantity: subtractDecimal({ left: activeQuantity, right: String(pairConfig.keepQuantity) }),
+          reason: "MAX_PRICE",
+          requiredPrice: residualPrice,
+          maximumPrice: maxPrice,
+        })
+      } else {
+        let sellQuantity = sellPlan.quantity
+        let quantityCapReason
+        if (maxQuantity && compareDecimal({ left: sellQuantity, right: maxQuantity }) > 0) {
+          sellQuantity = roundDecimalToIncrement({
+            value: maxQuantity,
+            increment: quantityStepSize,
+            direction: "down",
+          })
+          quantityCapReason = "MAX_QUANTITY"
+        }
+        if (maxNotional && compareDecimal({
+          left: multiplyDecimal({ left: residualPrice, right: sellQuantity }),
+          right: maxNotional,
+        }) > 0) {
+          const maxNotionalQuantity = roundDecimalToIncrement({
+            value: divideDecimal({
+              left: maxNotional,
+              right: residualPrice,
+              scale: 36,
+              rounding: "toward-zero",
+            }),
+            increment: quantityStepSize,
+            direction: "down",
+          })
+          if (compareDecimal({ left: maxNotionalQuantity, right: sellQuantity }) < 0) {
+            sellQuantity = maxNotionalQuantity
+            quantityCapReason = "MAX_NOTIONAL"
+          }
+        }
+        const sellNotional = multiplyDecimal({
+          left: residualPrice,
+          right: sellQuantity,
+        })
+        const quantityMeetsMinimum = compareDecimal({
+          left: sellQuantity,
+          right: minQuantity,
+        }) >= 0
+        const notionalMeetsMinimum = compareDecimal({
+          left: sellNotional,
+          right: minNotional,
+        }) >= 0
+        if (quantityMeetsMinimum && notionalMeetsMinimum) {
+          actions.push(Object.freeze({
+            side: "SELL",
+            type: marketMetadata.orderType,
+            price: residualPrice,
+            quantity: sellQuantity,
+            reason: compareDecimal({ left: outstandingRecovery, right: "0" }) > 0
+              ? "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT"
+              : "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+            requiredNetProceeds: sellPlan.requiredNetProceeds,
+          }))
+        } else {
+          inventoryDisposition = Object.freeze({
+            status: "EXCHANGE_CONSTRAINED_DUST",
+            quantity: subtractDecimal({
+              left: activeQuantity,
+              right: String(pairConfig.keepQuantity),
+            }),
+            reason: quantityCapReason ?? (!quantityMeetsMinimum ? "MIN_QUANTITY" : "MIN_NOTIONAL"),
+            minimumQuantity: minQuantity,
+            minimumNotional: minNotional,
+            evaluatedQuantity: sellQuantity,
+            evaluatedNotional: sellNotional,
+            ...(maxQuantity ? { maximumQuantity: maxQuantity } : {}),
+            ...(maxNotional ? { maximumNotional: maxNotional } : {}),
+          })
+        }
       }
     } else {
       inventoryDisposition = Object.freeze({
@@ -216,18 +283,34 @@ export function evaluateConservativeStrategy({
       const buyNotional = multiplyDecimal({ left: buyPrice, right: buyQuantity })
       const quantityMeetsMinimum = compareDecimal({ left: buyQuantity, right: minQuantity }) >= 0
       const notionalMeetsMinimum = compareDecimal({ left: buyNotional, right: minNotional }) >= 0
+      const quantityWithinMaximum = !maxQuantity || compareDecimal({ left: buyQuantity, right: maxQuantity }) <= 0
+      const notionalWithinMaximum = !maxNotional || compareDecimal({ left: buyNotional, right: maxNotional }) <= 0
+      const priceWithinFilters =
+        (!minPrice || compareDecimal({ left: buyPrice, right: minPrice }) >= 0) &&
+        (!maxPrice || compareDecimal({ left: buyPrice, right: maxPrice }) <= 0)
       const withinInvestmentLimit = investmentLimit === undefined || compareDecimal({
         left: addDecimal({ left: outstandingRecovery, right: buyNotional }),
         right: investmentLimit,
       }) <= 0
-      if (!quantityMeetsMinimum || !notionalMeetsMinimum) {
+      if (!quantityMeetsMinimum || !notionalMeetsMinimum || !quantityWithinMaximum ||
+          !notionalWithinMaximum || !priceWithinFilters) {
+        const filterReason = !quantityMeetsMinimum ? "MIN_QUANTITY"
+          : !notionalMeetsMinimum ? "MIN_NOTIONAL"
+            : !quantityWithinMaximum ? "MAX_QUANTITY"
+              : !notionalWithinMaximum ? "MAX_NOTIONAL"
+                : minPrice && compareDecimal({ left: buyPrice, right: minPrice }) < 0 ? "MIN_PRICE"
+                  : "MAX_PRICE"
         buyDisposition = Object.freeze({
           status: "EXCHANGE_CONSTRAINED_BUY",
-          reason: !quantityMeetsMinimum ? "MIN_QUANTITY" : "MIN_NOTIONAL",
+          reason: filterReason,
           quantity: buyQuantity,
           notional: buyNotional,
           minimumQuantity: minQuantity,
           minimumNotional: minNotional,
+          ...(maxQuantity ? { maximumQuantity: maxQuantity } : {}),
+          ...(maxNotional ? { maximumNotional: maxNotional } : {}),
+          ...(minPrice ? { minimumPrice: minPrice } : {}),
+          ...(maxPrice ? { maximumPrice: maxPrice } : {}),
         })
       } else if (withinInvestmentLimit) {
         actions.push(Object.freeze({
@@ -249,9 +332,11 @@ export function evaluateConservativeStrategy({
     ...(buyDisposition ? { buyDisposition } : {}),
     reason: actions.length === 0
       ? inventoryDisposition
-        ? "Residual inventory is currently below exchange SELL filters and is classified as dust"
+        ? inventoryDisposition.status === "PRICE_FILTER_BLOCKED"
+          ? "Residual SELL is deferred because the profit-preserving price is outside exchange price filters"
+          : "Residual inventory is currently below exchange SELL filters and is classified as dust"
         : buyDisposition
-          ? "Configured BUY is currently below exchange filters and was deferred"
+          ? "Configured BUY is currently outside exchange filters and was deferred"
           : "Required standing orders are already active or no sellable recovery inventory is available"
       : null,
   })
