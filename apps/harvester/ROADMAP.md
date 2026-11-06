@@ -1517,3 +1517,12 @@ Process-restart reconciliation is explicitly deferred and is not part of the act
 **Status: DEFERRED. Do not implement as part of the current Conservative strategy/policy audit.** The current work is limited to making Conservative strategy decisions and order lifecycle behave according to the owner-approved policy. This item must not interrupt, delay, or become an acceptance prerequisite for the current audit.
 
 When separately prioritized in the future, the restart-recovery work may cover the workstation-offline lifecycle: exchange orders may fill while Harvester is stopped; on a later startup, reconcile those fills, actual commissions, order states, and balances before new trading. No 24/7 uptime is required. Preserve historical shutdown snapshots. Track the deferred investigation in [issue #654](https://github.com/45s/coinzilla/issues/654).
+
+
+## Conservative Strategy audit — canonical authority (2026-11-06)
+
+The sole authoritative rule definition is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). All other Harvester documents, issues, PRs, tests, and implementation notes are references, evidence, or derived artifacts; they must not independently define strategy behavior. The canonical specification includes an owner-approved algorithm flowchart as a visualization, not a second source of truth.
+
+Owner decision recorded: **B** — when a new BUY fill occurs while a recovery SELL is open (including partially filled), cancel the existing SELL, reconcile its terminal state and every actual fill/commission, update accounting, then plan and submit a replacement against the updated position. If reconciliation is incomplete, fail closed. Partial SELL fills without a new BUY do not alter the open order or its price.
+
+The implementation and documentation consistency audit remain in progress. Latest verified PR #653 head had failing Unit Tests and Test Coverage workflows; do not describe the strategy as accepted or merge PR #653. Restart reconciliation remains separate in #654. See the canonical specification for all rules and precedence.
