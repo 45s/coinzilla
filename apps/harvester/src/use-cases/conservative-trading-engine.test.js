@@ -2566,7 +2566,7 @@ test("keeps UNKNOWN exchange order states active and waits for authoritative res
 })
 
 test("reevaluates after unfilled CANCELED and EXPIRED order states", async () => {
-  for (const status of ["CANCELED", "EXPIRED"]) {
+  for (const status of ["CANCELED", "EXPIRED", "REJECTED"]) {
     const { engine, pauses } = await createHarness()
     await engine.processMarketPrice({
       symbol: "DOGEUSDT",
@@ -2659,7 +2659,13 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     })
 
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    assert.equal(result.data.reevaluate, true)
+    if (status === "REJECTED") {
+      assert.equal(result.data.paused, true)
+      assert.ok(harness.pauses.includes("ORDER_REJECTED"))
+    } else {
+      assert.equal(result.data.reevaluate, true)
+      assert.deepEqual(harness.pauses, [])
+    }
     assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
     assert.equal(currentPortfolio.positions[0].spent.amount, "100")
     assert.equal(
@@ -2672,7 +2678,6 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     )
     assert.equal(harness.accountedFills.length, 1)
     assert.equal(harness.accountedFills[0].commissions[0].amount.amount, "0.01")
-    assert.deepEqual(harness.pauses, [])
   }
 })
 
