@@ -243,3 +243,15 @@ The complete 50-row DOGE and ZRO trade-history outputs are preserved in [AUDIT_D
 DOGE 1276698: 1,196 DOGE total; 85.93260000 USDT gross proceeds; 0.08593260 USDT commission; 85.84666740 USDT net. ZRO 727905: 5 ZRO gross less 0.005 ZRO fee = 4.995 ZRO net; 7.98 USDT quote debit. ZRO 727904: 64.09546 gross less 0.06409546 fee = 64.03136454 net; against 64.02 cost gives +0.01136454 USDT realized net.
 
 Chronology is decisive: DOGE 1276698 fills at 08:03, after ~07:58 CLOSING; ZRO 727905 fills at 08:38, after ~07:58 CLOSING. The closing audit's two unresolved owned orders were therefore pending at that snapshot. The later evidence identifies both known order IDs as subsequently filled, but only one was confirmed among the two unresolved at close (ZRO 727905); DOGE's candidate identity is now supported by its matching post-close fill, but the full closing payload is still needed to prove the second identity conclusively. Neither post-close fill proves internal Harvester processing.
+
+
+## 2026-11-06 11:57 UTC — repository and CI verification
+
+- Re-read PR #653 metadata and branch ref. PR is OPEN, unmerged, base `develop`; branch `docs/harvester-log-evidence-2026-11-06` matched HEAD `94650284a05e0e18cda662d5a41bce0a47788ac8` at verification start.
+- Confirmed the PR changed-file list contains all seven expected evidence/audit documents; fetched all seven from the branch. The DOGE and ZRO raw trade addenda each retain the complete operator-provided 50-row bounded result, including displayed commission fields; no exhaustive-history claim is made.
+- Exact-HEAD Actions runs: JavaScript Syntax 42213769852 PASS; Test Coverage 42213769902 PASS; Dependency Audit 42213769838 PASS; Unit Tests 42213769873 PASS; Utils Unit Tests 42213769913 PASS. Inspected jobs completed successfully. The read-only Binance TESTNET integration job in Unit Tests was SKIPPED.
+- The separate commit-status API response was `pending`, `total_count=0`; record it as a distinct status signal, not as an Actions failure or success.
+- No PR reviews or inline review threads were present at the time of inspection.
+- No fresh TESTNET balances/open orders, full historical CLOSING open-order payload, or later Harvester Journal/runtime session were available. The connector cannot read GitHub secret values or dispatch the secret-backed exchange workflow. Current DOGE/ZRO/USDT balances and post-CLOSING internal processing remain UNVERIFIED.
+- #649 is closed after merge of exact-once regression coverage; #646 remains open for product decisions; #626 remains open for the original empty-TypeError disposition and controlled TESTNET/owner acceptance.
+- No exchange mutation, order change/cancel/replace, withdrawal, account-setting change, or bot restart occurred. TESTNET acceptance remains NOT ACCEPTED.
