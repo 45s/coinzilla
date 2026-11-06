@@ -143,7 +143,7 @@ export function makeConservativeTradingEngine({
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
@@ -192,6 +192,7 @@ export function makeConservativeTradingEngine({
     trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
+    reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
   }
   const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
@@ -628,40 +629,11 @@ export function makeConservativeTradingEngine({
         })
       }
 
-      const fillsResult = await broker.getFills({
-        symbol,
-        orderId: order.brokerOrderId,
-      })
-      if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-        const errors = fillsResult?.errors ?? [new Error("Unable to reconcile recovery SELL fills after cancellation")]
-        await pause({ symbol, reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED", error: errors[0] })
-        return toResult({ errors })
-      }
-      let reconciledQuantity = "0"
-      const seenFillIds = new Set()
-      for (const fill of fillsResult.data) {
-        if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-            fill.side !== "SELL" || fill.brokerOrderId !== order.brokerOrderId ||
-            (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
-          await pause({ symbol, reason: "RECOVERY_SELL_FILL_IDENTITY_MISMATCH" })
-          return toResult({ error: new Error("Recovered SELL fill does not match the canceled order") })
-        }
-        recordSellExecutionFill({ fill })
-        const accounting = await updateTradingAccounting({ fill })
-        if (!accounting?.ok) {
-          await pause({ symbol, reason: "RECOVERY_SELL_FILL_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
-          return toResult({ errors: accounting?.errors ?? [new Error("Recovered SELL fill accounting failed")] })
-        }
-        if (!seenFillIds.has(fill.id)) {
-          reconciledQuantity = addDecimal({ left: reconciledQuantity, right: fill.quantity.amount })
-          seenFillIds.add(fill.id)
-        }
-      }
-      if (compareDecimal({ left: reconciledQuantity, right: canceledOrder.executedQuantity.amount }) !== 0) {
-        await pause({ symbol, reason: "RECOVERY_SELL_EXECUTED_QUANTITY_MISMATCH" })
-        return toResult({ error: new Error("Canceled SELL cumulative execution does not match reconciled fills") })
-      }
+      const terminalReconciliation = await reconcileTerminalOrderFills({ order: canceledOrder })
+      if (!terminalReconciliation?.ok) return terminalReconciliation
+      state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
       if (canceledOrder.status === "FILLED") {
+        state.completedOrderTransitions.add(canceledOrder.clientOrderId)
         if (compareDecimal({
           left: canceledOrder.executedQuantity.amount,
           right: canceledOrder.originalQuantity.amount,
@@ -1239,6 +1211,73 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const reconcileTerminalOrderFills = async ({ order } = {}) => {
+    const symbol = order?.market?.symbol
+    const terminalStatuses = new Set(["FILLED", "CANCELED", "EXPIRED", "REJECTED"])
+    if (!order || !terminalStatuses.has(order.status)) {
+      return toResult({ error: new TypeError("Terminal fill reconciliation requires a terminal canonical order") })
+    }
+    if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+      await pause({ symbol, reason: "TERMINAL_ORDER_MISSING_BROKER_ID" })
+      return toResult({ error: new Error("Terminal order has no broker order ID for fill reconciliation") })
+    }
+    const fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+      const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve terminal order fill history")
+      await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
+      return toResult({ error })
+    }
+    const fillsById = new Map()
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+        const error = new Error("Terminal execution history does not match its canonical order")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Terminal execution history contains conflicting facts for one fill ID")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
+    }
+    const fills = [...fillsById.values()].sort((left, right) => {
+      if (left.executedAt !== undefined && right.executedAt !== undefined &&
+          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+      return left.tradeId.localeCompare(right.tradeId)
+    })
+    const reconciledQuantity = fills.reduce(
+      (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+      "0",
+    )
+    if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0) {
+      const error = new Error("Terminal order executed quantity does not match its complete distinct fill history")
+      await pause({ symbol, reason: "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH", error })
+      return toResult({ error })
+    }
+    const fullExecution = compareDecimal({
+      left: order.executedQuantity.amount,
+      right: order.originalQuantity.amount,
+    }) === 0
+    if ((order.status === "FILLED") !== fullExecution) {
+      const error = new Error("Terminal order status conflicts with its executed/original quantity")
+      await pause({ symbol, reason: "TERMINAL_ORDER_STATUS_QUANTITY_CONFLICT", error })
+      return toResult({ error })
+    }
+    for (const fill of fills) {
+      const applied = await processExecutionFillTransition({ order, fill })
+      if (!applied?.ok) {
+        const error = applied?.errors?.[0] ?? new Error("Terminal order fill could not be applied")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", error })
+        return toResult({ errors: applied?.errors ?? [error] })
+      }
+    }
+    return toResult({ data: { reconciled: true, fillCount: fills.length, executedQuantity: reconciledQuantity } })
+  }
+
   const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
       const order = event?.executedOrder
@@ -1259,6 +1298,10 @@ export function makeConservativeTradingEngine({
       }
       state.registry = update.registry
 
+      if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
+        return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })
+      }
+
       if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
         const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
@@ -1273,6 +1316,11 @@ export function makeConservativeTradingEngine({
         }
       }
 
+      if (["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+        const terminal = await reconcileTerminalOrderFills({ order })
+        if (!terminal?.ok) return terminal
+      }
+
       if (event.executionType === "TRADE") {
         const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
         if (!fillResult.ok) return fillResult
@@ -1281,7 +1329,7 @@ export function makeConservativeTradingEngine({
         const isUnprocessedFill = order.status === "FILLED" &&
           !state.completedOrderTransitions.has(order.clientOrderId)
         if (!isUnprocessedFill) {
-          if (!recoveryMode && order.side === "SELL" && order.status !== "FILLED" &&
+          if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
             if (!cancellation.ok) return cancellation
@@ -1304,7 +1352,7 @@ export function makeConservativeTradingEngine({
         state.completedOrderTransitions.add(order.clientOrderId)
       }
 
-      if (!recoveryMode && order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
+      if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
           state.replacementIntents.has(symbol)) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
@@ -1322,7 +1370,8 @@ export function makeConservativeTradingEngine({
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
-      if (["CANCELED", "EXPIRED"].includes(order.status) &&
+      if (order.side === "BUY" &&
+          ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return toResult({ error: new Error("Partially filled order canceled; pair paused for review") })
@@ -1351,6 +1400,19 @@ export function makeConservativeTradingEngine({
         state.buyReferenceOverrides.delete(symbol)
         state.lastBuyPrices.set(symbol, executionPrice)
         state.buyExecutionTotals.delete(order.brokerOrderId)
+      }
+      if (order.side === "SELL" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+        state.replacementIntents.delete(symbol)
+        const replacement = await evaluateLatestTransition({ symbol })
+        if (!replacement.ok) return replacement
+        return toResult({
+          data: {
+            order,
+            terminalFillHistoryReconciled: true,
+            recoverySellReplaced: true,
+            ...replacement.data,
+          },
+        })
       }
       if (order.status === "FILLED" && order.side === "SELL") {
         if (recoveryMode) {
