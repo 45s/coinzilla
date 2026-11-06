@@ -90,7 +90,7 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
   )
 
   const submitted = []
-  const books = new Map()
+  const priceHandlers = new Map()
   let userData
   const metadata = (symbol) => {
     const base = symbol.slice(0, -4)
@@ -136,7 +136,10 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
       userData = handlers
       return { ok: true, data: { disconnect: async () => {} } }
     },
-    subscribeForPrices: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    subscribeForPrices: async ({ symbol, onPrice }) => {
+      priceHandlers.set(symbol, onPrice)
+      return { ok: true, data: { unsubscribe: async () => {} } }
+    },
     subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
       books.set(symbol, onBookTicker)
       return { ok: true, data: { unsubscribe: async () => {} } }
@@ -185,14 +188,24 @@ test("starts Conservative DOGE/ZRO strategies from a deterministic config and su
   try {
     assert.equal(runtime.userDataReady, true)
     const timestamp = Date.now()
-    for (const symbol of ["DOGEUSDT", "ZROUSDT"]) {
-      await books.get(symbol)({
-        symbol,
-        bestBidPrice: symbol === "DOGEUSDT" ? "0.07160" : "1.603",
-        bestBidQuantity: "100",
-        bestAskPrice: symbol === "DOGEUSDT" ? "0.07162" : "1.605",
-        bestAskQuantity: "100",
+    for (const [symbol, price] of [
+      ["DOGEUSDT", "0.07161000"],
+      ["ZROUSDT", "1.60400000"],
+    ]) {
+      const onPrice = priceHandlers.get(symbol)
+      assert.equal(typeof onPrice, "function", symbol + " market-price subscription")
+      await onPrice({
+        eventType: "aggTrade",
+        eventTime: timestamp,
         timestamp,
+        symbol,
+        price,
+        quantity: "100",
+        isBuyerMaker: false,
+        wasBestPrice: true,
+        aggId: timestamp,
+        firstId: timestamp,
+        lastId: timestamp,
       })
     }
     await waitFor(() => submitted.filter((order) => order.side === "BUY").length >= 2, "two strategy-generated BUY submissions")
