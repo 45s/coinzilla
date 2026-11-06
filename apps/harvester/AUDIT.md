@@ -279,34 +279,6 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 6. ZRO final recovery SELL and standing BUY: decision 07:04:46.922Z creates SELL 39.91 at 1.606, suffix -22 / order 727904, and BUY 5 at 1.596, suffix -23 / order 727905. SELL trade 11666 executes 07:08:46.965Z; recovery completion is journaled 07:08:47.127Z. Paired BUY remains NEW with 7.98 USDT locked at close.
 7. Shutdown: CLOSING snapshot 07:58:11.370Z is INCOMPLETE with two unresolved owned orders; process stop is 07:58:16.387Z. Successful process exit does not mean reconciliation passed.
 
-### Recovery SELL calculation and completion contract — superseded historical source notes
-
-All current Conservative recovery economics, commission handling, sell-through, dust, order lifecycle, and completion rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The source-rule summary in this historical evidence report is superseded and must not be used as an active contract.
-
-The ZRO arithmetic below is an immutable historical observation only: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; the Journal recorded 0.01 free and 0.04 active residual, with +0.01136454 USDT. It does not define current completion or dust behavior.
-
-### Shutdown and unresolved-order decision
-
-- PREFLIGHT open-order count is zero.
-- CLOSING audit is INCOMPLETE with UNRESOLVED_OWNED_ORDERS:2.
-- One unresolved order is identified: ZRO BUY 727905, NEW, 5 ZRO at 1.596, zero executed, 7.98 USDT quote locked.
-- The second unresolved order is not identified by supplied closing open-order detail. DOGE SELL 1276698 is a candidate, but must not be asserted as the second unresolved order without the full closing list/logs.
-- No order was canceled, amended, or recreated during this audit. Current decision is read-only investigation and fail-closed status.
-
-### Clarification gaps and exact evidence needed
-
-| Gap | Unknown | Evidence required | Closure rule |
-|---|---|---|---|
-| Runtime config | Exact budgets, mode, fees, minProfit, keepQuantity, symbols, filters. | Redacted config snapshot and timestamped exchange filters. | Tie values to run and verify every order's tick/step/notional. |
-| DOGE SELL 1276698 | Whether filled/partial/canceled/stale and why 1,196 DOGE locked. | Original logs; full order detail; all DOGE trades/commissions; closing open orders and balances. | Correlate orderId + clientOrderId + tradeId; do not infer proceeds from status label. |
-| Second unresolved order | Identity and reserved asset. | Full CLOSING openOrders payload and reconciliation diagnostics. | Name both orders and reconcile remaining quantity/reservations. |
-| Cancel/replace races | Whether replacement waited for confirmed cancellation/canonical reconciliation. | DEBUG/TRACE timeline and deterministic cancel/fill race replay. | No over-reservation or unsafe overlapping live SELLs. |
-| Duplicate fills | Exact-once across reconnect/restart permutations. | Offline duplicate, reorder, reconnect, REST/stream overlap, restart tests. | Canonical trade changes state once; conflicting payload fails closed. |
-| Conservative contract | Current strategy rules and owner decisions | Sole authority: canonical Conservative Domain Specification; decisions closed | All other docs/issues/PRs reference it; implementation and exact-head tests conform. |
-| Completion | Exactly-once allocation/reset across partial-fill/replacement lifecycle. | #648 full-cycle offline regression. | Duplicate terminal update cannot allocate/reset/issue next BUY twice. |
-| #626 recovery | Do #627/#629 satisfy original criteria? | Re-read #626 criteria; map to tests and exact CI. | Keep #626 open until each criterion has disposition. |
-| Log provenance | Full 4,880-line and 5,739-line correlation. | Original files read-only; verify SHA-256 before parsing. | Checksum mismatch means stop and record provenance issue. |
-
 ### Status and evidence discipline
 
 Observed fact is from Journal/order-history/account records. Source behavior is inspected code, not proof it ran. Test coverage means assertion exists, not that it passed. Hypotheses are not accounting inputs. PASS requires independent reconciliation or verified test; PARTIAL means incomplete lifecycle; CONFLICT means sources disagree; UNVERIFIED means evidence is absent. No global strategy-pass conclusion is supported: overall PARTIAL, ZRO arithmetic PASS, DOGE SELL CONFLICT, closing audit INCOMPLETE, TESTNET acceptance UNVERIFIED.

@@ -62,7 +62,7 @@ Source inspection found bootstrap CLOSING-audit logic and regression coverage fo
 
 **Status:** The earlier multi-document conflict is superseded by the owner-approved canonical contract. The sole current rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old maker-only fee, residual-suppression, portfolio completion, and zero-value statements preserved in historical records must not be used as current policy.
 
-Owner decisions are closed: minProfit >= 0.01 net after actual commissions; exact keepQuantity only; recover the full accumulated spent without proportional reduction; maker fee reserve for LIMIT_MAKER and higher applicable maker/taker reserve for regular LIMIT; actual commissions authoritative; reliable third-asset quote valuation or fail closed; sell-through/dust; unchanged partial SELL absent a new BUY; decision B for new BUY during open SELL; and keepQuantity=0 requires complete workflow verification.
+All owner decisions are closed and recorded in the canonical specification; no further product decisions are pending.
 
 Issue #646 and PR #653 track implementation conformance, documentation consolidation, and regression verification—not unresolved product decisions. This finding remains as historical provenance only.
 
@@ -162,7 +162,7 @@ Owner decisions are closed and recorded in the canonical Conservative specificat
 
 Closure: focused regressions prove the canonical lifecycle and accounting contract; tests do not define a competing strategy rule.
 
-### F-008 — user-data recovery (#626)### F-008 — user-data recovery (#626)
+### F-008 — user-data recovery (#626)
 
 1. Re-read original #626 acceptance criteria; do not infer closure from merged #627.
 2. Map each criterion to source, deterministic regression, failure mode, and exact CI head.
@@ -227,42 +227,6 @@ Closure: same canonical trade changes state once in all supported delivery/resta
 5. Add offline fixture for two unresolved orders, including one contradictory/unknown order, and assert readiness remains blocked.
 
 Closure: both orders and reservations identified and reconciled, else remain INCOMPLETE.
-
-### F-006 — fee/config contract (#646; historical, superseded)
-
-Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
-
-### F-007 — full-cycle exact-once and lifecycle regression (#648)
-
-1. Use deterministic offline engine + fake broker port; no network or credentials.
-2. Apply multiple partial BUY fills with actual commission facts; verify quantity, full accumulated spent, and exact-once accounting.
-3. Prove a partial SELL without a new BUY keeps the same exchange order and same price.
-4. When a new BUY fills during an OPEN/PARTIALLY_FILLED recovery SELL, cancel it, reconcile terminal state and all fills/commissions, update accounting, then plan the replacement.
-5. Cover fill-during-cancel including terminal FILLED, cancellation, expiry, rejection, unknown state, incomplete history, and conflicting duplicate fills.
-6. Verify full accumulated cost recovery without proportional reduction, at least 0.01 realized net profit, exact keepQuantity, residual sell-through, and explicit dust with basis preserved.
-7. Verify exact-once completion/reset only when position quantity equals keepQuantity; keepQuantity=0 requires the full end-to-end workflow.
-8. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
-9. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
-
-Closure: focused regressions prove the canonical lifecycle and accounting contract; tests do not define a competing strategy rule.
-
-### F-008 — user-data recovery (#626)### F-008 — user-data recovery (#626)
-
-1. Re-read original #626 acceptance criteria; do not infer closure from merged #627.
-2. Map each criterion to source, deterministic regression, failure mode, and exact CI head.
-3. Cover lost/late, duplicate/reordered events, reconnect/resubscribe, REST reconciliation, identity conflicts, and completion interrupted at every recovery boundary.
-4. Assess #629 subscription ordering separately; it is not full recovery acceptance.
-5. Keep #626 open until each criterion has a verified disposition and owner acceptance.
-
-### Cross-finding order
-
-1. Evidence integrity: original logs, closing open orders, trade history, config snapshot.
-2. Exchange facts: resolve DOGE and identify both unresolved orders; no runtime edits while conflict remains.
-3. Contract decision: resolve #646.
-4. Regression coverage: implement #648 test-only and update invariant matrix.
-5. Runtime fix only if a reproduced invariant violation is confirmed.
-6. Exact-head CI, then update audit/roadmap/#645 to the same commit.
-
 
 ## F-011 — ZRO runtime Portfolio and RecoveryLedger cycle state directly observed
 
