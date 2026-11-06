@@ -740,8 +740,12 @@ test("strategy decision event retains reason and exact decision inputs", () => {
     reason: "INITIAL_BUY",
     inputs: {
       lastBuyPrice: null, activeOrderCount: 0, activeBuyCount: 0, activeSellCount: 0,
-      activeBaseQuantity: "0", freeQuoteBalance: "1000", freeBaseBalance: "0",
-      committedQuote: "0", committedBase: "0", outstandingRecoveryAmount: "0",
+      activeBaseQuantity: "0", activeBaseBalance: "0",
+      freeQuoteBalance: "1000", freeBaseBalance: "0", quoteCashFlow: "0",
+      committedQuote: "0", committedQuoteBalance: "0", committedBase: "0",
+      committedBaseBalance: "0", outstandingRecoveryAmount: "0", investmentLimit: "1000",
+      orderQuantity: "1", keepQuantity: "0.1", priceStepPercent: "0.05",
+      makerPercent: "0", takerPercent: "0.075", minProfit: "0.01",
     },
     actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
   })
