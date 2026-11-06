@@ -209,21 +209,153 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
   assert.equal(sell.price, "0.105")
 })
 
-test("does not create a recovery SELL from residual active inventory after the recovery ledger is reset", () => {
-  const { portfolio, recoveryLedger } = makeBoughtState()
-  const completedLedger = recoveryLedger.resetCycle()
+function makeProfitableResidualState({ soldQuantity = "98" } = {}) {
+  const bought = makeBoughtState()
+  const fill = new Fill({
+    tradeId: "sell-1",
+    brokerOrderId: "sell-order-1",
+    market,
+    side: "SELL",
+    price: new Money({ amount: "0.11", asset: quoteAsset }),
+    quantity: new Quantity({ amount: soldQuantity, asset: baseAsset }),
+    quoteQuantity: new Money({ amount: multiplyDecimal({ left: soldQuantity, right: "0.11" }), asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    portfolio: bought.portfolio.applyFill({ fill }).portfolio,
+    recoveryLedger: bought.recoveryLedger.applyFill({ fill }).ledger,
+  }
+}
+
+test("continues selling residual inventory after cumulative recovery profit is already secured", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
     pairConfig,
     settings,
     portfolio,
-    recoveryLedger: completedLedger,
-    marketMetadata,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule.type === "MIN_NOTIONAL"
+              ? { ...rule, value: { amount: "0.05" } }
+              : rule,
+        ),
+      },
+    },
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(completedLedger.outstandingRecoveryAmount, "0")
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(recoveryLedger.outstandingRecoveryAmount, "0")
+  assert.equal(recoveryLedger.realizedNetProfit, "0.78")
+  assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "2")
+  assert.deepEqual({ price: sell.price, quantity: sell.quantity, reason: sell.reason }, {
+    price: "0.1",
+    quantity: "0.9",
+    reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+  })
+})
+
+test("classifies residual quantity below the exchange quantity step instead of submitting an invalid SELL", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState({ soldQuantity: "98.95" })
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule,
+        ),
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
-  assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
-  assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "100")
+  assert.deepEqual(decision.inventoryDisposition, {
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: "0.05",
+    reason: "QUANTITY_INCREMENT",
+    quantityStepSize: "0.1",
+  })
+})
+
+test("classifies residual quantity below MIN_NOTIONAL instead of submitting an invalid SELL", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule,
+        ),
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
+  assert.equal(decision.inventoryDisposition.quantity, "1")
+  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.09")
+})
+
+test("does not create a duplicate residual SELL while one is active", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: marketMetadata.tradingRules.constraints.map((rule) =>
+          rule.type === "QUANTITY_INCREMENT"
+            ? { ...rule, value: { amount: "0.1" } }
+            : rule.type === "MIN_NOTIONAL"
+              ? { ...rule, value: { amount: "0.05" } }
+              : rule,
+        ),
+      },
+    },
+    activeOrders: [{ market, side: "SELL", status: "OPEN" }],
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+})
+
+test("fails closed when active inventory has lost its recovery cost/profit basis", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger: recoveryLedger.resetCycle(),
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  }), /no recovery cost\/profit basis/)
 })
