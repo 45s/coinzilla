@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
@@ -534,9 +534,24 @@ export async function startHarvester({
         "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
       )
     }
+    const quoteCashFlowBaselineByAssetId = new Map()
+    for (const position of getPortfolio().positions) {
+      const assetId = position.market.quoteAsset.id
+      quoteCashFlowBaselineByAssetId.set(
+        assetId,
+        addDecimal({
+          left: quoteCashFlowBaselineByAssetId.get(assetId) ?? "0",
+          right: position.quoteNetCashFlow.amount,
+        }),
+      )
+    }
     const nextSnapshot = new AccountSnapshot({
       balances: result.data.balances,
       sourceTime: result.data.sourceTime,
+      quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
+        assetId,
+        amount,
+      })),
     })
     const accountAuditMarkets = [...marketMetadata.values()]
       .map(({ market }) => market)
