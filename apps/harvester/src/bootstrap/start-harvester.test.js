@@ -1486,16 +1486,17 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // The completed recovery cycle retained free inventory but left active
-  // strategy inventory. The existing standing BUY must not be trailed/canceled.
-  assert.equal(submittedOrders.length, 5)
-  assert.equal(buyCancellationCount.value, 0)
+  // The completed cycle sells all active inventory above keepQuantity and
+  // moves exactly the retained amount to free inventory. With no active
+  // position left, the next standing BUY may be trailed normally.
+  assert.equal(submittedOrders.length, 6)
+  assert.equal(buyCancellationCount.value, 1)
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0.001")
+  assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
 
 
