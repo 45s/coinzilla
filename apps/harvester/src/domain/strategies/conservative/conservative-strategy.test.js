@@ -455,3 +455,116 @@ test("fails closed when RecoveryLedger has cycle accounting but Portfolio has no
     marketMetadata,
   }), /cycle accounting without an active Position/)
 })
+
+
+test("caps residual SELL quantity at MAX_QUANTITY and leaves the rest for sell-through", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: [
+          ...marketMetadata.tradingRules.constraints.map((rule) =>
+            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
+              ? { ...rule, value: { amount: "0.1" } }
+              : rule.type === "MIN_NOTIONAL"
+                ? { ...rule, value: { amount: "0.05" } }
+                : rule,
+          ),
+          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "0.5" } },
+        ],
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(sell.quantity, "0.5")
+  assert.equal(sell.price, "0.1")
+})
+
+test("caps residual SELL quantity at MAX_NOTIONAL and leaves the rest for sell-through", () => {
+  const { portfolio, recoveryLedger } = makeProfitableResidualState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: [
+          ...marketMetadata.tradingRules.constraints.map((rule) =>
+            rule.type === "QUANTITY_INCREMENT" || rule.type === "MIN_QUANTITY"
+              ? { ...rule, value: { amount: "0.1" } }
+              : rule.type === "MIN_NOTIONAL"
+                ? { ...rule, value: { amount: "0.05" } }
+                : rule,
+          ),
+          { type: "MAX_NOTIONAL", status: "SUPPORTED", value: { amount: "0.06" } },
+        ],
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(sell.quantity, "0.6")
+  assert.equal(multiplyDecimal({ left: sell.price, right: sell.quantity }), "0.06")
+})
+
+test("defers a recovery SELL when its profit-preserving price exceeds MAX_PRICE", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: [
+          ...marketMetadata.tradingRules.constraints,
+          { type: "MAX_PRICE", status: "SUPPORTED", value: { amount: "0.101" } },
+        ],
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.inventoryDisposition.status, "PRICE_FILTER_BLOCKED")
+  assert.equal(decision.inventoryDisposition.reason, "MAX_PRICE")
+})
+
+test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, orderQuantity: 100 },
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata: {
+      ...marketMetadata,
+      tradingRules: {
+        constraints: [
+          ...marketMetadata.tradingRules.constraints,
+          { type: "MAX_QUANTITY", status: "SUPPORTED", value: { amount: "10" } },
+        ],
+      },
+    },
+    lastBuyPrice: "0.1",
+  })
+
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  assert.equal(decision.buyDisposition.reason, "MAX_QUANTITY")
+})
