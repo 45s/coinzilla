@@ -1402,3 +1402,14 @@ The raw evidence remains immutable. This correction updates derived audit interp
 The exchange-side DOGE SELL order 1276698 did fill, but only after the Harvester runtime's final OPEN/zero-executed observation and the ~07:58 UTC CLOSING snapshot: trade 221990 (278 DOGE) at 08:03:01.841Z and trade 221991 (918 DOGE) at 08:03:18.202Z. Net proceeds were 85.84666740 USDT after 0.08593260 USDT quote commission. ZRO BUY 727905 also filled after CLOSING at 08:38:24.782Z, crediting 4.995 net ZRO after base commission.
 
 This supersedes the earlier same-time DOGE conflict interpretation. It does not close the account settlement gap: post-shutdown Harvester Portfolio/RecoveryLedger application and post-fill balances/open orders remain UNVERIFIED. The complete historical CLOSING open-orders payload identifying both unresolved orders remains outstanding. Preserve the original CLOSING snapshot unchanged and keep TESTNET acceptance NOT ACCEPTED.
+
+
+## Conservative owner decisions recorded — 2026-11-06
+
+The strategy owner confirmed the following policies for #646:
+
+- `minProfit` must be at least **$0.01 net after all applicable fees/commissions**. Never close a position at a loss or break-even. Zero and values below $0.01 are not acceptable.
+- Sell the entire Conservative position except the amount explicitly reserved by configured `coinToKeep`. No additional residual inventory should be retained. Preserve the configured reserve.
+- Before implementation, verify the exact mapping between the user's `coinToKeep` setting and the current pair-level `keepQuantity` field; do not silently rename or reinterpret configuration.
+
+These decisions close the owner-input questions in #646. Remaining work is engineering/documentation alignment and tests. No runtime settings or exchange state were changed.
