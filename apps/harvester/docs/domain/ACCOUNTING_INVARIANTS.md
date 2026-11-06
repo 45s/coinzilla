@@ -292,3 +292,26 @@ Before D2 can pass:
 - Portfolio + RecoveryLedger application is proven atomic.
 - Every completion/reset path is idempotent.
 - No test uses broker connectivity, TESTNET, network calls, or exchange credentials as proof of domain correctness.
+
+
+## 11. Additional lifecycle invariants — 2026-11-06 audit
+
+### Residual sell-through
+- After the recovery target is reached, preserve the original cycle cost and actual net proceeds until every exchange-sellable active unit above `keepQuantity` is sold.
+- A residual SELL must not reduce aggregate realized net profit below `0.01` after actual commissions.
+- Base-asset SELL commission consumes additional base inventory; quote-asset SELL commission reduces proceeds. Apply actual commission facts, not estimates, to accounting.
+- Enforce current minimum quantity/notional, quantity increment, post-only, and fee-reserve constraints for every residual order.
+- Keep exactly the configured `keepQuantity`; do not classify an order-rounding remainder as dust unless it is proven unsellable under the applicable exchange filters.
+- Repeated evaluation with an active residual SELL must not create another SELL. A confirmed residual fill is applied once; only then may the remaining quantity be replanned.
+
+### Restart reconciliation
+- A process may be offline while exchange orders continue to fill. In-memory state not changing while stopped is expected.
+- On restart, replay durable Journal state before activating the trading engine; backfill all owned exchange fills since the last durable checkpoint.
+- Reconcile actual commissions, partial/terminal orders, open-order reservations, and free/locked/total account balances before readiness.
+- Identical fill replay is idempotent across both Portfolio and RecoveryLedger; conflicting facts for a reused fill ID fail closed.
+- Incomplete trade-history pagination, incomplete market universe, unknown ownership, missing commission facts, or balance/order mismatch prevents new order submission.
+- Persist the reconciled checkpoint before enabling trading; never rewrite the prior shutdown snapshot.
+
+### Current verification status
+
+The current strategy still suppresses residual SELLs after ledger reset, and the existing strategy test asserts that suppression. The current bootstrap explicitly disables durable Journal replay and starts with fresh in-process state. These are implementation gaps, not satisfied invariants. Required regression coverage is tracked in ROADMAP and audit issue #645; TESTNET acceptance remains separate.
