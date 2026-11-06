@@ -44,7 +44,13 @@ DOGE BUY quote debit = 85.836 USDT. ZRO net quote cash flow = +0.01136454 USDT. 
 
 This account-level match is a cross-check, not a substitute for execution-level accounting or external activity attribution. In particular, it does not validate the DOGE SELL.
 
-## F-004 — Duplicate-fill replay is detected without additional balance delta\n\n**Status:** PASS for the observed accounting result; PARTIAL for runtime behavior beyond the Journal evidence.\n\nThe Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at 07:02:40.928Z, and all 12 distinct applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No additional applied-fill records are created for those replays. The account balance deltas match the 12 unique fills (with the separate DOGE SELL conflict), and source tests cover idempotent duplicate application and conflicting replay identities. Tests were inspected, not executed.\n\n## F-005 — CLOSING audit correctly remains incomplete with unresolved owned orders
+## F-004 — Duplicate-fill replay is detected without additional balance delta
+
+**Status:** PASS for the observed accounting result; PARTIAL for runtime behavior beyond the Journal evidence.
+
+The Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at 07:02:40.928Z, and all 12 distinct applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No additional applied-fill records are created for those replays. The account balance deltas match the 12 unique fills (with the separate DOGE SELL conflict), and source tests cover idempotent duplicate application and conflicting replay identities. Tests were inspected, not executed.
+
+## F-005 — CLOSING audit correctly remains incomplete with unresolved owned orders
 
 **Status:** PASS for the observed fail-closed audit result; PARTIAL for identifying both orders.
 
