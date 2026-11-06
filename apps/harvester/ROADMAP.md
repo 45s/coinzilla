@@ -1472,3 +1472,18 @@ The owner decisions above are approved requirements, not pending questions. Star
 4. Complete the #646 specification/test matrix and #626 recovery disposition; retain the unknown original empty-`TypeError` cause as unknown unless trace evidence proves it.
 5. Reconcile remaining post-CLOSING evidence gaps without rewriting historical snapshots.
 6. Run all required CI on the exact final HEAD. Keep PR #653 open/unmerged and TESTNET acceptance NOT ACCEPTED until separately evidenced.
+
+
+## Operator workstation lifecycle clarification — 2026-11-06
+
+**Owner clarification:** Harvester runs on the operator's personal PC, not an always-on server. The operator may stop the process while exchange orders remain open. Binance orders can continue resting and may fill while Harvester is offline. This is an expected operating condition, not by itself a strategy defect, policy violation, failed order, or missing owner action. Do not require 24/7 uptime or treat post-shutdown fills as evidence that the operator did something wrong.
+
+**Correct lifecycle contract:**
+1. On shutdown, record the last observed state and identify owned open orders; do not assume stopping the local process cancels exchange orders.
+2. While offline, exchange orders remain exchange-side and can be partially/fully filled. Harvester cannot update its in-memory Portfolio/RecoveryLedger during that interval.
+3. On the next startup, before enabling new trading, reconcile exchange-owned open orders, all fills since the last durable checkpoint, commissions, and authoritative balances. Apply fills idempotently, resolve terminal/partial order states, then rebuild Portfolio/RecoveryLedger and reservations. Keep trading fail-closed until reconciliation succeeds.
+4. Never retroactively rewrite a historical shutdown snapshot. Report subsequent fills as post-shutdown exchange events and reconcile them in the next session.
+
+**Reclassification of 2026-11-06 evidence:** DOGE SELL 1276698 filled at 08:03:01.841Z and 08:03:18.202Z after the ~07:58Z CLOSING snapshot / ~07:58:16Z process stop; ZRO BUY 727905 filled at 08:38:24.782Z. These are expected exchange-side events during operator downtime. The absence of same-session post-fill Portfolio/RecoveryLedger updates is therefore NOT a defect and NOT an acceptance blocker by itself. The relevant engineering question is whether the next Harvester startup reliably discovers and applies these fills before trading resumes. That restart-reconciliation behavior still needs source/test evidence and, where appropriate, controlled TESTNET validation.
+
+Do not request the operator to keep the PC/process online continuously, nor request a restart or new exchange action as a prerequisite for offline code investigation. No live exchange action is authorized by this clarification.
