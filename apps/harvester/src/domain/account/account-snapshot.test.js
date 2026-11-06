@@ -105,3 +105,27 @@ test("reports each missing asset only once across markets", () => {
     /USDT, ETH/,
   )
 })
+
+
+test("tracks Portfolio quote cash flow already reflected in the snapshot", () => {
+  const snapshot = new AccountSnapshot({
+    balances: [balance({ asset: btc }), balance({ asset: usdt, free: "80" })],
+    sourceTime: 200,
+    quoteCashFlowBaseline: [
+      { assetId: usdt.id, amount: "100" },
+      { assetId: btc.id, amount: "-0.25" },
+    ],
+  })
+
+  assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: usdt.id }), "100")
+  assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: btc.id }), "-0.25")
+  assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: eth.id }), "0")
+  assert.throws(() => new AccountSnapshot({
+    balances: [],
+    sourceTime: 1,
+    quoteCashFlowBaseline: [
+      { assetId: usdt.id, amount: "1" },
+      { assetId: usdt.id, amount: "2" },
+    ],
+  }), /duplicate asset/)
+})
