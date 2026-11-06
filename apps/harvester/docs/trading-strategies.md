@@ -292,9 +292,7 @@ first-cycle workflow:
 5. **Full order reservations:** durable and exchange-reconciled reservation
    behavior for partial fills, cancellations, rejections, and uncertain
    outcomes remains deferred beyond the current process.
-6. **Restart and reconnect recovery:** persistence, historical exchange
-   reconciliation, and unattended operation guarantees remain deferred until
-   after the first real TESTNET cycle.
+6. **Restart reconciliation:** this is a P0 startup safety requirement, not a deferred feature. The owner may stop Harvester on a personal PC while exchange orders remain open and may fill offline. Before any new trading after restart, durable Journal replay, complete exchange-fill backfill, actual commission accounting, order/balance/reservation reconciliation, and fail-closed readiness are mandatory. The current bootstrap explicitly disables durable replay; see audit finding F-011. Continuous 24/7 uptime is not required.
 7. **Performance attribution:** strategy-specific attribution is optional and
    must not split the actual shared Position.
 
