@@ -359,3 +359,12 @@ This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is 
 - Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
 
 The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## F-001 disposition update — DOGE exchange execution occurred after CLOSING (2026-11-06)
+
+Updated status: PARTIAL — exchange execution chronology reconciled; post-shutdown application/account settlement UNVERIFIED.
+
+The original F-001 same-time conflict interpretation is superseded by the two preserved DOGE actual-trade rows: trade 221990 (278 DOGE SELL at 08:03:01.841Z) and trade 221991 (918 DOGE SELL at 08:03:18.202Z), both for order 1276698. The original TRACE final OPEN/zero-executed observation (~07:57:19Z) and CLOSING account snapshot (~07:58:11Z) both precede these fills. The exchange later filled 1,196 DOGE; gross proceeds were 85.93260000 USDT, quote commission 0.08593260 USDT, and net proceeds 85.84666740 USDT.
+
+This resolves the apparent runtime-versus-history contradiction by chronology. It does not establish a later Harvester accounting application: the process had stopped before the exchange fills. No later Portfolio/RecoveryLedger evidence or timestamped post-fill account snapshot is available. The full historical CLOSING open-orders payload is still missing, so the complete identities of both CLOSING unresolved orders are not proven. Do not backfill these later fills into the historical CLOSING snapshot or infer post-shutdown application.
