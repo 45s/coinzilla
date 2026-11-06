@@ -3211,6 +3211,11 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
   assert.equal(update.ok, true, update.errors?.[0]?.message)
   assert.equal(repricingEvaluations, 0)
   assert.deepEqual(harness.cancellationIds, [])
+  const unchangedSell = harness.engine.getOrders().find((order) => order.clientOrderId === sell.clientOrderId)
+  assert.equal(unchangedSell.status, "PARTIALLY_FILLED")
+  assert.equal(unchangedSell.limitPrice.amount, sell.limitPrice.amount)
+  assert.equal(unchangedSell.originalQuantity.amount, sell.originalQuantity.amount)
+  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
 })
 
 test("suppresses trailing BUY repricing while an actual active Position exists", async () => {
