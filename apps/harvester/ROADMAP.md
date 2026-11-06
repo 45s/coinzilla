@@ -1338,3 +1338,18 @@ The previous statement that the application logs were inaccessible is superseded
 - [ ] Keep TESTNET acceptance NOT ACCEPTED until account-wide reconciliation and recovery acceptance are independently proven.
 
 **Interpretation:** The prior DOGE runtime-vs-history discrepancy is explained by chronology: runtime/CLOSING were observed before later exchange fills. This does not prove the stopped process accounted for those fills. ZRO 727905 is confirmed filled after CLOSING. Do not retroactively rewrite the historical CLOSING snapshot or claim post-shutdown processing.
+
+
+## Audit continuation checkpoint — 2026-11-06 11:57 UTC
+
+The live GitHub verification confirms PR #653 is still open/unmerged and its branch matched the recorded exact HEAD at the start of the check. All seven evidence/audit artifacts are in the PR diff and fetch successfully. Five Actions workflows associated with that exact HEAD passed, including their inspected jobs; the read-only Binance TESTNET integration job was skipped. The separate commit-status endpoint returned pending with zero statuses and must remain separately reported.
+
+**Next priorities (still blocking acceptance):**
+1. Obtain a fresh read-only TESTNET account-balance and open-order snapshot, including DOGE/ZRO/USDT free, locked, and total amounts, plus canonical order detail/trades/commissions. Do not infer later balances from the bounded 50-row trade exports.
+2. Obtain the complete historical ~07:58 UTC CLOSING open-order payload to prove the identities and reservations of both unresolved owned orders.
+3. Inspect any later Harvester Journal/runtime session for DOGE order 1276698 and ZRO order 727905; prove whether post-CLOSING fills were applied to Portfolio and RecoveryLedger. Until direct evidence exists, this remains UNVERIFIED.
+4. Continue #646 only after explicit product decisions on fee-reserve policy (maker-only versus max maker/taker) and zero-value configuration semantics; keep this documentation/contract work separate from runtime changes.
+5. Continue #626 with the existing fail-closed recovery contract; disposition the original empty TypeError cause and obtain controlled TESTNET/owner acceptance without weakening the gate or implying process-restart Journal replay.
+6. Retain #649's merged exact-once regression as delivered coverage; map remaining lifecycle gaps to tests and acceptance evidence.
+
+The GitHub connector used for this session is read-only for exchange evidence: it cannot expose secret values or dispatch the secret-backed exchange-history workflow. Do not request or expose API secrets. TESTNET acceptance remains NOT ACCEPTED; no exchange writes, order mutations, withdrawals, account-setting changes, or bot restarts are permitted as part of this audit.
