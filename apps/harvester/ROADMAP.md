@@ -28,9 +28,9 @@ Trading safety requirements remain in force: live trading stays disabled unless 
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
 
-## Deferred: Journal, databases, and unrelated observability
+## Journal evidence workstream
 
-**BLOCKED until the bulletproof TESTNET acceptance gate in [TRADING_FIRST.md](./docs/TRADING_FIRST.md) passes.** No staged EventBus/Journal project, Journal integration expansion, Journal recovery/replay, database, new persistence layer, or observability project may be started during the trading-first phase. Existing minimal safety controls required by the current runtime must be preserved, but their presence does not authorize expanding them.
+Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 
 ## Mission and delivery priority
 

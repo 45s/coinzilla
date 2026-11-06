@@ -2,7 +2,7 @@
 
 ## Purpose and priority
 
-This roadmap plans a small, staged integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages into Harvester.
+This roadmap records the Harvester integration of the existing `@coinzilla/event-bus` and `@coinzilla/journal` packages. The current evidence contract and coverage matrix live in [JOURNAL_EVIDENCE_CONTRACT.md](./JOURNAL_EVIDENCE_CONTRACT.md).
 
 **This work does not depend on trading or TESTNET acceptance.** EventBus and Journal record operational lifecycle facts and the selected trading-investigation evidence in issue [#650](https://github.com/45s/coinzilla).
 

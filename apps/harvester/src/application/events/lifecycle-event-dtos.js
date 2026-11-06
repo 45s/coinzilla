@@ -54,7 +54,10 @@ const safeError = ({ error }) => {
     .replace(BEARER_TOKEN, "Bearer [REDACTED]")
     .replace(URL_CREDENTIALS, "$1[REDACTED]@")
     .slice(0, 240)
-  return { name, message }
+  const code = typeof error.code === "string" || Number.isSafeInteger(error.code)
+    ? { code: typeof error.code === "string" ? error.code.slice(0, 80) : error.code }
+    : {}
+  return { name, message, ...code }
 }
 
 const mapData = (input, operation, mapper) => {

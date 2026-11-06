@@ -747,3 +747,13 @@ test("strategy decision event retains reason and exact decision inputs", () => {
   assert.equal(result.data.reason, "INITIAL_BUY")
   assert.equal(result.data.inputs.freeQuoteBalance, "1000")
 })
+
+
+test("retains a safe structured broker error code", () => {
+  const result = mapBrokerConnectionFailedData({
+    broker: "binance",
+    error: Object.assign(new Error("order rejected"), { code: -1013 }),
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.error, { name: "Error", message: "order rejected", code: -1013 })
+})
