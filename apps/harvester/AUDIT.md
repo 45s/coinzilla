@@ -489,3 +489,20 @@ No concrete source/spec behavior mismatch was confirmed in the lifecycle paths i
 Focused offline engine regression cases have now been added for recovery SELL terminal states CANCELED, EXPIRED, and REJECTED. The valid partial-execution cases assert that actual quote commission is applied to Portfolio net cash flow and RecoveryLedger net SELL proceeds, Position quantity changes while accumulated `spent` is preserved, and only then does CANCELED/EXPIRED return for reevaluation (REJECTED reconciles first, then pauses as designed). Missing executed-fill history and conflicting duplicate fill facts are also covered; both must fail closed without changing accounting or creating a replacement SELL.
 
 Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. No production source, Journal, broker, or exchange code changed. Test execution and exact-head CI are still pending; this is regression coverage added, not a pass claim.
+
+
+## 2026-11-06 — final SELL lifecycle coverage review
+
+Reviewed the current branch source and regression inventory for the complete in-scope SELL lifecycle:
+
+- Partial SELL with no new BUY: the existing order remains PARTIALLY_FILLED with unchanged limit price and original quantity; no duplicate SELL or cancellation is created after a market-price event.
+- BUY fill while a recovery SELL is open: the engine cancels and reconciles the old SELL before replacement; the BUY may remain PARTIALLY_FILLED. Full-cycle coverage includes both cancellation/reconciliation cycles.
+- Terminal recovery SELL: focused CANCELED, EXPIRED, and REJECTED cases include partial terminal execution, actual quote commission, and position/basis/proceeds assertions. Missing history and conflicting duplicate fill facts fail closed without accounting mutation or replacement.
+- Residual and dust: coverage includes sell-through after the profit target, quantity-step and MIN_NOTIONAL dust, MAX_QUANTITY/MAX_NOTIONAL caps, exact keepQuantity completion gating, and a later BUY making prior dust sellable while preserving accumulated spent basis and prior net SELL proceeds.
+- Actual DOGE/ZRO fill fixtures assert net quantities, full spent basis, net proceeds, and above-keep residual disposition under their explicitly stated test-filter fixtures.
+
+This is a source/test coverage review, **not a test execution or PASS claim**. Focused Harvester tests and the complete verification matrix remain pending. A local clone attempt failed because this environment could not resolve github.com. The exact PR HEAD at the start of this review had no reported commit statuses or PR-triggered workflow runs.
+
+The separate canonical requirement to durably record exact dust quantity and limiting filter remains unresolved. The current domain decision computes that disposition, but the no-action log/lifecycle event does not persist it. No Journal, event DTO, broker, exchange, or other production change was made to address it.
+
+PR #653 remains OPEN and UNMERGED. No TESTNET or exchange actions were performed.
