@@ -1323,3 +1323,18 @@ The specification/config-boundary drift in fee-reserve policy, residual-inventor
 ## 2026-11-06 original-log verification update
 
 The previous statement that the application logs were inaccessible is superseded. Both original attachments have been parsed and checksum-verified; the durable derived evidence is in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO in-memory Portfolio and RecoveryLedger state is now a direct PASS. DOGE SELL 1276698 remains CONFLICT: runtime shows OPEN/zero executed and the shutdown execution inventory has no DOGE SELL, while exchange order history reports FILLED. The 1,196 DOGE locked and CLOSING `UNRESOLVED_OWNED_ORDERS:2` still require full closing open-orders and canonical trade/order facts. The ZRO BUY 727905 is one confirmed unresolved order; the identity of the second is not proven. Keep TESTNET acceptance NOT ACCEPTED and do not submit/cancel orders or restart Harvester to investigate.
+
+
+## Conservative audit — 2026-11-06 post-CLOSING trade-history update
+
+- [x] Preserve the operator-supplied 50-row DOGEUSDT actual-trade export, including all commission fields: [AUDIT_DOGE_TRADES_2026-11-06.md](./AUDIT_DOGE_TRADES_2026-11-06.md).
+- [x] Preserve the operator-supplied 50-row ZROUSDT actual-trade export, including all commission fields: [AUDIT_ZRO_TRADES_2026-11-06.md](./AUDIT_ZRO_TRADES_2026-11-06.md).
+- [x] Reconcile DOGE order 1276698 from two SELL fills: 1,196 DOGE; 85.93260000 USDT gross; 0.08593260 USDT fee; 85.84666740 USDT net. Both fills occurred after the ~07:58 CLOSING snapshot.
+- [x] Reconcile ZRO order 727905 from trade 12182: 5 ZRO gross BUY; 0.005 ZRO commission; 4.995 ZRO net; 7.98 USDT quote debit. Fill occurred after the ~07:58 CLOSING snapshot.
+- [x] Reconfirm ZRO recovery SELL 727904: 39.91 ZRO; 64.09546 USDT gross; 0.06409546 fee; 64.03136454 net; +0.01136454 USDT versus 64.02 USDT BUY cost.
+- [ ] Obtain fresh read-only balances and open orders after these later fills; reconcile DOGE and ZRO free/locked/total inventory and USDT.
+- [ ] Determine whether any later Harvester session/Journal reconciled the post-shutdown fills into Portfolio and RecoveryLedger.
+- [ ] Obtain the full ~07:58 CLOSING open-orders payload to prove both unresolved order identities and reservations; later fills do not substitute for the historical snapshot.
+- [ ] Keep TESTNET acceptance NOT ACCEPTED until account-wide reconciliation and recovery acceptance are independently proven.
+
+**Interpretation:** The prior DOGE runtime-vs-history discrepancy is explained by chronology: runtime/CLOSING were observed before later exchange fills. This does not prove the stopped process accounted for those fills. ZRO 727905 is confirmed filled after CLOSING. Do not retroactively rewrite the historical CLOSING snapshot or claim post-shutdown processing.
