@@ -1264,7 +1264,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         pricePrecision: 2,
         quantityPrecision: 3,
         makerPercent: 0,
-        takerPercent: 0.075,
+        takerPercent: 0,
         },
       },
     },
