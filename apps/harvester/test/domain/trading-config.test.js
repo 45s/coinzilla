@@ -57,6 +57,17 @@ test('rejects legacy flat settings/pairs and missing strategy-owned objects', ()
   assert.throws(() => validateTradingConfig(noPairs), /CG_coinGrabber.*pairs.*expected an object/);
 });
 
+test('rejects priceStepPercent values that make the calculated BUY price invalid', () => {
+  for (const priceStepPercent of [100, 100.01, 150]) {
+    const config = structuredClone(validConfig);
+    strategy(config).pairs.DOGEUSDT.priceStepPercent = priceStepPercent;
+    assert.throws(() => validateTradingConfig(config), /priceStepPercent.*less than 100/);
+  }
+  const boundary = structuredClone(validConfig);
+  strategy(boundary).pairs.DOGEUSDT.priceStepPercent = 99.999;
+  assert.equal(validateTradingConfig(boundary), boundary);
+});
+
 test('rejects empty pairs', () => {
   const config = structuredClone(validConfig); strategy(config).pairs = {};
   assert.throws(() => validateTradingConfig(config), /CG_coinGrabber.*pairs.*at least one pair/);
