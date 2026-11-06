@@ -293,6 +293,44 @@ test("classifies residual quantity below the exchange quantity step instead of s
   })
 })
 
+test("combines exchange-constrained dust with a later BUY and preserves the full recovery basis", () => {
+  const dustState = makeProfitableResidualState({ soldQuantity: "98.95" })
+  const laterBuy = new Fill({
+    tradeId: "later-buy-after-dust",
+    brokerOrderId: "later-buy-order",
+    market,
+    side: "BUY",
+    price: new Money({ amount: "0.1", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "100", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const portfolio = dustState.portfolio.applyFill({ fill: laterBuy }).portfolio
+  const recoveryLedger = dustState.recoveryLedger.applyFill({ fill: laterBuy }).ledger
+  const position = portfolio.getPosition({ symbol: market.symbol })
+
+  assert.equal(position.quantity.amount, "101.05")
+  assert.equal(position.spent.amount, "20")
+  assert.equal(recoveryLedger.buyCost, "20")
+  assert.equal(recoveryLedger.netSellProceeds, "10.8845")
+
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.ok(sell)
+  assert.equal(sell.quantity, "99")
+  assert.equal(sell.reason, "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT")
+  assert.equal(decision.inventoryDisposition, undefined)
+})
+
 test("classifies residual quantity below MIN_NOTIONAL instead of submitting an invalid SELL", () => {
   const { portfolio, recoveryLedger } = makeProfitableResidualState()
   const decision = evaluateConservativeStrategy({
