@@ -83,3 +83,10 @@ The original Journal (issue #645 comment 6680290142) contains these account snap
 PREFLIGHT open orders were captured as count 0, readiness READY. CLOSING was INCOMPLETE with UNRESOLVED_OWNED_ORDERS:2.
 
 These records were already available and are part of the evidence base. The remaining gaps are narrower: no complete ~07:58Z CLOSING open-orders payload has been located to identify both orders, and no later post-fill balance/open-orders snapshot or subsequent Harvester Journal/runtime session has been located to prove post-CLOSING wallet state and Portfolio/RecoveryLedger application. The supplied latest one-order snapshot is not interchangeable with either missing artifact.
+
+
+## Operator downtime clarification — supersedes post-shutdown “missing runtime processing” concern (2026-11-06)
+
+The owner operates Harvester on a personal PC and may stop it while exchange orders remain open. Binance orders persist independently of the local process and may fill during downtime. The DOGE 1276698 fills at 08:03Z and ZRO 727905 fill at 08:38Z occurred after the ~07:58Z CLOSING snapshot and process stop; this is normal and expected, not a same-time state conflict. No Portfolio/RecoveryLedger update is expected from a process that is not running.
+
+Do not classify the lack of same-session post-shutdown Journal updates as a defect or ask the owner to keep Harvester running 24/7. The relevant behavior to audit is the next-startup recovery: fetch open orders and fills since the durable checkpoint, reconcile commissions and balances, apply executions exactly once, rebuild reservations/positions, and keep trading fail-closed until reconciliation succeeds. This restart behavior remains to be verified independently; the historical logs alone neither prove nor disprove it.
