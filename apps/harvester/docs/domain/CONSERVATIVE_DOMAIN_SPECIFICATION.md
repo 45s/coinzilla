@@ -135,7 +135,7 @@ The same commission and order-type policy applies to Conservative and Aggressive
 
 - If the pair's configured `makerPercent` is zero, submit `LIMIT_MAKER` (POST-ONLY). The exchange either executes it as a maker or rejects it; do not turn it into a taker order.
 - If `makerPercent` is non-zero, submit a regular `LIMIT` order.
-- Use configured `makerPercent` as the commission estimate for planning in both cases. For the recovery SELL formula, `f = makerPercent / 100` (for example, `0.1` means `0.001`); zero `makerPercent` means a zero reserve. Do not use `takerPercent`, the observed liquidity role, or a maximum observed commission rate to change that planning estimate.
+- Use the greater of configured `makerPercent` and `takerPercent` as the conservative SELL planning reserve: `f = max(makerPercent, takerPercent) / 100`. The order type is still selected from `makerPercent` as described above; fee reserve and order type are separate decisions. Do not infer the actual commission from this reserve.
 - The broker-reported commission amount and asset on each confirmed fill are authoritative for accounting. Never book the planning estimate as an actual expense.
 - Include the actual commissions charged on BUY fills in the accumulated BUY cost that the recovery SELL must recover. Also account for actual SELL-fill commissions when calculating net SELL proceeds.
 - Do not maintain separate MAKER/TAKER commission-rate histories or reset commission-rate history at cycle boundaries; this policy does not use such histories.
@@ -148,7 +148,7 @@ The exchange remains the final POST-ONLY authority because the book can move aft
 
 See the [official Binance Spot API errors reference](https://github.com/binance/binance-spot-api-docs/blob/master/errors.md#messages-for--1010-error_msg_received--2010-new_order_rejected--2011-cancel_rejected-and--2038-order_amend_rejected).
 
-Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and plan with a 0% fee. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and plan with 0.1%. In both cases, account using the actual commission reported for every confirmed fill.
+Example: with `makerPercent = 0` and `takerPercent = 0.1`, use POST-ONLY and reserve 0.1% for SELL planning. With `makerPercent = 0.1` and `takerPercent = 0.2`, use regular LIMIT and reserve 0.2%. In both cases, account using the actual commission reported for every confirmed fill.
 
 ### 4.4 SELL fill accounting
 
@@ -176,8 +176,9 @@ If fill history is missing, duplicated with conflicting facts, or does not recon
 
 On success:
 - Allocate exactly `K` from active to free inventory.
-- Keep any additional active inventory in the active bucket.
-- Reset cycle BUY cost and SELL proceeds to zero.
+- Continue safe residual SELL-through for every sellable active quantity above `keepQuantity`; do not intentionally leave additional active inventory after the recovery cycle.
+- Classify only quantity-step/commission/minimum-notional constrained remainder as exchange dust, and expose the exact amount and reason. Do not silently increase the configured retained reserve.
+- Reset cycle BUY cost and SELL proceeds only after sell-through is complete or the remaining quantity is explicitly proven unsellable dust, while preserving the cost/profit basis needed to guarantee the residual exit is not loss-making.
 - Reset cycle BUY cost and SELL proceeds only after successful recovery completion; no commission-rate history is maintained.
 - Preserve free inventory outside future sellable quantity.
 - Re-enable trailing behavior for the next standing BUY.
@@ -326,10 +327,10 @@ stateDiagram-v2
 | Fill accounting | Base/quote commissions handled; third-asset/incomplete unsupported. | Position and RecoveryLedger handle multiple base/quote commission entries; reject third asset/incomplete. | Stronger multi-entry representation in Harvester; confirm canonical Fill invariants. |
 | Fill identity | Stable trade + order IDs and immutable fill ledger; identical replay ignored, conflict fails. | Canonical Fill ID/fingerprint; Portfolio and RecoveryLedger dedupe independently; `updateTradingAccounting` commits both immutable projections as one result. | Aligned; fingerprint and cross-projection atomicity tests cover the contract. |
 | Recovery SELL | Fee-reserved quantity, retained keep quantity, required net proceeds, quantity down / price up. | Same formula; actual base/quote commission accounting is verified at quantity-step and price-tick boundaries. | Aligned; post-fill inventory and minProfit boundaries are covered with exact decimals. |
-| Minimum profit | Positive at planning/runtime; completed actual proceeds must cover cost + minProfit. Config validator currently allows zero. | Sell planner/completion require strictly positive minProfit. | Validation inconsistency in Conservative strategy; verify the intended validation boundary. |
-| Completion keep quantity | Conservative strategy accepts configured keepQuantity >= 0; completion requires actual inventory >= keep. | Harvester completion requires keepQuantity > 0. | Different boundary. |
+| Minimum profit | `minProfit >= 0.01` net after actual applicable commissions; loss and break-even exits are forbidden. | Config validation, recovery planner, and completion enforce the 0.01 floor; tests reject zero and 0.009 and accept 0.01. | Aligned and implemented. |
+| Completion keep quantity | Preserve the configured pair-level `keepQuantity`; do not introduce a duplicate `coinToKeep` field. Completion must leave exactly this amount free after sell-through. | Current completion allocates exactly `keepQuantity` but leaves extra active inventory. | Partial; final exact-inventory behavior depends on residual sell-through. |
 | Cycle reset | Resets cycle cost and proceeds; fill identities remain available for deduplication. | `RecoveryLedger.resetCycle()` clears cycle totals and preserves fill identities; no commission-rate history is retained. | Aligned. |
-| Residual active inventory after allocation | Allocates exactly keep; any extra active inventory remains active. No immediate second recovery SELL is created by `#handleSellFilled`. | Completion helper allocates keep only; next strategy evaluation may propose a SELL for remaining active quantity even with a reset ledger. | Potential behavioral difference; needs explicit decision. |
+| Residual active inventory after allocation | Sell all exchange-sellable active inventory except exactly configured `keepQuantity`; preserve the minimum net-profit guarantee across residual fills. | Completion allocates only `keepQuantity`, leaves extra active inventory, and resets the ledger; strategy then suppresses SELL because outstanding recovery is zero. | Confirmed implementation defect; safe residual sell-through and dust handling are not implemented. |
 | SELL submission failure | Pair pauses; next standing BUY is not placed. | Application waits for SELL acknowledgement and pauses before BUY on failed/unknown submission. | Implemented at the engine boundary and covered by regression tests. |
 | FILLED status vs aggregate fills | Requires exact fill sum before completion; mismatch pauses. | Domain completion accepts boolean `sellOrderFullyFilled`; caller must provide trustworthy reconciled fact. | Requires clear adapter/application precondition. |
 
