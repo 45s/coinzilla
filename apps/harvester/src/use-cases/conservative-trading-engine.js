@@ -645,7 +645,7 @@ export function makeConservativeTradingEngine({
           seenFillIds.add(fill.id)
         }
       }
-      if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
+      if (compareDecimal({ left: reconciledQuantity, right: canceledOrder.executedQuantity.amount }) !== 0) {
         await pause({ symbol, reason: "RECOVERY_SELL_EXECUTED_QUANTITY_MISMATCH" })
         return toResult({ error: new Error("Canceled SELL cumulative execution does not match reconciled fills") })
       }
@@ -739,7 +739,7 @@ export function makeConservativeTradingEngine({
         seenFillIds.add(fill.id)
       }
     }
-    if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
+    if (compareDecimal({ left: reconciledQuantity, right: canceledOrder.executedQuantity.amount }) !== 0) {
       await pause({ symbol, reason: "TRAILING_BUY_EXECUTED_QUANTITY_MISMATCH" })
       return toResult({ error: new Error("Canceled BUY cumulative execution does not match reconciled fills") })
     }
@@ -1262,7 +1262,8 @@ export function makeConservativeTradingEngine({
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
-      if (["CANCELED", "EXPIRED"].includes(order.status) && order.executedQuantity.amount !== "0") {
+      if (["CANCELED", "EXPIRED"].includes(order.status) &&
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return toResult({ error: new Error("Partially filled order canceled; pair paused for review") })
       }
