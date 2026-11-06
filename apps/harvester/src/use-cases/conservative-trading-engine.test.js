@@ -1709,6 +1709,49 @@ test("ignores an out-of-order OPEN update after the BUY has already filled", asy
   assert.deepEqual(pauses, [])
 })
 
+test("reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    accountingApplied: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const originalSell = harness.engine.getOrders().find((order) => order.side === "SELL")
+  assert.ok(buyOrder)
+  assert.ok(originalSell)
+
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({ order: buyOrder, executedQuantity: "0.2", updatedAt: 2 }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "partial-buy-recalculates-recovery-sell",
+        price: "99.95",
+        quantity: "0.2",
+        quoteQuantity: "19.99",
+      }),
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.waitingForFullFill, true)
+  assert.equal(result.data.recoverySellReplaced, true)
+  assert.deepEqual(harness.cancellationIds, [originalSell.brokerOrderId])
+  const sells = harness.engine.getOrders().filter((order) => order.side === "SELL")
+  assert.equal(sells.length, 2)
+  assert.equal(sells[0].status, "CANCELED")
+  assert.equal(sells[1].status, "OPEN")
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").status, "PARTIALLY_FILLED")
+  assert.deepEqual(harness.pauses, [])
+})
+
 test("reconciles streamed BUY partial fills cumulatively before advancing the strategy", async () => {
   const { engine, accountedFills, pauses } = await createHarness({ accountingApplied: true })
   await engine.processMarketPrice({
