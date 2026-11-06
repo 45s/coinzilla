@@ -213,9 +213,9 @@ The detailed joint-session procedure, explicit limits, reconciliation requiremen
 5. Start the app with
    `pnpm --filter @coinzilla/harvester dev`.
 6. Confirm the broker connects, user-data readiness becomes READY, and the
-   enabled pair receives prices. The first Conservative BUY is submitted below
-   the current last trade by `priceStepPercent`, rounded down to the exchange
-   tick.
+   enabled pair receives prices. Verify any Conservative order intent against
+   [the canonical specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
+   and current exchange filters before authorizing submission.
 7. When the BUY fills, Harvester accounts the actual fill and follows the
    canonical Conservative lifecycle. A new BUY fill while a recovery SELL is
    open triggers decision B: cancel, reconcile terminal state and all fills/

@@ -130,7 +130,7 @@ For a spot fill, before commissions:
 | BUY | increase by executed base quantity | decrease by executed quote quantity |
 | SELL | decrease by executed base quantity | increase by executed quote quantity |
 
-Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) is currently unsupported and the fill must be rejected as unsupported. Do not ignore the debit or invent a conversion rate. Supporting third-asset commissions requires a future explicit accounting and valuation decision.
+Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) requires a reliable quote-currency valuation. If the asset, amount, or valuation is unavailable or unreliable, fail closed atomically; never ignore the debit or invent a conversion rate. The Conservative-specific rule is defined in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 Only the executed part is applied. A partially filled order updates the portfolio by that partial execution; a later fill applies only its own newly executed quantities. Never apply the original requested order quantity as if it had all executed.
 

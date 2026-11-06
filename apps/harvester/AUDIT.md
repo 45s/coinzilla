@@ -279,19 +279,11 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 6. ZRO final recovery SELL and standing BUY: decision 07:04:46.922Z creates SELL 39.91 at 1.606, suffix -22 / order 727904, and BUY 5 at 1.596, suffix -23 / order 727905. SELL trade 11666 executes 07:08:46.965Z; recovery completion is journaled 07:08:47.127Z. Paired BUY remains NEW with 7.98 USDT locked at close.
 7. Shutdown: CLOSING snapshot 07:58:11.370Z is INCOMPLETE with two unresolved owned orders; process stop is 07:58:16.387Z. Successful process exit does not mean reconciliation passed.
 
-### Recovery SELL calculation and completion contract
+### Recovery SELL calculation and completion contract — superseded historical source notes
 
-Inspected source behavior, not runtime proof:
-1. Apply BUY fills by canonical exchange trade identity; actual commission affects inventory and cash.
-2. Conservative policy considers active inventory, active SELL state, and outstanding recovery amount.
-3. Positive residual inventory alone is insufficient to create another recovery SELL; outstanding recovery must also be positive and no active SELL may exist.
-4. Planner reserves base for configured fee, divides sellable quantity by 1 + feeRate, rounds quantity down to exchange step, and rounds price up to tick. Current code uses max(makerPercent, takerPercent), while multiple domain docs say maker-only. This conflict is tracked in #646; no product decision is implied.
-5. Apply actual broker commission asset/amount per SELL fill; planned reserve is not a substitute.
-6. Completion requires a fully filled SELL, sufficient active inventory, and actual net proceeds meeting cost plus minProfit.
-7. Bootstrap completion allocates configured keepQuantity to Portfolio and resets RecoveryLedger only after eligibility succeeds.
-8. Residual active inventory after reset does not itself trigger a new recovery SELL. Existing engine test covers this; it was inspected, not run here.
+All current Conservative recovery economics, commission handling, sell-through, dust, order lifecycle, and completion rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The source-rule summary in this historical evidence report is superseded and must not be used as an active contract.
 
-ZRO arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; completion records 0.01 free and 0.04 active residual. Net quote result +0.01136454 USDT. DOGE evidence does not establish SELL completion or realized PnL.
+The ZRO arithmetic below is an immutable historical observation only: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; the Journal recorded 0.01 free and 0.04 active residual, with +0.01136454 USDT. It does not define current completion or dust behavior.
 
 ### Shutdown and unresolved-order decision
 
@@ -310,7 +302,7 @@ ZRO arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; 
 | Second unresolved order | Identity and reserved asset. | Full CLOSING openOrders payload and reconciliation diagnostics. | Name both orders and reconcile remaining quantity/reservations. |
 | Cancel/replace races | Whether replacement waited for confirmed cancellation/canonical reconciliation. | DEBUG/TRACE timeline and deterministic cancel/fill race replay. | No over-reservation or unsafe overlapping live SELLs. |
 | Duplicate fills | Exact-once across reconnect/restart permutations. | Offline duplicate, reorder, reconnect, REST/stream overlap, restart tests. | Canonical trade changes state once; conflicting payload fails closed. |
-| Fee/config contract | Maker-only or max maker/taker; are zero minProfit/keepQuantity valid? | Explicit #646 decision, aligned docs, validator, tests. | One contract across config, planner, completion, docs, tests. |
+| Conservative contract | Current strategy rules and owner decisions | Sole authority: canonical Conservative Domain Specification; decisions closed | All other docs/issues/PRs reference it; implementation and exact-head tests conform. |
 | Completion | Exactly-once allocation/reset across partial-fill/replacement lifecycle. | #648 full-cycle offline regression. | Duplicate terminal update cannot allocate/reset/issue next BUY twice. |
 | #626 recovery | Do #627/#629 satisfy original criteria? | Re-read #626 criteria; map to tests and exact CI. | Keep #626 open until each criterion has disposition. |
 | Log provenance | Full 4,880-line and 5,739-line correlation. | Original files read-only; verify SHA-256 before parsing. | Checksum mismatch means stop and record provenance issue. |

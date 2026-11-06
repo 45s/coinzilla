@@ -762,14 +762,9 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 - [ ] Verify the complete SELL-completion transition on bounded Binance Spot TESTNET. Offline tests do not prove exchange behavior.
 
 
-### Commission and order-type policy clarification — 2026-11-03
+### Historical commission and order-type policy decision — 2026-11-03 (superseded)
 
-- [x] Confirm the same rule for Conservative and Aggressive: zero `makerPercent` means POST-ONLY `LIMIT_MAKER`; non-zero `makerPercent` means regular `LIMIT`.
-- [x] Confirm planning always uses `makerPercent`, regardless of `takerPercent` or the liquidity role reported by the exchange.
-- [x] Confirm accounting uses the actual commission amount/asset reported on each confirmed fill, including BUY commissions in the recovery SELL cost and SELL commissions in net proceeds.
-- [x] Remove combined observed commission-rate state and use configured `makerPercent` directly for Conservative recovery SELL planning. No MAKER/TAKER histories or maximum-observed-rate tracking. Merged in PR #489.
-- [x] Add focused offline tests for zero/non-zero `makerPercent`, independence from `takerPercent`, shared order-type selection, actual BUY-fee inclusion in recovery SELL planning, and cycle-reset deduplication. Existing actual SELL-fee accounting tests remain in place; Aggressive order planning is deferred while the strategy returns `NO_ACTION`.
-- [x] Verify deterministic CI and update implementation status. PR #489 passed required checks; no TESTNET verification is implied by this documentation decision.
+The old makerPercent-only planning policy and its tests are preserved in PR #489 history only. The owner-approved current order-type selection and fee-reserve policy is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not use the historical bullets below as current policy.
 
 ### POST-ONLY book-ticker subscription lifecycle regression — 2026-11-04
 
@@ -830,8 +825,8 @@ This entry incorporates the later operator-provided Harvester journal, TESTNET o
 
 - [x] Add an acknowledgement reconciliation barrier: a terminal FILLED acknowledgement now fetches its complete execution history, validates order identity and cumulative quantity, and applies ordered incremental fills before the current serialized transition can finish.
 - [x] Fail closed and pause the pair when the acknowledgement execution history is unavailable, incomplete, or inconsistent.
-- [x] Require positive outstanding recovery in the Conservative policy before creating a recovery SELL; positive residual active inventory alone is not a recovery obligation after ledger reset.
-- [x] Add deterministic regression coverage for delayed immediate-FILLED acknowledgement reconciliation with multiple executions, incomplete acknowledgement history, and residual active inventory after recovery reset.
+- [x] Historical PR #513 code introduced an outstanding-recovery gate. That residual-suppression behavior is superseded by the canonical sell-through contract; current behavior must sell all sellable inventory above exact keepQuantity and classify dust.
+- [x] Historical regression covered immediate-FILLED reconciliation and residual suppression. Current acceptance requires new sell-through/dust regressions from the canonical specification.
 - [ ] Execute the Harvester test suite and coverage locally or in CI; inspect and fix any failures.
 - [ ] Verify required workspace checks and CI are green.
 - [ ] Review duplicate/out-of-order stream overlap, cancellation/fill races, and complete recovery lifecycle regressions against the new barrier.
@@ -853,11 +848,11 @@ The twelve BUYs used distinct client IDs, so this is not the client-ID collision
 
 **Remediation status:** implemented in PR #513 with the reconciliation barrier and fail-closed pair pause described above. Do not weaken duplicate suppression or rely on unique client IDs to solve repeated independent submissions. Review duplicate/out-of-order stream overlap and cancellation/fill races before accepting the lifecycle.
 
-### Incident B — invalid recovery SELL after cycle completion
+### Historical Incident B — residual-suppression defect (superseded by canonical sell-through)
 
-After the SELL completion event, the RecoveryLedger reset and exactly one DOGE was allocated to free inventory. The subsequent strategy evaluation attempted another tiny recovery SELL for approximately three residual DOGE at 0.00334 USDT (0.01002 USDT notional), which correctly failed MIN_NOTIONAL. The defect was the policy eligibility rule: residual active quantity alone was being treated as enough to plan a recovery SELL, even though the completed cycle had reset the outstanding recovery obligation to zero. The policy now requires positive outstandingRecoveryAmount before planning a recovery SELL. The engine also pauses the pair on strategy-order validation failure, preventing the same invalid decision from being reevaluated on every market event. MIN_NOTIONAL validation is unchanged.
+The historical incident occurred after a SELL completion event: the RecoveryLedger reset, a keep amount was allocated, and a later strategy evaluation attempted a tiny SELL for residual inventory that failed MIN_NOTIONAL. The old remediation treated positive outstandingRecoveryAmount as a prerequisite for any further recovery SELL and suppressed additional SELLs after ledger reset.
 
-**Remediation status:** source fix and deterministic regressions are committed in PR #513. The policy requires positive outstanding recovery, preserves exactly keepQuantity as free inventory, leaves additional residual active, and allows the next legitimate BUY. The engine-level regression applies the SELL to Portfolio and RecoveryLedger, resets the ledger, then proves no second recovery SELL is generated from residual active inventory. A separate test proves a MIN_NOTIONAL validation failure pauses the pair and is not reevaluated repeatedly. Exchange MIN_NOTIONAL validation remains unchanged; verify these tests on the exact current CI head.
+**This old remediation is superseded.** The owner-approved current contract requires selling all exchange-sellable inventory above exact keepQuantity, preserving full accumulated cost basis, and explicitly classifying exchange-constrained dust. Do not use the historical residual-suppression rule or its regression as current acceptance criteria. See [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### Account reconciliation — still incomplete
 
@@ -884,7 +879,7 @@ To close reconciliation, run the newly added read-only command `pnpm --filter @c
 - [ ] Deterministic regression tests, Harvester tests, workspace checks, and required CI pass on PR #513.
 - [x] Live trading remains disabled.
 
-**Current milestone status:** PR #513 is merged and its two source defects are resolved: the twelve-BUY burst was caused by FILLED acknowledgements releasing the serialized transition before execution fills updated strategy state; residual active inventory alone could trigger another recovery SELL after ledger reset. The +0.20730 USDT difference is a cycle/session scope mismatch: five cycle profits sum to +0.57065 USDT. Follow-up lifecycle, accounting, fee-policy, and account-audit verification is in PR #515. The first safe, repeatable Conservative TESTNET cycle is still **not accepted**. Keep Harvester stopped; merge status and offline CI do not authorize a TESTNET restart.
+**Historical milestone status at the PR #513 checkpoint:** the twelve-BUY acknowledgement/fill race was addressed and the +0.20730 USDT difference was identified as a cycle/session scope mismatch. The old residual-suppression policy was later superseded by the owner-approved sell-through contract. This checkpoint does not establish current implementation acceptance. Current blockers and CI are tracked in the final Conservative audit section below.
 
 
 ### Follow-up source review — conflicting duplicate execution records
@@ -1280,14 +1275,16 @@ The specification/config-boundary drift in fee-reserve policy, residual-inventor
 
 Owner decisions are closed and recorded in the canonical specification. This historical checklist is superseded: do not reopen maker/taker fee policy, the $0.01 minimum profit, exact keepQuantity, full accumulated cost recovery, residual sell-through, partial SELL behavior, or decision B. The active gate is to remove contradictory rule definitions, make every other artifact reference the canonical specification, and pass the repository-wide documentation audit before implementation.
 
-### Gate 4 — regression coverage (#648)
+### Gate 4 — canonical Conservative regression coverage (#648)
 
-- [ ] Offline complete cycle: partial BUY fills, actual commissions, partial SELL fills, cancel/replace, next standing BUY.
-- [ ] Exercise cancel/fill race permutations and assert reservations are never double-counted or released early.
-- [ ] Assert exactly one completion, keep/free allocation, RecoveryLedger reset, and next-cycle transition.
-- [ ] Replay terminal events and canonical fills; assert no duplicate inventory/cash, allocation, reset, or order intent.
-- [ ] Assert minimum-profit gate uses actual net proceeds/commissions and failed eligibility does not reset/allocate.
-- [ ] Assert residual active inventory alone does not trigger another recovery SELL.
+- [ ] Prove full accumulated spent recovery plus at least 0.01 net; no proportional cost reduction for keepQuantity.
+- [ ] Prove exact keepQuantity and sell-through of every exchange-sellable residual; classify dust and preserve its basis.
+- [ ] Prove actual base/quote commissions and reliable third-asset quote valuation; otherwise fail closed.
+- [ ] Prove a partial SELL without a new BUY remains the same exchange order at the same price.
+- [ ] Prove decision B: new BUY during OPEN/PARTIALLY_FILLED SELL cancels, reconciles terminal state and every fill/commission, updates accounting, then replaces.
+- [ ] Cover fill-during-cancel including terminal FILLED, CANCELED, EXPIRED, REJECTED, UNKNOWN, incomplete history, and duplicate/conflicting fill identities.
+- [ ] Prove exact-once completion/reset only at exact keepQuantity and realized net profit >= 0.01.
+- [ ] Prove keepQuantity=0 through the complete end-to-end workflow.
 - [ ] Run focused tests, Harvester suite, workspace coverage, syntax, and exact-head CI; record commit and outcomes.
 
 ### Gate 5 — user-data recovery (#626)
@@ -1390,15 +1387,9 @@ The exchange-side DOGE SELL order 1276698 did fill, but only after the Harvester
 This supersedes the earlier same-time DOGE conflict interpretation. It does not close the account settlement gap: post-shutdown Harvester Portfolio/RecoveryLedger application and post-fill balances/open orders remain UNVERIFIED. The complete historical CLOSING open-orders payload identifying both unresolved orders remains outstanding. Preserve the original CLOSING snapshot unchanged and keep TESTNET acceptance NOT ACCEPTED.
 
 
-## Conservative owner decisions recorded — 2026-11-06
+## Conservative owner decisions — canonical reference only
 
-The strategy owner confirmed the following policies for #646:
-
-- `minProfit` must be at least **$0.01 net after all applicable fees/commissions**. Never close a position at a loss or break-even. Zero and values below $0.01 are not acceptable.
-- Sell the entire Conservative position except exactly the amount configured in the existing pair-level `keepQuantity` field. No additional residual inventory should be retained. `coinToKeep` is not a Harvester config key; do not add a duplicate setting or rename `keepQuantity`.
-
-These decisions close the owner-input questions in #646. Remaining work is engineering/documentation alignment and tests. No runtime settings or exchange state were changed.
-
+All owner-approved decisions are recorded in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This roadmap does not duplicate them. No Conservative product decisions remain open; the active work is documentation consistency, implementation, regression evidence, and exact-head CI.
 
 ## Conservative Strategy audit — current implementation gate (2026-11-06)
 

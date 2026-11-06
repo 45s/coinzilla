@@ -146,22 +146,23 @@ Closure: both orders and reservations identified and reconciled, else remain INC
 
 ### F-006 — fee/config contract (#646; historical, superseded)
 
-Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).### F-007 — full-cycle exact-once regression (#648)
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+
+### F-007 — full-cycle exact-once and lifecycle regression (#648)
 
 1. Use deterministic offline engine + fake broker port; no network or credentials.
-2. Submit initial BUY and apply multiple partial BUY fills with actual base/quote fees.
-3. Assert inventory/cost and next standing BUY decision from execution data.
-4. Create recovery SELL, partially fill, then cancel/replace. Exercise cancel-before-fill and fill-races-cancel orderings.
-5. Apply replacement partial and terminal fills; assert actual commission asset/amount, net proceeds, min-profit gate, remaining inventory.
-6. Trigger completion; assert one completion event, one keep/free allocation, one RecoveryLedger reset, one next-cycle eligibility transition.
-7. Replay terminal SELL and canonical fills; assert no second allocation/reset, no duplicate BUY, and no accounting delta.
-8. Assert residual active inventory alone does not create another recovery SELL.
-9. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
-10. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
+2. Apply multiple partial BUY fills with actual commission facts; verify quantity, full accumulated spent, and exact-once accounting.
+3. Prove a partial SELL without a new BUY keeps the same exchange order and same price.
+4. When a new BUY fills during an OPEN/PARTIALLY_FILLED recovery SELL, cancel it, reconcile terminal state and all fills/commissions, update accounting, then plan the replacement.
+5. Cover fill-during-cancel including terminal FILLED, cancellation, expiry, rejection, unknown state, incomplete history, and conflicting duplicate fills.
+6. Verify full accumulated cost recovery without proportional reduction, at least 0.01 realized net profit, exact keepQuantity, residual sell-through, and explicit dust with basis preserved.
+7. Verify exact-once completion/reset only when position quantity equals keepQuantity; keepQuantity=0 requires the full end-to-end workflow.
+8. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
+9. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
 
-Closure: one test proves partial execution, replacement, terminal replay, exact-once completion, and next-cycle boundary without changing strategy behavior.
+Closure: focused regressions prove the canonical lifecycle and accounting contract; tests do not define a competing strategy rule.
 
-### F-008 — user-data recovery (#626)
+### F-008 — user-data recovery (#626)### F-008 — user-data recovery (#626)
 
 1. Re-read original #626 acceptance criteria; do not infer closure from merged #627.
 2. Map each criterion to source, deterministic regression, failure mode, and exact CI head.
@@ -229,22 +230,23 @@ Closure: both orders and reservations identified and reconciled, else remain INC
 
 ### F-006 — fee/config contract (#646; historical, superseded)
 
-Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).### F-007 — full-cycle exact-once regression (#648)
+Owner decisions are closed and recorded in the canonical Conservative specification. This old decision checklist is retained only as history. Current rules and acceptance requirements are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+
+### F-007 — full-cycle exact-once and lifecycle regression (#648)
 
 1. Use deterministic offline engine + fake broker port; no network or credentials.
-2. Submit initial BUY and apply multiple partial BUY fills with actual base/quote fees.
-3. Assert inventory/cost and next standing BUY decision from execution data.
-4. Create recovery SELL, partially fill, then cancel/replace. Exercise cancel-before-fill and fill-races-cancel orderings.
-5. Apply replacement partial and terminal fills; assert actual commission asset/amount, net proceeds, min-profit gate, remaining inventory.
-6. Trigger completion; assert one completion event, one keep/free allocation, one RecoveryLedger reset, one next-cycle eligibility transition.
-7. Replay terminal SELL and canonical fills; assert no second allocation/reset, no duplicate BUY, and no accounting delta.
-8. Assert residual active inventory alone does not create another recovery SELL.
-9. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
-10. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
+2. Apply multiple partial BUY fills with actual commission facts; verify quantity, full accumulated spent, and exact-once accounting.
+3. Prove a partial SELL without a new BUY keeps the same exchange order and same price.
+4. When a new BUY fills during an OPEN/PARTIALLY_FILLED recovery SELL, cancel it, reconcile terminal state and all fills/commissions, update accounting, then plan the replacement.
+5. Cover fill-during-cancel including terminal FILLED, cancellation, expiry, rejection, unknown state, incomplete history, and conflicting duplicate fills.
+6. Verify full accumulated cost recovery without proportional reduction, at least 0.01 realized net profit, exact keepQuantity, residual sell-through, and explicit dust with basis preserved.
+7. Verify exact-once completion/reset only when position quantity equals keepQuantity; keepQuantity=0 requires the full end-to-end workflow.
+8. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
+9. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
 
-Closure: one test proves partial execution, replacement, terminal replay, exact-once completion, and next-cycle boundary without changing strategy behavior.
+Closure: focused regressions prove the canonical lifecycle and accounting contract; tests do not define a competing strategy rule.
 
-### F-008 — user-data recovery (#626)
+### F-008 — user-data recovery (#626)### F-008 — user-data recovery (#626)
 
 1. Re-read original #626 acceptance criteria; do not infer closure from merged #627.
 2. Map each criterion to source, deterministic regression, failure mode, and exact CI head.
@@ -290,7 +292,7 @@ Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied e
 
 **Current evidence gaps remain unchanged:** later DOGE 1276698 and ZRO 727905 exchange fills are verified by bounded 50-row exports, but later Harvester processing and current balances are UNVERIFIED. The full historical CLOSING open-order payload is still absent, so the complete two-order identity set is not proven. No all-time trade-history claim is made. The original CLOSING snapshot is not rewritten.
 
-**Cross-workstream state:** #649 is closed/merged with exact-once regression coverage; #646 is open pending explicit product decisions (maker-only versus max maker/taker reserve and zero-value input semantics); #626 is open pending original empty-TypeError cause disposition and controlled TESTNET/owner acceptance. TESTNET acceptance remains NOT ACCEPTED.
+**Cross-workstream state (superseding update):** #646 owner decisions are CLOSED; the canonical specification is the sole rule source. #626 remains a separate user-data recovery workstream. PR #653 is open and unmerged on the current audit branch; at the starting head Unit Tests and Test Coverage failed while Syntax, Utils Unit Tests, and Dependency Audit passed. The documentation commits have not yet been reverified by CI. TESTNET acceptance remains NOT ACCEPTED.
 
 
 ## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
