@@ -320,3 +320,31 @@ The later fills do not rewrite the earlier CLOSING balances/open-order state and
 Harvester runs on the operator's personal PC; continuous uptime is not an operational requirement. The process was stopped around 07:58:16Z while Binance-owned orders remained open. Binance continued managing those orders and later executed DOGE SELL 1276698 at 08:03:01.841Z / 08:03:18.202Z and ZRO BUY 727905 at 08:38:24.782Z. This is expected exchange behavior during local application downtime.
 
 The timeline must therefore be read as: (1) Harvester observed open/unfilled orders at shutdown; (2) the process was offline; (3) Binance subsequently filled those resting orders. There is no expectation that the stopped process update its in-memory Portfolio/RecoveryLedger, and no evidence of same-session post-fill processing is required. The next required checkpoint is the next startup: reconcile these exchange-side fills and current account/open-order state before allowing new trading. The restart path must be idempotent and fail-closed.
+
+ 
+## Expected-versus-actual recovery reconciliation — 2026-11-06
+
+The decision-time config committed at audit baseline `4af3434f788b87139513921f220294ae90daf4d5` sets `minProfit=0.01), DOGE `keepQuantity=1), ZRO `keepQuantity=0.01), and 0.1% maker/taker rates. Both actual recovery orders are ordinary LIMIT. With the canonical 0.1% reserve and exchange quantity steps DOGE=1 / ZRO=0.01, the SELL plans reproduce the exact submitted quantities and prices:
+
+| Symbol | Net BUY position | Full spent | Keep | Expected SELL | Actual SELL | Verdict |
+|---|---:|---:|---:|---:|---:|---|
+| DOGEUSDT | 1,198.8 DOGE | 85.836 USDT | 1 DOGE | 1,196 @ 0.07185 | 1,196 @ 0.07185 | FOLLOWED |
+| ZROUSDT | 39.96 ZRO | 64.02 USDT | 0.01 ZRO | 39.91 @ 1.606 | 39.91 @ 1.606 | FOLLOWED |
+
+### DOGE 1276698
+
+BUY fills 221733/221736/221738: gross 1,200 DOGE; base commission 1.2 DOGE; net quantity 1,198.8; quote spent 85.836 USDT. SELL fills:
+- 221990: 278 DOGE, 19.97430000 USDT gross, 0.01997430 USDT quote commission.
+- 221991: 918 DOGE, 65.95830000 USDT gross, 0.06595830 USDT quote commission.
+
+Total SELL: 1,196 DOGE; gross 85.93260000; actual quote commission 0.08593260; net proceeds 85.84666740; net profit +0.01066740 USDT. Remaining exchange-side quantity 2.8 DOGE = 1 configured keep + 1.8 excess. The two fills occurred after CLOSING and shutdown; they are not in the in-process closing Portfolio/RecoveryLedger and must not be retroactively applied. Historical filter evidence is insufficient to prove the 1.8 excess dust classification; mark it UNVERIFIED pending #654 reconciliation.
+
+### ZRO 727904
+
+Eight BUY fills 11658–11665: gross 40 ZRO; base commission 0.04; net quantity 39.96; quote spent 64.02000000 USDT. SELL trade 11666: 39.91 ZRO; gross quote 64.09546000; actual quote commission 0.06409546; net proceeds 64.03136454; realized net profit +0.01136454 USDT. Remaining quantity 0.05 ZRO.
+
+The historical runtime allocated 0.01 ZRO free and reset the recovery ledger while 0.04 ZRO remained active. Verdict: **VIOLATED**. The 0.04 amount is above keepQuantity and cannot be silently discarded or absorbed into free inventory. Exact historical MIN_NOTIONAL evidence is absent; at 1.606 its value is 0.06424 USDT, so if the applicable minimum was 5 USDT it would be exchange-constrained dust. Either way, canonical completion must not allocate/reset while active quantity exceeds exact keepQuantity. The subsequent 727905 BUY (5 gross, 0.005 base fee, 4.995 net) filled after CLOSING and is a separate later event.
+
+### Confirmed implementation root cause and correction
+
+At baseline `4af3434f788b87139513921f220294ae90daf4d5`, completion rejected only `activeQuantity < keepQuantity` and incorrectly allowed `activeQuantity > keepQuantity`; the strategy also stopped creating SELL intents when outstanding recovery reached zero. Current branch code now defers completion for any residual above keepQuantity and continues residual SELL planning with current-market pricing, filter checks, and explicit dust. Exact DOGE/ZRO actual-fill regressions and an exact ZRO completion-gate regression were added. These new tests are not yet verified by local execution or GitHub Actions.
