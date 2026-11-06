@@ -72,20 +72,22 @@ export function evaluateRecoveryCompletion({
       realizedNetProfit,
     })
   }
+  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0) {
+    return Object.freeze({
+      eligible: false,
+      pause: false,
+      reason: compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0
+        ? "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"
+        : "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      freeQuantity: "0",
+      realizedNetProfit,
+    })
+  }
   if (compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
     return Object.freeze({
       eligible: false,
       pause: true,
       reason: "RECOVERY_SELL_FAILED_MIN_PROFIT",
-      freeQuantity: "0",
-      realizedNetProfit,
-    })
-  }
-  if (compareDecimal({ left: activeQuantity, right: keepQuantity }) > 0) {
-    return Object.freeze({
-      eligible: false,
-      pause: false,
-      reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
       freeQuantity: "0",
       realizedNetProfit,
     })
