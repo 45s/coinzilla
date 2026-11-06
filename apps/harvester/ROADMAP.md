@@ -1561,3 +1561,8 @@ Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac
 ## 2026-11-06 audit continuation — partial BUY policy regression
 
 Source/spec comparison found one stale regression in `src/domain/strategies/conservative/conservative-strategy.test.js`: it expected a PARTIALLY_FILLED BUY to suppress both strategy sides. The canonical contract requires active orders to suppress duplicate intents, but does not suppress a valid recovery SELL; the BUY remains active and no duplicate BUY is created. Current `evaluateConservativeStrategy` already plans the SELL while `hasActiveBuy` prevents another BUY. Updated the test to assert that behavior (commit `b1f28cb4dbe49e1d51cf110db1f1307e3d2644e1`). This is a test/spec alignment change, not a recovery, Journal, or broker implementation change. Exact-head CI/test execution is still pending; no pass is claimed.
+
+
+## 2026-11-06 audit continuation — dust plus subsequent BUY regression
+
+Added a domain regression covering the canonical dust lifecycle: a profitable SELL leaves 0.05 above `keepQuantity` that is below the quantity step; a later BUY is then applied to both Position and RecoveryLedger; the test asserts the old dust remains in active quantity, the original spent basis is preserved and increased by the new BUY cost, prior net SELL proceeds remain included, and the combined inventory produces a valid aggregate recovery SELL. Test-only change: `f8ff57f7170cb0750ee540862e393c1aadad6590`. No recovery, Journal, or broker implementation was changed. Exact-head CI/test execution remains pending.
