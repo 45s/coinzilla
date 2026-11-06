@@ -43,21 +43,21 @@ Until every criterion is evidenced and reviewed, the first milestone remains OPE
 
 ## The mission
 
-**Current runtime decision (2026-11-05): Journal replay and process-restart recovery are disabled.** Every process starts with fresh in-memory trading state. Do not read prior Journal sessions, restore old Portfolio/RecoveryLedger/order state, or require historical trade reconciliation before startup. Keep only the narrowly required durable PREFLIGHT/CLOSING account audit and pre-side-effect order/cancel intent flushes. Existing exchange open orders are still unowned and must not be silently adopted.
+**Current runtime decision (2026-11-05): Journal replay and process-restart recovery are disabled.** Every process starts with fresh in-memory trading state. Do not read prior Journal sessions, restore old Portfolio/RecoveryLedger/order state, or require historical trade reconciliation before startup. The exact retained Journal safeguards are defined in the contract below. Existing exchange open orders are still unowned and must not be silently adopted.
 
 ## Journal contract boundary
 
-Journal is **not wholly optional** during the trading-first phase. The existing, narrowly scoped durability barriers are mandatory trading safeguards and must remain intact:
+Journal is **not wholly optional** during the trading-first phase. The following existing durability barriers are mandatory and retain their current fail-closed behavior:
 
-- Capture and durably flush the required account-wide startup audit (balances and open orders) before market subscriptions or trading-engine activation.
-- Capture and durably flush the required closing account audit after shutdown intake is drained and owned-order reconciliation is attempted.
-- Durably flush `order.submission_requested` before calling the broker placement operation.
-- Durably flush `order.cancel_requested` before calling the broker cancellation operation.
-- If a required record cannot be durably written, preserve the existing fail-closed behavior: do not perform the corresponding exchange side effect and surface the failure.
+- **Startup audit:** trading-enabled startup requires a successfully started Journal with durable `flush()`. Capture the full account-wide snapshot as `account.snapshot_captured / OPENING`, including every asset's exact free, locked, and total quantity, and durably flush it before market subscriptions or trading-engine activation. Read-only mode may continue without Journal.
+- **Closing audit:** after shutdown intake is drained and owned-order reconciliation is attempted, capture and durably flush `CLOSING` while broker REST remains connected. Mark the audit INCOMPLETE if any owned order or accounting state remains unresolved.
+- **Order submission:** durably flush `order.submission_requested` before calling the broker placement operation.
+- **Order cancellation:** durably flush `order.cancel_requested` before calling the broker cancellation operation.
+- **Failure behavior:** if a required record cannot be durably written, do not perform the corresponding exchange side effect and surface the failure.
 
-These are existing requirements, not authorization for a broader Journal project. Until the TESTNET acceptance gate passes, do not add new blocking flushes or make strategy evaluation, market-event processing, fill accounting, or other broker-event handling wait for optional diagnostic evidence. Additional evidence delivery remains best-effort and any persistence gap must be observable rather than reported as successfully persisted.
+These are existing requirements, not authorization for a broader Journal project. Until the TESTNET acceptance gate passes, do not add new blocking flushes or make strategy evaluation, market-event processing, fill accounting, or other broker-event handling wait for optional diagnostic evidence. Additional evidence delivery remains best-effort; any persistence gap must be observable rather than reported as successfully persisted.
 
-The deferred category is broader Journal work: replay/recovery, reconstruction, migrations, schema/consumer expansion, comprehensive raw broker-payload retention, and additional investigation evidence. Preserve the mandatory barriers above while keeping that broader work deferred. Issue [#650](https://github.com/45s/coinzilla/issues/650) must follow this boundary; its optional/best-effort rule applies only to additional evidence, never to the existing required barriers.
+The deferred category is broader Journal work: replay/recovery, reconstruction, migrations, schema/consumer expansion, comprehensive raw broker-payload retention, and additional investigation evidence. Issue [#650](https://github.com/45s/coinzilla/issues/650) follows this boundary: its optional/best-effort rule applies only to additional evidence, never to these required barriers.
 
 
 **FIRST MAKE IT WORK. THEN MAKE IT BETTER.**
@@ -278,7 +278,7 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 
 When a fully reconciled recovery SELL has recovered invested capital and met minimum net profit, only the configured keepQuantity is allocated to free inventory. Additional active residual caused by conservative base-fee reserves or quantity-step rounding remains active inventory. It must not, by itself, create another recovery SELL after the RecoveryLedger is reset.
 
-Trading-enabled startup MUST NOT activate the Conservative engine unless the Journal has successfully started and exposes durable flush(). The full broker account snapshot is journaled as account.snapshot_captured / OPENING, including every asset and its exact free, locked, and total quantity; the event must be flushed before the first market subscription can trigger an order. Graceful shutdown drains accepted user-data events, reconciles owned orders, captures and flushes CLOSING while broker REST remains connected, and marks the audit INCOMPLETE if any owned order or accounting state is unresolved. Read-only mode may continue without Journal.
+The required startup/closing capture sequence and failure behavior are defined in the [Journal contract boundary](#journal-contract-boundary) above.
 
 Account-level balance changes are a cross-check only. They cannot be labeled profit until executions, commission asset/amount, external deposits/withdrawals/transfers, and remaining inventory valuation are reconciled. Do not assign external balances to strategy Portfolio.
 

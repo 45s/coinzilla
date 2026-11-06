@@ -13,8 +13,6 @@ Before any implementation or state-changing action, provide a concise preflight 
 
 Before every Harvester task, follow [the non-negotiable hard stop and bulletproof acceptance gate](./docs/TRADING_FIRST.md#non-negotiable-hard-stop--trading-app-only). Until that gate passes, work ONLY on the trading workflow. Do not start Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactors, optimizations, or unrelated features. A narrow safety fix is allowed only to prevent a specific immediate material risk in the current order flow; prove the direct blocker, make the smallest fix, test it, and return to trading. Roadmap entries and old approvals do not override this gate.
 
-**Journal boundary:** Journal is not wholly optional. Preserve the existing mandatory durable account-audit records and the durable `order.submission_requested` and `order.cancel_requested` flushes before their corresponding broker side effects, including their existing fail-closed behavior. These are the only current Journal durability barriers authorized before the TESTNET gate passes. Do not weaken them or expand Journal schemas, consumers, replay, recovery, or broader evidence collection. Any already-existing non-barrier diagnostic delivery remains best-effort; it must not become a new trading-blocking dependency. [TRADING_FIRST.md](./docs/TRADING_FIRST.md#journal-contract-boundary) defines the exact contract.
-
 ## Product priority
 
 The single source of truth for Harvester's execution order, first TESTNET milestone, and deferred work is [TRADING_FIRST.md](./docs/TRADING_FIRST.md). Read it before planning or editing Harvester tasks.
