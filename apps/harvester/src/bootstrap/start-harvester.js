@@ -300,7 +300,9 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         if (completion.eligible) {
           const previousPortfolio = portfolio
           const previousLedger = recoveryLedger
-          portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
+            portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          }
           const resetLedger = recoveryLedger.resetCycle()
           recoveryLedgers.set(marketId, resetLedger)
           logger.debug?.({
