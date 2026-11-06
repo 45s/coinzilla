@@ -52,7 +52,7 @@ The Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at
 
 ## F-005 — CLOSING audit correctly remains incomplete with unresolved owned orders
 
-**Status:** PASS for the observed fail-closed audit result; PARTIAL for identifying both orders.
+**Status:** PASS for the observed `auditStatus=INCOMPLETE` snapshot; PARTIAL for source/test proof of shutdown fail-closed behavior and identification of both orders.
 
 The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. The ZRO BUY 727905 is independently confirmed NEW and has 7.98 USDT locked. The DOGE 1,196 locked amount and order-history FILLED status conflict; without the raw logs and a CLOSING open-order identity list, do not assert that order 1276698 is definitively the second unresolved order.
 
