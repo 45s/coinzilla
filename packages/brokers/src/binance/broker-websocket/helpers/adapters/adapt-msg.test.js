@@ -72,3 +72,18 @@ test("uses Binance transaction time rather than event publication time for fills
   assert.equal(event.fill.time, transactionTime)
   assert.notEqual(event.fill.time, eventPublicationTime)
 })
+
+test("preserves bounded allowlisted Binance execution-report evidence without copying arbitrary fields", () => {
+  const event = adaptMsg({
+    e: "executionReport", E: 1730000000000, T: 1730000000001, s: "DOGEUSDT",
+    c: "h-DOGEUSDT-8", C: "h-DOGEUSDT-7", S: "SELL", o: "LIMIT", f: "GTC",
+    q: "10", p: "0.15", x: "TRADE", X: "PARTIALLY_FILLED", i: 12345,
+    l: "4", z: "4", L: "0.15", n: "0.0006", N: "USDT", t: 98765,
+    m: true, Z: "0.6", Y: "0.6", apiKey: "secret", signature: "secret",
+  })
+  assert.equal(event.brokerEvidence.schemaVersion, 1)
+  assert.equal(event.brokerEvidence.cumulativeQuoteQuantity, "0.6")
+  assert.equal(event.brokerEvidence.commissionAmount, "0.0006")
+  assert.equal(event.brokerEvidence.tradeId, 98765)
+  assert.equal(JSON.stringify(event.brokerEvidence).includes("secret"), false)
+})

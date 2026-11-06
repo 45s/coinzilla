@@ -17,6 +17,8 @@ import {
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
+  mapBrokerExecutionReportData,
+  mapOrderUpdatedData,
   mapStrategyDecisionData,
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
@@ -997,6 +999,19 @@ export function makeConservativeTradingEngine({
           strategy: decision.strategy,
           symbol,
           referencePrice: marketPrice.price,
+          reason: decision.reason,
+          inputs: {
+            lastBuyPrice: state.lastBuyPrices.get(symbol) ?? null,
+            activeOrderCount: activeOrdersBefore.length,
+            activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
+            activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
+            activeBaseQuantity: position?.baseQuantity.amount ?? "0",
+            freeQuoteBalance: quoteBalance.amount,
+            freeBaseBalance: baseBalance.amount,
+            committedQuote,
+            committedBase,
+            outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
+          },
           actions: executableActions,
         }),
       })
@@ -1181,6 +1196,9 @@ export function makeConservativeTradingEngine({
 
   const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
+      if (event?.eventType === "executionReport" && event?.brokerEvidence) {
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
+      }
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
         if (event?.eventType === "executionReport") throw new TypeError("Execution report requires canonical executedOrder")
@@ -1198,6 +1216,9 @@ export function makeConservativeTradingEngine({
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
       state.registry = update.registry
+      if (update.applied === true) {
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED, dataResult: mapOrderUpdatedData({ order, executionType: event.executionType, evidence: event.brokerEvidence }) })
+      }
 
       if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {

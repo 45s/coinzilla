@@ -8,6 +8,8 @@ import {
   mapBrokerConnectionFailedData,
   mapBrokerDisconnectedData,
   mapBrokerStatusChangedData,
+  mapBrokerExecutionReportData,
+  mapOrderUpdatedData,
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
@@ -52,6 +54,8 @@ test("exports stable names and source for the initial operational lifecycle cont
     BROKER_SUBSCRIPTION_ESTABLISHED: "broker.subscription_established",
     BROKER_SUBSCRIPTION_FAILED: "broker.subscription_failed",
     STRATEGY_DECISION: "strategy.decision",
+    BROKER_EXECUTION_REPORT: "broker.execution_report",
+    ORDER_UPDATED: "order.updated",
     ORDER_SUBMISSION_REQUESTED: "order.submission_requested",
     ORDER_SUBMITTED: "order.submitted",
     ORDER_CANCELLATION_REQUESTED: "order.cancel_requested",
@@ -704,4 +708,42 @@ test("maps complete account-wide open orders and blocks trading while any are un
   assert.equal(mapAccountOpenOrdersCapturedData({
     phase: "OPENING", observedAt: 1, orders: [], readiness: "RECONCILED",
   }).ok, false)
+})
+
+
+test("maps versioned broker execution evidence and rejects untrusted payloads", () => {
+  const result = mapBrokerExecutionReportData({ evidence: {
+    schemaVersion: 1, source: "binance.spot.userData.executionReport",
+    eventTime: 1730000000000, transactionTime: 1730000000001,
+    symbol: "DOGEUSDT", clientOrderId: "h-DOGEUSDT-8", side: "SELL",
+    executionType: "TRADE", orderStatus: "PARTIALLY_FILLED", orderId: 12345,
+    orderQuantity: "10", lastExecutedQuantity: "4", cumulativeExecutedQuantity: "4",
+    commissionAmount: "0.0006", commissionAsset: "USDT", tradeId: 98765,
+    cumulativeQuoteQuantity: "0.6", isMaker: true, apiKey: "not-copied",
+  } })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.cumulativeQuoteQuantity, "0.6")
+  assert.equal(result.data.commissionAmount, "0.0006")
+  assert.equal(result.data.tradeId, "98765")
+  assert.equal("apiKey" in result.data, false)
+  assert.equal(mapBrokerExecutionReportData({ evidence: { schemaVersion: 1, source: "wrong" } }).ok, false)
+  assert.equal(mapBrokerExecutionReportData({ evidence: {
+    schemaVersion: 1, source: "binance.spot.userData.executionReport", orderQuantity: "NaN",
+  } }).ok, false)
+})
+
+test("strategy decision event retains reason and exact decision inputs", () => {
+  const result = mapStrategyDecisionData({
+    strategy: "CONSERVATIVE", symbol: "DOGEUSDT", referencePrice: "100",
+    reason: "INITIAL_BUY",
+    inputs: {
+      lastBuyPrice: null, activeOrderCount: 0, activeBuyCount: 0, activeSellCount: 0,
+      activeBaseQuantity: "0", freeQuoteBalance: "1000", freeBaseBalance: "0",
+      committedQuote: "0", committedBase: "0", outstandingRecoveryAmount: "0",
+    },
+    actions: [{ side: "BUY", type: "LIMIT_MAKER", price: "99.95", quantity: "1" }],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reason, "INITIAL_BUY")
+  assert.equal(result.data.inputs.freeQuoteBalance, "1000")
 })

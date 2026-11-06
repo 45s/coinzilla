@@ -218,6 +218,11 @@ const requireDecimalString = ({ value, field }) => {
   return value
 }
 
+const requireCount = ({ value, field }) => {
+  if (!Number.isSafeInteger(value) || value < 0) throw new TypeError(field + " must be a non-negative safe integer")
+  return value
+}
+
 const requireOrderFacts = ({ order }) => {
   if (!order || typeof order !== "object" || !order.market?.symbol) {
     throw new TypeError("order must contain canonical market facts")
@@ -236,7 +241,7 @@ const requireOrderFacts = ({ order }) => {
 
 /** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
 export const mapStrategyDecisionData = (input = {}) =>
-  mapData(input, "Strategy-decision event mapping", ({ strategy, symbol, referencePrice, actions }) => {
+  mapData(input, "Strategy-decision event mapping", ({ strategy, symbol, referencePrice, reason, inputs, actions }) => {
     if (strategy !== "CONSERVATIVE") throw new TypeError("strategy must be CONSERVATIVE")
     if (!Array.isArray(actions) || actions.length === 0) {
       throw new TypeError("strategy decision must contain at least one actionable order")
@@ -245,6 +250,21 @@ export const mapStrategyDecisionData = (input = {}) =>
       strategy,
       symbol: requireString({ value: symbol, field: "symbol" }),
       referencePrice: requireDecimalString({ value: referencePrice, field: "referencePrice" }),
+      ...(reason === undefined ? {} : { reason: requireString({ value: reason, field: "reason" }).slice(0, 160) }),
+      ...(inputs === undefined ? {} : {
+        inputs: {
+          lastBuyPrice: inputs.lastBuyPrice == null ? null : requireDecimalString({ value: inputs.lastBuyPrice, field: "inputs.lastBuyPrice" }),
+          activeOrderCount: requireCount({ value: inputs.activeOrderCount, field: "inputs.activeOrderCount" }),
+          activeBuyCount: requireCount({ value: inputs.activeBuyCount, field: "inputs.activeBuyCount" }),
+          activeSellCount: requireCount({ value: inputs.activeSellCount, field: "inputs.activeSellCount" }),
+          activeBaseQuantity: requireDecimalString({ value: inputs.activeBaseQuantity, field: "inputs.activeBaseQuantity" }),
+          freeQuoteBalance: requireDecimalString({ value: inputs.freeQuoteBalance, field: "inputs.freeQuoteBalance" }),
+          freeBaseBalance: requireDecimalString({ value: inputs.freeBaseBalance, field: "inputs.freeBaseBalance" }),
+          committedQuote: requireDecimalString({ value: inputs.committedQuote, field: "inputs.committedQuote" }),
+          committedBase: requireDecimalString({ value: inputs.committedBase, field: "inputs.committedBase" }),
+          outstandingRecoveryAmount: requireDecimalString({ value: inputs.outstandingRecoveryAmount, field: "inputs.outstandingRecoveryAmount" }),
+        },
+      }),
       actions: actions.map((action, index) => ({
         side: action?.side === "BUY" || action?.side === "SELL"
           ? action.side
@@ -579,4 +599,57 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     if (auditStatus === "COMPLETE" && auditReasons.length > 0) throw new TypeError("COMPLETE snapshot cannot contain auditReasons")
     if (auditStatus === "INCOMPLETE" && auditReasons.length === 0) throw new TypeError("INCOMPLETE snapshot requires auditReasons")
     return { phase, auditStatus, sourceTime: snapshot.sourceTime, assetCount: balances.length, balances, auditReasons: [...auditReasons] }
+  })
+
+
+/** Preserve versioned, allowlisted Binance executionReport facts separately from normalized events. */
+export const mapBrokerExecutionReportData = (input = {}) =>
+  mapData(input, "Broker execution-report evidence mapping", ({ evidence }) => {
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+        evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
+      throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
+    }
+    const data = { schemaVersion: 1, source: "binance.spot.userData.executionReport" }
+    for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason"]) {
+      if (evidence[field] !== undefined) {
+        if (typeof evidence[field] !== "string") throw new TypeError("evidence." + field + " must be a string")
+        data[field] = evidence[field].slice(0, 256)
+      }
+    }
+    if (evidence.commissionAsset !== undefined) {
+      if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") throw new TypeError("evidence.commissionAsset must be a string or null")
+      data.commissionAsset = evidence.commissionAsset
+    }
+    for (const field of ["orderId", "tradeId"]) {
+      if (evidence[field] !== undefined) data[field] = String(evidence[field])
+    }
+    for (const field of ["orderQuantity", "orderPrice", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
+      if (evidence[field] !== undefined) data[field] = requireDecimalString({ value: evidence[field], field: "evidence." + field })
+    }
+    for (const field of ["eventTime", "transactionTime"]) {
+      if (evidence[field] !== undefined) {
+        if (!Number.isSafeInteger(evidence[field]) || evidence[field] < 0) throw new TypeError("evidence." + field + " must be a non-negative safe integer")
+        data[field] = evidence[field]
+      }
+    }
+    for (const field of ["isMaker", "working"]) {
+      if (evidence[field] !== undefined) data[field] = requireBoolean({ value: evidence[field], field: "evidence." + field })
+    }
+    return data
+  })
+
+/** Record an applied canonical order-state transition with exact cumulative quantities. */
+export const mapOrderUpdatedData = (input = {}) =>
+  mapData(input, "Order-updated event mapping", ({ order, executionType, evidence }) => {
+    if (!(order instanceof CanonicalOrder)) throw new TypeError("order must be a canonical Harvester order")
+    return {
+      ...requireExecutionOrderFacts({ order }),
+      originalQuantity: requireDecimalString({ value: order.originalQuantity?.amount, field: "originalQuantity" }),
+      executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount, field: "executedQuantity" }),
+      ...(order.limitPrice === undefined ? {} : { price: requireDecimalString({ value: order.limitPrice.amount, field: "price" }) }),
+      ...(order.updatedAt === undefined ? {} : { updatedAt: order.updatedAt }),
+      ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType, field: "executionType" }) }),
+      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity, field: "cumulativeQuoteQuantity" }) } : {}),
+      ...(typeof evidence?.transactionTime === "number" ? { brokerTransactionTime: evidence.transactionTime } : {}),
+    }
   })
