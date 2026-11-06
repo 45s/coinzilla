@@ -58,11 +58,18 @@ export function evaluateConservativeStrategy({
 
   const priceTickSize = getRuleAmount({ type: "PRICE_INCREMENT" })
   const quantityStepSize = getRuleAmount({ type: "QUANTITY_INCREMENT" })
+  const minQuantity = getRuleAmount({ type: "MIN_QUANTITY" })
+  const minNotional = getRuleAmount({ type: "MIN_NOTIONAL" })
   const position = portfolio.getPosition({ symbol: marketPrice.symbol })
   const activeQuantity = position?.baseQuantity.amount ?? "0"
   const ledger = recoveryLedger ?? {
     buyCost: "0",
     netSellProceeds: "0",
+  }
+  if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
+      compareDecimal({ left: ledger.buyCost, right: "0" }) === 0 &&
+      compareDecimal({ left: ledger.netSellProceeds, right: "0" }) === 0) {
+    throw new Error("Conservative active inventory has no recovery cost/profit basis")
   }
   const orders = activeOrders.filter((order) => order?.market?.symbol === marketPrice.symbol)
   const hasActiveBuy = orders.some((order) =>
@@ -83,17 +90,17 @@ export function evaluateConservativeStrategy({
     })
   }
 
-  // Residual active inventory alone is not a recovery obligation. After a
-  // completed cycle the ledger is reset; preserve that inventory for the next
-  // legitimate cycle instead of creating a new recovery SELL from it.
+  // The recovery ledger remains open until every exchange-sellable unit above
+  // keepQuantity has been sold. This includes residual sell-through after the
+  // cycle has already reached its minimum net-profit target.
   const outstandingRecovery = ledger.outstandingRecoveryAmount ?? maxDecimal({
     left: "0",
     right: subtractDecimal({ left: ledger.buyCost, right: ledger.netSellProceeds }),
   })
-  // Submit recovery first. The executor processes intents in order and stops on failure.
+  let inventoryDisposition
+  // Submit recovery SELL first. Active orders suppress duplicate SELL intents.
   if (!hasActiveSell &&
-      compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
-      compareDecimal({ left: outstandingRecovery, right: "0" }) > 0) {
+      compareDecimal({ left: activeQuantity, right: String(pairConfig.keepQuantity) }) > 0) {
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
       takerPercent: String(pairConfig.takerPercent),
@@ -109,14 +116,69 @@ export function evaluateConservativeStrategy({
       quantityStepSize,
     })
     if (compareDecimal({ left: sellPlan.quantity, right: "0" }) > 0) {
-      actions.push(Object.freeze({
-        side: "SELL",
-        type: marketMetadata.orderType,
-        price: sellPlan.price,
-        quantity: sellPlan.quantity,
-        reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
-        requiredNetProceeds: sellPlan.requiredNetProceeds,
-      }))
+      // Once cumulative proceeds already cover cost + minProfit, price the
+      // residual at the current market reference, never at an artificial
+      // one-tick floor. The cycle's actual cumulative net profit remains the
+      // accounting authority.
+      const residualPrice = compareDecimal({
+        left: sellPlan.requiredNetProceeds,
+        right: "0",
+      }) === 0
+        ? maxDecimal({
+          left: sellPlan.price,
+          right: roundDecimalToIncrement({
+            value: marketPrice.price,
+            increment: priceTickSize,
+            direction: "up",
+          }),
+        })
+        : sellPlan.price
+      const sellNotional = multiplyDecimal({
+        left: residualPrice,
+        right: sellPlan.quantity,
+      })
+      const quantityMeetsMinimum = compareDecimal({
+        left: sellPlan.quantity,
+        right: minQuantity,
+      }) >= 0
+      const notionalMeetsMinimum = compareDecimal({
+        left: sellNotional,
+        right: minNotional,
+      }) >= 0
+      if (quantityMeetsMinimum && notionalMeetsMinimum) {
+        actions.push(Object.freeze({
+          side: "SELL",
+          type: marketMetadata.orderType,
+          price: residualPrice,
+          quantity: sellPlan.quantity,
+          reason: compareDecimal({ left: outstandingRecovery, right: "0" }) > 0
+            ? "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT"
+            : "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+          requiredNetProceeds: sellPlan.requiredNetProceeds,
+        }))
+      } else {
+        inventoryDisposition = Object.freeze({
+          status: "EXCHANGE_CONSTRAINED_DUST",
+          quantity: subtractDecimal({
+            left: activeQuantity,
+            right: String(pairConfig.keepQuantity),
+          }),
+          reason: !quantityMeetsMinimum ? "MIN_QUANTITY" : "MIN_NOTIONAL",
+          minimumQuantity: minQuantity,
+          minimumNotional: minNotional,
+          evaluatedNotional: sellNotional,
+        })
+      }
+    } else {
+      inventoryDisposition = Object.freeze({
+        status: "EXCHANGE_CONSTRAINED_DUST",
+        quantity: subtractDecimal({
+          left: activeQuantity,
+          right: String(pairConfig.keepQuantity),
+        }),
+        reason: "QUANTITY_INCREMENT",
+        quantityStepSize,
+      })
     }
   }
 
@@ -157,8 +219,11 @@ export function evaluateConservativeStrategy({
     symbol: marketPrice.symbol,
     action: actions.length === 0 ? "NO_ACTION" : "PLACE_ORDERS",
     actions: Object.freeze(actions),
+    ...(inventoryDisposition ? { inventoryDisposition } : {}),
     reason: actions.length === 0
-      ? "Required standing orders are already active or no sellable recovery inventory is available"
+      ? inventoryDisposition
+        ? "Residual inventory is currently below exchange SELL filters and is classified as dust"
+        : "Required standing orders are already active or no sellable recovery inventory is available"
       : null,
   })
 }
