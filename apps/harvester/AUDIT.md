@@ -425,3 +425,8 @@ A source review now establishes a concrete restart blocker: `start-harvester.js`
 The residual sell-through defect is also source-confirmed: after recovery completion allocates exactly `keepQuantity` and resets the ledger, strategy evaluation suppresses SELL intents when outstanding recovery is zero, even if active inventory remains above `keepQuantity`. The existing test asserts this suppression. Do not make a blind residual SELL; preserve original cycle basis and actual commission facts, and check minimum notional, post-only, quantity steps, and explicit dust before implementing.
 
 Required next work: implement durable replay/reconciliation and fail-closed readiness; implement safe residual sell-through with exact reserve/dust behavior; add the full requested regression matrix; run relevant tests and exact-final-HEAD CI. PR #653 stays open/unmerged. TESTNET acceptance remains **NOT ACCEPTED**. No exchange writes, cancellations, withdrawals, account/config changes, live trades, or bot restarts were performed.
+
+
+## Audit priority correction — 2026-11-06
+
+Process-restart reconciliation is deferred to the final item in `ROADMAP.md`. It is not an active implementation task, blocker, or acceptance criterion for the current Conservative strategy/policy audit. Do not spend further audit time implementing restart recovery. Continue with Conservative policy defects, sell-through, commission accounting, exact `keepQuantity`, exchange filters/dust, and regression tests.
