@@ -56,6 +56,23 @@ test("pauses when actual remaining inventory is below keepQuantity", () => {
   assert.equal(result.freeQuantity, "0")
 })
 
+test("continues recovery without pausing when profit is below the floor but sellable inventory remains", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "1.25",
+    keepQuantity: "1",
+    netSellProceeds: "10.009",
+  })
+
+  assert.deepEqual(result, {
+    eligible: false,
+    pause: false,
+    reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+    freeQuantity: "0",
+    realizedNetProfit: "0.009",
+  })
+})
+
 test("defers completion while any active residual remains above keepQuantity", () => {
   const result = evaluateRecoveryCompletion({
     ...baseInput,
