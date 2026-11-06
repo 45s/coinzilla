@@ -39,7 +39,7 @@ export function validateTradingConfig(config) {
     requireNumber(pair.investment, `${pairPath}.investment`, { min: 0, exclusiveMin: true });
     requireNumber(pair.orderQuantity, `${pairPath}.orderQuantity`, { min: 0, exclusiveMin: true });
     requireNumber(pair.keepQuantity, `${pairPath}.keepQuantity`, { min: 0 });
-    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true });
+    requireNumber(pair.priceStepPercent, `${pairPath}.priceStepPercent`, { min: 0, exclusiveMin: true, max: 100, exclusiveMax: true });
     requirePrecision(pair.pricePrecision, `${pairPath}.pricePrecision`);
     requirePrecision(pair.quantityPrecision, `${pairPath}.quantityPrecision`);
     requireNumber(pair.makerPercent, `${pairPath}.makerPercent`, { min: 0, max: 100, exclusiveMax: true });
