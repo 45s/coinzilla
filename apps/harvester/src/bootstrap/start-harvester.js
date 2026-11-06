@@ -241,12 +241,30 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
               right: currentLedger.netSellProceeds,
             }),
             outstandingRecoveryAmount: subtractDecimal({
-              left: nextLedger.outstandingRecoveryAmount,
-              right: currentLedger.outstandingRecoveryAmount,
+              left: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: nextPosition?.spent.amount ?? "0",
+                  right: nextLedger.netSellProceeds,
+                }),
+              }),
+              right: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: previousPosition?.spent.amount ?? "0",
+                  right: currentLedger.netSellProceeds,
+                }),
+              }),
             }),
             realizedNetProfit: subtractDecimal({
-              left: nextLedger.realizedNetProfit,
-              right: currentLedger.realizedNetProfit,
+              left: subtractDecimal({
+                left: nextLedger.netSellProceeds,
+                right: nextPosition?.spent.amount ?? "0",
+              }),
+              right: subtractDecimal({
+                left: currentLedger.netSellProceeds,
+                right: previousPosition?.spent.amount ?? "0",
+              }),
             }),
           },
         })
@@ -286,7 +304,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       try {
         const completionInput = {
           sellOrderFullyFilled: true,
-          buyCost: recoveryLedger.buyCost,
+          spent: position.spent.amount,
           netSellProceeds: recoveryLedger.netSellProceeds,
           activeQuantity: position.baseQuantity.amount,
           keepQuantity,
