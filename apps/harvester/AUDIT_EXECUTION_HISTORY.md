@@ -17,58 +17,58 @@
 
 ## All 23 current-session orders
 
-Order history is newest-first; this table is chronological by client-order sequence. Prices/quantities are the original order values; executed/quote values are the order-history values.
+The order-history timestamp is the exchange order creation/time field in the supplied CLI export. Client IDs share the prefix `h-971fc65d9a264984ab8aa7-`; the suffix is the per-session sequence. Prices and quantities are exact exported strings.
 
-| Client suffix | Symbol | Side | Broker order ID | Price | Original qty | Executed qty | Quote qty | History status |
-|---:|---|---|---:|---:|---:|---:|---:|---|
-| -1 | DOGEUSDT | BUY | 1276628 | 0.07157 | 400 | 400 | 28.628 | FILLED |
-| -2 | ZROUSDT | BUY | 727817 | 1.604 | 5 | 5 | 8.020 | FILLED |
-| -3 | DOGEUSDT | SELL | 1276663 | 0.07203 | 398 | 0 | 0 | CANCELED |
-| -4 | DOGEUSDT | BUY | 1276664 | 0.07153 | 400 | 400 | 28.612 | FILLED |
-| -5 | ZROUSDT | SELL | 727837 | 1.615 | 4.98 | 0 | 0 | CANCELED |
-| -6 | ZROUSDT | BUY | 727838 | 1.603 | 5 | 5 | 8.015 | FILLED |
-| -7 | ZROUSDT | SELL | 727846 | 1.611 | 9.97 | 0 | 0 | CANCELED |
-| -8 | ZROUSDT | BUY | 727847 | 1.602 | 5 | 5 | 8.010 | FILLED |
-| -9 | DOGEUSDT | SELL | 1276683 | 0.07191 | 797 | 0 | 0 | CANCELED |
-| -10 | DOGEUSDT | BUY | 1276684 | 0.07149 | 400 | 400 | 28.596 | FILLED |
-| -11 | DOGEUSDT | SELL | 1276698 | 0.07185 | 1,196 | 1,196 | 85.9326 | FILLED* |
-| -12 | ZROUSDT | SELL | 727858 | 1.610 | 14.96 | 0 | 0 | CANCELED |
-| -13 | ZROUSDT | BUY | 727859 | 1.601 | 5 | 5 | 8.005 | FILLED |
-| -14 | ZROUSDT | SELL | 727860 | 1.609 | 19.95 | 0 | 0 | CANCELED |
-| -15 | ZROUSDT | BUY | 727861 | 1.600 | 5 | 5 | 8.000 | FILLED |
-| -16 | ZROUSDT | SELL | 727866 | 1.608 | 24.94 | 0 | 0 | CANCELED |
-| -17 | ZROUSDT | BUY | 727867 | 1.599 | 5 | 5 | 7.995 | FILLED |
-| -18 | ZROUSDT | SELL | 727875 | 1.608 | 29.93 | 0 | 0 | CANCELED |
-| -19 | ZROUSDT | BUY | 727876 | 1.598 | 5 | 5 | 7.990 | FILLED |
-| -20 | ZROUSDT | SELL | 727891 | 1.607 | 34.92 | 0 | 0 | CANCELED |
-| -21 | ZROUSDT | BUY | 727892 | 1.597 | 5 | 5 | 7.985 | FILLED |
-| -22 | ZROUSDT | SELL | 727904 | 1.606 | 39.91 | 39.91 | 64.09546 | FILLED |
-| -23 | ZROUSDT | BUY | 727905 | 1.596 | 5 | 0 | 0 | NEW |
+| Client suffix | Order-history time UTC | Symbol | Side | Binance orderId | Price | Original qty | Executed qty | Quote qty | History status |
+|---:|---|---|---|---:|---:|---:|---:|---:|---|
+| -1 | 2026-11-06T07:00:08.202Z | DOGEUSDT | BUY | 1276628 | 0.07157000 | 400.00000000 | 400.00000000 | 28.62800000 | FILLED |
+| -2 | 2026-11-06T07:00:08.808Z | ZROUSDT | BUY | 727817 | 1.60400000 | 5.00000000 | 5.00000000 | 8.02000000 | FILLED |
+| -3 | 2026-11-06T07:01:41.153Z | DOGEUSDT | SELL | 1276663 | 0.07203000 | 398.00000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -4 | 2026-11-06T07:01:41.456Z | DOGEUSDT | BUY | 1276664 | 0.07153000 | 400.00000000 | 400.00000000 | 28.61200000 | FILLED |
+| -5 | 2026-11-06T07:01:47.527Z | ZROUSDT | SELL | 727837 | 1.61500000 | 4.98000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -6 | 2026-11-06T07:01:47.830Z | ZROUSDT | BUY | 727838 | 1.60300000 | 5.00000000 | 5.00000000 | 8.01500000 | FILLED |
+| -7 | 2026-11-06T07:02:05.195Z | ZROUSDT | SELL | 727846 | 1.61100000 | 9.97000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -8 | 2026-11-06T07:02:05.500Z | ZROUSDT | BUY | 727847 | 1.60200000 | 5.00000000 | 5.00000000 | 8.01000000 | FILLED |
+| -9 | 2026-11-06T07:02:14.978Z | DOGEUSDT | SELL | 1276683 | 0.07191000 | 797.00000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -10 | 2026-11-06T07:02:15.284Z | DOGEUSDT | BUY | 1276684 | 0.07149000 | 400.00000000 | 400.00000000 | 28.59600000 | FILLED |
+| -11 | 2026-11-06T07:02:31.151Z | DOGEUSDT | SELL | 1276698 | 0.07185000 | 1196.00000000 | 1196.00000000 | 85.93260000 | FILLED* |
+| -12 | 2026-11-06T07:02:37.746Z | ZROUSDT | SELL | 727858 | 1.61000000 | 14.96000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -13 | 2026-11-06T07:02:38.051Z | ZROUSDT | BUY | 727859 | 1.60100000 | 5.00000000 | 5.00000000 | 8.00500000 | FILLED |
+| -14 | 2026-11-06T07:02:40.455Z | ZROUSDT | SELL | 727860 | 1.60900000 | 19.95000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -15 | 2026-11-06T07:02:40.761Z | ZROUSDT | BUY | 727861 | 1.60000000 | 5.00000000 | 5.00000000 | 8.00000000 | FILLED |
+| -16 | 2026-11-06T07:02:53.960Z | ZROUSDT | SELL | 727866 | 1.60800000 | 24.94000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -17 | 2026-11-06T07:02:54.264Z | ZROUSDT | BUY | 727867 | 1.59900000 | 5.00000000 | 5.00000000 | 7.99500000 | FILLED |
+| -18 | 2026-11-06T07:03:10.107Z | ZROUSDT | SELL | 727875 | 1.60800000 | 29.93000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -19 | 2026-11-06T07:03:10.417Z | ZROUSDT | BUY | 727876 | 1.59800000 | 5.00000000 | 5.00000000 | 7.99000000 | FILLED |
+| -20 | 2026-11-06T07:04:14.775Z | ZROUSDT | SELL | 727891 | 1.60700000 | 34.92000000 | 0.00000000 | 0.00000000 | CANCELED |
+| -21 | 2026-11-06T07:04:15.080Z | ZROUSDT | BUY | 727892 | 1.59700000 | 5.00000000 | 5.00000000 | 7.98500000 | FILLED |
+| -22 | 2026-11-06T07:04:47.064Z | ZROUSDT | SELL | 727904 | 1.60600000 | 39.91000000 | 39.91000000 | 64.09546000 | FILLED |
+| -23 | 2026-11-06T07:04:47.368Z | ZROUSDT | BUY | 727905 | 1.59600000 | 5.00000000 | 0.00000000 | 0.00000000 | NEW |
 
 `* FILLED` is the order-history status only; it conflicts with the Journal/account closing evidence and must not be treated as reconciled.
 
-All current-session order IDs correlate to the Journal's submission acknowledgements. The Journal records nine cancellation requests and nine cancellation confirmations for the nine SELL orders with suffixes -3, -5, -7, -9, -12, -14, -16, -18, and -20. Each canceled order reports zero executed quantity in order history.
+The Journal records nine cancellation requests and nine cancellation confirmations for the nine SELL orders with suffixes -3, -5, -7, -9, -12, -14, -16, -18, and -20. Each canceled order reports zero executed quantity in order history.
 
 ## Applied execution ledger
 
-Execution times below are Binance trade timestamps in epoch milliseconds; Journal event times are separately recorded in the raw JSONL.
+The Journal's canonical fill identity is `binance:<symbol>:<tradeId>`. Both the Journal event time and exchange `executedAt` are shown; the latter is the millisecond timestamp carried by the fill DTO.
 
-| Symbol | Trade ID | Broker order ID | Side | Price | Base qty | Quote qty | Commission asset/amount |
-|---|---:|---:|---|---:|---:|---:|---|
-| DOGEUSDT | 221733 | 1276628 | BUY | 0.07157 | 400 | 28.628 | DOGE 0.4 |
-| DOGEUSDT | 221736 | 1276664 | BUY | 0.07153 | 400 | 28.612 | DOGE 0.4 |
-| DOGEUSDT | 221738 | 1276684 | BUY | 0.07149 | 400 | 28.596 | DOGE 0.4 |
-| ZROUSDT | 11658 | 727817 | BUY | 1.604 | 5 | 8.020 | ZRO 0.005 |
-| ZROUSDT | 11659 | 727838 | BUY | 1.603 | 5 | 8.015 | ZRO 0.005 |
-| ZROUSDT | 11660 | 727847 | BUY | 1.602 | 5 | 8.010 | ZRO 0.005 |
-| ZROUSDT | 11661 | 727859 | BUY | 1.601 | 5 | 8.005 | ZRO 0.005 |
-| ZROUSDT | 11662 | 727861 | BUY | 1.600 | 5 | 8.000 | ZRO 0.005 |
-| ZROUSDT | 11663 | 727867 | BUY | 1.599 | 5 | 7.995 | ZRO 0.005 |
-| ZROUSDT | 11664 | 727876 | BUY | 1.598 | 5 | 7.990 | ZRO 0.005 |
-| ZROUSDT | 11665 | 727892 | BUY | 1.597 | 5 | 7.985 | ZRO 0.005 |
-| ZROUSDT | 11666 | 727904 | SELL | 1.606 | 39.91 | 64.09546 | USDT 0.06409546 |
+| Symbol | Journal event UTC | Exchange executedAt UTC | Client suffix | Trade ID | Binance orderId | Side | Price | Base qty | Quote qty | Actual commission | Liquidity | Commission status |
+|---|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---|
+| DOGEUSDT | 2026-11-06T07:01:41.004Z | 2026-11-06T07:01:40.846Z | -1 | 221733 | 1276628 | BUY | 0.07157 | 400 | 28.628 | 0.4 DOGE | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:01:47.374Z | 2026-11-06T07:01:47.219Z | -2 | 11658 | 727817 | BUY | 1.604 | 5 | 8.02 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:03.551Z | 2026-11-06T07:02:03.388Z | -6 | 11659 | 727838 | BUY | 1.603 | 5 | 8.015 | 0.005 ZRO | MAKER | COMPLETE |
+| DOGEUSDT | 2026-11-06T07:02:13.334Z | 2026-11-06T07:02:13.170Z | -4 | 221736 | 1276664 | BUY | 0.07153 | 400 | 28.612 | 0.4 DOGE | MAKER | COMPLETE |
+| DOGEUSDT | 2026-11-06T07:02:29.509Z | 2026-11-06T07:02:29.345Z | -10 | 221738 | 1276684 | BUY | 0.07149 | 400 | 28.596 | 0.4 DOGE | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:36.107Z | 2026-11-06T07:02:35.944Z | -8 | 11660 | 727847 | BUY | 1.602 | 5 | 8.01 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:38.812Z | 2026-11-06T07:02:38.051Z | -13 | 11661 | 727859 | BUY | 1.601 | 5 | 8.005 | 0.005 ZRO | TAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:02:52.317Z | 2026-11-06T07:02:52.152Z | -15 | 11662 | 727861 | BUY | 1.6 | 5 | 8 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:03:08.450Z | 2026-11-06T07:03:08.289Z | -17 | 11663 | 727867 | BUY | 1.599 | 5 | 7.995 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:04:13.128Z | 2026-11-06T07:04:12.964Z | -19 | 11664 | 727876 | BUY | 1.598 | 5 | 7.99 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:04:45.423Z | 2026-11-06T07:04:45.259Z | -21 | 11665 | 727892 | BUY | 1.597 | 5 | 7.985 | 0.005 ZRO | MAKER | COMPLETE |
+| ZROUSDT | 2026-11-06T07:08:47.124Z | 2026-11-06T07:08:46.965Z | -22 | 11666 | 727904 | SELL | 1.606 | 39.91 | 64.09546 | 0.06409546 USDT | MAKER | COMPLETE |
 
-Journal applied-fill identity is `binance:<symbol>:<tradeId>`. The Journal records 13 duplicate-fill notifications: ZRO trade 11661 is replayed at 07:02:40.928Z, then all 12 applied fills are replayed again at CLOSING (07:58:11.075–07:58:11.077Z). No duplicate replay adds another execution to the ledger.
+The Journal records 13 duplicate-fill notifications: ZRO trade 11661 is replayed at 07:02:40.928Z, then all 12 applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No duplicate replay adds another execution to the ledger.
 
 ## Strategy decision to order correlation
 
