@@ -30,6 +30,28 @@ test("reserves equal maker and taker fees", () => {
   )
 })
 
+test("uses maker fee for LIMIT_MAKER even when taker fee is higher", () => {
+  assert.deepEqual(
+    calculateSellFeeRate({
+      makerPercent: "0",
+      takerPercent: "0.075",
+      orderType: "LIMIT_MAKER",
+    }),
+    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
+  )
+})
+
+test("continues to reserve the higher possible fee for ordinary LIMIT orders", () => {
+  assert.deepEqual(
+    calculateSellFeeRate({
+      makerPercent: "0",
+      takerPercent: "0.075",
+      orderType: "LIMIT",
+    }),
+    { feeRate: "0.00075", reservedPercent: "0.075", reservedRole: "TAKER" },
+  )
+})
+
 test("rejects invalid maker or taker percentages", () => {
   for (const makerPercent of ["-0.1", "100", "not-a-number", undefined]) {
     assert.throws(() => calculateSellFeeRate({ makerPercent, takerPercent: "0.1" }))
