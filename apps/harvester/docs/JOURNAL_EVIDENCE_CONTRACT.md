@@ -44,7 +44,7 @@ Fields may be absent when Binance does not supply them:
 - Execution facts: `lastExecutedQuantity`, `cumulativeExecutedQuantity`, `lastExecutedPrice`, `cumulativeQuoteQuantity`, `lastQuoteQuantity`.
 - Fee/liquidity facts: `commissionAmount`, `commissionAsset`, `isMaker`.
 
-The broker evidence record is stored separately from normalized `order.updated` and `execution.fill_applied` events. It does not replace canonical domain objects or imply that a broker event has been applied to accounting.
+The broker evidence record is stored separately from normalized `order.updated` and `execution.fill_applied` events. `order.updated` is emitted only when the order registry applies a new canonical state; duplicate or stale reports remain visible in the broker evidence stream without generating duplicate normalized transitions. A broker report does not imply that its execution has been applied to accounting.
 
 ## Known boundaries
 
