@@ -227,3 +227,19 @@ These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve 
 - ZRO SELL trade 11666/order 727904: applied once; actual quote commission 0.06409546 USDT; net proceeds 64.03136454 USDT; Portfolio quote cash flow +0.01136454 USDT; RecoveryLedger outstanding reached zero. Recovery completion allocated 0.01 ZRO free, retained 0.04 active residual, and reset cycle totals. The next market evaluation preserved 0.04 active + 0.01 free.
 - DOGE SELL 1276698/client suffix -11: last observed evaluations show OPEN, executed 0, remaining 1,196; Portfolio remains 1,198.8 DOGE; RecoveryLedger proceeds remain zero. No DOGE SELL execution is among the 12 shutdown execution records. Exchange order history still reports FILLED, so terminal state and realized PnL remain CONFLICT.
 - ZRO BUY 727905/client suffix -23 remains confirmed NEW with 7.98 USDT locked. DOGE 1276698 is only a candidate for the other unresolved order until the complete CLOSING open-order payload is available.
+
+
+## 2026-11-06 post-CLOSING exchange trade timeline (operator-supplied read-only exports)
+
+The complete 50-row DOGE and ZRO trade-history outputs are preserved in [AUDIT_DOGE_TRADES_2026-11-06.md](./AUDIT_DOGE_TRADES_2026-11-06.md) and [AUDIT_ZRO_TRADES_2026-11-06.md](./AUDIT_ZRO_TRADES_2026-11-06.md).
+
+| UTC timestamp | Symbol | Trade | Order | Side | Qty | Quote | Fee |
+|---|---|---:|---:|---|---:|---:|---:|
+| 2026-11-06 07:08:46.965 | ZROUSDT | 11666 | 727904 | SELL | 39.91 ZRO | 64.09546000 USDT | 0.06409546 USDT |
+| 2026-11-06 08:03:01.841 | DOGEUSDT | 221990 | 1276698 | SELL | 278 DOGE | 19.97430000 USDT | 0.01997430 USDT |
+| 2026-11-06 08:03:18.202 | DOGEUSDT | 221991 | 1276698 | SELL | 918 DOGE | 65.95830000 USDT | 0.06595830 USDT |
+| 2026-11-06 08:38:24.782 | ZROUSDT | 12182 | 727905 | BUY | 5 ZRO | 7.98000000 USDT | 0.005 ZRO |
+
+DOGE 1276698: 1,196 DOGE total; 85.93260000 USDT gross proceeds; 0.08593260 USDT commission; 85.84666740 USDT net. ZRO 727905: 5 ZRO gross less 0.005 ZRO fee = 4.995 ZRO net; 7.98 USDT quote debit. ZRO 727904: 64.09546 gross less 0.06409546 fee = 64.03136454 net; against 64.02 cost gives +0.01136454 USDT realized net.
+
+Chronology is decisive: DOGE 1276698 fills at 08:03, after ~07:58 CLOSING; ZRO 727905 fills at 08:38, after ~07:58 CLOSING. The closing audit's two unresolved owned orders were therefore pending at that snapshot. The later evidence identifies both known order IDs as subsequently filled, but only one was confirmed among the two unresolved at close (ZRO 727905); DOGE's candidate identity is now supported by its matching post-close fill, but the full closing payload is still needed to prove the second identity conclusively. Neither post-close fill proves internal Harvester processing.
