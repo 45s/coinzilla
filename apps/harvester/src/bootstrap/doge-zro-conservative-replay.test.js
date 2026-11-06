@@ -220,18 +220,18 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
   }
 
   const fillOrder = ({ order, price, tradeId }) => {
-  const market = order.market
-  const quantity = order.originalQuantity.amount
-  const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
-  // Simulate Binance's reported commission from the exchange fee schedule:
-  // BUY fees are charged in base; SELL fees are charged in quote.
-  const commissionAsset = order.side === "BUY" ? market.baseAsset : market.quoteAsset
-  const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
-  const commissionAmount = multiplyDecimal({
-    left: commissionBasis,
-    right: exchangeCommissionRate,
-  })
-  const timestamp = Date.now()
+    const market = order.market
+    const quantity = order.originalQuantity.amount
+    const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
+    // Simulate Binance's reported commission from the exchange fee schedule:
+    // BUY fees are charged in base; SELL fees are charged in quote.
+    const commissionAsset = order.side === "BUY" ? market.baseAsset : market.quoteAsset
+    const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
+    const commissionAmount = multiplyDecimal({
+      left: commissionBasis,
+      right: exchangeCommissionRate,
+    })
+    const timestamp = Date.now()
     const executedOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
       brokerOrderId: order.brokerOrderId,
@@ -331,7 +331,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: dogeBuy,
       price: "0.07157",
       tradeId: "645-doge-buy",
-
     })
     const dogeSell = await dogeSellSubmitted
 
@@ -344,7 +343,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: zroBuy,
       price: "1.604",
       tradeId: "645-zro-buy",
-
     })
     const zroSell = await zroSellSubmitted
     assert.deepEqual(
@@ -364,7 +362,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: dogeSell,
       price: "0.07204",
       tradeId: "645-doge-sell",
-
     })
     const zroCycle = waitForCycle("ZROUSDT")
     await triggerPrice("ZROUSDT", "1.615")
@@ -372,7 +369,6 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       order: zroSell,
       price: "1.615",
       tradeId: "645-zro-sell",
-
     })
 
     const [dogeCompletion, zroCompletion] = await Promise.all([dogeCycle, zroCycle])
