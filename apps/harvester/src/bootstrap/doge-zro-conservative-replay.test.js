@@ -1,14 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import {
-  Asset,
-  Balance,
-  CanonicalOrder,
-  Commission,
-  Fill,
-  Money,
-  Quantity,
-} from "@coinzilla/entities"
+import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import { multiplyDecimal, percentageToRate } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
@@ -77,37 +69,39 @@ const config = {
 
 // Binance exchangeInfo payload: the real broker's symbol-filter adapter and
 // Harvester's canonical metadata converter must both process this response.
-const exchangeInfoResponse = (symbol) => {
+const exchangeInfoSymbol = (symbol) => {
   const baseAsset = symbol.slice(0, -4)
   return {
-    symbols: [{
-      symbol,
-      baseAsset,
-      quoteAsset: "USDT",
-      orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
-      filters: [
-        {
-          filterType: "PRICE_FILTER",
-          minPrice: "0",
-          maxPrice: "100000",
-          tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
-        },
-        {
-          filterType: "LOT_SIZE",
-          minQty: symbol === "DOGEUSDT" ? "1" : "0.1",
-          maxQty: "100000000",
-          stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
-        },
-        {
-          filterType: "MIN_NOTIONAL",
-          minNotional: "5",
-          applyToMarket: true,
-          avgPriceMins: 5,
-        },
-      ],
-    }],
+    symbol,
+    baseAsset,
+    quoteAsset: "USDT",
+    orderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
+    filters: [
+      {
+        filterType: "PRICE_FILTER",
+        minPrice: "0",
+        maxPrice: "100000",
+        tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
+      },
+      {
+        filterType: "LOT_SIZE",
+        minQty: symbol === "DOGEUSDT" ? "1" : "0.1",
+        maxQty: "100000000",
+        stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
+      },
+      {
+        filterType: "MIN_NOTIONAL",
+        minNotional: "5",
+        applyToMarket: true,
+        avgPriceMins: 5,
+      },
+    ],
   }
 }
+
+const exchangeInfoResponse = (symbol) => ({
+  symbols: (symbol ? [symbol] : ["DOGEUSDT", "ZROUSDT"]).map(exchangeInfoSymbol),
+})
 
 const waitForOrder = (submitted, waiters, { symbol, side }) => {
   const matches = (order) =>
@@ -151,12 +145,49 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     })
     broker.connect = async () => {}
     broker.disconnect = async () => {}
-    broker.getExchangeMarkets = async () => ({ ok: true, data: [] })
-    // Mock only the external WebSocket API response. Keep the real broker's
-    // getSymbolFilters() and adaptSymbolFiltersResponse() implementation.
-    broker.tradingConnection.request = async (method, { symbol }) => {
-      assert.equal(method, "exchangeInfo")
-      return { data: exchangeInfoResponse(symbol) }
+    // Simulate Binance RPC responses, leaving the real broker's exchange-info,
+    // order-request and canonical-order adapters in the execution path.
+    broker.tradingConnection.request = async (method, params = {}) => {
+      if (method === "exchangeInfo") {
+        return { data: exchangeInfoResponse(params.symbol) }
+      }
+      if (method === "ticker.price") {
+        return {
+          data: {
+            symbol: params.symbol,
+            price: params.symbol === "DOGEUSDT" ? "0.07161000" : "1.60500000",
+          },
+        }
+      }
+      if (method === "order.place") {
+        const timestamp = Date.now()
+        return {
+          data: {
+            symbol: params.symbol,
+            orderId: nextBrokerOrderId++,
+            clientOrderId: params.newClientOrderId,
+            price: params.price,
+            origQty: params.quantity,
+            executedQty: "0",
+            status: "NEW",
+            type: params.type,
+            side: params.side,
+            time: timestamp,
+            updateTime: timestamp,
+          },
+        }
+      }
+      throw new Error("Unexpected simulated Binance RPC method: " + method)
+    }
+    const createCanonicalOrder = broker.createCanonicalOrder.bind(broker)
+    broker.createCanonicalOrder = async (order) => {
+      const result = await createCanonicalOrder(order)
+      if (result?.ok) {
+        submitted.push(result.data)
+        openOrders.set(result.data.clientOrderId, result.data)
+        notifyOrderWaiters()
+      }
+      return result
     }
     broker.getOpenOrders = async () => ({ ok: true, data: [] })
     broker.getFills = async () => ({ ok: true, data: [] })
@@ -180,9 +211,11 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
         }),
       },
     })
-    broker.subscribeForUserData = async (handlers) => {
-      userDataHandlers = handlers
-      return { ok: true, data: { disconnect: async () => {} } }
+    // Keep BinanceWebSocketBroker.subscribeForUserData() and its execution
+    // normalization active; replace only the remote user-data subscription.
+    broker.userDataSession.subscribe = async ({ onEvent }) => {
+      userDataHandlers = { onEvent }
+      return { data: { disconnect: async () => {} } }
     }
     broker.subscribeForPrices = async ({ symbol, onPrice }) => {
       priceHandlers.set(symbol, onPrice)
@@ -192,31 +225,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       ok: true,
       data: { unsubscribe: async () => {} },
     })
-    broker.getPrices = async ({ symbol }) => ({
-      ok: true,
-      data: { symbol, price: symbol === "DOGEUSDT" ? "0.07161000" : "1.60500000" },
-    })
-    broker.createCanonicalOrder = async (order) => {
-      submitted.push(order)
-      const timestamp = Date.now()
-      const canonicalOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: "replay-" + nextBrokerOrderId++,
-        market: order.market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
-        status: "OPEN",
-        createdAt: timestamp,
-        acknowledgedAt: timestamp,
-        updatedAt: timestamp,
-      })
-      openOrders.set(canonicalOrder.clientOrderId, canonicalOrder)
-      notifyOrderWaiters()
-      return { ok: true, data: canonicalOrder }
-    }
+
     broker.cancelOrder = async ({ symbol, orderId }) => {
       const order = [...openOrders.values()].find((item) =>
         item.market.symbol === symbol && item.brokerOrderId === String(orderId))
@@ -272,32 +281,36 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       updatedAt: timestamp,
       completedAt: timestamp,
     })
-    const commissions = [new Commission({
-      amount: new Money({
-        amount: commissionAmount,
-        asset: commissionAsset,
-      }),
-    })]
-    const fill = new Fill({
-      tradeId,
-      brokerOrderId: order.brokerOrderId,
-      clientOrderId: order.clientOrderId,
-      market,
-      side: order.side,
-      price: new Money({ amount: price, asset: market.quoteAsset }),
-      quantity: new Quantity({ amount: quantity, asset: market.baseAsset }),
-      quoteQuantity: new Money({ amount: quoteQuantity, asset: market.quoteAsset }),
-      commissions,
-      commissionStatus: "COMPLETE",
-      executedAt: timestamp,
-    })
     openOrders.delete(order.clientOrderId)
     userDataHandlers.onEvent({
       event: {
         eventType: "executionReport",
         executionType: "TRADE",
-        executedOrder,
-        fill,
+        executedOrder: {
+          symbol: market.symbol,
+          id: order.brokerOrderId,
+          clientOrderId: order.clientOrderId,
+          type: order.type,
+          side: order.side,
+          quantity,
+          executedQuantity: quantity,
+          price: order.price,
+          status: "FILLED",
+          createdAt: order.createdAt,
+          updatedAt: timestamp,
+        },
+        fill: {
+          symbol: market.symbol,
+          id: tradeId,
+          orderId: order.brokerOrderId,
+          commissionAmount,
+          commissionAsset: commissionAsset.code,
+          isMaker: order.type === "LIMIT_MAKER",
+          price,
+          quantity,
+          quoteQuantity,
+          time: timestamp,
+        },
       },
     })
   }
