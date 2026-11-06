@@ -313,3 +313,10 @@ Total exchange execution: 1,196 DOGE; gross 85.93260000 USDT; quote commission 0
 ZRO BUY order 727905 likewise filled after CLOSING: trade 12182 at 08:38:24.782Z, 5 ZRO gross less 0.005 ZRO base commission = 4.995 ZRO net, with 7.98 USDT quote debit.
 
 The later fills do not rewrite the earlier CLOSING balances/open-order state and do not prove a later Harvester process applied them to Portfolio/RecoveryLedger. A post-fill account/open-orders snapshot and later Journal/runtime evidence remain unavailable. The complete historical CLOSING open-orders payload is still required to prove both unresolved order identities. The two trade exports are bounded 50-row responses with no fromId, not exhaustive all-time histories.
+
+
+## Operator downtime and post-shutdown fills — interpretation (2026-11-06)
+
+Harvester runs on the operator's personal PC; continuous uptime is not an operational requirement. The process was stopped around 07:58:16Z while Binance-owned orders remained open. Binance continued managing those orders and later executed DOGE SELL 1276698 at 08:03:01.841Z / 08:03:18.202Z and ZRO BUY 727905 at 08:38:24.782Z. This is expected exchange behavior during local application downtime.
+
+The timeline must therefore be read as: (1) Harvester observed open/unfilled orders at shutdown; (2) the process was offline; (3) Binance subsequently filled those resting orders. There is no expectation that the stopped process update its in-memory Portfolio/RecoveryLedger, and no evidence of same-session post-fill processing is required. The next required checkpoint is the next startup: reconcile these exchange-side fills and current account/open-order state before allowing new trading. The restart path must be idempotent and fail-closed.
