@@ -386,29 +386,25 @@ The strategy owner explicitly approved these requirements:
 The minimum-profit floor is enforced at configuration validation, recovery planning, and recovery completion boundaries. Actual confirmed net proceeds and commissions remain authoritative; the configured floor is not a substitute for fill accounting.
 
 
-## 13. Audit continuation — residual liquidation and process restart (2026-11-06)
+## 13. Audit continuation — residual sell-through (2026-11-06)
 
-### 13.1 Residual liquidation after recovery profit is secured
+### 13.1 Residual liquidation after cumulative recovery profit is secured
 
-The owner-approved contract is to sell all exchange-sellable Conservative active inventory except exactly the configured pair-level `keepQuantity`. A completed recovery SELL may leave additional active quantity because the sell plan rounds down for quantity steps and reserves for possible base-asset commission. That quantity is not automatically dust and must not silently become a second retained reserve.
+The owner-approved contract is to sell all exchange-sellable Conservative active inventory except exactly the configured pair-level `keepQuantity`. The original cycle BUY cost and actual net SELL proceeds/commission basis must remain available until active inventory reaches exactly `keepQuantity`, or the remaining quantity is explicitly identified as currently exchange-constrained dust.
 
-The original cycle BUY cost and actual net SELL proceeds/commission basis must remain available while any sellable residual remains. Residual SELLs must preserve aggregate realized net profit of at least `minProfit >= 0.01` after actual commissions. Do not reset/discard the basis before the residual is sold or the remainder is explicitly classified as exchange-constrained dust. Every residual order must pass current minimum quantity/notional, quantity-step, fee-reserve, and post-only checks. Base-asset commissions must be applied to actual inventory; quote-asset commissions must reduce actual net proceeds. Unsupported or incomplete commission facts fail closed.
+The active implementation change now:
+- Allows a SELL when active inventory is above `keepQuantity`, even when cumulative proceeds have already reduced `outstandingRecoveryAmount` to zero.
+- Retains the original RecoveryLedger through residual sell-through; cycle completion does not allocate the reserve or reset the ledger while active quantity remains above `keepQuantity`.
+- When the cumulative proceeds already cover cycle cost plus `minProfit`, prices the residual SELL from the current market reference rounded up to the price tick, rather than submitting at an artificial one-tick price.
+- Checks the candidate residual order against current `MIN_QUANTITY` and `MIN_NOTIONAL` before emitting an intent. A candidate that cannot satisfy those filters is reported in `inventoryDisposition` as `EXCHANGE_CONSTRAINED_DUST`, with exact quantity and limiting rule; it is not submitted and does not pause the pair.
+- Treats an active residual SELL as the duplicate-prevention boundary. After its confirmed fill, the remaining active inventory is replanned from actual Portfolio and RecoveryLedger state.
 
-The implementation currently does not satisfy this section: the strategy requires positive outstanding recovery to create a SELL; completion resets the ledger after allocating `keepQuantity`; subsequent evaluation therefore suppresses a SELL for residual active inventory. The existing test that expects suppression must be replaced with end-to-end residual sell-through tests. This section specifies required behavior, not a claim that it is implemented.
+Completion is now deferred without pausing when cumulative profit is sufficient but active quantity remains above `keepQuantity`. The engine reevaluates the strategy so sellable residual is sold; an exchange-constrained remainder remains visible as dust and the original basis is retained so later fills can be combined safely. The exact retained amount is allocated only when active quantity equals `keepQuantity`.
+
+Every residual SELL must still preserve aggregate realized net profit of at least `minProfit >= 0.01` after actual commissions and pass current price/quantity increments, minimum quantity/notional, and post-only checks. Base-asset commissions consume actual base inventory; quote-asset commissions reduce net proceeds. Actual fills remain the accounting authority. Unsupported or incomplete commission facts fail closed.
+
+**Verification status:** source changes and focused regressions are committed on the audit branch. Exact-head CI is being checked; do not mark this behavior accepted until all relevant tests and CI pass.
 
 ### 13.2 Exchange-constrained dust
 
-Dust is only the remaining amount that cannot be sold under the exchange's current supported quantity increment, minimum quantity, minimum notional, and commission constraints. Report exact quantity and the limiting rule. A quantity-step remainder may be eligible for a later combined sell after additional fills; do not permanently classify it as dust solely because one rounded order leaves it behind. Never sell or consume the configured `keepQuantity`.
-
-### 13.3 Restart reconciliation after workstation downtime
-
-Process uptime is not a trading requirement. Exchange-side orders may fill while Harvester is stopped. On every startup after a prior trading session, before any strategy evaluation can submit a new order:
-1. Load and validate the last durable Journal checkpoint and replay its complete order/fill/cycle history into Portfolio, RecoveryLedger, and OrderRegistry.
-2. Fetch complete exchange trade history since that checkpoint, exhausting pagination and proving the relevant market universe. Correlate every execution to an owned order and immutable client/broker IDs.
-3. Apply each missing canonical fill once to Portfolio and RecoveryLedger, including actual commission amount and asset. Replays with identical facts are no-ops; reused IDs with changed facts are conflicts.
-4. Reconcile partial and terminal order states, cancellation races, current account balances, free/locked quantities, and the full account-wide open-order set. Restore reservations for owned active orders.
-5. Durably record successful reconciliation and only then open trading readiness.
-
-Any incomplete history, unknown order ownership, conflicting fill identity, unsupported commission, missing market metadata, stale/contradictory balance snapshot, unresolved terminal order, or reservation mismatch must keep trading fail-closed. Transport reconnection alone is not application recovery. Historical shutdown snapshots are immutable; post-shutdown fills are reconciled in the next process session.
-
-**Current implementation status:** the inspected `start-harvester.js` explicitly disables durable Journal replay and starts with fresh in-process trading state. The repository's separate restore/audit use cases are not currently wired into this startup path. This is a confirmed startup integration defect; offline TESTNET evidence is not claimed.
+Dust is the exact active quantity above `keepQuantity` for which the maximum fee-adjusted, quantity-step-rounded candidate cannot satisfy the current exchange `MIN_QUANTITY` or `MIN_NOTIONAL` filter. The decision reports the quantity and limiting rule. Dust is not silently transferred to the retained reserve. It remains in active inventory with the recovery basis intact, so a later BUY fill can make the combined amount sellable. Never sell or consume the configured `keepQuantity`.
