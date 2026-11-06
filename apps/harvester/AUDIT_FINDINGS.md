@@ -101,3 +101,95 @@ The reviewed `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md` §9 marks two
 **Status:** PARTIAL.
 
 The accessible evidence establishes a DOGE order/account conflict, not its cause. Do not create a speculative runtime defect issue or implement a speculative reconciliation change. The only follow-ups opened are #646 for confirmed spec/config-boundary drift and #648 for the documented regression-test gap.
+
+## Clarification and closure playbooks
+
+### F-001 — DOGE SELL 1276698 / 1,196 DOGE locked (CONFLICT)
+
+1. Preserve order-history row: orderId 1276698, client ID h-971fc65d9a264984ab8aa7-11, SELL 1,196 at 0.07185, reported quote 85.9326, status FILLED.
+2. Preserve Journal separately: broker acknowledgement OPEN and no applied DOGE SELL fill.
+3. Obtain full CLOSING open-order list and original harvester.log / harvester-trace.log. Verify both SHA-256 checksums before parsing.
+4. Obtain read-only exchange order detail, all DOGE trades from preflight to closing, actual commission amount/asset, and timestamped balances/open orders. Do not submit or cancel an order.
+5. Correlate orderId, clientOrderId, tradeId, and timestamps. Preserve exchange milliseconds and Journal event time separately.
+6. Build state timeline: intent → submit → acknowledgement → user-data update → trade/fill → cancel if any → REST terminal state → closing reconciliation. Mark absent transitions.
+7. Recalculate BUY leg: 1,200 gross; 1.2 DOGE fee; 1,198.8 net; 85.836 USDT debit. Add SELL only when confirmed by trade history and commission evidence.
+8. Reconcile free/locked/total DOGE and USDT. If SELL truly filled, explain the base debit and quote credit; if not, explain the FILLED history row.
+9. Identify the second unresolved order independently; do not assume it is 1276698.
+10. Only after a consistent ledger exists, classify root cause and create a narrow bug issue if warranted, with deterministic regression before implementation.
+
+Closure: terminal state, fills, commissions, balances, reservations, Journal, and both unresolved-order identities reconcile with no unexplained delta.
+
+### F-002 / F-003 — ZRO and account cash flow (PASS / PARTIAL)
+
+1. Preserve BUY trades 11658–11665 and SELL trade 11666.
+2. Recompute BUY gross 40; base fees 0.04; net BUY 39.96; SELL 39.91; residual 0.05.
+3. Recompute SELL gross quote 64.09546; quote fee 0.06409546; net proceeds 64.03136454; BUY cost 64.02; net quote profit 0.01136454.
+4. Tie 0.01 free allocation to cycle completion; verify 0.04 residual in actual Portfolio/RecoveryLedger state or replay. Arithmetic is consistent, but exact in-memory residual ownership remains PARTIAL until directly observed.
+5. Tie order 727905 to open-order evidence and 7.98 USDT locked; verify terminal state at closing.
+6. Never count standing BUY as execution or realized PnL.
+
+Closure: balance, ledger, free allocation, BUY reservation, and completion agree; order 727905 terminal state known.
+
+### F-004 — duplicate fills (PASS observed Journal; PARTIAL general guarantee)
+
+1. Use canonical identity binance:<symbol>:<tradeId>.
+2. Assert 13 duplicate notifications create no extra applied-fill records in this run.
+3. Add deterministic cases for exact duplicate, conflicting same identity, REST/stream overlap, reordered fills, reconnect, and process restart.
+4. Assert duplicate delivery changes Portfolio and RecoveryLedger by exactly zero; conflicting payload fails closed.
+5. Record exact command, commit SHA, and CI for every PASS claim.
+
+Closure: same canonical trade changes state once in all supported delivery/restart permutations.
+
+### F-005 — closing audit (PARTIAL)
+
+1. Retrieve full closing account snapshot and all open orders/reservations.
+2. Identify both unresolved owned orders by symbol, orderId, clientOrderId, side, price, original/executed/remaining qty, and locked asset.
+3. Reconcile reservations against free/locked balances and ownership registry.
+4. Verify shutdown INCOMPLETE is fail-closed; it does not imply orders were canceled.
+5. Add offline fixture for two unresolved orders, including one contradictory/unknown order, and assert readiness remains blocked.
+
+Closure: both orders and reservations identified and reconciled, else remain INCOMPLETE.
+
+### F-006 — fee/config contract (#646, CONFLICT)
+
+1. Product/strategy owner chooses planned reserve: makerPercent only or max(makerPercent,takerPercent). Actual fill commissions remain authoritative either way.
+2. Decide whether minProfit=0 and keepQuantity=0 are legal.
+3. Align config validator with planner/completion preconditions so invalid values fail at config load, or explicitly support them end-to-end.
+4. Align Conservative spec, trading-strategies, Accounting Invariants, Portfolio docs, README, and roadmap.
+5. Correct test matrix: current fee tests cover configured maker/taker maximum, not observed commission-rate history. Actual fill fees are applied per trade.
+6. Correct stale residual-inventory matrix: engine test already covers residual active inventory not creating a new recovery SELL.
+7. Run focused tests and exact-head CI only after contract decision.
+
+Closure: one approved policy, no contradictory docs, validator and domain support same values, test matrix reflects assertions.
+
+### F-007 — full-cycle exact-once regression (#648)
+
+1. Use deterministic offline engine + fake broker port; no network or credentials.
+2. Submit initial BUY and apply multiple partial BUY fills with actual base/quote fees.
+3. Assert inventory/cost and next standing BUY decision from execution data.
+4. Create recovery SELL, partially fill, then cancel/replace. Exercise cancel-before-fill and fill-races-cancel orderings.
+5. Apply replacement partial and terminal fills; assert actual commission asset/amount, net proceeds, min-profit gate, remaining inventory.
+6. Trigger completion; assert one completion event, one keep/free allocation, one RecoveryLedger reset, one next-cycle eligibility transition.
+7. Replay terminal SELL and canonical fills; assert no second allocation/reset, no duplicate BUY, and no accounting delta.
+8. Assert residual active inventory alone does not create another recovery SELL.
+9. Assert externally meaningful Portfolio/RecoveryLedger state and broker-port effects, not private call counts only.
+10. Run focused test, Harvester suite, workspace coverage, syntax, and required CI; record exact head in #648/#645.
+
+Closure: one test proves partial execution, replacement, terminal replay, exact-once completion, and next-cycle boundary without changing strategy behavior.
+
+### F-008 — user-data recovery (#626)
+
+1. Re-read original #626 acceptance criteria; do not infer closure from merged #627.
+2. Map each criterion to source, deterministic regression, failure mode, and exact CI head.
+3. Cover lost/late, duplicate/reordered events, reconnect/resubscribe, REST reconciliation, identity conflicts, and completion interrupted at every recovery boundary.
+4. Assess #629 subscription ordering separately; it is not full recovery acceptance.
+5. Keep #626 open until each criterion has a verified disposition and owner acceptance.
+
+### Cross-finding order
+
+1. Evidence integrity: original logs, closing open orders, trade history, config snapshot.
+2. Exchange facts: resolve DOGE and identify both unresolved orders; no runtime edits while conflict remains.
+3. Contract decision: resolve #646.
+4. Regression coverage: implement #648 test-only and update invariant matrix.
+5. Runtime fix only if a reproduced invariant violation is confirmed.
+6. Exact-head CI, then update audit/roadmap/#645 to same commit.
