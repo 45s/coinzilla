@@ -386,7 +386,7 @@ For each symbol and each decision/order, produce a compact row set containing: c
 
 **Status:** DOGE SELL planning FOLLOWED; DOGE post-shutdown accounting/dust UNVERIFIED. ZRO SELL planning and arithmetic FOLLOWED; ZRO completion VIOLATED. Root cause confirmed; correction and exact-evidence regressions added on the audit branch.
 
-The audit-baseline config confirms DOGE `keepQuantity=1`, ZRO `keepQuantity=0.01`, `minProfit=0.01`, and 0.1% maker/taker rates. Both actual ordinary LIMIT SELLs match the canonical 0.1%-reserve calculation exactly: DOGE 1,196 @ 0.07185; ZRO 39.91 @ 1.606.
+The audit-baseline config confirms DOGE `keepQuantity=1`, ZRO `keepQuantity=0.01`, `minProfit=0.01`, and 0.1% maker/taker rates. Under candidate quantity steps of 1 DOGE and 0.01 ZRO, both actual ordinary LIMIT SELLs match the canonical 0.1%-reserve calculation: DOGE 1,196 @ 0.07185; ZRO 39.91 @ 1.606. The exact historical exchange filter payload was not preserved; the original logs only state that trading rules were validated. Therefore historical tick/step/minimum-filter conformance is UNVERIFIED, even though both submitted orders were accepted by the exchange.
 
 DOGE: 1,200 gross BUY less 1.2 DOGE base fees = 1,198.8 net; spent 85.836 USDT. Order 1276698 filled in two distinct post-CLOSING trades (221990: 278; 221991: 918). Gross 85.9326, actual quote fees 0.0859326, net proceeds 85.8466674, net profit +0.0106674, remaining 2.8 DOGE. Planning/order FOLLOWED. Because the fills happened after the local process stopped, same-session Portfolio/RecoveryLedger application is not expected. The 1.8 DOGE above keepQuantity has no preserved historical filter snapshot, so final dust classification is UNVERIFIED and restart reconciliation remains deferred to #654.
 
@@ -399,4 +399,4 @@ Regression coverage added:
 - Actual DOGE fill identities/commissions and 2.8 remaining quantity; no residual SELL below MIN_NOTIONAL, with 1.8 excess explicitly classified as dust in the test filter fixture.
 - Actual ZRO eight BUY fills and SELL fill/quote commission; 0.04 excess remains active and is classified as MIN_NOTIONAL dust in the test filter fixture.
 
-The actual historical MIN_NOTIONAL/quantity-step snapshots were not preserved in the supplied logs, so the test fixture proves current policy behavior under the stated filter values, not the exact historical exchange filter snapshot. No exchange writes or bot restarts were performed.
+The actual historical MIN_NOTIONAL/quantity-step snapshots were not preserved in the supplied logs, so the test fixtures prove current policy behavior under their stated filter values, not the exact historical exchange filter snapshot. No exchange writes or bot restarts were performed.
