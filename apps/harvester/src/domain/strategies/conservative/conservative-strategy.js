@@ -129,6 +129,7 @@ export function evaluateConservativeStrategy({
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
       takerPercent: String(pairConfig.takerPercent),
+      orderType: marketMetadata.orderType,
     }).feeRate
     const sellPlan = calculateRecoverySellPlan({
       activeQuantity,
