@@ -399,12 +399,12 @@ Process-restart reconciliation is deferred to the final item in `ROADMAP.md`. It
 
 **Decision-time configuration:** the audit-baseline `trading-config.json` at `4af3434f788b87139513921f220294ae90daf4d5` matches the current audit branch configuration: `minProfit=0.01`; DOGE `keepQuantity=1`, maker/taker reserve 0.1%; ZRO `keepQuantity=0.01`, maker/taker reserve 0.1%. Both submitted recovery orders were ordinary `LIMIT` orders, so the applicable planning reserve is 0.1%.
 
-| Symbol / order | Expected vs actual SELL quantity and price | Exchange-side result | Strategy verdict |
+| Symbol / order | Expected under candidate filter steps vs actual SELL quantity and price | Exchange-side result | Strategy verdict |
 |---|---|---|---|
-| DOGE 1276698 | Expected 1,196 @ 0.07185; actual 1,196 @ 0.07185 | Two distinct post-CLOSING fills; net proceeds 85.84666740 USDT; profit +0.01066740 USDT; remaining 2.8 DOGE | FOLLOWED for planning and exchange execution |
-| ZRO 727904 | Expected 39.91 @ 1.606; actual 39.91 @ 1.606 | One pre-CLOSING fill; net proceeds 64.03136454 USDT; profit +0.01136454 USDT; remaining 0.05 ZRO | FOLLOWED for planning and SELL execution; VIOLATED for recovery completion |
+| DOGE 1276698 | Under step size 1: 1,196 @ 0.07185; actual 1,196 @ 0.07185 | Two distinct post-CLOSING fills; net proceeds 85.84666740 USDT; profit +0.01066740 USDT; remaining 2.8 DOGE | FOLLOWED for submitted order/exchange execution; filter-based calculation UNVERIFIED |
+| ZRO 727904 | Under step size 0.01: 39.91 @ 1.606; actual 39.91 @ 1.606 | One pre-CLOSING fill; net proceeds 64.03136454 USDT; profit +0.01136454 USDT; remaining 0.05 ZRO | FOLLOWED for submitted order/exchange execution; filter-based calculation UNVERIFIED; VIOLATED for recovery completion |
 
-Independent quantity/price calculation using the canonical 0.1% reserve, exact keep quantities, and exchange steps (DOGE 1; ZRO 0.01) reproduces both order quantities and limit prices. The decision-time configuration is directly confirmed at the audit baseline. The order history confirms both actual orders were `LIMIT`; actual trade commissions, not configured rates, determine the realized results.
+Under candidate step sizes of 1 DOGE and 0.01 ZRO, the canonical 0.1% reserve calculation reproduces both submitted quantities and limit prices exactly. The decision-time configuration is directly confirmed at the audit baseline, and the order history confirms both actual orders were `LIMIT`. However, the original logs record only `Exchange trading rules validated` and do not preserve the exact filter values; the historical step/tick/minimum-filter inputs are therefore UNVERIFIED. Exchange acceptance proves each submitted order passed the exchange's then-current order filters, but does not prove the assumed step values or the residual dust classification. Actual trade commissions, not configured rates, determine realized results.
 
 ### DOGE — post-CLOSING SELL, not a runtime contradiction
 
