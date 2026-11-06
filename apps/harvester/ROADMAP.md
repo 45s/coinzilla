@@ -1235,3 +1235,4 @@ persistence, exchange operations, or broader observability projects.
 - [x] PR #636 preserves semantic SUCCESS/SYSTEM console labels, distinguishes them during duplicate suppression, and keeps colored output within the 200-character limit.
 - [x] Document concise log-message rules: omit redundant application prefixes, keep INFO operator-focused, move routine market evaluations to DEBUG, and avoid duplicate event records.
 - [x] Console INFO output omits the redundant `INFO` label; SYSTEM is used for Journal, WebSocket, subscription, readiness, and shutdown lifecycle transitions.
+- [x] The `pnpm run dev` child-process runner respects stdout/stderr and `logs_harvester/terminal.log` backpressure, pausing reads until writable destinations drain; focused tests cover forwarding, backpressure, and destination changes. This protects the development terminal/log mirror only and does not change Harvester trading or Journal transports.
