@@ -255,7 +255,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Recovery ledger | Third-asset/incomplete/negative commission reject | recovery accounting tests | Partial |
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
-| Fee reserve | Zero fee, actual fee, configured ceiling, actual above ceiling | `sell-fee-rate.test.js` | Existing |
+| Fee reserve | Configured maker/taker maximum (zero, maker-higher, taker-higher, equal, invalid) | `sell-fee-rate.test.js`; actual per-fill commission accounting is covered separately by `recovery-fill-accounting.test.js` | Existing |
 | Fee reserve | Fee-history reset behavior | reset test documents preserve; differs from Conservative strategy | Decision |
 | SELL plan | Keep quantity and rounding | `recovery-sell-plan.test.js` | Existing |
 | SELL plan | Partial proceeds lower remaining required proceeds | sell-plan test | Existing |
@@ -272,12 +272,12 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Completion | Fully filled but below minProfit does not allocate | completion test | Existing |
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
 | Completion | Exact minProfit equality passes and one tick below fails | `recovery-sell-plan-accounting.test.js` | Existing |
-| Completion | Completion invoked exactly once and ledger reset only once | pure helper alone cannot prove caller orchestration | Gap |
-| Completion | Residual active inventory behavior after allocation | no strategy lifecycle test | Gap / decision |
+| Completion | Completion invoked exactly once and ledger reset only once | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
+| Completion | Residual active inventory after allocation does not create another recovery SELL | `keeps post-recovery residual active inventory and does not issue another recovery SELL` | Existing |
 | Ordering | Out-of-order fills with deterministic execution-time policy | no explicit test | Gap |
 | Failure | Invalid fill quantity/notional/commission, unsupported asset, wrong market | several focused tests | Partial |
 | Failure | Cross-projection partial failure leaves neither projection committed | `update-trading-accounting.test.js` | Existing |
-| Lifecycle | Full BUY → partial fills → SELL partial/replacement → completion → next BUY | pieces exist; no end-to-end pure-domain contract test | Gap |
+| Lifecycle | Full BUY → partial fills → SELL partial/cancel-fill replacement → completion → next BUY | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
 
 ## 10. D2 exit criteria
 
