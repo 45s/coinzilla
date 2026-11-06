@@ -145,25 +145,29 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
         return { ok: true, data: typeof fills === "function" ? fills() : fills }
       }
       const canceledOrder = canceledOrders.get(orderId)
+      const cancelFill = cancelWithFill && canceledOrder
+        ? [new Fill({
+            tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase(),
+            brokerOrderId: orderId,
+            clientOrderId: canceledOrder.clientOrderId,
+            market,
+            side: canceledOrder.side,
+            price: canceledOrder.limitPrice,
+            quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+            quoteQuantity: new Money({
+              amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
+              asset: quoteAsset,
+            }),
+            commissions: [],
+            commissionStatus: "COMPLETE",
+          })]
+        : []
       return {
         ok: true,
-        data: cancelWithFill && canceledOrder
-          ? [new Fill({
-              tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase(),
-              brokerOrderId: orderId,
-              clientOrderId: canceledOrder.clientOrderId,
-              market,
-              side: canceledOrder.side,
-              price: canceledOrder.limitPrice,
-              quantity: new Quantity({ amount: "0.1", asset: baseAsset }),
-              quoteQuantity: new Money({
-                amount: multiplyDecimal({ left: canceledOrder.limitPrice.amount, right: "0.1" }),
-                asset: quoteAsset,
-              }),
-              commissions: [],
-              commissionStatus: "COMPLETE",
-            })]
-          : [],
+        data: [
+          ...accountedFills.filter((fill) => fill.brokerOrderId === orderId),
+          ...cancelFill,
+        ],
       }
     },
     getCanonicalOrder: async ({ clientOrderId }) => {

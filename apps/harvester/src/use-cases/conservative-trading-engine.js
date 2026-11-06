@@ -1316,14 +1316,14 @@ export function makeConservativeTradingEngine({
         }
       }
 
-      if (["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
-        const terminal = await reconcileTerminalOrderFills({ order })
-        if (!terminal?.ok) return terminal
-      }
-
       if (event.executionType === "TRADE") {
         const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
         if (!fillResult.ok) return fillResult
+      }
+
+      if (["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+        const terminal = await reconcileTerminalOrderFills({ order })
+        if (!terminal?.ok) return terminal
       }
       if (update.duplicate || update.stale) {
         const isUnprocessedFill = order.status === "FILLED" &&
