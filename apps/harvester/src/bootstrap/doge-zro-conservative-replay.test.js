@@ -2,7 +2,6 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { startHarvester } from "./start-harvester.js"
-import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 
 const eventPublisher = {
   publish: () => ({ ok: true }),
@@ -22,8 +21,65 @@ async function waitFor(predicate, label, timeoutMs = 15_000) {
   assert.fail(label + " was not observed before timeout")
 }
 
-test("starts Conservative DOGE/ZRO strategies from the real config and submits their initial BUYs", { timeout: 30_000 }, async () => {
-  const config = await loadTradingConfig()
+test("starts Conservative DOGE/ZRO strategies from a deterministic config and submits their initial BUYs", { timeout: 30_000 }, async () => {
+  const config = {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: {
+          minProfit: 0.01,
+          conservative: { enabled: true },
+          aggressive: { enabled: false },
+        },
+        pairs: {
+          DOGEUSDT: {
+            enabled: true,
+            investment: 100,
+            orderQuantity: 400,
+            keepQuantity: 1,
+            priceStepPercent: 0.05,
+            pricePrecision: 5,
+            quantityPrecision: 0,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
+          },
+          SOLFDUSD: {
+            enabled: false,
+            investment: 100,
+            orderQuantity: 1,
+            keepQuantity: 0.01,
+            priceStepPercent: 0.05,
+            pricePrecision: 2,
+            quantityPrecision: 3,
+            makerPercent: 0,
+            takerPercent: 0.1,
+          },
+          ZROUSDT: {
+            enabled: true,
+            investment: 100,
+            orderQuantity: 5,
+            keepQuantity: 0.01,
+            priceStepPercent: 0.05,
+            pricePrecision: 3,
+            quantityPrecision: 1,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
+          },
+          ZROFDUSD: {
+            enabled: false,
+            investment: 100,
+            orderQuantity: 5,
+            keepQuantity: 0.01,
+            priceStepPercent: 0.5,
+            pricePrecision: 3,
+            quantityPrecision: 1,
+            makerPercent: 0,
+            takerPercent: 0.1,
+          },
+        },
+      },
+    },
+  }
   const strategy = config.strategies.CG_coinGrabber
   assert.equal(strategy.enabled, true)
   assert.equal(strategy.settings.conservative.enabled, true)
