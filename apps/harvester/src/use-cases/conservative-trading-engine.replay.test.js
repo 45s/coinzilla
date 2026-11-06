@@ -15,6 +15,7 @@ import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledge
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 
 const baseAsset = new Asset({ id: "zro", code: "ZRO" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
@@ -27,29 +28,8 @@ const market = new Market({
 
 const marketMetadata = { market }
 
-const tradingConfig = {
-  strategies: {
-    CG_coinGrabber: {
-      enabled: true,
-      settings: {
-        minProfit: 0.01,
-        conservative: { enabled: true },
-        aggressive: { enabled: false },
-      },
-      pairs: {
-        ZROUSDT: {
-          enabled: true,
-          investment: 1000,
-          orderQuantity: 5,
-          keepQuantity: 0.01,
-          priceStepPercent: 0.05,
-          makerPercent: 0,
-          takerPercent: 0.1,
-        },
-      },
-    },
-  },
-}
+const tradingConfig = await loadTradingConfig()
+const zroPairConfig = tradingConfig.strategies.CG_coinGrabber.pairs.ZROUSDT
 
 // These are the eight confirmed BUY executions from the 2026-11-06 ZROUSDT
 // history. Quote amounts are exchange-reported facts, not recomputed prices.
@@ -76,7 +56,7 @@ function makeHistoricalBuyFill({ tradeId, price, quantity, quote }) {
     quoteQuantity: new Money({ amount: quote, asset: quoteAsset }),
     commissions: [
       new Commission({
-        amount: new Money({ amount: "0.005", asset: baseAsset }),
+        amount: new Money({ amount: String(zroPairConfig.orderQuantity * zroPairConfig.makerPercent / 100), asset: baseAsset }),
       }),
     ],
     commissionStatus: "COMPLETE",
@@ -243,3 +223,17 @@ test("replays ZROUSDT trade 11666 without completing recovery while 0.05 ZRO rem
   assert.equal(portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.05")
   assert.equal(recoveryLedger.netSellProceeds, "64.03136454")
 })
+
+test("loads and exposes the enabled DOGEUSDT pair from the production trading config", () => {
+  const dogePairConfig = tradingConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT
+
+  assert.ok(dogePairConfig)
+  assert.equal(dogePairConfig.enabled, true)
+  assert.equal(dogePairConfig.orderQuantity > 0, true)
+  assert.equal(dogePairConfig.keepQuantity >= 0, true)
+  assert.equal(dogePairConfig.pricePrecision >= 0, true)
+  assert.equal(dogePairConfig.quantityPrecision >= 0, true)
+  assert.equal(dogePairConfig.makerPercent >= 0, true)
+  assert.equal(dogePairConfig.takerPercent >= 0, true)
+})
+
