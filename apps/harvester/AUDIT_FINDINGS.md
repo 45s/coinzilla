@@ -317,3 +317,45 @@ Trace lines 4551–4563 record canonical SELL trade 11666/order 727904 applied e
 **Current evidence gaps remain unchanged:** later DOGE 1276698 and ZRO 727905 exchange fills are verified by bounded 50-row exports, but later Harvester processing and current balances are UNVERIFIED. The full historical CLOSING open-order payload is still absent, so the complete two-order identity set is not proven. No all-time trade-history claim is made. The original CLOSING snapshot is not rewritten.
 
 **Cross-workstream state:** #649 is closed/merged with exact-once regression coverage; #646 is open pending explicit product decisions (maker-only versus max maker/taker reserve and zero-value input semantics); #626 is open pending original empty-TypeError cause disposition and controlled TESTNET/owner acceptance. TESTNET acceptance remains NOT ACCEPTED.
+
+
+## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
+
+A review of parent issue #645 comment 6680483675 and the original Journal comment 6680290142 confirms that these records were already supplied by the operator and must not be described as absent.
+
+### Historical account snapshots from the original Journal
+
+| Phase | Asset | Free | Locked | Total |
+|---|---|---:|---:|---:|
+| PREFLIGHT (~07:00:04Z) | DOGE | 19,119.8 | 0 | 19,119.8 |
+| PREFLIGHT (~07:00:04Z) | USDT | 8,954.11668541 | 0 | 8,954.11668541 |
+| PREFLIGHT (~07:00:04Z) | ZRO | 245.125 | 0 | 245.125 |
+| CLOSING (~07:58:11Z) | DOGE | 19,122.6 | 1,196 | 20,318.6 |
+| CLOSING (~07:58:11Z) | USDT | 8,860.31204995 | 7.98 | 8,868.29204995 |
+| CLOSING (~07:58:11Z) | ZRO | 245.175 | 0 | 245.175 |
+
+The PREFLIGHT account snapshot was COMPLETE and its open-orders snapshot reported zero orders. The CLOSING account snapshot was INCOMPLETE with `UNRESOLVED_OWNED_ORDERS:2`. These are historical Journal facts, not current wallet balances.
+
+### Operator-supplied latest open-orders snapshot
+
+The operator also supplied a separate point-in-time open-orders response, preserved in issue #645 comment 6680483675. It showed one open order:
+
+- Symbol: ZROUSDT
+- Side/type: BUY LIMIT
+- Exchange order ID: `727905`
+- Client order ID: `h-971fc65d9a264984ab8aa7-23`
+- Price: `1.59600000`
+- Original quantity: `5.00000000`
+- Executed quantity: `0`
+- Status: `NEW`
+
+This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is a supplied latest snapshot, but it is not the complete account-wide open-orders payload captured at the earlier ~07:58Z CLOSING event.
+
+### Corrected evidence classification
+
+- **Already supplied and preserved:** PREFLIGHT and CLOSING balances; PREFLIGHT zero-open-orders Journal record; separate latest one-order ZROUSDT open-orders snapshot; DOGE/ZRO order histories; bounded 50-row DOGE/ZRO trade exports; original Journal and parsed application-log evidence.
+- **Still not supplied/located in the preserved audit:** the complete historical ~07:58Z CLOSING open-orders payload identifying both unresolved owned orders.
+- **Still unverified:** a timestamped account-balance/open-orders snapshot after the later DOGE 1276698 and ZRO 727905 fills; any later Harvester Journal/runtime evidence proving those post-CLOSING fills were applied to Portfolio/RecoveryLedger.
+- Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
+
+The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
