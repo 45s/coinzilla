@@ -59,7 +59,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -182,6 +182,9 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     getFreeBalance: ({ assetId }) => assetId === quoteAsset.id
       ? new Quantity({ amount: quoteFreeBalance, asset: quoteAsset })
       : new Quantity({ amount: baseFreeBalance, asset: baseAsset }),
+    getQuoteCashFlowBaseline: ({ assetId }) => assetId === quoteAsset.id
+      ? quoteCashFlowBaseline
+      : "0",
   }
   let currentPortfolio = initialPortfolio ?? new Portfolio()
   let currentRecoveryLedger = initialRecoveryLedger ?? RecoveryLedger.empty({ market })
@@ -242,6 +245,53 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     },
   }
 }
+
+test("does not double-count historical quote cash flow already reflected in a refreshed account snapshot", async () => {
+  const position = new Position({
+    market,
+    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "100", asset: quoteAsset }),
+  })
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [position] }),
+    initialRecoveryLedger: RecoveryLedger.empty({ market }),
+    quoteFreeBalance: "0",
+    quoteCashFlowBaseline: "100",
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.submittedOrders.length, 0)
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE")
+  assert.deepEqual(harness.orders, [])
+})
+
+test("adds only quote cash flow accrued after the latest account snapshot baseline", async () => {
+  const position = new Position({
+    market,
+    baseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "120", asset: quoteAsset }),
+  })
+  const harness = await createHarness({
+    initialPortfolio: new Portfolio({ positions: [position] }),
+    initialRecoveryLedger: RecoveryLedger.empty({ market }),
+    quoteFreeBalance: "80",
+    quoteCashFlowBaseline: "100",
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.submittedOrders.length, 1)
+  assert.equal(result.data.submittedOrders[0].side, "BUY")
+})
 
 test("durably journals the submission intent before calling the broker", async () => {
   const sequence = []
