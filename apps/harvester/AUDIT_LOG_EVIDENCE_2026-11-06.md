@@ -63,3 +63,23 @@ The shutdown trace's `Exchange account snapshot loaded` event is timestamped `20
 5. Exact identity and reservation reconciliation for both unresolved orders.
 
 No TESTNET order, cancellation, restart, account-setting change, or exchange write was performed. This addendum is derived evidence, not a substitute for the original exchange trade/order records.
+
+
+## Evidence correction — balance and open-orders records were already supplied
+
+Parent issue #645 comment 6680483675 records the operator-supplied latest open-orders snapshot: one ZROUSDT BUY LIMIT order 727905, client ID `h-971fc65d9a264984ab8aa7-23`, price 1.59600000, original quantity 5.00000000, executed quantity 0, status NEW. The same issue comment explicitly identifies this as a point-in-time latest snapshot, not the historical CLOSING open-order payload.
+
+The original Journal (issue #645 comment 6680290142) contains these account snapshots:
+
+| Phase | Asset | Free | Locked | Total |
+|---|---|---:|---:|---:|
+| PREFLIGHT | DOGE | 19119.8 | 0 | 19119.8 |
+| PREFLIGHT | USDT | 8954.11668541 | 0 | 8954.11668541 |
+| PREFLIGHT | ZRO | 245.125 | 0 | 245.125 |
+| CLOSING | DOGE | 19122.6 | 1196 | 20318.6 |
+| CLOSING | USDT | 8860.31204995 | 7.98 | 8868.29204995 |
+| CLOSING | ZRO | 245.175 | 0 | 245.175 |
+
+PREFLIGHT open orders were captured as count 0, readiness READY. CLOSING was INCOMPLETE with UNRESOLVED_OWNED_ORDERS:2.
+
+These records were already available and are part of the evidence base. The remaining gaps are narrower: no complete ~07:58Z CLOSING open-orders payload has been located to identify both orders, and no later post-fill balance/open-orders snapshot or subsequent Harvester Journal/runtime session has been located to prove post-CLOSING wallet state and Portfolio/RecoveryLedger application. The supplied latest one-order snapshot is not interchangeable with either missing artifact.
