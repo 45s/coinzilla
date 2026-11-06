@@ -324,12 +324,14 @@ The timeline must therefore be read as: (1) Harvester observed open/unfilled ord
  
 ## Expected-versus-actual recovery reconciliation — 2026-11-06
 
-The decision-time config committed at audit baseline `4af3434f788b87139513921f220294ae90daf4d5` sets `minProfit=0.01), DOGE `keepQuantity=1), ZRO `keepQuantity=0.01), and 0.1% maker/taker rates. Both actual recovery orders are ordinary LIMIT. With the canonical 0.1% reserve and exchange quantity steps DOGE=1 / ZRO=0.01, the SELL plans reproduce the exact submitted quantities and prices:
+The decision-time config committed at audit baseline `4af3434f788b87139513921f220294ae90daf4d5` sets minProfit=0.01, DOGE keepQuantity=1, ZRO keepQuantity=0.01, and 0.1% maker/taker rates. Both actual recovery orders are ordinary LIMIT. Under candidate quantity-step assumptions DOGE=1 / ZRO=0.01, the canonical 0.1% reserve calculations reproduce the submitted quantities and prices. The original logs record only `Exchange trading rules validated`, not the actual filter values; historical tick/step/minimum-filter conformance is therefore UNVERIFIED. Exchange acceptance confirms that each submitted order passed the exchange's then-current filters, but does not prove the assumed filter values.
 
 | Symbol | Net BUY position | Full spent | Keep | Expected SELL | Actual SELL | Verdict |
 |---|---:|---:|---:|---:|---:|---|
-| DOGEUSDT | 1,198.8 DOGE | 85.836 USDT | 1 DOGE | 1,196 @ 0.07185 | 1,196 @ 0.07185 | FOLLOWED |
-| ZROUSDT | 39.96 ZRO | 64.02 USDT | 0.01 ZRO | 39.91 @ 1.606 | 39.91 @ 1.606 | FOLLOWED |
+| DOGEUSDT | 1,198.8 DOGE | 85.836 USDT | 1 DOGE | 1,196 @ 0.07185* | 1,196 @ 0.07185 | FOLLOWED for submitted order; filter calculation UNVERIFIED |
+| ZROUSDT | 39.96 ZRO | 64.02 USDT | 0.01 ZRO | 39.91 @ 1.606* | 39.91 @ 1.606 | FOLLOWED for submitted order; filter calculation UNVERIFIED |
+
+*Expected quantities/prices are conditional on the candidate quantity steps above; the accepted exchange orders prove submitted order validity, not that the assumed historical filter values were exact.*
 
 ### DOGE 1276698
 
