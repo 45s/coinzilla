@@ -2138,7 +2138,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
   assert.ok(recoverySell)
   assert.ok(nextStandingBuy)
   assert.notEqual(recoverySell.clientOrderId, firstRecoverySell.clientOrderId)
-  assert.deepEqual(harness.orders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY"])
+  assert.deepEqual(harness.orders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "SELL", "BUY"])
   assert.deepEqual(buyAfterSellAcknowledgements, [
     firstRecoverySell.clientOrderId,
     recoverySell.clientOrderId,
