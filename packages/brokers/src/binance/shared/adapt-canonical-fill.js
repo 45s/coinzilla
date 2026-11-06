@@ -46,8 +46,20 @@ export function adaptCanonicalFill({ trade, market } = {}) {
       commissionStatus = "COMPLETE"
     } else if (typeof trade.commissionAsset === "string" && trade.commissionAsset.trim()) {
       const asset = commissionAssetFor(trade.commissionAsset, market)
+      const isThirdAsset = asset.id !== market.baseAsset.id &&
+        asset.id !== market.quoteAsset.id
+      const thirdAssetCommissionQuoteValue = trade.thirdAssetCommissionQuoteValue
+      if (thirdAssetCommissionQuoteValue !== undefined && !isThirdAsset) {
+        throw new TypeError("Third-asset commission quote value was supplied for a base/quote commission")
+      }
       commissions.push(new Commission({
         amount: new Money({ amount: commission.amount, asset }),
+        ...(isThirdAsset && thirdAssetCommissionQuoteValue !== undefined
+          ? { quoteValue: new Money({
+            amount: thirdAssetCommissionQuoteValue,
+            asset: market.quoteAsset,
+          }) }
+          : {}),
       }))
       commissionStatus = "COMPLETE"
     }

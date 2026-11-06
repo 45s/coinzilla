@@ -33,6 +33,8 @@ export const fillErrMsgs = {
   liquidityRole: "Fill.liquidityRole is unsupported",
   executedAt: "Fill.executedAt should be a non-negative safe integer",
   commissions: "Fill.commissions should be an array of Commission values",
+  thirdAssetCommissionQuoteValueAsset: "Fill third-asset commission quote value should use the market quote Asset",
+  quoteValueOnlyForThirdAsset: "Commission.quoteValue is only valid for a third-asset commission",
   commissionStatus: "Fill.commissionStatus is unsupported",
   partialCommissions: "Fill.PARTIAL commission status should include at least one known commission",
   unknownCommissions: "Fill.UNKNOWN commission status should not include commission entries",
@@ -133,6 +135,20 @@ export class Fill {
     }
     if (commissionStatus === "UNKNOWN" && commissions.length > 0) {
       throw new Error(fillErrMsgs.unknownCommissions)
+    }
+    for (const commission of commissions) {
+      const commissionAssetId = commission.amount.asset.id
+      const isThirdAsset = commissionAssetId !== market.baseAsset.id &&
+        commissionAssetId !== market.quoteAsset.id
+      if (commission.quoteValue !== undefined && !isThirdAsset) {
+        throw new Error(fillErrMsgs.quoteValueOnlyForThirdAsset)
+      }
+      if (
+        commission.quoteValue !== undefined &&
+        commission.quoteValue.asset.id !== market.quoteAsset.id
+      ) {
+        throw new Error(fillErrMsgs.thirdAssetCommissionQuoteValueAsset)
+      }
     }
 
     this.#tradeId = tradeId.trim()
