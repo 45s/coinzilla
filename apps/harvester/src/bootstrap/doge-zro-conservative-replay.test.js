@@ -85,9 +85,9 @@ const exchangeInfoSymbol = (symbol) => {
       },
       {
         filterType: "LOT_SIZE",
-        minQty: symbol === "DOGEUSDT" ? "1" : "0.1",
+        minQty: symbol === "DOGEUSDT" ? "1" : "0.01",
         maxQty: "100000000",
-        stepSize: symbol === "DOGEUSDT" ? "1" : "0.1",
+        stepSize: symbol === "DOGEUSDT" ? "1" : "0.01",
       },
       {
         filterType: "MIN_NOTIONAL",
