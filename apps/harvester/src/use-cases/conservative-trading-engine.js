@@ -985,6 +985,8 @@ export function makeConservativeTradingEngine({
         committedBase,
         committedBaseBalance,
         quoteCashFlow,
+        portfolioQuoteCashFlow,
+        quoteCashFlowBaseline,
       })
       if (executableActions.length === 0) {
         return toResult({
