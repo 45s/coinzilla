@@ -17,15 +17,15 @@ const binanceEnv = {
 
 const config = {
   strategies: {
-      CG_coinGrabber: {
-        enabled: true,
-        settings: {
-          minProfit: 0.01,
-          conservative: { enabled: true },
-          aggressive: { enabled: false },
-        },
-        pairs: {
-          DOGEUSDT: {
+    CG_coinGrabber: {
+      enabled: true,
+      settings: {
+        minProfit: 0.01,
+        conservative: { enabled: true },
+        aggressive: { enabled: false },
+      },
+      pairs: {
+        DOGEUSDT: {
             enabled: true,
             investment: 100,
             orderQuantity: 400,
@@ -36,7 +36,7 @@ const config = {
             makerPercent: 0.1,
             takerPercent: 0.1,
           },
-          ZROUSDT: {
+        ZROUSDT: {
             enabled: true,
             investment: 100,
             orderQuantity: 5,
@@ -47,8 +47,8 @@ const config = {
             makerPercent: 0.1,
             takerPercent: 0.1,
           },
-        },
       },
+    },
   },
 }
 
@@ -97,7 +97,7 @@ test("submits the expected Conservative DOGE/ZRO BUY orders for triggered prices
         }),
       },
     })
-    broker.subscribeForUserData = async (handlers) => {
+    broker.subscribeForUserData = async () => {
       return { ok: true, data: { disconnect: async () => {} } }
     }
     broker.subscribeForPrices = async ({ symbol, onPrice }) => {
