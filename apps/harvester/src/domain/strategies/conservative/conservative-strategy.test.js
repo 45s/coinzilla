@@ -101,7 +101,7 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
   assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
     side, price, quantity,
   })), [
-    { side: "SELL", price: "0.103", quantity: "98" },
+    { side: "SELL", price: "0.102", quantity: "99" },
     { side: "BUY", price: "0.099", quantity: "100" },
   ])
 })
@@ -207,7 +207,7 @@ test("includes the actual BUY quote commission in the recovery SELL limit price"
 
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.equal(recoveryLedger.buyCost, "10.2")
-  assert.equal(sell.price, "0.105")
+  assert.equal(sell.price, "0.104")
 })
 
 function makeProfitableResidualState({ soldQuantity = "98" } = {}) {
@@ -258,7 +258,7 @@ test("continues selling residual inventory after cumulative recovery profit is a
   assert.equal(portfolio.getPosition({ symbol: market.symbol }).baseQuantity.amount, "2")
   assert.deepEqual({ price: sell.price, quantity: sell.quantity, reason: sell.reason }, {
     price: "0.1",
-    quantity: "0.9",
+    quantity: "1",
     reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
   })
 })
@@ -318,7 +318,7 @@ test("classifies residual quantity below MIN_NOTIONAL instead of submitting an i
   assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
   assert.equal(decision.inventoryDisposition.quantity, "1")
-  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.09")
+  assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.1")
 })
 
 test("does not create a duplicate residual SELL while one is active", () => {
@@ -358,7 +358,7 @@ test("fails closed when active inventory has no positive recovery cost basis", (
     recoveryLedger: recoveryLedger.resetCycle(),
     marketMetadata,
     lastBuyPrice: "0.1",
-  }), /no recovery cost\/profit basis/)
+  }), /Position\.spent and legacy RecoveryLedger cost mirror diverged/)
 
   const proceedsOnlyLedger = new RecoveryLedger({
     market,
@@ -582,4 +582,16 @@ test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL",
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
   assert.equal(decision.buyDisposition.reason, "MAX_QUANTITY")
+})
+
+test("fails closed rather than inventing a next BUY reference while active inventory lacks completed-BUY VWAP", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+  }), /requires the reconciled completed-BUY VWAP/)
 })

@@ -1905,14 +1905,14 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
       const position = currentPortfolio.getPosition({ marketId })
       const result = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
-        buyCost: currentRecoveryLedger.buyCost,
+        spent: currentPortfolio.getPosition({ marketId }).spent.amount,
         netSellProceeds: currentRecoveryLedger.netSellProceeds,
         activeQuantity: position.baseQuantity.amount,
         keepQuantity,
         minProfit,
       })
       completionSnapshot = {
-        buyCost: currentRecoveryLedger.buyCost,
+        spent: currentPortfolio.getPosition({ marketId }).spent.amount,
         netSellProceeds: currentRecoveryLedger.netSellProceeds,
         activeQuantity: position.baseQuantity.amount,
         realizedNetProfit: result.realizedNetProfit,
