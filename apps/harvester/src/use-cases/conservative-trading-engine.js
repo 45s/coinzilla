@@ -1373,6 +1373,28 @@ export function makeConservativeTradingEngine({
         if (!replacement.ok) return replacement
         return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
+      if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
+          state.registry.getActiveOrders({ marketId: order.market.id }).some((active) => active.side === "SELL")) {
+        const cancellation = await cancelAndReconcileRecoverySells({
+          symbol,
+          marketId: order.market.id,
+        })
+        if (!cancellation.ok) return cancellation
+        if (cancellation.data?.deferred === true) {
+          return toResult({ data: { order, replacementDeferred: true, waitingForFullFill: true } })
+        }
+        state.replacementIntents.delete(symbol)
+        const replacement = await evaluateLatestTransition({ symbol })
+        if (!replacement.ok) return replacement
+        return toResult({
+          data: {
+            ...replacement.data,
+            order,
+            recoverySellReplaced: true,
+            waitingForFullFill: true,
+          },
+        })
+      }
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
