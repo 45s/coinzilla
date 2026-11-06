@@ -26,6 +26,7 @@ const eventPublisher = {
   flush: async () => ({ ok: true, durable: true }),
 }
 const cycleCompletions = new Map()
+const cycleWaiters = new Map()
 
 const binanceEnv = {
   HARVESTER_BROKER: "binance",
@@ -84,27 +85,31 @@ const marketFilters = (symbol) => {
   }
 }
 
-const waitForOrderCount = (submitted, waiters, expected) => {
-  if (submitted.length >= expected) return Promise.resolve()
-  return new Promise((resolve) => waiters.push({ expected, resolve }))
+const waitForOrder = (submitted, waiters, { symbol, side }) => {
+  const matches = (order) =>
+    order.market.symbol === symbol && order.side === side
+  const existing = submitted.find(matches)
+  if (existing) return Promise.resolve(existing)
+  return new Promise((resolve) => waiters.push({ matches, resolve }))
 }
 
 test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", { timeout: 30_000 }, async () => {
   cycleCompletions.clear()
+  cycleWaiters.clear()
   const submitted = []
   const priceHandlers = new Map()
   const openOrders = new Map()
   const orderWaiters = []
-  const cycleWaiters = new Map()
   let userDataHandlers
   let nextBrokerOrderId = 1
 
   const notifyOrderWaiters = () => {
     for (let index = orderWaiters.length - 1; index >= 0; index -= 1) {
       const waiter = orderWaiters[index]
-      if (submitted.length < waiter.expected) continue
+      const order = submitted.find(waiter.matches)
+      if (!order) continue
       orderWaiters.splice(index, 1)
-      waiter.resolve()
+      waiter.resolve(order)
     }
   }
   const waitForCycle = (symbol) => {
@@ -285,15 +290,19 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     assert.equal(runtime.userDataReady, true)
 
     // The initial market references and resulting BUY orders are from issue #645.
+    const dogeBuySubmitted = waitForOrder(submitted, orderWaiters, {
+      symbol: "DOGEUSDT",
+      side: "BUY",
+    })
     await triggerPrice("DOGEUSDT", "0.07161000")
-    await waitForOrderCount(submitted, orderWaiters, 1)
-    await triggerPrice("ZROUSDT", "1.60500000")
-    await waitForOrderCount(submitted, orderWaiters, 2)
+    const dogeBuy = await dogeBuySubmitted
 
-    const dogeBuy = submitted.find((order) =>
-      order.market.symbol === "DOGEUSDT" && order.side === "BUY")
-    const zroBuy = submitted.find((order) =>
-      order.market.symbol === "ZROUSDT" && order.side === "BUY")
+    const zroBuySubmitted = waitForOrder(submitted, orderWaiters, {
+      symbol: "ZROUSDT",
+      side: "BUY",
+    })
+    await triggerPrice("ZROUSDT", "1.60500000")
+    const zroBuy = await zroBuySubmitted
     assert.deepEqual(
       [dogeBuy.price, dogeBuy.quantity, dogeBuy.type],
       ["0.07157", "400", "LIMIT"],
@@ -304,7 +313,10 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
     )
 
     // Trigger each BUY fill at its submitted limit; exchange reports actual fills/fees.
-    const dogeSellSubmitted = waitForOrderCount(submitted, orderWaiters, 4)
+    const dogeSellSubmitted = waitForOrder(submitted, orderWaiters, {
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    })
     await triggerPrice("DOGEUSDT", "0.07157")
     fillOrder({
       order: dogeBuy,
@@ -313,9 +325,12 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       commissionAmount: "0.4",
       commissionAsset: "DOGE",
     })
-    await dogeSellSubmitted
+    const dogeSell = await dogeSellSubmitted
 
-    const zroSellSubmitted = waitForOrderCount(submitted, orderWaiters, 6)
+    const zroSellSubmitted = waitForOrder(submitted, orderWaiters, {
+      symbol: "ZROUSDT",
+      side: "SELL",
+    })
     await triggerPrice("ZROUSDT", "1.604")
     fillOrder({
       order: zroBuy,
@@ -324,12 +339,7 @@ test("replays one complete Conservative DOGE/ZRO cycle from issue #645 prices", 
       commissionAmount: "0.005",
       commissionAsset: "ZRO",
     })
-    await zroSellSubmitted
-
-    const dogeSell = submitted.find((order) =>
-      order.market.symbol === "DOGEUSDT" && order.side === "SELL")
-    const zroSell = submitted.find((order) =>
-      order.market.symbol === "ZROUSDT" && order.side === "SELL")
+    const zroSell = await zroSellSubmitted
     assert.deepEqual([dogeSell.price, dogeSell.quantity], ["0.07203", "398"])
     assert.deepEqual([zroSell.price, zroSell.quantity], ["1.615", "4.98"])
 
