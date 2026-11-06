@@ -1,6 +1,7 @@
 import { createWriteStream, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { spawn } from "node:child_process"
+import { forwardChildOutput } from "./forward-child-output.js"
 
 const logDirectory = resolve(process.cwd(), "../../logs_harvester")
 const logPath = resolve(logDirectory, "terminal.log")
@@ -51,26 +52,39 @@ const onSigterm = () => handleSignal("SIGTERM")
 process.once("SIGINT", onSigint)
 process.once("SIGTERM", onSigterm)
 
-const forwardOutput = (stream, output) => {
-  stream.on("data", (chunk) => {
-    output.write(chunk)
-    if (!logStreamFailed) logStream.write(chunk)
-  })
+const forwardOutput = async (stream, output) => {
+  try {
+    await forwardChildOutput({
+      source: stream,
+      destinations: () => [
+        output,
+        ...(!logStreamFailed ? [logStream] : []),
+      ],
+    })
+  } catch (error) {
+    if (!logStreamFailed) {
+      process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
+      process.exitCode = 1
+      if (!childClosed && !child.killed) child.kill("SIGTERM")
+    }
+  }
 }
 
-forwardOutput(child.stdout, process.stdout)
-forwardOutput(child.stderr, process.stderr)
+const outputForwarding = [
+  forwardOutput(child.stdout, process.stdout),
+  forwardOutput(child.stderr, process.stderr),
+]
 
 logStream.on("error", (error) => {
   if (logStreamFailed) return
   logStreamFailed = true
-  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\\n`)
+  process.stderr.write(`Failed to write Harvester terminal log: ${error.message}\n`)
   process.exitCode = 1
   if (!childClosed && !child.killed) child.kill("SIGTERM")
 })
 
 child.on("error", (error) => {
-  process.stderr.write(`Failed to start Harvester: ${error.message}\\n`)
+  process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
   process.exitCode = 1
 })
 
@@ -79,12 +93,16 @@ child.on("close", async (code, signal) => {
   process.removeListener("SIGINT", onSigint)
   process.removeListener("SIGTERM", onSigterm)
 
+  await Promise.all(outputForwarding)
   await closeLogStream()
-  if (code !== null) {
+
+  if (logStreamFailed) {
+    process.exitCode = 1
+  } else if (code !== null) {
     process.exitCode = code
   } else if (signal) {
     process.exitCode = signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1
   } else {
-    process.exitCode = logStreamFailed ? 1 : 0
+    process.exitCode ??= 0
   }
 })
