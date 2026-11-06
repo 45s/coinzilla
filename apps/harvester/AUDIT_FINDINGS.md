@@ -67,6 +67,7 @@ Confirmed mismatches:
 2. Specification comparison table still describes a possible post-reset recovery SELL from residual inventory; current strategy requires positive outstanding recovery and a test covers residual inventory after ledger reset.
 3. Portfolio documentation says automatic free allocation after recovery completion is not implemented; current bootstrap completion path allocates the exact free quantity and resets the ledger after eligibility.
 4. The trading-config validator accepts `minProfit=0` and `keepQuantity=0`, while the recovery SELL planner requires positive minProfit and the recovery completion evaluator requires both positive minProfit and positive keepQuantity. The current TESTNET config uses positive values, so this did not affect the observed run; the accepted-input contract is inconsistent.
+5. `ACCOUNTING_INVARIANTS.md` §9 still marks post-allocation residual-inventory strategy coverage as a gap, but `conservative-trading-engine.test.js` now contains `keeps post-recovery residual active inventory and does not issue another recovery SELL`. The matrix should be reconciled with the existing test, while preserving the separate exact-once/full-cycle gaps tracked in #648.
 
 No trading behavior was changed to resolve this documentation conflict. Issue #646 requests explicit specification alignment.
 
