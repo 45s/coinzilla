@@ -417,3 +417,14 @@ Exact-HEAD workflow lookup returned zero PR-triggered runs. No package test comm
 Added offline engine tests for partial terminal recovery SELL outcomes CANCELED, EXPIRED, and REJECTED. The valid cases verify exact fill application, quote commission preservation, Position quantity reduction, unchanged accumulated Position.spent, and cumulative RecoveryLedger net proceeds before the event can advance; REJECTED then pauses under existing policy. Missing fill history and conflicting duplicate fill IDs must fail closed before accounting or replacement.
 
 Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. No production implementation changes. Tests and exact-head CI are not yet verified.
+
+
+## 2026-11-06 — final SELL lifecycle review and scope verification
+
+Reviewed current branch source and tests for partial SELL stability, BUY-triggered SELL cancellation/reconciliation/replacement, terminal CANCELED/EXPIRED/REJECTED recovery SELLs with partial executions and actual quote commissions, residual sell-through, exchange-constrained dust, and dust plus a later BUY preserving accumulated cost basis. Regression coverage is present; this review did not execute tests.
+
+A local clone attempt failed because github.com could not be resolved from this environment. GitHub's exact-head workflow/status queries returned no runs and no statuses. Therefore focused Harvester tests, full verification, and exact-head CI remain unverified.
+
+Scope cleanup restored six changed files outside apps/harvester to byte-identical develop versions: AI_AGENT_WORKFLOW.md, two Binance shared fill-adapter files, and three shared commission/fill entity files. The PR changed-file inventory now contains 51 files, all under apps/harvester. PR #653 remains OPEN and UNMERGED. No TESTNET/exchange action, merge, Journal, broker, or out-of-app production change was performed in this continuation.
+
+The canonical specification is unchanged. Exact dust quantity/limiting-filter persistence remains unresolved and was not implemented under the explicit scope restriction.

@@ -473,3 +473,12 @@ No recovery, Journal, broker, or exchange implementation changes are authorized 
 Offline engine tests now cover partial terminal SELL fills for CANCELED, EXPIRED, and REJECTED. They verify fill quantity and actual quote commission are reconciled before subsequent strategy action; Position quantity and cumulative net SELL proceeds update, while accumulated Position.spent remains unchanged. REJECTED retains the existing fail-closed pause after reconciliation. Separate missing-history and conflicting-duplicate cases assert no accounting mutation and no replacement SELL.
 
 Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. These tests have not yet been executed in a local environment or verified by exact-head CI. Do not mark F-011 PASS until focused tests and the Harvester suite pass on the exact PR head.
+
+
+## Superseding lifecycle coverage status — 2026-11-06
+
+The current branch regression inventory now includes the formerly missing focused terminal recovery-SELL cases for CANCELED, EXPIRED, and REJECTED, including partial terminal executions, actual quote commission, and fail-closed handling of missing/conflicting fill history (engine test file, around lines 2619–2745). The current branch also contains tests for unchanged partial SELL behavior without a new BUY, decision-B cancellation/reconciliation/replacement, residual sell-through, quantity-step/MIN_NOTIONAL dust, and dust combined with a later BUY while preserving Position.spent and prior net SELL proceeds.
+
+This supersedes earlier historical statements in this file that terminal SELL cases or the dust-plus-later-BUY regression were still missing. It does **not** mean tests passed: no focused or full test suite has been executed on the current code head, and no exact-head Actions runs or commit statuses are reported.
+
+The canonical durable-dust-recording requirement remains an unresolved audit gap: exact dust quantity and limiting filter are calculated in the domain but are not persisted in the no-action log/lifecycle event. No Journal, event DTO, broker, exchange, or other production change was made. PR #653 remains OPEN and UNMERGED.

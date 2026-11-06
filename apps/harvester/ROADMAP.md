@@ -1599,3 +1599,16 @@ This pass found a regression-proof gap, not a confirmed source/spec runtime mism
 - [ ] Execute focused engine tests and the complete Harvester test suite on the exact current PR head; verify exact-head CI before marking F-011 complete.
 
 These are test-only changes. No production, Journal, broker, exchange, restart, or TESTNET work is included. PR #653 remains open and unmerged.
+
+
+## Current Conservative audit status — 2026-11-06
+
+- [x] Source/test coverage reviewed for partial SELL stability without a new BUY.
+- [x] Source/test coverage reviewed for decision-B BUY-fill cancellation, terminal SELL reconciliation, and replacement ordering.
+- [x] Focused terminal recovery-SELL regression cases added for CANCELED, EXPIRED, and REJECTED, including partial executions, actual quote commission, and incomplete/conflicting history fail-closed cases.
+- [x] Residual sell-through, quantity-step and MIN_NOTIONAL dust, MAX_QUANTITY/MAX_NOTIONAL caps, exact keepQuantity completion gating, and dust-plus-later-BUY basis preservation are represented in regression tests.
+- [ ] Execute focused Harvester tests and the full Harvester suite.
+- [ ] Verify all required workflows and commit statuses on the exact final PR HEAD.
+- [ ] Resolve the canonical requirement to durably record exact dust quantity and limiting filter. This requires a separately authorized in-scope production change; it was not implemented here.
+
+The checked items above indicate source/test inventory review and test presence only, **not passing test execution**. Local cloning is unavailable because github.com DNS resolution failed; exact-head Actions/status queries currently return no runs/statuses. PR #653 stays OPEN and UNMERGED. The canonical specification remains the sole rule authority; it is unchanged.
