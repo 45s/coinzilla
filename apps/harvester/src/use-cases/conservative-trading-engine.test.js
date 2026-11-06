@@ -59,7 +59,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -199,7 +199,7 @@ async function createHarness({ strategyPolicy, isMarketPriceFresh = () => true, 
     isMarketPriceFresh,
     isMarketBookFresh,
     eventPublisher: effectiveEventPublisher,
-    tradingConfig,
+    tradingConfig: suppliedTradingConfig ?? tradingConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
     getMarketMetadata: () => marketMetadata,
@@ -1654,7 +1654,25 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     })
   }
 
+  const zeroFeeTradingConfig = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          DOGEUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+            makerPercent: 0,
+            takerPercent: 0,
+          },
+        },
+      },
+    },
+  }
   const harness = await createHarness({
+    tradingConfig: zeroFeeTradingConfig,
     baseFreeBalance: "2",
     quoteFreeBalance: "1000",
     cancelWithFill: true,
@@ -1864,7 +1882,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     order: recoverySell,
     tradeId: "cycle-recovery-sell-partial",
     quantity: "0.5",
-    commissionAsset: "BASE",
+    commissionAsset: "QUOTE",
     executedAt: 15,
   })
   const recoverySellPartial = await engine.processUserDataEvent({
@@ -1892,7 +1910,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     order: recoverySell,
     tradeId: "cycle-recovery-sell-final",
     quantity: finalSellQuantity,
-    commissionAsset: "BASE",
+    commissionAsset: "QUOTE",
     executedAt: 16,
   })
   const recoverySellCompleted = await engine.processUserDataEvent({
