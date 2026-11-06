@@ -2806,8 +2806,10 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   harness = await createHarness({
     strategyPolicy,
     updateTradingAccounting: async ({ fill }) => {
-      const update = harness.getCurrentPortfolio().applyFill({ fill })
-      harness.setCurrentPortfolio(update.portfolio)
+      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ fill })
+      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ fill })
+      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
       return { ok: true, data: { applied: true, duplicate: false } }
     },
   })
@@ -2936,6 +2938,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   const harness = await createHarness({
     strategyPolicy,
     initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
   })
 
   const first = await harness.engine.processMarketPrice({
