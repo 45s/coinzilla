@@ -1,6 +1,6 @@
 # Harvester Roadmap
 
-> **CURRENT DIRECTION — 2026-11-05: POST-MERGE ENGINEERING AND CONTROLLED TESTNET READINESS.**
+> **CURRENT DIRECTION — 2026-11-06: CONSERVATIVE STRATEGY EVIDENCE AUDIT AND CONTROLLED TESTNET READINESS.**
 >
 > **2026-11-05 runtime decision:** durable Journal replay and process-restart recovery are intentionally disabled. Startup does not read historical Journal sessions, reconstruct Portfolio/RecoveryLedger/order state, or reconcile old trades. Harvester starts with fresh in-memory trading state for the current process. The separate durable account PREFLIGHT/CLOSING audit and pre-side-effect order/cancel intent flushes remain enabled. Do not reintroduce Journal replay or make it a startup prerequisite unless the user explicitly requests it.
 >
@@ -1236,3 +1236,20 @@ persistence, exchange operations, or broader observability projects.
 - [x] Document concise log-message rules: omit redundant application prefixes, keep INFO operator-focused, move routine market evaluations to DEBUG, and avoid duplicate event records.
 - [x] Console INFO output omits the redundant `INFO` label; SYSTEM is used for Journal, WebSocket, subscription, readiness, and shutdown lifecycle transitions.
 - [x] The `pnpm run dev` child-process runner respects stdout/stderr and `logs_harvester/terminal.log` backpressure, pausing reads until writable destinations drain; focused tests cover forwarding, backpressure, and destination changes. This protects the development terminal/log mirror only and does not change Harvester trading or Journal transports.
+
+## Conservative strategy evidence audit — 2026-11-06
+
+**Audit:** [AUDIT.md](./AUDIT.md)  
+**Findings register:** [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md)  
+**Execution ledger:** [AUDIT_EXECUTION_HISTORY.md](./AUDIT_EXECUTION_HISTORY.md)  
+**Parent evidence:** [#645](https://github.com/45s/coinzilla/issues/645)  
+**Specification follow-up:** [#646](https://github.com/45s/coinzilla/issues/646)  
+**Baseline:** `develop` `4af3434f788b87139513921f220294ae90daf4d5`
+
+The 2026-11-06 Journal (114 records) and the 100-row DOGEUSDT and ZROUSDT order-history exports have been parsed. Twenty-three current-session order submissions are correlated to Journal client IDs and exchange order IDs. ZRO trade-level quantities, commissions, realized quote profit (+0.01136454 USDT), residual base (+0.05 ZRO), and account balance deltas reconcile. The 0.05 ZRO consists of 0.01 free quantity allocated at recovery completion plus 0.04 active residual from fee-reserved sell sizing / quantity-step rounding.
+
+DOGE remains **CONFLICT**: order history reports SELL 1276698 / client suffix -11 FILLED for 1,196 DOGE, while the Journal has no applied DOGE SELL fill and retains the order acknowledgement as OPEN; the CLOSING snapshot has 1,196 DOGE locked. The DOGE total balance delta exactly matches the three net BUY fills, not the reported SELL. The CLOSING account audit is INCOMPLETE with two unresolved owned orders. No cause or realized DOGE SELL PnL is asserted.
+
+The original `harvester.log` and `harvester-trace.log` attachments, whose byte sizes and SHA-256 values are preserved in #645, were not accessible in the current execution session and were not parsed. Full log correlation and the DOGE conflict therefore remain UNVERIFIED / CONFLICT. No source fix is justified by the currently accessible evidence; no TESTNET orders, cancellations, or restarts were performed.
+
+The specification drift in fee-reserve policy, residual-inventory behavior, and Portfolio recovery allocation is tracked in #646. Keep the TESTNET gate closed until the DOGE order lifecycle and CLOSING account state are correlated against the original logs and any resulting defect is reproduced with deterministic offline regression coverage.
