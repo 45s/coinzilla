@@ -102,9 +102,9 @@ The initial decision created one BUY per enabled market. Subsequent filled BUY t
 
 ZRO order 727905 is consistent across order history, the supplied open-orders snapshot, and the 7.98 USDT locked balance. DOGE order 1276698 is not consistent across order history, Journal state, and the 1,196 DOGE locked balance. The CLOSING account event's exchange sourceTime (1793948926965 / 2026-11-06T07:08:46.965Z) exactly matches ZRO SELL trade 11666's executedAt; the CLOSING Journal event timestamp is 07:58:11.370Z. Treat these as distinct source/event timestamps; do not infer snapshot query time from sourceTime.
 
-## Evidence not available
+## Original application logs — verified and parsed
 
-The original `harvester.log` and `harvester-trace.log` are referenced by #645 and their sizes/line counts/checksums are recorded in its evidence inventory. They were not accessible to this execution session and were not parsed. Consequently, this derived ledger does not claim to correlate all application DEBUG/TRACE records or establish the cause of the DOGE conflict. No excerpts were substituted for the original files.
+The original `harvester.log` and `harvester-trace.log` were read-only inspected, independently SHA-256 verified against #645, and parsed. Integrity metadata, exact line references, ZRO Portfolio/RecoveryLedger transitions, DOGE final runtime state, shutdown execution inventory, and timestamp interpretation are preserved in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). ZRO runtime accounting is now directly observed. DOGE order 1276698 is OPEN/zero-executed in the last runtime evaluations and no DOGE SELL appears in the 12 shutdown execution records, but the separate exchange order-history row reports FILLED; retain CONFLICT. The logs do not identify the second CLOSING unresolved order with certainty.
 
 ## Expanded per-symbol decision and lifecycle interpretation
 
@@ -220,3 +220,10 @@ DOGE BUY: gross 400 + 400 + 400 = 1,200 DOGE; fees 0.4 + 0.4 + 0.4 = 1.2; net 1,
 ZRO: gross BUY 8 × 5 = 40; BUY fees 8 × 0.005 = 0.04; SELL 39.91; residual 40 - 0.04 - 39.91 = 0.05 ZRO. Gross SELL quote 39.91 × 1.606 = 64.09546; quote fee 0.06409546; net proceeds 64.03136454; BUY cost 64.02; realized net +0.01136454 USDT. Combined USDT delta -85.836 + 0.01136454 = -85.82463546, matching account total change.
 
 These equations prove ZRO arithmetic and DOGE BUY leg only. They do not resolve DOGE SELL or prove complete in-memory ownership state.
+
+
+## Verified log-derived lifecycle update — 2026-11-06
+
+- ZRO SELL trade 11666/order 727904: applied once; actual quote commission 0.06409546 USDT; net proceeds 64.03136454 USDT; Portfolio quote cash flow +0.01136454 USDT; RecoveryLedger outstanding reached zero. Recovery completion allocated 0.01 ZRO free, retained 0.04 active residual, and reset cycle totals. The next market evaluation preserved 0.04 active + 0.01 free.
+- DOGE SELL 1276698/client suffix -11: last observed evaluations show OPEN, executed 0, remaining 1,196; Portfolio remains 1,198.8 DOGE; RecoveryLedger proceeds remain zero. No DOGE SELL execution is among the 12 shutdown execution records. Exchange order history still reports FILLED, so terminal state and realized PnL remain CONFLICT.
+- ZRO BUY 727905/client suffix -23 remains confirmed NEW with 7.98 USDT locked. DOGE 1276698 is only a candidate for the other unresolved order until the complete CLOSING open-order payload is available.
