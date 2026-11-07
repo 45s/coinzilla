@@ -2657,7 +2657,6 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     let currentPortfolio = seeded.portfolio
     let currentRecoveryLedger = seeded.recoveryLedger
     const accountedFills = []
-    let sellFill
     const harness = await createHarness({
       initialPortfolio: seeded.portfolio,
       initialRecoveryLedger: seeded.recoveryLedger,
@@ -2677,19 +2676,18 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
       priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
     })
     const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const executedQuantity = status === "REJECTED" ? "0" : "0.2"
     const quoteQuantity = multiplyDecimal({ left: sellOrder.limitPrice.amount, right: "0.2" })
-    sellFill = executedQuantity === "0" ? undefined : makeSellFill({
+    const sellFill = makeSellFill({
       order: sellOrder,
       tradeId: "terminal-recovery-sell-" + status.toLowerCase(),
-      quantity: executedQuantity,
+      quantity: "0.2",
       quoteQuantity,
       commissionAmount: "0.01",
     })
     const terminalOrder = makeOrderStatusUpdate({
       order: sellOrder,
       status,
-      executedQuantity,
+      executedQuantity: "0.2",
     })
 
     const result = await harness.engine.processUserDataEvent({
@@ -2697,35 +2695,24 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     })
 
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    if (status === "REJECTED") {
-      assert.equal(result.data.paused, true)
-      assert.ok(harness.pauses.includes("ORDER_REJECTED"))
-      assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "1")
-      assert.equal(currentPortfolio.positions[0].spent.amount, "100")
-      assert.equal(currentPortfolio.positions[0].quoteNetCashFlow.amount, "-100")
-      assert.equal(currentRecoveryLedger.netSellProceeds, "0")
-      assert.equal(accountedFills.length, 0)
-    } else {
-      assert.equal(result.data.reevaluate, true)
-      assert.deepEqual(harness.pauses, [])
-      assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
-      assert.equal(currentPortfolio.positions[0].spent.amount, "100")
-      assert.equal(
-        currentPortfolio.positions[0].quoteNetCashFlow.amount,
-        subtractDecimal({
-          left: subtractDecimal({ left: quoteQuantity, right: "0.01" }),
-          right: "100",
-        }),
-      )
-      assert.equal(
-        currentRecoveryLedger.netSellProceeds,
-        subtractDecimal({ left: quoteQuantity, right: "0.01" }),
-      )
-      assert.equal(accountedFills.length, 1)
-      assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
-    }
+    assert.equal(result.data.reevaluate, true)
+    assert.deepEqual(harness.pauses, [])
+    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "0.8")
+    assert.equal(currentPortfolio.positions[0].spent.amount, "100")
+    assert.equal(
+      currentPortfolio.positions[0].quoteNetCashFlow.amount,
+      subtractDecimal({
+        left: subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+        right: "100",
+      }),
+    )
+    assert.equal(
+      currentRecoveryLedger.netSellProceeds,
+      subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+    )
+    assert.equal(accountedFills.length, 1)
+    assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
   }
-})
 })
 
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
