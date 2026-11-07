@@ -1,3 +1,4 @@
+import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Commission, Fill, Money, Order, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import {

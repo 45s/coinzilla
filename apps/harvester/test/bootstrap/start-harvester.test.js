@@ -313,8 +313,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   );
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 3, "startup, user-data recovery, and graceful shutdown each capture an authoritative account snapshot");
-  assert.equal(openOrderSnapshotCalls, 3, "the ordinary TRADE lifecycle plus graceful shutdown must perform three authoritative open-order snapshots");
+  assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture one PREFLIGHT snapshot and one CLOSING snapshot; it does not trigger a separate recovery snapshot");
+  assert.equal(openOrderSnapshotCalls, 2, "the ordinary TRADE scenario must perform the startup open-order audit and the shutdown reconciliation snapshot");
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
 
@@ -488,5 +488,18 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
   assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
 
-  await context.stop()
+  let shutdownError
+  try {
+    await context.stop()
+  } catch (error) {
+    shutdownError = error
+  }
+  assert.equal(
+    shutdownError,
+    undefined,
+    "multi-market shutdown must reconcile both canceled BUY orders successfully; diagnostic logs: " +
+      JSON.stringify(diagnosticLogs.filter(({ message }) =>
+        message === "Shutdown order reconciliation failed" ||
+        message === "paused a trading pair")),
+  )
 })

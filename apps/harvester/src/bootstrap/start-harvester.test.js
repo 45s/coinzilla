@@ -1779,24 +1779,24 @@ test("stops broker intake before draining queued user-data and disconnects after
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await queueStarted
   const stopPromise = runtime.stop()
-  await Promise.all([bookUnsubscribed, marketUnsubscribed, userDataUnsubscribed])
+  await Promise.all([bookUnsubscribed, marketUnsubscribed])
 
-  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"))
-  assert.ok(calls.includes("unsubscribe:BTCUSDT"))
-  assert.ok(calls.includes("unsubscribe:user-data"))
-  assert.equal(calls.includes("queue:done"), false)
-  assert.equal(calls.includes("disconnect"), false)
+  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
+  assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
+  assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
+  assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
 
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await Promise.resolve()
-  assert.equal(queuedEvents, 1)
+  assert.equal(queuedEvents, 1, "a second event must not enter the serialized queue while its first callback is still running")
 
   resolveQueue()
   await stopPromise
-  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("queue:done") < calls.indexOf("disconnect"))
+  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"), "book-ticker intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"), "market-price intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
 
 
