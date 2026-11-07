@@ -354,8 +354,14 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
 
+    // The user-data execution report is itself authoritative evidence. Binance REST
+    // trade history can lag the stream, so reconcile the terminal cumulative quantity
+    // against the union of REST history and the fill carried by this terminal event.
     const fillsById = new Map()
-    for (const fill of fillsResult.data) {
+    const candidateFills = eventFill === undefined
+      ? fillsResult.data
+      : [...fillsResult.data, eventFill]
+    for (const fill of candidateFills) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
@@ -1261,7 +1267,7 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const reconcileTerminalOrderFills = async ({ order } = {}) => {
+  const reconcileTerminalOrderFills = async ({ order, eventFill } = {}) => {
     const symbol = order?.market?.symbol
     const terminalStatuses = new Set(["FILLED", "CANCELED", "EXPIRED", "REJECTED"])
     if (!order || !terminalStatuses.has(order.status)) {
@@ -1391,7 +1397,10 @@ export function makeConservativeTradingEngine({
 
       if (!terminalFillsReconciled &&
           ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
-        const terminal = await reconcileTerminalOrderFills({ order })
+        const terminal = await reconcileTerminalOrderFills({
+          order,
+          ...(event.executionType === "TRADE" ? { eventFill: event.fill } : {}),
+        })
         if (!terminal?.ok) return terminal
       }
       if (update.duplicate || update.stale) {
