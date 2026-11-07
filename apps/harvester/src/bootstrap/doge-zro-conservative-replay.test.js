@@ -2,22 +2,13 @@ import test, { describe, beforeAll, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
-import { multiplyDecimal, percentageToRate, subtractDecimal } from "@coinzilla/utils"
+import {
+  multiplyDecimal,
+  percentageToRate,
+  subtractDecimal,
+} from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
-
-const expectedSellOrders = {
-  DOGEUSDT: {
-    initialPrice: "0.07161000",
-    buyPrice: "0.07157",
-    nextBuyPrice: "0.07153",
-    sellPrice: "0.07203",
-    sellFillPrice: "0.07204",
-    expectedSellQuantity: "398",
-    expectedFreeQuantity: "1.6",
-    expectedProfit: "0.01524808",
-  },
-}
 
 const config = {
   strategies: {
@@ -56,8 +47,8 @@ describe("DOGEUSDT Conservative strategy replay", () => {
   })
 
   beforeEach(async () => {
-      replay = await createReplayHarness(symbol)
-    })
+    replay = await createReplayHarness(symbol)
+  })
 
   afterEach(async () => {
     if (replay?.runtime) await replay.runtime.stop()
@@ -65,9 +56,26 @@ describe("DOGEUSDT Conservative strategy replay", () => {
   })
 
   test("creates the initial BUY after a price trigger", async () => {
-      const buy = await getInitialBuy(replay)
-      assert.deepEqual(
-        [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
+    const buy = await getInitialBuy(replay)
+    assert.deepEqual(
+      [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
+      [
+        symbol,
+        "BUY",
+        replay.scenario.buyPrice,
+        String(replay.pair.orderQuantity),
+        "LIMIT",
+      ],
+    )
+    assert.deepEqual(
+      replay.outgoingOrderRequests.map(({ params }) => [
+        params.symbol,
+        params.side,
+        params.price,
+        params.quantity,
+        params.type,
+      ]),
+      [
         [
           symbol,
           "BUY",
@@ -75,67 +83,60 @@ describe("DOGEUSDT Conservative strategy replay", () => {
           String(replay.pair.orderQuantity),
           "LIMIT",
         ],
-      )
-      assert.deepEqual(
-        replay.outgoingOrderRequests.map(({ params }) => [
-          params.symbol,
-          params.side,
-          params.price,
-          params.quantity,
-          params.type,
-        ]),
-        [[
-          symbol,
-          "BUY",
-          replay.scenario.buyPrice,
-          String(replay.pair.orderQuantity),
-          "LIMIT",
-        ]],
-      )
-      assert.deepEqual(
-        replay.receivedPrices.map(({ symbol: receivedSymbol, price }) => [
-          receivedSymbol,
-          price,
-        ]),
-        [[symbol, replay.scenario.initialPrice]],
-      )
-    })
+      ],
+    )
+    assert.deepEqual(
+      replay.receivedPrices.map(({ symbol: receivedSymbol, price }) => [
+        receivedSymbol,
+        price,
+      ]),
+      [[symbol, replay.scenario.initialPrice]],
+    )
+  })
 
   test("creates the next standing BUY and recovery SELL from the actual BUY fill report", async () => {
-      const { recoverySell: sell, nextStandingBuy } = await getRecoveryOrders(replay)
-      assert.deepEqual(
-        [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
+    const { recoverySell: sell, nextStandingBuy } =
+      await getRecoveryOrders(replay)
+    assert.deepEqual(
+      [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
+      [
+        symbol,
+        "SELL",
+        replay.scenario.sellPrice,
+        replay.scenario.expectedSellQuantity,
+        "LIMIT",
+      ],
+    )
+    assert.deepEqual(
+      [
+        nextStandingBuy.market.symbol,
+        nextStandingBuy.side,
+        nextStandingBuy.price,
+        nextStandingBuy.quantity,
+        nextStandingBuy.type,
+      ],
+      [
+        symbol,
+        "BUY",
+        replay.scenario.nextBuyPrice,
+        String(replay.pair.orderQuantity),
+        "LIMIT",
+      ],
+    )
+    assert.deepEqual(
+      replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
+        executedOrder.symbol,
+        executedOrder.side,
+        executedOrder.price,
+        executedOrder.executedQuantity,
+        fill.price,
+        fill.quantity,
+        fill.quoteQuantity,
+        fill.commissionAmount,
+        fill.commissionAsset,
+      ]),
+      [
         [
-          symbol,
-          "SELL",
-          replay.scenario.sellPrice,
-          replay.scenario.expectedSellQuantity,
-          "LIMIT",
-        ],
-      )
-      assert.deepEqual(
-        [
-          nextStandingBuy.market.symbol,
-          nextStandingBuy.side,
-          nextStandingBuy.price,
-          nextStandingBuy.quantity,
-          nextStandingBuy.type,
-        ],
-        [symbol, "BUY", replay.scenario.nextBuyPrice, String(replay.pair.orderQuantity), "LIMIT"],
-      )
-      assert.deepEqual(
-        replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
-          executedOrder.symbol,
-          executedOrder.side,
-          executedOrder.price,
-          executedOrder.executedQuantity,
-          fill.price,
-          fill.quantity,
-          fill.quoteQuantity,
-          fill.commissionAmount,
-          fill.commissionAsset,
-        ]),
-        [[
           symbol,
           "BUY",
           replay.scenario.buyPrice,
@@ -145,169 +146,181 @@ describe("DOGEUSDT Conservative strategy replay", () => {
           "28.628",
           "0.4",
           symbol.slice(0, -4),
-        ]],
-      )
-      assert.deepEqual(
-        replay.outgoingOrderRequests.map(({ params }) => [
-          params.symbol,
-          params.side,
-          params.price,
-          params.quantity,
-          params.type,
-        ]),
-        [
-          [
-            symbol,
-            "BUY",
-            replay.scenario.buyPrice,
-            String(replay.pair.orderQuantity),
-            "LIMIT",
-          ],
-          [
-            symbol,
-            "SELL",
-            replay.scenario.sellPrice,
-            replay.scenario.expectedSellQuantity,
-            "LIMIT",
-          ],
-          [
-            symbol,
-            "BUY",
-            replay.scenario.nextBuyPrice,
-            String(replay.pair.orderQuantity),
-            "LIMIT",
-          ],
         ],
-      )
-    })
+      ],
+    )
+    assert.deepEqual(
+      replay.outgoingOrderRequests.map(({ params }) => [
+        params.symbol,
+        params.side,
+        params.price,
+        params.quantity,
+        params.type,
+      ]),
+      [
+        [
+          symbol,
+          "BUY",
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          "LIMIT",
+        ],
+        [
+          symbol,
+          "SELL",
+          replay.scenario.sellPrice,
+          replay.scenario.expectedSellQuantity,
+          "LIMIT",
+        ],
+        [
+          symbol,
+          "BUY",
+          replay.scenario.nextBuyPrice,
+          String(replay.pair.orderQuantity),
+          "LIMIT",
+        ],
+      ],
+    )
+  })
 
   test("reconciles four completed BUY fills into one profitable recovery SELL and retained portfolio", async () => {
-      let buy = await getInitialBuy(replay)
-      const completedBuys = []
-      let sell
+    let buy = await getInitialBuy(replay)
+    const completedBuys = []
+    let sell
 
-      for (let index = 0; index < 4; index += 1) {
-        const sellSubmitted = replay.waitForOrder("SELL", index + 1)
-        const nextBuySubmitted = replay.waitForOrder("BUY", index + 2)
-        await replay.triggerPrice(buy.price)
-        await replay.fillOrder({
-          order: buy,
-          price: buy.price,
-          tradeId: "645-" + symbol.toLowerCase() + "-multi-buy-" + (index + 1),
-        })
-        const [nextSell, nextBuy] = await Promise.all([
-          sellSubmitted,
-          nextBuySubmitted,
-        ])
-        completedBuys.push(buy)
-        sell = nextSell
-        buy = nextBuy
-      }
-
-      assert.equal(completedBuys.length, 4)
-      assert.equal(replay.cancelledOrders.length, 3)
-      assert.ok(replay.cancelledOrders.every((order) => order.status === "CANCELED"))
-      assert.deepEqual(
-        completedBuys.map((order) => [order.market.symbol, order.side, order.type]),
-        Array.from({ length: 4 }, () => [symbol, "BUY", "LIMIT"]),
-      )
-      assert.deepEqual(
-        replay.outgoingOrderRequests.map(({ params }) => params.side),
-        ["BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY"],
-      )
-      assert.deepEqual(
-        [sell.market.symbol, sell.side, sell.type],
-        [symbol, "SELL", "LIMIT"],
-      )
-      assert.ok(Number(sell.quantity) > replay.pair.keepQuantity)
-      assert.ok(Number(sell.price) > 0)
-
-      const cycle = replay.waitForCycle()
-      await replay.triggerPrice(sell.price)
+    for (let index = 0; index < 4; index += 1) {
+      const sellSubmitted = replay.waitForOrder("SELL", index + 1)
+      const nextBuySubmitted = replay.waitForOrder("BUY", index + 2)
+      await replay.triggerPrice(buy.price)
       await replay.fillOrder({
-        order: sell,
-        price: sell.price,
-        tradeId: "645-" + symbol.toLowerCase() + "-multi-sell",
+        order: buy,
+        price: buy.price,
+        tradeId: "645-" + symbol.toLowerCase() + "-multi-buy-" + (index + 1),
       })
-      const completion = await cycle
-      assert.ok(Number(completion.realizedNetProfit) >= 0.01)
+      const [nextSell, nextBuy] = await Promise.all([
+        sellSubmitted,
+        nextBuySubmitted,
+      ])
+      completedBuys.push(buy)
+      sell = nextSell
+      buy = nextBuy
+    }
 
-      const position = replay.runtime.portfolio.getPosition({ symbol })
-      const expectedRetainedQuantity = subtractDecimal({
-        left: "1598.4",
-        right: sell.quantity,
-      })
-      assert.equal(position.baseQuantity.amount, "0")
-      assert.equal(position.freeBaseQuantity.amount, expectedRetainedQuantity)
-      assert.ok(Number(position.freeBaseQuantity.amount) >= replay.pair.keepQuantity)
-      assert.equal(replay.receivedExecutionReports.filter(
-        ({ executedOrder }) => executedOrder.side === "BUY",
-      ).length, 4)
-      assert.equal(replay.receivedExecutionReports.filter(
-        ({ executedOrder }) => executedOrder.side === "SELL",
-      ).length, 1)
+    assert.equal(completedBuys.length, 4)
+    assert.equal(replay.cancelledOrders.length, 3)
+    assert.ok(
+      replay.cancelledOrders.every((order) => order.status === "CANCELED"),
+    )
+    assert.deepEqual(
+      completedBuys.map((order) => [
+        order.market.symbol,
+        order.side,
+        order.type,
+      ]),
+      Array.from({ length: 4 }, () => [symbol, "BUY", "LIMIT"]),
+    )
+    assert.deepEqual(
+      replay.outgoingOrderRequests.map(({ params }) => params.side),
+      ["BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY", "SELL", "BUY"],
+    )
+    assert.deepEqual(
+      [sell.market.symbol, sell.side, sell.type],
+      [symbol, "SELL", "LIMIT"],
+    )
+    assert.ok(Number(sell.quantity) > replay.pair.keepQuantity)
+    assert.ok(Number(sell.price) > 0)
+
+    const cycle = replay.waitForCycle()
+    await replay.triggerPrice(sell.price)
+    await replay.fillOrder({
+      order: sell,
+      price: sell.price,
+      tradeId: "645-" + symbol.toLowerCase() + "-multi-sell",
     })
+    const completion = await cycle
+    assert.ok(Number(completion.realizedNetProfit) >= 0.01)
+
+    const position = replay.runtime.portfolio.getPosition({ symbol })
+    const expectedRetainedQuantity = subtractDecimal({
+      left: "1598.4",
+      right: sell.quantity,
+    })
+    assert.equal(position.baseQuantity.amount, "0")
+    assert.equal(position.freeBaseQuantity.amount, expectedRetainedQuantity)
+    assert.ok(
+      Number(position.freeBaseQuantity.amount) >= replay.pair.keepQuantity,
+    )
+    assert.equal(
+      replay.receivedExecutionReports.filter(
+        ({ executedOrder }) => executedOrder.side === "BUY",
+      ).length,
+      4,
+    )
+    assert.equal(
+      replay.receivedExecutionReports.filter(
+        ({ executedOrder }) => executedOrder.side === "SELL",
+      ).length,
+      1,
+    )
+  })
 
   test("completes the recovery cycle after the SELL fill report", async () => {
-      const { recoverySell: sell } = await getRecoveryOrders(replay)
-      const cycle = replay.waitForCycle()
-      await replay.triggerPrice(replay.scenario.sellFillPrice)
-      await replay.fillOrder({
-        order: sell,
-        price: replay.scenario.sellFillPrice,
-        tradeId: "645-" + symbol.toLowerCase() + "-sell",
-      })
+    const { recoverySell: sell } = await getRecoveryOrders(replay)
+    const cycle = replay.waitForCycle()
+    await replay.triggerPrice(replay.scenario.sellFillPrice)
+    await replay.fillOrder({
+      order: sell,
+      price: replay.scenario.sellFillPrice,
+      tradeId: "645-" + symbol.toLowerCase() + "-sell",
+    })
 
-      const completion = await cycle
-      assert.equal(
-        completion.freeQuantity,
-        replay.scenario.expectedFreeQuantity,
-      )
-      assert.equal(completion.realizedNetProfit, replay.scenario.expectedProfit)
+    const completion = await cycle
+    assert.equal(completion.freeQuantity, replay.scenario.expectedFreeQuantity)
+    assert.equal(completion.realizedNetProfit, replay.scenario.expectedProfit)
 
-      const position = replay.runtime.portfolio.getPosition({ symbol })
-      assert.equal(position.baseQuantity.amount, "0")
-      assert.equal(
-        position.freeBaseQuantity.amount,
-        replay.scenario.expectedFreeQuantity,
-      )
-      assert.deepEqual(
-        replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
-          executedOrder.symbol,
-          executedOrder.side,
-          executedOrder.price,
-          executedOrder.executedQuantity,
-          fill.price,
-          fill.quantity,
-          fill.quoteQuantity,
-          fill.commissionAmount,
-          fill.commissionAsset,
-        ]),
+    const position = replay.runtime.portfolio.getPosition({ symbol })
+    assert.equal(position.baseQuantity.amount, "0")
+    assert.equal(
+      position.freeBaseQuantity.amount,
+      replay.scenario.expectedFreeQuantity,
+    )
+    assert.deepEqual(
+      replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
+        executedOrder.symbol,
+        executedOrder.side,
+        executedOrder.price,
+        executedOrder.executedQuantity,
+        fill.price,
+        fill.quantity,
+        fill.quoteQuantity,
+        fill.commissionAmount,
+        fill.commissionAsset,
+      ]),
+      [
         [
-          [
-            symbol,
-            "BUY",
-            replay.scenario.buyPrice,
-            String(replay.pair.orderQuantity),
-            replay.scenario.buyPrice,
-            String(replay.pair.orderQuantity),
-            "28.628",
-            "0.4",
-            symbol.slice(0, -4),
-          ],
-          [
-            symbol,
-            "SELL",
-            replay.scenario.sellPrice,
-            replay.scenario.expectedSellQuantity,
-            replay.scenario.sellFillPrice,
-            replay.scenario.expectedSellQuantity,
-            "28.67192",
-            "0.02867192",
-            "USDT",
-          ],
+          symbol,
+          "BUY",
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          "28.628",
+          "0.4",
+          symbol.slice(0, -4),
         ],
-      )
+        [
+          symbol,
+          "SELL",
+          replay.scenario.sellPrice,
+          replay.scenario.expectedSellQuantity,
+          replay.scenario.sellFillPrice,
+          replay.scenario.expectedSellQuantity,
+          "28.67192",
+          "0.02867192",
+          "USDT",
+        ],
+      ],
+    )
   })
 })
 
@@ -348,17 +361,29 @@ function waitForOrder(submitted, waiters, symbol, side, occurrence = 1) {
     order.market.symbol === symbol && order.side === side
   const getOrders = () => submitted.filter(matches)
   const existing = getOrders()
-  if (existing.length >= occurrence) return Promise.resolve(existing[occurrence - 1])
-  return new Promise((resolve) => waiters.push({
-    matches,
-    isReady: () => getOrders().length >= occurrence,
-    resolve: () => resolve(getOrders()[occurrence - 1]),
-  }))
+  if (existing.length >= occurrence)
+    return Promise.resolve(existing[occurrence - 1])
+  return new Promise((resolve) =>
+    waiters.push({
+      matches,
+      isReady: () => getOrders().length >= occurrence,
+      resolve: () => resolve(getOrders()[occurrence - 1]),
+    }),
+  )
 }
 
 async function createReplayHarness(symbol) {
   const pair = config.strategies.CG_coinGrabber.pairs[symbol]
-  const expectedSellOrder = expectedSellOrders[symbol]
+  const expectedSellOrder = {
+    initialPrice: "0.07161000",
+    buyPrice: "0.07157",
+    nextBuyPrice: "0.07153",
+    sellPrice: "0.07203",
+    sellFillPrice: "0.07204",
+    expectedSellQuantity: "398",
+    expectedFreeQuantity: "1.6",
+    expectedProfit: "0.01524808",
+  }
   const submittedList = []
   const outgoingOrderRequestsList = []
   const receivedPricesList = []
@@ -453,7 +478,10 @@ async function createReplayHarness(symbol) {
       ok: true,
       data: canonicalFills.get(String(orderId)) ?? [],
     })
-    broker.getCanonicalOrderHistory = async ({ orderId, symbol: requestedSymbol } = {}) => ({
+    broker.getCanonicalOrderHistory = async ({
+      orderId,
+      symbol: requestedSymbol,
+    } = {}) => ({
       ok: true,
       data: [...orderHistory.values()].filter(
         (order) =>
@@ -513,7 +541,11 @@ async function createReplayHarness(symbol) {
     broker.cancelOrder = async ({ orderId } = {}) => {
       const key = String(orderId)
       const order = orderHistory.get(key)
-      if (!order) return { ok: false, errors: [new Error("simulated exchange order not found")] }
+      if (!order)
+        return {
+          ok: false,
+          errors: [new Error("simulated exchange order not found")],
+        }
       const timestamp = Date.now()
       const canceled = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
@@ -679,4 +711,3 @@ async function getRecoveryOrders(replay) {
   ])
   return { initialBuy: buy, recoverySell, nextStandingBuy }
 }
-
