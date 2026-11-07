@@ -12,6 +12,23 @@ import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableI
  * orders are supplied by the engine so repeated market events do not duplicate
  * either side. This function creates intents only; it never performs I/O.
  */
+function getNoActionReason({ actions, inventoryDisposition, buyDisposition }) {
+  if (actions.length > 0) return null
+
+  if (inventoryDisposition) {
+    if (inventoryDisposition.status === "PRICE_FILTER_BLOCKED") {
+      return "Residual SELL is deferred because the profit-preserving price is outside exchange price filters"
+    }
+    return "Residual inventory is currently below exchange SELL filters and is classified as dust"
+  }
+
+  if (buyDisposition) {
+    return "Configured BUY is currently outside exchange filters and was deferred"
+  }
+
+  return "Required standing orders are already active or no sellable recovery inventory is available"
+}
+
 export function evaluateConservativeStrategy({
   marketPrice,
   pairConfig,
@@ -302,12 +319,20 @@ export function evaluateConservativeStrategy({
       }) <= 0
       if (!quantityMeetsMinimum || !notionalMeetsMinimum || !quantityWithinMaximum ||
           !notionalWithinMaximum || !priceWithinFilters) {
-        const filterReason = !quantityMeetsMinimum ? "MIN_QUANTITY"
-          : !notionalMeetsMinimum ? "MIN_NOTIONAL"
-            : !quantityWithinMaximum ? "MAX_QUANTITY"
-              : !notionalWithinMaximum ? "MAX_NOTIONAL"
-                : minPrice && compareDecimal({ left: buyPrice, right: minPrice }) < 0 ? "MIN_PRICE"
-                  : "MAX_PRICE"
+        let filterReason
+        if (!quantityMeetsMinimum) {
+          filterReason = "MIN_QUANTITY"
+        } else if (!notionalMeetsMinimum) {
+          filterReason = "MIN_NOTIONAL"
+        } else if (!quantityWithinMaximum) {
+          filterReason = "MAX_QUANTITY"
+        } else if (!notionalWithinMaximum) {
+          filterReason = "MAX_NOTIONAL"
+        } else if (minPrice && compareDecimal({ left: buyPrice, right: minPrice }) < 0) {
+          filterReason = "MIN_PRICE"
+        } else {
+          filterReason = "MAX_PRICE"
+        }
         buyDisposition = Object.freeze({
           status: "EXCHANGE_CONSTRAINED_BUY",
           reason: filterReason,
@@ -338,14 +363,10 @@ export function evaluateConservativeStrategy({
     actions: Object.freeze(actions),
     ...(inventoryDisposition ? { inventoryDisposition } : {}),
     ...(buyDisposition ? { buyDisposition } : {}),
-    reason: actions.length === 0
-      ? inventoryDisposition
-        ? inventoryDisposition.status === "PRICE_FILTER_BLOCKED"
-          ? "Residual SELL is deferred because the profit-preserving price is outside exchange price filters"
-          : "Residual inventory is currently below exchange SELL filters and is classified as dust"
-        : buyDisposition
-          ? "Configured BUY is currently outside exchange filters and was deferred"
-          : "Required standing orders are already active or no sellable recovery inventory is available"
-      : null,
+    reason: getNoActionReason({
+      actions,
+      inventoryDisposition,
+      buyDisposition,
+    }),
   })
 }
