@@ -687,7 +687,7 @@ test("rejects invalid account snapshot phase, decimals, duplicate assets and inc
 })
 
 
-test("maps complete account-wide open orders and blocks trading while any are unowned", () => {
+test("maps complete account-wide open orders and classifies unowned orders without adopting them", () => {
   const order = {
     clientOrderId: "manual-order-1",
     id: "699694",
