@@ -1565,16 +1565,18 @@ export async function startHarvester({
     const marketIntakeErrors = await stopMarketIntake({ subscriptions, bookSubscriptions })
     if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
 
+    // Unsubscribing prevents new callbacks; drain callbacks already accepted
+    // before reconciling or cancelling orders. Otherwise an in-flight price
+    // evaluation can submit a fresh BUY after the shutdown cancellation pass.
+    const pendingMarketTasks = [...marketPriceIntake.values()]
+      .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
+      .filter(Boolean)
+    await Promise.all(pendingMarketTasks)
     await userDataEventQueue
 
     if (tradingEnabled && tradingEngine) {
-      const firstCancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
-      if (firstCancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
-
-      // Execution reports remain accepted while cancellation and its REST fill
-      // reconciliation are in progress. Drain them before refreshing ownership.
-      await userDataEventQueue
-
+      // Resolve PENDING submissions to canonical broker identities first.
+      // Only then can shutdown safely select and cancel owned BUY orders.
       try {
         const reconciliation = await tradingEngine.reconcileOwnedOrders()
         if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
@@ -1582,11 +1584,18 @@ export async function startHarvester({
         auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
       }
 
-      // A pending acknowledgement may have become cancellable during the
-      // reconciliation pass. Make one final cancellation pass before closing
-      // the user-data stream.
-      const finalCancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
-      if (finalCancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+      const cancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
+      if (cancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+
+      // Keep execution reports flowing until cancellation responses and
+      // fills racing with cancellation have been processed.
+      await userDataEventQueue
+      try {
+        const reconciliation = await tradingEngine.reconcileOwnedOrders()
+        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      } catch {
+        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      }
     }
 
     const userDataIntakeErrors = await stopUserDataIntake({ userDataSubscription })
@@ -1595,12 +1604,6 @@ export async function startHarvester({
     await userDataEventQueue
 
     if (tradingEnabled && tradingEngine) {
-      try {
-        const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-      } catch {
-        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-      }
       const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
       const unresolvedOrders = tradingEngine.getOrders().filter((order) => {
         if (terminalStatuses.has(order.status)) return false
