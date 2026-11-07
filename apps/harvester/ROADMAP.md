@@ -1578,3 +1578,23 @@ The canonical rule is **unsellable exchange-constrained dust is retained on top 
 This supersedes older roadmap/audit wording that required above-keep dust to remain active, block completion/reset, or wait for a later BUY to make it sellable. The sole rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 **Historical checkpoint (superseded 2026-11-07):** source completion/accounting and durable dust evidence were still unverified at this point. The audit-closure section below records the implemented validation and lifecycle event. Exact-head CI remains pending.
+
+## Conservative Strategy implementation audit closure — 2026-11-07
+
+**Status: CLOSED for in-scope source implementation and documentation alignment.** This section supersedes earlier roadmap checkpoints that listed the residual/dust, partial-BUY, terminal-SELL, and durable dust-evidence work as outstanding.
+
+The active audit scope is now implemented and represented by offline regressions:
+
+- Continue SELLing all exchange-sellable position quantity above the exact configured `keepQuantity`, including after cumulative net proceeds have already met the minimum-profit target. Residual pricing uses the validated current market reference; the original full cost/proceeds basis remains intact until completion.
+- Apply exchange quantity/price/notional filters and fee reserve to each residual SELL. Respect maximum quantity/notional by selling in valid chunks; do not classify price-filter blocks as dust.
+- Classify only exchange-constrained quantity-step, MIN_QUANTITY, or MIN_NOTIONAL remainder as dust, with exact remainder and evaluated filter evidence. Retain that dust as a bonus on top of `keepQuantity`.
+- Validate the dust evidence at completion and persist its quantity, reason, and relevant filter/evaluated values in the recovery-completion lifecycle event. Allocate `keepQuantity + dust` and reset the recovery basis only after terminal FILLED execution reconciliation and the actual net-profit gate pass.
+- Preserve the same partial SELL order and price when no new BUY occurs. For any BUY fill during an active recovery SELL, cancel and reconcile terminal state plus every actual fill/commission before calculating and submitting the replacement. Keep a partially filled BUY active without creating a duplicate BUY.
+- Reconcile CANCELED, EXPIRED, and REJECTED recovery SELL outcomes before reevaluation; missing/conflicting history fails closed.
+- Cover exact-once accounting/completion and the full partial-fill/cancel/replace lifecycle. The engine lifecycle regression now runs for both positive `keepQuantity` and supported `keepQuantity = 0`.
+
+The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/ACCOUNTING_INVARIANTS.md). The audit findings and historical evidence limitations are recorded in [AUDIT.md](./AUDIT.md) and [AUDIT_FINDINGS.md](./AUDIT_FINDINGS.md).
+
+**Explicitly outside this closure:** workstation process-restart reconstruction remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). The historical CLOSING open-order payload and post-fill account snapshot were not preserved; those historical facts remain UNVERIFIED and non-blocking. Exact historical DOGE/ZRO exchange filters were not captured, so no candidate filter assumptions are represented as historical facts. No TESTNET acceptance is claimed.
+
+**Next phase — verification only:** execute the focused Conservative tests, full Harvester test suite, and required exact-head CI. The tests are present but have not yet been run on this updated head; no passing test or CI result is claimed. Fix any failures in that separate phase. This audit closure does not authorize TESTNET writes, bot restarts, or merging PR #653.
