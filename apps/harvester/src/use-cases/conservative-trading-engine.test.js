@@ -4401,20 +4401,27 @@ test("shutdown cancellation cancels only strategy-owned BUY orders and preserves
     clientOrderId: "shutdown-buy",
     brokerOrderId: "broker-shutdown-buy",
   })
+  const secondBuyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "shutdown-buy-second",
+    brokerOrderId: "broker-shutdown-buy-second",
+  })
   const sellOrder = makeShutdownOrder({
     side: "SELL",
     clientOrderId: "shutdown-sell",
     brokerOrderId: "broker-shutdown-sell",
   })
   const { engine, cancellationIds } = await createHarness({
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder, sellOrder] }) },
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder, secondBuyOrder, sellOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
   })
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.deepEqual(cancellationIds, ["broker-shutdown-buy"])
+  assert.deepEqual(cancellationIds, ["broker-shutdown-buy", "broker-shutdown-buy-second"])
   assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy").status, "CANCELED")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy-second").status, "CANCELED")
   assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-sell").status, "OPEN")
 })
 
@@ -4426,6 +4433,7 @@ test("shutdown cancellation applies partial BUY fills before confirming cancella
   })
   const { engine, accountedFills, pauses } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
     cancelWithFill: true,
   })
 
@@ -4449,6 +4457,7 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
   })
   const { engine, cancellationIds } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
     cancelFailure: true,
   })
 

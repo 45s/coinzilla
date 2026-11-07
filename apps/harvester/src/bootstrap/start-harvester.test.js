@@ -2033,7 +2033,7 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
   releaseOpenOrders()
-  await stopPromise
+  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/)
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   assert.equal(snapshots.length, 2)
@@ -2428,8 +2428,24 @@ test("starts from fresh in-memory state without replaying historical Journal rec
     return { ok: true, data: [] }
   }
 
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            orderQuantity: 0.001,
+          },
+        },
+      },
+    },
+  }
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => config,
     env: {
       ...binanceEnv,
       HARVESTER_ENABLE_TRADING: "true",
@@ -2460,4 +2476,111 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   assert.equal(calls.includes("subscribe:BTCUSDT"), true)
 
   await runtime.stop()
+})
+
+test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const market = createMarketMetadata("BTCUSDT").market
+  let resolveCancelStarted
+  let releaseCancel
+  let resolveUserDataObserved
+  const cancelStarted = new Promise((resolve) => { resolveCancelStarted = resolve })
+  const cancelGate = new Promise((resolve) => { releaseCancel = resolve })
+  const userDataObserved = new Promise((resolve) => { resolveUserDataObserved = resolve })
+  const observedEvents = []
+  broker.placeOrder = async ({ order }) => {
+    calls.push("placeOrder:" + order.side)
+    return {
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "broker-" + order.clientOrderId,
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        status: "OPEN",
+        createdAt: 1,
+        acknowledgedAt: 1,
+        updatedAt: 1,
+      }),
+    }
+  }
+  broker.cancelOrder = async ({ order }) => {
+    calls.push("cancelOrder:" + order.side)
+    resolveCancelStarted()
+    await cancelGate
+    return {
+      ok: true,
+      data: new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: 2,
+        completedAt: 2,
+      }),
+    }
+  }
+
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    now: () => 1000,
+    onUserDataEvent: async ({ event }) => {
+      observedEvents.push(event)
+      resolveUserDataObserved()
+    },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "64900",
+    bestBidQuantity: "1",
+    bestAskPrice: "65100",
+    bestAskQuantity: "1",
+    timestamp: 1000,
+  })
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 1000,
+  })
+  assert.ok(calls.includes("placeOrder:BUY"))
+
+  const stopPromise = runtime.stop()
+  await waitForTestSignal(cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
+  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+  await waitForTestSignal(userDataObserved, "user-data event during shutdown", () => ({
+    observedEvents: observedEvents.length,
+    calls,
+  }))
+
+  assert.equal(observedEvents.length, 1)
+  assert.equal(calls.includes("unsubscribe:user-data"), false)
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
+  assert.equal(calls.includes("cancelOrder:SELL"), false)
+
+  releaseCancel()
+  await stopPromise
+
+  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
 })

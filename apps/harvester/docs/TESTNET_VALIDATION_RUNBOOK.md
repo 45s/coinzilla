@@ -144,9 +144,9 @@ Portfolio/RecoveryLedger agreement does not by itself prove account-wide reconci
 
 1. During the joint session, agree whether any final Harvester-owned order must remain open. Prefer no outstanding owned orders for the first closed-session audit.
 2. If an order must be canceled, authorize that exact order only, wait for the terminal acknowledgement, and reconcile all fills including cancel/fill races. Never use cancel-all.
-3. Stop Harvester gracefully. Shutdown must stop new intake, drain accepted user-data work, reconcile all owned orders, and capture CLOSING while broker REST is still available.
+3. Stop Harvester gracefully. Shutdown must stop market-price/book intake, cancel only acknowledged strategy-owned BUY orders, keep user-data intake active while cancellation-racing fills are reconciled, preserve all SELL orders, drain accepted user-data work, reconcile owned orders, make a final BUY-cancellation pass for newly acknowledged orders, then stop user-data intake and capture CLOSING while broker REST is still available.
 4. Verify one durable CLOSING snapshot exists for the same Journal session and includes every returned asset with exact free, locked, and total amounts.
-5. Verify CLOSING is COMPLETE. If reconciliation fails, an owned order remains non-terminal, intake/accounting is unsafe, or flush fails, CLOSING must be INCOMPLETE and the audit fails closed.
+5. Verify CLOSING is COMPLETE. Known open SELL orders are expected to remain active and are not unresolved. If a BUY remains open, an order state is unknown, reconciliation fails, intake/accounting is unsafe, or flush fails, CLOSING must be INCOMPLETE; shutdown reports failure and retains the process lock.
 6. Run the read-only `journal:balance-audit` against that closed session. Capture its full output and exit code.
 7. Retrieve complete TESTNET trade history for the session window and verify pagination/completeness. Correlate every trade with the order journal and commission facts. Preserve raw read-only evidence securely.
 8. Reconcile per-asset balance deltas against executions, commissions, open/locked orders, and external account activity. Reconcile cycle profit against exact Portfolio cash flow and RecoveryLedger totals. No unexplained residual is accepted.

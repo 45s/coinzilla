@@ -88,16 +88,17 @@ For every broker-connected startup, including read-only mode, bootstrap fetches 
 
 The implemented order is:
 
-1. Stop market-price and user-data intake; ignore late callbacks.
-2. Drain already accepted serialized user-data work.
-3. Reconcile Harvester-owned orders and determine CLOSING audit completeness.
-4. For trading-enabled runs, capture and durably flush the CLOSING account snapshot while broker access is still available. Mark it INCOMPLETE when reconciliation, intake, or accounting state is unsafe.
-5. Disconnect broker resources.
-6. Publish `harvester.stopped` while EventBus and Journal are still available.
-7. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
-8. Close EventBus with its 5-second timeout.
+1. Stop market-price and book-ticker intake immediately so no new strategy decisions or orders can start.
+2. Drain already accepted user-data work, then cancel only acknowledged OPEN/PARTIALLY_FILLED BUY orders registered as owned by `CG_coinGrabber`. Each cancellation has a durable intent and canonical terminal response; retrieve and apply every execution that raced with cancellation before proceeding.
+3. Keep user-data intake active during cancellation and fill reconciliation. This preserves execution reports that arrive while the broker processes a cancellation. SELL orders are never canceled by shutdown and remain active on the broker.
+4. Drain accepted user-data work, reconcile owned orders, make a final BUY-cancellation pass for orders that became acknowledged during reconciliation, then stop user-data intake and drain the queue again.
+5. For trading-enabled runs, capture and durably flush the CLOSING account snapshot while broker access is still available. Mark it INCOMPLETE when any cancellation, reconciliation, intake, or accounting state is unresolved.
+6. Disconnect broker resources.
+7. Publish `harvester.stopped` while EventBus and Journal are still available.
+8. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
+9. Close EventBus with its 5-second timeout.
 
-Cleanup failures are isolated so later cleanup still runs. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
+Cleanup failures are isolated so later cleanup still runs. An incomplete CLOSING audit is also a shutdown failure: the process reports a non-zero exit status and retains the trading-process lock. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
 
 A process kill, machine crash, power loss, or failed filesystem sync can still lose recent records. The Journal is not an unconditional durability guarantee.
 

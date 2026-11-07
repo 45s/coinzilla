@@ -44,7 +44,7 @@ function logSystem(logger, data) {
   logger?.info?.(data)
 }
 
-async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
+async function stopMarketIntake({ subscriptions, bookSubscriptions = [] }) {
   const results = await Promise.allSettled([
     ...bookSubscriptions.map(({ unsubscribe }) => {
       return Promise.resolve().then(() => unsubscribe())
@@ -52,15 +52,28 @@ async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDat
     ...subscriptions.map(({ unsubscribe }) => {
       return Promise.resolve().then(() => unsubscribe())
     }),
-    ...(typeof userDataSubscription?.disconnect === "function"
-      ? [Promise.resolve().then(() => {
-        return userDataSubscription.disconnect()
-      })]
-      : []),
   ])
   return results
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
+}
+
+async function stopUserDataIntake({ userDataSubscription }) {
+  if (typeof userDataSubscription?.disconnect !== "function") return []
+  const result = await Promise.allSettled([
+    Promise.resolve().then(() => userDataSubscription.disconnect()),
+  ])
+  return result
+    .filter((entry) => entry.status === "rejected")
+    .map((entry) => entry.reason)
+}
+
+async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
+  const [marketErrors, userDataErrors] = await Promise.all([
+    stopMarketIntake({ subscriptions, bookSubscriptions }),
+    stopUserDataIntake({ userDataSubscription }),
+  ])
+  return [...marketErrors, ...userDataErrors]
 }
 
 async function disconnectBroker({ broker, brokerName, eventPublisher }) {
@@ -520,6 +533,7 @@ export async function startHarvester({
   let userDataStartupComplete = false
   let pendingUserDataRecovery = false
   let stopped = false
+  let userDataIntakeStopped = false
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
     if (!tradingEngine || !userDataReady || stopped) return
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
@@ -917,7 +931,7 @@ export async function startHarvester({
     try {
       userDataResult = await broker.subscribeForUserData({
       onEvent: ({ event } = {}) => {
-        if (stopped) return
+        if (userDataIntakeStopped) return
         const isExecution = event?.eventType === "executionReport" &&
           event?.executionType === "TRADE"
         const isOrderUpdate = event?.eventType === "executionReport"
@@ -1505,12 +1519,40 @@ export async function startHarvester({
     userDataStatus = "STOPPING"
     logSystem(logger, { message: "Shutdown started" })
 
-    const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription, logger })
-    await userDataEventQueue
-
     const auditReasons = []
     let snapshotError
-    if (intakeErrors.length > 0) auditReasons.push("BROKER_INTAKE_SHUTDOWN_FAILED")
+    const marketIntakeErrors = await stopMarketIntake({ subscriptions, bookSubscriptions })
+    if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
+
+    await userDataEventQueue
+
+    if (tradingEnabled && tradingEngine) {
+      const firstCancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
+      if (firstCancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+
+      // Execution reports remain accepted while cancellation and its REST fill
+      // reconciliation are in progress. Drain them before refreshing ownership.
+      await userDataEventQueue
+
+      try {
+        const reconciliation = await tradingEngine.reconcileOwnedOrders()
+        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      } catch {
+        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+      }
+
+      // A pending acknowledgement may have become cancellable during the
+      // reconciliation pass. Make one final cancellation pass before closing
+      // the user-data stream.
+      const finalCancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
+      if (finalCancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+    }
+
+    const userDataIntakeErrors = await stopUserDataIntake({ userDataSubscription })
+    userDataIntakeStopped = true
+    if (userDataIntakeErrors.length > 0) auditReasons.push("USER_DATA_INTAKE_SHUTDOWN_FAILED")
+    await userDataEventQueue
+
     if (tradingEnabled && tradingEngine) {
       try {
         const reconciliation = await tradingEngine.reconcileOwnedOrders()
@@ -1519,7 +1561,11 @@ export async function startHarvester({
         auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
       }
       const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
-      const unresolvedOrders = tradingEngine.getOrders().filter((order) => !terminalStatuses.has(order.status))
+      const unresolvedOrders = tradingEngine.getOrders().filter((order) => {
+        if (terminalStatuses.has(order.status)) return false
+        if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) return false
+        return true
+      })
       if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
       if (userDataAccountingFailed || userDataRequiresReconciliation) {
         auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
@@ -1540,7 +1586,16 @@ export async function startHarvester({
 
     userDataStatus = "STOPPED"
     const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cleanupErrors = [...intakeErrors, ...disconnectErrors, ...(snapshotError ? [snapshotError] : [])]
+    const auditError = auditReasons.length > 0
+      ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
+      : undefined
+    const cleanupErrors = [
+      ...marketIntakeErrors,
+      ...userDataIntakeErrors,
+      ...disconnectErrors,
+      ...(snapshotError ? [snapshotError] : []),
+      ...(auditError ? [auditError] : []),
+    ]
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
     }
