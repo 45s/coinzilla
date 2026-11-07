@@ -1,6 +1,12 @@
 import { Asset, Market } from "@coinzilla/entities"
 import { adaptCanonicalFill } from "../../../shared/adapt-canonical-fill.js"
 
+/**
+ * Build the canonical Market required to normalize trades for one symbol.
+ *
+ * @param {{symbol: string, exchangeInfo: {symbols?: Array<object>}}} options
+ * @returns {import("@coinzilla/entities").Market}
+ */
 export function createCanonicalFillMarket({ symbol, exchangeInfo }) {
   const symbolMatches = Array.isArray(exchangeInfo?.symbols)
     ? exchangeInfo.symbols.filter((item) => item?.symbol === symbol)
@@ -29,6 +35,12 @@ export function createCanonicalFillMarket({ symbol, exchangeInfo }) {
   })
 }
 
+/**
+ * Normalize a Binance myTrades page into canonical Fill entities.
+ *
+ * @param {{trades: object[], market: import("@coinzilla/entities").Market}} options
+ * @returns {import("@coinzilla/entities").Fill[]}
+ */
 export function adaptCanonicalFills({ trades, market }) {
   if (!Array.isArray(trades)) {
     throw new TypeError("Binance myTrades response should be an array")
