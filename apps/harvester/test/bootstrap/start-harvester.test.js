@@ -313,8 +313,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   );
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture one PREFLIGHT snapshot and one CLOSING snapshot; it does not trigger a separate recovery snapshot");
-  assert.equal(openOrderSnapshotCalls, 2, "the ordinary TRADE scenario must perform the startup open-order audit and the shutdown reconciliation snapshot");
+  assert.equal(accountSnapshotCalls, 3, "the ordinary TRADE scenario must capture PREFLIGHT, the user-data recovery snapshot triggered by the TRADE, and the final CLOSING snapshot");
+  assert.equal(openOrderSnapshotCalls, 3, "the ordinary TRADE scenario must audit open orders at startup, during user-data recovery, and again during shutdown reconciliation");
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
 
@@ -425,9 +425,10 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
       return toResult({ data: canceled })
     },
     getOpenOrders: async ({ symbol } = {}) => toResult({
-      data: [...canonicalOrders.values()].filter((order) =>
-        ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
-        (!symbol || order.market.symbol === symbol)),
+      data: [...canonicalOrders.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
     }),
     getFills: async () => toResult({ data: [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({

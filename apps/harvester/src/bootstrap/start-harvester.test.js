@@ -1857,7 +1857,11 @@ test("logs safe correlation details when an execution report is not owned", asyn
   assert.equal(diagnostic.clientIdMatchStatus, undefined)
   assert.ok(Array.isArray(diagnostic.errors))
 
-  await result.stop()
+  await assert.rejects(
+    result.stop(),
+    /USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE/,
+    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
+  )
 })
 
 
@@ -2154,7 +2158,11 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
   assert.equal(snapshots[1].data.phase, "CLOSING")
   assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
   assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
-  assert.ok(snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"))
+  assert.equal(
+    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
+    false,
+    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
+  )
   assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
 })
 
@@ -2587,16 +2595,15 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   const cancelGate = new Promise((resolve) => { releaseCancel = resolve })
   const userDataObserved = new Promise((resolve) => { resolveUserDataObserved = resolve })
   const observedEvents = []
+  let submittedOrder
   let canceledOrder
   broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
-    data: canceledOrder?.brokerOrderId === orderId ? [canceledOrder] : [],
+    data: [canceledOrder ?? submittedOrder].filter((order) => order?.brokerOrderId === orderId),
   })
   broker.placeOrder = async ({ order }) => {
     calls.push("placeOrder:" + order.side)
-    return {
-      ok: true,
-      data: new CanonicalOrder({
+    submittedOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: "broker-" + order.clientOrderId,
         market,
@@ -2609,8 +2616,8 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
         createdAt: 1,
         acknowledgedAt: 1,
         updatedAt: 1,
-      }),
-    }
+      })
+    return { ok: true, data: submittedOrder }
   }
   broker.cancelOrder = async ({ order }) => {
     calls.push("cancelOrder:" + order.side)
