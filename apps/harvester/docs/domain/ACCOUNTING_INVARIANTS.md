@@ -6,7 +6,7 @@ The matrix below records implementation/test evidence and gaps only. A test name
 
 ## Implementation regression matrix (evidence only)
 
-Legend: **Existing** = a focused current test exists; **Partial** = related test exists but not all combinations; **Gap** = direct proof is missing and should be added in D2.
+Legend: **Existing** = a focused current test exists; **Partial** = related test exists but not all combinations; **Gap** = direct proof is missing. These statuses describe test presence, not execution; exact-head test/CI verification is tracked separately.
 
 | Area | Required case | Current Harvester evidence | Status |
 |---|---|---|---|
@@ -16,7 +16,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Portfolio | SELL quote commission reduces quote proceeds | `position.test.js` | Existing |
 | Portfolio | SELL cannot consume active + free quantity by dipping into free | `position.test.js` | Existing |
 | Portfolio | Total base quantity conserved by free allocation | `position.test.js` | Partial |
-| Lifecycle | keepQuantity=0 complete workflow | End-to-end BUY/SELL/cancel/reconcile/dust/profit/exact-once regression required by canonical spec | Gap / verification required |
+| Lifecycle | keepQuantity=0 complete workflow | `completes the full Conservative lifecycle with the supported zero keepQuantity` in `conservative-trading-engine.test.js` | Existing — execution pending |
 | Fill identity | Identical replay no-op | `portfolio.test.js`, `recovery-ledger.test.js` | Existing |
 | Fill identity | Same ID with changed financial facts rejects | both identity tests | Existing |
 | Fill identity | Changes in each fingerprint field reject | `fills/fill-fingerprint.test.js` | Existing |
@@ -24,10 +24,10 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Order lifecycle | NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED, EXPIRED, and unknown states map and drive safe engine behavior | `adapt-canonical-order.test.js`, `order-registry.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Cancellation race | A recovery SELL fill returned during cancellation is applied once when its late stream event is replayed | `conservative-trading-engine.test.js` | Existing |
 | Fill identity | Same fill applied to Portfolio and ledger atomically | `update-trading-accounting.test.js` | Existing |
-| Recovery ledger | Multiple BUY fills accumulate actual cost | ledger test uses BUY then multiple sells; add multi-BUY explicit case | Partial |
+| Recovery ledger | Multiple BUY fills accumulate actual cost | Actual multi-BUY DOGE/ZRO fixtures in `conservative-strategy.test.js`; full-cycle engine regression | Existing — execution pending |
 | Recovery ledger | Partial SELL fills accumulate net proceeds across replacement | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Base commissions do not alter quote ledger | `recovery-fill-accounting.test.js` | Existing |
-| Recovery ledger | Multiple base/quote commission entries aggregate correctly | commission-rate test; recovery accounting tests not all combinations | Partial |
+| Recovery ledger | Multiple base/quote commission entries aggregate correctly | `recovery-fill-accounting.test.js` aggregated commission validation and per-asset accounting cases | Existing — execution pending |
 | Recovery ledger | Third-asset/incomplete/negative commission reject | recovery accounting tests | Partial |
 | Recovery ledger | Reset clears cycle amounts but preserves IDs | `recovery-ledger.test.js` | Existing |
 | Recovery ledger | Late duplicate after reset stays duplicate | reset test | Existing |
@@ -37,7 +37,7 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | SELL plan | Partial proceeds lower remaining required proceeds | sell-plan test | Existing |
 | SELL plan | Base commission + quantity step edge | `recovery-sell-plan-accounting.test.js` | Existing |
 | SELL plan | Quote commission + price tick boundary at minProfit | `recovery-sell-plan-accounting.test.js` | Existing |
-| SELL plan | Already recovered proceeds still require full SELL fill | planner test exists; lifecycle test needed | Partial |
+| SELL plan | Already recovered proceeds still require full SELL fill | `conservative-strategy.test.js` residual sell-through cases; engine terminal SELL lifecycle | Existing — execution pending |
 | Strategy | Initial BUY price and quantity boundaries | `conservative-strategy.test.js` | Partial |
 | Strategy | Initial BUY trailing decision/replacement eligibility | `trailing-buy-repricing.test.js`, `conservative-trading-engine.test.js` | Existing |
 | Strategy | Standing BUY allowed with active recovery SELL | strategy test creates both intents | Existing |
@@ -49,12 +49,12 @@ Legend: **Existing** = a focused current test exists; **Partial** = related test
 | Completion | Insufficient active inventory does not allocate | completion test | Existing |
 | Completion | Exact minProfit equality passes and one tick below fails | `recovery-sell-plan-accounting.test.js` | Existing |
 | Completion | Completion invoked exactly once and ledger reset only once | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
-| Sell-through | After recovery profit is secured, continue selling active inventory above `keepQuantity` at a price that does not violate net-profit, exchange-filter, or post-only constraints | Current strategy suppresses SELL when the ledger resets; existing test explicitly asserts suppression | Gap / FAIL against owner-approved contract |
-| Sell-through | Repeat evaluation after a residual fill without duplicating an active SELL | No regression proving repeated evaluation and duplicate-order prevention for residual sell-through | Gap |
-| Sell-through | Quantity-step remainder is either sold in a later valid order or explicitly classified as exchange-constrained dust | No complete residual/dust regression | Gap |
-| Sell-through | Base-asset SELL commission leaves exactly the configured retained quantity when exchange rules permit | Existing planner reserves a fee but no end-to-end exact-retained-quantity proof | Gap |
-| Sell-through | Retained `keepQuantity` is never sold; no extra active inventory is intentionally retained | Existing completion allocates exact `keepQuantity` but leaves additional active inventory | Gap / FAIL against owner-approved contract |
-| Ordering | Out-of-order fills with deterministic execution-time policy | no explicit test | Gap |
+| Sell-through | After recovery profit is secured, continue selling active inventory above `keepQuantity` at a price that does not violate net-profit, exchange-filter, or post-only constraints | `conservative-strategy.test.js` residual sell-through and price/filter boundary cases | Existing — execution pending |
+| Sell-through | Repeat evaluation after a residual fill without duplicating an active SELL | `does not create a duplicate residual SELL while one is active` and engine active-order suppression | Existing — execution pending |
+| Sell-through | Quantity-step remainder is either sold in a later valid order or explicitly classified as exchange-constrained dust | `conservative-strategy.test.js`, `recovery-completion.dust.test.js`, and dust lifecycle event DTO tests | Existing — execution pending |
+| Sell-through | Base-asset SELL commission leaves exactly the configured retained quantity when exchange rules permit | `recovery-sell-plan-accounting.test.js` exact keepQuantity boundary; actual commission fill fixtures | Existing — execution pending |
+| Sell-through | Retained `keepQuantity` is never sold; no extra sellable inventory is intentionally retained | Recovery completion predicate, exact fee-reserved planner test, and residual sell-through regressions | Existing — execution pending |
+| Ordering | Out-of-order fills with deterministic execution-time policy | Excluded as a separate accounting-order requirement: Portfolio/RecoveryLedger deltas are additive and idempotent by stable fill ID; completed-BUY VWAP uses aggregate executed quote/base totals. Stale/out-of-order order reports are covered by engine lifecycle tests. | Excluded — rationale documented |
 | Failure | Invalid fill quantity/notional/commission, unsupported asset, wrong market | several focused tests | Partial |
 | Failure | Cross-projection partial failure leaves neither projection committed | `update-trading-accounting.test.js` | Existing |
 | Lifecycle | Full BUY → partial fills → SELL partial/cancel-fill replacement → completion → next BUY | `reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion` | Existing |
@@ -72,4 +72,4 @@ Before D2 can pass:
 
 ## Current verification status
 
-This matrix is evidence only; the canonical specification remains the sole rule authority. Residual sell-through and dust paths have implementation changes on the audit branch, but acceptance is not established until focused regressions and all required exact-head CI checks pass. At the starting PR #653 head, Unit Tests and Test Coverage failed. Restart reconciliation remains separate in #654.
+This matrix is evidence only; the canonical specification remains the sole rule authority. The in-scope implementation and regression inventory now covers residual sell-through, exchange-constrained dust and durable dust evidence, exact retained quantity, BUY-during-SELL cancellation/reconciliation/replacement, terminal SELL outcomes, and exact-once completion. The zero-keepQuantity full-cycle regression is included. Test execution and exact-head CI remain pending as a separate verification phase; no test-pass claim is made here. Restart reconciliation remains explicitly deferred in #654.
