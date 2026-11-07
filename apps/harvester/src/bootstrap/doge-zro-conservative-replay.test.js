@@ -207,6 +207,26 @@ describe("DOGEUSDT Conservative strategy replay", () => {
     }
 
     assert.equal(completedBuys.length, 4)
+    assert.deepEqual(
+      replay.receivedExecutionReports
+        .filter(({ executedOrder }) => executedOrder.side === "BUY")
+        .map(({ executedOrder, fill }) => [
+          executedOrder.price,
+          executedOrder.executedQuantity,
+          fill.price,
+          fill.quantity,
+          fill.quoteQuantity,
+          fill.commissionAmount,
+          fill.commissionAsset,
+        ]),
+      [
+        ["0.07157", "400", "0.07157", "400", "28.628", "0.4", "DOGE"],
+        ["0.07153", "400", "0.07153", "400", "28.612", "0.4", "DOGE"],
+        ["0.07149", "400", "0.07149", "400", "28.596", "0.4", "DOGE"],
+        ["0.07145", "400", "0.07145", "400", "28.58", "0.4", "DOGE"],
+      ],
+      "each BUY must reconcile its executed quantity, quote notional, and base-asset commission",
+    )
     assert.equal(replay.cancelledOrders.length, 3)
     assert.ok(
       replay.cancelledOrders.every((order) => order.status === "CANCELED"),
@@ -227,8 +247,9 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       [sell.market.symbol, sell.side, sell.type],
       [symbol, "SELL", "LIMIT"],
     )
+    assert.equal(sell.quantity, "1595")
+    assert.equal(sell.price, "0.07182")
     assert.ok(Number(sell.quantity) > replay.pair.keepQuantity)
-    assert.ok(Number(sell.price) > 0)
 
     const cycle = replay.waitForCycle()
     await replay.triggerPrice(sell.price)
@@ -238,7 +259,32 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       tradeId: "645-" + symbol.toLowerCase() + "-multi-sell",
     })
     const completion = await cycle
-    assert.ok(Number(completion.realizedNetProfit) >= 0.01)
+    assert.equal(completion.freeQuantity, "3.4")
+    assert.equal(completion.realizedNetProfit, "0.0223471")
+    assert.ok(Number(completion.realizedNetProfit) >= config.strategies.CG_coinGrabber.settings.minProfit)
+    assert.deepEqual(
+      replay.receivedExecutionReports
+        .filter(({ executedOrder }) => executedOrder.side === "SELL")
+        .map(({ executedOrder, fill }) => [
+          executedOrder.price,
+          executedOrder.executedQuantity,
+          fill.price,
+          fill.quantity,
+          fill.quoteQuantity,
+          fill.commissionAmount,
+          fill.commissionAsset,
+        ]),
+      [[
+        "0.07182",
+        "1595",
+        "0.07182",
+        "1595",
+        "114.5529",
+        "0.1145529",
+        "USDT",
+      ]],
+      "SELL proceeds and quote-asset commission must match the actual execution",
+    )
 
     const position = replay.runtime.portfolio.getPosition({ symbol })
     const expectedRetainedQuantity = subtractDecimal({
@@ -246,7 +292,9 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       right: sell.quantity,
     })
     assert.equal(position.baseQuantity.amount, "0")
+    assert.equal(expectedRetainedQuantity, "3.4")
     assert.equal(position.freeBaseQuantity.amount, expectedRetainedQuantity)
+    assert.equal(position.freeBaseQuantity.amount, "3.4")
     assert.ok(
       Number(position.freeBaseQuantity.amount) >= replay.pair.keepQuantity,
     )
