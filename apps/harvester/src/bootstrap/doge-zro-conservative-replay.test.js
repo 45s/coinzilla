@@ -514,9 +514,28 @@ async function createReplayHarness(symbol) {
     broker.createCanonicalOrder = async (order) => {
       const result = await createCanonicalOrder(order)
       if (result?.ok) {
-        submittedList.push(result.data)
-        openOrders.set(result.data.clientOrderId, result.data)
-        orderHistory.set(result.data.brokerOrderId, result.data)
+        const canonicalOrder = result.data
+        // The replay assertions use exchange-shaped price/quantity fields while
+        // the engine and broker now exchange canonical Money/Quantity values.
+        submittedList.push({
+          clientOrderId: canonicalOrder.clientOrderId,
+          brokerOrderId: canonicalOrder.brokerOrderId,
+          market: canonicalOrder.market,
+          side: canonicalOrder.side,
+          type: canonicalOrder.type,
+          limitPrice: canonicalOrder.limitPrice,
+          originalQuantity: canonicalOrder.originalQuantity,
+          executedQuantity: canonicalOrder.executedQuantity,
+          status: canonicalOrder.status,
+          createdAt: canonicalOrder.createdAt,
+          acknowledgedAt: canonicalOrder.acknowledgedAt,
+          updatedAt: canonicalOrder.updatedAt,
+          completedAt: canonicalOrder.completedAt,
+          price: canonicalOrder.limitPrice.amount,
+          quantity: canonicalOrder.originalQuantity.amount,
+        })
+        openOrders.set(canonicalOrder.clientOrderId, canonicalOrder)
+        orderHistory.set(canonicalOrder.brokerOrderId, canonicalOrder)
         notifyOrderWaiters()
       }
       return result
