@@ -1305,7 +1305,13 @@ export function makeConservativeTradingEngine({
     )
     if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0) {
       const error = new Error("Terminal order executed quantity does not match its complete distinct fill history")
-      await pause({ symbol, reason: "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH", error })
+      const reason = order.side === "SELL" && order.status === "FILLED"
+        ? "SELL_FILL_RECONCILIATION_FAILED"
+        : order.side === "BUY" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0
+          ? "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
+          : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH"
+      await pause({ symbol, reason, error })
       return toResult({ error })
     }
     const fullExecution = compareDecimal({
@@ -1479,7 +1485,11 @@ export function makeConservativeTradingEngine({
         state.lastBuyPrices.set(symbol, executionPrice)
         state.buyExecutionTotals.delete(order.brokerOrderId)
       }
-      if (order.side === "SELL" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+      if (order.status === "REJECTED") {
+        await pause({ symbol, reason: "ORDER_REJECTED" })
+        return toResult({ data: { order, paused: true } })
+      }
+      if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
         if (!replacement.ok) return replacement
@@ -1548,10 +1558,6 @@ export function makeConservativeTradingEngine({
         state.sellExecutionTotals.delete(order.brokerOrderId)
         state.completedRecoverySellSymbols.delete(symbol)
         state.trailingBuy.set(symbol, true)
-      }
-      if (order.status === "REJECTED") {
-        await pause({ symbol, reason: "ORDER_REJECTED" })
-        return toResult({ data: { order, paused: true } })
       }
       return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
