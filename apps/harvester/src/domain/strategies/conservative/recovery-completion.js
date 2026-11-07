@@ -30,7 +30,21 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
   return undefined
 }
 
-/** Complete only after a reconciled recovery SELL, sufficient net profit, and exact classification of residual dust. */
+/**
+ * Complete only after a reconciled recovery SELL, sufficient net profit, and
+ * exact classification of residual dust.
+ *
+ * @param {object} input
+ * @param {boolean} input.sellOrderFullyFilled A terminal FILLED SELL with reconciled execution history.
+ * @param {string} input.spent Full accumulated BUY cost including actual fees.
+ * @param {string} input.netSellProceeds Cumulative confirmed net SELL proceeds.
+ * @param {string} input.activeQuantity Active base quantity after confirmed fills.
+ * @param {string} input.keepQuantity Configured pair-level retained quantity.
+ * @param {string} input.minProfit Minimum realized net profit.
+ * @param {object} [input.inventoryDisposition] Fresh strategy evidence for exchange-constrained dust.
+ * @param {string} [input.inventoryDisposition.quantity] Exact active quantity above keepQuantity.
+ * @param {"MIN_QUANTITY"|"MIN_NOTIONAL"|"QUANTITY_INCREMENT"} [input.inventoryDisposition.reason] Limiting exchange filter.
+ */
 export function evaluateRecoveryCompletion({ sellOrderFullyFilled, spent, netSellProceeds, activeQuantity, keepQuantity, minProfit, inventoryDisposition } = {}) {
   if (typeof sellOrderFullyFilled !== "boolean") throw new TypeError("sellOrderFullyFilled must be a boolean")
   for (const [field, value] of Object.entries({ spent, netSellProceeds, activeQuantity, keepQuantity, minProfit })) assertDecimalString({ value, field })
