@@ -540,6 +540,7 @@ export async function startHarvester({
   }
 
   const subscriptions = []
+  const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
   let userDataReady = false
@@ -1353,7 +1354,6 @@ export async function startHarvester({
     // Establish every enabled market stream before doing any REST ticker
     // seeding or waiting for an initial strategy evaluation. A slow first
     // market must never prevent later enabled markets from receiving prices.
-    const marketPriceIntake = new Map()
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       if (!pairConfig.enabled) continue
 
