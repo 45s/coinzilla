@@ -3,7 +3,7 @@ import { Portfolio } from "../../portfolio/portfolio.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
-import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableInventory } from "./conservative-rules.js"
+import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableInventory } from "./conservative-helpers.js"
 
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.
