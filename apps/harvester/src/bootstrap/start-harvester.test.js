@@ -1504,12 +1504,13 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // With no active position left, the subsequent market tick may trail the
-  // standing BUY; shutdown then completes after the resulting order state is reconciled.
+  // With no active position left, the subsequent market tick preserves the
+  // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
+  // then cancels the replacement BUY while leaving recovery SELLs untouched.
   assert.equal(submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
-  assert.equal(buyCancellationCount.value, 1, "the subsequent market tick must cancel the standing BUY once under the existing trailing strategy behavior")
+  assert.equal(buyCancellationCount.value, 1, "the subsequent market tick must trail the standing BUY once")
   await runtime.stop()
-  assert.equal(buyCancellationCount.value, 1)
+  assert.equal(buyCancellationCount.value, 2, "shutdown must cancel the replacement standing BUY")
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
