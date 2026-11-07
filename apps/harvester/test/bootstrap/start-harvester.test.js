@@ -7,11 +7,29 @@ import {
   Fill,
   Market,
   Money,
+  Order,
   Quantity,
   TradingRules,
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
+const createOpenOrderSnapshot = ({ order }) => {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    price: Number(order.limitPrice.amount),
+    id: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+  });
+  openOrder.originalPrice = order.limitPrice.amount;
+  openOrder.originalQuantity = order.originalQuantity.amount;
+  openOrder.executedQuantity = order.executedQuantity.amount;
+  openOrder.status = order.status === 'OPEN' ? 'NEW' : 'PARTIALLY_FILLED';
+  return openOrder;
+};
+
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
@@ -133,6 +151,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   const userDataErrors = [];
   let orderSequence = 0;
   let lastOrder;
+  const canonicalOrders = new Map();
+  const fillsByOrderId = new Map();
   let onPrice;
   let onUserDataEvent;
   let observedTrade;
@@ -142,8 +162,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
       lastOrder = order;
-      return toResult({
-      data: new CanonicalOrder({
+      const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: String(++orderSequence),
         market,
@@ -153,17 +172,26 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
         originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
         executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
         status: 'OPEN',
-      }),
       });
+      canonicalOrders.set(submitted.brokerOrderId, submitted);
+      return toResult({ data: submitted });
     },
     get lastOrder() { return lastOrder; },
     cancelOrder: async () => toResult({ error: new Error('Unexpected cancellation') }),
     getOpenOrders: async () => {
       openOrderSnapshotCalls += 1;
-      return toResult({ data: [] });
+      return toResult({
+        data: [...canonicalOrders.values()]
+          .filter((order) => ['OPEN', 'PARTIALLY_FILLED'].includes(order.status))
+          .map((order) => createOpenOrderSnapshot({ order })),
+      });
     },
-    getFills: async () => toResult({ data: [] }),
-    getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrderId.get(String(orderId)) ?? [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => toResult({ error: new Error("order not found") }),
     getAccountSnapshot: async () => {
       accountSnapshotCalls += 1;
@@ -188,7 +216,15 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       return toResult({ data: { unsubscribe: async () => {} } });
     },
     subscribeForUserData: async ({ onEvent: callback } = {}) => {
-      onUserDataEvent = callback;
+      onUserDataEvent = (message) => {
+        const event = message?.event;
+        if (event?.executionType === 'TRADE' && event.executedOrder?.brokerOrderId) {
+          const orderId = String(event.executedOrder.brokerOrderId);
+          canonicalOrders.set(orderId, event.executedOrder);
+          fillsByOrderId.set(orderId, [event.fill]);
+        }
+        return callback(message);
+      };
       return toResult({ data: { disconnect: async () => {} } });
     },
   };
@@ -277,8 +313,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   );
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 2);
-  assert.equal(openOrderSnapshotCalls, 2);
+  assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture the PREFLIGHT and final CLOSING account snapshots; this test's TRADE does not trigger stream recovery");
+  assert.equal(openOrderSnapshotCalls, 3, "the ordinary TRADE scenario must audit open orders at startup, reconcile owned orders before shutdown BUY cancellation, and reconcile them again after cancellation; neither reconciliation is a stream-recovery snapshot");
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
 
@@ -345,30 +381,61 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   const diagnosticLogs = []
   let orderSequence = 0
   let snapshotSequence = 0
+  const canonicalOrders = new Map()
   const broker = {
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
       const market = metadataBySymbol.get(order.symbol).market
       submittedSymbols.push(order.symbol)
-      return toResult({
-        data: new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: String(++orderSequence),
-          market,
-          side: order.side,
-          type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-          status: "OPEN",
-        }),
+      const submitted = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: String(++orderSequence),
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        status: "OPEN",
+        createdAt: 10,
+        acknowledgedAt: 10,
+        updatedAt: 10,
       })
+      canonicalOrders.set(submitted.brokerOrderId, submitted)
+      return toResult({ data: submitted })
     },
-    cancelOrder: async () => toResult({ error: new Error("Unexpected cancellation") }),
-    getOpenOrders: async () => toResult({ data: [] }),
+    cancelOrder: async ({ order } = {}) => {
+      const canceled = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: 11,
+        completedAt: 11,
+      })
+      canonicalOrders.set(canceled.brokerOrderId, canceled)
+      return toResult({ data: canceled })
+    },
+    getOpenOrders: async ({ symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
     getFills: async () => toResult({ data: [] }),
-    getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => toResult({ data: null }),
     getAccountSnapshot: async () => toResult({ data: { balances, sourceTime: ++snapshotSequence } }),
     getSymbolFilters: async ({ symbol } = {}) => toResult({ data: metadataBySymbol.get(symbol) }),
@@ -422,5 +489,18 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   assert.equal(typeof priceSubscriptions.get("DOGEUSDT"), "function")
   assert.equal(typeof priceSubscriptions.get("ZROUSDT"), "function")
 
-  await context.stop()
+  let shutdownError
+  try {
+    await context.stop()
+  } catch (error) {
+    shutdownError = error
+  }
+  assert.equal(
+    shutdownError,
+    undefined,
+    "multi-market shutdown must reconcile both canceled BUY orders successfully; diagnostic logs: " +
+      JSON.stringify(diagnosticLogs.filter(({ message }) =>
+        message === "Shutdown order reconciliation failed" ||
+        message === "paused a trading pair")),
+  )
 })

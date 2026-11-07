@@ -1876,6 +1876,227 @@ export function makeConservativeTradingEngine({
     }
   }
 
+  const cancelOwnedBuyOrdersForShutdown = () => runTransition({
+    task: async () => {
+      const activeBuyOrders = state.registry.getActiveOrders()
+        .filter((order) =>
+          order.side === "BUY" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
+        )
+      const errors = []
+      let canceled = 0
+      let reconciled = 0
+
+      for (const order of activeBuyOrders) {
+        const { symbol } = order.market
+        const eligibility = await ensureCancellationEligible({
+          symbol,
+          order,
+          reason: "SHUTDOWN_BUY_CANCELLATION_INELIGIBLE",
+        })
+        if (!eligibility.ok) {
+          errors.push(...eligibility.errors)
+          continue
+        }
+
+        const cancelIntent = await publishDurableIntent({
+          eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
+          dataResult: mapOrderCancellationRequestedData({
+            order,
+            reason: "PROCESS_SHUTDOWN",
+          }),
+        })
+        if (!cancelIntent.ok) {
+          const error = cancelIntent.errors?.[0] ?? new Error("Shutdown BUY cancellation intent was not durably journaled")
+          await pause({ symbol, reason: "SHUTDOWN_BUY_CANCEL_INTENT_NOT_DURABLE", error })
+          errors.push(error)
+          continue
+        }
+
+        let cancelResult
+        try {
+          cancelResult = await broker.cancelOrder({ order })
+        } catch (error) {
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+
+        if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
+          const error = cancelResult?.errors?.[0] ?? new Error("Broker did not confirm a canonical shutdown BUY cancellation")
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+
+        const cancellation = cancelResult.data
+        if (
+          cancellation.clientOrderId !== order.clientOrderId ||
+          cancellation.brokerOrderId !== order.brokerOrderId ||
+          cancellation.market.id !== order.market.id ||
+          cancellation.side !== "BUY"
+        ) {
+          const error = new Error("Shutdown cancellation response does not match the owned BUY order")
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_IDENTITY_MISMATCH",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+
+        if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
+          const error = new Error("Shutdown BUY cancellation did not return a terminal order state")
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+
+        let update
+        try {
+          update = state.registry.applyUpdate({ order: cancellation })
+        } catch (error) {
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_RECONCILIATION_FAILED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+        if (update.unknown) {
+          const error = new Error("Shutdown cancellation response is not registered as a Harvester-owned order")
+          const failed = await markCancellationUnknown({
+            symbol,
+            order,
+            reason: "SHUTDOWN_BUY_CANCELLATION_NOT_REGISTERED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+        state.registry = update.registry
+        let reconciledOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId })
+        if (update.stale && !["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(reconciledOrder.status)) {
+          const error = new Error("Shutdown BUY cancellation response is stale and the owned order remains open")
+          const failed = await markCancellationUnknown({
+            symbol,
+            order: reconciledOrder,
+            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            error,
+          })
+          errors.push(...(failed.errors ?? [error]))
+          continue
+        }
+
+        let fillsResult
+        try {
+          fillsResult = await broker.getFills({
+            symbol,
+            orderId: order.brokerOrderId,
+          })
+        } catch (error) {
+          fillsResult = toResult({ error })
+        }
+        if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+          const error = fillsResult?.errors?.[0] ?? new Error("Unable to reconcile shutdown BUY execution history")
+          await pause({ symbol, reason: "SHUTDOWN_BUY_FILL_RECONCILIATION_FAILED", error })
+          errors.push(error)
+          continue
+        }
+
+        const fillsById = new Map()
+        let invalidFill
+        for (const fill of fillsResult.data) {
+          if (!(fill instanceof Fill) ||
+              fill.market.id !== order.market.id ||
+              fill.side !== "BUY" ||
+              fill.brokerOrderId !== order.brokerOrderId ||
+              (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+            invalidFill = new Error("Shutdown BUY execution history contains a fill for a different order")
+            break
+          }
+          const previous = fillsById.get(fill.id)
+          if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+            invalidFill = new Error("Shutdown BUY execution history contains conflicting duplicate fill facts")
+            break
+          }
+          if (!previous) fillsById.set(fill.id, fill)
+        }
+        if (invalidFill) {
+          await pause({ symbol, reason: "SHUTDOWN_BUY_FILL_IDENTITY_MISMATCH", error: invalidFill })
+          errors.push(invalidFill)
+          continue
+        }
+
+        const fills = [...fillsById.values()].sort((left, right) => {
+          if (left.executedAt !== undefined && right.executedAt !== undefined &&
+              left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+          return left.tradeId.localeCompare(right.tradeId)
+        })
+        const reconciledQuantity = fills.reduce(
+          (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+          "0",
+        )
+        if (compareDecimal({
+          left: reconciledQuantity,
+          right: reconciledOrder.executedQuantity.amount,
+        }) !== 0) {
+          const error = new Error("Shutdown BUY execution history does not match the terminal order executed quantity")
+          await pause({ symbol, reason: "SHUTDOWN_BUY_EXECUTED_QUANTITY_MISMATCH", error })
+          errors.push(error)
+          continue
+        }
+
+        let fillFailed = false
+        for (const fill of fills) {
+          const processed = await processExecutionFillTransition({
+            order: reconciledOrder,
+            fill,
+          })
+          if (!processed.ok) {
+            errors.push(...(processed.errors ?? [new Error("Shutdown BUY fill accounting failed")]))
+            fillFailed = true
+            break
+          }
+          reconciled += 1
+        }
+        if (fillFailed) continue
+
+        if (reconciledOrder.status === "CANCELED") {
+          publishOrderCancelled({ order: reconciledOrder })
+          canceled += 1
+        } else {
+          publishOrderCancelFailed({
+            order: reconciledOrder,
+            outcome: reconciledOrder.status + "_DURING_SHUTDOWN",
+            error: new Error("The BUY order reached " + reconciledOrder.status + " before shutdown cancellation completed"),
+          })
+        }
+      }
+
+      if (errors.length > 0) return toResult({ errors })
+      return toResult({ data: { canceled, reconciled } })
+    },
+  })
+
   const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
     const initialOrdersResult = await runTransition({
       task: async () => toResult({ data: { ownedOrders: [...state.registry.orders] } }),
@@ -1985,6 +2206,7 @@ export function makeConservativeTradingEngine({
     processBookTicker,
     processUserDataEvent,
     reconcileOwnedOrders,
+    cancelOwnedBuyOrdersForShutdown,
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,

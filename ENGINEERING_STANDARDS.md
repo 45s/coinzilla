@@ -68,6 +68,24 @@ Other repository instructions and task checklists should link to this section ra
 - Run the affected package's test and coverage scripts first, then relevant workspace tests and repository quality checks. Report exact commands and outcomes accurately.
 - Never claim tests passed unless they were actually executed and passed.
 
+### Human-readable test design
+
+Tests are executable specifications for people, not merely machine checks. A reviewer must be able to understand the scenario, the action, and the expected business outcome from the test name, local variable names, and assertion message without opening helper implementations or asking an author to decode abbreviations.
+
+Required practices:
+
+- Name suites and test cases in plain English. Describe the observable behavior and important scenario (for example, "submits the recovery SELL before the next standing BUY after the actual BUY fill"), not an implementation detail or vague verb such as "handles".
+- Write each test in a clear Arrange → Act → Assert flow. Keep setup and infrastructure behind a small, intention-revealing fixture/harness API; keep business expectations in the test itself.
+- Use precise domain names for values: `initialBuyOrder`, `recoverySellOrder`, `completedBuyOrders`, `retainedInventoryQuantity`, and `receivedExecutionReports`. Avoid opaque aliases such as `replay`, `buy`, `sell`, `pair`, `item`, `tmp`, `x`, or unexplained abbreviations when the value's role can be stated.
+- Do not make readers decode positional tuples. When comparing orders, fills, requests, positions, or lifecycle records, map them to objects with named fields such as `{ marketSymbol, side, price, quantity, orderType }`. Use arrays only when sequence or order is itself the behavior being verified, and keep each array element meaningful.
+- Give scenario constants and expected financial values descriptive names. Keep monetary and quantity values as exact decimal strings; do not replace exact comparisons with floating-point approximations.
+- Every assertion MUST include a detailed, plain-English failure message describing the invariant and scenario. A message that only repeats a literal or says "should equal" is insufficient. Include useful context such as the order role, market, lifecycle stage, or accounting outcome.
+- Prefer one assertion per business invariant. Group related assertions in a named helper only when that helper preserves the invariant's meaning and still receives a detailed failure message.
+- Name test helpers after the domain action or result they represent (for example, `submitInitialBuyOrder` or `waitForRecoveryCycleCompletion`). Keep fake broker/exchange mechanics separate from the scenario specification.
+- A test should be understandable top-to-bottom without navigating into the harness. If the harness is complex, give it a dedicated module and expose only the small operations the scenario needs. Keep scenario-specific fixture modules cohesive, hide their internal fake-exchange maps, and do not let test cases manipulate broker internals directly.
+
+A materially edited test case must comply with these practices throughout that case, not only on newly added lines. Review the full changed test file for opaque names, tuple-based comparisons, missing assertion messages, and unexplained expected values before delivery.
+
 ### 3. Reliability, error handling, and observability
 
 - Treat diagnostics as part of the feature design. A failure should be understandable from its error and logs without requiring guesswork.
@@ -198,17 +216,18 @@ Before approving a pull request, ask:
 1. Is the behavior correct, and are success, edge, boundary, and failure cases covered?
 2. Does every bug fix have a regression test?
 3. Are tests deterministic, meaningful, and free of leaked resources?
-4. Are names and control flow easy to understand?
-5. Are side effects and state changes explicit?
-6. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
-7. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
-8. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
-9. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
-10. Is logic duplicated, or has an abstraction been introduced too early?
-11. Could the change expose secrets, weaken security, or break compatibility?
-12. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
-13. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
-14. Are the requirements in [Documentation impact](#documentation-impact) satisfied?
+4. Are test names, variables, comparisons, and failure messages understandable in plain English without decoding tuples or asking for context?
+5. Are names and control flow easy to understand?
+6. Are side effects and state changes explicit?
+7. Are logs and errors actionable, appropriately contextual, and free of sensitive data?
+8. Are module responsibilities cohesive, with thin public entry points and no catch-all modules?
+9. Have meaningful pure functions been extracted into focused modules instead of being embedded in classes/services or large files?
+10. If a file is approaching 300 lines or exceeds 500 lines, has its structure been reviewed and any justified exception documented?
+11. Is logic duplicated, or has an abstraction been introduced too early?
+12. Could the change expose secrets, weaken security, or break compatibility?
+13. Does the PR branch contain the latest commit from its actual target (`develop` for task PRs, `main` for release PRs), verified immediately before merge?
+14. Do all required automated checks and coverage gates pass for the exact final PR head SHA?
+15. Are the requirements in [Documentation impact](#documentation-impact) satisfied?
 
 ## Rollout policy
 

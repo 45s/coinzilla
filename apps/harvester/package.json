@@ -1,6 +1,6 @@
 {
   "name": "@coinzilla/harvester",
-  "version": "1.0.0",
+  "version": "1.0.001",
   "private": true,
   "description": "Harvester application workspace",
   "scripts": {
@@ -32,14 +32,9 @@
   },
   "config": {
     "targetedTestFiles": [
-      "test/bootstrap/start-harvester.test.js",
-      "test/configured-account-snapshot-journal.test.js",
-      "test/domain/trading-config.test.js",
-      "test/infrastructure/config/load-trading-config.test.js",
-      "test/main.test.js",
-      "src/use-cases/conservative-trading-engine.test.js",
       "src/bootstrap/doge-zro-conservative-replay.test.js",
-      "src/bootstrap/start-harvester.test.js"
+      "src/bootstrap/start-harvester.test.js",
+      "test/bootstrap/start-harvester.test.js"
     ]
   }
 }

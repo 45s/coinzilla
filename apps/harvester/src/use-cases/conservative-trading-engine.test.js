@@ -4864,3 +4864,93 @@ test("best-effort strategy evidence failure does not block order submission", as
   assert.equal(result.ok, true)
   assert.equal(harness.orders.length, 1)
 })
+
+function makeShutdownOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", executedQuantity = "0" }) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side,
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+test("shutdown cancellation cancels only strategy-owned BUY orders and preserves SELL orders", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "shutdown-buy",
+    brokerOrderId: "broker-shutdown-buy",
+  })
+  const secondBuyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "shutdown-buy-second",
+    brokerOrderId: "broker-shutdown-buy-second",
+  })
+  const sellOrder = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "shutdown-sell",
+    brokerOrderId: "broker-shutdown-sell",
+  })
+  const { engine, cancellationIds } = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder, secondBuyOrder, sellOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+  })
+
+  const result = await engine.cancelOwnedBuyOrdersForShutdown()
+
+  assert.equal(result.ok, true, "shutdown must confirm every acknowledged owned BUY cancellation and reconcile its fills")
+  assert.deepEqual(cancellationIds, ["broker-shutdown-buy", "broker-shutdown-buy-second"], "shutdown must cancel both owned BUY orders using their exact broker order IDs")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy").status, "CANCELED", "the first strategy-owned BUY must reach its broker-confirmed terminal CANCELED state")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy-second").status, "CANCELED", "the second strategy-owned BUY must reach its broker-confirmed terminal CANCELED state")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-sell").status, "OPEN", "graceful shutdown must preserve the owned recovery SELL order without cancellation")
+})
+
+test("shutdown cancellation applies partial BUY fills before confirming cancellation", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "shutdown-partial-buy",
+    brokerOrderId: "broker-shutdown-partial-buy",
+  })
+  const { engine, accountedFills, pauses } = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    cancelWithFill: true,
+  })
+
+  const result = await engine.cancelOwnedBuyOrdersForShutdown()
+
+  assert.equal(result.ok, true, "shutdown must successfully reconcile the partial BUY fill before reporting cancellation complete")
+  assert.equal(accountedFills.length, 1, "the partial BUY execution racing with cancellation must be accounted exactly once")
+  assert.equal(accountedFills[0].side, "BUY", "the execution reconciled during shutdown must retain its original BUY side")
+  assert.equal(accountedFills[0].quantity.amount, "0.1", "shutdown reconciliation must account for the exact 0.1 DOGE partial BUY fill")
+  const canceledOrder = engine.getOrders().find((order) => order.clientOrderId === "shutdown-partial-buy")
+  assert.equal(canceledOrder.status, "CANCELED", "the partially filled BUY must be marked CANCELED only after terminal broker confirmation")
+  assert.equal(canceledOrder.executedQuantity.amount, "0.1", "the canceled order must retain the 0.1 DOGE executed quantity reported by canonical fill history")
+  assert.deepEqual(pauses, [], "a fully reconciled partial BUY cancellation must not pause the market for an accounting inconsistency")
+})
+
+test("shutdown cancellation retains UNKNOWN state when the broker does not confirm cancellation", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "shutdown-unknown-buy",
+    brokerOrderId: "broker-shutdown-unknown-buy",
+  })
+  const { engine, cancellationIds } = await createHarness({
+    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    eventPublisher: { publish: () => ({ ok: true }) },
+    cancelFailure: true,
+  })
+
+  const result = await engine.cancelOwnedBuyOrdersForShutdown()
+
+  assert.equal(result.ok, false, "shutdown cancellation must fail closed when the broker does not confirm a terminal cancellation result")
+  assert.deepEqual(cancellationIds, ["broker-shutdown-unknown-buy"], "shutdown must attempt cancellation for the exact broker ID of the acknowledged owned BUY order")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-unknown-buy").status, "UNKNOWN", "an unconfirmed broker cancellation must retain UNKNOWN order state rather than falsely reporting a clean stop")
+})

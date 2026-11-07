@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
@@ -87,20 +87,66 @@ const createMarketMetadata = (symbol) => {
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }
 }
+const createOpenOrderSnapshot = ({ order }) => {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    price: Number(order.limitPrice.amount),
+    id: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+  })
+  openOrder.originalPrice = order.limitPrice.amount
+  openOrder.originalQuantity = order.originalQuantity.amount
+  openOrder.executedQuantity = order.executedQuantity.amount
+  openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
   const fillHistoryByOrder = new Map()
+  const canonicalOrdersByBrokerId = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
     placeOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(orderId) ?? [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    cancelOrder: async ({ order } = {}) => {
+      const canceledOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: Date.now(),
+        completedAt: Date.now(),
+      })
+      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+      return { ok: true, data: canceledOrder }
+    },
+    getOpenOrders: async ({ symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
+    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
@@ -138,7 +184,24 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     },
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
-      userDataHandlers = handlers
+      userDataHandlers = {
+        ...handlers,
+        onEvent: (message) => {
+          const event = message?.event
+          const executedOrder = event?.executedOrder
+          if (executedOrder?.brokerOrderId) {
+            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+          }
+          const fill = event?.fill
+          if (fill instanceof Fill) {
+            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+            if (!existing.some((item) => item.id === fill.id)) {
+              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+            }
+          }
+          return handlers.onEvent(message)
+        },
+      }
       return {
         ok: true,
         data: { disconnect: async () => calls.push("unsubscribe:user-data") },
@@ -806,7 +869,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when startup recovery leaves user-data reconciliation incomplete")
 })
 
 test("does not acknowledge a stale recovery after a newer disconnect", async () => {
@@ -868,7 +931,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when a newer disconnect prevents authoritative user-data recovery")
 })
 
 test("does not become ready when recovery is reported during subscription setup", async () => {
@@ -1178,6 +1241,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   let signalRecoveryCompleted
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
+  const canonicalOrdersByBrokerId = new Map()
+  const fillHistoryByOrder = new Map()
   const runtimeErrors = []
   const runtimeDebug = []
   const runtimeInfo = []
@@ -1191,13 +1256,17 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     disconnect: async () => calls.push("disconnect"),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getOpenOrders: async ({ symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") buyCancellationCount.value += 1
-      return {
-      ok: true,
-      data: new CanonicalOrder({
+      const canceledOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
         market: order.market,
@@ -1211,11 +1280,20 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         acknowledgedAt: order.acknowledgedAt,
         updatedAt: 3,
         completedAt: 3,
-      }),
-    }
+      })
+      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+      return { ok: true, data: canceledOrder }
     },
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getFills: async ({ orderId } = {}) => ({
+      ok: true,
+      data: fillHistoryByOrder.get(String(orderId)) ?? [],
+    }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       snapshotTime += 1
@@ -1232,7 +1310,24 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       return { ok: true, data: { balances, sourceTime: snapshotTime } }
     },
     subscribeForUserData: async (handlers) => {
-      userDataHandlers = handlers
+      userDataHandlers = {
+        ...handlers,
+        onEvent: (message) => {
+          const event = message?.event
+          const executedOrder = event?.executedOrder
+          if (executedOrder?.brokerOrderId) {
+            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+          }
+          const fill = event?.fill
+          if (fill instanceof Fill) {
+            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+            if (!existing.some((item) => item.id === fill.id)) {
+              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+            }
+          }
+          return handlers.onEvent(message)
+        },
+      }
       return { ok: true, data: { disconnect: async () => calls.push("unsubscribe:user-data") } }
     },
     subscribeForPrices: async ({ symbol, onPrice }) => {
@@ -1248,9 +1343,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       submittedOrders.push(order)
       if (submittedOrders.length === 3) resolveThreeOrders()
       if (submittedOrders.length === 5) resolveFiveOrders()
-      return {
-        ok: true,
-        data: new CanonicalOrder({
+      const acknowledgedOrder = new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: "broker-" + order.clientOrderId,
           market: marketMetadata.market,
@@ -1263,8 +1356,9 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
           createdAt: 1,
           acknowledgedAt: 1,
           updatedAt: 1,
-        }),
-      }
+        })
+      canonicalOrdersByBrokerId.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+      return { ok: true, data: acknowledgedOrder }
     },
   }
   const config = {
@@ -1504,12 +1598,13 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // The completed cycle sells all active inventory above keepQuantity and
-  // moves exactly the retained amount to free inventory. With no active
-  // position left, the next standing BUY may be trailed normally.
-  assert.equal(submittedOrders.length, 6)
-  assert.equal(buyCancellationCount.value, 1)
+  // With no active position left, the subsequent market tick preserves the
+  // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
+  // then cancels the replacement BUY while leaving recovery SELLs untouched.
+  assert.equal(submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
+  assert.equal(buyCancellationCount.value, 1, "the subsequent market tick must trail the standing BUY once")
   await runtime.stop()
+  assert.equal(buyCancellationCount.value, 2, "shutdown must cancel the replacement standing BUY")
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
@@ -1684,24 +1779,24 @@ test("stops broker intake before draining queued user-data and disconnects after
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await queueStarted
   const stopPromise = runtime.stop()
-  await Promise.all([bookUnsubscribed, marketUnsubscribed, userDataUnsubscribed])
+  await Promise.all([bookUnsubscribed, marketUnsubscribed])
 
-  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"))
-  assert.ok(calls.includes("unsubscribe:BTCUSDT"))
-  assert.ok(calls.includes("unsubscribe:user-data"))
-  assert.equal(calls.includes("queue:done"), false)
-  assert.equal(calls.includes("disconnect"), false)
+  assert.ok(calls.includes("unsubscribe:book:BTCUSDT"), "shutdown must stop book-ticker intake before draining accepted user-data work")
+  assert.ok(calls.includes("unsubscribe:BTCUSDT"), "shutdown must stop market-price intake before draining accepted user-data work")
+  assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain active until already accepted user-data work has drained")
+  assert.equal(calls.includes("queue:done"), false, "shutdown must wait for the deliberately blocked user-data callback before continuing cleanup")
+  assert.equal(calls.includes("disconnect"), false, "the broker must remain connected while accepted user-data work is still running")
 
   broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
   await Promise.resolve()
-  assert.equal(queuedEvents, 1)
+  assert.equal(queuedEvents, 1, "a second event must not enter the serialized queue while its first callback is still running")
 
   resolveQueue()
   await stopPromise
-  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("queue:done"))
-  assert.ok(calls.indexOf("queue:done") < calls.indexOf("disconnect"))
+  assert.ok(calls.indexOf("unsubscribe:book:BTCUSDT") < calls.indexOf("queue:done"), "book-ticker intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("queue:done"), "market-price intake must stop before the accepted user-data callback finishes")
+  assert.ok(calls.indexOf("queue:done") < calls.indexOf("unsubscribe:user-data"), "user-data intake may stop only after accepted callbacks have drained")
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "the user-data subscription must be disconnected before the broker itself")
 })
 
 
@@ -1762,7 +1857,18 @@ test("logs safe correlation details when an execution report is not owned", asyn
   assert.equal(diagnostic.clientIdMatchStatus, undefined)
   assert.ok(Array.isArray(diagnostic.errors))
 
-  await result.stop()
+  await assert.rejects(
+    result.stop(),
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
+      )
+      return true
+    },
+    "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
+  )
 })
 
 
@@ -2045,21 +2151,25 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"))
+  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
 
   const stopPromise = runtime.stop()
   await openOrdersStarted
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
   releaseOpenOrders()
-  await stopPromise
+  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/, "shutdown must reject when owned-order REST reconciliation remains unresolved after the pending query completes")
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   assert.equal(snapshots.length, 2)
   assert.equal(snapshots[1].data.phase, "CLOSING")
   assert.equal(snapshots[1].data.auditStatus, "INCOMPLETE")
   assert.ok(snapshots[1].data.auditReasons.includes("OWNED_ORDER_RECONCILIATION_FAILED"))
-  assert.ok(snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"))
+  assert.equal(
+    snapshots[1].data.auditReasons.includes("UNRESOLVED_OWNED_ORDERS:1"),
+    false,
+    "the cancellation pass must resolve the BUY order even though the earlier REST reconciliation failure keeps the CLOSING audit incomplete",
+  )
   assert.ok(calls.indexOf("disconnect") > calls.lastIndexOf("account:snapshot"))
 })
 
@@ -2481,3 +2591,146 @@ test("starts from fresh in-memory state without replaying historical Journal rec
   await runtime.stop()
 })
 
+test("keeps user-data intake active until shutdown BUY cancellation and fill reconciliation finish", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const market = createMarketMetadata("BTCUSDT").market
+  let resolveCancelStarted
+  let releaseCancel
+  let resolveUserDataObserved
+  const cancelStarted = new Promise((resolve) => { resolveCancelStarted = resolve })
+  const cancelGate = new Promise((resolve) => { releaseCancel = resolve })
+  const userDataObserved = new Promise((resolve) => { resolveUserDataObserved = resolve })
+  const observedEvents = []
+  let submittedOrder
+  let canceledOrder
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: submittedOrder && !canceledOrder
+      ? [createOpenOrderSnapshot({ order: submittedOrder })]
+      : [],
+  })
+  broker.getCanonicalOrderHistory = async ({ orderId }) => ({
+    ok: true,
+    data: [canceledOrder ?? submittedOrder].filter((order) => order?.brokerOrderId === orderId),
+  })
+  broker.placeOrder = async ({ order }) => {
+    calls.push("placeOrder:" + order.side)
+    submittedOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: "broker-" + order.clientOrderId,
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        status: "OPEN",
+        createdAt: 1,
+        acknowledgedAt: 1,
+        updatedAt: 1,
+      })
+    return { ok: true, data: submittedOrder }
+  }
+  broker.cancelOrder = async ({ order }) => {
+    calls.push("cancelOrder:" + order.side)
+    resolveCancelStarted()
+    await cancelGate
+    canceledOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      status: "CANCELED",
+      createdAt: order.createdAt,
+      acknowledgedAt: order.acknowledgedAt,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+    return { ok: true, data: canceledOrder }
+  }
+
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            orderQuantity: 0.001,
+          },
+        },
+      },
+    },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    now: () => 1000,
+    onUserDataEvent: async ({ event }) => {
+      observedEvents.push(event)
+      resolveUserDataObserved()
+    },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+
+  await broker.emitBookTicker("BTCUSDT", {
+    symbol: "BTCUSDT",
+    bestBidPrice: "64900",
+    bestBidQuantity: "1",
+    bestAskPrice: "65100",
+    bestAskQuantity: "1",
+    timestamp: 1000,
+  })
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 1000,
+  })
+  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
+
+  const stopPromise = runtime.stop()
+  let testError
+  try {
+    await waitForTestSignal(cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
+    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+    await waitForTestSignal(userDataObserved, "user-data event during shutdown", () => ({
+      observedEvents: observedEvents.length,
+      calls,
+    }))
+
+    assert.equal(observedEvents.length, 1, "the user-data event delivered during the broker cancellation window must reach the application handler")
+    assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain subscribed until cancellation and fill reconciliation have completed")
+    assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"), "market-price intake must stop before the shutdown BUY cancellation request is sent")
+    assert.equal(calls.includes("cancelOrder:SELL"), false, "graceful shutdown must never cancel a strategy-owned SELL recovery order")
+  } catch (error) {
+    testError = error
+  } finally {
+    releaseCancel()
+  }
+
+  let stopError
+  try {
+    await stopPromise
+  } catch (error) {
+    stopError = error
+  }
+  if (testError) throw testError
+  if (stopError) throw stopError
+
+  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
+})

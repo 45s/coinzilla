@@ -34,6 +34,8 @@ tests and full Harvester suite still require execution on the exact PR head.
 
 ## Current work selection
 
+- [~] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Tracking PR: [#663](https://github.com/45s/coinzilla/pull/663).
+
 The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
 
 Trading safety requirements remain in force: live trading stays disabled unless explicitly authorized; TESTNET-only runtime protections, exact-order ownership, and the existing mandatory Journal durability barriers must not be weakened. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.

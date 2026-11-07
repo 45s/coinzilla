@@ -27,7 +27,7 @@ Follow the canonical [ENGINEERING_STANDARDS.md](../../ENGINEERING_STANDARDS.md) 
 
 ## Tests and verification
 
-Follow the canonical engineering verification requirements. Harvester behavior changes require deterministic tests; exchange-order verification is opt-in and TESTNET-only.
+Follow the canonical [human-readable test design standard](../../ENGINEERING_STANDARDS.md#human-readable-test-design) and engineering verification requirements. Harvester tests must read as plain-English behavior specifications: precise domain variable names, named-field comparisons instead of opaque tuples, descriptive test names, and a detailed message on every assertion. Keep exchange-order verification deterministic and offline by default; exchange-order verification is opt-in and TESTNET-only.
 
 ## Changes and delivery
 
