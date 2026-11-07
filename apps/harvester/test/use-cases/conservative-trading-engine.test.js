@@ -372,13 +372,17 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.equal(
     submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
     false,
+    "A second BUY must not be submitted while the initial recovery SELL acknowledgement is still pending.",
   )
 
   pendingSell.resolve(toResult({ data: pendingSellOrder }))
   await placingRecoveryOrders
 
   const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
-  assert.ok(secondBuyIntent)
+  assert.ok(
+    secondBuyIntent,
+    "The next standing BUY should be submitted only after the initial recovery SELL has been acknowledged.",
+  )
   const secondBuy = new CanonicalOrder({
     clientOrderId: secondBuyIntent.clientOrderId,
     brokerOrderId: "3",
@@ -414,7 +418,11 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   // serialized until the broker confirms it. Observe the cancellation before
   // resolving the broker promise; awaiting partialFill first would deadlock.
   await cancelStarted.promise
-  assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId])
+  assert.deepEqual(
+    cancellations,
+    [pendingSellOrder.brokerOrderId],
+    "The first BUY fill must cancel the exact broker order ID of the acknowledged recovery SELL, not another SELL or a client ID.",
+  )
 
   const sellFillEvent = createTradeEvent({
     acknowledgedOrder: pendingSellOrder,
@@ -449,25 +457,40 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.equal(
     canceledRecoverySellOrders.length,
     2,
-    JSON.stringify({
-      cancellations,
-      canceledRecoverySellOrders: canceledRecoverySellOrders.map((order) => order.value),
-      sellIntents: submittedIntents.filter(({ side }) => side === "SELL"),
-      allOrders: engine.getOrders().map((order) => order.value),
-    }, null, 2),
+    "Exactly two earlier recovery SELL orders should be canceled: the initial protection order and the interim replacement created after the partial BUY fill. Actual canceled orders: " + JSON.stringify(canceledRecoverySellOrders.map((order) => order.value)) + "; broker cancellations: " + JSON.stringify(cancellations),
   )
   const replacementSellOrder = canceledRecoverySellOrders.find(
     (order) => order.clientOrderId !== pendingSellOrder.clientOrderId,
   )
-  assert.ok(replacementSellOrder)
-  assert.deepEqual(cancellations, canceledRecoverySellOrders.map((order) => order.brokerOrderId))
-  assert.deepEqual(cancellations, [
-    pendingSellOrder.brokerOrderId,
-    replacementSellOrder.brokerOrderId,
-  ])
-  assert.equal(getPortfolio().appliedFillIds.length, 4)
-  assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
-  assert.equal(getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length, 1)
+  assert.ok(
+    replacementSellOrder,
+    "After the initial recovery SELL is canceled, the partial BUY fill must result in a distinct interim recovery SELL that is itself canceled when the final BUY fill arrives.",
+  )
+  assert.deepEqual(
+    cancellations,
+    canceledRecoverySellOrders.map((order) => order.brokerOrderId),
+    "Every canceled recovery SELL must have exactly one matching broker cancellation request, with no unrelated cancellation.",
+  )
+  assert.deepEqual(
+    cancellations,
+    [pendingSellOrder.brokerOrderId, replacementSellOrder.brokerOrderId],
+    "The cancellation sequence must target the initial recovery SELL first and the interim replacement second, using each acknowledged broker order ID.",
+  )
+  assert.equal(
+    getPortfolio().appliedFillIds.length,
+    4,
+    "Portfolio accounting must contain each of the four distinct BUY and SELL executions exactly once after reconciliation.",
+  )
+  assert.equal(
+    getRecoveryLedger().appliedFillIds.length,
+    4,
+    "The recovery ledger must mirror all four distinct BUY and SELL executions after reconciliation.",
+  )
+  assert.equal(
+    getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length,
+    1,
+    "The partial recovery SELL execution must be applied once even though it arrives both as a stream event and during terminal cancellation reconciliation.",
+  )
 
   await engine.processUserDataEvent({
     event: createTradeEvent({
@@ -478,8 +501,16 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
       status: "FILLED",
     }),
   })
-  assert.equal(getPortfolio().appliedFillIds.length, 4)
-  assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
+  assert.equal(
+    getPortfolio().appliedFillIds.length,
+    4,
+    "Replaying the final BUY execution must not add a duplicate fill to Portfolio accounting.",
+  )
+  assert.equal(
+    getRecoveryLedger().appliedFillIds.length,
+    4,
+    "Replaying the final BUY execution must not add a duplicate fill to the recovery ledger.",
+  )
 
   await engine.evaluateLatest({ symbol: "ZROUSDT" })
   const recoverySellSubmissionIntents = submittedIntents.filter(
@@ -487,12 +518,12 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   )
   assert.equal(
     recoverySellSubmissionIntents.length,
-    2,
-    "Expected exactly two recovery SELL submissions: the initial protection order and one replacement after the pending SELL's partial fill was reconciled; no duplicate replacement should be submitted.",
+    3,
+    "Expected exactly three recovery SELL submissions: initial protection after the first BUY; interim protection after the second BUY's partial fill; and final protection after its remaining fill plus the canceled SELL's partial execution were reconciled. Each distinct BUY-fill state requires its own protected inventory quantity. Actual SELL submissions: " + JSON.stringify(recoverySellSubmissionIntents.map(({ clientOrderId, quantity, price }) => ({ clientOrderId, quantity, price }))),
   )
   assert.equal(
-    recoverySellSubmissionIntents[1].quantity,
+    recoverySellSubmissionIntents[2].quantity,
     "17",
-    "Expected the replacement recovery SELL to use the latest reconciled inventory after the BUY fills and partial SELL fill.",
+    "The final recovery SELL (third submission) must protect the latest reconciled inventory: 10 initial BUY + 10 later BUY - 2 partial SELL - 1 retained keepQuantity = 17. Actual SELL submissions: " + JSON.stringify(recoverySellSubmissionIntents.map(({ quantity }) => quantity)),
   )
 })
