@@ -133,6 +133,8 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   const userDataErrors = [];
   let orderSequence = 0;
   let lastOrder;
+  const canonicalOrders = new Map();
+  const fillsByOrderId = new Map();
   let onPrice;
   let onUserDataEvent;
   let observedTrade;
@@ -142,8 +144,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
       lastOrder = order;
-      return toResult({
-      data: new CanonicalOrder({
+      const submitted = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: String(++orderSequence),
         market,
@@ -153,17 +154,22 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
         originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
         executedQuantity: new Quantity({ amount: '0', asset: baseAsset }),
         status: 'OPEN',
-      }),
       });
+      canonicalOrders.set(submitted.brokerOrderId, submitted);
+      return toResult({ data: submitted });
     },
     get lastOrder() { return lastOrder; },
     cancelOrder: async () => toResult({ error: new Error('Unexpected cancellation') }),
     getOpenOrders: async () => {
       openOrderSnapshotCalls += 1;
-      return toResult({ data: [] });
+      return toResult({ data: [...canonicalOrders.values()].filter((order) => ['OPEN', 'PARTIALLY_FILLED'].includes(order.status)) });
     },
-    getFills: async () => toResult({ data: [] }),
-    getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrderId.get(String(orderId)) ?? [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => toResult({ error: new Error("order not found") }),
     getAccountSnapshot: async () => {
       accountSnapshotCalls += 1;
@@ -188,7 +194,15 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       return toResult({ data: { unsubscribe: async () => {} } });
     },
     subscribeForUserData: async ({ onEvent: callback } = {}) => {
-      onUserDataEvent = callback;
+      onUserDataEvent = (message) => {
+        const event = message?.event;
+        if (event?.executionType === 'TRADE' && event.executedOrder?.brokerOrderId) {
+          const orderId = String(event.executedOrder.brokerOrderId);
+          canonicalOrders.set(orderId, event.executedOrder);
+          fillsByOrderId.set(orderId, [event.fill]);
+        }
+        return callback(message);
+      };
       return toResult({ data: { disconnect: async () => {} } });
     },
   };
