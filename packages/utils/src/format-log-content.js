@@ -121,15 +121,11 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
 }
 
 /**
- * @typedef {unknown} LogData
- */
-
-/**
  * Normalize data before transport delivery. The result is detached from the
  * caller's object graph, JSON-compatible where possible, recursively redacted,
  * and preserves standard Error diagnostics (name, message, stack, cause, errors).
  * Circular references and throwing getters receive explicit marker strings.
- * @param {LogData} data
+ * @param {unknown} data
  * @returns {unknown} Primitive, normalized object/array, undefined, or safe fallback.
  */
 export function normalizeLogData(data) {
