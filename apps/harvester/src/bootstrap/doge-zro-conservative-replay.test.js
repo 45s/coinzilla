@@ -77,12 +77,17 @@ const exchangeInfoSymbol = (symbol) => {
 
 let dogeExchangeInfo
 
-const waitForOrder = (submitted, waiters, symbol, side) => {
+const waitForOrder = (submitted, waiters, symbol, side, occurrence = 1) => {
   const matches = (order) =>
     order.market.symbol === symbol && order.side === side
-  const existing = submitted.find(matches)
-  if (existing) return Promise.resolve(existing)
-  return new Promise((resolve) => waiters.push({ matches, resolve }))
+  const getOrders = () => submitted.filter(matches)
+  const existing = getOrders()
+  if (existing.length >= occurrence) return Promise.resolve(existing[occurrence - 1])
+  return new Promise((resolve) => waiters.push({
+    matches,
+    isReady: () => getOrders().length >= occurrence,
+    resolve: () => resolve(getOrders()[occurrence - 1]),
+  }))
 }
 
 const createReplayHarness = async (symbol) => {
@@ -103,15 +108,14 @@ const createReplayHarness = async (symbol) => {
   const notifyOrderWaiters = () => {
     for (let index = orderWaitersList.length - 1; index >= 0; index -= 1) {
       const waiter = orderWaitersList[index]
-      const order = submittedList.find(waiter.matches)
-      if (!order) continue
+      if (!waiter.isReady()) continue
       orderWaitersList.splice(index, 1)
-      waiter.resolve(order)
+      waiter.resolve()
     }
   }
 
-  const waitForOrderSide = (side) =>
-    waitForOrder(submittedList, orderWaitersList, symbol, side)
+  const waitForOrderSide = (side, occurrence = 1) =>
+    waitForOrder(submittedList, orderWaitersList, symbol, side, occurrence)
 
   const waitForCycle = () => {
     if (cycleCompletion) return Promise.resolve(cycleCompletion)
@@ -347,18 +351,22 @@ const getInitialBuy = async (replay) => {
   return submitted
 }
 
-const getRecoverySell = async (replay) => {
+const getRecoveryOrders = async (replay) => {
   const { scenario, waitForOrder, triggerPrice, fillOrder } = replay
-  const buySubmitted = getInitialBuy(replay)
-  const buy = await buySubmitted
-  const sellSubmitted = waitForOrder("SELL")
+  const buy = await getInitialBuy(replay)
+  const recoverySellSubmitted = waitForOrder("SELL")
+  const nextStandingBuySubmitted = waitForOrder("BUY", 2)
   await triggerPrice(scenario.buyPrice)
   await fillOrder({
     order: buy,
     price: scenario.buyPrice,
     tradeId: "645-" + replay.symbol.toLowerCase() + "-buy",
   })
-  return sellSubmitted
+  const [recoverySell, nextStandingBuy] = await Promise.all([
+    recoverySellSubmitted,
+    nextStandingBuySubmitted,
+  ])
+  return { initialBuy: buy, recoverySell, nextStandingBuy }
 }
 
 describe("DOGEUSDT Conservative strategy replay", () => {
@@ -429,6 +437,16 @@ describe("DOGEUSDT Conservative strategy replay", () => {
         ],
       )
       assert.deepEqual(
+        [
+          nextStandingBuy.market.symbol,
+          nextStandingBuy.side,
+          nextStandingBuy.price,
+          nextStandingBuy.quantity,
+          nextStandingBuy.type,
+        ],
+        [symbol, "BUY", "0.07153", String(replay.pair.orderQuantity), "LIMIT"],
+      )
+      assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
           executedOrder.side,
@@ -473,6 +491,13 @@ describe("DOGEUSDT Conservative strategy replay", () => {
             "SELL",
             replay.scenario.sellPrice,
             replay.scenario.expectedSellQuantity,
+            "LIMIT",
+          ],
+          [
+            symbol,
+            "BUY",
+            "0.07153",
+            String(replay.pair.orderQuantity),
             "LIMIT",
           ],
         ],
