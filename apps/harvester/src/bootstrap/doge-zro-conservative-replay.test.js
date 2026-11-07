@@ -23,7 +23,7 @@ const config = {
       pairs: {
         DOGEUSDT: {
           enabled: true,
-          investment: 100,
+          investment: 200,
           orderQuantity: 400,
           keepQuantity: 1,
           priceStepPercent: 0.05,
