@@ -291,7 +291,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   );
   await context.stop();
 
-  assert.equal(accountSnapshotCalls, 2);
+  assert.equal(accountSnapshotCalls, 3, "startup, user-data recovery, and graceful shutdown each capture an authoritative account snapshot");
   assert.equal(openOrderSnapshotCalls, 3, "the ordinary TRADE lifecycle plus graceful shutdown must perform three authoritative open-order snapshots");
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
