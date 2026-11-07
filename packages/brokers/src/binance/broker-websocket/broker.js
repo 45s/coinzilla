@@ -133,7 +133,7 @@ function forwardSafely(onEvent, onStatus, event, logger) {
 export class BinanceWebSocketBroker extends CoreBroker {
   /**
    * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
-   * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: Function, clearTimeoutFn?: Function, userDataRecoveryWarningThreshold?: number}} [dependencies]
+   * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, userDataRecoveryWarningThreshold?: number}} [dependencies]
    */
   constructor(input = {}, {
     apiClientFactory = createApiClient,
