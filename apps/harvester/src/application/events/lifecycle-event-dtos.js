@@ -525,7 +525,7 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
-/** Map the complete account-wide open-order snapshot before trading readiness is granted. */
+/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
 export const mapAccountOpenOrdersCapturedData = (input = {}) =>
   mapData(input, "Account-open-orders-captured event mapping", ({
     phase, observedAt, orders, readiness, blockReasons = [],
