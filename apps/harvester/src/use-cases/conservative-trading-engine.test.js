@@ -4905,11 +4905,11 @@ test("shutdown cancellation cancels only strategy-owned BUY orders and preserves
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.deepEqual(cancellationIds, ["broker-shutdown-buy", "broker-shutdown-buy-second"])
-  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy").status, "CANCELED")
-  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy-second").status, "CANCELED")
-  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-sell").status, "OPEN")
+  assert.equal(result.ok, true, "shutdown must confirm every acknowledged owned BUY cancellation and reconcile its fills")
+  assert.deepEqual(cancellationIds, ["broker-shutdown-buy", "broker-shutdown-buy-second"], "shutdown must cancel both owned BUY orders using their exact broker order IDs")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy").status, "CANCELED", "the first strategy-owned BUY must reach its broker-confirmed terminal CANCELED state")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-buy-second").status, "CANCELED", "the second strategy-owned BUY must reach its broker-confirmed terminal CANCELED state")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-sell").status, "OPEN", "graceful shutdown must preserve the owned recovery SELL order without cancellation")
 })
 
 test("shutdown cancellation applies partial BUY fills before confirming cancellation", async () => {
@@ -4927,13 +4927,13 @@ test("shutdown cancellation applies partial BUY fills before confirming cancella
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(accountedFills.length, 1)
-  assert.equal(accountedFills[0].side, "BUY")
-  assert.equal(accountedFills[0].quantity.amount, "0.1")
+  assert.equal(accountedFills.length, 1, "the partial BUY execution racing with cancellation must be accounted exactly once")
+  assert.equal(accountedFills[0].side, "BUY", "the execution reconciled during shutdown must retain its original BUY side")
+  assert.equal(accountedFills[0].quantity.amount, "0.1", "shutdown reconciliation must account for the exact 0.1 DOGE partial BUY fill")
   const canceledOrder = engine.getOrders().find((order) => order.clientOrderId === "shutdown-partial-buy")
-  assert.equal(canceledOrder.status, "CANCELED")
-  assert.equal(canceledOrder.executedQuantity.amount, "0.1")
-  assert.deepEqual(pauses, [])
+  assert.equal(canceledOrder.status, "CANCELED", "the partially filled BUY must be marked CANCELED only after terminal broker confirmation")
+  assert.equal(canceledOrder.executedQuantity.amount, "0.1", "the canceled order must retain the 0.1 DOGE executed quantity reported by canonical fill history")
+  assert.deepEqual(pauses, [], "a fully reconciled partial BUY cancellation must not pause the market for an accounting inconsistency")
 })
 
 test("shutdown cancellation retains UNKNOWN state when the broker does not confirm cancellation", async () => {
@@ -4950,7 +4950,7 @@ test("shutdown cancellation retains UNKNOWN state when the broker does not confi
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
 
-  assert.equal(result.ok, false)
-  assert.deepEqual(cancellationIds, ["broker-shutdown-unknown-buy"])
-  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-unknown-buy").status, "UNKNOWN")
+  assert.equal(result.ok, false, "shutdown cancellation must fail closed when the broker does not confirm a terminal cancellation result")
+  assert.deepEqual(cancellationIds, ["broker-shutdown-unknown-buy"], "shutdown must attempt cancellation for the exact broker ID of the acknowledged owned BUY order")
+  assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-unknown-buy").status, "UNKNOWN", "an unconfirmed broker cancellation must retain UNKNOWN order state rather than falsely reporting a clean stop")
 })
