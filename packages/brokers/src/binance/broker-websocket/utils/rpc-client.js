@@ -120,7 +120,7 @@ export class BinanceWebSocketApiClient {
   #removeCloseListener
 
   /**
-   * @param {{transport: {connect: Function, send: Function, close: Function, onMessage: Function, onClose: Function}, apiKey: string, apiSecret: string, requestTimeout?: number, recvWindow?: number, now?: () => number, idFactory?: () => string|number, setTimeoutFn?: Function, clearTimeoutFn?: Function}} options
+   * @param {{transport: {connect: () => Promise<unknown>, send: (data: string) => void, close: () => Promise<unknown>, onMessage: (listener: (message: unknown) => void) => (() => void)|void, onClose: (listener: (event: object) => void) => (() => void)|void, onError?: (listener: (error: Error) => void) => (() => void)|void}, apiKey: string, apiSecret: string, requestTimeout?: number, recvWindow?: number, now?: () => number, idFactory?: () => string|number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
    * @throws {TypeError|RangeError} If the transport or timing dependencies are invalid.
    */
   constructor({
