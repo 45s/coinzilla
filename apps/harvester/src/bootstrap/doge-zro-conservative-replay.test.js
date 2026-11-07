@@ -343,8 +343,6 @@ function exchangeInfoSymbol(symbol) {
   }
 }
 
-let dogeExchangeInfo
-
 function waitForOrder(submitted, waiters, symbol, side, occurrence = 1) {
   const matches = (order) =>
     order.market.symbol === symbol && order.side === side
