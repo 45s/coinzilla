@@ -46,7 +46,7 @@ export function parseDecimal({ value, field = "value" } = {}) {
   }
 
   const decimal = String(value)
-  const match = /^([+-]?)(\\d+)(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(decimal)
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(decimal)
 
   if (!match) {
     throw new TypeError(field + " has an invalid decimal format")
@@ -107,7 +107,7 @@ export function formatDecimalString({ coefficient, scale } = {}) {
     ? digits
     : digits.slice(0, -scale) + "." + digits.slice(-scale)
   const normalized = decimal.includes(".")
-    ? decimal.replace(/0+$/, "").replace(/\\.$/, "")
+    ? decimal.replace(/0+$/, "").replace(/\.$/, "")
     : decimal
 
   return (negative && absolute !== 0n ? "-" : "") + normalized
@@ -347,7 +347,7 @@ export function normalizeDecimalString({
   }
 
   const input = value.trim()
-  const match = /^(-?)(\\d+)(?:\\.(\\d+))?$/.exec(input)
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(input)
   if (!match) throw new TypeError(field + " has an invalid decimal format")
 
   const [, sign, rawWhole, rawFraction = ""] = match
@@ -358,7 +358,7 @@ export function normalizeDecimalString({
     throw new RangeError(field + " exceeds supported precision")
   }
 
-  const whole = rawWhole.replace(/^0+(?=\\d)/, "")
+  const whole = rawWhole.replace(/^0+(?=\d)/, "")
   const fraction = rawFraction.replace(/0+$/, "")
   const isZero = whole === "0" && fraction.length === 0
 
