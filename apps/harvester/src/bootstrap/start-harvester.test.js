@@ -806,7 +806,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when startup recovery leaves user-data reconciliation incomplete")
 })
 
 test("does not acknowledge a stale recovery after a newer disconnect", async () => {
@@ -868,7 +868,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "shutdown must reject when a newer disconnect prevents authoritative user-data recovery")
 })
 
 test("does not become ready when recovery is reported during subscription setup", async () => {
@@ -1508,7 +1508,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   // strategy inventory. The existing standing BUY must not be trailed/canceled.
   assert.equal(submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
   assert.equal(buyCancellationCount.value, 0, "a later market tick must not cancel the retained standing BUY before shutdown")
-  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
+  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/, "shutdown must report failure and retain the safety lock while an owned BUY remains unresolved")
   assert.equal(buyCancellationCount.value, 1)
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
@@ -2045,14 +2045,14 @@ test("marks CLOSING account audit INCOMPLETE when owned-order REST reconciliatio
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"))
+  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
 
   const stopPromise = runtime.stop()
   await openOrdersStarted
   assert.equal(events.filter((event) => event.name === "account.snapshot_captured").length, 1)
   assert.equal(calls.includes("disconnect"), false)
   releaseOpenOrders()
-  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/)
+  await assert.rejects(stopPromise, /Harvester shutdown was incomplete/, "shutdown must reject when owned-order REST reconciliation remains unresolved after the pending query completes")
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
   assert.equal(snapshots.length, 2)
@@ -2597,10 +2597,10 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
       calls,
     }))
 
-    assert.equal(observedEvents.length, 1)
-    assert.equal(calls.includes("unsubscribe:user-data"), false)
-    assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
-    assert.equal(calls.includes("cancelOrder:SELL"), false)
+    assert.equal(observedEvents.length, 1, "the user-data event delivered during the broker cancellation window must reach the application handler")
+    assert.equal(calls.includes("unsubscribe:user-data"), false, "user-data intake must remain subscribed until cancellation and fill reconciliation have completed")
+    assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"), "market-price intake must stop before the shutdown BUY cancellation request is sent")
+    assert.equal(calls.includes("cancelOrder:SELL"), false, "graceful shutdown must never cancel a strategy-owned SELL recovery order")
   } catch (error) {
     testError = error
   } finally {
@@ -2616,6 +2616,6 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   if (testError) throw testError
   if (stopError) throw stopError
 
-  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
-  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
+  assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
+  assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
 })
