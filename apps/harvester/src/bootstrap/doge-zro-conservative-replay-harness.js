@@ -241,8 +241,8 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
         receivedExecutionReports.push(message.event)
         const executionFill = message.event?.fill
         const fillOrderId = executionFill?.brokerOrderId ?? executionFill?.orderId
-        if (fill && fillBrokerOrderId !== undefined && fillBrokerOrderId !== null) {
-          const brokerOrderId = String(fillBrokerOrderId)
+        if (executionFill && fillOrderId !== undefined && fillOrderId !== null) {
+          const brokerOrderId = String(fillOrderId)
           const order = exchangeOrderHistory.get(brokerOrderId)
           if (order) {
             const commissionAsset = executionFill.commissionAsset === order.market.baseAsset.code

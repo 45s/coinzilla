@@ -82,7 +82,7 @@ Required practices:
 - Every assertion MUST include a detailed, plain-English failure message describing the invariant and scenario. A message that only repeats a literal or says "should equal" is insufficient. Include useful context such as the order role, market, lifecycle stage, or accounting outcome.
 - Prefer one assertion per business invariant. Group related assertions in a named helper only when that helper preserves the invariant's meaning and still receives a detailed failure message.
 - Name test helpers after the domain action or result they represent (for example, `submitInitialBuyOrder` or `waitForRecoveryCycleCompletion`). Keep fake broker/exchange mechanics separate from the scenario specification.
-- A test should be understandable top-to-bottom without navigating into the harness. If the harness is complex, give it a dedicated module and expose only the small operations the scenario needs.
+- A test should be understandable top-to-bottom without navigating into the harness. If the harness is complex, give it a dedicated module and expose only the small operations the scenario needs. Keep scenario-specific fixture modules cohesive, hide their internal fake-exchange maps, and do not let test cases manipulate broker internals directly.
 
 A materially edited test case must comply with these practices throughout that case, not only on newly added lines. Review the full changed test file for opaque names, tuple-based comparisons, missing assertion messages, and unexplained expected values before delivery.
 
@@ -270,5 +270,3 @@ Treat required CI as a production safety boundary, not as advisory feedback.
 - Keep unit tests deterministic and offline. Integration tests requiring credentials or network access must remain explicitly separate.
 - Report workflow availability, actual successful runs, and branch-protection enforcement as three distinct facts.
 - When changing policy enforcement, add regression tests for both the passing case and representative invalid configurations.
-
-<!-- Test readability standard reaffirmed: use descriptive names, named fields, and explanatory assertion messages. -->
