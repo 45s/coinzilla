@@ -2,15 +2,22 @@ const MAX_DECIMAL_DIGITS = 256
 export const MAX_DECIMAL_SCALE = 100
 const MAX_DECIMAL_EXPONENT = 100
 
-const ROUNDING_MODES = new Set(["toward-zero", "away-from-zero", "half-up"])
-const INCREMENT_DIRECTIONS = new Set(["down", "up", "nearest"])
+/** @typedef {{ coefficient: bigint, scale: number }} ParsedDecimal */
+/** @typedef {'toward-zero'|'away-from-zero'|'half-up'} DecimalRounding */
+/** @typedef {'down'|'up'|'nearest'} DecimalIncrementDirection */
 
+/**
+ * Validate an integer decimal scale in the supported range 0..100.
+ * @param {number} scale
+ * @throws {RangeError} If scale is not an integer in range.
+ */
 function validateScale(scale) {
   if (!Number.isInteger(scale) || scale < 0 || scale > MAX_DECIMAL_SCALE) {
     throw new RangeError("scale must be an integer from 0 to " + MAX_DECIMAL_SCALE)
   }
 }
 
+/** @param {{ scale: number }} options @returns {void} */
 export function validateDecimalScale({ scale } = {}) {
   validateScale(scale)
 }
@@ -25,8 +32,13 @@ function alignDecimals(left, right) {
 }
 
 /**
- * Parse an exact decimal string (or bigint) without converting through Number.
- * Scientific notation is supported with a bounded exponent.
+ * Parse an exact decimal string or bigint into an integer coefficient and scale.
+ * Supports scientific notation with exponent magnitude at most 100; JavaScript
+ * numbers are rejected to avoid precision already lost by Number conversion.
+ *
+ * @param {{ value: string|bigint, field?: string }} options
+ * @returns {ParsedDecimal}
+ * @throws {TypeError|RangeError} For invalid syntax, unsupported input types, or precision bounds.
  */
 export function parseDecimal({ value, field = "value" } = {}) {
   if (typeof value !== "string" && typeof value !== "bigint") {
@@ -34,7 +46,7 @@ export function parseDecimal({ value, field = "value" } = {}) {
   }
 
   const decimal = String(value)
-  const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(decimal)
+  const match = /^([+-]?)(\\d+)(?:\\.(\\d+))?(?:e([+-]?\\d+))?$/i.exec(decimal)
 
   if (!match) {
     throw new TypeError(field + " has an invalid decimal format")
@@ -69,7 +81,13 @@ export function parseDecimal({ value, field = "value" } = {}) {
   return { coefficient, scale }
 }
 
-/** Format a coefficient/scale pair as canonical exact decimal text. */
+/**
+ * Format a coefficient/scale pair as canonical decimal text, removing
+ * insignificant trailing zeros and negative zero.
+ * @param {ParsedDecimal} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} If the coefficient or scale is invalid.
+ */
 export function formatDecimalString({ coefficient, scale } = {}) {
   if (typeof coefficient !== "bigint") {
     throw new TypeError("coefficient must be a bigint")
@@ -89,13 +107,18 @@ export function formatDecimalString({ coefficient, scale } = {}) {
     ? digits
     : digits.slice(0, -scale) + "." + digits.slice(-scale)
   const normalized = decimal.includes(".")
-    ? decimal.replace(/0+$/, "").replace(/\.$/, "")
+    ? decimal.replace(/0+$/, "").replace(/\\.$/, "")
     : decimal
 
   return (negative && absolute !== 0n ? "-" : "") + normalized
 }
 
-/** Validate a decimal string without converting it to a JavaScript Number. */
+/**
+ * Validate and return the original decimal string (no canonicalization).
+ * @param {{ value: string, field?: string }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} If the value is not a supported decimal string.
+ */
 export function assertDecimalString({ value, field = "value" } = {}) {
   if (typeof value !== "string") {
     throw new TypeError(field + " must be a decimal string")
@@ -104,6 +127,7 @@ export function assertDecimalString({ value, field = "value" } = {}) {
   return value
 }
 
+/** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact sum. */
 export function addDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left, field: "left" }),
@@ -115,6 +139,7 @@ export function addDecimal({ left, right } = {}) {
   })
 }
 
+/** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Exact difference. */
 export function subtractDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left, field: "left" }),
@@ -126,6 +151,12 @@ export function subtractDecimal({ left, right } = {}) {
   })
 }
 
+/**
+ * Multiply exact decimal operands. The combined fractional scale may not exceed 100.
+ * @param {{ left: string|bigint, right: string|bigint }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} For invalid operands or excessive result scale.
+ */
 export function multiplyDecimal({ left, right } = {}) {
   const parsedLeft = parseDecimal({ value: left, field: "left" })
   const parsedRight = parseDecimal({ value: right, field: "right" })
@@ -164,8 +195,11 @@ function divideIntegers({ numerator, denominator, rounding } = {}) {
 }
 
 /**
- * Divide exactly to a caller-selected scale and explicit rounding mode.
- * half-up rounds ties away from zero.
+ * Divide exact operands to a requested fractional scale using an explicit mode.
+ * Half-up ties round away from zero.
+ * @param {{ left: string|bigint, right: string|bigint, scale: number, rounding: DecimalRounding }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} For invalid scale/rounding or division by zero.
  */
 export function divideDecimal({ left, right, scale, rounding } = {}) {
   validateScale(scale)
@@ -188,6 +222,7 @@ export function divideDecimal({ left, right, scale, rounding } = {}) {
   })
 }
 
+/** @param {{ left: string|bigint, right: string|bigint }} options @returns {-1|0|1} */
 export function compareDecimal({ left, right } = {}) {
   const aligned = alignDecimals(
     parseDecimal({ value: left, field: "left" }),
@@ -196,6 +231,7 @@ export function compareDecimal({ left, right } = {}) {
   return aligned.left === aligned.right ? 0 : aligned.left > aligned.right ? 1 : -1
 }
 
+/** @param {{ value: string|bigint }} options @returns {string} Absolute value. */
 export function absoluteDecimal({ value } = {}) {
   const parsed = parseDecimal({ value })
   return formatDecimalString({
@@ -204,6 +240,7 @@ export function absoluteDecimal({ value } = {}) {
   })
 }
 
+/** @param {{ value: string|bigint }} options @returns {string} Negated value. */
 export function negateDecimal({ value } = {}) {
   const parsed = parseDecimal({ value })
   return formatDecimalString({
@@ -212,19 +249,27 @@ export function negateDecimal({ value } = {}) {
   })
 }
 
+/** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Smaller canonical operand. */
 export function minDecimal({ left, right } = {}) {
   return compareDecimal({ left, right }) <= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
 
+/** @param {{ left: string|bigint, right: string|bigint }} options @returns {string} Larger canonical operand. */
 export function maxDecimal({ left, right } = {}) {
   return compareDecimal({ left, right }) >= 0
     ? formatDecimalString(parseDecimal({ value: left }))
     : formatDecimalString(parseDecimal({ value: right }))
 }
 
-/** Change fractional precision. Reducing scale always requires an explicit rounding mode. */
+/**
+ * Change fractional precision. Increasing scale is exact; reducing it requires
+ * an explicit rounding mode.
+ * @param {{ value: string|bigint, scale: number, rounding?: DecimalRounding }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} If rounding is omitted when reducing scale or inputs are invalid.
+ */
 export function rescaleDecimal({ value, scale, rounding } = {}) {
   validateScale(scale)
   const parsed = parseDecimal({ value })
@@ -248,8 +293,11 @@ export function rescaleDecimal({ value, scale, rounding } = {}) {
 }
 
 /**
- * Round a non-negative value to a non-negative increment.
- * A zero increment disables increment rounding and returns canonical input.
+ * Round a non-negative value to a non-negative increment. A zero increment
+ * disables increment rounding and returns the canonical input.
+ * @param {{ value: string|bigint, increment: string|bigint, direction: DecimalIncrementDirection }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} For invalid direction or negative operands.
  */
 export function roundDecimalToIncrement({ value, increment, direction } = {}) {
   if (!INCREMENT_DIRECTIONS.has(direction)) {
@@ -282,10 +330,12 @@ export function roundDecimalToIncrement({ value, increment, direction } = {}) {
   })
 }
 
-
 /**
  * Canonicalize a plain decimal string without Number conversion.
- * This is a generic lexical normalization primitive; domain validation remains with callers.
+ * This is lexical normalization only; domain-specific validation remains with callers.
+ * @param {{ value: string, allowNegative?: boolean, field?: string }} options
+ * @returns {string}
+ * @throws {TypeError|RangeError} For invalid syntax, disallowed negatives, or precision bounds.
  */
 export function normalizeDecimalString({
   value,
@@ -297,7 +347,7 @@ export function normalizeDecimalString({
   }
 
   const input = value.trim()
-  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(input)
+  const match = /^(-?)(\\d+)(?:\\.(\\d+))?$/.exec(input)
   if (!match) throw new TypeError(field + " has an invalid decimal format")
 
   const [, sign, rawWhole, rawFraction = ""] = match
@@ -308,7 +358,7 @@ export function normalizeDecimalString({
     throw new RangeError(field + " exceeds supported precision")
   }
 
-  const whole = rawWhole.replace(/^0+(?=\d)/, "")
+  const whole = rawWhole.replace(/^0+(?=\\d)/, "")
   const fraction = rawFraction.replace(/0+$/, "")
   const isZero = whole === "0" && fraction.length === 0
 
