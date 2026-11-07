@@ -16,7 +16,7 @@ const foo = (methodName) => () => {
  */
 export class CoreBroker {
   /**
-   * @param {{logger?: import("@coinzilla/utils").Logger}} [input]
+   * @param {{logger?: object}} [input]
    */
   constructor(input = {}) {
     this.logger = input.logger || defaultLogger
