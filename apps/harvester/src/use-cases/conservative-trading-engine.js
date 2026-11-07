@@ -354,13 +354,8 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
 
-    // The terminal stream event is authoritative evidence when REST history lags.
-    // Merge it with REST history, retaining the same duplicate-ID conflict checks.
     const fillsById = new Map()
-    const candidateFills = eventFill === undefined
-      ? fillsResult.data
-      : [...fillsResult.data, eventFill]
-    for (const fill of candidateFills) {
+    for (const fill of fillsResult.data) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
@@ -1282,8 +1277,13 @@ export function makeConservativeTradingEngine({
       await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
       return toResult({ error })
     }
+    // The terminal stream event is authoritative evidence when REST history lags.
+    // Merge it with REST history, retaining the same duplicate-ID conflict checks.
     const fillsById = new Map()
-    for (const fill of fillsResult.data) {
+    const candidateFills = eventFill === undefined
+      ? fillsResult.data
+      : [...fillsResult.data, eventFill]
+    for (const fill of candidateFills) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
