@@ -2428,24 +2428,8 @@ test("starts from fresh in-memory state without replaying historical Journal rec
     return { ok: true, data: [] }
   }
 
-  const config = {
-    ...tradingConfig,
-    strategies: {
-      ...tradingConfig.strategies,
-      CG_coinGrabber: {
-        ...tradingConfig.strategies.CG_coinGrabber,
-        pairs: {
-          ...tradingConfig.strategies.CG_coinGrabber.pairs,
-          BTCUSDT: {
-            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-            orderQuantity: 0.001,
-          },
-        },
-      },
-    },
-  }
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => config,
+    loadConfig: async () => tradingConfig,
     env: {
       ...binanceEnv,
       HARVESTER_ENABLE_TRADING: "true",
@@ -2489,6 +2473,11 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   const cancelGate = new Promise((resolve) => { releaseCancel = resolve })
   const userDataObserved = new Promise((resolve) => { resolveUserDataObserved = resolve })
   const observedEvents = []
+  let canceledOrder
+  broker.getCanonicalOrderHistory = async ({ orderId }) => ({
+    ok: true,
+    data: canceledOrder?.brokerOrderId === orderId ? [canceledOrder] : [],
+  })
   broker.placeOrder = async ({ order }) => {
     calls.push("placeOrder:" + order.side)
     return {
@@ -2513,28 +2502,42 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     calls.push("cancelOrder:" + order.side)
     resolveCancelStarted()
     await cancelGate
-    return {
-      ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: order.executedQuantity,
-        status: "CANCELED",
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 2,
-        completedAt: 2,
-      }),
-    }
+    canceledOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      status: "CANCELED",
+      createdAt: order.createdAt,
+      acknowledgedAt: order.acknowledgedAt,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+    return { ok: true, data: canceledOrder }
   }
 
+  const config = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            orderQuantity: 0.001,
+          },
+        },
+      },
+    },
+  }
   const runtime = await startHarvesterForTest({
-    loadConfig: async () => tradingConfig,
+    loadConfig: async () => config,
     env: {
       ...binanceEnv,
       HARVESTER_ENABLE_TRADING: "true",
