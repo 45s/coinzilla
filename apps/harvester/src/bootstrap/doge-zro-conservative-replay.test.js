@@ -102,6 +102,7 @@ const createReplayHarness = async (symbol) => {
   const openOrders = new Map()
   const orderHistory = new Map()
   const canonicalFills = new Map()
+  const cancelledOrdersList = []
   const orderWaitersList = []
   let userDataHandler
   let nextBrokerOrderId = 1
@@ -266,6 +267,7 @@ const createReplayHarness = async (symbol) => {
       })
       openOrders.delete(order.clientOrderId)
       orderHistory.set(key, canceled)
+      cancelledOrdersList.push(canceled)
       return { ok: true, data: canceled }
     }
     return broker
@@ -377,6 +379,7 @@ const createReplayHarness = async (symbol) => {
     pair,
     scenario: expectedSellOrder,
     submitted: submittedList,
+    cancelledOrders: cancelledOrdersList,
     outgoingOrderRequests: outgoingOrderRequestsList,
     receivedPrices: receivedPricesList,
     receivedExecutionReports: receivedExecutionReportsList,
@@ -570,6 +573,8 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       }
 
       assert.equal(completedBuys.length, 4)
+      assert.equal(replay.cancelledOrders.length, 3)
+      assert.ok(replay.cancelledOrders.every((order) => order.status === "CANCELED"))
       assert.deepEqual(
         completedBuys.map((order) => [order.market.symbol, order.side, order.type]),
         Array.from({ length: 4 }, () => [symbol, "BUY", "LIMIT"]),
