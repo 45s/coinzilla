@@ -424,9 +424,8 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       )
     })
 
-  test("creates a recovery SELL from the actual BUY fill report", async () => {
-      const sellSubmitted = getRecoverySell(replay)
-      const sell = await sellSubmitted
+  test("creates the next standing BUY and recovery SELL from the actual BUY fill report", async () => {
+      const { recoverySell: sell, nextStandingBuy } = await getRecoveryOrders(replay)
       assert.deepEqual(
         [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
         [
@@ -506,8 +505,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
     })
 
   test("completes the recovery cycle after the SELL fill report", async () => {
-      const sellSubmitted = getRecoverySell(replay)
-      const sell = await sellSubmitted
+      const { recoverySell: sell } = await getRecoveryOrders(replay)
       const cycle = replay.waitForCycle()
       await replay.triggerPrice(replay.scenario.sellFillPrice)
       await replay.fillOrder({
