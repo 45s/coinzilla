@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
@@ -87,20 +87,66 @@ const createMarketMetadata = (symbol) => {
     supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
   }
 }
+const createOpenOrderSnapshot = ({ order }) => {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    price: Number(order.limitPrice.amount),
+    id: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+  })
+  openOrder.originalPrice = order.limitPrice.amount
+  openOrder.originalQuantity = order.originalQuantity.amount
+  openOrder.executedQuantity = order.executedQuantity.amount
+  openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
   const fillHistoryByOrder = new Map()
+  const canonicalOrdersByBrokerId = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
     placeOrder: async () => ({ ok: true }),
-    cancelOrder: async () => ({ ok: true }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(orderId) ?? [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    cancelOrder: async ({ order } = {}) => {
+      const canceledOrder = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: Date.now(),
+        completedAt: Date.now(),
+      })
+      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+      return { ok: true, data: canceledOrder }
+    },
+    getOpenOrders: async ({ symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
+    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
@@ -138,7 +184,24 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     },
     subscribeForUserData: async (handlers) => {
       calls.push("subscribe:user-data")
-      userDataHandlers = handlers
+      userDataHandlers = {
+        ...handlers,
+        onEvent: (message) => {
+          const event = message?.event
+          const executedOrder = event?.executedOrder
+          if (executedOrder?.brokerOrderId) {
+            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+          }
+          const fill = event?.fill
+          if (fill instanceof Fill) {
+            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+            if (!existing.some((item) => item.id === fill.id)) {
+              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+            }
+          }
+          return handlers.onEvent(message)
+        },
+      }
       return {
         ok: true,
         data: { disconnect: async () => calls.push("unsubscribe:user-data") },
@@ -1248,9 +1311,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       submittedOrders.push(order)
       if (submittedOrders.length === 3) resolveThreeOrders()
       if (submittedOrders.length === 5) resolveFiveOrders()
-      return {
-        ok: true,
-        data: new CanonicalOrder({
+      const acknowledgedOrder = new CanonicalOrder({
           clientOrderId: order.clientOrderId,
           brokerOrderId: "broker-" + order.clientOrderId,
           market: marketMetadata.market,
@@ -1263,8 +1324,9 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
           createdAt: 1,
           acknowledgedAt: 1,
           updatedAt: 1,
-        }),
-      }
+        })
+      canonicalOrdersByBrokerId.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+      return { ok: true, data: acknowledgedOrder }
     },
   }
   const config = {
