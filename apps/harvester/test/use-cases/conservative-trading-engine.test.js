@@ -440,16 +440,18 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   }))
   await Promise.all([partialFill, finalFill, delayedSellReport])
 
-  // The final BUY fill is queued behind the partial fill. The partial-fill
-  // transition first replaces the original recovery SELL; the final-fill
-  // transition must then cancel that replacement as well.
-  const recoverySellOrders = engine.getOrders().filter((order) => order.side === "SELL")
-  assert.equal(recoverySellOrders.length, 2)
-  const replacementSellOrder = recoverySellOrders.find(
+  // Both serialized BUY-fill transitions must cancel the recovery SELL
+  // that was active at that point. Other SELL registry entries may remain
+  // from subsequent replacement/deferred evaluations.
+  const canceledRecoverySellOrders = engine.getOrders().filter(
+    (order) => order.side === "SELL" && order.status === "CANCELED",
+  )
+  assert.equal(canceledRecoverySellOrders.length, 2)
+  const replacementSellOrder = canceledRecoverySellOrders.find(
     (order) => order.clientOrderId !== pendingSellOrder.clientOrderId,
   )
   assert.ok(replacementSellOrder)
-  assert.equal(replacementSellOrder.status, "CANCELED")
+  assert.deepEqual(cancellations, canceledRecoverySellOrders.map((order) => order.brokerOrderId))
   assert.deepEqual(cancellations, [
     pendingSellOrder.brokerOrderId,
     replacementSellOrder.brokerOrderId,
