@@ -2,7 +2,28 @@ import { randomUUID } from "node:crypto"
 
 import { createSignedBinanceParams } from "./signature.js"
 
+/**
+ * @typedef {object} BinanceRpcRequestOptions
+ * @property {boolean} [signed=false] - Whether to sign the request.
+ * @property {number} [recvWindow] - Binance receive window in milliseconds.
+ * @property {number} [timeout] - Request timeout in milliseconds.
+ * @property {boolean} [stateChanging=false] - Marks an uncertain timeout/disconnect outcome.
+ */
+
+/**
+ * @typedef {object} BinanceRpcResponse
+ * @property {string|number} id
+ * @property {number} status
+ * @property {unknown} data
+ * @property {unknown[]} [rateLimits]
+ */
+
+/** Error returned by the Binance WebSocket API or its protocol boundary. */
 export class BinanceRpcError extends Error {
+  /**
+   * @param {string} message
+   * @param {{code?: number|null, status?: number|null, requestId?: string|number|null, method?: string|null, details?: unknown, outcomeUnknown?: boolean}} [options]
+   */
   constructor(message, {
     code = null,
     status = null,
@@ -23,6 +44,7 @@ export class BinanceRpcError extends Error {
 }
 
 export class BinanceRpcTimeoutError extends BinanceRpcError {
+  /** @param {{requestId: string|number, method: string, timeout: number, stateChanging: boolean}} options */
   constructor({ requestId, method, timeout, stateChanging }) {
     super(`Binance WebSocket API request "${method}" timed out after ${timeout} ms`, {
       requestId,
@@ -35,6 +57,7 @@ export class BinanceRpcTimeoutError extends BinanceRpcError {
 }
 
 export class BinanceRpcConnectionError extends BinanceRpcError {
+  /** @param {string} message @param {{requestId?: string|number, method?: string, stateChanging?: boolean}} [options] */
   constructor(message, { requestId, method, stateChanging } = {}) {
     super(message, {
       requestId,
@@ -46,6 +69,7 @@ export class BinanceRpcConnectionError extends BinanceRpcError {
 }
 
 export class BinanceRpcProtocolError extends BinanceRpcError {
+  /** @param {string} message @param {{requestId?: string|number, method?: string, details?: unknown}} [options] */
   constructor(message, { requestId, method, details } = {}) {
     super(message, { requestId, method, details })
     this.name = "BinanceRpcProtocolError"
@@ -82,6 +106,9 @@ function hasOwn(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
 
+/**
+ * Correlate Binance WebSocket API RPC requests and push events on one transport.
+ */
 export class BinanceWebSocketApiClient {
   #state = "idle"
   #pending = new Map()
@@ -92,6 +119,10 @@ export class BinanceWebSocketApiClient {
   #removeErrorListener
   #removeCloseListener
 
+  /**
+   * @param {{transport: {connect: Function, send: Function, close: Function, onMessage: Function, onClose: Function}, apiKey: string, apiSecret: string, requestTimeout?: number, recvWindow?: number, now?: () => number, idFactory?: () => string|number, setTimeoutFn?: Function, clearTimeoutFn?: Function}} options
+   * @throws {TypeError|RangeError} If the transport or timing dependencies are invalid.
+   */
   constructor({
     transport,
     apiKey,
@@ -151,6 +182,7 @@ export class BinanceWebSocketApiClient {
     return this.#pending.size
   }
 
+  /** @returns {Promise<BinanceWebSocketApiClient>} Resolves when the API socket is open. */
   async connect() {
     if (this.#state === "open") return this
     if (this.#state !== "idle") {
@@ -173,6 +205,14 @@ export class BinanceWebSocketApiClient {
     }
   }
 
+  /**
+   * Send one RPC request; state-changing calls are never replayed automatically.
+   *
+   * @param {string} method - Binance WebSocket API method name.
+   * @param {Record<string, unknown>} [params]
+   * @param {BinanceRpcRequestOptions} [options]
+   * @returns {Promise<BinanceRpcResponse>}
+   */
   request(method, params, {
     signed = false,
     recvWindow = this.recvWindow,
@@ -263,18 +303,22 @@ export class BinanceWebSocketApiClient {
     })
   }
 
+  /** @param {(event: object) => void} listener @returns {() => boolean} */
   onEvent(listener) {
     return this.#subscribe(this.#eventListeners, listener, "event")
   }
 
+  /** @param {(error: Error) => void} listener @returns {() => boolean} */
   onError(listener) {
     return this.#subscribe(this.#errorListeners, listener, "error")
   }
 
+  /** @param {(event: object) => void} listener @returns {() => boolean} */
   onClose(listener) {
     return this.#subscribe(this.#closeListeners, listener, "close")
   }
 
+  /** @returns {Promise<void>} Rejects pending requests and closes the transport. */
   async disconnect() {
     if (this.#state === "closed") return
     this.#state = "closed"
