@@ -1,4 +1,4 @@
-import test, { before as beforeAll, beforeEach, afterEach } from "node:test"
+import test, { describe, before as beforeAll, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -10,6 +10,7 @@ const cycleCompletions = new Map()
 const cycleWaiters = new Map()
 let runtime
 
+describe("Conservative DOGE/ZRO replay", () => {
 beforeAll(() => {
   assert.deepEqual(
     Object.keys(config.strategies.CG_coinGrabber.pairs)
@@ -507,3 +508,5 @@ test(
       )
   },
 )
+})
+
