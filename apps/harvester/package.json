@@ -31,14 +31,6 @@
     "@coinzilla/utils": "workspace:*"
   },
   "config": {
-    "targetedTestFiles": [
-      "test/bootstrap/start-harvester.test.js",
-      "test/configured-account-snapshot-journal.test.js",
-      "test/domain/trading-config.test.js",
-      "test/infrastructure/config/load-trading-config.test.js",
-      "test/main.test.js",
-      "src/use-cases/conservative-trading-engine.test.js",
-      "src/bootstrap/doge-zro-conservative-replay.test.js"
-    ]
+    "targetedTestFiles": []
   }
 }
