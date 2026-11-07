@@ -14,7 +14,7 @@ const seen = new Set();
 let configurationErrors = 0;
 
 function logSection(title) {
-  console.log("\\n" + "=".repeat(100));
+  console.log("\n" + "=".repeat(100));
   console.log(title);
   console.log("=".repeat(100));
 }
@@ -149,7 +149,7 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
   if (details) {
     console.error("DIAGNOSTIC DETAIL:");
     console.error(details);
-    console.error("::error file=" + configuredPath + "::Targeted test " + status + " — " + details.replace(/\\r?\\n/g, " "));
+    console.error("::error file=" + configuredPath + "::Targeted test " + status + " — " + details.replace(/\r?\n/g, " "));
   }
 
   results.push({ path: configuredPath, absolutePath, status, durationMs, exitCode: child.status, signal: child.signal });
@@ -204,7 +204,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       "\` | " + (result.exitCode ?? "—") + " |"
     ),
     ""
-  ].join("\\n");
+  ].join("\n");
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 }
 
