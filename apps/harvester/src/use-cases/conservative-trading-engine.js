@@ -1281,25 +1281,40 @@ export function makeConservativeTradingEngine({
       await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
       return toResult({ error })
     }
-    // The terminal stream event is authoritative evidence when REST history lags.
-    // Merge it with REST history, retaining the same duplicate-ID conflict checks.
+    // Processed user-data fills are canonical in-process facts. Prefer them
+    // over REST rows when the exchange's REST metadata is contradictory; the
+    // final cumulative-quantity check below still requires a complete history.
     const fillsById = new Map()
-    // Keep canonical stream fills as durable-in-transition evidence: REST may
-    // lag behind user-data delivery, including earlier fills from the same
-    // order. Merge every observed fact and let the duplicate-ID parity check
-    // reject conflicting REST/stream representations.
     const previouslyProcessedFills = [
       ...(state.processedFillsByOrder.get(order.brokerOrderId)?.values() ?? []),
     ]
-    const candidateFills = [
-      ...fillsResult.data,
+    const streamFills = [
       ...previouslyProcessedFills,
       ...(eventFill === undefined ? [] : [eventFill]),
     ]
-    for (const fill of candidateFills) {
+    for (const fill of streamFills) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
           (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+        const error = new Error("Terminal stream execution does not match its canonical order")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Terminal stream contains conflicting facts for one fill ID")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
+    }
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+        // A valid stream execution can supersede a contradictory REST row,
+        // but only if the union still proves the terminal cumulative quantity.
+        if (streamFills.length > 0) continue
         const error = new Error("Terminal execution history does not match its canonical order")
         await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
         return toResult({ error })
@@ -1537,6 +1552,7 @@ export function makeConservativeTradingEngine({
         return toResult({
           data: {
             order,
+            reevaluate: true,
             terminalFillHistoryReconciled: true,
             recoverySellReplaced: true,
             ...replacement.data,
