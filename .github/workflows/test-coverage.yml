@@ -43,7 +43,15 @@ jobs:
         shell: bash
         run: |
           set +e
-          pnpm run test:coverage 2>&1 | tee coverage-output.txt
+          # These workspaces have dedicated coverage commands below. Exclude
+          # them here so their test suites are not executed twice.
+          pnpm --filter './packages/*' --filter './apps/*' \
+            --filter '!@coinzilla/brokers' \
+            --filter '!@coinzilla/notifiers' \
+            --filter '!@coinzilla/event-bus' \
+            --filter '!@coinzilla/utils' \
+            --filter '!@coinzilla/bot-free-roll' \
+            --recursive exec node --test --experimental-test-coverage 2>&1 | tee coverage-output.txt
           test_status=${PIPESTATUS[0]}
 
           {
