@@ -3,7 +3,6 @@ import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import {
   multiplyDecimal,
   percentageToRate,
-  subtractDecimal,
 } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
@@ -168,9 +167,9 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
 
     const createCanonicalOrder = broker.createCanonicalOrder.bind(broker)
     broker.createCanonicalOrder = async (order) => {
-      const result = await createCanonicalOrder(order)
-      if (result?.ok) {
-        const canonicalOrder = result.data
+      const canonicalOrderCreationResult = await createCanonicalOrder(order)
+      if (canonicalOrderCreationResult?.ok) {
+        const canonicalOrder = canonicalOrderCreationResult.data
         // The replay assertions use exchange-shaped price/quantity fields while
         // the engine and broker now exchange canonical Money/Quantity values.
         submittedCanonicalOrders.push({
@@ -194,7 +193,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
         exchangeOrderHistory.set(canonicalOrder.brokerOrderId, canonicalOrder)
         notifyOrderWaiters()
       }
-      return result
+      return canonicalOrderCreationResult
     }
     broker.getOpenOrders = async ({ symbol: requestedSymbol } = {}) => ({
       ok: true,
@@ -240,38 +239,38 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     broker.userDataSession.subscribe = async ({ onEvent }) => {
       publishUserDataEvent = (message) => {
         receivedExecutionReports.push(message.event)
-        const fill = message.event?.fill
-        const fillOrderId = fill?.brokerOrderId ?? fill?.orderId
-        if (fill && publishFullOrderFillId !== undefined && publishFullOrderFillId !== null) {
-          const brokerOrderId = String(publishFullOrderFillId)
+        const executionFill = message.event?.fill
+        const fillOrderId = executionFill?.brokerOrderId ?? executionFill?.orderId
+        if (fill && fillBrokerOrderId !== undefined && fillBrokerOrderId !== null) {
+          const brokerOrderId = String(fillBrokerOrderId)
           const order = exchangeOrderHistory.get(brokerOrderId)
           if (order) {
-            const commissionAsset = fill.commissionAsset === order.market.baseAsset.code
+            const commissionAsset = executionFill.commissionAsset === order.market.baseAsset.code
               ? order.market.baseAsset
               : order.market.quoteAsset
-            const commissions = fill.commissionAmount && fill.commissionAmount !== "0"
+            const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
               ? [new Commission({
-                amount: new Money({ amount: fill.commissionAmount, asset: commissionAsset }),
+                amount: new Money({ amount: executionFill.commissionAmount, asset: commissionAsset }),
               })]
               : []
             // Match adaptCanonicalFill: Binance REST and user-data fills do not
             // include clientOrderId, so both sources produce identical canonical values.
             const canonicalFill = new Fill({
-              tradeId: String(fill.tradeId ?? fill.id),
+              tradeId: String(executionFill.tradeId ?? executionFill.id),
               brokerOrderId,
               market: order.market,
-              side: fill.side,
-              price: new Money({ amount: fill.price, asset: order.market.quoteAsset }),
-              quantity: new Quantity({ amount: fill.quantity, asset: order.market.baseAsset }),
-              quoteQuantity: new Money({ amount: fill.quoteQuantity, asset: order.market.quoteAsset }),
-              liquidityRole: fill.isMaker ? "MAKER" : "TAKER",
-              executedAt: fill.time,
+              side: executionFill.side,
+              price: new Money({ amount: executionFill.price, asset: order.market.quoteAsset }),
+              quantity: new Quantity({ amount: executionFill.quantity, asset: order.market.baseAsset }),
+              quoteQuantity: new Money({ amount: executionFill.quoteQuantity, asset: order.market.quoteAsset }),
+              liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
+              executedAt: executionFill.time,
               commissions,
               commissionStatus: "COMPLETE",
             })
-            const fills = exchangeCanonicalFills.get(brokerOrderId) ?? []
-            fills.push(canonicalFill)
-            exchangeCanonicalFills.set(brokerOrderId, fills)
+            const canonicalFillsForOrder = exchangeCanonicalFills.get(brokerOrderId) ?? []
+            canonicalFillsForOrder.push(canonicalFill)
+            exchangeCanonicalFills.set(brokerOrderId, canonicalFillsForOrder)
           }
         }
         return onEvent(message)
@@ -283,8 +282,8 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       symbol: requestedSymbol,
       onPrice,
     }) => {
-      const targetSymbol = requestedSymbol ?? subscribedSymbol ?? marketSymbol
-      marketPriceEventHandlers.set(targetSymbol, (event) => {
+      const targetMarketSymbol = requestedSymbol ?? subscribedSymbol ?? marketSymbol
+      marketPriceEventHandlers.set(targetMarketSymbol, (event) => {
         receivedMarketPriceEvents.push(event)
         return onPrice(event)
       })
@@ -295,15 +294,15 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       data: { unsubscribe: async () => {} },
     })
     broker.cancelOrder = async ({ orderId } = {}) => {
-      const key = String(orderId)
-      const order = exchangeOrderHistory.get(key)
+      const brokerOrderId = String(orderId)
+      const order = exchangeOrderHistory.get(brokerOrderId)
       if (!order)
         return {
           ok: false,
           errors: [new Error("simulated exchange order not found")],
         }
       const timestamp = Date.now()
-      const canceled = new CanonicalOrder({
+      const canceledCanonicalOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
         market: order.market,
@@ -319,9 +318,9 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
         completedAt: timestamp,
       })
       exchangeOpenOrders.delete(order.clientOrderId)
-      exchangeOrderHistory.set(key, canceled)
-      confirmedCanceledOrders.push(canceled)
-      return { ok: true, data: canceled }
+      exchangeOrderHistory.set(brokerOrderId, canceled)
+      confirmedCanceledOrders.push(canceledCanonicalOrder)
+      return { ok: true, data: canceledCanonicalOrder }
     }
     return broker
   }
@@ -363,9 +362,9 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
   assert.equal(runtime.userDataReady, true, "the replay must complete user-data reconciliation before accepting simulated market events")
 
   const publishMarketPrice = async (price) => {
-    const onPrice = marketPriceEventHandlers.get(marketSymbol)
-    assert.equal(typeof onPrice, "function", marketSymbol + " must have an active market-price subscription before a price event is published")
-    await onPrice({
+    const marketPriceHandler = marketPriceEventHandlers.get(marketSymbol)
+    assert.equal(typeof marketPriceHandler, "function", marketSymbol + " must have an active market-price subscription before a price event is published")
+    await marketPriceHandler({
       eventType: "aggTrade",
       eventTime: Date.now(),
       timestamp: Date.now(),
@@ -381,22 +380,22 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
   }
 
   const publishFullOrderFill = async ({ order, price, tradeId }) => {
-    const quantity = order.originalQuantity.amount
-    const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
-    const commissionRate = percentageToRate({
+    const executedBaseQuantity = order.originalQuantity.amount
+    const executedQuoteQuantity = multiplyDecimal({ left: price, right: executedBaseQuantity })
+    const executionCommissionRate = percentageToRate({
       percent: String(
         order.type === "LIMIT_MAKER" ? marketConfiguration.makerPercent : marketConfiguration.takerPercent,
       ),
     })
-    const commissionAsset =
+    const executionCommissionAsset =
       order.side === "BUY" ? order.market.baseAsset : order.market.quoteAsset
-    const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
-    const commissionAmount = multiplyDecimal({
-      left: commissionBasis,
-      right: commissionRate,
+    const commissionCalculationBasis = order.side === "BUY" ? executedBaseQuantity : executedQuoteQuantity
+    const executionCommissionAmount = multiplyDecimal({
+      left: commissionCalculationBasis,
+      right: executionCommissionRate,
     })
     const timestamp = Date.now()
-    const filledOrder = new CanonicalOrder({
+    const fullyFilledCanonicalOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
       brokerOrderId: order.brokerOrderId,
       market: order.market,
@@ -404,7 +403,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       type: order.type,
       limitPrice: order.limitPrice,
       originalQuantity: order.originalQuantity,
-      executedQuantity: new Quantity({ amount: quantity, asset: order.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: executedBaseQuantity, asset: order.market.baseAsset }),
       status: "FILLED",
       createdAt: order.createdAt,
       acknowledgedAt: order.acknowledgedAt,
@@ -412,7 +411,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       completedAt: timestamp,
     })
     exchangeOpenOrders.delete(order.clientOrderId)
-    exchangeOrderHistory.set(order.brokerOrderId, filledOrder)
+    exchangeOrderHistory.set(order.brokerOrderId, fullyFilledCanonicalOrder)
     return publishUserDataEvent({
       event: {
         eventType: "executionReport",
@@ -423,8 +422,8 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
           clientOrderId: order.clientOrderId,
           type: order.type,
           side: order.side,
-          quantity,
-          executedQuantity: quantity,
+          quantity: executedBaseQuantity,
+          executedQuantity: executedBaseQuantity,
           price: order.limitPrice.amount,
           status: "FILLED",
           createdAt: order.createdAt,
@@ -435,12 +434,12 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
           id: tradeId,
           orderId: order.brokerOrderId,
           side: order.side,
-          commissionAmount,
-          commissionAsset: commissionAsset.code,
+          commissionAmount: executionCommissionAmount,
+          commissionAsset: executionCommissionAsset.code,
           isMaker: order.type === "LIMIT_MAKER",
           price,
-          quantity,
-          quoteQuantity,
+          quantity: executedBaseQuantity,
+          quoteQuantity: executedQuoteQuantity,
           time: timestamp,
         },
       },

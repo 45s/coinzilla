@@ -270,3 +270,5 @@ Treat required CI as a production safety boundary, not as advisory feedback.
 - Keep unit tests deterministic and offline. Integration tests requiring credentials or network access must remain explicitly separate.
 - Report workflow availability, actual successful runs, and branch-protection enforcement as three distinct facts.
 - When changing policy enforcement, add regression tests for both the passing case and representative invalid configurations.
+
+<!-- Test readability standard reaffirmed: use descriptive names, named fields, and explanatory assertion messages. -->
