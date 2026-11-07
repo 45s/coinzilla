@@ -73,6 +73,8 @@ test("portfolio log summary is scoped to the evaluated market and exposes only a
     position: {
       marketId: "market-zro-usdt",
       symbol: "ZROUSDT",
+      quantity: "10",
+      spent: "10.5",
       activeBaseQuantity: "10",
       freeBaseQuantity: "0.01",
       totalBaseQuantity: "10.01",
