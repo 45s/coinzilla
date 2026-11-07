@@ -1,4 +1,4 @@
-import { Asset, Balance, CanonicalOrder, Commission, Fill, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Commission, Fill, Money, Order, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import {
   multiplyDecimal,
@@ -6,6 +6,23 @@ import {
 } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
+
+function createOpenOrderSnapshot({ order }) {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    price: Number(order.limitPrice.amount),
+    id: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+  })
+  openOrder.originalPrice = order.limitPrice.amount
+  openOrder.originalQuantity = order.originalQuantity.amount
+  openOrder.executedQuantity = order.executedQuantity.amount
+  openOrder.status = order.status === "OPEN" ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
 
 function createExchangeMarketMetadata(marketSymbol, tradingConfig) {
   const baseAsset = marketSymbol.slice(0, -4)
@@ -197,9 +214,9 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     }
     broker.getOpenOrders = async ({ symbol: requestedSymbol } = {}) => ({
       ok: true,
-      data: [...exchangeOpenOrders.values()].filter(
-        (order) => !requestedSymbol || order.market.symbol === requestedSymbol,
-      ),
+      data: [...exchangeOpenOrders.values()]
+        .filter((order) => !requestedSymbol || order.market.symbol === requestedSymbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
     })
     broker.getFills = async ({ orderId } = {}) => ({
       ok: true,
@@ -318,7 +335,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
         completedAt: timestamp,
       })
       exchangeOpenOrders.delete(order.clientOrderId)
-      exchangeOrderHistory.set(brokerOrderId, canceled)
+      exchangeOrderHistory.set(brokerOrderId, canceledCanonicalOrder)
       confirmedCanceledOrders.push(canceledCanonicalOrder)
       return { ok: true, data: canceledCanonicalOrder }
     }
