@@ -1241,6 +1241,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   let signalRecoveryCompleted
   const recoveryCompleted = new Promise((resolve) => { signalRecoveryCompleted = resolve })
   const submittedOrders = []
+  const canonicalOrdersByBrokerId = new Map()
+  const fillHistoryByOrder = new Map()
   const runtimeErrors = []
   const runtimeDebug = []
   const runtimeInfo = []
@@ -1254,13 +1256,17 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     disconnect: async () => calls.push("disconnect"),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
-    getOpenOrders: async () => ({ ok: true, data: [] }),
+    getOpenOrders: async ({ symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") buyCancellationCount.value += 1
-      return {
-      ok: true,
-      data: new CanonicalOrder({
+      const canceledOrder = new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
         market: order.market,
@@ -1274,11 +1280,20 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         acknowledgedAt: order.acknowledgedAt,
         updatedAt: 3,
         completedAt: 3,
-      }),
-    }
+      })
+      canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
+      return { ok: true, data: canceledOrder }
     },
-    getFills: async () => ({ ok: true, data: [] }),
-    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getFills: async ({ orderId } = {}) => ({
+      ok: true,
+      data: fillHistoryByOrder.get(String(orderId)) ?? [],
+    }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
       snapshotTime += 1
@@ -1295,7 +1310,24 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       return { ok: true, data: { balances, sourceTime: snapshotTime } }
     },
     subscribeForUserData: async (handlers) => {
-      userDataHandlers = handlers
+      userDataHandlers = {
+        ...handlers,
+        onEvent: (message) => {
+          const event = message?.event
+          const executedOrder = event?.executedOrder
+          if (executedOrder?.brokerOrderId) {
+            canonicalOrdersByBrokerId.set(executedOrder.brokerOrderId, executedOrder)
+          }
+          const fill = event?.fill
+          if (fill instanceof Fill) {
+            const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+            if (!existing.some((item) => item.id === fill.id)) {
+              fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+            }
+          }
+          return handlers.onEvent(message)
+        },
+      }
       return { ok: true, data: { disconnect: async () => calls.push("unsubscribe:user-data") } }
     },
     subscribeForPrices: async ({ symbol, onPrice }) => {
