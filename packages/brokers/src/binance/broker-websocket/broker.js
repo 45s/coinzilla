@@ -17,6 +17,10 @@ import { adaptBookTickerMessage } from "./helpers/adapt-book-ticker.js"
 import { createBinanceUserDataClientPort } from "../../infrastructure/binance/user-data-client-adapter.js"
 import { adaptCanonicalOrderHistory, createCanonicalOrderHistoryMarket, requireOrderHistoryArray, validateOrderHistoryCursorItems } from "./helpers/adapters/order-history.js"
 
+/**
+ * @param {import("./config/binance-websocket-config.js").BinanceWebSocketConfig} config
+ * @returns {BinanceWebSocketApiClient}
+ */
 function createApiClient(config) {
   const transport = new NativeWebSocketTransport({ url: config.websocketApiUrl })
   return new BinanceWebSocketApiClient({
@@ -26,6 +30,11 @@ function createApiClient(config) {
   })
 }
 
+/**
+ * @param {import("./config/binance-websocket-config.js").BinanceWebSocketConfig} config
+ * @param {object} logger
+ * @returns {BinanceStreamsClient}
+ */
 function createMarketClient(config, logger) {
   return new BinanceStreamsClient({
     url: config.websocketStreamsUrl,
@@ -35,6 +44,12 @@ function createMarketClient(config, logger) {
   })
 }
 
+/**
+ * Resolve a canonical market, sharing concurrent metadata requests by symbol.
+ *
+ * @param {{broker: BinanceWebSocketBroker, symbol: string}} options
+ * @returns {Promise<import("@coinzilla/entities").Market>}
+ */
 async function getCanonicalMarket({ broker, symbol }) {
   if (broker.canonicalMarkets.has(symbol)) return broker.canonicalMarkets.get(symbol)
   const pending = broker.canonicalMarketRequests.get(symbol)
@@ -106,7 +121,20 @@ function forwardSafely(onEvent, onStatus, event, logger) {
 }
 
 
+/**
+ * @template T
+ * @typedef {object} BrokerResult
+ * @property {boolean} ok - Whether the broker operation succeeded.
+ * @property {T} [data] - Normalized operation result when successful.
+ * @property {Error[]} [errors] - Operation errors when unsuccessful.
+ */
+
+/** Native Binance Spot broker using separate WebSocket API and public Streams clients. */
 export class BinanceWebSocketBroker extends CoreBroker {
+  /**
+   * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
+   * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: Function, clearTimeoutFn?: Function, userDataRecoveryWarningThreshold?: number}} [dependencies]
+   */
   constructor(input = {}, {
     apiClientFactory = createApiClient,
     marketClientFactory = createMarketClient,
@@ -139,6 +167,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     })
   }
 
+  /** @returns {Promise<void>} Opens the API connection and resumes user-data subscription recovery. */
   async connect() {
     if (this.userDataSession.isRecovering) {
       await this.userDataSession.waitForRecovery()
@@ -168,6 +197,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<void>} Stops user-data recovery and disconnects both WebSocket clients. */
   async disconnect() {
     this.connected = false
     this.userDataUnavailable = true
@@ -185,6 +215,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<BrokerResult<unknown[]>>} Non-zero Spot asset values. */
   async getAssets() {
     try {
       const response = await this.tradingConnection.request(
@@ -199,6 +230,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<BrokerResult<import("@coinzilla/entities").Balance[]>>} All Spot balances, including zero balances. */
   async getBalances() {
     try {
       const response = await this.tradingConnection.request(
@@ -213,6 +245,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<BrokerResult<{balances: import("@coinzilla/entities").Balance[], sourceTime: number}>>} Balances and Binance source update time. */
   async getAccountSnapshot() {
     try {
       const response = await this.tradingConnection.request(
@@ -237,6 +270,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<BrokerResult<{serverTime: number}>>} Binance server time in Unix epoch milliseconds. */
   async getServerTime() {
     try {
       const response = await this.tradingConnection.request("time")
@@ -252,6 +286,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol?: string}} [options] @returns {Promise<BrokerResult<import("@coinzilla/entities").Order[]>>} */
   async getOpenOrders({ symbol } = {}) {
     try {
       const response = await this.tradingConnection.request(
@@ -266,6 +301,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{symbol: string, orderId?: string|number, clientOrderId?: string}} options - Exactly one order identifier is required.
+   * @returns {Promise<BrokerResult<import("@coinzilla/entities").Order|null>>}
+   */
   async getOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
       if (typeof symbol !== "string" || !symbol.trim()) {
@@ -302,6 +341,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{symbol: string, orderId?: string|number, clientOrderId?: string}} options - Exactly one order identifier is required.
+   * @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder>>}
+   */
   async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
       if (typeof symbol !== "string" || !symbol.trim()) {
@@ -349,6 +392,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       return toResult({ errors: [error] })
     }
   }
+  /** @param {{symbol: string, orderId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<object[]>>} */
   async getOrderHistory(input = {}) {
     try {
       const params = createOrderHistoryParams(input)
@@ -362,6 +406,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string, orderId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder[]>>} */
   async getCanonicalOrderHistory(input = {}) {
     try {
       const params = createOrderHistoryParams(input)
@@ -394,6 +439,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string, orderId?: string|number, fromId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<object[]>>} */
   async getMyTrades(input = {}) {
     try {
       const params = createMyTradesParams(input)
@@ -408,6 +454,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string, orderId?: string|number, fromId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<import("@coinzilla/entities").Fill[]>>} */
   async getFills(input = {}) {
     try {
       const params = createMyTradesParams(input)
@@ -426,6 +473,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {Record<string, unknown>} input - Legacy broker order request. @returns {Promise<BrokerResult<import("@coinzilla/entities").Order>>} */
   async createOrder(input) {
     try {
       if (this.userDataUnavailable) {
@@ -446,6 +494,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {Record<string, unknown> & {symbol: string, clientOrderId: string}} [input] @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder>>} */
   async createCanonicalOrder(input = {}) {
     try {
       if (this.userDataUnavailable) {
@@ -483,6 +532,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string, orderId: string|number}} options @returns {Promise<BrokerResult<import("@coinzilla/entities").Order>>} */
   async cancelOrder({ symbol, orderId }) {
     try {
       if (this.userDataUnavailable) {
@@ -500,6 +550,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string}} options @returns {Promise<BrokerResult<import("@coinzilla/entities").Order[]>>} */
   async cancelAllOpenOrders({ symbol }) {
     try {
       if (this.userDataUnavailable) {
@@ -517,6 +568,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string}} options @returns {Promise<BrokerResult<object>>} Latest Binance ticker-price response. */
   async getPrices({ symbol }) {
     try {
       const response = await this.tradingConnection.request("ticker.price", { symbol })
@@ -527,6 +579,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @returns {Promise<BrokerResult<import("@coinzilla/entities").Market[]>>} Frozen canonical market catalog. */
   async getExchangeMarkets() {
     try {
       const response = await this.tradingConnection.request("exchangeInfo", {})
@@ -553,6 +606,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /** @param {{symbol: string}} options @returns {Promise<BrokerResult<object>>} Symbol filters and market metadata. */
   async getSymbolFilters({ symbol }) {
     try {
       if (typeof symbol !== "string" || symbol.length === 0) {
@@ -569,6 +623,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{symbol: string, onPrice: (price: object) => void}} options
+   * @returns {Promise<BrokerResult<{stream: string, unsubscribe: () => Promise<unknown>}>>}
+   */
   async subscribeForPrices({ symbol, onPrice }) {
     let stream
     try {
@@ -590,6 +648,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{symbol: string, onBookTicker: (ticker: {symbol: string, bestBidPrice: string, bestBidQuantity: string, bestAskPrice: string, bestAskQuantity: string, timestamp: number}) => void}} [options]
+   * @returns {Promise<BrokerResult<{stream: string, unsubscribe: () => Promise<unknown>}>>}
+   */
   async subscribeForBookTicker({ symbol, onBookTicker } = {}) {
     let stream
     try {
@@ -617,6 +679,10 @@ export class BinanceWebSocketBroker extends CoreBroker {
     }
   }
 
+  /**
+   * @param {{onEvent: (message: {event: object}) => void|Promise<void>, onStatus?: (status: object) => void}} options
+   * @returns {Promise<BrokerResult<object>>} Subscription controls including disconnect and recovery acknowledgement.
+   */
   async subscribeForUserData({ onEvent, onStatus }) {
     try {
       if (!this.connected) throw new Error("Binance broker must be connected before subscribing to user data")
