@@ -93,7 +93,7 @@ The agreed Position accounting responsibility includes:
 
 These are shared pair-level accounting facts, not separate Conservative and Aggressive copies. The active strategy must consult and respect this accounting and its reservations. Strategy-specific decision state may remain separate, but it must not contradict the shared accounting. The Trading Engine grants operational control to only one strategy for a pair at a time; the inactive strategy must not submit or manage orders for that Position.
 
-A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule.
+A market price is not part of the position's held-quantity accounting. If valuation is needed (including valuing commissions), it should be a separate calculation using an explicitly supplied price and a defined conversion rule. Conservative position quantity/spent, actual commission valuation, SELL proceeds, and recovery basis are defined only in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ### Aggressive strategy inventory
 
@@ -130,7 +130,7 @@ For a spot fill, before commissions:
 | BUY | increase by executed base quantity | decrease by executed quote quantity |
 | SELL | decrease by executed base quantity | increase by executed quote quantity |
 
-Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) is currently unsupported and the fill must be rejected as unsupported. Do not ignore the debit or invent a conversion rate. Supporting third-asset commissions requires a future explicit accounting and valuation decision.
+Commission is then accounted for in the asset in which it was actually charged. If commission is charged in the base asset, the net base quantity is reduced. If charged in the quote asset, the net quote quantity is reduced. A commission charged in a third asset (for example, BNB commission on a `BTCUSDT` trade) requires a reliable quote-currency valuation. If the asset, amount, or valuation is unavailable or unreliable, fail closed atomically; never ignore the debit or invent a conversion rate. The Conservative-specific rule is defined in [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 Only the executed part is applied. A partially filled order updates the portfolio by that partial execution; a later fill applies only its own newly executed quantities. Never apply the original requested order quantity as if it had all executed.
 
@@ -156,43 +156,25 @@ Use the repository's object-input/object-output function convention and `toResul
 - Do not mutate shared portfolio state concurrently without an explicit serialization/consistency policy.
 - Keep durable persistence and process-restart recovery separate from the in-memory domain model. The application now performs bounded reconnect-time reconciliation for orders already in its in-memory registry; this does not restore state after restart or reconcile account balances.
 
-## Implemented in-memory transition
+## Implemented in-memory transition — implementation evidence only
 
-Position and Portfolio are implemented under src/domain/portfolio/. Position stores a canonical Market, active base Quantity, separately retained free base Quantity, and signed quote-net-cash-flow Money. Applying BUY/SELL fills changes active inventory only and accounts for commissions charged in the base or quote asset using exact decimal-string arithmetic. `Position.allocateFreeQuantity({ quantity })` transfers an exact amount from active inventory into the permanently excluded free-inventory bucket; it rejects allocations that exceed active holdings. `Portfolio.allocateFreeQuantity({ marketId, quantity })` applies that transition immutably to the matching shared Position.
+The application currently applies canonical fills through paired Portfolio/RecoveryLedger accounting. This section records architecture and code location only; it does not define Conservative accounting or completion rules.
 
-Portfolio.applyFill({ fill }) creates or replaces the Position for fill.market.id and tracks canonical fill IDs plus deterministic execution fingerprints for process-lifetime duplicate protection. An identical duplicate returns the unchanged Portfolio; reusing a Fill ID with different execution facts raises an accounting conflict. A SELL that would make active base holdings negative fails. The domain accepts only COMPLETE commission data and rejects third-asset commissions rather than ignoring an asset debit. This matches the agreed current product behavior: third-asset commission fills are unsupported and must fail visibly.
+The authoritative Conservative contract, including the quantity/spent model, actual commission valuation, full-cost recovery, exact retained quantity, residual sell-through, dust, cancellation/reconciliation, and completion, is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-`updateTradingAccounting()` exposes the paired Portfolio/RecoveryLedger transition through a `toResult` application use case. Bootstrap owns the latest immutable Portfolio snapshot and per-market RecoveryLedger, serializes fill updates, and supplies the latest snapshot to strategy evaluation. The compatibility `updatePortfolio()` runtime method delegates to the paired accounting workflow so it cannot leave the two projections out of sync. The implementation does not yet calculate FIFO/average cost basis, reservations, available inventory, or account-wide asset allocation. Free inventory is now represented as a separate quantity bucket, but it is not yet allocated automatically by a completed Conservative recovery cycle. Fill deduplication is process-local and not durable; process-restart restoration and account-balance reconciliation are not provided. Reconnect-time order/fill reconciliation is implemented separately at the application boundary.
-
-Bootstrap subscribes to the broker user-data stream before market-price subscriptions. Canonical TRADE fills are serialized and applied through the paired Portfolio/RecoveryLedger accounting workflow; order acknowledgements and status-only events do not change holdings. On reconnect, the broker's stream-level `reconciled` status triggers a second, application-owned reconciliation while the trading gate remains closed: only orders already in the in-memory Harvester registry are checked against `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()`. Missing REST fills are passed through the same canonical fill/accounting path, with stable execution IDs preventing double accounting when stream and REST overlap. Incomplete or conflicting REST state keeps the affected market paused and the trading gate closed. External/manual orders and inventory are never adopted. This reconnect workflow is process-local; durable restart recovery, account-balance reconciliation, and external inventory attribution remain deferred. `runtime.updatePortfolio({ fill })` remains a compatibility integration point, not a separate accounting implementation.
-
-## Conservative recovery domain primitives\n\nHarvester's Conservative strategy domain now contains separate pure calculations for initial BUY price, actual fill commission rate, configured sell-fee reserve policy, recovery SELL planning, per-fill quote recovery accounting, and recovery completion eligibility. The immutable `RecoveryLedger` accumulates quote-denominated BUY cost (including actual quote-asset BUY commission) and confirmed net SELL proceeds (after actual quote-asset SELL commission). Base-asset commissions affect Position quantity but are not converted into quote recovery cash flow. Third-asset commissions and incomplete commission data fail closed.\n\nThese modules are not yet integrated into `startHarvester`, the broker user-data stream, an order lifecycle registry, or durable persistence. The completion decision does not itself allocate free inventory: the application workflow must first reconcile the recovery SELL's final status and fills, then apply the exact returned quantity through Portfolio. Do not infer that a fully working recovery cycle exists from these domain primitives alone.\n\n## Confirmed domain decisions
+## Confirmed domain decisions
 
 The following decisions have been agreed:
 
 1. **Position ownership — one position per trading pair.** `BTCUSDT` and `ETHUSDT` have separate positions. A Position is not account-wide per asset and is not split into separate strategy-owned positions.
-**Cross-strategy BUY repricing invariant:** Conservative trailing BUY and
-Aggressive BUY-grid upward repricing are both allowed only while the matching
-Portfolio Position has zero active `baseQuantity.amount`. A positive active
-quantity suppresses repricing before trigger evaluation and prevents repricing-
-driven BUY cancellation/replacement. A missing or zero-quantity Position is
-eligible; retained `freeBaseQuantity` is excluded. This is an engine-level
-safety invariant, not a strategy-local flag. Aggressive grid repricing is not
-yet executable, so its implementation must adopt this invariant before it
-introduces any grid replacement behavior.
+**Cross-strategy BUY repricing invariant:** Conservative trailing-BUY repricing eligibility is defined only in the canonical Conservative specification. The shared engine must enforce that gate against active Position quantity; retained free inventory is excluded. Any future Aggressive BUY-grid repricing requires its own approved strategy specification before becoming executable. This paragraph records the engine boundary only; it does not define Conservative behavior.
 
 2. **Cross-strategy control — exclusive, with shared accounting.** Conservative and Aggressive use the same Position and inventory for a pair, but only one strategy controls it at a time. Each pair has a planned total quote budget. A configurable `conservativeTakeoverPercent` setting defaults to `20` (20%). When actual executed BUY investment exceeds that percentage of the pair's planned total quote budget, the Trading Engine automatically hands control from Aggressive to Conservative. Only executed BUY fills count: unfilled/open BUY orders and their reserved quote commitment are excluded. Conservative keeps control until the entire position is sold and the invested quote capital has been recovered; a position becoming smaller than the takeover threshold does not return control to Aggressive. If the position is losing money, stop creating new BUY orders but keep existing SELL orders active. Never force a sale at a loss to switch strategies. Aggressive resumes only after the full position is closed and the invested capital is back. The inactive strategy must not operate the Position.
-3. **Accounting — complete shared accounting.** Position is the authoritative source for actual holdings, invested quote, average entry cost, realized profit, commissions, reserved inventory, and available inventory. Both strategies use this shared accounting.
-4. **Third-asset commissions — reject for now.** A fill whose commission is charged in an asset other than the pair's base or quote asset is unsupported and must be rejected visibly. It must never be silently ignored or valued using an invented conversion.
+3. **Accounting — shared pair projection.** Portfolio is the shared source for actual pair holdings and reservations. Conservative quantity/spent and recovery cost/proceeds semantics are defined only in the canonical Conservative specification.
+4. **Third-asset commissions.** Conservative third-asset commissions require a reliable quote-currency valuation; otherwise fail closed. The canonical specification defines this rule. Do not silently ignore the debit or invent a conversion.
 
 These decisions define pair-level accounting and exclusive strategy control for each pair. They do **not** yet define how one exchange asset shared by different pairs (for example, USDT used by both `BTCUSDT` and `ZROUSDT`) is globally allocated against the exchange's actual account balance.
 
 ## Decisions still required
 
-2. **Order reservation lifecycle:** when exactly is quantity reserved for a submitted BUY or SELL, and when is it released after rejection, cancellation, expiration, partial fill, or an uncertain exchange response? The shared Position must expose reserved and available inventory, but the lifecycle and race-handling contract still needs to be specified.
-3. **Cross-pair asset coordination:** how does the engine prevent separate pair positions from spending or selling the same underlying account balance? Pair-level positions do not by themselves solve account-wide balance contention.
-4. **Duplicate fills:** which broker execution identifiers and retention/persistence rules provide durable deduplication?
-5. **Persistence/reconciliation:** when and how will the in-memory portfolio be restored and reconciled with exchange balances and executions?
-6. **Profit attribution:** if both strategies trade the same pair and share the same inventory, is strategy-specific performance reporting required, and if so, how should it be attributed without creating separate competing positions?
-
-Until these remaining decisions are closed, do not invent reservation timing, cross-pair allocation, recovery, or profit-attribution rules.
+The remaining questions in this document concern shared Portfolio/Aggressive architecture only. They do not reopen or override Conservative Strategy decisions. For Conservative, see [the canonical specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).

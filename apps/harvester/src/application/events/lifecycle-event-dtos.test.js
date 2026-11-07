@@ -593,6 +593,35 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
 })
 
 
+test("maps exact dust quantity and limiting filter into the durable completion event", () => {
+  const result = mapRecoveryCycleCompletedData({
+    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL",
+      minimumQuantity: "1", minimumNotional: "5", evaluatedQuantity: "1", evaluatedNotional: "0.07185" },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.dust, { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL",
+    minimumQuantity: "1", minimumNotional: "5", evaluatedQuantity: "1", evaluatedNotional: "0.07185" })
+})
+
+test("maps quantity-step dust with its rounded candidate", () => {
+  const result = mapRecoveryCycleCompletedData({
+    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.04", realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.04", reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1", evaluatedQuantity: "0" },
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.data.dust.evaluatedQuantity, "0")
+})
+
+test("rejects a durable dust record without limiting-filter values", () => {
+  const result = mapRecoveryCycleCompletedData({
+    symbol: "DOGEUSDT", marketId: "market:binance:DOGEUSDT", freeQuantity: "1.8", realizedNetProfit: "0.01",
+    dust: { status: "EXCHANGE_CONSTRAINED_DUST", quantity: "0.8", reason: "MIN_NOTIONAL" },
+  })
+  assert.equal(result.ok, false)
+})
+
 test("maps duplicate Fill and recovery-cycle completion DTOs", () => {
   const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })

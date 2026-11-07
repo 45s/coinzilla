@@ -1,5 +1,8 @@
 # Harvester controlled Binance Spot TESTNET validation runbook
 
+> This is an execution and evidence checklist, not a strategy specification. All Conservative expected behavior is derived from [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). If a checklist statement differs, the canonical specification controls.
+
+
 > **Execution gate: CLOSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin the joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
 
 ## 1. Scope and hard limits
@@ -15,7 +18,7 @@ Current committed configuration to verify before the session:
 | Aggressive | disabled |
 | Pair investment cap | 100 USDT |
 | BUY order quantity | 5 ZRO |
-| Free keep quantity | 0.01 ZRO |
+| Configured keepQuantity | 0.01 ZRO in the current expected ZRO config; re-verify the exact branch config before the session |
 | Minimum net profit | 0.01 USDT |
 | Price step | 0.05% |
 | Maker fee assumption | 0.1% |
@@ -28,7 +31,7 @@ Hard operational limits for the first session:
 
 - Exactly two enabled symbols: DOGEUSDT and ZROUSDT.
 - Exactly one Harvester process and one operator-controlled session.
-- At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after that pair's previous SELL cancellation is confirmed and its fills are reconciled.
+- At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after the previous SELL's terminal exchange state and all actual fills/commissions are reconciled.
 - No manual orders during the run. Record and classify every pre-existing/external open order before starting.
 - Never exceed the configured 100 USDT investment cap per pair, 200 USDT combined configured cap, or available free quote balance; the smallest applicable limit wins.
 - Do not increase order quantity, investment, keep quantity, or fee assumptions during the session.
@@ -116,11 +119,11 @@ The operator and assistant explicitly authorize each phase together. Do not trea
 2. Verify the exchange acknowledgement and correlate it to the exact client order ID and exchange order ID. There must be no duplicate active BUY.
 2a. **Specific regression-race observation:** record each strategy evaluation ID, order intent/client order ID, BUY limit price, `lastBuyPrice` before evaluation, canonical fill trade IDs, and the weighted execution price after reconciliation. A new BUY decision must not use the previous market price or an un-reconciled/empty reference after the preceding BUY has been acknowledged FILLED. A later BUY must be based on the preceding reconciled weighted execution price. If a second BUY is submitted while the prior FILLED acknowledgement's execution history is still being fetched/applied, or if the same BUY price is resubmitted from stale state, abort immediately and preserve evidence. Do not deliberately create twelve live orders to test this; the offline twelve-sequential-immediate-fill regression already exercises twelve transitions at a fixed market input, and the live session is bounded to one recovery cycle.
 3. Reconcile every execution report against REST order/trade history. For every fill, record trade ID, order ID, client order ID, side, price, base quantity, quote quantity, commission amount/asset/status, and event time.
-4. Verify Portfolio and RecoveryLedger are updated exactly once for each canonical fill. Base-asset commissions affect net base inventory; quote-asset commissions affect net quote cash flow. Unknown, malformed, or unsupported third-asset commission data must fail closed; never estimate realized fees from the configured percentage.
-5. Verify the next standing BUY and recovery SELL are consistent with the reconciled fills, outstanding recovery amount, fee reserve, tick/quantity rules, available balances, and the one-BUY/one-SELL limit.
-6. If a BUY fills while a recovery SELL is open, verify cancellation is limited to that identified owned SELL. Wait for the cancellation acknowledgement and reconcile any fills that raced with cancellation before allowing a replacement SELL.
-7. Verify any partial fills and multiple fills that occur are accumulated by unique trade ID and exact decimal arithmetic. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
-8. After the recovery SELL is fully filled, verify actual net proceeds, commissions, recovery completion, realized net profit, and allocation of exactly 0.01 ZRO to free inventory. Any additional residual must remain correctly classified; it must not create a new recovery SELL after the ledger is reset.
+4. Verify Portfolio and RecoveryLedger are updated exactly once for each canonical fill. Base-asset commissions affect net base inventory; quote-asset commissions affect net quote cash flow. Third-asset commission data requires reliable quote-currency valuation; otherwise fail closed. Never estimate actual realized fees from the configured percentage.
+5. Verify the next standing BUY and recovery SELL against the canonical specification, reconciled position quantity/spent, cumulative net SELL proceeds, actual commissions, applicable fee reserve, exchange filters, available balances, and the one-BUY/one-SELL limit.
+6. If a BUY fills while a recovery SELL is open, apply the BUY fill once, cancel only that identified owned SELL, reconcile its terminal state and every actual fill/commission (including fill-during-cancel), update accounting, and only then plan a replacement. If the SELL becomes FILLED during cancellation, process it as FILLED. Incomplete reconciliation fails closed.
+7. Verify any partial fills and multiple fills are accumulated by unique trade ID and exact decimal arithmetic. A partial SELL without a new BUY must remain the same exchange order at the same price. Duplicate identical reports must not double count; conflicting duplicate facts or stale/incomplete REST history require a safe pause. Do not manufacture a cancel/fill race or exceed the one-cycle order limit to force a rare event. If partial-fill/cancel/late-event paths are not exercised naturally in this bounded session, record those live paths as NOT OBSERVED; the merged offline regression matrix remains evidence for implementation behavior, but it is not live exchange proof and cannot be reported as TESTNET acceptance.
+8. After the recovery SELL is terminal, verify actual net proceeds, commissions, full accumulated cost recovery, minimum $0.01 net profit, sell-through of all sellable inventory above exact configured keepQuantity, and exact retained allocation. If exchange-constrained dust remains, verify its exact quantity and limiting filter and that its original basis is preserved; do not treat it as extra retained inventory or reset the cycle while position quantity is above keepQuantity.
 9. Stop after the first completed recovery cycle. Do not allow another cycle without a separate explicit decision.
 
 Expected result: one complete controlled BUY/fill → recovery SELL/fill → recovery completion for DOGEUSDT and one for ZROUSDT, with no more than one active BUY and one active recovery SELL per pair. A next BUY may remain open only if the agreed scenario requires it and the operator explicitly elects to leave it open. Otherwise, the session must finish with a deliberate, reconciled shutdown plan. No unexplained orders, fills, commissions, or accounting deltas are acceptable.

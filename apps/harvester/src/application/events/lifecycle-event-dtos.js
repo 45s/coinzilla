@@ -503,13 +503,24 @@ export const mapDuplicateFillData = (input = {}) => {
   return toResult({ data: { ...fillResult.data, duplicate: true } })
 }
 
-/** Map a completed recovery cycle after the application has committed its reset. */
+const mapRecoveryDustData = ({ dust }) => {
+  if (dust === undefined) return undefined
+  if (!dust || dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
+  if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) throw new TypeError("dust.reason must identify the limiting exchange filter")
+  const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
+  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
+  for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
+  return mapped
+}
+
+/** Map a completed recovery cycle with exact retained-dust evidence. */
 export const mapRecoveryCycleCompletedData = (input = {}) =>
-  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, realizedNetProfit }) => ({
+  mapData(input, "Recovery-cycle-completed event mapping", ({ symbol, marketId, freeQuantity, realizedNetProfit, dust }) => ({
     symbol: requireString({ value: symbol, field: "symbol" }),
     marketId: requireString({ value: marketId, field: "marketId" }),
     freeQuantity: requireDecimalString({ value: freeQuantity, field: "freeQuantity" }),
     realizedNetProfit: requireDecimalString({ value: realizedNetProfit, field: "realizedNetProfit" }),
+    ...(dust === undefined ? {} : { dust: mapRecoveryDustData({ dust }) }),
   }))
 
 

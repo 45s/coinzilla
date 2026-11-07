@@ -17,9 +17,34 @@ permissions:
 
 jobs:
   coverage:
-    name: Workspace test coverage
+    name: "Coverage (${{ matrix.package }})"
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - package: "@coinzilla/bot-free-roll"
+            has_coverage_script: true
+          - package: "@coinzilla/harvester"
+            has_coverage_script: false
+          - package: "@coinzilla/brokers"
+            has_coverage_script: true
+          - package: "@coinzilla/db"
+            has_coverage_script: true
+          - package: "@coinzilla/entities"
+            has_coverage_script: false
+          - package: "@coinzilla/event-bus"
+            has_coverage_script: true
+          - package: "@coinzilla/journal"
+            has_coverage_script: false
+          - package: "@coinzilla/market-simulator"
+            has_coverage_script: true
+          - package: "@coinzilla/notifiers"
+            has_coverage_script: true
+          - package: "@coinzilla/utils"
+            has_coverage_script: true
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -39,74 +64,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run workspace tests with coverage
-        shell: bash
+      - name: Run ${{ matrix.package }} coverage
+        run: pnpm --filter "${{ matrix.package }}" exec node --test --experimental-test-coverage
+
+      - name: Enforce ${{ matrix.package }} coverage thresholds
+        if: matrix.has_coverage_script
+        run: pnpm --filter "${{ matrix.package }}" run test:coverage
+
+  workspace-coverage-gate:
+    name: Workspace test coverage
+    if: always()
+    needs:
+      - coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package coverage job to pass
+        env:
+          MATRIX_RESULT: ${{ needs.coverage.result }}
         run: |
-          set +e
-          pnpm run test:coverage 2>&1 | tee coverage-output.txt
-          test_status=${PIPESTATUS[0]}
-
-          {
-            echo '## Workspace test coverage'
-            echo
-            cat coverage-output.txt
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          exit "$test_status"
-
-      - name: Enforce Brokers package coverage command
-        run: pnpm --filter @coinzilla/brokers test:coverage
-
-      - name: Enforce Notifiers package coverage thresholds
-        run: pnpm --filter @coinzilla/notifiers test:coverage
-
-      - name: Enforce Event Bus package coverage thresholds
-        run: pnpm --filter @coinzilla/event-bus test:coverage
-
-      - name: Verify Event Bus coverage thresholds reject insufficient coverage
-        shell: bash
-        run: |
-          verify_threshold() {
-            local threshold_flag="$1"
-            set +e
-            local output
-            output="$(pnpm --filter @coinzilla/event-bus exec node --test --experimental-test-coverage "$threshold_flag" --test-coverage-include=src/event-bus.js --test-coverage-include=src/index.js --test-coverage-include=src/helpers/*.js --test-coverage-exclude=src/**/*.test.js 2>&1)"
-            local test_status=$?
-            set -e
-
-            if [[ "$test_status" -eq 0 ]] || ! grep -Fq "does not meet threshold of 100%" <<< "$output"; then
-              printf '%s\\n' "$output"
-              echo "::error::Expected Event Bus coverage to fail with $threshold_flag."
-              exit 1
-            fi
-          }
-
-          verify_threshold "--test-coverage-lines=100"
-          verify_threshold "--test-coverage-branches=100"
-
-      - name: Enforce Utilities package coverage thresholds
-        run: pnpm --filter @coinzilla/utils test:coverage
-
-      - name: Verify Utilities coverage thresholds reject insufficient coverage
-        shell: bash
-        run: |
-          verify_utils_threshold() {
-            local threshold_flag="$1"
-            set +e
-            local output
-            output="$(pnpm --filter @coinzilla/utils exec node --test --experimental-test-coverage "$threshold_flag" --test-coverage-include=src/*.js --test-coverage-exclude=src/*.test.js 2>&1)"
-            local test_status=$?
-            set -e
-
-            if [[ "$test_status" -eq 0 ]] || ! grep -Fq "does not meet threshold of 100%" <<< "$output"; then
-              printf '%s\\n' "$output"
-              echo "::error::Expected Utilities coverage to fail with $threshold_flag."
-              exit 1
-            fi
-          }
-
-          verify_utils_threshold "--test-coverage-lines=100"
-          verify_utils_threshold "--test-coverage-branches=100"
-
-      - name: Enforce Free-Roll bot coverage thresholds
-        run: pnpm --filter @coinzilla/bot-free-roll test:coverage
+          if [[ "$MATRIX_RESULT" != "success" ]]; then
+            echo "::error::At least one package coverage matrix job did not succeed (result: $MATRIX_RESULT)."
+            exit 1
+          fi
+          echo "All package coverage matrix jobs passed."

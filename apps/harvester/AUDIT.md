@@ -1,18 +1,40 @@
 # Harvester Conservative Strategy Audit
 
+> This is a historical evidence report, not a strategy-rule authority. The sole current Conservative contract is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Old rule summaries and status tables below are historical unless explicitly updated; they must not override the canonical specification.
+
+
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
 **Audit baseline:** `develop` at `4af3434f788b87139513921f220294ae90daf4d5` (2026-11-06; PR #644 merge commit)  
 **Evidence session:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
-**Status:** PARTIAL — ZRO arithmetic reconciles; DOGE execution/order state conflicts; original application logs were not accessible in this execution session.  
+**Status:** IMPLEMENTATION AUDIT CLOSED (2026-11-07) — in-scope Conservative source behavior, regression coverage inventory, and supporting documentation have been reconciled against the canonical specification. Test execution and exact-head CI are a separate pending verification phase; no test-pass claim is made. Historical exchange-filter inputs not captured in the original logs remain UNVERIFIED and non-blocking. TESTNET acceptance is NOT CLAIMED.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
 ## Executive result
 
 The accessible Journal and the two verbatim 100-row order-history comments establish 23 Harvester order submissions in the 07:00 session: six DOGEUSDT orders and seventeen ZROUSDT orders. The Journal records 12 applied fills, 13 duplicate-fill events, nine cancellation requests and nine confirmed cancellations, and one ZRO recovery-cycle completion.
 
-ZRO independently reconciles at the execution and account-balance levels. DOGE does not: order history reports the final 1,196-DOGE SELL as FILLED, while the Journal retains its order as OPEN, the closing account snapshot contains 1,196 DOGE locked, and no DOGE SELL fill is applied in the Journal. The closing account audit correctly reports INCOMPLETE with two unresolved owned orders.
+ZRO's pre-CLOSING recovery SELL and DOGE's post-CLOSING SELL reconcile at the trade/arithmetic level. Both observed SELLs met the minimum net-profit amount after actual commissions. The source audit identified and corrected the ZRO residual sell-through/completion defect; current code continues selling exchange-sellable inventory above exact keepQuantity and retains only validated exchange-constrained dust as a keepQuantity bonus. DOGE's post-shutdown fills and ZRO's post-shutdown BUY are expected workstation-downtime behavior, not same-session runtime failures. Exact historical exchange-filter values and the complete historical CLOSING open-order payload were not preserved; those narrow historical facts remain UNVERIFIED and non-blocking. The original CLOSING audit remains INCOMPLETE at its recorded timestamp and is not rewritten.
 
-Do not treat the session as a successful two-symbol reconciliation.
+## Current closure decision — 2026-11-07
+
+**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
+
+Implemented and represented by focused regression coverage on this branch:
+
+- Recovery SELL planning continues after the minimum net-profit target is secured until all exchange-sellable quantity above `keepQuantity` is sold. Residuals use the validated market reference and still pass exchange quantity/notional/price and POST-ONLY checks.
+- Exchange-constrained dust is accepted only with exact quantity evidence and a validated limiting filter (`MIN_QUANTITY`, `MIN_NOTIONAL`, or `QUANTITY_INCREMENT`). Dust is retained as a bonus on top of `keepQuantity`; price-filter blocks are not dust.
+- The completion lifecycle records the dust quantity, limiting reason, and evaluated filter values in its lifecycle event. Completion preserves `keepQuantity + dust` and resets the recovery basis only after a reconciled terminal FILLED SELL and the actual minimum-profit check.
+- Any BUY fill while a recovery SELL is open triggers cancel, terminal-state/fill/commission reconciliation, and replacement planning; a partial BUY remains partial. A partial SELL without a new BUY remains the same order and price.
+- Terminal recovery SELL outcomes (CANCELED, EXPIRED, REJECTED) reconcile execution history before reevaluation or fail closed. Exact-once fill application and recovery completion/reset are covered by deterministic offline regressions.
+- A full-cycle engine regression now covers the supported `keepQuantity = 0` path as well as a positive retained quantity.
+
+Historical evidence disposition:
+- DOGE SELL 1276698 and ZRO BUY 727905 filled after the workstation process stopped. This is expected downtime behavior; same-session in-memory updates were not expected.
+- The complete historical CLOSING open-order payload and post-fill account snapshot were not preserved. Those facts remain historically UNVERIFIED and non-blocking; no values or order identities are inferred.
+- Historical exact exchange-filter values were not preserved in runtime logs. Actual exchange acceptance and trade arithmetic are known, but candidate historical filter assumptions are not promoted to facts.
+- Process-restart reconstruction remains explicitly deferred to [#654](https://github.com/45s/coinzilla/issues/654) and is outside this audit.
+
+**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](./docs/domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
 
 ## Evidence and provenance
 
@@ -22,10 +44,10 @@ Do not treat the session as a successful two-symbol reconciliation.
 | DOGEUSDT order history, 100 rows | [#645 DOGE order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680477550) | All 100 rows parsed; six current-session orders isolated |
 | ZROUSDT order history, 100 rows | [#645 ZRO order-history comment](https://github.com/45s/coinzilla/issues/645#issuecomment-6680478011) | All 100 rows parsed; seventeen current-session orders isolated |
 | Latest open-orders snapshot | [#645 evidence inventory](https://github.com/45s/coinzilla/issues/645#issuecomment-6680483675) | One ZRO BUY order 727905 NEW, corroborated |
-| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 lines | UNVERIFIED — not mounted/exposed in this execution session; not substituted with excerpts |
-| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 lines | UNVERIFIED — not mounted/exposed in this execution session; not substituted with excerpts |
+| `harvester.log` | Original conversation attachment; 16,878,030 bytes, 4,880 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
+| `harvester-trace.log` | Original conversation attachment; 17,021,746 bytes, 5,739 physical lines | PASS — SHA-256 independently recomputed; parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 
-Original log checksums recorded in #645 (not recomputed here):
+Original log checksums recorded in #645 and independently recomputed against the original attachments:
 - `harvester.log`: `5be28db5f6bc998e1190c1bddf4a91c97703fe9e502e98422932511a56ff633d`
 - `harvester-trace.log`: `4a030ccc4cd645b42ffdf01cb285d4cb1fa5d54417f8845a076448f1d20abcd3`
 
@@ -94,7 +116,7 @@ The DOGE total balance delta (+1,198.8) equals the three net BUY fills exactly a
 - Base inventory and BUY cash debit reconcile.
 - SELL execution, SELL commission, realized net PnL, and final sellable/free DOGE are UNVERIFIED / CONFLICT.
 - Do not book the order-history quote amount as realized proceeds or assume a commission asset/rate.
-- The 1,196 DOGE locked and order 1276698's FILLED status are mutually inconsistent in the supplied evidence. Original application logs are required to establish the timeline and identity; they were not available here.
+- The parsed TRACE log shows order 1276698 OPEN with zero executed and 1,196 remaining at the last DOGE evaluations; the shutdown execution set contains no DOGE SELL fill. This strongly favors OPEN/unfilled at the last observed runtime point, but the separate order-history row says FILLED. Keep the order state CONFLICT until complete DOGE trade history, canonical order detail, and the full CLOSING open-order payload reconcile it.
 
 DOGE order lifecycle from the current-session history:
 - 1276628 BUY 400 @ 0.07157 — FILLED.
@@ -184,14 +206,14 @@ Two focused child issues were created: [#646 — Align Conservative specificatio
 | DOGE BUY inventory/cash debit | PASS | Three fills and account deltas reconcile |
 | DOGE SELL/order/balance state | CONFLICT | History FILLED vs Journal OPEN, no applied SELL fill, 1,196 DOGE locked |
 | DOGE realized net PnL | UNVERIFIED | Missing applied SELL fill/actual commission correlation |
-| Full application-log correlation | UNVERIFIED | Original log attachments unavailable in this execution session |
+| Original log integrity and parsing | PASS | Both original files independently hashed and parsed; see [log evidence addendum](./AUDIT_LOG_EVIDENCE_2026-11-06.md) |
 | Source behavior review | PARTIAL | Relevant code inspected; no full runtime execution |
 | Regression coverage | PARTIAL | Relevant tests inspected, not run |
 | Live TESTNET acceptance | UNVERIFIED | No new exchange operation authorized or performed |
 
 ## Safety decision
 
-Keep the existing TESTNET execution gate closed. Do not restart Harvester or submit/cancel orders to resolve this audit. The next engineering step is to obtain access to the original log attachments in a context where they can be read without altering them, verify their recorded SHA-256 checksums, and correlate the DOGE order 1276698 lifecycle with the account closing snapshot and the two unresolved owned-order records. Until that is done, DOGE SELL execution and realized PnL remain CONFLICT / UNVERIFIED.
+Keep the existing TESTNET execution gate closed. Do not restart Harvester or submit/cancel orders to resolve this audit. The logs are now integrity-verified and parsed; next obtain complete DOGE `myTrades` with commission facts, canonical order detail for 1276698, and the full CLOSING open-order payload/reconciliation diagnostics. DOGE SELL execution and realized PnL remain CONFLICT / UNVERIFIED.
 
 ## Lifecycle reconstruction and decision-by-decision assessment
 
@@ -219,18 +241,11 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 
 ### 3. Recovery SELL calculation and completion contract
 
-Inspected source behavior, not runtime proof:
-1. Apply BUY fills by canonical exchange trade identity; actual base/quote commission affects inventory and cash.
-2. Conservative policy considers active inventory, active SELL state, and outstanding recovery amount.
-3. Positive residual inventory alone is insufficient to create another recovery SELL; outstanding recovery must also be positive and no active SELL may exist.
-4. Planner reserves base for configured fee, divides sellable quantity by 1 + feeRate, rounds quantity down to exchange step, and rounds price up to tick. Current code uses max(makerPercent, takerPercent), while multiple domain documents say maker-only. This is a contract conflict tracked in #646, not an approved product decision.
-5. Apply actual broker commission asset/amount per SELL fill; planned reserve is not a substitute.
-6. Completion requires a fully filled SELL, sufficient active inventory, and actual net proceeds meeting cost plus minProfit.
-7. Bootstrap completion allocates configured keepQuantity to Portfolio and resets RecoveryLedger only after eligibility succeeds.
-8. Residual active inventory after reset does not itself trigger a new recovery SELL. Existing engine test covers this; it was inspected, not run here.
-9. A standing BUY can be paired with a recovery SELL intent; exact-once completion and ownership of outstanding orders must remain intact.
+The expected Conservative behavior is defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This evidence report does not repeat SELL formulas, commission reserves, retained-inventory rules, residual handling, terminal outcomes, or recovery-completion criteria.
 
-ZRO observed arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; completion records 0.01 free and 0.04 active residual. Net quote result +0.01136454 USDT. DOGE evidence does not establish SELL completion or realized PnL.
+Historical source observations in the original audit baseline are superseded by the current canonical contract and current source. Implementation conformance remains unaccepted until focused regressions and exact-head CI pass.
+
+ZRO observed arithmetic in the historical session remains an immutable evidence fact: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; the recorded quote result was +0.01136454 USDT. DOGE historical evidence and chronology are documented separately in the audit addenda; do not infer current balances or runtime state from those snapshots.
 
 ### 4. Shutdown and unresolved-order decision
 
@@ -249,7 +264,7 @@ ZRO observed arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO re
 | Second unresolved order | Identity and reserved asset of second unresolved order. | Full CLOSING openOrders payload and reconciliation diagnostics. | Name both orders and reconcile remaining quantity/reservations. |
 | Cancel/replace races | Whether replacement always waited for confirmed cancellation/canonical reconciliation. | DEBUG/TRACE timeline and deterministic cancel/fill race replay. | No over-reservation or unsafe overlapping live SELLs. |
 | Duplicate fills | Whether exact-once holds across reconnect/restart permutations. | Offline duplicate, reorder, reconnect, REST/stream overlap, restart tests. | Canonical trade changes state once; conflicting same-identity payload fails closed. |
-| Fee/config contract | Maker-only or max maker/taker; are zero minProfit/keepQuantity valid? | Explicit decision in #646, then aligned docs, validator, tests. | One contract across config, planner, completion, docs, tests. |
+| Conservative contract | Strategy rules and accepted configuration | Sole authority: canonical Conservative Domain Specification; owner decisions closed | Every other artifact references it; implementation and exact-head tests conform. |
 | Completion | Exactly-once allocation/reset across full partial-fill/replacement lifecycle. | #648 full-cycle offline regression. | Duplicate terminal update cannot allocate/reset/issue next BUY twice. |
 | #626 recovery | Do #627/#629 satisfy all original acceptance criteria? | Re-read #626 criteria; map to tests and exact CI. | Keep #626 open until each criterion has disposition. |
 | Log provenance | Full 4,880-line and 5,739-line log correlation. | Original files read-only; verify SHA-256 before parsing. | Checksum mismatch means stop and record provenance issue. |
@@ -278,47 +293,257 @@ Evidence labels are strict: observed = present in supplied Journal/order-history
 1. DOGE initial evaluation 07:00:08.056Z: reference 0.07161000; BUY 400 at 0.07157, suffix -1 / order 1276628. Trade 221733 applies 400 with 0.4 DOGE commission; net contribution 399.6 DOGE.
 2. ZRO initial evaluation 07:00:08.661Z: reference 1.605; BUY 5 at 1.604, suffix -2 / order 727817. Trade 11658 applies 5 with 0.005 ZRO commission; net contribution 4.995 ZRO.
 3. Subsequent BUY-fill decisions create a recovery SELL intent and, where shown, a next standing BUY. The ledger lists SELL before paired BUY; this proves decision ordering, not atomic exchange-side behavior.
-4. Nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) have Journal cancel requests and confirmations; history says CANCELED with zero execution. Replacements appear in later decisions. Without DEBUG/TRACE logs, all asynchronous cancel/fill races remain unverified.
+4. Nine prior SELL intents (-3, -5, -7, -9, -12, -14, -16, -18, -20) have Journal cancel requests and confirmations; history says CANCELED with zero execution. Replacements appear in later decisions. The DEBUG/TRACE logs are now available for correlation; this audit does not claim that every asynchronous cancel/fill race was exercised or proven by this single session.
 5. DOGE final recovery SELL: decision 07:02:31.008Z creates SELL 1,196 at 0.07185, suffix -11 / order 1276698. History says FILLED; Journal acknowledgement says OPEN; no DOGE SELL fill is applied; closing has 1,196 DOGE locked. This is a blocker, not a PASS.
 6. ZRO final recovery SELL and standing BUY: decision 07:04:46.922Z creates SELL 39.91 at 1.606, suffix -22 / order 727904, and BUY 5 at 1.596, suffix -23 / order 727905. SELL trade 11666 executes 07:08:46.965Z; recovery completion is journaled 07:08:47.127Z. Paired BUY remains NEW with 7.98 USDT locked at close.
 7. Shutdown: CLOSING snapshot 07:58:11.370Z is INCOMPLETE with two unresolved owned orders; process stop is 07:58:16.387Z. Successful process exit does not mean reconciliation passed.
 
-### Recovery SELL calculation and completion contract
-
-Inspected source behavior, not runtime proof:
-1. Apply BUY fills by canonical exchange trade identity; actual commission affects inventory and cash.
-2. Conservative policy considers active inventory, active SELL state, and outstanding recovery amount.
-3. Positive residual inventory alone is insufficient to create another recovery SELL; outstanding recovery must also be positive and no active SELL may exist.
-4. Planner reserves base for configured fee, divides sellable quantity by 1 + feeRate, rounds quantity down to exchange step, and rounds price up to tick. Current code uses max(makerPercent, takerPercent), while multiple domain docs say maker-only. This conflict is tracked in #646; no product decision is implied.
-5. Apply actual broker commission asset/amount per SELL fill; planned reserve is not a substitute.
-6. Completion requires a fully filled SELL, sufficient active inventory, and actual net proceeds meeting cost plus minProfit.
-7. Bootstrap completion allocates configured keepQuantity to Portfolio and resets RecoveryLedger only after eligibility succeeds.
-8. Residual active inventory after reset does not itself trigger a new recovery SELL. Existing engine test covers this; it was inspected, not run here.
-
-ZRO arithmetic: 40 gross BUY - 0.04 base fee - 39.91 SELL = 0.05 ZRO remaining; completion records 0.01 free and 0.04 active residual. Net quote result +0.01136454 USDT. DOGE evidence does not establish SELL completion or realized PnL.
-
-### Shutdown and unresolved-order decision
-
-- PREFLIGHT open-order count is zero.
-- CLOSING audit is INCOMPLETE with UNRESOLVED_OWNED_ORDERS:2.
-- One unresolved order is identified: ZRO BUY 727905, NEW, 5 ZRO at 1.596, zero executed, 7.98 USDT quote locked.
-- The second unresolved order is not identified by supplied closing open-order detail. DOGE SELL 1276698 is a candidate, but must not be asserted as the second unresolved order without the full closing list/logs.
-- No order was canceled, amended, or recreated during this audit. Current decision is read-only investigation and fail-closed status.
-
-### Clarification gaps and exact evidence needed
-
-| Gap | Unknown | Evidence required | Closure rule |
-|---|---|---|---|
-| Runtime config | Exact budgets, mode, fees, minProfit, keepQuantity, symbols, filters. | Redacted config snapshot and timestamped exchange filters. | Tie values to run and verify every order's tick/step/notional. |
-| DOGE SELL 1276698 | Whether filled/partial/canceled/stale and why 1,196 DOGE locked. | Original logs; full order detail; all DOGE trades/commissions; closing open orders and balances. | Correlate orderId + clientOrderId + tradeId; do not infer proceeds from status label. |
-| Second unresolved order | Identity and reserved asset. | Full CLOSING openOrders payload and reconciliation diagnostics. | Name both orders and reconcile remaining quantity/reservations. |
-| Cancel/replace races | Whether replacement waited for confirmed cancellation/canonical reconciliation. | DEBUG/TRACE timeline and deterministic cancel/fill race replay. | No over-reservation or unsafe overlapping live SELLs. |
-| Duplicate fills | Exact-once across reconnect/restart permutations. | Offline duplicate, reorder, reconnect, REST/stream overlap, restart tests. | Canonical trade changes state once; conflicting payload fails closed. |
-| Fee/config contract | Maker-only or max maker/taker; are zero minProfit/keepQuantity valid? | Explicit #646 decision, aligned docs, validator, tests. | One contract across config, planner, completion, docs, tests. |
-| Completion | Exactly-once allocation/reset across partial-fill/replacement lifecycle. | #648 full-cycle offline regression. | Duplicate terminal update cannot allocate/reset/issue next BUY twice. |
-| #626 recovery | Do #627/#629 satisfy original criteria? | Re-read #626 criteria; map to tests and exact CI. | Keep #626 open until each criterion has disposition. |
-| Log provenance | Full 4,880-line and 5,739-line correlation. | Original files read-only; verify SHA-256 before parsing. | Checksum mismatch means stop and record provenance issue. |
-
 ### Status and evidence discipline
 
 Observed fact is from Journal/order-history/account records. Source behavior is inspected code, not proof it ran. Test coverage means assertion exists, not that it passed. Hypotheses are not accounting inputs. PASS requires independent reconciliation or verified test; PARTIAL means incomplete lifecycle; CONFLICT means sources disagree; UNVERIFIED means evidence is absent. No global strategy-pass conclusion is supported: overall PARTIAL, ZRO arithmetic PASS, DOGE SELL CONFLICT, closing audit INCOMPLETE, TESTNET acceptance UNVERIFIED.
+
+
+## Verified original application-log addendum — 2026-11-06
+
+The former evidence-access blocker is resolved. Both original files were read-only hashed and parsed; byte counts, physical line counts, newline termination, and SHA-256 values are recorded in [AUDIT_LOG_EVIDENCE_2026-11-06.md](./AUDIT_LOG_EVIDENCE_2026-11-06.md). The trace directly records ZRO Portfolio and RecoveryLedger before/after SELL accounting and cycle completion (0.01 free + 0.04 active residual). It also records DOGE order 1276698 OPEN with zero executed at the final runtime evaluations and no DOGE SELL among the 12 shutdown execution records. This strengthens, but does not resolve, the conflict with the separate exchange order-history FILLED row. The second unresolved order remains unidentified; DOGE order 1276698 is only a candidate. Do not book DOGE SELL proceeds or PnL. See the addendum for exact line references, timestamps, and remaining evidence.
+
+
+## 2026-11-06 post-CLOSING TESTNET trade-history reconciliation
+
+New read-only exports are preserved verbatim, including all 50 rows each, in [DOGE trade evidence](./AUDIT_DOGE_TRADES_2026-11-06.md) and [ZRO trade evidence](./AUDIT_ZRO_TRADES_2026-11-06.md). Both commands requested 50 rows with no `fromId`; neither is asserted to be exhaustive all-time history.
+
+**DOGE order 1276698 / client suffix -11:** trade 221990 (278 DOGE) and trade 221991 (918 DOGE) are SELL MAKER fills at 0.07185, at 08:03:01.841Z and 08:03:18.202Z. Total 1,196 DOGE; gross quote 85.93260000 USDT; quote commission 0.08593260 USDT; net quote proceeds 85.84666740 USDT. The final runtime evaluation (~07:57:19Z) and CLOSING snapshot (~07:58:11Z) predate both fills. This is a chronology resolution, not contradictory same-time evidence. Exchange execution is confirmed after shutdown; application accounting and later account balance remain unverified.
+
+**ZRO order 727905 / client suffix -23:** trade 12182 is BUY 5 ZRO at 1.596 at 08:38:24.782Z, gross quote 7.98 USDT, commission 0.005 ZRO, net base credited 4.995 ZRO. The ~07:58 CLOSING snapshot correctly showed it NEW with 7.98 USDT locked. This resolves one of the two unresolved order identities by later execution; the second identity remains unknown.
+
+**ZRO recovery SELL 727904 / trade 11666:** 39.91 ZRO at 1.606, gross 64.09546 USDT, fee 0.06409546 USDT, net 64.03136454 USDT; against 64.02 USDT BUY cost, realized net +0.01136454 USDT. This fill predates CLOSING and matches the observed runtime Portfolio/RecoveryLedger completion.
+
+The CLOSING snapshot remains a valid historical point-in-time record. Later exchange fills must not be retroactively inserted into that snapshot or treated as proof the stopped Harvester processed them. TESTNET acceptance remains NOT ACCEPTED; no exchange writes or bot restart were performed.
+
+
+## Historical 2026-11-06 repository and exact-head verification checkpoint (superseded by later docs commits)
+
+> This is a point-in-time snapshot from 11:57 UTC before the canonical-specification consolidation. Its PR head, workflow results, and issue states below are historical. The later documentation commits and current CI state are recorded in the current ROADMAP and PR #653.
+
+
+At the follow-up verification session (2026-11-06 11:57 UTC), the live GitHub PR metadata, branch ref, changed-file inventory, workflow runs, job results, issue states, and review state were rechecked. PR #653 remains OPEN and unmerged, targets `develop`, and its branch ref matched the previously recorded HEAD `94650284a05e0e18cda662d5a41bce0a47788ac8` at the start of this verification. The PR diff lists all seven expected audit artifacts, and each was fetched successfully from the PR branch. The DOGE/ZRO trade addenda preserve the bounded 50-row exports; neither query is represented as exhaustive all-time history.
+
+All five PR-triggered workflow runs associated with that exact HEAD completed successfully: JavaScript Syntax (run 42213769852), Test Coverage (42213769902), Dependency Audit (42213769838), Unit Tests (42213769873), and Utils Unit Tests (42213769913). Their inspected jobs completed successfully. The Unit Tests workflow's read-only Binance TESTNET integration job was SKIPPED, not passed. Separately, the commit-status endpoint returned `pending` with zero legacy statuses; this is reported independently and is not treated as a failed workflow or as a green combined status. No PR reviews or inline review threads were present at this check.
+
+The repository connector provides read-only GitHub access and cannot read GitHub secret values or dispatch the repository's secret-backed exchange-history workflow. No fresh Binance balances, open orders, complete historical CLOSING open-order payload, or later Harvester Journal/runtime session was available in this session. Accordingly, current DOGE/ZRO/USDT free, locked, and total balances and post-CLOSING Portfolio/RecoveryLedger processing remain UNVERIFIED. Do not infer them from trade exports. The historical CLOSING snapshot remains unchanged.
+
+Historical cross-workstream cross-check at 11:57 UTC: #649 was CLOSED; #626 remained open. The earlier statement that #646 awaited product decisions is superseded: all Conservative owner decisions are now closed and recorded only in the canonical specification. #654 remains the separate restart-reconciliation scope. No exchange writes, order changes, cancellations, withdrawals, account-setting changes, or bot restarts were performed. TESTNET acceptance remains NOT ACCEPTED.
+
+
+## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
+
+A review of parent issue #645 comment 6680483675 and the original Journal comment 6680290142 confirms that these records were already supplied by the operator and must not be described as absent.
+
+### Historical account snapshots from the original Journal
+
+| Phase | Asset | Free | Locked | Total |
+|---|---|---:|---:|---:|
+| PREFLIGHT (~07:00:04Z) | DOGE | 19,119.8 | 0 | 19,119.8 |
+| PREFLIGHT (~07:00:04Z) | USDT | 8,954.11668541 | 0 | 8,954.11668541 |
+| PREFLIGHT (~07:00:04Z) | ZRO | 245.125 | 0 | 245.125 |
+| CLOSING (~07:58:11Z) | DOGE | 19,122.6 | 1,196 | 20,318.6 |
+| CLOSING (~07:58:11Z) | USDT | 8,860.31204995 | 7.98 | 8,868.29204995 |
+| CLOSING (~07:58:11Z) | ZRO | 245.175 | 0 | 245.175 |
+
+The PREFLIGHT account snapshot was COMPLETE and its open-orders snapshot reported zero orders. The CLOSING account snapshot was INCOMPLETE with `UNRESOLVED_OWNED_ORDERS:2`. These are historical Journal facts, not current wallet balances.
+
+### Operator-supplied latest open-orders snapshot
+
+The operator also supplied a separate point-in-time open-orders response, preserved in issue #645 comment 6680483675. It showed one open order:
+
+- Symbol: ZROUSDT
+- Side/type: BUY LIMIT
+- Exchange order ID: `727905`
+- Client order ID: `h-971fc65d9a264984ab8aa7-23`
+- Price: `1.59600000`
+- Original quantity: `5.00000000`
+- Executed quantity: `0`
+- Status: `NEW`
+
+This matches the ZRO BUY later confirmed by trade 12182 at 08:38:24.782Z. It is a supplied latest snapshot, but it is not the complete account-wide open-orders payload captured at the earlier ~07:58Z CLOSING event.
+
+### Corrected evidence classification
+
+- **Already supplied and preserved:** PREFLIGHT and CLOSING balances; PREFLIGHT zero-open-orders Journal record; separate latest one-order ZROUSDT open-orders snapshot; DOGE/ZRO order histories; bounded 50-row DOGE/ZRO trade exports; original Journal and parsed application-log evidence.
+- **Still not supplied/located in the preserved audit:** the complete historical ~07:58Z CLOSING open-orders payload identifying both unresolved owned orders.
+- **Still unverified:** a timestamped account-balance/open-orders snapshot after the later DOGE 1276698 and ZRO 727905 fills; any later Harvester Journal/runtime evidence proving those post-CLOSING fills were applied to Portfolio/RecoveryLedger.
+- Do not call historical balances or the supplied one-order snapshot "missing". Do not call them post-fill/current balances. Do not infer internal accounting from exchange fills alone.
+
+The raw evidence remains immutable. This correction updates derived audit interpretation only; it does not rewrite the original Journal or retroactively alter the CLOSING snapshot.
+
+
+## Superseding chronology clarification — post-CLOSING DOGE/ZRO fills (2026-11-06)
+
+The preliminary DOGE order-state conflict described above is superseded for the exchange execution chronology by the preserved 50-row actual-trade exports. The original application logs and CLOSING snapshot end around 07:58:11Z; they show DOGE order 1276698 OPEN with zero executed at the last runtime evaluations. The exchange-side fills occurred later:
+
+- DOGE order 1276698: trade 221990, SELL 278 DOGE at 08:03:01.841Z, and trade 221991, SELL 918 DOGE at 08:03:18.202Z. Total 1,196 DOGE; 85.93260000 USDT gross; 0.08593260 USDT quote commission; 85.84666740 USDT net proceeds.
+- ZRO BUY 727905: trade 12182 at 08:38:24.782Z, gross 5 ZRO, 0.005 ZRO base commission, 4.995 ZRO net credit, 7.98000000 USDT quote debit.
+
+Thus the runtime OPEN/zero-executed state and later exchange FILLED history are chronologically consistent, not contradictory same-time observations. The eventual exchange-side DOGE execution is confirmed; the earlier ~07:58 CLOSING snapshot remains historically valid and must not be rewritten.
+
+This does not prove that a later Harvester process applied either post-CLOSING fill to Portfolio/RecoveryLedger. No timestamped post-fill account/open-orders snapshot or later Journal/runtime session has been located. The complete historical CLOSING open-orders payload identifying both unresolved orders is also still absent. ZRO 727905 is one identified CLOSING unresolved order; the second identity remains unproven. Keep account-wide settlement and TESTNET acceptance PARTIAL/NOT ACCEPTED.
+
+
+## Operator workstation lifecycle clarification — 2026-11-06
+
+The operator runs Harvester on a personal PC and is not expected to maintain a 24/7 process. Stopping Harvester while exchange orders remain open is a normal supported operating condition. Exchange-side orders are not automatically cancelled when the local process stops and may fill while the application is offline. In-memory Portfolio/RecoveryLedger state cannot update during that interval; this fact alone is not a defect or an operator failure.
+
+The required safety behavior is **restart reconciliation before trading resumes**: discover owned open orders and fills since the last durable checkpoint, reconcile partial/terminal states, commissions and authoritative balances, apply executions idempotently to Portfolio/RecoveryLedger, restore reservations, and keep trading fail-closed until reconciliation completes. Historical CLOSING snapshots remain immutable; later fills belong to the next-session reconciliation.
+
+Accordingly, DOGE 1276698 (1,196 DOGE SELL at 08:03Z) and ZRO 727905 (5 ZRO BUY at 08:38Z) filling after the ~07:58Z shutdown is expected and must not be described as a runtime contradiction or as a requirement for 24/7 uptime. Lack of a later same-session Journal update is **not** a defect. Whether startup recovery correctly imports these offline fills remains an engineering behavior to verify; do not claim it failed without a restart/reconciliation test or source-level proof.
+
+
+## 2026-11-06 source audit — startup replay and residual sell-through
+
+The workstation lifecycle clarification remains authoritative: offline fills are expected and do not require 24/7 uptime or same-session in-memory accounting. DOGE SELL 1276698 and ZRO BUY 727905 must be imported on the next startup before any new trading.
+
+A source review now establishes a concrete restart blocker: `start-harvester.js` explicitly disables durable Journal replay and initializes fresh in-process trading state. The startup path does not call `restoreHarvesterJournalState` or attach its restored Portfolio/RecoveryLedger/OrderRegistry to the trading engine. Separate projection, restoration, trade-history audit, and account-audit helpers exist, but are not proof of startup integration. Classify restart reconciliation as **FAIL at the inspected startup integration**, not merely unknown due to absent runtime logs.
+
+The residual sell-through defect is also source-confirmed: after recovery completion allocates exactly `keepQuantity` and resets the ledger, strategy evaluation suppresses SELL intents when outstanding recovery is zero, even if active inventory remains above `keepQuantity`. The existing test asserts this suppression. Do not make a blind residual SELL; preserve original cycle basis and actual commission facts, and check minimum notional, post-only, quantity steps, and explicit dust before implementing.
+
+Required next work: implement durable replay/reconciliation and fail-closed readiness; implement safe residual sell-through with exact reserve/dust behavior; add the full requested regression matrix; run relevant tests and exact-final-HEAD CI. PR #653 stays open/unmerged. TESTNET acceptance remains **NOT ACCEPTED**. No exchange writes, cancellations, withdrawals, account/config changes, live trades, or bot restarts were performed.
+
+
+## Audit priority correction — 2026-11-06
+
+Process-restart reconciliation is deferred to the final item in `ROADMAP.md`. It is not an active implementation task, blocker, or acceptance criterion for the current Conservative strategy/policy audit. Do not spend further audit time implementing restart recovery. Continue with Conservative policy defects, sell-through, commission accounting, exact `keepQuantity`, exchange filters/dust, and regression tests.
+
+ 
+## 2026-11-06 actual DOGE/ZRO Conservative conformance reconciliation
+
+**Decision-time configuration:** the audit-baseline `trading-config.json` at `4af3434f788b87139513921f220294ae90daf4d5` matches the current audit branch configuration: `minProfit=0.01`; DOGE `keepQuantity=1`, maker/taker reserve 0.1%; ZRO `keepQuantity=0.01`, maker/taker reserve 0.1%. Both submitted recovery orders were ordinary `LIMIT` orders, so the applicable planning reserve is 0.1%.
+
+| Symbol / order | Expected under candidate filter steps vs actual SELL quantity and price | Exchange-side result | Strategy verdict |
+|---|---|---|---|
+| DOGE 1276698 | Under step size 1: 1,196 @ 0.07185; actual 1,196 @ 0.07185 | Two distinct post-CLOSING fills; net proceeds 85.84666740 USDT; profit +0.01066740 USDT; remaining 2.8 DOGE | FOLLOWED for submitted order/exchange execution; filter-based calculation UNVERIFIED |
+| ZRO 727904 | Under step size 0.01: 39.91 @ 1.606; actual 39.91 @ 1.606 | One pre-CLOSING fill; net proceeds 64.03136454 USDT; profit +0.01136454 USDT; remaining 0.05 ZRO | FOLLOWED for submitted order/exchange execution; filter-based calculation UNVERIFIED; VIOLATED for recovery completion |
+
+Under candidate step sizes of 1 DOGE and 0.01 ZRO, the canonical 0.1% reserve calculation reproduces both submitted quantities and limit prices exactly. The decision-time configuration is directly confirmed at the audit baseline, and the order history confirms both actual orders were `LIMIT`. However, the original logs record only `Exchange trading rules validated` and do not preserve the exact filter values; the historical step/tick/minimum-filter inputs are therefore UNVERIFIED. Exchange acceptance proves each submitted order passed the exchange's then-current order filters, but does not prove the assumed step values or the residual dust classification. Actual trade commissions, not configured rates, determine realized results.
+
+### DOGE — post-CLOSING SELL, not a runtime contradiction
+
+Three BUY fills acquired 1,198.8 DOGE net after 1.2 DOGE base commissions, with full cost 85.836 USDT. Order 1276698 then filled as two distinct trades after shutdown: trade 221990 sold 278 DOGE and trade 221991 sold 918 DOGE, both at 0.07185. Combined gross proceeds were 85.93260000 USDT, actual quote commission 0.08593260 USDT, and net proceeds 85.84666740 USDT. Net profit is +0.01066740 USDT. Exchange-side remaining inventory is 2.8 DOGE: exact configured keep quantity 1 plus 1.8 excess.
+
+The submitted order values match the canonical calculation under the candidate step-size assumption; exact historical filter-based calculation remains UNVERIFIED. Both executions occurred after the ~07:58Z CLOSING snapshot and process stop, so no same-session Portfolio/RecoveryLedger update was expected. The 1.8 DOGE excess has not been proven as dust from a preserved decision-time exchange-filter snapshot; its value at 0.07185 is 0.12933 USDT. Final in-process disposition remains UNVERIFIED and belongs to the separately deferred restart scope #654, not this active audit.
+
+### ZRO — confirmed historical completion violation
+
+Eight BUY fills acquired 39.96 ZRO net after 0.04 ZRO base commissions; Position.spent was 64.02 USDT. SELL order 727904 sold 39.91 ZRO at 1.606; gross proceeds were 64.09546000 USDT, actual quote commission 0.06409546 USDT, net proceeds 64.03136454 USDT, and realized net profit +0.01136454 USDT. Position quantity after the SELL was 0.05 ZRO.
+
+The historical runtime then allocated 0.01 ZRO to free inventory and reset the RecoveryLedger while 0.04 ZRO remained active. Immediately afterward, repeated Conservative evaluations (07:08:47.129Z through 07:09:04.750Z) returned NO_ACTION with an empty actions array despite the 0.04 active remainder. This directly proves the old strategy did not create a residual SELL. This is **VIOLATED** regardless of whether the 0.04 remainder was exchange-constrained dust: canonical completion requires active quantity to equal keepQuantity, and dust above keepQuantity must remain active with its original cost basis and must not trigger ledger reset. At 1.606, 0.04 ZRO is worth 0.06424 USDT; whether it failed the exact historical MIN_NOTIONAL filter is UNVERIFIED because that decision-time filter snapshot was not preserved.
+
+**Confirmed root cause at the audit baseline:** `evaluateRecoveryCompletion` rejected active quantity below keepQuantity but accepted any amount above it; it did not require equality. Separately, `evaluateConservativeStrategy` emitted recovery SELL only while outstanding recovery was positive, so after the profit target was met it could not sell residual inventory. The baseline Position had no separate accumulated-spent field, so RecoveryLedger.buyCost was the sole recorded recovery cost basis; resetting that ledger zeroed the 64.02 USDT basis while 0.04 ZRO remained active. Together these conditions allowed premature allocation/reset and stranded active residual without its original recovery basis.
+
+**Implementation correction already present on the audit branch:** completion now returns `RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH` whenever active quantity exceeds keepQuantity; the strategy continues planning SELLs above keepQuantity after the profit target is secured, prices that residual from the current market reference, checks exchange filters, and classifies exact constrained dust without resetting the basis. Added actual-fill regression fixtures for both DOGE and ZRO plus an exact ZRO completion-gate regression. These new tests have not yet been executed locally or by GitHub Actions.
+
+ZRO BUY order 727905 (5 gross ZRO, 0.005 ZRO base commission, 4.995 net) filled at 08:38:24.782Z after CLOSING and is a separate later exchange event. It is not included in the 39.96-ZRO pre-SELL position above.
+
+### Current verdict and verification boundary
+
+- DOGE submitted SELL order and exchange execution: FOLLOWED; exact filter-based calculation and post-shutdown residual disposition: UNVERIFIED.
+- DOGE post-shutdown fill accounting inside Harvester and final dust disposition: UNVERIFIED; #654 is deferred.
+- ZRO submitted SELL order and actual fee/profit arithmetic: FOLLOWED; exact historical filter-based calculation: UNVERIFIED.
+- ZRO recovery completion/reset with 0.04 active residual: VIOLATED; root cause confirmed and implementation corrected on this branch.
+- Partial SELL stability, decision-B cancel/reconcile/replacement, and other terminal states are not proven by these two final SELLs; continue focused source/test audit rather than infer them from this outcome.
+- No TESTNET writes, cancellations, new orders, bot restarts, or merges were performed.
+
+
+## 2026-11-06 lifecycle audit — partial BUY while recovery SELL is open
+
+**Confirmed source finding — VIOLATED:** `processUserDataEventTransition()` in `src/use-cases/conservative-trading-engine.js` accounts a BUY TRADE fill but returns from the generic `PARTIALLY_FILLED` branch before canceling an active recovery SELL. Cancellation currently occurs only in the later FILLED-BUY path. The canonical specification requires the existing SELL to be canceled and fully reconciled after any new BUY fill, including a partial BUY fill, before recalculating SELL quantity/price.
+
+**Fix and regression added:** commit `9c054725e03a751b06b8a3421e859201640c6469` adds cancellation/reconciliation/replanning for a partial BUY while a recovery SELL is active; commit `3cfc085d0caecc9a74ca9cb279298dde7c6075df` adds a regression asserting the BUY remains PARTIALLY_FILLED, the old SELL is canceled, and a replacement SELL is opened only after reconciliation. Exact-head GitHub Actions had no runs at the time of this update; test and fix are therefore **PENDING VERIFICATION**, not passed.
+
+**Related lifecycle checks:** partial SELL fills are applied through the paired idempotent accounting transition and do not trigger completion; the cancellation-race regression at test line 2551 proves one application when a raced SELL fill is replayed. Dust becoming sellable after a later BUY still requires a dedicated regression. Completion must continue to require exact keepQuantity and preserve above-keep dust/basis without allocation/reset.
+
+The canonical specification remains the sole source of truth and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No TESTNET writes, cancellations, new orders, or bot restarts were performed.
+
+
+## Lifecycle audit refinement — partial BUY replacement path (2026-11-06)
+
+The partial-BUY fix required one additional source correction: `evaluateConservativeStrategy()` had an early return for any partially filled BUY, which suppressed all SELL planning even after the old recovery SELL had been reconciled. That gate is removed; active BUY/SELL orders themselves continue to suppress duplicate intents, while SELL planning can now use the updated active Position. Commit `546c2388962774ea89bcc78a98e319337252c895` contains this policy correction; regression commit `58f9369a5ef4b74b83b8680b174ac99765e3a310` updates the scenario to apply the BUY fill to both Position and RecoveryLedger and verify a larger replacement SELL while the BUY remains PARTIALLY_FILLED.
+
+Current lifecycle classifications:
+- Partial SELL exact-once accounting: FOLLOWED in-process; paired accounting and stable fill fingerprints, with partial/terminal regression coverage.
+- SELL fill racing cancellation and late stream replay: FOLLOWED in-process; test verifies one accounting application.
+- Any BUY fill while recovery SELL is open: source correction and regression added; **PENDING VERIFICATION** until exact-head tests run.
+- Dust becoming sellable after a later BUY while preserving accumulated basis: UNVERIFIED; source retains Position.spent and evaluates aggregate active quantity, but a dedicated dust-plus-later-BUY regression is still missing.
+- Exact keepQuantity on completion: FOLLOWED by the completion predicate and tests; above-keep residual/dust defers free allocation and both Position/RecoveryLedger reset.
+
+Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac99765e3a310`. No GitHub Actions runs were visible for that exact head. Do not claim tests passed. The canonical specification remains the only source of strategy rules and is unchanged. PR #653 remains open/unmerged; #654 remains deferred. No exchange or TESTNET actions were performed.
+
+
+## 2026-11-06 continuation — Conservative regression audit
+
+Source/spec review found and corrected stale tests that contradicted the canonical partial-BUY lifecycle: an active PARTIALLY_FILLED BUY suppresses duplicate BUY intent but does not suppress recovery SELL planning; if a recovery SELL is already OPEN/PARTIALLY_FILLED, any new BUY fill requires cancel/reconcile/replace even while the BUY remains partial. Added/updated domain and full-cycle regression assertions. Dust-plus-later-BUY accounting regression is also added. These are test-only changes; no recovery, Journal, or broker implementation was changed.
+
+**Historical checkpoint:** exact dust quantity/filter persistence was unresolved at that time. Superseded by the 2026-11-07 implementation recorded below.
+
+Latest exact-head Actions/workflow runs and legacy statuses remain empty; no tests are claimed as passing. PR #653 remains open/unmerged. No TESTNET or exchange actions were performed.
+
+
+## 2026-11-06 audit continuation — lifecycle regression precision
+
+After aligning the full-cycle partial-BUY scenario with owner decision B, its fill-count, order-count, and cancellation assertions were updated for both cancellation/reconciliation cycles (follow-up test commit `9c9b0d12fcd04d2ce08915a09e4431241bfd7f9f`). The partial-SELL/no-new-BUY regression was also strengthened to assert the same SELL remains PARTIALLY_FILLED with unchanged limit price and original quantity, with no duplicate SELL or cancellation after a market-price event (test commit `bbeb8ce4f39111bc0f076b99b9dc2001766332c6`). These are test-only changes. Exact-head CI remains unverified.
+
+
+## Focused lifecycle source audit — 2026-11-06 21:05 +02:00
+
+**Audited ref:** `8c1bdfda34c9f3e9fc0aaf4a5635ecf7cbb570ff`  
+**Canonical specification:** unchanged, SHA `7e85f077a0722fff8ee386c3ddba53754ffa313c`.
+
+Rule-by-rule source/test inspection confirms the following current coverage: partial BUY suppresses duplicate BUY while allowing recovery SELL; a BUY partial fill triggers SELL cancellation/reconciliation without advancing the BUY lifecycle; a partial SELL without a new BUY remains the same order/price/original quantity; residual inventory continues sell-through after the profit target; MAX_QUANTITY/MAX_NOTIONAL cap residual SELLs; dust can combine with a later BUY without losing the full cost basis; completion is blocked while inventory remains above exact keepQuantity.
+
+**New coverage gap:** the engine has a terminal SELL path for CANCELED, EXPIRED, and REJECTED: it reconciles terminal fill history before reevaluation. Existing generic terminal-state tests exercise BUY orders, while the recovery-SELL tests cover fill-during-cancel and FILLED completion. No focused test directly exercises each terminal SELL outcome (including a partial execution reported with a non-FILLED terminal status) and proves that complete fill/commission reconciliation precedes replacement. See F-011.
+
+No concrete source/spec behavior mismatch was confirmed in the lifecycle paths inspected in this pass. This is not an overall audit PASS. Exact-head Actions query returned no PR-triggered workflow runs; no tests were executed in this session. Keep PR #653 open/unmerged and TESTNET closed. Historical checkpoint only; superseded by the 2026-11-07 dust completion event implementation below.
+
+## F-011 regression follow-up — terminal recovery SELL
+
+Focused offline engine regression cases have now been added for recovery SELL terminal states CANCELED, EXPIRED, and REJECTED. The valid partial-execution cases assert that actual quote commission is applied to Portfolio net cash flow and RecoveryLedger net SELL proceeds, Position quantity changes while accumulated `spent` is preserved, and only then does CANCELED/EXPIRED return for reevaluation (REJECTED reconciles first, then pauses as designed). Missing executed-fill history and conflicting duplicate fill facts are also covered; both must fail closed without changing accounting or creating a replacement SELL.
+
+Test-only commits: `d936f823e96499e6f586f98847bf5bfa536fb76a`, `bf753cb8f63bc33a868f69aeace460718ddfe7c2`, `8a0483ad8f208236afa8d86be642497aab6038b8`, `0a276483479bc9d11867018a857a3f3b2f2d33bb`. No production source, Journal, broker, or exchange code changed. Test execution and exact-head CI are still pending; this is regression coverage added, not a pass claim.
+
+
+## 2026-11-06 — final SELL lifecycle coverage review
+
+Reviewed the current branch source and regression inventory for the complete in-scope SELL lifecycle:
+
+- Partial SELL with no new BUY: the existing order remains PARTIALLY_FILLED with unchanged limit price and original quantity; no duplicate SELL or cancellation is created after a market-price event.
+- BUY fill while a recovery SELL is open: the engine cancels and reconciles the old SELL before replacement; the BUY may remain PARTIALLY_FILLED. Full-cycle coverage includes both cancellation/reconciliation cycles.
+- Terminal recovery SELL: focused CANCELED, EXPIRED, and REJECTED cases include partial terminal execution, actual quote commission, and position/basis/proceeds assertions. Missing history and conflicting duplicate fill facts fail closed without accounting mutation or replacement.
+- Residual and dust: coverage includes sell-through after the profit target, quantity-step and MIN_NOTIONAL dust, MAX_QUANTITY/MAX_NOTIONAL caps, exact keepQuantity completion gating, and a later BUY making prior dust sellable while preserving accumulated spent basis and prior net SELL proceeds.
+- Actual DOGE/ZRO fill fixtures assert net quantities, full spent basis, net proceeds, and above-keep residual disposition under their explicitly stated test-filter fixtures.
+
+This is a source/test coverage review, **not a test execution or PASS claim**. Focused Harvester tests and the complete verification matrix remain pending. A local clone attempt failed because this environment could not resolve github.com. The exact PR HEAD at the start of this review had no reported commit statuses or PR-triggered workflow runs.
+
+At this historical checkpoint, exact dust quantity/filter persistence was unresolved. Superseded by the 2026-11-07 application/event implementation below.
+
+PR #653 remains OPEN and UNMERGED. No TESTNET or exchange actions were performed.
+
+## Owner clarification — exchange-constrained dust is a keepQuantity bonus (2026-11-06)
+
+The canonical rule is now explicit: unsellable exchange-constrained dust is retained **in addition to** configured `keepQuantity`, not treated as outstanding inventory that must later be sold before completion. Example: `keepQuantity = 1.00` and `dust = 0.04` means retain `1.04` total. Never discard dust, force an invalid SELL, or count dust as sold. Once all sellable quantity is sold and the other completion conditions pass, retain `keepQuantity + dust` and preserve the dust quantity/accounting provenance.
+
+This supersedes older audit wording that required above-keep dust to remain active, block completion/reset, or wait for a later BUY to become sellable. Those statements are historical and are not the current owner-approved contract. The canonical authority is `docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
+
+**Historical checkpoint (superseded 2026-11-07):** source/test conformance had not yet been checked against the dust clarification. The audit-closure section below records the subsequent implementation and regression additions. Exact-head CI remains pending.
+
+## Audit closure — historical evidence disposition and dust recording
+
+**Historical evidence disposition (2026-11-07):**
+- DOGE SELL 1276698 and ZRO BUY 727905 filled after Harvester was stopped. The owner runs Harvester on a personal workstation and does not require 24/7 uptime. These post-shutdown fills are expected exchange behavior; missing same-session in-memory Portfolio/Journal updates are not defects.
+- The complete historical CLOSING open-order payload and a timestamped post-fill account snapshot were not preserved in the supplied evidence. Their identities/balances remain historically UNVERIFIED; no facts are reconstructed or claimed.
+- This historical evidence limitation is dispositioned as non-blocking for this audit. Safe reconciliation of fills during downtime remains a separate restart workstream in #654. The CLOSING audit correctly remained INCOMPLETE at its recorded timestamp.
+- Historical DOGE/ZRO exchange-filter calculations cannot be independently reproduced where contemporaneous filter payloads were not captured. This does not invalidate the trade arithmetic or authorize retroactive assumptions.
+
+**Dust completion evidence:**
+- Completion accepts above-keep residual only with a validated EXCHANGE_CONSTRAINED_DUST disposition whose exact quantity equals active inventory minus configured keepQuantity.
+- The limiting filter must be demonstrated (MIN_QUANTITY, MIN_NOTIONAL, or QUANTITY_INCREMENT); price-filter blocks and unsupported reasons cannot be retained as dust.
+- The completed-cycle lifecycle event records dust quantity, reason, and relevant filter threshold/evaluated values. Retained allocation is keepQuantity plus dust.
+- Dust completion is attempted only after a reconciled FILLED recovery SELL and a fresh strategy evaluation; a subsequent BUY fill or new SELL order invalidates that eligibility.

@@ -1,4 +1,4 @@
-import test from "node:test"
+import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -18,6 +18,10 @@ const startHarvesterForTest = (input = {}) => {
 }
 
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+
+// Include the source file in every reporter test name so failures are identifiable
+// even when the spec reporter output is copied without its surrounding file header.
+const test = (name, ...args) => nodeTest(`[start-harvester.test.js] ${name}`, ...args)
 
 async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
   let timeout
@@ -86,6 +90,7 @@ const createMarketMetadata = (symbol) => {
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
+  const fillHistoryByOrder = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
@@ -94,7 +99,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
+    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(orderId) ?? [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
@@ -139,7 +144,16 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { disconnect: async () => calls.push("unsubscribe:user-data") },
       }
     },
-    emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
+    emitUserDataEvent: (event) => {
+      const fill = event?.fill
+      if (fill instanceof Fill) {
+        const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+        if (!existing.some((item) => item.id === fill.id)) {
+          fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+        }
+      }
+      return userDataHandlers?.onEvent({ event })
+    },
     emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
     emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
@@ -303,16 +317,20 @@ test("subscribes every enabled market before waiting for the first market's REST
     logger: { info() {}, error() {}, debug() {} },
   })
 
+  let resolveSecondSubscription
+  const secondSubscription = new Promise((resolve) => { resolveSecondSubscription = resolve })
+  const subscribeForPrices = broker.subscribeForPrices
+  broker.subscribeForPrices = async (input) => {
+    const result = await subscribeForPrices(input)
+    if (input.symbol === "ETHUSDT") resolveSecondSubscription()
+    return result
+  }
+
   await waitForTestSignal(
-    new Promise((resolve) => {
-      const check = () => {
-        if (calls.includes("subscribe:ETHUSDT")) resolve()
-        else setImmediate(check)
-      }
-      check()
-    }),
+    secondSubscription,
     "second enabled market subscription",
     () => ({ calls }),
+    2000,
   )
   assert.ok(calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:BTCUSDT"))
@@ -1264,7 +1282,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         pricePrecision: 2,
         quantityPrecision: 3,
         makerPercent: 0,
-        takerPercent: 0.075,
+        takerPercent: 0,
         },
       },
     },
@@ -1486,16 +1504,17 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // The completed recovery cycle retained free inventory but left active
-  // strategy inventory. The existing standing BUY must not be trailed/canceled.
-  assert.equal(submittedOrders.length, 5)
-  assert.equal(buyCancellationCount.value, 0)
+  // The completed cycle sells all active inventory above keepQuantity and
+  // moves exactly the retained amount to free inventory. With no active
+  // position left, the next standing BUY may be trailed normally.
+  assert.equal(submittedOrders.length, 6)
+  assert.equal(buyCancellationCount.value, 1)
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0.001")
+  assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
 
 
@@ -1901,13 +1920,13 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(received.quoteQuantity, "650")
   assert.equal(received.commissionStatus, "COMPLETE")
   assert.deepEqual(received.commissions, [])
-  assert.equal(received.previousRecoveryLedger.buyCost, "0")
+  assert.equal(received.previousRecoveryLedger.legacyBuyCostMirror, "0")
   assert.equal(committed.applied, true)
   assert.equal(committed.duplicate, false)
-  assert.equal(committed.nextRecoveryLedger.buyCost, "650")
+  assert.equal(committed.nextRecoveryLedger.legacyBuyCostMirror, "650")
   assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
   assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01")
-  assert.equal(committed.accountingDelta.buyCost, "650")
+  assert.equal(committed.accountingDelta.positionSpent, "650")
   assert.equal(committed.accountingDelta.netSellProceeds, "0")
   assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
   assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
@@ -2461,3 +2480,4 @@ test("starts from fresh in-memory state without replaying historical Journal rec
 
   await runtime.stop()
 })
+

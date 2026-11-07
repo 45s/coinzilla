@@ -1,4 +1,5 @@
-import test from "node:test"
+import nodeTest from "node:test"
+const test = (name, ...args) => nodeTest("[initial-buy-price.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 

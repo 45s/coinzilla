@@ -23,6 +23,17 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.equal('pairs' in validConfig, false);
 });
 
+test('requires at least 0.01 net quote profit', () => {
+  for (const minProfit of [0, 0.009, -0.01]) {
+    const config = structuredClone(validConfig);
+    strategy(config).settings.minProfit = minProfit;
+    assert.throws(() => validateTradingConfig(config), /minProfit.*greater than or equal to 0.01/);
+  }
+  const boundary = structuredClone(validConfig);
+  strategy(boundary).settings.minProfit = 0.01;
+  assert.equal(validateTradingConfig(boundary), boundary);
+});
+
 test('rejects enabling the deferred Aggressive mode', () => {
   const config = structuredClone(validConfig);
   strategy(config).settings.aggressive.enabled = true;
@@ -44,6 +55,17 @@ test('rejects legacy flat settings/pairs and missing strategy-owned objects', ()
   assert.throws(() => validateTradingConfig(noSettings), /CG_coinGrabber.*settings.*expected an object/);
   const noPairs = structuredClone(validConfig); delete strategy(noPairs).pairs;
   assert.throws(() => validateTradingConfig(noPairs), /CG_coinGrabber.*pairs.*expected an object/);
+});
+
+test('rejects priceStepPercent values that make the calculated BUY price invalid', () => {
+  for (const priceStepPercent of [100, 100.01, 150]) {
+    const config = structuredClone(validConfig);
+    strategy(config).pairs.DOGEUSDT.priceStepPercent = priceStepPercent;
+    assert.throws(() => validateTradingConfig(config), /priceStepPercent.*less than 100/);
+  }
+  const boundary = structuredClone(validConfig);
+  strategy(boundary).pairs.DOGEUSDT.priceStepPercent = 99.999;
+  assert.equal(validateTradingConfig(boundary), boundary);
 });
 
 test('rejects empty pairs', () => {

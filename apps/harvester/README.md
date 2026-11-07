@@ -1,6 +1,6 @@
 # Harvester
 
-> **Current status — 2026-11-05:** PR #545 (automatic account PREFLIGHT audit), PR #546 (Binance WebSocket/REST canonical fill timestamp alignment), PR #552 (audit status documentation), PR #553 (Journal durability policy reconciliation), PR #554 (aggregate BUY/SELL commitment limits), and PR #559 (same-process lost-ack client-order-ID reconciliation) are merged into `develop`. The source-level startup audit, canonical fill timestamp correction, and order-budget allocator are covered by offline regressions; this does not constitute exchange acceptance. The controlled Binance Spot TESTNET gate remains CLOSED until the operator and assistant complete and review the joint one-pair recovery-cycle evidence. See [TESTNET validation runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md) and [Harvester Roadmap](./ROADMAP.md).
+> **Current status — 2026-11-07:** The in-scope Conservative Strategy implementation/documentation audit is CLOSED on PR #653. Residual sell-through, exact keepQuantity, exchange-constrained dust evidence, partial-fill/cancel/replace lifecycle, terminal SELL reconciliation, and exact-once completion are implemented and represented by offline regressions. Test execution and exact-head CI are the next verification phase; no test-pass claim is made. The controlled Binance Spot TESTNET acceptance gate remains CLOSED. Process-restart reconstruction remains separately deferred to [#654](https://github.com/45s/coinzilla/issues/654). See [Harvester Roadmap](./ROADMAP.md) and [Conservative Strategy audit](./AUDIT.md).
 
 
 > **AI WORK PRIORITY — HARD RULE:** Until the bulletproof real Binance Spot TESTNET acceptance gate passes, Harvester work is trading workflow only. No Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactoring, optimization, or side quests. Only a narrowly targeted fix for a demonstrated immediate trading-safety blocker is allowed. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
@@ -68,38 +68,27 @@ This is a same-host, same-OS-user guard, not a distributed lock. It does not coo
 
 ### Operational event journal
 
-Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The Journal is enabled by default. Applied-fill records include stable trade identity, exact execution quantities, actual commission amounts, and commission asset identity. PR #606 adds a strict Journal projection and rehydrates Portfolio, RecoveryLedger, free inventory, order identities, and recovery intents from those facts before trading readiness. Set `HARVESTER_JOURNAL_ENABLED=false` only for configuration-only/no-broker operation; every broker-connected startup requires Journal persistence for the durable PREFLIGHT account audit. Set `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.
+Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The Journal is enabled by default. Applied-fill records include stable trade identity, exact execution quantities, actual commission amounts, and commission asset identity. The current bootstrap does not replay prior Journal sessions into Portfolio, RecoveryLedger, or OrderRegistry; process-restart reconciliation is deferred to [#654](https://github.com/45s/coinzilla/issues/654). Set `HARVESTER_JOURNAL_ENABLED=false` only for configuration-only/no-broker operation; every broker-connected startup requires Journal persistence for the durable PREFLIGHT account audit. Set `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.
 
-Journal persistence is optional only when Harvester runs without a broker (configuration-only mode). Every broker-connected startup, including read-only mode, requires an enabled, ready Journal with durable flush support because the account PREFLIGHT audit is mandatory. Startup fails closed if the Journal is disabled, cannot start, either account query fails, either event cannot be published, or either flush is not durable. Before market subscriptions or trading-engine activation, Harvester captures the full broker account balance snapshot (all returned assets, exact free/locked/total quantities), fetches the account-wide open-order set (not just enabled symbols), and durably flushes both `account.snapshot_captured` and `account.open_orders_captured` with `phase: "PREFLIGHT"`. Every open order is recorded with symbol, broker/client order IDs, side, type, price, original/executed quantities, and status. Trading-enabled startup restores Harvester-owned orders from the validated Journal and reconciles each against canonical exchange order history and complete paginated fills. Pre-existing unowned, duplicate, missing, or contradictory orders still block startup; Harvester never adopts or cancels unowned orders automatically. Read-only startup records existing orders without changing them. This removes the need to run the balances/orders scripts manually before each start. During graceful shutdown of a trading-enabled run, Harvester stops new intake, drains accepted user-data work, reconciles Harvester-owned orders, captures a CLOSING balance snapshot, and durably flushes it before disconnecting the broker. The closing snapshot is marked INCOMPLETE if order reconciliation failed, owned orders remain non-terminal, or user-data/accounting state is unsafe.
+Journal persistence is optional only when Harvester runs without a broker (configuration-only mode). Every broker-connected startup, including read-only mode, requires an enabled, ready Journal with durable flush support because the account PREFLIGHT audit is mandatory. Startup fails closed if the Journal is disabled, cannot start, either account query fails, either event cannot be published, or either flush is not durable. Before market subscriptions or trading-engine activation, Harvester captures the full broker account balance snapshot (all returned assets, exact free/locked/total quantities), fetches the account-wide open-order set (not just enabled symbols), and durably flushes both `account.snapshot_captured` and `account.open_orders_captured` with `phase: "PREFLIGHT"`. Every open order is recorded with symbol, broker/client order IDs, side, type, price, original/executed quantities, and status. Trading-enabled startup currently begins with fresh in-process Portfolio, RecoveryLedger, and OrderRegistry state; it does not restore previous-session ownership or fills. Do not treat a restart after trading as reconciled or safe based on this Journal alone; see the separate deferred #654 workstream. Pre-existing unowned, duplicate, missing, or contradictory orders still block startup; Harvester never adopts or cancels unowned orders automatically. Read-only startup records existing orders without changing them. This removes the need to run the balances/orders scripts manually before each start. During graceful shutdown of a trading-enabled run, Harvester stops new intake, drains accepted user-data work, reconciles Harvester-owned orders, captures a CLOSING balance snapshot, and durably flushes it before disconnecting the broker. The closing snapshot is marked INCOMPLETE if order reconciliation failed, owned orders remain non-terminal, or user-data/accounting state is unsafe.
 
 The Journal event is an account-level balance record, not a Portfolio import. PREFLIGHT is the startup baseline; CLOSING is the graceful-shutdown balance audit for trading-enabled runs. Neither event seeds strategy-owned inventory. It includes every asset returned by the broker, with exact free, locked, and total decimal quantities, and does not silently assign pre-existing balances or external orders to Harvester.
 
-Recovery completion allocates exactly the configured keepQuantity to free inventory. Any additional active residual (for example, quantity-step or conservative fee-reserve dust) remains active inventory. Once the RecoveryLedger is reset, that residual alone is not a recovery obligation and must not generate another recovery SELL. A deterministic 12-fill regression exercises the real Conservative policy and verifies that every next BUY price is derived from the preceding reconciled fill.
+Conservative recovery completion, retained inventory, residual sell-through, and dust behavior are defined only in [the canonical Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 The recovery.cycle_completed event's realizedNetProfit is per-cycle, not cumulative session profit. The read-only journal:balance-audit command sums those cycle results per JSONL session and reports the cumulative recovery profit alongside exact per-asset opening/closing balance deltas. Files are one JSONL session per process; automatic rotation and retention are not provided.
 
 Normal shutdown stops intake, drains accepted user-data work, reconciles owned orders, records and flushes the CLOSING account snapshot while broker REST access is still available, disconnects the broker, publishes the final stopped event, closes Journal (drain and sync), then closes EventBus. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) for the exact event inventory, file format, failure behavior, and diagnosis steps. Follow the [staged Journal integration roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md) and its [AI implementation task](./docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md).
 
-### Durable restart recovery
+### Durable restart recovery — deferred separate workstream (#654)
 
-PR #606 adds a fail-closed recovery path for trading-enabled startup:
+The current startup path explicitly disables prior-session Journal replay and initializes fresh in-process Portfolio, RecoveryLedger, and OrderRegistry state. It therefore does not yet prove that exchange orders/fills accumulated while Harvester was stopped are restored before new trading. This is a known separate workstream tracked in [#654](https://github.com/45s/coinzilla/issues/654), outside the active Conservative strategy/policy audit. Do not describe restart reconciliation as implemented or expand this strategy task into #654.
 
-- Validate all previous Journal sessions and reject malformed or contradictory order, cancellation, fill, recovery-cycle, account-audit, and shutdown sequences.
-- Rebuild exact canonical Fill values, Portfolio positions, RecoveryLedger state, free inventory, OrderRegistry ownership, completed-cycle identities, and paused/cancel-replace state.
-- Load canonical market metadata for enabled and historically owned symbols.
-- Resolve every restored order by canonical client-order lookup when necessary, then require exactly one canonical order-history record and complete paginated REST fill history.
-- Compare REST fills against every durable Journal execution fact, including trade identity, price, quantities, transaction time, liquidity role, commission status, and commission denomination/amount. Missing Journal execution IDs or changed facts fail closed.
-- Reconcile account-wide open orders and current free/locked balances against the original PREFLIGHT baseline, replayed accounting, and exact active-order reservations.
-- Keep stream-driven order transitions read-only until canonical order/fill reconciliation, account audit, and user-data stream checks all pass. Recovery cannot submit, cancel, or replace orders.
-- Preserve ambiguous submissions, cancellations, partial-fill cancellations, and durable strategy pauses. Recoverable cancel/replace pauses clear only after every associated order has been canonically resolved.
-- Fetch paginated symbol-scoped account trade history from the durable PREFLIGHT source timestamp, with strict cursor advancement, duplicate detection, exact fill parity, and request pacing.
-- Compare exchange trade facts against durable Journal fills; any unowned, missing, duplicate, or contradictory execution blocks recovery.
-
-**Known limits and current gate:** Binance `myTrades` requires a symbol. PR #598 adds the unfiltered current `exchangeInfo` market catalog, and PR #606 adds the paginated history scanner and exact Journal parity audit. The current catalog cannot enumerate symbols delisted after the durable baseline, so it cannot prove a complete historical account-wide symbol universe. The startup gate therefore remains fail-closed until that universe can be proven complete; do not bypass it or manually set a completeness flag. The full crash-boundary matrix is also still in progress. TESTNET acceptance is NOT ACCEPTED until the separate joint validation session.
+Harvester is expected to run on a personal PC; 24/7 uptime is not required. Resting exchange orders may fill while the process is stopped. Historical shutdown snapshots remain immutable. The future #654 acceptance gate must reconcile owned orders, all intervening fills and actual commissions, balances, reservations, and Portfolio/RecoveryLedger state before enabling new trading.
 
 ### Portfolio domain
 
-A Portfolio is an immutable in-memory collection of market-scoped Positions. Positions track net base quantity and signed quote cash flow and are updated from canonical actual fills through `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings. Base/quote commissions are applied exactly; incomplete/unknown and third-asset commissions fail closed. Duplicate canonical fill IDs are checked against the restored Journal execution history across process restarts.
+A Portfolio is an immutable in-memory collection of market-scoped Positions. Positions track net base quantity and signed quote cash flow and are updated from canonical actual fills through `src/use-cases/update-portfolio.js`; market-price updates and order submissions do not change holdings. Base/quote commissions are applied exactly; incomplete/unknown and third-asset commissions fail closed. Canonical fill identities are deduplicated within the active in-process accounting workflow. Durable cross-process restoration is part of the separate deferred #654 workstream.
 
 See [Portfolio Domain](./docs/domain/portfolio.md) for the domain boundary, fill accounting flow, responsibilities, reliability requirements, and unresolved design decisions.
 
@@ -224,26 +213,29 @@ The detailed joint-session procedure, explicit limits, reconciliation requiremen
 5. Start the app with
    `pnpm --filter @coinzilla/harvester dev`.
 6. Confirm the broker connects, user-data readiness becomes READY, and the
-   enabled pair receives prices. The first Conservative BUY is submitted below
-   the current last trade by `priceStepPercent`, rounded down to the exchange
-   tick.
-7. When the BUY fills, Harvester accounts the actual fill and places the next
-   standing BUY plus the recovery SELL. If another BUY fills while that SELL
-   is open, Harvester cancels it, reconciles its fill history, and places a
-   recalculated SELL only after the cancellation is confirmed.
-8. After the recovery SELL fills, Harvester verifies actual net proceeds and
-   moves exactly `keepQuantity` into free inventory. Confirm the next BUY
-   remains active and the free amount is excluded from invested-position
-   calculations.
+   enabled pair receives prices. Verify any Conservative order intent against
+   [the canonical specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
+   and current exchange filters before authorizing submission.
+7. When the BUY fills, Harvester accounts the actual fill and follows the
+   canonical Conservative lifecycle. A new BUY fill while a recovery SELL is
+   open triggers decision B: cancel, reconcile terminal state and all fills/
+   commissions, update accounting, then plan the replacement. A SELL that
+   becomes FILLED during cancellation is processed as FILLED. Incomplete
+   reconciliation fails closed.
+8. After a SELL reaches a terminal state, verify actual fills/commissions,
+   full accumulated cost recovery, at least $0.01 realized net profit, and
+   sell-through of all sellable quantity above exact configured `keepQuantity`.
+   Classify exchange-constrained dust explicitly and preserve its basis. Do not
+   allocate/reset until position quantity equals `keepQuantity`.
 
 **Shutdown/restart warning:** stopping Harvester does not cancel exchange
-orders. Before restarting, inspect the TESTNET account and reconcile any
-outstanding Harvester orders or uncertain outcomes. External orders and
-pre-existing inventory are not adopted by Harvester; they may affect available
-balances but are not automatically sold. A clean account is recommended for a
-controlled first-cycle test, but it is not a startup requirement. If Harvester
-pauses because an order outcome or fill history is uncertain, do not restart
-and blindly resubmit; inspect the account and reconcile it first.
+orders. Personal-PC downtime is expected; 24/7 uptime is not required. However,
+the current bootstrap does not replay prior-session Journal state or restore
+owned orders/fills after restart. Safe restart reconciliation is deferred to
+[#654](https://github.com/45s/coinzilla). Until that work is complete, do not
+resume trading after a prior session with owned resting orders or unresolved
+fills merely because a manual account inspection was performed. External
+orders and pre-existing inventory remain unowned.
 
 This runbook is for TESTNET only. It does not enable live trading or claim
 durable restart recovery.
@@ -290,8 +282,9 @@ with documentation deferred to a later follow-up commit.
 
 ## Current status
 
-Implemented: application-owned broker port, Binance adapter, validated config, Conservative pure policy, initial/standing BUY and recovery SELL planning, exchange-rule-validated order submission, in-process order ownership, canonical order/fill event coordination, fill-driven Portfolio/RecoveryLedger updates, in-process balance/commitment checks, deferred evaluation resumption, graceful shutdown, durable OPENING/CLOSING all-asset account snapshots, and a read-only per-session balance audit command. The 2026-11-04 Journal shows 21 BUY fills (8,400 DOGE / 635.85200 USDT) and 8 SELL fills (8,390 DOGE / 636.42265 USDT), net +0.57065 USDT quote cash flow. The five per-cycle recovery profits (+0.07808, +0.03285, +0.06053, +0.03584, +0.36335) sum exactly to +0.57065; the +0.20730 difference was the previous four cycles, while +0.36335 was only the final cycle. The same Journal confirms the twelve BUY race: all 12 distinct 400-DOGE BUYs at 0.07598 USDT were acknowledged FILLED before the first execution fill was applied. Merged PR #513 waits for complete fill-history reconciliation before releasing the serialized transition, and deterministic delayed-ack plus 12-fill real-policy tests cover the race. The post-cycle residual inventory path now requires positive outstanding recovery before another recovery SELL can be planned; invalid order validation pauses the pair. Engine-level regressions cover the reset/keep/free state and repeated MIN_NOTIONAL decisions. Follow-up PR #515 now adds streamed partial-fill, stale REST, pending acknowledgement/cancellation, shutdown reconciliation, fee-boundary, multi-fill accounting, and account-audit failure regressions; its latest offline CI results and remaining gates are tracked in ROADMAP.md. The latest read-only account snapshot reports 12,321 free DOGE, 9,792.44855 free USDT, 9,990.865 FDUSD, and 517 non-zero assets; this is account-wide pre-existing TESTNET inventory, not Harvester-owned Portfolio state. The historical Journal predates opening/closing snapshots, so it cannot establish the account opening baseline. Keep TESTNET trading stopped; live trading remains disabled. See [ROADMAP.md](./ROADMAP.md) for the incident evidence, remaining gates, and next acceptance steps.
+Harvester contains the Conservative domain policy, order execution, canonical fill accounting, and offline integration coverage. This is implementation status only; it does not establish conformance or TESTNET acceptance. The exact current audit blockers, documentation gate, regression requirements, and CI state are tracked in [ROADMAP.md](./ROADMAP.md). The sole Conservative rule authority is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
+Historical 2026-11-04 TESTNET evidence and account snapshots elsewhere in this README remain immutable historical records. They must not be treated as current balances, current runtime state, or proof of current acceptance.
 
 ## Standalone Binance TESTNET order tools
 
@@ -392,7 +385,7 @@ and diagnostic limitations.
 
 **BUY-burst clarification:** the twelve DOGEUSDT BUYs were twelve distinct exchange orders with distinct client IDs and broker order IDs; they were not duplicate IDs. All twelve nevertheless used the exact same 0.07598 USDT price and 400 DOGE quantity, executed as TAKER within roughly three seconds. A 12-order burst may be expected during a sharp price dump; twelve independently submitted orders at the identical price are the anomaly. The Conservative strategy interprets priceStepPercent: 0.05 as 0.05% and computes the next BUY from the last reconciled BUY execution price. The repeated identical price is consistent with submissions occurring before the previous BUY fill had updated strategy state. PR #513 adds the immediate-FILLED acknowledgement reconciliation barrier; review and test the non-terminal acknowledgement followed by streamed FILLED/TRADE event path as well. Do not describe this as a client-ID collision or treat the burst count alone as proof of a defect.
 
-PR #513 is merged and contains the source-level fixes for the two incident defects: FILLED broker acknowledgements are held behind complete execution-history retrieval/application before the serialized strategy transition can finish, and residual active inventory no longer creates a recovery SELL after the recovery ledger has been reset. Invalid strategy order validation pauses the affected pair rather than retrying the same invalid decision on every market event. Deterministic regression tests cover delayed multi-fill acknowledgement reconciliation, incomplete-history fail-closed behavior, and residual inventory after cycle completion. Follow-up PR #515 owns the remaining streamed lifecycle/interleaving matrix, end-to-end accounting and fee boundaries, and OPENING/CLOSING audit verification. Its branch must remain synchronized with `develop`, and all remaining acceptance checks must pass on the exact final head before merge. Keep Harvester stopped; CI success and merge do not authorize TESTNET restart.
+PR #513 is a historical incident-remediation checkpoint. Its original residual-suppression behavior is superseded by the current Conservative implementation: residual inventory above `keepQuantity` is sold through when exchange-sellable, while only validated exchange-constrained dust is retained as a keepQuantity bonus. The current lifecycle, commission, dust, and completion implementation is tracked in PR #653 and the current [audit closure](./AUDIT.md). CI/test verification remains pending, and no TESTNET restart is authorized by this documentation.
 
 
 ## Standalone Binance TESTNET trade history (read-only)
@@ -431,7 +424,7 @@ The Binance Spot TESTNET account initially showed **Commissions: None**. The ope
 
 The previous CI run checked an earlier PR merge ref and failed one Harvester regression because it still expected a successful result for an invalid MIN_NOTIONAL intent. The current branch test now asserts the intended contract: `processMarketPrice()` returns `ok: false` with the MIN_NOTIONAL validation error, pauses the pair once, and does not reevaluate on later ticks. A fresh CI run must verify the exact current PR head before merge.
 
-The earlier maker-only fee-reserve finding is resolved in source: Conservative recovery SELL sizing reserves the greater of configured makerPercent and takerPercent. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee rates. Actual exchange commissions remain authoritative for realized accounting.
+The earlier maker-only fee-reserve finding is superseded by the fee/order-type policy in the canonical Conservative specification. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee rates. Actual exchange commissions remain authoritative for realized accounting.
 
 The remaining lifecycle overlap matrix and a future closed-session account-baseline audit are follow-up work, not blockers to merging the completed source remediation. Keep Harvester stopped; merge does not authorize TESTNET restart or order submission.
 
@@ -488,3 +481,8 @@ entry format, and shutdown behavior.
 This is a narrowly scoped, explicitly authorized observability task. It does
 not change the general TESTNET acceptance gate, authorize exchange writes, or
 modify trading/Journal behavior.
+
+
+## Conservative Strategy authority
+
+All Conservative profitability, position quantity/spent accounting, actual commission valuation, SELL planning, fee reserves, exact keepQuantity, residual sell-through, dust, order lifecycle, and recovery completion rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This README is a navigation and implementation-status document, not a second source of truth.
