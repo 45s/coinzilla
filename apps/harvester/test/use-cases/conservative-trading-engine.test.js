@@ -440,7 +440,9 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   }))
   await Promise.all([partialFill, finalFill, delayedSellReport])
 
-  assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId])
+  // The queued final BUY fill runs after the partial-fill replacement is placed,
+  // so it must also cancel that newly acknowledged recovery SELL (broker order 4).
+  assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId, "4"])
   assert.equal(getPortfolio().appliedFillIds.length, 4)
   assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
   assert.equal(getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length, 1)
