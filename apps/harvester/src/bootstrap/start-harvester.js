@@ -1586,8 +1586,12 @@ export async function startHarvester({
 
     userDataStatus = "STOPPED"
     const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cancellationAuditFailed = auditReasons.some((reason) =>
-      reason === "OWNED_BUY_CANCELLATION_FAILED" || reason.startsWith("UNRESOLVED_OWNED_ORDERS:")
+    const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
+      [
+        "OWNED_BUY_CANCELLATION_FAILED",
+        "OWNED_ORDER_RECONCILIATION_FAILED",
+        "USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE",
+      ].includes(reason) || reason.startsWith("UNRESOLVED_OWNED_ORDERS:")
     )
     const auditError = cancellationAuditFailed
       ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
