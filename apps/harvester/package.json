@@ -4,7 +4,7 @@
   "private": true,
   "description": "Harvester application workspace",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-reporter=spec",
     "test:coverage": "node --test --experimental-test-coverage",
     "start": "node src/index.js",
     "dev": "node scripts/run-dev-with-log.js",
