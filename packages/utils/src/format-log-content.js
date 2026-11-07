@@ -154,7 +154,7 @@ export function normalizeLogData(data) {
  * Convert log data into the value accepted by the console formatter.
  * Structured values become pretty-printed JSON; primitives remain primitives.
  * Unsupported values may become undefined or a safe string fallback.
- * @param {LogData} data
+ * @param {unknown} data
  * @returns {string|number|boolean|undefined}
  */
 export function formatLogContent(data) {
