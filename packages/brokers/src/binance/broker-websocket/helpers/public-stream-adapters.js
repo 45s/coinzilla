@@ -19,7 +19,7 @@ const userDataEventTypes = new Set([
 /**
  * Adapt a public market-data message; reject authenticated user-data events.
  *
- * @param {object} message - Raw Binance Spot stream event.
+ * @param {unknown} message - Raw Binance Spot stream event.
  * @returns {object} Normalized public event or the original event when no adapter exists.
  * @throws {TypeError} If the payload is invalid or belongs to the user-data API.
  */
