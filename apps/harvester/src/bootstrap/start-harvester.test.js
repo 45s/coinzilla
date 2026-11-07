@@ -317,16 +317,20 @@ test("subscribes every enabled market before waiting for the first market's REST
     logger: { info() {}, error() {}, debug() {} },
   })
 
+  let resolveSecondSubscription
+  const secondSubscription = new Promise((resolve) => { resolveSecondSubscription = resolve })
+  const subscribeForPrices = broker.subscribeForPrices
+  broker.subscribeForPrices = async (input) => {
+    const result = await subscribeForPrices(input)
+    if (input.symbol === "ETHUSDT") resolveSecondSubscription()
+    return result
+  }
+
   await waitForTestSignal(
-    new Promise((resolve) => {
-      const check = () => {
-        if (calls.includes("subscribe:ETHUSDT")) resolve()
-        else setImmediate(check)
-      }
-      check()
-    }),
+    secondSubscription,
     "second enabled market subscription",
     () => ({ calls }),
+    2000,
   )
   assert.ok(calls.indexOf("subscribe:ETHUSDT") < calls.indexOf("prices:BTCUSDT"))
   assert.ok(calls.includes("subscribe:book:BTCUSDT"))
