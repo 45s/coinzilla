@@ -2237,7 +2237,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   assert.equal(replayedTerminalFill.ok, true)
   assert.equal(replayedTerminalFill.data.ignored, true)
   assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, 1)
+  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
   assert.equal(resetCount, 1)
   assert.equal(events.filter((event) => event.name === "recovery.cycle_completed").length, 1)
   assert.equal(harness.orders.length, beforeReplay.orderCount)
