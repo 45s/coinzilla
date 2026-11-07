@@ -30,6 +30,13 @@ function createAsset({ code }) {
   return new Asset({ id: normalizedCode.toLowerCase(), code: normalizedCode })
 }
 
+/**
+ * Convert a Binance order DTO into the canonical order entity.
+ *
+ * @param {{order: Record<string, unknown>, market: import("@coinzilla/entities").Market}} options
+ * @returns {import("@coinzilla/entities").CanonicalOrder}
+ * @throws {TypeError} If the order, market, identifiers, side, type, or decimal quantities are invalid.
+ */
 export function adaptCanonicalOrder({ order, market } = {}) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError("Binance order should be an object")
@@ -86,6 +93,13 @@ export function adaptCanonicalOrder({ order, market } = {}) {
   })
 }
 
+/**
+ * Build a canonical market from Binance exchangeInfo symbol metadata.
+ *
+ * @param {{symbolInfo: {symbol: string, baseAsset: string, quoteAsset: string}}} options
+ * @returns {import("@coinzilla/entities").Market}
+ * @throws {TypeError} If the symbol or asset codes are missing or invalid.
+ */
 export function createCanonicalMarket({ symbolInfo } = {}) {
   if (
     !symbolInfo ||
