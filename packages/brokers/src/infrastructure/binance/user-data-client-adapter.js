@@ -1,6 +1,14 @@
 import { adaptMsg } from "../../binance/broker-websocket/helpers/adapters/adapt-msg.js"
 import { getUserDataEventIdentity } from "../../binance/broker-websocket/helpers/user-data-event-deduplicator.js"
 
+/**
+ * Adapt the Binance RPC client to the exchange-neutral user-data client port.
+ * Binance event envelopes and subscription IDs are normalized at this boundary.
+ *
+ * @param {object} client - Binance WebSocket API RPC client.
+ * @returns {import("../../ports/user-data-client-port.js").UserDataClientPort}
+ * @throws {TypeError} If the client does not expose the required RPC and lifecycle methods.
+ */
 export function createBinanceUserDataClientPort(client) {
   if (!client || typeof client.request !== "function" ||
       typeof client.connect !== "function" || typeof client.disconnect !== "function" ||
