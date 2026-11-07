@@ -674,14 +674,25 @@ test("publishes rejected submission outcome without blocking pair pause", async 
 
 
 test("does not await a pending EventBus publisher promise", async () => {
+  let resolvePublisher
+  const publisherPromise = new Promise((resolve) => { resolvePublisher = resolve })
   const { engine, orders } = await createHarness({
-    eventPublisher: { publish: () => new Promise(() => {}) },
+    eventPublisher: { publish: () => publisherPromise },
   })
-  const result = await engine.processMarketPrice({
+  const processing = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  assert.equal(result.ok, true)
+  let timeout
+  const result = await Promise.race([
+    processing.then((value) => ({ value })),
+    new Promise((resolve) => { timeout = setTimeout(() => resolve(null), 100) }),
+  ])
+  clearTimeout(timeout)
+  resolvePublisher({ ok: true })
+  if (result === null) await processing
+  assert.ok(result, "strategy processing must not wait for the EventBus publisher promise")
+  assert.equal(result.value.ok, true)
   assert.equal(orders.length, 1)
 })
 
