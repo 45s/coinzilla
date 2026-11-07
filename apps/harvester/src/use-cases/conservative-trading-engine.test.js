@@ -201,9 +201,18 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
           : async () => ({ ok: true, durable: true }),
       }
     : undefined
+  // The synthetic seeded portfolio below is built from a completed BUY fill at 100.
+  // The engine intentionally does not infer a reconciled VWAP from portfolio totals,
+  // so expose that known fixture evidence to the policy in seeded-position tests.
+  const defaultStrategyPolicy = initialPortfolio
+    ? {
+        ...conservativeStrategyPolicy,
+        evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
+      }
+    : conservativeStrategyPolicy
   const engine = makeConservativeTradingEngine({
     broker,
-    strategyPolicy: strategyPolicy ?? conservativeStrategyPolicy,
+    strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
     isMarketPriceFresh,
     isMarketBookFresh,
     eventPublisher: effectiveEventPublisher,
