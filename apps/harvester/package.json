@@ -1,6 +1,6 @@
 {
   "name": "@coinzilla/harvester",
-  "version": "1.0.0",
+  "version": "1.0.001",
   "private": true,
   "description": "Harvester application workspace",
   "scripts": {
