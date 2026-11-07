@@ -6,7 +6,7 @@
 **Parent:** [#645 — Harvester Conservative Strategy Audit](https://github.com/45s/coinzilla/issues/645)  
 **Audit baseline:** `develop` at `4af3434f788b87139513921f220294ae90daf4d5` (2026-11-06; PR #644 merge commit)  
 **Evidence session:** 2026-11-06 07:00:00.896–07:58:16.387 UTC  
-**Status:** PARTIAL — original application logs integrity-verified and parsed; ZRO pre-CLOSING Portfolio/RecoveryLedger arithmetic PASS; DOGE SELL fills are now chronologically reconciled as post-CLOSING exchange executions; DOGE strategy quantity/keepQuantity conformance and final inventory disposition remain to be verified; CLOSING audit was INCOMPLETE at its historical capture.  
+**Status:** IMPLEMENTATION AUDIT CLOSED (2026-11-07) — in-scope Conservative source behavior, regression coverage inventory, and supporting documentation have been reconciled against the canonical specification. Test execution and exact-head CI are a separate pending verification phase; no test-pass claim is made. Historical exchange-filter inputs not captured in the original logs remain UNVERIFIED and non-blocking. TESTNET acceptance is NOT CLAIMED.  
 **Safety:** No TESTNET orders, bot restarts, credential requests, or exchange writes were performed.
 
 ## Executive result
@@ -16,6 +16,27 @@ The accessible Journal and the two verbatim 100-row order-history comments estab
 ZRO's pre-CLOSING recovery SELL reconciles at the execution and account-balance levels. The later bounded trade export establishes that DOGE SELL order 1276698 filled 1,196 DOGE at 08:03:01.841Z and 08:03:18.202Z, after the ~07:58Z CLOSING snapshot and process stop. The earlier Journal OPEN/zero-executed observation and later exchange FILLED state are therefore chronologically consistent, not a same-time conflict. DOGE exchange-side proceeds/commission arithmetic is now known; the remaining C-strategy question is whether the planned 1,196 quantity/0.07185 price and resulting 2.8 DOGE simple remainder conformed to decision-time config, exact keepQuantity, fee reserve and exchange filters. The historical CLOSING audit remains INCOMPLETE with two unresolved owned orders; do not rewrite that snapshot.
 
 The actual DOGE/ZRO exchange outcomes must now be compared against the canonical Conservative contract before declaring strategy conformance.
+
+## Current closure decision — 2026-11-07
+
+**The in-scope Conservative Strategy implementation/documentation audit is CLOSED.** The code and regression inventory have been reviewed against the sole authority, [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This closure does not mean tests or CI passed, and it does not grant TESTNET or live-trading acceptance.
+
+Implemented and represented by focused regression coverage on this branch:
+
+- Recovery SELL planning continues after the minimum net-profit target is secured until all exchange-sellable quantity above `keepQuantity` is sold. Residuals use the validated market reference and still pass exchange quantity/notional/price and POST-ONLY checks.
+- Exchange-constrained dust is accepted only with exact quantity evidence and a validated limiting filter (`MIN_QUANTITY`, `MIN_NOTIONAL`, or `QUANTITY_INCREMENT`). Dust is retained as a bonus on top of `keepQuantity`; price-filter blocks are not dust.
+- The completion lifecycle records the dust quantity, limiting reason, and evaluated filter values in its lifecycle event. Completion preserves `keepQuantity + dust` and resets the recovery basis only after a reconciled terminal FILLED SELL and the actual minimum-profit check.
+- Any BUY fill while a recovery SELL is open triggers cancel, terminal-state/fill/commission reconciliation, and replacement planning; a partial BUY remains partial. A partial SELL without a new BUY remains the same order and price.
+- Terminal recovery SELL outcomes (CANCELED, EXPIRED, REJECTED) reconcile execution history before reevaluation or fail closed. Exact-once fill application and recovery completion/reset are covered by deterministic offline regressions.
+- A full-cycle engine regression now covers the supported `keepQuantity = 0` path as well as a positive retained quantity.
+
+Historical evidence disposition:
+- DOGE SELL 1276698 and ZRO BUY 727905 filled after the workstation process stopped. This is expected downtime behavior; same-session in-memory updates were not expected.
+- The complete historical CLOSING open-order payload and post-fill account snapshot were not preserved. Those facts remain historically UNVERIFIED and non-blocking; no values or order identities are inferred.
+- Historical exact exchange-filter values were not preserved in runtime logs. Actual exchange acceptance and trade arithmetic are known, but candidate historical filter assumptions are not promoted to facts.
+- Process-restart reconstruction remains explicitly deferred to [#654](https://github.com/45s/coinzilla/issues/654) and is outside this audit.
+
+**Verification boundary:** regression tests are present and mapped in [ACCOUNTING_INVARIANTS.md](./docs/domain/ACCOUNTING_INVARIANTS.md), but have not yet been executed on this exact head. The next phase is to run the focused Harvester tests, full Harvester suite, and required CI, then fix any failures. Do not describe this audit closure as test, CI, or TESTNET acceptance.
 
 ## Evidence and provenance
 
