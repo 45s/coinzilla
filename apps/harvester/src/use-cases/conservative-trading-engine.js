@@ -1307,10 +1307,12 @@ export function makeConservativeTradingEngine({
       const error = new Error("Terminal order executed quantity does not match its complete distinct fill history")
       const reason = order.side === "SELL" && order.status === "FILLED"
         ? "SELL_FILL_RECONCILIATION_FAILED"
-        : order.side === "BUY" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
-          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0
-          ? "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
-          : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH"
+        : order.side === "BUY" && order.status === "FILLED"
+          ? "BUY_FILL_RECONCILIATION_FAILED"
+          : order.side === "BUY" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+            compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0
+            ? "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
+            : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH"
       await pause({ symbol, reason, error })
       return toResult({ error })
     }
@@ -1334,7 +1336,11 @@ export function makeConservativeTradingEngine({
     return toResult({ data: { reconciled: true, fillCount: fills.length, executedQuantity: reconciledQuantity } })
   }
 
-  const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
+  const processUserDataEventTransition = async ({
+    event,
+    recoveryMode = false,
+    terminalFillsReconciled = false,
+  } = {}) => {
     try {
       if (event?.eventType === "executionReport" && event?.brokerEvidence) {
         publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
@@ -1383,7 +1389,8 @@ export function makeConservativeTradingEngine({
         if (!fillResult.ok) return fillResult
       }
 
-      if (["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+      if (!terminalFillsReconciled &&
+          ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
         const terminal = await reconcileTerminalOrderFills({ order })
         if (!terminal?.ok) return terminal
       }
@@ -1804,6 +1811,7 @@ export function makeConservativeTradingEngine({
         const processedOrder = await processUserDataEventTransition({
           event: { executedOrder: historyOrder },
           recoveryMode,
+          terminalFillsReconciled: true,
         })
         if (!processedOrder.ok) {
           const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
