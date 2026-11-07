@@ -314,7 +314,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   await context.stop();
 
   assert.equal(accountSnapshotCalls, 2, "the ordinary TRADE scenario must capture the PREFLIGHT and final CLOSING account snapshots; this test's TRADE does not trigger stream recovery");
-  assert.equal(openOrderSnapshotCalls, 2, "the ordinary TRADE scenario must perform the startup open-order audit and the final shutdown reconciliation; this test's TRADE does not trigger stream recovery");
+  assert.equal(openOrderSnapshotCalls, 3, "the ordinary TRADE scenario must audit open orders at startup, reconcile owned orders before shutdown BUY cancellation, and reconcile them again after cancellation; neither reconciliation is a stream-recovery snapshot");
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10');
 });
 
