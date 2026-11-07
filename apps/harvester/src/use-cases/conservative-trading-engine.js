@@ -799,7 +799,7 @@ export function makeConservativeTradingEngine({
         activePositionQuantity,
         freeBaseQuantity: position?.freeBaseQuantity.amount ?? "0",
       })
-      return evaluateLatestTransition({ symbol })
+      return toResult({ data: { skipped: true, reason: "ACTIVE_POSITION_EXISTS" } })
     }
 
     const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
@@ -1518,6 +1518,19 @@ export function makeConservativeTradingEngine({
         return toResult({ data: { order, paused: true } })
       }
       if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
+        if (recoveryMode) {
+          // Recovery reconciliation establishes exchange facts only. It must
+          // not submit a replacement until startup has reconciled every
+          // same-market cancellation intent and the runtime resumes trading.
+          state.deferredEvaluations.add(symbol)
+          return toResult({
+            data: {
+              order,
+              terminalFillHistoryReconciled: true,
+              recoveryReplacementDeferred: true,
+            },
+          })
+        }
         state.replacementIntents.delete(symbol)
         const replacement = await evaluateLatestTransition({ symbol })
         if (!replacement.ok) return replacement
