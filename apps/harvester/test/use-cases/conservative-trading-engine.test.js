@@ -482,7 +482,17 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   assert.equal(getRecoveryLedger().appliedFillIds.length, 4)
 
   await engine.evaluateLatest({ symbol: "ZROUSDT" })
-  const sellIntents = submittedIntents.filter(({ side }) => side === "SELL")
-  assert.equal(sellIntents.length, 2)
-  assert.equal(sellIntents[1].quantity, "17")
+  const recoverySellSubmissionIntents = submittedIntents.filter(
+    ({ side }) => side === "SELL",
+  )
+  assert.equal(
+    recoverySellSubmissionIntents.length,
+    2,
+    "Expected exactly two recovery SELL submissions: the initial protection order and one replacement after the pending SELL's partial fill was reconciled; no duplicate replacement should be submitted.",
+  )
+  assert.equal(
+    recoverySellSubmissionIntents[1].quantity,
+    "17",
+    "Expected the replacement recovery SELL to use the latest reconciled inventory after the BUY fills and partial SELL fill.",
+  )
 })
