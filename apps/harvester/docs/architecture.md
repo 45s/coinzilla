@@ -214,6 +214,7 @@ There is exactly one Position per trading pair, shared by both strategies. The T
 - [Trading Strategies](./trading-strategies.md)
 - [Harvester Roadmap](../ROADMAP.md)
 - [Harvester Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md)
+- [Broker–Harvester Trading Flow](./architecture/BROKER_HARVESTER_TRADING_FLOW.md)
 
 
 ## Implementation pattern for use cases
