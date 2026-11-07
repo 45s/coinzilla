@@ -2255,10 +2255,11 @@ test("fails startup before market subscriptions when PREFLIGHT account snapshot 
 })
 
 
-test("journals account-wide open orders and blocks trading before engine activation when any exist", async () => {
+test("journals pre-existing account-wide orders and allows trading startup without adopting or changing them", async () => {
   const calls = []
   const broker = createBroker(calls)
-  const events = []
+  let cancelCalls = 0
+  let placeCalls = 0
   broker.getOpenOrders = async (input = {}) => {
     calls.push("open-orders:account-wide:" + String(input.symbol))
     return {
@@ -2276,11 +2277,14 @@ test("journals account-wide open orders and blocks trading before engine activat
       }],
     }
   }
+  broker.cancelOrder = async () => { cancelCalls += 1; return { ok: true } }
+  broker.placeOrder = async () => { placeCalls += 1; return { ok: true } }
+  const events = []
   const eventPublisher = {
     publish: (event) => { events.push(event); return { ok: true } },
     flush: async () => ({ ok: true, durable: true }),
   }
-  await assert.rejects(startHarvesterForTest({
+  const runtime = await startHarvesterForTest({
     loadConfig: async () => ({
       ...tradingConfig,
       strategies: {
@@ -2298,20 +2302,24 @@ test("journals account-wide open orders and blocks trading before engine activat
     brokerAdapterFactory: () => broker,
     eventPublisher,
     logger: { info() {}, error() {}, debug() {} },
-  }), /startup blocked: account has 1 open order/)
+  })
 
   const openingBalances = events.find((event) => event.name === "account.snapshot_captured")
   const openOrders = events.find((event) => event.name === "account.open_orders_captured")
-  assert.equal(openingBalances.data.phase, "PREFLIGHT")
-  assert.equal(openOrders.data.readiness, "BLOCKED")
-  assert.equal(openOrders.data.orderCount, 1)
-  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694")
-  assert.ok(calls.includes("open-orders:account-wide:undefined"))
-  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false)
-  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false)
-  assert.ok(calls.includes("disconnect"))
+  assert.equal(openingBalances.data.phase, "PREFLIGHT", "trading startup must retain the durable account PREFLIGHT snapshot")
+  assert.equal(openOrders.data.readiness, "BLOCKED", "the audit must explicitly classify the unmatched exchange order as unowned")
+  assert.deepEqual(openOrders.data.blockReasons, ["UNOWNED_OPEN_ORDERS:1"], "the Journal must preserve why the existing order is not considered Harvester-owned")
+  assert.equal(openOrders.data.orderCount, 1, "the account-wide audit must record the pre-existing order")
+  assert.equal(openOrders.data.orders[0].brokerOrderId, "699694", "the audit must preserve the exact external broker order ID")
+  assert.ok(calls.includes("open-orders:account-wide:undefined"), "startup must inspect open orders account-wide without a symbol filter")
+  assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), true, "an unowned open order must not prevent market-book subscriptions")
+  assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), true, "an unowned open order must not prevent market-price subscriptions")
+  assert.equal(cancelCalls, 0, "startup must never cancel a pre-existing unowned exchange order")
+  assert.equal(placeCalls, 0, "startup must not submit an order merely because an external order was observed")
+  assert.equal(runtime.connected, true, "the trading runtime must start while leaving the external order unadopted")
+  await runtime.stop()
+  assert.ok(calls.includes("disconnect"), "the test must close the broker connection after verifying startup")
 })
-
 
 test("fails closed before market subscriptions when the account-wide open-order query fails", async () => {
   const calls = []
