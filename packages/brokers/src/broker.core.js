@@ -1,10 +1,23 @@
 import { defaultLogger, EM } from "@coinzilla/utils"
 
+/**
+ * Create the default implementation for an unsupported broker operation.
+ *
+ * @param {string} methodName - Public operation name included in the error.
+ * @returns {(...args: unknown[]) => never}
+ */
 const foo = (methodName) => () => {
   throw new Error(EM.methodShouldBeImplemented(methodName))
 }
 
+/**
+ * Exchange-neutral base class for broker adapters.
+ * Concrete brokers override the operations they support.
+ */
 export class CoreBroker {
+  /**
+   * @param {{logger?: import("@coinzilla/utils").Logger}} [input]
+   */
   constructor(input = {}) {
     this.logger = input.logger || defaultLogger
     this.openOrders = new Map()
