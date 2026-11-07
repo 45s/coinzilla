@@ -2,6 +2,9 @@ const MAX_DECIMAL_DIGITS = 256
 export const MAX_DECIMAL_SCALE = 100
 const MAX_DECIMAL_EXPONENT = 100
 
+const ROUNDING_MODES = new Set(["toward-zero", "away-from-zero", "half-up"])
+const INCREMENT_DIRECTIONS = new Set(["down", "up", "nearest"])
+
 /** @typedef {{ coefficient: bigint, scale: number }} ParsedDecimal */
 /** @typedef {'toward-zero'|'away-from-zero'|'half-up'} DecimalRounding */
 /** @typedef {'down'|'up'|'nearest'} DecimalIncrementDirection */
