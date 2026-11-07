@@ -622,7 +622,6 @@ export async function startHarvester({
 
   const publishOpenOrdersSnapshot = async ({
     phase = "PREFLIGHT",
-    blockOnExistingOrders = tradingEnabled,
     ownershipReconciled = hasCanonicalOwnershipReconciliation,
     orders: suppliedOrders,
   } = {}) => {
@@ -714,12 +713,6 @@ export async function startHarvester({
       readiness,
       symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
     })
-    if (unownedOrders.length > 0 && blockOnExistingOrders) {
-      throw new Error(
-        "Conservative TESTNET startup blocked: account has " + unownedOrders.length +
-        " open order(s) without matching durable Harvester ownership; inspect account.open_orders_captured in Journal",
-      )
-    }
     return orders
   }
 
@@ -1308,10 +1301,7 @@ export async function startHarvester({
     initialAccountSnapshotReady = true
 
     if (!tradingEnabled) {
-      await publishOpenOrdersSnapshot({
-        phase: "PREFLIGHT",
-        blockOnExistingOrders: false,
-      })
+      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
     }
 
     if (tradingEnabled) {
@@ -1319,10 +1309,7 @@ export async function startHarvester({
         throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
       }
 
-      await publishOpenOrdersSnapshot({
-        phase: "PREFLIGHT",
-        blockOnExistingOrders: true,
-      })
+      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
 
       while (true) {
         const queuedEvents = userDataEventQueue
