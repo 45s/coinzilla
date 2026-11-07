@@ -23,7 +23,7 @@ export class NativeWebSocketTransport {
   #handlers = null
 
   /**
-   * @param {{url: string, WebSocketCtor?: Function, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: Function, clearTimeoutFn?: Function}} options
+   * @param {{url: string, WebSocketCtor?: new (url: string) => object, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
    * @throws {TypeError|RangeError} If the URL or timeout values are invalid.
    */
   constructor({
