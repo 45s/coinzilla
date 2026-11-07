@@ -13,10 +13,36 @@ const results = [];
 const seen = new Set();
 let configurationErrors = 0;
 
+// Respect NO_COLOR and explicit FORCE_COLOR=0. GitHub Actions logs and modern
+// Windows terminals support ANSI escape sequences.
+const colorEnabled =
+  process.env.NO_COLOR === undefined &&
+  process.env.FORCE_COLOR !== "0" &&
+  (process.stdout.isTTY || process.stderr.isTTY || Boolean(process.env.CI));
+
+const color = (code, value) =>
+  colorEnabled ? "\u001B[" + code + "m" + value + "\u001B[0m" : value;
+
+const green = (value) => color("32", value);
+const red = (value) => color("31", value);
+const yellow = (value) => color("33", value);
+const cyan = (value) => color("36", value);
+const gray = (value) => color("90", value);
+const bold = (value) => color("1", value);
+
 function logSection(title) {
-  console.log("\n" + "=".repeat(100));
-  console.log(title);
-  console.log("=".repeat(100));
+  console.log("\n" + cyan(bold("━".repeat(88))));
+  console.log(cyan(bold("  " + title)));
+  console.log(cyan(bold("━".repeat(88))));
+}
+
+function statusLabel(status) {
+  if (status === "PASS") return green("✔ PASS");
+  if (status === "SKIP") return yellow("↷ SKIP");
+  if (status === "TIMEOUT") return red("◷ TIMEOUT");
+  if (status === "SPAWN ERROR") return red("✖ SPAWN ERROR");
+  if (status === "TERMINATED") return red("✖ TERMINATED");
+  return red("✖ " + status);
 }
 
 function formatDuration(milliseconds) {
@@ -25,9 +51,10 @@ function formatDuration(milliseconds) {
 
 function reportConfigurationError(message, filePath = "") {
   configurationErrors += 1;
+  console.error(red("✖ CONFIGURATION ERROR: ") + message);
+  console.error(gray("  Package: " + packageJsonPath));
+  if (filePath) console.error(gray("  Configured path: " + filePath));
   console.error("::error::TARGETED TEST CONFIGURATION: " + message);
-  console.error("  Package: " + packageJsonPath);
-  if (filePath) console.error("  Configured path: " + filePath);
 }
 
 logSection("HARVESTER TARGETED TEST RUN — ENVIRONMENT");
@@ -123,7 +150,7 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
       cwd: packageDirectory,
       stdio: "inherit",
       timeout: perFileTimeoutMs,
-      env: { ...process.env, FORCE_COLOR: "0" }
+      env: { ...process.env, FORCE_COLOR: colorEnabled ? "1" : "0" }
     }
   );
   const durationMs = Number(process.hrtime.bigint() - testStarted) / 1_000_000;
@@ -138,17 +165,17 @@ for (let index = 0; index < configuredFiles.length; index += 1) {
     details = "Exit code: " + child.status + (child.signal ? "; signal: " + child.signal : "");
   }
 
-  console.log("END TEST OUTPUT");
-  console.log("File result:      " + status);
-  console.log("Exit code:        " + String(child.status));
-  console.log("Signal:           " + String(child.signal));
-  console.log("Spawn error:      " + (child.error ? child.error.message : "none"));
+  console.log(gray("END TEST OUTPUT"));
+  console.log("File result:      " + statusLabel(status));
+  console.log("Exit code:        " + (child.status === 0 ? green("0") : red(String(child.status))));
+  console.log("Signal:           " + (child.signal ? red(child.signal) : gray("none")));
+  console.log("Spawn error:      " + (child.error ? red(child.error.message) : gray("none")));
   console.log("Duration:         " + formatDuration(durationMs));
-  console.log("Absolute path:    " + absolutePath);
+  console.log("Absolute path:    " + gray(absolutePath));
 
   if (details) {
-    console.error("DIAGNOSTIC DETAIL:");
-    console.error(details);
+    console.error(red(bold("DIAGNOSTIC DETAIL:")));
+    console.error(red(details));
     console.error("::error file=" + configuredPath + "::Targeted test " + status + " — " + details.replace(/\r?\n/g, " "));
   }
 
@@ -166,24 +193,23 @@ console.log("Finished:         " + finishedAt.toISOString());
 console.log("Elapsed wall time:" + formatDuration(finishedAt.getTime() - startedAt.getTime()));
 console.log("Total test time:  " + formatDuration(totalDurationMs));
 console.log("Configured files: " + configuredFiles.length);
-console.log("Passed files:     " + passed);
-console.log("Failed files:     " + failed);
-console.log("Config errors:    " + configurationErrors);
+console.log("Passed files:     " + green(String(passed)));
+console.log("Failed files:     " + (failed > 0 ? red(String(failed)) : green("0")));
+console.log("Config errors:    " + (configurationErrors > 0 ? red(String(configurationErrors)) : green("0")));
 
 for (const result of results) {
-  const icon = result.status === "PASS" ? "PASS" : "FAIL";
   console.log(
-    "[" + icon + "] " + result.status.padEnd(13) +
+    statusLabel(result.status).padEnd(colorEnabled ? 22 : 14) +
     " " + formatDuration(result.durationMs).padStart(8) +
     "  " + result.path
   );
-  if (result.absolutePath) console.log("       FULL PATH: " + result.absolutePath);
-  if (result.exitCode !== undefined) console.log("       EXIT CODE: " + result.exitCode);
-  if (result.signal) console.log("       SIGNAL:    " + result.signal);
+  if (result.absolutePath) console.log(gray("       FULL PATH: " + result.absolutePath));
+  if (result.exitCode !== undefined) console.log(gray("       EXIT CODE: " + result.exitCode));
+  if (result.signal) console.log(gray("       SIGNAL:    " + result.signal));
 }
 
 const overallFailed = configurationErrors > 0 || failed > 0;
-console.log("\\nOVERALL STATUS: " + (overallFailed ? "FAILED" : "PASSED"));
+console.log("\nOVERALL STATUS: " + (overallFailed ? red(bold("✖ FAILED")) : green(bold("✔ PASSED"))));
 
 if (process.env.GITHUB_STEP_SUMMARY) {
   const summary = [
