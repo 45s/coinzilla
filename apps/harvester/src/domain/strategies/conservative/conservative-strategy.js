@@ -247,6 +247,7 @@ export function evaluateConservativeStrategy({
         }),
         reason: "QUANTITY_INCREMENT",
         quantityStepSize,
+        evaluatedQuantity: "0",
       })
     }
   }

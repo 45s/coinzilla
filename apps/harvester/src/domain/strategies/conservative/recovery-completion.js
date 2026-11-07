@@ -23,8 +23,9 @@ const normalizeDustDisposition = ({ inventoryDisposition, activeQuantity, keepQu
     return Object.freeze({ status: "EXCHANGE_CONSTRAINED_DUST", quantity, reason, minimumQuantity: inventoryDisposition.minimumQuantity, minimumNotional: inventoryDisposition.minimumNotional, evaluatedQuantity: inventoryDisposition.evaluatedQuantity, evaluatedNotional: inventoryDisposition.evaluatedNotional })
   }
   if (reason === "QUANTITY_INCREMENT") {
-    if (inventoryDisposition.quantityStepSize === undefined || compareDecimal({ left: quantity, right: inventoryDisposition.quantityStepSize }) >= 0) return undefined
-    return Object.freeze({ status: "EXCHANGE_CONSTRAINED_DUST", quantity, reason, quantityStepSize: inventoryDisposition.quantityStepSize })
+    if (inventoryDisposition.quantityStepSize === undefined || inventoryDisposition.evaluatedQuantity !== "0") return undefined
+    return Object.freeze({ status: "EXCHANGE_CONSTRAINED_DUST", quantity, reason,
+      quantityStepSize: inventoryDisposition.quantityStepSize, evaluatedQuantity: inventoryDisposition.evaluatedQuantity })
   }
   return undefined
 }

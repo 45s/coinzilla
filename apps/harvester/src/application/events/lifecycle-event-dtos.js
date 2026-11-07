@@ -508,7 +508,7 @@ const mapRecoveryDustData = ({ dust }) => {
   if (!dust || dust.status !== "EXCHANGE_CONSTRAINED_DUST") throw new TypeError("dust.status must be EXCHANGE_CONSTRAINED_DUST")
   if (!["MIN_QUANTITY", "MIN_NOTIONAL", "QUANTITY_INCREMENT"].includes(dust.reason)) throw new TypeError("dust.reason must identify the limiting exchange filter")
   const mapped = { status: "EXCHANGE_CONSTRAINED_DUST", quantity: requireDecimalString({ value: dust.quantity, field: "dust.quantity" }), reason: dust.reason }
-  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize"] }[dust.reason]
+  const fields = { MIN_QUANTITY: ["minimumQuantity", "evaluatedQuantity"], MIN_NOTIONAL: ["minimumQuantity", "minimumNotional", "evaluatedQuantity", "evaluatedNotional"], QUANTITY_INCREMENT: ["quantityStepSize", "evaluatedQuantity"] }[dust.reason]
   for (const field of fields) mapped[field] = requireDecimalString({ value: dust[field], field: "dust." + field })
   return mapped
 }

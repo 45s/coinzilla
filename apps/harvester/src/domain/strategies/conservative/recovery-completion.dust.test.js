@@ -112,3 +112,18 @@ test("rejects dust when its claimed MIN_NOTIONAL filter is not limiting", () => 
   assert.equal(result.eligible, false)
   assert.equal(result.reason, "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE")
 })
+
+test("validates quantity-step dust using the rounded-down candidate quantity", () => {
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.04",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0",
+    },
+  })
+  assert.equal(result.eligible, true)
+  assert.equal(result.dust.reason, "QUANTITY_INCREMENT")
+})
