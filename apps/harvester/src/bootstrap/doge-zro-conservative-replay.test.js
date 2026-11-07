@@ -10,6 +10,7 @@ const expectedSellOrders = {
   DOGEUSDT: {
     initialPrice: "0.07161000",
     buyPrice: "0.07157",
+    nextBuyPrice: "0.07153",
     sellPrice: "0.07203",
     sellFillPrice: "0.07204",
     expectedSellQuantity: "398",
@@ -444,7 +445,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
           nextStandingBuy.quantity,
           nextStandingBuy.type,
         ],
-        [symbol, "BUY", "0.07153", String(replay.pair.orderQuantity), "LIMIT"],
+        [symbol, "BUY", replay.scenario.nextBuyPrice, String(replay.pair.orderQuantity), "LIMIT"],
       )
       assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
@@ -496,7 +497,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
           [
             symbol,
             "BUY",
-            "0.07153",
+            replay.scenario.nextBuyPrice,
             String(replay.pair.orderQuantity),
             "LIMIT",
           ],
