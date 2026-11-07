@@ -2,6 +2,7 @@ import { defaultLogger as logger } from "@coinzilla/utils"
 import { adaptUser } from "./user.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
+/** Binance user-data and public stream event-name mapping. */
 export const wsEventsMap = Object.freeze({
   executionReport: "executionReport",
   outboundAccountPosition: "outboundAccountPosition",
@@ -90,6 +91,13 @@ const adaptersMap = {
   [wsEventsMap.listStatus]: adaptUser.listStatus,
 }
 
+/**
+ * Normalize a Binance WebSocket event using its event-type adapter.
+ * Unknown event types are returned unchanged.
+ *
+ * @param {object} message - Raw Binance event object.
+ * @returns {object} Adapted event payload.
+ */
 export function adaptMsg(message) {
   const adapter = adaptersMap[message.e]
   if (!adapter) {
