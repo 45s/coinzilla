@@ -20,7 +20,7 @@ import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/re
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
@@ -2006,6 +2006,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
           })
           allocationCount += 1
         }
+        currentPortfolio = currentPortfolio.resetRecoveryBasis({ marketId })
         currentRecoveryLedger = currentRecoveryLedger.resetCycle()
         resetCount += 1
       }
@@ -2704,7 +2705,10 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     assert.equal(currentPortfolio.positions[0].spent.amount, "100")
     assert.equal(
       currentPortfolio.positions[0].quoteNetCashFlow.amount,
-      subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+      subtractDecimal({
+        left: subtractDecimal({ left: quoteQuantity, right: "0.01" }),
+        right: "100",
+      }),
     )
     assert.equal(
       currentRecoveryLedger.netSellProceeds,
@@ -2843,10 +2847,11 @@ test("accounts a recovery SELL fill during cancellation once when its late strea
   assert.equal(lateResult.ok, true)
   assert.equal(lateResult.data.ignored, true)
   assert.deepEqual(cancellationIds, [sellOrder.brokerOrderId])
-  assert.equal(accountedFills.filter((fill) => fill.tradeId === "recovery-cancel-fill-sell").length, 1)
+  const canceledSellTradeId = "recovery-cancel-fill-sell-" + sellOrder.brokerOrderId
+  assert.equal(accountedFills.filter((fill) => fill.tradeId === canceledSellTradeId).length, 1)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), [
     "buy-triggering-recovery-sell-cancel",
-    "recovery-cancel-fill-sell",
+    canceledSellTradeId,
   ])
   assert.deepEqual(pauses, [])
 })
@@ -3314,6 +3319,7 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
   let repricingEvaluations = 0
   const strategyPolicy = {
     ...conservativeStrategyPolicy,
+    evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
     evaluateTrailingBuyRepricing: (input) => {
       repricingEvaluations += 1
       return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
@@ -3387,6 +3393,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   let repricingEvaluations = 0
   const strategyPolicy = {
     ...conservativeStrategyPolicy,
+    evaluate: (input) => conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" }),
     evaluateTrailingBuyRepricing: (input) => {
       repricingEvaluations += 1
       return conservativeStrategyPolicy.evaluateTrailingBuyRepricing(input)
