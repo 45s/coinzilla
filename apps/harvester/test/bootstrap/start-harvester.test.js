@@ -7,11 +7,29 @@ import {
   Fill,
   Market,
   Money,
+  Order,
   Quantity,
   TradingRules,
 } from '@coinzilla/entities';
 import { toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
+const createOpenOrderSnapshot = ({ order }) => {
+  const openOrder = new Order({
+    symbol: order.market.symbol,
+    type: order.type,
+    side: order.side,
+    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    price: Number(order.limitPrice.amount),
+    id: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+  });
+  openOrder.originalPrice = order.limitPrice.amount;
+  openOrder.originalQuantity = order.originalQuantity.amount;
+  openOrder.executedQuantity = order.executedQuantity.amount;
+  openOrder.status = order.status === 'OPEN' ? 'NEW' : 'PARTIALLY_FILLED';
+  return openOrder;
+};
+
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({ ok: true, durable: true }),
@@ -162,7 +180,11 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
     cancelOrder: async () => toResult({ error: new Error('Unexpected cancellation') }),
     getOpenOrders: async () => {
       openOrderSnapshotCalls += 1;
-      return toResult({ data: [...canonicalOrders.values()].filter((order) => ['OPEN', 'PARTIALLY_FILLED'].includes(order.status)) });
+      return toResult({
+        data: [...canonicalOrders.values()]
+          .filter((order) => ['OPEN', 'PARTIALLY_FILLED'].includes(order.status))
+          .map((order) => createOpenOrderSnapshot({ order })),
+      });
     },
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrderId.get(String(orderId)) ?? [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
