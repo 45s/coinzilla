@@ -1005,14 +1005,14 @@ test("order intent publication failure pauses the pair without calling the broke
 })
 
 
-function makeSeededRecoveryState() {
+function makeSeededRecoveryState({ quantity = "1" } = {}) {
   const fill = new Fill({
     tradeId: "seed-recovery-buy",
     brokerOrderId: "seed-recovery-order",
     market,
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
     quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
@@ -3725,7 +3725,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
 
 
 test("keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL", async () => {
-  const seeded = makeSeededRecoveryState()
+  const seeded = makeSeededRecoveryState({ quantity: "1.05" })
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
   const events = []
