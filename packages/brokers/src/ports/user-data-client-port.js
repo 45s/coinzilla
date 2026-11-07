@@ -14,14 +14,14 @@
  * payloads before exposing them through this contract.
  *
  * @typedef {Object} UserDataClientPort
- * @property {string} state
+ * @property {"idle"|"connecting"|"open"|"closing"|"closed"|string} state
  * @property {() => Promise<unknown>} connect
  * @property {() => Promise<unknown>} disconnect
  * @property {(listener: (message: UserDataClientPortEvent) => void) => (() => void)|void} onEvent
  * @property {(listener: (error: Error) => void) => (() => void)|void} onError
  * @property {(listener: (event: unknown) => void) => (() => void)|void} onClose
- * @property {() => Promise<unknown>} subscribe
- * @property {() => Promise<unknown>} listSubscriptions
+ * @property {() => Promise<number|null>} subscribe
+ * @property {() => Promise<number[]|null>} listSubscriptions
  * @property {(subscriptionId: number) => Promise<void>} unsubscribe
  */
 
