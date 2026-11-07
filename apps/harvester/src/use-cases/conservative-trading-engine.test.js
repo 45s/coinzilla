@@ -3718,6 +3718,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   const seeded = makeSeededRecoveryState()
   let currentPortfolio = seeded.portfolio
   let currentRecoveryLedger = seeded.recoveryLedger
+  const events = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -3737,7 +3738,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
         },
       }
     },
-    completeRecoveryCycle: async ({ marketId }) => {
+    completeRecoveryCycle: async ({ marketId, inventoryDisposition }) => {
       const position = currentPortfolio.getPosition({ marketId })
       const completion = evaluateRecoveryCompletion({
         sellOrderFullyFilled: true,
@@ -3746,6 +3747,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
         activeQuantity: position.baseQuantity.amount,
         keepQuantity: "0.1",
         minProfit: "0.01",
+        ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
       })
       if (completion.eligible) {
         currentPortfolio = currentPortfolio.allocateFreeQuantity({
@@ -3756,6 +3758,7 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
       }
       return { ok: true, data: completion }
     },
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
   })
 
   await harness.engine.processMarketPrice({
@@ -3796,6 +3799,21 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(nextEvaluation.ok, true, nextEvaluation.errors?.[0]?.message)
   assert.equal(nextEvaluation.data.decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
   assert.equal(nextEvaluation.data.decision.inventoryDisposition.reason, "QUANTITY_INCREMENT")
+  const dust = nextEvaluation.data.decision.inventoryDisposition
+  const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
+  assert.equal(completedPosition.baseQuantity.amount, "0")
+  assert.equal(completedPosition.freeBaseQuantity.amount, addDecimal({ left: "0.1", right: dust.quantity }))
+  assert.equal(currentRecoveryLedger.buyCost, "0")
+  assert.equal(currentRecoveryLedger.netSellProceeds, "0")
+  const completedEvent = events.find((event) => event.name === "recovery.cycle_completed")
+  assert.ok(completedEvent)
+  assert.deepEqual(completedEvent.data.dust, {
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    quantity: dust.quantity,
+    reason: "QUANTITY_INCREMENT",
+    quantityStepSize: dust.quantityStepSize,
+    evaluatedQuantity: "0",
+  })
   assert.deepEqual(harness.pauses, [])
 })
 
