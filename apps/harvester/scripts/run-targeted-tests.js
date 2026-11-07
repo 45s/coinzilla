@@ -44,7 +44,7 @@ for (const file of files) {
     continue;
   }
 
-  console.log(`\\n===== Targeted test: ${file} =====`);
+  console.log(`\n===== Targeted test: ${file} =====`);
   const result = spawnSync(
     process.execPath,
     ["--test", "--test-reporter=spec", file],
