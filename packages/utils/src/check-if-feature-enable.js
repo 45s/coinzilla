@@ -2,9 +2,17 @@ import { handleErr } from './handle-err.js'
 import { defaultLogger } from './logger.js'
 
 /**
+ * @typedef {object} FeatureFlagLogger
+ * @property {(data: unknown) => unknown} warn
+ * @property {(data: unknown) => unknown} [error]
+ */
+
+/**
  * Enable a feature only when its environment variable is exactly "1".
- * Never include the environment variable's value in diagnostic output.
- * @param {{ envVarName: string, where?: string, logger?: object }} options
+ * The flag's value is never included in diagnostic output. Missing or any
+ * other value logs a warning and returns false.
+ *
+ * @param {{ envVarName: string, where?: string, logger?: FeatureFlagLogger }} options
  * @returns {boolean}
  */
 export function checkIfFeatureEnable({ envVarName, where, logger = defaultLogger } = {}) {
