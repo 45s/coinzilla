@@ -16,7 +16,8 @@
     "testnet:trades": "node --env-file=.env.development scripts/list-testnet-trades.js",
     "journal:balance-audit": "node --env-file=.env.development scripts/reconcile-journal-account-balances.js",
     "testnet:audit": "node --env-file=.env.development scripts/audit-testnet-account.js",
-    "testnet": "node --env-file=.env.development scripts/testnet-menu.js"
+    "testnet": "node --env-file=.env.development scripts/testnet-menu.js",
+    "test:targeted": "node scripts/run-targeted-tests.js"
   },
   "engines": {
     "node": ">=24"
@@ -28,5 +29,16 @@
     "@coinzilla/event-bus": "workspace:*",
     "@coinzilla/journal": "workspace:*",
     "@coinzilla/utils": "workspace:*"
+  },
+  "config": {
+    "targetedTestFiles": [
+      "test/bootstrap/start-harvester.test.js",
+      "test/configured-account-snapshot-journal.test.js",
+      "test/domain/trading-config.test.js",
+      "test/infrastructure/config/load-trading-config.test.js",
+      "test/main.test.js",
+      "src/use-cases/conservative-trading-engine.test.js",
+      "src/bootstrap/doge-zro-conservative-replay.test.js"
+    ]
   }
 }
