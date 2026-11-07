@@ -98,7 +98,7 @@ The implemented order is:
 8. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
 9. Close EventBus with its 5-second timeout.
 
-Cleanup failures are isolated so later cleanup still runs. An incomplete CLOSING audit is also a shutdown failure: the process reports a non-zero exit status and retains the trading-process lock. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
+Cleanup failures are isolated so later cleanup still runs. For trading-enabled runs, an unresolved BUY cancellation, non-terminal/unknown owned order, or unresolved user-data/accounting reconciliation is a shutdown failure: the process reports a non-zero exit status and retains the trading-process lock. Other incomplete CLOSING audits are still recorded as INCOMPLETE. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
 
 A process kill, machine crash, power loss, or failed filesystem sync can still lose recent records. The Journal is not an unconditional durability guarantee.
 
