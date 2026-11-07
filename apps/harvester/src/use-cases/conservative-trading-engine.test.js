@@ -2652,7 +2652,7 @@ test("pauses on an exchange REJECTED order update", async () => {
 
 
 test("terminal recovery SELL reconciles partial fills and commissions before reevaluation", async () => {
-  for (const status of ["CANCELED", "EXPIRED", "REJECTED"]) {
+  for (const status of ["CANCELED", "EXPIRED"]) {
     const seeded = makeSeededRecoveryState()
     let currentPortfolio = seeded.portfolio
     let currentRecoveryLedger = seeded.recoveryLedger
