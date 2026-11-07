@@ -148,7 +148,7 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
       const canceledOrder = canceledOrders.get(orderId)
       const cancelFill = cancelWithFill && canceledOrder
         ? [new Fill({
-            tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase(),
+            tradeId: "recovery-cancel-fill-" + canceledOrder.side.toLowerCase() + "-" + orderId,
             brokerOrderId: orderId,
             clientOrderId: canceledOrder.clientOrderId,
             market,
