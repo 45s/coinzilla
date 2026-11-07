@@ -22,8 +22,8 @@
 ## Conservative domain rule extraction — PR #653
 
 The Conservative policy now delegates its core state predicates to
-`src/domain/strategies/conservative/conservative-helpers.js`. Each predicate has
-a focused deterministic unit test in `conservative-helpers.test.js`; the policy
+`src/domain/strategies/conservative/helpers.js`. Each predicate has
+a focused deterministic unit test in `helpers.test.js`; the policy
 continues to own intent calculation and order economics, while the trading
 engine continues to own broker lifecycle and I/O.
 
@@ -1531,7 +1531,7 @@ Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac
 
 ## 2026-11-06 audit continuation — partial BUY policy regression
 
-Source/spec comparison found one stale regression in `src/domain/strategies/conservative/conservative-strategy.test.js`: it expected a PARTIALLY_FILLED BUY to suppress both strategy sides. The canonical contract requires active orders to suppress duplicate intents, but does not suppress a valid recovery SELL; the BUY remains active and no duplicate BUY is created. Current `evaluateConservativeStrategy` already plans the SELL while `hasActiveBuy` prevents another BUY. Updated the test to assert that behavior (commit `b1f28cb4dbe49e1d51cf110db1f1307e3d2644e1`). This is a test/spec alignment change, not a recovery, Journal, or broker implementation change. Exact-head CI/test execution is still pending; no pass is claimed.
+Source/spec comparison found one stale regression in `src/domain/strategies/conservative/strategy.test.js`: it expected a PARTIALLY_FILLED BUY to suppress both strategy sides. The canonical contract requires active orders to suppress duplicate intents, but does not suppress a valid recovery SELL; the BUY remains active and no duplicate BUY is created. Current `evaluateConservativeStrategy` already plans the SELL while `hasActiveBuy` prevents another BUY. Updated the test to assert that behavior (commit `b1f28cb4dbe49e1d51cf110db1f1307e3d2644e1`). This is a test/spec alignment change, not a recovery, Journal, or broker implementation change. Exact-head CI/test execution is still pending; no pass is claimed.
 
 
 ## 2026-11-06 audit continuation — dust plus subsequent BUY regression
