@@ -87,6 +87,11 @@ Other repository instructions and task checklists should link to this section ra
 - Functions should communicate their action or result. Tests should describe the behavior being verified.
 - Avoid comments that merely restate code. Explain non-obvious intent, constraints, and trade-offs.
 
+### JavaScript control flow
+
+- Do not use nested ternary operators. Use `if`/`else` statements or extract a clearly named helper when conditional logic needs multiple branches.
+- Always use braces for control statements, including single-line bodies: `if`, `else`, `for`, `while`, `do`, and other block-controlled statements. Do not write unbraced one-line control flow.
+
 ### 5. Functions and side effects
 
 - Prefer small, cohesive functions with one clear responsibility.
