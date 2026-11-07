@@ -2585,7 +2585,7 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
     price: "65000",
     timestamp: 1000,
   })
-  assert.ok(calls.includes("placeOrder:BUY"))
+  assert.ok(calls.includes("placeOrder:BUY"), "the fixture must create an acknowledged strategy-owned BUY before graceful shutdown begins")
 
   const stopPromise = runtime.stop()
   let testError
