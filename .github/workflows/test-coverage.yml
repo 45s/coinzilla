@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: test-coverage-${{ github.workflow }}-${{ github.ref }}
+  group: test-coverage-${ github.workflow }-${ github.ref }
   cancel-in-progress: true
 
 permissions:
@@ -17,21 +17,46 @@ permissions:
 
 jobs:
   coverage:
-    name: Workspace test coverage
+    name: "Coverage (${ matrix.package })"
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        include:
+          - package: "@coinzilla/bot-free-roll"
+            has_coverage_script: true
+          - package: "@coinzilla/harvester"
+            has_coverage_script: false
+          - package: "@coinzilla/brokers"
+            has_coverage_script: true
+          - package: "@coinzilla/db"
+            has_coverage_script: true
+          - package: "@coinzilla/entities"
+            has_coverage_script: false
+          - package: "@coinzilla/event-bus"
+            has_coverage_script: true
+          - package: "@coinzilla/journal"
+            has_coverage_script: false
+          - package: "@coinzilla/market-simulator"
+            has_coverage_script: true
+          - package: "@coinzilla/notifiers"
+            has_coverage_script: true
+          - package: "@coinzilla/utils"
+            has_coverage_script: true
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup${ b906affcce14559ad1aafd4ab0e942779e9f58b1 } # v4
         with:
           version: 12.11.2
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node${ 49933ea5288caeca8642d1e84afbd3f7d6820020 } # v4
         with:
           node-version: 24.x
           cache: pnpm
@@ -39,20 +64,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run workspace tests with coverage
-        run: pnpm run test:coverage
+      - name: Run ${ matrix.package } coverage
+        run: pnpm --filter "${ matrix.package }" exec node --test --experimental-test-coverage
 
-      - name: Enforce Brokers package coverage command
-        run: pnpm --filter @coinzilla/brokers test:coverage
-
-      - name: Enforce Notifiers package coverage thresholds
-        run: pnpm --filter @coinzilla/notifiers test:coverage
-
-      - name: Enforce Event Bus package coverage thresholds
-        run: pnpm --filter @coinzilla/event-bus test:coverage
-
-      - name: Enforce Utilities package coverage thresholds
-        run: pnpm --filter @coinzilla/utils test:coverage
-
-      - name: Enforce Free-Roll bot coverage thresholds
-        run: pnpm --filter @coinzilla/bot-free-roll test:coverage
+      - name: Enforce ${ matrix.package } coverage thresholds
+        if: matrix.has_coverage_script
+        run: pnpm --filter "${ matrix.package }" run test:coverage
