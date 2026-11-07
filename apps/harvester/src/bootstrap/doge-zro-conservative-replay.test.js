@@ -6,16 +6,8 @@ import { multiplyDecimal, percentageToRate } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
 
-const pairConfigs = {
+const replayCases = {
   DOGEUSDT: {
-    investment: 100,
-    orderQuantity: 400,
-    keepQuantity: 1,
-    priceStepPercent: 0.05,
-    pricePrecision: 5,
-    quantityPrecision: 0,
-    makerPercent: 0.1,
-    takerPercent: 0.1,
     initialPrice: "0.07161000",
     buyPrice: "0.07157",
     sellPrice: "0.07203",
@@ -25,14 +17,6 @@ const pairConfigs = {
     expectedProfit: "0.01524808",
   },
   ZROUSDT: {
-    investment: 100,
-    orderQuantity: 5,
-    keepQuantity: 0.01,
-    priceStepPercent: 0.05,
-    pricePrecision: 3,
-    quantityPrecision: 1,
-    makerPercent: 0.1,
-    takerPercent: 0.1,
     initialPrice: "1.60500000",
     buyPrice: "1.604",
     sellPrice: "1.615",
@@ -82,7 +66,7 @@ const config = {
 
 const exchangeInfoSymbol = (symbol) => {
   const baseAsset = symbol.slice(0, -4)
-  const pair = pairConfigs[symbol]
+  const pair = config.strategies.CG_coinGrabber.pairs[symbol]
   return {
     symbol,
     baseAsset,
@@ -120,7 +104,8 @@ const waitForOrder = (submitted, waiters, symbol, side) => {
 }
 
 const createReplayHarness = async (symbol) => {
-  const pair = pairConfigs[symbol]
+  const pair = config.strategies.CG_coinGrabber.pairs[symbol]
+  const scenario = replayCases[symbol]
   const submitted = []
   const outgoingOrderRequests = []
   const receivedPrices = []
@@ -169,7 +154,7 @@ const createReplayHarness = async (symbol) => {
         return { data: { symbols: [exchangeInfoSymbol(symbol)] } }
       }
       if (method === "ticker.price") {
-        return { data: { symbol, price: pair.initialPrice } }
+        return { data: { symbol, price: scenario.initialPrice } }
       }
       if (method === "order.place") {
         const timestamp = Date.now()
@@ -355,6 +340,7 @@ const createReplayHarness = async (symbol) => {
     runtime,
     symbol,
     pair,
+    scenario,
     submitted,
     outgoingOrderRequests,
     receivedPrices,
@@ -367,23 +353,23 @@ const createReplayHarness = async (symbol) => {
 }
 
 const getInitialBuy = async (replay) => {
-  const { pair, waitForOrder, triggerPrice } = replay
+  const { scenario, waitForOrder, triggerPrice } = replay
   const submitted = waitForOrder("BUY")
-  await triggerPrice(pair.initialPrice)
+  await triggerPrice(scenario.initialPrice)
   return submitted
 }
 
 const getRecoverySell = async (replay) => {
-  const { pair, waitForOrder, triggerPrice, fillOrder } = replay
+  const { pair, scenario, waitForOrder, triggerPrice, fillOrder } = replay
   const buySubmitted = getInitialBuy(replay)
   const buy = await buySubmitted
   const sellSubmitted = waitForOrder("SELL")
-  await triggerPrice(pair.buyPrice)
-  await fillOrder({ order: buy, price: pair.buyPrice, tradeId: "645-" + replay.symbol.toLowerCase() + "-buy" })
+  await triggerPrice(scenario.buyPrice)
+  await fillOrder({ order: buy, price: scenario.buyPrice, tradeId: "645-" + replay.symbol.toLowerCase() + "-buy" })
   return sellSubmitted
 }
 
-for (const symbol of Object.keys(pairConfigs)) {
+for (const symbol of Object.keys(replayCases)) {
   describe("Conservative " + symbol + " replay", () => {
     let replay
 
@@ -400,7 +386,7 @@ for (const symbol of Object.keys(pairConfigs)) {
       const buy = await getInitialBuy(replay)
       assert.deepEqual(
         [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
-        [symbol, "BUY", replay.pair.buyPrice, String(replay.pair.orderQuantity), "LIMIT"],
+        [symbol, "BUY", replay.scenario.buyPrice, String(replay.pair.orderQuantity), "LIMIT"],
       )
       assert.deepEqual(
         replay.outgoingOrderRequests.map(({ params }) => [
@@ -415,7 +401,7 @@ for (const symbol of Object.keys(pairConfigs)) {
           receivedSymbol,
           price,
         ]),
-        [[symbol, replay.pair.initialPrice]],
+        [[symbol, replay.scenario.initialPrice]],
       )
     })
 
@@ -424,7 +410,7 @@ for (const symbol of Object.keys(pairConfigs)) {
       const sell = await sellSubmitted
       assert.deepEqual(
         [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
-        [symbol, "SELL", replay.pair.sellPrice, replay.pair.expectedSellQuantity, "LIMIT"],
+        [symbol, "SELL", replay.scenario.sellPrice, replay.scenario.expectedSellQuantity, "LIMIT"],
       )
       assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
@@ -451,7 +437,7 @@ for (const symbol of Object.keys(pairConfigs)) {
       const sellSubmitted = getRecoverySell(replay)
       const sell = await sellSubmitted
       const cycle = replay.waitForCycle()
-      await replay.triggerPrice(replay.pair.sellFillPrice)
+      await replay.triggerPrice(replay.scenario.sellFillPrice)
       await replay.fillOrder({
         order: sell,
         price: replay.pair.sellFillPrice,
@@ -459,8 +445,8 @@ for (const symbol of Object.keys(pairConfigs)) {
       })
 
       const completion = await cycle
-      assert.equal(completion.freeQuantity, replay.pair.expectedFreeQuantity)
-      assert.equal(completion.realizedNetProfit, replay.pair.expectedProfit)
+      assert.equal(completion.freeQuantity, replay.scenario.expectedFreeQuantity)
+      assert.equal(completion.realizedNetProfit, replay.scenario.expectedProfit)
 
       const position = replay.runtime.portfolio.getPosition({ symbol })
       assert.equal(position.baseQuantity.amount, "0")
