@@ -489,3 +489,25 @@ This supersedes older findings text that treated above-`keepQuantity` dust as ac
 - The limiting filter must be demonstrated (MIN_QUANTITY, MIN_NOTIONAL, or QUANTITY_INCREMENT); price-filter blocks and unsupported reasons cannot be retained as dust.
 - The completed-cycle lifecycle event records dust quantity, reason, and relevant filter threshold/evaluated values. Retained allocation is keepQuantity plus dust.
 - Dust completion is attempted only after a reconciled FILLED recovery SELL and a fresh strategy evaluation; a subsequent BUY fill or new SELL order invalidates that eligibility.
+
+## Current audit disposition — 2026-11-07
+
+**In-scope Conservative implementation audit: CLOSED.** This section supersedes older historical checkpoint statements above that described residual sell-through, dust persistence, partial-BUY replacement, terminal SELL coverage, or exact-once lifecycle coverage as still missing.
+
+Current source and regression inventory:
+- Residual sell-through continues after the minimum profit target is reached, using current market price for additional residual quantity and retaining the original full cost/proceeds basis until completion.
+- Residual SELL sizing respects quantity steps, MIN/MAX quantity, MIN/MAX notional, price bounds, fee reserve, and the configured order type. A blocked price is not reclassified as dust.
+- Dust evidence is validated against exact active quantity above `keepQuantity` and the actual limiting filter. Quantity-step, MIN_QUANTITY, and MIN_NOTIONAL cases have focused domain coverage. The completion lifecycle DTO records dust quantity, reason, and relevant evaluated/threshold values; completion allocates `keepQuantity + dust`.
+- A later BUY can make previously unsellable dust sellable without losing prior spent cost or net SELL proceeds.
+- Partial SELL with no new BUY preserves the same order and price. Any BUY fill during an active recovery SELL triggers cancellation, terminal-state/fill/commission reconciliation, and replacement planning.
+- CANCELED, EXPIRED, and REJECTED recovery SELL outcomes have focused partial-terminal-fill, actual-commission, missing-history, and conflicting-fill regressions.
+- Full-cycle engine coverage asserts partial BUY/SELL fills, both SELL replacement sequences, acknowledgement ordering, exact-once fill application, and exact-once completion/reset. A second full-cycle variant now covers `keepQuantity = 0`; the positive-reserve variant remains covered.
+- Actual DOGE/ZRO fill fixtures cover the observed trade quantities and commissions and verify residual handling under explicit test filter fixtures.
+
+**Historical evidence limitations (non-blocking):**
+- Actual decision-time exchange filter payloads were not preserved in the original runtime logs. Historical DOGE 1.8 excess and ZRO 0.04 excess cannot be retrospectively proven to have been MIN_NOTIONAL dust. The trade arithmetic and exchange executions are confirmed; exact historical filter-based disposition remains UNVERIFIED.
+- The complete historical CLOSING open-order payload and a post-fill account snapshot were not preserved. Do not infer the missing second order identity or later balances. The CLOSING audit remains INCOMPLETE at its original timestamp.
+- DOGE SELL 1276698 and ZRO BUY 727905 filled after the workstation process stopped. This is expected; later process reconciliation is a separate deferred workstream in #654.
+
+**Verification boundary:** source and regression coverage are now present and mapped in `docs/domain/ACCOUNTING_INVARIANTS.md`. The newly added zero-`keepQuantity` full-cycle test and the rest of the Harvester suite have not yet been executed on the current PR head. Exact-head CI is intentionally the next phase; no passing test/CI claim is made here. TESTNET acceptance remains NOT CLAIMED.
+
