@@ -19,6 +19,19 @@
 >
 > Older sections below are historical implementation notes. Where they conflict with this current post-merge status, follow this notice and the final handoff section at the end of this roadmap.
 
+## Conservative domain rule extraction — PR #653
+
+The Conservative policy now delegates its core state predicates to
+`src/domain/strategies/conservative/conservative-rules.js`. Each predicate has
+a focused deterministic unit test in `conservative-rules.test.js`; the policy
+continues to own intent calculation and order economics, while the trading
+engine continues to own broker lifecycle and I/O.
+
+This is an internal organization change only. The canonical behavior contract
+remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md);
+no strategy behavior change or TESTNET acceptance is claimed. The focused
+tests and full Harvester suite still require execution on the exact PR head.
+
 ## Current work selection
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
