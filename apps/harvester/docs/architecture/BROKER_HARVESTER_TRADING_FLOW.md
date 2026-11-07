@@ -1,6 +1,6 @@
 # Broker–Harvester Trading Flow
 
-This document describes the current Conservative trading path at the application/infrastructure boundary. Method names and responsibilities below were checked against the Harvester broker port, Binance adapter, bootstrap, Trading Engine, and shared Binance broker implementation.
+This document describes the current Conservative trading path at the application/infrastructure boundary. Method names and responsibilities below were checked against the Harvester broker port, Binance adapter, bootstrap, Trading Engine, and shared Binance broker implementation. A [Mermaid-free text version](./BROKER_HARVESTER_TRADING_FLOW_TEXT.md) is also available.
 
 ## Responsibilities
 
@@ -38,7 +38,6 @@ The sequence below separates the order acknowledgement from the later execution 
 
 ```mermaid
 sequenceDiagram
-    autonumber
     participant Binance as Binance
     participant Broker as Binance broker + Harvester adapter
     participant Bootstrap as Harvester bootstrap / intake
