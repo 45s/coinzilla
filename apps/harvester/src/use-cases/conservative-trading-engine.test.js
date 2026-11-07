@@ -1978,11 +1978,13 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         realizedNetProfit: result.realizedNetProfit,
       }
       if (result.eligible) {
-        currentPortfolio = currentPortfolio.allocateFreeQuantity({
-          marketId,
-          quantity: result.freeQuantity,
-        })
-        allocationCount += 1
+        if (compareDecimal({ left: result.freeQuantity, right: "0" }) > 0) {
+          currentPortfolio = currentPortfolio.allocateFreeQuantity({
+            marketId,
+            quantity: result.freeQuantity,
+          })
+          allocationCount += 1
+        }
         currentRecoveryLedger = currentRecoveryLedger.resetCycle()
         resetCount += 1
       }
@@ -2001,7 +2003,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
         events.push(event)
         if (event.name === "recovery.cycle_completed") {
           assert.equal(completionCalls.length, 1)
-          assert.equal(allocationCount, 1)
+          assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
           assert.equal(resetCount, 1)
         }
         return { ok: true }
@@ -2195,7 +2197,7 @@ const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   })
   assert.equal(recoverySellCompleted.ok, true, recoverySellCompleted.errors?.[0]?.message)
   assert.equal(completionCalls.length, 1)
-  assert.equal(allocationCount, 1)
+  assert.equal(allocationCount, keepQuantity === "0" ? 0 : 1)
   assert.equal(resetCount, 1)
   assert.ok(completionSnapshot)
   assert.ok(compareDecimal({ left: completionSnapshot.spent, right: "0" }) > 0)
