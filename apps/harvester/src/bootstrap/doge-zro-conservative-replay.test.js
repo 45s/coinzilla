@@ -53,17 +53,7 @@ const createConfig = (symbol) => ({
         aggressive: { enabled: false },
       },
       pairs: {
-        [symbol]: {
-          enabled: true,
-          investment: pairConfigs[symbol].investment,
-          orderQuantity: pairConfigs[symbol].orderQuantity,
-          keepQuantity: pairConfigs[symbol].keepQuantity,
-          priceStepPercent: pairConfigs[symbol].priceStepPercent,
-          pricePrecision: pairConfigs[symbol].pricePrecision,
-          quantityPrecision: pairConfigs[symbol].quantityPrecision,
-          makerPercent: pairConfigs[symbol].makerPercent,
-          takerPercent: pairConfigs[symbol].takerPercent,
-        },
+        [symbol]: { enabled: true, ...pairConfigs[symbol] },
       },
     },
   },
