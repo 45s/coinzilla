@@ -1562,6 +1562,22 @@ export async function startHarvester({
 
     const auditReasons = []
     let snapshotError
+    const logShutdownFailure = ({ message, stage, result, error } = {}) => {
+      const errors = error
+        ? [error]
+        : result?.errors?.length
+          ? result.errors
+          : [new Error(message)]
+      logger.error?.({
+        message,
+        stage,
+        errors: errors.map((entry) => ({
+          name: entry?.name,
+          message: entry?.message ?? String(entry),
+          stack: entry?.stack,
+        })),
+      })
+    }
     const marketIntakeErrors = await stopMarketIntake({ subscriptions, bookSubscriptions })
     if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
 
@@ -1579,22 +1595,53 @@ export async function startHarvester({
       // Only then can shutdown safely select and cancel owned BUY orders.
       try {
         const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-      } catch {
+        if (reconciliation?.ok !== true) {
+          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+          logShutdownFailure({
+            message: "Shutdown order reconciliation failed",
+            stage: "BEFORE_BUY_CANCELLATION",
+            result: reconciliation,
+          })
+        }
+      } catch (error) {
         auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+        logShutdownFailure({
+          message: "Shutdown order reconciliation failed",
+          stage: "BEFORE_BUY_CANCELLATION",
+          error,
+        })
       }
 
       const cancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
-      if (cancellation?.ok !== true) auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+      if (cancellation?.ok !== true) {
+        auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
+        logShutdownFailure({
+          message: "Shutdown BUY cancellation failed",
+          stage: "CANCEL_OWNED_BUYS",
+          result: cancellation,
+        })
+      }
 
       // Keep execution reports flowing until cancellation responses and
       // fills racing with cancellation have been processed.
       await userDataEventQueue
       try {
         const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-      } catch {
+        if (reconciliation?.ok !== true) {
+          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+          logShutdownFailure({
+            message: "Shutdown order reconciliation failed",
+            stage: "AFTER_BUY_CANCELLATION",
+            result: reconciliation,
+          })
+        }
+      } catch (error) {
         auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
+        logShutdownFailure({
+          message: "Shutdown order reconciliation failed",
+          stage: "AFTER_BUY_CANCELLATION",
+          error,
+        })
       }
     }
 
