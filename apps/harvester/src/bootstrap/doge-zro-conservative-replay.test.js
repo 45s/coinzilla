@@ -196,7 +196,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
       await replay.fillOrder({
         order: buy,
         price: buy.price,
-        tradeId: "645-" + symbol.toLowerCase() + "-multi-buy-" + (index + 1),
+        tradeId: String(645 + index),
       })
       const [nextSell, nextBuy] = await Promise.all([
         sellSubmitted,
@@ -257,7 +257,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
     await replay.fillOrder({
       order: sell,
       price: sell.price,
-      tradeId: "645-" + symbol.toLowerCase() + "-multi-sell",
+      tradeId: "649",
     })
     const completion = await cycle
     assert.equal(completion.freeQuantity, "3.4")
@@ -320,7 +320,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
     await replay.fillOrder({
       order: sell,
       price: replay.scenario.sellFillPrice,
-      tradeId: "645-" + symbol.toLowerCase() + "-sell",
+      tradeId: "650",
     })
 
     const completion = await cycle
@@ -795,7 +795,7 @@ async function getRecoveryOrders(replay) {
   await fillOrder({
     order: buy,
     price: scenario.buyPrice,
-    tradeId: "645-" + replay.symbol.toLowerCase() + "-buy",
+    tradeId: "645",
   })
   const [recoverySell, nextStandingBuy] = await Promise.all([
     recoverySellSubmitted,
