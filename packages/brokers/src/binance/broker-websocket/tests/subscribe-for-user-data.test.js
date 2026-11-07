@@ -328,6 +328,9 @@ describe("BinanceSdkBroker.subscribeForUserData", () => {
     assert.equal(statuses[1].symbol, "BTCUSDT")
     assert.equal(statuses[1].brokerOrderId, "102")
     assert.equal(statuses[1].executionId, "402")
+    assert.equal(statuses[1].brokerEvidence.source, "binance.spot.userData.executionReport")
+    assert.equal(statuses[1].brokerEvidence.commissionAmount, "0")
+    assert.equal(statuses[1].brokerEvidence.tradeId, 402)
     await result.data.disconnect()
   })
 

@@ -35,6 +35,9 @@ function matchesRawStream(stream, message) {
   return false
 }
 
+/**
+ * Manage public Binance Streams subscriptions, acknowledgements, and reconnects.
+ */
 export class BinanceStreamsClient {
   #transport = null
   #state = "idle"
@@ -55,6 +58,10 @@ export class BinanceStreamsClient {
   #reconnectAttempts = 0
   #transportCleanup = null
 
+  /**
+   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
+   * @throws {TypeError|RangeError} If a URL, callback, or timing option is invalid.
+   */
   constructor({
     url = DEFAULT_URL,
     transportFactory = (options) => new NativeWebSocketTransport(options),
@@ -99,6 +106,7 @@ export class BinanceStreamsClient {
     return [...this.#listeners.keys()]
   }
 
+  /** @returns {Promise<BinanceStreamsClient>} Resolves when all desired streams are active. */
   connect() {
     if (this.#listeners.size === 0) {
       return Promise.reject(new Error("Subscribe to at least one stream before connecting"))
@@ -106,6 +114,13 @@ export class BinanceStreamsClient {
     return this.#connect(false, [...this.#listeners.keys()])
   }
 
+  /**
+   * Add a listener to one or more validated stream names.
+   *
+   * @param {string|string[]} streamNames
+   * @param {(message: object) => void} listener
+   * @returns {Promise<string[]>} The normalized stream names subscribed.
+   */
   async subscribe(streamNames, listener) {
     if (typeof listener !== "function") throw new TypeError("A stream listener function is required")
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
@@ -163,6 +178,13 @@ export class BinanceStreamsClient {
     })
   }
 
+  /**
+   * Remove a listener from one or more streams; omit listener to remove all listeners.
+   *
+   * @param {string|string[]} streamNames
+   * @param {(message: object) => void} [listener]
+   * @returns {Promise<string[]>} The normalized stream names processed.
+   */
   async unsubscribe(streamNames, listener) {
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) throw new TypeError("At least one stream is required")
@@ -199,6 +221,7 @@ export class BinanceStreamsClient {
     })
   }
 
+  /** @returns {Promise<void>} Stops reconnects, clears subscriptions, and closes the socket. */
   async disconnect() {
     this.#manualDisconnect = true
     this.#clearReconnectTimer()

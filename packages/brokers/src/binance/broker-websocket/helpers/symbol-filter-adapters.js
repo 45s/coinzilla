@@ -1,5 +1,12 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
+/**
+ * Validate a required positive decimal filter returned by Binance.
+ *
+ * @param {{value: string|null|undefined, name: string, symbol: string}} options
+ * @returns {string} The unchanged exact decimal string.
+ * @throws {Error|TypeError} If the filter is missing, malformed, or not positive.
+ */
 export function validatePositiveDecimalFilter({ value, name, symbol }) {
   if (value === undefined || value === null) {
     throw new Error(`Binance ${name} missing for ${symbol}`)
@@ -15,6 +22,13 @@ export function validatePositiveDecimalFilter({ value, name, symbol }) {
   return value
 }
 
+/**
+ * Validate an optional non-negative decimal filter returned by Binance.
+ *
+ * @param {{value: string|null|undefined, name: string, symbol: string}} options
+ * @returns {string|undefined} The unchanged exact decimal string, or undefined when absent.
+ * @throws {TypeError|RangeError} If a provided filter is malformed or negative.
+ */
 export function readOptionalDecimalFilter({ value, name, symbol }) {
   if (value === undefined || value === null) return undefined
   try {

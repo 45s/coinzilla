@@ -17,6 +17,8 @@ import {
   mapExecutionAccountingFailedData,
   mapExecutionInvalidFillData,
   mapExecutionUnownedOrderData,
+  mapBrokerExecutionReportData,
+  mapOrderUpdatedData,
   mapStrategyDecisionData,
   mapStrategyPausedData,
 } from "../application/events/lifecycle-event-dtos.js"
@@ -898,7 +900,7 @@ export function makeConservativeTradingEngine({
           message: "Harvester Conservative evaluation submitted no orders",
           evaluationId,
           symbol,
-          reason: decision.reason,
+          reason: decision.reason ?? executableActions[0]?.reason,
           activeOrders: activeOrdersBefore.map((order) => order.value),
         })
         return toResult({ data: { decision, submittedOrders: [] } })
@@ -1032,6 +1034,30 @@ export function makeConservativeTradingEngine({
           strategy: decision.strategy,
           symbol,
           referencePrice: marketPrice.price,
+          reason: decision.reason ?? executableActions[0]?.reason,
+          inputs: {
+            lastBuyPrice: lastBuyPrice ?? null,
+            activeOrderCount: activeOrdersBefore.length,
+            activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
+            activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
+            activeBaseQuantity: position?.baseQuantity.amount ?? "0",
+            activeBaseBalance,
+            freeQuoteBalance: quoteBalance.amount,
+            freeBaseBalance: baseBalance.amount,
+            quoteCashFlow,
+            committedQuote,
+            committedQuoteBalance,
+            committedBase,
+            committedBaseBalance,
+            outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
+            investmentLimit: String(pairs[symbol].investment),
+            orderQuantity: String(pairs[symbol].orderQuantity),
+            keepQuantity: String(pairs[symbol].keepQuantity),
+            priceStepPercent: String(pairs[symbol].priceStepPercent),
+            makerPercent: String(pairs[symbol].makerPercent),
+            takerPercent: String(pairs[symbol].takerPercent),
+            minProfit: String(settings.minProfit),
+          },
           actions: executableActions,
         }),
       })
@@ -1286,6 +1312,9 @@ export function makeConservativeTradingEngine({
 
   const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
     try {
+      if (event?.eventType === "executionReport" && event?.brokerEvidence) {
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
+      }
       const order = event?.executedOrder
       if (!(order instanceof CanonicalOrder)) {
         if (event?.eventType === "executionReport") throw new TypeError("Execution report requires canonical executedOrder")
@@ -1303,6 +1332,9 @@ export function makeConservativeTradingEngine({
         return toResult({ error: new Error("Order update does not belong to a Harvester order") })
       }
       state.registry = update.registry
+      if (update.applied === true) {
+        publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED, dataResult: mapOrderUpdatedData({ order, executionType: event.executionType, evidence: event.brokerEvidence }) })
+      }
 
       if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
         return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })

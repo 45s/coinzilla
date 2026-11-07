@@ -41,6 +41,18 @@ function validateSymbol({ symbol }) {
   return symbol.trim().toUpperCase()
 }
 
+/**
+ * Validate and normalize parameters for Binance myTrades queries.
+ *
+ * @param {object} [options]
+ * @param {string} options.symbol
+ * @param {string|number} [options.orderId]
+ * @param {string|number} [options.fromId]
+ * @param {string|number} [options.startTime] - Unix epoch milliseconds.
+ * @param {string|number} [options.endTime] - Unix epoch milliseconds.
+ * @param {number} [options.limit] - Page size from 1 through 1000.
+ * @returns {{symbol: string, limit: number, orderId?: number, fromId?: number, startTime?: number, endTime?: number}}
+ */
 export function createMyTradesParams({
   symbol,
   orderId,
@@ -75,6 +87,17 @@ export function createMyTradesParams({
   }
 }
 
+/**
+ * Validate and normalize parameters for Binance allOrders queries.
+ *
+ * @param {object} [options]
+ * @param {string} options.symbol
+ * @param {string|number} [options.orderId]
+ * @param {string|number} [options.startTime] - Unix epoch milliseconds.
+ * @param {string|number} [options.endTime] - Unix epoch milliseconds.
+ * @param {number} [options.limit] - Page size from 1 through 1000.
+ * @returns {{symbol: string, limit: number, orderId?: number, startTime?: number, endTime?: number}}
+ */
 export function createOrderHistoryParams({
   symbol,
   orderId,

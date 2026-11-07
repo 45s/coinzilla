@@ -18,6 +18,13 @@ function commissionAssetFor(code, market) {
   return createAsset(normalizedCode)
 }
 
+/**
+ * Convert a Binance trade DTO into the canonical fill entity.
+ *
+ * @param {{trade: Record<string, unknown>, market: import("@coinzilla/entities").Market}} options
+ * @returns {import("@coinzilla/entities").Fill}
+ * @throws {TypeError} If the trade, market, identifiers, side, or commission facts are invalid.
+ */
 export function adaptCanonicalFill({ trade, market } = {}) {
   if (!trade || typeof trade !== "object" || Array.isArray(trade)) {
     throw new TypeError("Binance fill should be an object")

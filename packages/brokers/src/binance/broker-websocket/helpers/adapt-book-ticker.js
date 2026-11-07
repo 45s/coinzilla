@@ -1,5 +1,12 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 
+/**
+ * Validate and freeze an exact-decimal Binance bookTicker callback payload.
+ *
+ * @param {{message: object, symbol: string, timestamp: number}} options
+ * @returns {{symbol: string, bestBidPrice: string, bestBidQuantity: string, bestAskPrice: string, bestAskQuantity: string, timestamp: number}}
+ * @throws {TypeError|RangeError} If the event, symbol, or positive decimal fields are invalid.
+ */
 export function adaptBookTickerMessage({ message, symbol, timestamp }) {
   if (!message || typeof message !== "object" || Array.isArray(message) ||
       (message.e !== undefined && message.e !== "bookTicker")) {

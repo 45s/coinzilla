@@ -14,8 +14,11 @@ function assertValidDate(value, name) {
 }
 
 /**
- * Calculate a time difference using only explicit inputs.
- * This function does not read the clock or mutate the supplied Date objects.
+ * Calculate end minus start using explicit Date inputs; does not read the clock
+ * or mutate either Date. Negative results are returned when end is earlier.
+ * @param {{ start: Date, end: Date, unit?: 'second'|'minute'|'hour' }} options
+ * @returns {number} Difference expressed in the selected unit.
+ * @throws {TypeError|RangeError} If a date or unit is invalid.
  */
 export const calculateTimeDiffBetween = ({ start, end, unit = 'hour' } = {}) => {
   if (!Object.hasOwn(unitsMap, unit)) {

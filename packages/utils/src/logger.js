@@ -90,30 +90,39 @@ function createConsoleTransport() {
 
 /**
  * @typedef {object} LogEntry
- * @property {string} timestamp - ISO-8601 timestamp created once per log call.
- * @property {'trace'|'debug'|'info'|'warn'|'error'} level - Standard severity.
- * @property {'trace'|'debug'|'info'|'warn'|'error'|'success'|'system'} method - Called semantic method.
- * @property {*} data - JSON-safe structured data with sensitive fields redacted.
+ * @property {string} timestamp ISO-8601 timestamp created once per log call.
+ * @property {'trace'|'debug'|'info'|'warn'|'error'} level Normalized severity.
+ * @property {'trace'|'debug'|'info'|'warn'|'error'|'success'|'system'} method Called method.
+ * @property {unknown} data Detached, frozen, JSON-safe data with sensitive fields redacted.
  */
 
 /**
  * @typedef {object} LoggerTransport
- * @property {string} name - Unique transport identifier within this logger.
- * @property {'trace'|'debug'|'info'|'warn'|'error'} level - Minimum severity accepted by this transport.
- * @property {(entry: LogEntry) => (void|Promise<void>)} write - Receives each accepted entry.
- * @property {(entry: LogEntry) => boolean} [shouldWrite] - Optional additional transport-specific filter.
- * @property {() => (void|Promise<void>)} [close] - Optional resource cleanup hook.
+ * @property {string} name Unique non-empty identifier within this logger.
+ * @property {'trace'|'debug'|'info'|'warn'|'error'} level Minimum accepted severity.
+ * @property {(entry: LogEntry) => (void|Promise<void>)} write Receives each accepted entry.
+ * @property {(entry: LogEntry) => boolean} [shouldWrite] Additional transport-specific filter.
+ * @property {() => (void|Promise<void>)} [close] Optional resource cleanup hook.
+ */
+
+/**
+ * @typedef {{ transport: string, error: unknown }} LoggerTransportError
  */
 
 /**
  * Structured logger with independently filtered output transports.
+ * Omit transports to create the default console transport; pass [] for none.
  *
- * @param {{ transports?: LoggerTransport[], onTransportError?: (context: { transport: string, error: * }) => (void|Promise<void>) }} [options]
+ * @param {{ transports?: LoggerTransport[], onTransportError?: (context: LoggerTransportError) => (void|Promise<void>) }} [options]
  */
 export class Logger {
   #transports = new Map()
   #onTransportError
 
+  /**
+   * @param {{ transports?: LoggerTransport[], onTransportError?: (context: LoggerTransportError) => (void|Promise<void>) }} [options]
+   * @throws {TypeError} If constructor options or a transport contract is invalid.
+   */
   constructor({ transports = [createConsoleTransport()], onTransportError } = {}) {
     if (!Array.isArray(transports)) {
       throw new TypeError('Logger transports must be an array')
@@ -152,7 +161,7 @@ export class Logger {
   /**
    * Change one transport's minimum severity without affecting other transports.
    * @param {{ transport: string, level: 'trace'|'debug'|'info'|'warn'|'error' }} options
-   * @returns {{ transports: Array<{ name: string, level: string }> }}
+   * @returns {{ transports: Array<{ name: string, level: string }> }} Detached configuration snapshot.
    * @throws {TypeError} If the transport identifier is unknown or options are invalid.
    */
   setLevel({ transport, level } = {}) {
@@ -169,8 +178,8 @@ export class Logger {
   }
 
   /**
-   * Return a detached snapshot of the current transport configuration.
-   * @returns {{ transports: Array<{ name: string, level: string }> }}
+   * Return a detached snapshot of registered transport names and thresholds.
+   * @returns {{ transports: Array<{ name: string, level: 'trace'|'debug'|'info'|'warn'|'error' }> }}
    */
   getConfig() {
     return {
@@ -183,10 +192,10 @@ export class Logger {
 
   /**
    * Remove a transport and await its optional cleanup hook.
-   * Cleanup failures are reported through onTransportError and do not prevent
-   * other transports from being used.
+   * Cleanup failures are reported through onTransportError.
    * @param {string} name
-   * @returns {Promise<boolean>} Whether a transport was removed.
+   * @returns {Promise<boolean>} Whether a transport was found and removed.
+   * @throws {TypeError} If name is not a non-empty string.
    */
   async removeTransport(name) {
     if (typeof name !== 'string' || name.trim() === '') {
@@ -202,7 +211,8 @@ export class Logger {
   }
 
   /**
-   * Close and remove every registered transport.
+   * Close and remove all transports, awaiting every optional cleanup hook.
+   * Cleanup failures are reported and do not prevent other transports closing.
    * @returns {Promise<void>}
    */
   async close() {
@@ -274,33 +284,41 @@ export class Logger {
     }
   }
 
+  /** @param {unknown} data @returns {void} Log at TRACE severity. */
   trace(data) {
     this.#log(data, 'trace')
   }
 
+  /** @param {unknown} data @returns {void} Log at DEBUG severity. */
   debug(data) {
     this.#log(data, 'debug')
   }
 
+  /** @param {unknown} data @returns {void} Log at INFO severity. */
   info(data) {
     this.#log(data, 'info')
   }
 
+  /** @param {unknown} data @returns {void} Log at WARN severity. */
   warn(data) {
     this.#log(data, 'warn')
   }
 
+  /** @param {unknown} data @returns {void} Log at ERROR severity. */
   error(data) {
     this.#log(data, 'error')
   }
 
+  /** @param {unknown} data @returns {void} Semantic success method mapped to INFO severity. */
   success(data) {
     this.#log(data, 'success')
   }
 
+  /** @param {unknown} data @returns {void} Semantic system method mapped to INFO severity. */
   system(data) {
     this.#log(data, 'system')
   }
 }
 
+/** Shared process-wide logger instance with the default console transport. */
 export const defaultLogger = new Logger()

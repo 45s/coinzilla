@@ -11,6 +11,13 @@ function assertSymbol(symbol) {
   return symbol.toLowerCase()
 }
 
+/**
+ * Validate a Binance Spot stream name without changing its spelling.
+ *
+ * @param {string} stream
+ * @returns {string} The validated stream name.
+ * @throws {TypeError} If the name is empty or unsupported.
+ */
 export function validateStreamName(stream) {
   if (typeof stream !== "string" || stream.length === 0 || stream !== stream.trim()) {
     throw new TypeError("stream name must be a non-empty string without surrounding whitespace")
@@ -26,6 +33,14 @@ export function validateStreamName(stream) {
   return stream
 }
 
+/**
+ * Create a validated Binance Spot stream name from its typed options.
+ *
+ * @param {"trade"|"aggTrade"|"miniTicker"|"ticker"|"bookTicker"|"kline"|"rollingWindowTicker"|"partialBookDepth"|"diffBookDepth"} type
+ * @param {{symbol?: string, interval?: string, windowSize?: string, levels?: number, speed?: "100ms"|"1000ms"}} [options]
+ * @returns {string}
+ * @throws {TypeError} If the selected stream type or its options are unsupported.
+ */
 export function createStreamName(type, options = {}) {
   const { symbol, interval, windowSize, levels, speed } = options
   const normalizedSymbol = symbol === undefined || symbol === null ||
@@ -68,6 +83,13 @@ export function createStreamName(type, options = {}) {
   }
 }
 
+/**
+ * Parse raw, combined, all-market, or control-acknowledgement stream messages.
+ *
+ * @param {string|object|Array<object>} rawMessage - WebSocket message data.
+ * @returns {{stream: string|null, data: object|object[]}|{acknowledgement: object}|{serverShutdown: true, data: object}}
+ * @throws {TypeError} If the payload is not a supported Binance stream message.
+ */
 export function parseStreamMessage(rawMessage) {
   let parsed
   try {

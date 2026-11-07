@@ -4,6 +4,7 @@ import {
 } from "../../../shared/adapt-canonical-order.js"
 import { normalizeBinanceId } from "../../../shared/normalize-binance-id.js"
 
+/** @param {{orders: unknown}} options @returns {object[]} Validated Binance order history page. */
 export function requireOrderHistoryArray({ orders }) {
   if (!Array.isArray(orders)) {
     throw new TypeError("Binance allOrders response should be an array")
@@ -11,6 +12,7 @@ export function requireOrderHistoryArray({ orders }) {
   return orders
 }
 
+/** @param {{orders: object[]}} options @returns {object[]} Orders with valid non-negative exchange IDs. */
 export function validateOrderHistoryCursorItems({ orders }) {
   for (const order of orders) {
     if (!order || typeof order !== "object" || Array.isArray(order)) {
@@ -21,6 +23,10 @@ export function validateOrderHistoryCursorItems({ orders }) {
   return orders
 }
 
+/**
+ * @param {{symbol: string, exchangeInfo: {symbols?: Array<object>}}} options
+ * @returns {import("@coinzilla/entities").Market}
+ */
 export function createCanonicalOrderHistoryMarket({ symbol, exchangeInfo }) {
   const symbolMatches = Array.isArray(exchangeInfo?.symbols)
     ? exchangeInfo.symbols.filter((item) => item?.symbol === symbol)
@@ -41,6 +47,7 @@ const CANONICAL_ORDER_STATUSES = new Set([
   "EXPIRED_IN_MATCH",
 ])
 
+/** @param {{orders: object[], symbol: string}} options @returns {object[]} */
 export function validateCanonicalOrderHistoryItems({ orders, symbol }) {
   if (typeof symbol !== "string" || !symbol.trim()) {
     throw new TypeError("Canonical order history requires a symbol")
@@ -56,6 +63,10 @@ export function validateCanonicalOrderHistoryItems({ orders, symbol }) {
   return orders
 }
 
+/**
+ * @param {{orders: object[], market: import("@coinzilla/entities").Market}} options
+ * @returns {import("@coinzilla/entities").CanonicalOrder[]}
+ */
 export function adaptCanonicalOrderHistory({ orders, market }) {
   validateCanonicalOrderHistoryItems({ orders, symbol: market?.symbol })
   return orders.map((order) => adaptCanonicalOrder({ order, market }))

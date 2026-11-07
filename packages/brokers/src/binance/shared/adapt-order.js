@@ -1,5 +1,12 @@
 import { Order } from "@coinzilla/entities"
 
+/**
+ * Adapt a Binance order response to the legacy broker Order entity.
+ * Exact exchange price and quantity strings are retained on the returned order.
+ *
+ * @param {{origQty: string|number, executedQty: string|number, price: string|number, orderId: string|number, clientOrderId?: string, type: string, side: string, symbol: string, status: string}} binanceOrder
+ * @returns {import("@coinzilla/entities").Order}
+ */
 export function adaptOrder(binanceOrder) {
   const {
     origQty,

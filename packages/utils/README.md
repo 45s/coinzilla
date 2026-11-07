@@ -2,6 +2,8 @@
 
 Domain-neutral helpers shared across the Coinzilla workspace. The package uses native Node.js APIs and has no runtime dependencies.
 
+Public JavaScript APIs are documented with JSDoc for editor IntelliSense, parameter hints, and hover information. Runtime behavior and validation remain implemented and tested in JavaScript; JSDoc does not enable static type-checking or add TypeScript declarations.
+
 ## Public API
 
 **Search here before writing a generic helper.** The repository-wide rules and current duplication audit are documented in [../../docs/engineering/SHARED_UTILITIES_POLICY.md](../../docs/engineering/SHARED_UTILITIES_POLICY.md). Consumers should import supported APIs from this package entry point, not private source paths.

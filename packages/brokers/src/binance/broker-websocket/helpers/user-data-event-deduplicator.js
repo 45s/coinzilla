@@ -20,6 +20,12 @@ function executionReportIdentity(event) {
   return `executionReport:${event.s}:${event.i}:${event.I}`
 }
 
+/**
+ * Return a stable identity for a user-data event, or null when it cannot be identified.
+ *
+ * @param {unknown} message - Binance user-data message or wrapped event.
+ * @returns {string|null}
+ */
 export function getUserDataEventIdentity(message) {
   const unwrapped = unwrapUserDataEvent(message)
   if (!unwrapped) return null
@@ -36,6 +42,13 @@ export function getUserDataEventIdentity(message) {
   }
 }
 
+/**
+ * Create a bounded in-memory user-data event deduplicator.
+ *
+ * @param {{maxEntries?: number}} [options] - Maximum identities retained.
+ * @returns {{isDuplicate: (message: unknown) => boolean, clear: () => void, readonly size: number}}
+ * @throws {RangeError} If maxEntries is not a positive integer.
+ */
 export function createUserDataEventDeduplicator({ maxEntries = DEFAULT_MAX_ENTRIES } = {}) {
   if (!Number.isInteger(maxEntries) || maxEntries < 1) {
     throw new RangeError("maxEntries must be a positive integer")

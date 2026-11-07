@@ -30,6 +30,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 ## Roadmap
 
 - [~] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (feature branch `feature/utils-logger-levels`).
+- [x] Document public and non-obvious `packages/utils` inputs, outputs, callbacks, async behavior, defaults, and validation contracts with JSDoc; completed in [PR #659](https://github.com/45s/coinzilla/pull/659), merged at `27388a54dd788819a08b5e605cb714258da57ccd`. JavaScript-first tooling remains unchanged.
 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.

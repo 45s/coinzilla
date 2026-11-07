@@ -18,6 +18,12 @@ The `@coinzilla/brokers` entry point exports:
 
 Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
+## JavaScript editor types
+
+The public broker methods, configuration options, Binance adapters, RPC/Streams clients, and user-data boundaries use JSDoc to describe their inputs, outputs, callbacks, and important value constraints. VS Code and other JavaScript language servers read these annotations for hover information, parameter hints, and IntelliSense without a TypeScript build step.
+
+The package remains plain JavaScript. JSDoc improves editor type information; it does not add runtime validation or enable project-wide static type checking. Keep runtime validation and the existing offline tests as the correctness boundary. Do not add `checkJs`, `@ts-check`, TypeScript declarations, or a TypeScript toolchain as part of routine JSDoc maintenance; follow the repository-wide [JavaScript and JSDoc standard](../../docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md).
+
 ## Runtime and configuration
 
 - Node.js **24 or newer** is required. The native transport also checks the bundled Undici version at runtime.

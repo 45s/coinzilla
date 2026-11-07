@@ -12,6 +12,12 @@ function isAtLeast(version, minimum) {
   return true
 }
 
+/**
+ * Check whether a bundled Undici version meets the patched minimum for its major.
+ *
+ * @param {string|undefined} value
+ * @returns {boolean}
+ */
 export function isSafeUndiciVersion(value) {
   const version = parseVersion(value)
   if (!version) return false
@@ -26,6 +32,13 @@ export function isSafeUndiciVersion(value) {
   return Boolean(minimum && isAtLeast(version, minimum))
 }
 
+/**
+ * Enforce the broker's supported Node.js and patched Undici runtime floor.
+ *
+ * @param {{nodeVersion?: string, undiciVersion?: string}} [versions]
+ * @returns {void}
+ * @throws {Error} If Node.js or bundled Undici is missing or below the supported version.
+ */
 export function assertNativeWebSocketRuntime({
   nodeVersion = process.versions.node,
   undiciVersion = process.versions.undici,

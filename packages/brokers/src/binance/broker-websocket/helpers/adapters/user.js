@@ -1,3 +1,9 @@
+/**
+ * Binance user-data event adapters keyed by the raw event type.
+ * Each adapter returns a normalized event object while preserving exchange values.
+ *
+ * @type {{balanceUpdate: (message: object) => object, outboundAccountInfo: (message: object) => object, outboundAccountPosition: (message: object) => object, executionReport: (message: object) => object, listStatus: (message: object) => object}}
+ */
 export const adaptUser = {
   balanceUpdate: (message) => ({
     asset: message.a,

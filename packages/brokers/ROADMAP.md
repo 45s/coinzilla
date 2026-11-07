@@ -65,6 +65,7 @@ The migration is complete only when all of the following are true:
 - [x] Phase 7 — remove the SDK and retire legacy REST implementation; completed by PR #333 on 2026-10-31.
 - [~] Phase 8 — operational hardening and completion; code-level hardening and offline verification are complete. A manual read-only TESTNET workflow is available at `.github/workflows/unit-tests.yml` (`run_broker_testnet_read_only` manual input). The repository owner reports that the required TESTNET secrets are configured (values intentionally uninspected); the manual run on `develop` and long-running recovery/soak validation in a controlled TESTNET session remain pending.
 - [~] Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers`; in progress. Slices 1–3 are merged via PRs #596, #599, and #602; slice 4 (application session and explicit port contract) is underway. The first modernization tranche established test seams and selected adapters but did not complete the package's domain/application/ports/infrastructure architecture.
+- [x] JSDoc contract coverage — completed by PR #657 and merged into `develop` at `ccf4662`. Public broker methods and non-obvious inputs/outputs at Binance adapter, RPC, Streams, transport, and user-data boundaries are documented. The package remains JavaScript-first; no `checkJs` or TypeScript tooling was added.
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 

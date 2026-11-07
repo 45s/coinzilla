@@ -9,6 +9,13 @@ const normalizeAssetCode = ({ asset }) => {
   return new Asset({ id: code.toLowerCase(), code })
 }
 
+/**
+ * Adapt Binance account balance rows into canonical Balance entities.
+ *
+ * @param {Array<{asset: string, free: string|number, locked: string|number}>} input
+ * @returns {import("@coinzilla/entities").Balance[]}
+ * @throws {TypeError} If the input is malformed or contains duplicate asset codes.
+ */
 export function adaptSpotBalance(input) {
   if (!Array.isArray(input)) {
     throw new TypeError("Binance account balances should be an array")
