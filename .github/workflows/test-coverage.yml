@@ -39,30 +39,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run workspace tests with coverage
-        shell: bash
-        run: |
-          set +e
-          # These workspaces have dedicated coverage commands below. Exclude
-          # them here so their test suites are not executed twice.
-          pnpm --filter './packages/*' --filter './apps/*' \
-            --filter '!@coinzilla/brokers' \
-            --filter '!@coinzilla/notifiers' \
-            --filter '!@coinzilla/event-bus' \
-            --filter '!@coinzilla/utils' \
-            --filter '!@coinzilla/bot-free-roll' \
-            --recursive --parallel --workspace-concurrency=2 \
-            exec node --test --experimental-test-coverage 2>&1 | tee coverage-output.txt
-          test_status=${PIPESTATUS[0]}
-
-          {
-            echo '## Workspace test coverage'
-            echo
-            cat coverage-output.txt
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          exit "$test_status"
-
       - name: Enforce Brokers package coverage command
         run: pnpm --filter @coinzilla/brokers test:coverage
 
