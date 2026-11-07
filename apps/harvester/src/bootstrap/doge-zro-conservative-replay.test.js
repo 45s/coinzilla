@@ -1,4 +1,4 @@
-import test, { describe, beforeEach, afterEach } from "node:test"
+import test, { describe, beforeAll, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -15,15 +15,6 @@ const expectedSellOrders = {
     expectedSellQuantity: "398",
     expectedFreeQuantity: "1.6",
     expectedProfit: "0.01524808",
-  },
-  ZROUSDT: {
-    initialPrice: "1.60500000",
-    buyPrice: "1.604",
-    sellPrice: "1.615",
-    sellFillPrice: "1.615",
-    expectedSellQuantity: "4.98",
-    expectedFreeQuantity: "0.015",
-    expectedProfit: "0.0146573",
   },
 }
 
@@ -45,17 +36,6 @@ const config = {
           priceStepPercent: 0.05,
           pricePrecision: 5,
           quantityPrecision: 0,
-          makerPercent: 0.1,
-          takerPercent: 0.1,
-        },
-        ZROUSDT: {
-          enabled: true,
-          investment: 100,
-          orderQuantity: 5,
-          keepQuantity: 0.01,
-          priceStepPercent: 0.05,
-          pricePrecision: 3,
-          quantityPrecision: 1,
           makerPercent: 0.1,
           takerPercent: 0.1,
         },
@@ -94,6 +74,8 @@ const exchangeInfoSymbol = (symbol) => {
     ],
   }
 }
+
+let dogeExchangeInfo
 
 const waitForOrder = (submitted, waiters, symbol, side) => {
   const matches = (order) =>
@@ -151,7 +133,7 @@ const createReplayHarness = async (symbol) => {
         outgoingOrderRequestsList.push({ method, params: { ...params } })
       }
       if (method === "exchangeInfo") {
-        return { data: { symbols: [exchangeInfoSymbol(symbol)] } }
+        return { data: { symbols: [dogeExchangeInfo] } }
       }
       if (method === "ticker.price") {
         return { data: { symbol, price: expectedSellOrder.initialPrice } }
@@ -379,22 +361,24 @@ const getRecoverySell = async (replay) => {
   return sellSubmitted
 }
 
-describe("Conservative strategy replay", () => {
+describe("DOGEUSDT Conservative strategy replay", () => {
+  const symbol = "DOGEUSDT"
   let replay
 
-  describe("DOGEUSDT replays", () => {
-    const symbol = "DOGEUSDT"
+  beforeAll(() => {
+    dogeExchangeInfo = exchangeInfoSymbol(symbol)
+  })
 
-    beforeEach(async () => {
+  beforeEach(async () => {
       replay = await createReplayHarness(symbol)
     })
 
-    afterEach(async () => {
-      if (replay?.runtime) await replay.runtime.stop()
-      replay = undefined
-    })
+  afterEach(async () => {
+    if (replay?.runtime) await replay.runtime.stop()
+    replay = undefined
+  })
 
-    test("creates the initial BUY after a price trigger", async () => {
+  test("creates the initial BUY after a price trigger", async () => {
       const buy = await getInitialBuy(replay)
       assert.deepEqual(
         [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
@@ -423,7 +407,7 @@ describe("Conservative strategy replay", () => {
       )
     })
 
-    test("creates a recovery SELL from the actual BUY fill report", async () => {
+  test("creates a recovery SELL from the actual BUY fill report", async () => {
       const sellSubmitted = getRecoverySell(replay)
       const sell = await sellSubmitted
       assert.deepEqual(
@@ -458,7 +442,7 @@ describe("Conservative strategy replay", () => {
       )
     })
 
-    test("completes the recovery cycle after the SELL fill report", async () => {
+  test("completes the recovery cycle after the SELL fill report", async () => {
       const sellSubmitted = getRecoverySell(replay)
       const sell = await sellSubmitted
       const cycle = replay.waitForCycle()
@@ -493,10 +477,5 @@ describe("Conservative strategy replay", () => {
           [symbol, "SELL", "USDT"],
         ],
       )
-    })
-  })
-
-  describe("ZROUSDT replays", () => {
-    //implement
   })
 })
