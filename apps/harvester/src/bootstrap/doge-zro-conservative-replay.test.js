@@ -1,4 +1,5 @@
-import test, { describe, before, beforeEach, afterEach } from "node:test"
+import nodeTest, { describe, before, beforeEach, afterEach } from "node:test"
+const test = (name, ...args) => nodeTest("[doge-zro-conservative-replay.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
