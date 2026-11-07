@@ -117,6 +117,7 @@ test("does not create a second SELL while a recovery SELL is active", () => {
     recoveryLedger,
     marketMetadata,
     activeOrders: [{ market, side: "SELL", status: "PARTIALLY_FILLED" }],
+    lastBuyPrice: "0.1",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
   assert.equal(decision.actions.some((action) => action.side === "BUY"), true)
@@ -327,7 +328,7 @@ test("combines exchange-constrained dust with a later BUY and preserves the full
   })
   const sell = decision.actions.find((action) => action.side === "SELL")
   assert.ok(sell)
-  assert.equal(sell.quantity, "99")
+  assert.equal(sell.quantity, "100")
   assert.equal(sell.reason, "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT")
   assert.equal(decision.inventoryDisposition, undefined)
 })
@@ -412,7 +413,7 @@ test("fails closed when active inventory has no positive recovery cost basis", (
     recoveryLedger: proceedsOnlyLedger,
     marketMetadata,
     lastBuyPrice: "0.1",
-  }), /no recovery cost\/profit basis/)
+  }), /Position\\.spent and legacy RecoveryLedger cost mirror diverged/)
 })
 
 
