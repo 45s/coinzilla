@@ -354,9 +354,8 @@ export function makeConservativeTradingEngine({
       return toResult({ error })
     }
 
-    // The user-data execution report is itself authoritative evidence. Binance REST
-    // trade history can lag the stream, so reconcile the terminal cumulative quantity
-    // against the union of REST history and the fill carried by this terminal event.
+    // The terminal stream event is authoritative evidence when REST history lags.
+    // Merge it with REST history, retaining the same duplicate-ID conflict checks.
     const fillsById = new Map()
     const candidateFills = eventFill === undefined
       ? fillsResult.data
