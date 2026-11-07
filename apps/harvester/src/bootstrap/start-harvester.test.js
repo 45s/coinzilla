@@ -2569,20 +2569,33 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   assert.ok(calls.includes("placeOrder:BUY"))
 
   const stopPromise = runtime.stop()
-  await waitForTestSignal(cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
-  broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
-  await waitForTestSignal(userDataObserved, "user-data event during shutdown", () => ({
-    observedEvents: observedEvents.length,
-    calls,
-  }))
+  let testError
+  try {
+    await waitForTestSignal(cancelStarted, "shutdown BUY cancellation", () => ({ calls }))
+    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+    await waitForTestSignal(userDataObserved, "user-data event during shutdown", () => ({
+      observedEvents: observedEvents.length,
+      calls,
+    }))
 
-  assert.equal(observedEvents.length, 1)
-  assert.equal(calls.includes("unsubscribe:user-data"), false)
-  assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
-  assert.equal(calls.includes("cancelOrder:SELL"), false)
+    assert.equal(observedEvents.length, 1)
+    assert.equal(calls.includes("unsubscribe:user-data"), false)
+    assert.ok(calls.indexOf("unsubscribe:BTCUSDT") < calls.indexOf("cancelOrder:BUY"))
+    assert.equal(calls.includes("cancelOrder:SELL"), false)
+  } catch (error) {
+    testError = error
+  } finally {
+    releaseCancel()
+  }
 
-  releaseCancel()
-  await stopPromise
+  let stopError
+  try {
+    await stopPromise
+  } catch (error) {
+    stopError = error
+  }
+  if (testError) throw testError
+  if (stopError) throw stopError
 
   assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"))
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"))
