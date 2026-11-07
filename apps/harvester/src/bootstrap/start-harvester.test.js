@@ -788,7 +788,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("does not acknowledge a stale recovery after a newer disconnect", async () => {
@@ -850,7 +850,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
 
   assert.equal(acknowledgementCount, 0)
   assert.equal(result.userDataReady, false)
-  await result.stop()
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
 })
 
 test("does not become ready when recovery is reported during subscription setup", async () => {
@@ -1490,7 +1490,8 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   // strategy inventory. The existing standing BUY must not be trailed/canceled.
   assert.equal(submittedOrders.length, 5)
   assert.equal(buyCancellationCount.value, 0)
-  await runtime.stop()
+  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(buyCancellationCount.value, 1)
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0.001")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
