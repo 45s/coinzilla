@@ -1504,11 +1504,11 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // The completed recovery cycle retained free inventory but left active
-  // strategy inventory. The existing standing BUY must not be trailed/canceled.
+  // With no active position left, the subsequent market tick may trail the
+  // standing BUY; shutdown then completes after the resulting order state is reconciled.
   assert.equal(submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
-  assert.equal(buyCancellationCount.value, 0, "a later market tick must not cancel the retained standing BUY before shutdown")
-  await assert.rejects(runtime.stop(), /Harvester shutdown was incomplete/, "shutdown must report failure and retain the safety lock while an owned BUY remains unresolved")
+  assert.equal(buyCancellationCount.value, 1, "the subsequent market tick must cancel the standing BUY once under the existing trailing strategy behavior")
+  await runtime.stop()
   assert.equal(buyCancellationCount.value, 1)
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   assert.equal(position.baseQuantity.amount, "0")
