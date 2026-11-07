@@ -410,9 +410,11 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
     }),
   })
 
-  await partialFill
-  assert.deepEqual(cancellations, [])
+  // The partial BUY fill starts recovery SELL cancellation and remains
+  // serialized until the broker confirms it. Observe the cancellation before
+  // resolving the broker promise; awaiting partialFill first would deadlock.
   await cancelStarted.promise
+  assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId])
 
   const sellFillEvent = createTradeEvent({
     acknowledgedOrder: pendingSellOrder,
@@ -436,8 +438,7 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
       status: "CANCELED",
     }),
   }))
-  await finalFill
-  await delayedSellReport
+  await Promise.all([partialFill, finalFill, delayedSellReport])
 
   assert.deepEqual(cancellations, [pendingSellOrder.brokerOrderId])
   assert.equal(getPortfolio().appliedFillIds.length, 4)
