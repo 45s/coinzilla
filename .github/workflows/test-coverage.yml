@@ -51,7 +51,8 @@ jobs:
             --filter '!@coinzilla/event-bus' \
             --filter '!@coinzilla/utils' \
             --filter '!@coinzilla/bot-free-roll' \
-            --recursive exec node --test --experimental-test-coverage 2>&1 | tee coverage-output.txt
+            --recursive --parallel --workspace-concurrency=2 \
+            exec node --test --experimental-test-coverage 2>&1 | tee coverage-output.txt
           test_status=${PIPESTATUS[0]}
 
           {
