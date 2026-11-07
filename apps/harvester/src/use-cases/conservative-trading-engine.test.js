@@ -20,7 +20,7 @@ import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngin
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
-import { evaluateConservativeStrategy } from "../domain/strategies/conservative/conservative-strategy.js"
+import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
 const baseAsset = new Asset({ id: "doge", code: "DOGE" })
 const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
