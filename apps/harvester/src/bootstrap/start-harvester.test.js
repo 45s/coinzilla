@@ -1,4 +1,4 @@
-import test from "node:test"
+import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -18,6 +18,10 @@ const startHarvesterForTest = (input = {}) => {
 }
 
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+
+// Include the source file in every reporter test name so failures are identifiable
+// even when the spec reporter output is copied without its surrounding file header.
+const test = (name, ...args) => nodeTest(`[start-harvester.test.js] ${name}`, ...args)
 
 async function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 15_000) {
   let timeout
