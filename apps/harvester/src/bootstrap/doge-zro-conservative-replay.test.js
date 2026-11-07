@@ -394,9 +394,17 @@ describe("DOGEUSDT Conservative strategy replay", () => {
         replay.outgoingOrderRequests.map(({ params }) => [
           params.symbol,
           params.side,
+          params.price,
+          params.quantity,
           params.type,
         ]),
-        [[symbol, "BUY", "LIMIT"]],
+        [[
+          symbol,
+          "BUY",
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          "LIMIT",
+        ]],
       )
       assert.deepEqual(
         replay.receivedPrices.map(({ symbol: receivedSymbol, price }) => [
@@ -424,20 +432,49 @@ describe("DOGEUSDT Conservative strategy replay", () => {
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
           executedOrder.side,
+          executedOrder.price,
+          executedOrder.executedQuantity,
+          fill.price,
+          fill.quantity,
+          fill.quoteQuantity,
+          fill.commissionAmount,
           fill.commissionAsset,
         ]),
-        // add price/commission/quantity
-        [[symbol, "BUY", symbol.slice(0, -4)]],
+        [[
+          symbol,
+          "BUY",
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          "28.628",
+          "0.4",
+          symbol.slice(0, -4),
+        ]],
       )
       assert.deepEqual(
         replay.outgoingOrderRequests.map(({ params }) => [
           params.symbol,
           params.side,
+          params.price,
+          params.quantity,
           params.type,
         ]),
         [
-          [symbol, "BUY", "LIMIT"],
-          [symbol, "SELL", "LIMIT"],
+          [
+            symbol,
+            "BUY",
+            replay.scenario.buyPrice,
+            String(replay.pair.orderQuantity),
+            "LIMIT",
+          ],
+          [
+            symbol,
+            "SELL",
+            replay.scenario.sellPrice,
+            replay.scenario.expectedSellQuantity,
+            "LIMIT",
+          ],
         ],
       )
     })
@@ -470,11 +507,37 @@ describe("DOGEUSDT Conservative strategy replay", () => {
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
           executedOrder.side,
+          executedOrder.price,
+          executedOrder.executedQuantity,
+          fill.price,
+          fill.quantity,
+          fill.quoteQuantity,
+          fill.commissionAmount,
           fill.commissionAsset,
         ]),
         [
-          [symbol, "BUY", symbol.slice(0, -4)],
-          [symbol, "SELL", "USDT"],
+          [
+            symbol,
+            "BUY",
+            replay.scenario.buyPrice,
+            String(replay.pair.orderQuantity),
+            replay.scenario.buyPrice,
+            String(replay.pair.orderQuantity),
+            "28.628",
+            "0.4",
+            symbol.slice(0, -4),
+          ],
+          [
+            symbol,
+            "SELL",
+            replay.scenario.sellFillPrice,
+            replay.scenario.expectedSellQuantity,
+            replay.scenario.sellFillPrice,
+            replay.scenario.expectedSellQuantity,
+            "28.67192",
+            "0.02867192",
+            "USDT",
+          ],
         ],
       )
   })
