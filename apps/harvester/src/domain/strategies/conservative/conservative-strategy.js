@@ -3,6 +3,7 @@ import { Portfolio } from "../../portfolio/portfolio.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
+import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableInventory } from "./conservative-rules.js"
 
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.
@@ -87,7 +88,7 @@ export function evaluateConservativeStrategy({
   if (recoveryLedger && recoveryLedger.market?.id !== marketMetadata.market.id) {
     throw new Error("Conservative RecoveryLedger market does not match strategy market")
   }
-  if ((compareDecimal({ left: activeQuantity, right: "0" }) > 0 ||
+  if ((hasActivePosition({ activeQuantity }) ||
        compareDecimal({ left: positionSpent, right: "0" }) > 0) && !recoveryLedger) {
     throw new Error("Conservative active Position requires its recovery proceeds ledger")
   }
@@ -95,7 +96,7 @@ export function evaluateConservativeStrategy({
       compareDecimal({ left: ledger.buyCost, right: positionSpent }) !== 0) {
     throw new Error("Conservative Position.spent and legacy RecoveryLedger cost mirror diverged")
   }
-  if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 &&
+  if (hasActivePosition({ activeQuantity }) &&
       compareDecimal({ left: positionSpent, right: "0" }) <= 0) {
     throw new Error("Conservative active inventory has no Position.spent recovery basis")
   }
@@ -104,11 +105,16 @@ export function evaluateConservativeStrategy({
        compareDecimal({ left: ledger.netSellProceeds, right: "0" }) > 0)) {
     throw new Error("Conservative RecoveryLedger has cycle accounting without an active Position")
   }
-  const orders = activeOrders.filter((order) => order?.market?.symbol === marketPrice.symbol)
-  const hasActiveBuy = orders.some((order) =>
-    order.side === "BUY" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-  const hasActiveSell = orders.some((order) =>
-    order.side === "SELL" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  const hasActiveBuy = hasActiveOrder({
+    activeOrders,
+    symbol: marketPrice.symbol,
+    side: "BUY",
+  })
+  const hasActiveSell = hasActiveOrder({
+    activeOrders,
+    symbol: marketPrice.symbol,
+    side: "SELL",
+  })
   const actions = []
   // The recovery ledger remains open until every exchange-sellable unit above
   // keepQuantity has been sold. This includes residual sell-through after the
@@ -120,8 +126,10 @@ export function evaluateConservativeStrategy({
   let inventoryDisposition
   let buyDisposition
   // Submit recovery SELL first. Active orders suppress duplicate SELL intents.
-  if (!hasActiveSell &&
-      compareDecimal({ left: activeQuantity, right: String(pairConfig.keepQuantity) }) > 0) {
+  if (!hasActiveSell && hasSellableInventory({
+    activeQuantity,
+    keepQuantity: String(pairConfig.keepQuantity),
+  })) {
     const feeRate = calculateSellFeeRate({
       makerPercent: String(pairConfig.makerPercent),
       takerPercent: String(pairConfig.takerPercent),
@@ -216,7 +224,10 @@ export function evaluateConservativeStrategy({
             type: marketMetadata.orderType,
             price: residualPrice,
             quantity: sellQuantity,
-            reason: compareDecimal({ left: outstandingRecovery, right: "0" }) > 0
+            reason: hasOutstandingRecovery({
+              positionSpent,
+              netSellProceeds: ledger.netSellProceeds,
+            })
               ? "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT"
               : "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
             requiredNetProceeds: sellPlan.requiredNetProceeds,
@@ -253,7 +264,7 @@ export function evaluateConservativeStrategy({
   }
 
   if (!hasActiveBuy) {
-    if (compareDecimal({ left: activeQuantity, right: "0" }) > 0 && lastBuyPrice === undefined) {
+    if (hasActivePosition({ activeQuantity }) && lastBuyPrice === undefined) {
       throw new Error("Conservative active Position requires the reconciled completed-BUY VWAP before placing the next standing BUY")
     }
     const referencePrice = lastBuyPrice ?? marketPrice.price
