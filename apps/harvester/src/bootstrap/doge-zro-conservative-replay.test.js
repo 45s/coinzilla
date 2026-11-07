@@ -440,7 +440,7 @@ for (const symbol of Object.keys(replayCases)) {
       await replay.triggerPrice(replay.scenario.sellFillPrice)
       await replay.fillOrder({
         order: sell,
-        price: replay.pair.sellFillPrice,
+        price: replay.scenario.sellFillPrice,
         tradeId: "645-" + symbol.toLowerCase() + "-sell",
       })
 
@@ -450,7 +450,7 @@ for (const symbol of Object.keys(replayCases)) {
 
       const position = replay.runtime.portfolio.getPosition({ symbol })
       assert.equal(position.baseQuantity.amount, "0")
-      assert.equal(position.freeBaseQuantity.amount, replay.pair.expectedFreeQuantity)
+      assert.equal(position.freeBaseQuantity.amount, replay.scenario.expectedFreeQuantity)
       assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
