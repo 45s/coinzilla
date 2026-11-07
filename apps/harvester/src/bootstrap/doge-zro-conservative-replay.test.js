@@ -43,7 +43,7 @@ const pairConfigs = {
   },
 }
 
-const createConfig = (symbol) => ({
+const config = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -53,11 +53,32 @@ const createConfig = (symbol) => ({
         aggressive: { enabled: false },
       },
       pairs: {
-        [symbol]: { enabled: true, ...pairConfigs[symbol] },
+        DOGEUSDT: {
+          enabled: true,
+          investment: 100,
+          orderQuantity: 400,
+          keepQuantity: 1,
+          priceStepPercent: 0.05,
+          pricePrecision: 5,
+          quantityPrecision: 0,
+          makerPercent: 0.1,
+          takerPercent: 0.1,
+        },
+        ZROUSDT: {
+          enabled: true,
+          investment: 100,
+          orderQuantity: 5,
+          keepQuantity: 0.01,
+          priceStepPercent: 0.05,
+          pricePrecision: 3,
+          quantityPrecision: 1,
+          makerPercent: 0.1,
+          takerPercent: 0.1,
+        },
       },
     },
   },
-})
+}
 
 const exchangeInfoSymbol = (symbol) => {
   const baseAsset = symbol.slice(0, -4)
@@ -100,7 +121,6 @@ const waitForOrder = (submitted, waiters, symbol, side) => {
 
 const createReplayHarness = async (symbol) => {
   const pair = pairConfigs[symbol]
-  const config = createConfig(symbol)
   const submitted = []
   const outgoingOrderRequests = []
   const receivedPrices = []
