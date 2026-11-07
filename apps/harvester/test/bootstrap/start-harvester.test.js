@@ -359,30 +359,60 @@ test("subscribes and submits initial BUYs independently for every enabled Conser
   const diagnosticLogs = []
   let orderSequence = 0
   let snapshotSequence = 0
+  const canonicalOrders = new Map()
   const broker = {
     connect: async () => {},
     disconnect: async () => {},
     placeOrder: async ({ order } = {}) => {
       const market = metadataBySymbol.get(order.symbol).market
       submittedSymbols.push(order.symbol)
-      return toResult({
-        data: new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: String(++orderSequence),
-          market,
-          side: order.side,
-          type: order.type,
-          limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-          originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-          executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-          status: "OPEN",
-        }),
+      const submitted = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: String(++orderSequence),
+        market,
+        side: order.side,
+        type: order.type,
+        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        status: "OPEN",
+        createdAt: 10,
+        acknowledgedAt: 10,
+        updatedAt: 10,
       })
+      canonicalOrders.set(submitted.brokerOrderId, submitted)
+      return toResult({ data: submitted })
     },
-    cancelOrder: async () => toResult({ error: new Error("Unexpected cancellation") }),
-    getOpenOrders: async () => toResult({ data: [] }),
+    cancelOrder: async ({ order } = {}) => {
+      const canceled = new CanonicalOrder({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        market: order.market,
+        side: order.side,
+        type: order.type,
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+        createdAt: order.createdAt,
+        acknowledgedAt: order.acknowledgedAt,
+        updatedAt: 11,
+        completedAt: 11,
+      })
+      canonicalOrders.set(canceled.brokerOrderId, canceled)
+      return toResult({ data: canceled })
+    },
+    getOpenOrders: async ({ symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()].filter((order) =>
+        ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getFills: async () => toResult({ data: [] }),
-    getCanonicalOrderHistory: async () => toResult({ data: [] }),
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => toResult({
+      data: [...canonicalOrders.values()].filter((order) =>
+        (!orderId || order.brokerOrderId === String(orderId)) &&
+        (!symbol || order.market.symbol === symbol)),
+    }),
     getCanonicalOrder: async () => toResult({ data: null }),
     getAccountSnapshot: async () => toResult({ data: { balances, sourceTime: ++snapshotSequence } }),
     getSymbolFilters: async ({ symbol } = {}) => toResult({ data: metadataBySymbol.get(symbol) }),
