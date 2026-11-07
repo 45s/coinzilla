@@ -1,4 +1,4 @@
-import test, { describe, before as beforeAll, beforeEach, afterEach } from "node:test"
+import test, { describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -6,34 +6,44 @@ import { multiplyDecimal, percentageToRate } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
 
-const cycleCompletions = new Map()
-const cycleWaiters = new Map()
-let runtime
+const pairConfigs = {
+  DOGEUSDT: {
+    investment: 100,
+    orderQuantity: 400,
+    keepQuantity: 1,
+    priceStepPercent: 0.05,
+    pricePrecision: 5,
+    quantityPrecision: 0,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+    initialPrice: "0.07161000",
+    buyPrice: "0.07157",
+    sellPrice: "0.07203",
+    sellFillPrice: "0.07204",
+    expectedSellQuantity: "398",
+    expectedFreeQuantity: "1.6",
+    expectedProfit: "0.01524808",
+  },
+  ZROUSDT: {
+    investment: 100,
+    orderQuantity: 5,
+    keepQuantity: 0.01,
+    priceStepPercent: 0.05,
+    pricePrecision: 3,
+    quantityPrecision: 1,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+    initialPrice: "1.60500000",
+    buyPrice: "1.604",
+    sellPrice: "1.615",
+    sellFillPrice: "1.615",
+    expectedSellQuantity: "4.98",
+    expectedFreeQuantity: "0.015",
+    expectedProfit: "0.0146573",
+  },
+}
 
-describe("Conservative DOGE/ZRO replay", () => {
-beforeAll(() => {
-  assert.deepEqual(
-    Object.keys(config.strategies.CG_coinGrabber.pairs)
-      .filter((symbol) => config.strategies.CG_coinGrabber.pairs[symbol].enabled)
-      .sort(),
-    ["DOGEUSDT", "ZROUSDT"],
-    "replay fixture must enable the DOGE and ZRO markets",
-  )
-})
-
-beforeEach(() => {
-  cycleCompletions.clear()
-  cycleWaiters.clear()
-  runtime = undefined
-})
-
-afterEach(async () => {
-  if (!runtime) return
-  await runtime.stop()
-  runtime = undefined
-})
-
-const config = {
+const createConfig = (symbol) => ({
   strategies: {
     CG_coinGrabber: {
       enabled: true,
@@ -43,37 +53,15 @@ const config = {
         aggressive: { enabled: false },
       },
       pairs: {
-        DOGEUSDT: {
-          enabled: true,
-          investment: 100,
-          orderQuantity: 400,
-          keepQuantity: 1,
-          priceStepPercent: 0.05,
-          pricePrecision: 5,
-          quantityPrecision: 0,
-          makerPercent: 0.1,
-          takerPercent: 0.1,
-        },
-        ZROUSDT: {
-          enabled: true,
-          investment: 100,
-          orderQuantity: 5,
-          keepQuantity: 0.01,
-          priceStepPercent: 0.05,
-          pricePrecision: 3,
-          quantityPrecision: 1,
-          makerPercent: 0.1,
-          takerPercent: 0.1,
-        },
+        [symbol]: { enabled: true, ...pairConfigs[symbol] },
       },
     },
   },
-}
+})
 
-// Binance exchangeInfo payload: the real broker's symbol-filter adapter and
-// Harvester's canonical metadata converter must both process this response.
 const exchangeInfoSymbol = (symbol) => {
   const baseAsset = symbol.slice(0, -4)
+  const pair = pairConfigs[symbol]
   return {
     symbol,
     baseAsset,
@@ -84,13 +72,13 @@ const exchangeInfoSymbol = (symbol) => {
         filterType: "PRICE_FILTER",
         minPrice: "0",
         maxPrice: "100000",
-        tickSize: symbol === "DOGEUSDT" ? "0.00001" : "0.001",
+        tickSize: pair.pricePrecision === 5 ? "0.00001" : "0.001",
       },
       {
         filterType: "LOT_SIZE",
-        minQty: symbol === "DOGEUSDT" ? "1" : "0.01",
+        minQty: pair.quantityPrecision === 0 ? "1" : "0.01",
         maxQty: "100000000",
-        stepSize: symbol === "DOGEUSDT" ? "1" : "0.01",
+        stepSize: pair.quantityPrecision === 0 ? "1" : "0.01",
       },
       {
         filterType: "MIN_NOTIONAL",
@@ -102,13 +90,7 @@ const exchangeInfoSymbol = (symbol) => {
   }
 }
 
-const exchangeInfoResponse = (symbol) => ({
-  symbols: (symbol ? [symbol] : ["DOGEUSDT", "ZROUSDT"]).map(
-    exchangeInfoSymbol,
-  ),
-})
-
-const waitForOrder = (submitted, waiters, { symbol, side }) => {
+const waitForOrder = (submitted, waiters, symbol, side) => {
   const matches = (order) =>
     order.market.symbol === symbol && order.side === side
   const existing = submitted.find(matches)
@@ -116,397 +98,368 @@ const waitForOrder = (submitted, waiters, { symbol, side }) => {
   return new Promise((resolve) => waiters.push({ matches, resolve }))
 }
 
-test(
-  "replays one complete Conservative DOGE/ZRO cycle from issue #645 prices",
-  { timeout: 30_000 },
-  async () => {
-    const submitted = []
-    const outgoingOrderRequests = []
-    const receivedPrices = []
-    const receivedExecutionReports = []
-    const priceHandlers = new Map()
-    const openOrders = new Map()
-    const orderWaiters = []
-    let userDataHandlers
-    let nextBrokerOrderId = 1
+const createReplayHarness = async (symbol) => {
+  const pair = pairConfigs[symbol]
+  const config = createConfig(symbol)
+  const submitted = []
+  const outgoingOrderRequests = []
+  const receivedPrices = []
+  const receivedExecutionReports = []
+  const priceHandlers = new Map()
+  const openOrders = new Map()
+  const orderWaiters = []
+  let userDataHandler
+  let nextBrokerOrderId = 1
+  let cycleCompletion
+  let cycleWaiter
 
-    const notifyOrderWaiters = () => {
-      for (let index = orderWaiters.length - 1; index >= 0; index -= 1) {
-        const waiter = orderWaiters[index]
-        const order = submitted.find(waiter.matches)
-        if (!order) continue
-        orderWaiters.splice(index, 1)
-        waiter.resolve(order)
-      }
+  const notifyOrderWaiters = () => {
+    for (let index = orderWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = orderWaiters[index]
+      const order = submitted.find(waiter.matches)
+      if (!order) continue
+      orderWaiters.splice(index, 1)
+      waiter.resolve(order)
     }
-    const waitForCycle = (symbol) => {
-      if (cycleCompletions.has(symbol))
-        return Promise.resolve(cycleCompletions.get(symbol))
-      return new Promise((resolve) => cycleWaiters.set(symbol, resolve))
-    }
+  }
 
-    // Real Binance broker + real Harvester adapter. Only exchange I/O is simulated.
-    const brokerFactory = ({ config: brokerConfig, logger }) => {
-      const broker = new BinanceWebSocketBroker({
-        apiKey: brokerConfig.apiKey,
-        apiSecret: brokerConfig.apiSecret,
-        logger,
-      })
-      broker.connect = async () => {}
-      broker.disconnect = async () => {}
-      // Simulate Binance RPC responses, leaving the real broker's exchange-info,
-      // order-request and canonical-order adapters in the execution path.
-      broker.tradingConnection.request = async (method, params = {}) => {
-        if (method === "order.place") {
-          outgoingOrderRequests.push({ method, params: { ...params } })
-        }
-        if (method === "exchangeInfo") {
-          return { data: exchangeInfoResponse(params.symbol) }
-        }
-        if (method === "ticker.price") {
-          return {
-            data: {
-              symbol: params.symbol,
-              price: params.symbol === "DOGEUSDT" ? "0.07161000" : "1.60500000",
-            },
-          }
-        }
-        if (method === "order.place") {
-          const timestamp = Date.now()
-          return {
-            data: {
-              symbol: params.symbol,
-              orderId: nextBrokerOrderId++,
-              clientOrderId: params.newClientOrderId,
-              price: params.price,
-              origQty: params.quantity,
-              executedQty: "0",
-              status: "NEW",
-              type: params.type,
-              side: params.side,
-              time: timestamp,
-              updateTime: timestamp,
-            },
-          }
-        }
-        throw new Error("Unexpected simulated Binance RPC method: " + method)
-      }
-      const createCanonicalOrder = broker.createCanonicalOrder.bind(broker)
-      broker.createCanonicalOrder = async (order) => {
-        const result = await createCanonicalOrder(order)
-        if (result?.ok) {
-          submitted.push(result.data)
-          openOrders.set(result.data.clientOrderId, result.data)
-          notifyOrderWaiters()
-        }
-        return result
-      }
-      broker.getOpenOrders = async () => ({ ok: true, data: [] })
-      broker.getFills = async () => ({ ok: true, data: [] })
-      broker.getCanonicalOrderHistory = async ({ symbol, orderId } = {}) => ({
-        ok: true,
-        data: [...openOrders.values()].filter(
-          (order) =>
-            (!symbol || order.market.symbol === symbol) &&
-            (!orderId || order.brokerOrderId === String(orderId)),
-        ),
-      })
-      broker.getCanonicalOrder = async () => ({
-        ok: false,
-        errors: [new Error("not found")],
-      })
-      broker.getAccountSnapshot = async () => ({
-        ok: true,
-        data: {
-          sourceTime: Date.now(),
-          balances: ["DOGE", "ZRO", "USDT"].map((code) => {
-            const asset = new Asset({ id: code.toLowerCase(), code })
-            return new Balance({
-              free: new Quantity({
-                amount: code === "USDT" ? "1000" : "0",
-                asset,
-              }),
-              locked: new Quantity({ amount: "0", asset }),
-            })
-          }),
-        },
-      })
-      // Keep BinanceWebSocketBroker.subscribeForUserData() and its execution
-      // normalization active; replace only the remote user-data subscription.
-      broker.userDataSession.subscribe = async ({ onEvent }) => {
-        userDataHandlers = {
-          onEvent: (message) => {
-            receivedExecutionReports.push(message.event)
-            return onEvent(message)
-          },
-        }
-        return { data: { disconnect: async () => {} } }
-      }
-      broker.subscribeForPrices = async ({ symbol, onPrice }) => {
-        priceHandlers.set(symbol, (event) => {
-          receivedPrices.push(event)
-          return onPrice(event)
-        })
-        return { ok: true, data: { unsubscribe: async () => {} } }
-      }
-      broker.subscribeForBookTicker = async () => ({
-        ok: true,
-        data: { unsubscribe: async () => {} },
-      })
+  const waitForOrderSide = (side) =>
+    waitForOrder(submitted, orderWaiters, symbol, side)
 
-      broker.cancelOrder = async ({ symbol, orderId }) => {
-        const order = [...openOrders.values()].find(
-          (item) =>
-            item.market.symbol === symbol &&
-            item.brokerOrderId === String(orderId),
-        )
-        if (!order) return { ok: false, errors: [new Error("order not found")] }
-        return { ok: true }
+  const waitForCycle = () => {
+    if (cycleCompletion) return Promise.resolve(cycleCompletion)
+    return new Promise((resolve) => {
+      cycleWaiter = resolve
+    })
+  }
+
+  const brokerFactory = ({ config: brokerConfig, logger }) => {
+    const broker = new BinanceWebSocketBroker({
+      apiKey: brokerConfig.apiKey,
+      apiSecret: brokerConfig.apiSecret,
+      logger,
+    })
+    broker.connect = async () => {}
+    broker.disconnect = async () => {}
+    broker.tradingConnection.request = async (method, params = {}) => {
+      if (method === "order.place") {
+        outgoingOrderRequests.push({ method, params: { ...params } })
       }
-      return broker
-    }
-
-    const triggerPrice = async (symbol, price) => {
-      const onPrice = priceHandlers.get(symbol)
-      assert.equal(typeof onPrice, "function", symbol + " price subscription")
-      await onPrice({
-        eventType: "aggTrade",
-        eventTime: Date.now(),
-        timestamp: Date.now(),
-        symbol,
-        price,
-        quantity: "100",
-        isBuyerMaker: false,
-        wasBestPrice: true,
-        aggId: Date.now(),
-        firstId: Date.now(),
-        lastId: Date.now(),
-      })
-    }
-
-    const fillOrder = ({ order, price, tradeId }) => {
-      const market = order.market
-      const quantity = order.originalQuantity.amount
-      const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
-      // Simulate Binance's reported commission from the exchange fee schedule:
-      // BUY fees are charged in base; SELL fees are charged in quote.
-      const pairConfig = config.strategies.CG_coinGrabber.pairs[market.symbol]
-      const isMaker = order.type === "LIMIT_MAKER"
-      const commissionPercent = isMaker
-        ? pairConfig.makerPercent
-        : pairConfig.takerPercent
-      const commissionRate = percentageToRate({
-        percent: String(commissionPercent),
-      })
-      const commissionAsset =
-        order.side === "BUY" ? market.baseAsset : market.quoteAsset
-      const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
-      const commissionAmount = multiplyDecimal({
-        left: commissionBasis,
-        right: commissionRate,
-      })
-      const timestamp = Date.now()
-      openOrders.delete(order.clientOrderId)
-      userDataHandlers.onEvent({
-        event: {
-          eventType: "executionReport",
-          executionType: "TRADE",
-          executedOrder: {
-            symbol: market.symbol,
-            id: order.brokerOrderId,
-            clientOrderId: order.clientOrderId,
-            type: order.type,
-            side: order.side,
-            quantity,
-            executedQuantity: quantity,
-            price: order.limitPrice.amount,
-            status: "FILLED",
-            createdAt: order.createdAt,
-            updatedAt: timestamp,
-          },
-          fill: {
-            symbol: market.symbol,
-            id: tradeId,
-            orderId: order.brokerOrderId,
-            commissionAmount,
-            commissionAsset: commissionAsset.code,
-            isMaker,
-            price,
-            quantity,
-            quoteQuantity,
+      if (method === "exchangeInfo") {
+        return { data: { symbols: [exchangeInfoSymbol(symbol)] } }
+      }
+      if (method === "ticker.price") {
+        return { data: { symbol, price: pair.initialPrice } }
+      }
+      if (method === "order.place") {
+        const timestamp = Date.now()
+        return {
+          data: {
+            symbol: params.symbol,
+            orderId: nextBrokerOrderId++,
+            clientOrderId: params.newClientOrderId,
+            price: params.price,
+            origQty: params.quantity,
+            executedQty: "0",
+            status: "NEW",
+            type: params.type,
+            side: params.side,
             time: timestamp,
+            updateTime: timestamp,
           },
-        },
-      })
+        }
+      }
+      throw new Error("Unexpected simulated Binance RPC method: " + method)
     }
 
-    runtime = await startHarvester({
-      loadConfig: async () => config,
-      env: {
-        HARVESTER_BROKER: "binance",
-        BINANCE_API_KEY: "key",
-        BINANCE_API_SECRET_KEY: "secret",
-        NODE_ENV: "test",
-        HARVESTER_TRADING_MODE: "testnet",
-        HARVESTER_ENABLE_TRADING: "true",
-      },
-      brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
-        createBinanceBrokerAdapter({
-          config: brokerConfig,
-          logger,
-          brokerFactory,
+    const createCanonicalOrder = broker.createCanonicalOrder.bind(broker)
+    broker.createCanonicalOrder = async (order) => {
+      const result = await createCanonicalOrder(order)
+      if (result?.ok) {
+        submitted.push(result.data)
+        openOrders.set(result.data.clientOrderId, result.data)
+        notifyOrderWaiters()
+      }
+      return result
+    }
+    broker.getOpenOrders = async () => ({ ok: true, data: [] })
+    broker.getFills = async () => ({ ok: true, data: [] })
+    broker.getCanonicalOrderHistory = async ({ orderId } = {}) => ({
+      ok: true,
+      data: [...openOrders.values()].filter(
+        (order) => !orderId || order.brokerOrderId === String(orderId),
+      ),
+    })
+    broker.getCanonicalOrder = async () => ({
+      ok: false,
+      errors: [new Error("not found")],
+    })
+    broker.getAccountSnapshot = async () => ({
+      ok: true,
+      data: {
+        sourceTime: Date.now(),
+        balances: [symbol.slice(0, -4), "USDT"].map((code) => {
+          const asset = new Asset({ id: code.toLowerCase(), code })
+          return new Balance({
+            free: new Quantity({
+              amount: code === "USDT" ? "1000" : "0",
+              asset,
+            }),
+            locked: new Quantity({ amount: "0", asset }),
+          })
         }),
-      eventPublisher: {
-        publish: (event) => {
-          if (event.name === "recovery.cycle_completed") {
-            cycleCompletions.set(event.data.symbol, event.data)
-            cycleWaiters.get(event.data.symbol)?.(event.data)
-            cycleWaiters.delete(event.data.symbol)
-          }
-          return { ok: true }
-        },
-        flush: async () => ({ ok: true, durable: true }),
       },
-      logger: { info() {}, debug() {}, error() {} },
+    })
+    broker.userDataSession.subscribe = async ({ onEvent }) => {
+      userDataHandler = (message) => {
+        receivedExecutionReports.push(message.event)
+        return onEvent(message)
+      }
+      return { data: { disconnect: async () => {} } }
+    }
+    broker.subscribeForPrices = async ({ subscribedSymbol, symbol: requestedSymbol, onPrice }) => {
+      const targetSymbol = requestedSymbol ?? subscribedSymbol ?? symbol
+      priceHandlers.set(targetSymbol, (event) => {
+        receivedPrices.push(event)
+        return onPrice(event)
+      })
+      return { ok: true, data: { unsubscribe: async () => {} } }
+    }
+    broker.subscribeForBookTicker = async () => ({
+      ok: true,
+      data: { unsubscribe: async () => {} },
+    })
+    broker.cancelOrder = async () => ({ ok: true })
+    return broker
+  }
+
+  const runtime = await startHarvester({
+    loadConfig: async () => config,
+    env: {
+      HARVESTER_BROKER: "binance",
+      BINANCE_API_KEY: "key",
+      BINANCE_API_SECRET_KEY: "secret",
+      NODE_ENV: "test",
+      HARVESTER_TRADING_MODE: "testnet",
+      HARVESTER_ENABLE_TRADING: "true",
+    },
+    brokerAdapterFactory: ({ config: brokerConfig, logger }) =>
+      createBinanceBrokerAdapter({
+        config: brokerConfig,
+        logger,
+        brokerFactory,
+      }),
+    eventPublisher: {
+      publish: (event) => {
+        if (event.name === "recovery.cycle_completed") {
+          cycleCompletion = event.data
+          cycleWaiter?.(event.data)
+          cycleWaiter = undefined
+        }
+        return { ok: true }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+
+  assert.equal(runtime.userDataReady, true)
+
+  const triggerPrice = async (price) => {
+    const onPrice = priceHandlers.get(symbol)
+    assert.equal(typeof onPrice, "function", symbol + " price subscription")
+    await onPrice({
+      eventType: "aggTrade",
+      eventTime: Date.now(),
+      timestamp: Date.now(),
+      symbol,
+      price,
+      quantity: "100",
+      isBuyerMaker: false,
+      wasBestPrice: true,
+      aggId: Date.now(),
+      firstId: Date.now(),
+      lastId: Date.now(),
+    })
+  }
+
+  const fillOrder = ({ order, price, tradeId }) => {
+    const quantity = order.originalQuantity.amount
+    const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
+    const commissionRate = percentageToRate({
+      percent: String(order.type === "LIMIT_MAKER" ? pair.makerPercent : pair.takerPercent),
+    })
+    const commissionAsset =
+      order.side === "BUY" ? order.market.baseAsset : order.market.quoteAsset
+    const commissionBasis = order.side === "BUY" ? quantity : quoteQuantity
+    const commissionAmount = multiplyDecimal({
+      left: commissionBasis,
+      right: commissionRate,
+    })
+    const timestamp = Date.now()
+    openOrders.delete(order.clientOrderId)
+    userDataHandler({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: {
+          symbol,
+          id: order.brokerOrderId,
+          clientOrderId: order.clientOrderId,
+          type: order.type,
+          side: order.side,
+          quantity,
+          executedQuantity: quantity,
+          price: order.limitPrice.amount,
+          status: "FILLED",
+          createdAt: order.createdAt,
+          updatedAt: timestamp,
+        },
+        fill: {
+          symbol,
+          id: tradeId,
+          orderId: order.brokerOrderId,
+          commissionAmount,
+          commissionAsset: commissionAsset.code,
+          isMaker: order.type === "LIMIT_MAKER",
+          price,
+          quantity,
+          quoteQuantity,
+          time: timestamp,
+        },
+      },
+    })
+  }
+
+  return {
+    runtime,
+    pair,
+    submitted,
+    outgoingOrderRequests,
+    receivedPrices,
+    receivedExecutionReports,
+    waitForOrder: waitForOrderSide,
+    waitForCycle,
+    triggerPrice,
+    fillOrder,
+  }
+}
+
+const getInitialBuy = async (replay) => {
+  const { pair, waitForOrder, triggerPrice } = replay
+  const submitted = waitForOrder("BUY")
+  await triggerPrice(pair.initialPrice)
+  return submitted
+}
+
+const getRecoverySell = async (replay) => {
+  const { pair, waitForOrder, triggerPrice, fillOrder } = replay
+  const buySubmitted = getInitialBuy(replay)
+  const buy = await buySubmitted
+  const sellSubmitted = waitForOrder("SELL")
+  await triggerPrice(pair.buyPrice)
+  fillOrder({ order: buy, price: pair.buyPrice, tradeId: "645-" + pairSymbol(replay) + "-buy" })
+  return sellSubmitted
+}
+
+const pairSymbol = (replay) =>
+  replay.runtime.portfolio.getMarkets?.()[0]?.symbol ??
+  Object.keys(replay.runtime.config?.strategies?.CG_coinGrabber?.pairs ?? {})[0] ??
+  "market"
+
+for (const symbol of Object.keys(pairConfigs)) {
+  describe("Conservative " + symbol + " replay", () => {
+    let replay
+
+    beforeEach(async () => {
+      replay = await createReplayHarness(symbol)
     })
 
-    assert.equal(runtime.userDataReady, true)
+    afterEach(async () => {
+      if (replay?.runtime) await replay.runtime.stop()
+      replay = undefined
+    })
 
-      // The initial market references and resulting BUY orders are from issue #645.
-      const dogeBuySubmitted = waitForOrder(submitted, orderWaiters, {
-        symbol: "DOGEUSDT",
-        side: "BUY",
-      })
-      await triggerPrice("DOGEUSDT", "0.07161000")
-      const dogeBuy = await dogeBuySubmitted
+    test("creates the initial BUY after a price trigger", async () => {
+      const buy = await getInitialBuy(replay)
       assert.deepEqual(
-        [dogeBuy.market.symbol, dogeBuy.side, dogeBuy.price, dogeBuy.quantity, dogeBuy.type],
-        ["DOGEUSDT", "BUY", "0.07157", "400", "LIMIT"],
-        "the first DOGE price update must produce the expected strategy BUY",
-      )
-
-      const zroBuySubmitted = waitForOrder(submitted, orderWaiters, {
-        symbol: "ZROUSDT",
-        side: "BUY",
-      })
-      await triggerPrice("ZROUSDT", "1.60500000")
-      const zroBuy = await zroBuySubmitted
-      assert.deepEqual(
-        [zroBuy.market.symbol, zroBuy.side, zroBuy.price, zroBuy.quantity, zroBuy.type],
-        ["ZROUSDT", "BUY", "1.604", "5", "LIMIT"],
-        "the first ZRO price update must produce the expected strategy BUY",
+        [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
+        [symbol, "BUY", replay.pair.buyPrice, String(replay.pair.orderQuantity), "LIMIT"],
       )
       assert.deepEqual(
-        [dogeBuy.price, dogeBuy.quantity, dogeBuy.type],
-        ["0.07157", "400", "LIMIT"],
+        replay.outgoingOrderRequests.map(({ params }) => [
+          params.symbol,
+          params.side,
+          params.type,
+        ]),
+        [[symbol, "BUY", "LIMIT"]],
       )
       assert.deepEqual(
-        [zroBuy.price, zroBuy.quantity, zroBuy.type],
-        ["1.604", "5", "LIMIT"],
+        replay.receivedPrices.map(({ symbol: receivedSymbol, price }) => [
+          receivedSymbol,
+          price,
+        ]),
+        [[symbol, replay.pair.initialPrice]],
       )
+    })
 
-      // Trigger each BUY fill at its submitted limit; exchange reports actual fills/fees.
-      const dogeSellSubmitted = waitForOrder(submitted, orderWaiters, {
-        symbol: "DOGEUSDT",
-        side: "SELL",
-      })
-      await triggerPrice("DOGEUSDT", "0.07157")
-      fillOrder({
-        order: dogeBuy,
-        price: "0.07157",
-        tradeId: "645-doge-buy",
-      })
-      const dogeSell = await dogeSellSubmitted
-
-      const zroSellSubmitted = waitForOrder(submitted, orderWaiters, {
-        symbol: "ZROUSDT",
-        side: "SELL",
-      })
-      await triggerPrice("ZROUSDT", "1.604")
-      fillOrder({
-        order: zroBuy,
-        price: "1.604",
-        tradeId: "645-zro-buy",
-      })
-      const zroSell = await zroSellSubmitted
+    test("creates a recovery SELL from the actual BUY fill report", async () => {
+      const sellSubmitted = getRecoverySell(replay)
+      const sell = await sellSubmitted
       assert.deepEqual(
-        [dogeSell.price, dogeSell.quantity, dogeSell.type],
-        ["0.07203", "398", "LIMIT"],
+        [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
+        [symbol, "SELL", replay.pair.sellPrice, replay.pair.expectedSellQuantity, "LIMIT"],
       )
       assert.deepEqual(
-        [zroSell.price, zroSell.quantity, zroSell.type],
-        ["1.615", "4.98", "LIMIT"],
-      )
-
-      // Market trades through each SELL limit. DOGE receives a better fill than its limit,
-      // matching the exchange's price-improvement behavior while meeting the $0.01 net floor.
-      const dogeCycle = waitForCycle("DOGEUSDT")
-      await triggerPrice("DOGEUSDT", "0.07204")
-      fillOrder({
-        order: dogeSell,
-        price: "0.07204",
-        tradeId: "645-doge-sell",
-      })
-      const zroCycle = waitForCycle("ZROUSDT")
-      await triggerPrice("ZROUSDT", "1.615")
-      fillOrder({
-        order: zroSell,
-        price: "1.615",
-        tradeId: "645-zro-sell",
-      })
-
-      const [dogeCompletion, zroCompletion] = await Promise.all([
-        dogeCycle,
-        zroCycle,
-      ])
-      assert.equal(dogeCompletion.freeQuantity, "1.6")
-      assert.equal(zroCompletion.freeQuantity, "0.015")
-      assert.equal(dogeCompletion.realizedNetProfit, "0.01524808")
-      assert.equal(zroCompletion.realizedNetProfit, "0.0146573")
-
-      const dogePosition = runtime.portfolio.getPosition({ symbol: "DOGEUSDT" })
-      const zroPosition = runtime.portfolio.getPosition({ symbol: "ZROUSDT" })
-      assert.equal(dogePosition.baseQuantity.amount, "0")
-      assert.equal(dogePosition.freeBaseQuantity.amount, "1.6")
-      assert.equal(zroPosition.baseQuantity.amount, "0")
-      assert.equal(zroPosition.freeBaseQuantity.amount, "0.015")
-
-      // Verify both directions at the broker boundary, not only final portfolio state.
-      assert.deepEqual(
-        receivedPrices.map(({ symbol, price }) => [symbol, price]),
-        [
-          ["DOGEUSDT", "0.07161000"],
-          ["ZROUSDT", "1.60500000"],
-          ["DOGEUSDT", "0.07157"],
-          ["ZROUSDT", "1.604"],
-          ["DOGEUSDT", "0.07204"],
-          ["ZROUSDT", "1.615"],
-        ],
-      )
-      assert.deepEqual(
-        receivedExecutionReports.map(({ executedOrder, fill }) => [
+        replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
           executedOrder.side,
-          fill.id,
+          fill.commissionAsset,
+        ]),
+        [[symbol, "BUY", symbol.slice(0, -4)]],
+      )
+      assert.deepEqual(
+        replay.outgoingOrderRequests.map(({ params }) => [
+          params.symbol,
+          params.side,
+          params.type,
+        ]),
+        [
+          [symbol, "BUY", "LIMIT"],
+          [symbol, "SELL", "LIMIT"],
+        ],
+      )
+    })
+
+    test("completes the recovery cycle after the SELL fill report", async () => {
+      const sellSubmitted = getRecoverySell(replay)
+      const sell = await sellSubmitted
+      const cycle = replay.waitForCycle()
+      await replay.triggerPrice(replay.pair.sellFillPrice)
+      replay.fillOrder({
+        order: sell,
+        price: replay.pair.sellFillPrice,
+        tradeId: "645-" + symbol.toLowerCase() + "-sell",
+      })
+
+      const completion = await cycle
+      assert.equal(completion.freeQuantity, replay.pair.expectedFreeQuantity)
+      assert.equal(completion.realizedNetProfit, replay.pair.expectedProfit)
+
+      const position = replay.runtime.portfolio.getPosition({ symbol })
+      assert.equal(position.baseQuantity.amount, "0")
+      assert.equal(position.freeBaseQuantity.amount, replay.pair.expectedFreeQuantity)
+      assert.deepEqual(
+        replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
+          executedOrder.symbol,
+          executedOrder.side,
           fill.commissionAsset,
         ]),
         [
-          ["DOGEUSDT", "BUY", "645-doge-buy", "DOGE"],
-          ["ZROUSDT", "BUY", "645-zro-buy", "ZRO"],
-          ["DOGEUSDT", "SELL", "645-doge-sell", "USDT"],
-          ["ZROUSDT", "SELL", "645-zro-sell", "USDT"],
+          [symbol, "BUY", symbol.slice(0, -4)],
+          [symbol, "SELL", "USDT"],
         ],
       )
-      assert.deepEqual(
-        outgoingOrderRequests.map(({ params }) => [params.symbol, params.side, params.type]),
-        [
-          ["DOGEUSDT", "BUY", "LIMIT"],
-          ["ZROUSDT", "BUY", "LIMIT"],
-          ["DOGEUSDT", "SELL", "LIMIT"],
-          ["ZROUSDT", "SELL", "LIMIT"],
-        ],
-      )
-  },
-)
-})
-
+    })
+  })
+}
