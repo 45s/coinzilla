@@ -1,4 +1,4 @@
-import test, { describe, beforeAll, beforeEach, afterEach } from "node:test"
+import test, { describe, before, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -42,7 +42,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
   const symbol = "DOGEUSDT"
   let replay
 
-  beforeAll(() => {
+  before(() => {
     dogeExchangeInfo = exchangeInfoSymbol(symbol)
   })
 
