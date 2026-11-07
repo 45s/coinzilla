@@ -1868,7 +1868,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
     event: {
       executionType: "TRADE",
       executedOrder: makeFilledOrder({ order: sellOrder }),
-      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-2", quantity: "0.4" }),
+      fill: makeSellFill({ order: sellOrder, tradeId: "recovery-sell-part-2", quantity: "0.5" }),
     },
   })
 
