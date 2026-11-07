@@ -446,7 +446,16 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   const canceledRecoverySellOrders = engine.getOrders().filter(
     (order) => order.side === "SELL" && order.status === "CANCELED",
   )
-  assert.equal(canceledRecoverySellOrders.length, 2)
+  assert.equal(
+    canceledRecoverySellOrders.length,
+    2,
+    JSON.stringify({
+      cancellations,
+      canceledRecoverySellOrders: canceledRecoverySellOrders.map((order) => order.value),
+      sellIntents: submittedIntents.filter(({ side }) => side === "SELL"),
+      allOrders: engine.getOrders().map((order) => order.value),
+    }, null, 2),
+  )
   const replacementSellOrder = canceledRecoverySellOrders.find(
     (order) => order.clientOrderId !== pendingSellOrder.clientOrderId,
   )
