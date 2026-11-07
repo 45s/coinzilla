@@ -8,13 +8,21 @@ import {
   validateDecimalScale,
 } from "./decimal.js"
 
-/** Convert percentage points (for example, 0.075) into a decimal rate (0.00075). */
+/**
+ * Convert percentage points to a decimal rate (for example, "0.075" -> "0.00075").
+ * @param {{ percent: string }} options
+ * @returns {string} Exact decimal rate.
+ */
 export function percentageToRate({ percent } = {}) {
   assertDecimalString({ value: percent, field: "percent" })
   return multiplyDecimal({ left: percent, right: "0.01" })
 }
 
-/** Calculate value * percent / 100 without floating-point conversion. */
+/**
+ * Calculate value multiplied by percent divided by 100 exactly.
+ * @param {{ value: string, percent: string }} options
+ * @returns {string}
+ */
 export function calculatePercentageOf({ value, percent } = {}) {
   assertDecimalString({ value, field: "value" })
   return multiplyDecimal({
@@ -23,7 +31,11 @@ export function calculatePercentageOf({ value, percent } = {}) {
   })
 }
 
-/** Apply a signed percentage change; negative percentages represent decreases. */
+/**
+ * Apply a signed percentage change; negative percentages represent decreases.
+ * @param {{ value: string, percent: string }} options
+ * @returns {string}
+ */
 export function applyPercentageChange({ value, percent } = {}) {
   assertDecimalString({ value, field: "value" })
   const change = calculatePercentageOf({ value, percent })
@@ -31,8 +43,11 @@ export function applyPercentageChange({ value, percent } = {}) {
 }
 
 /**
- * Calculate the percentage change from one value to another.
- * Scale is the number of fractional digits in the returned percentage.
+ * Calculate percentage change from `from` to `to` using explicit precision
+ * and rounding. A zero starting value is invalid.
+ * @param {{ from: string, to: string, scale: number, rounding: 'toward-zero'|'away-from-zero'|'half-up' }} options
+ * @returns {string} Percentage points at the requested scale.
+ * @throws {TypeError|RangeError} For invalid decimals, scale, rounding, or zero `from`.
  */
 export function calculatePercentageChange({ from, to, scale, rounding } = {}) {
   assertDecimalString({ value: from, field: "from" })

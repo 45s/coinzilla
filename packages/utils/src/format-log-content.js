@@ -121,12 +121,12 @@ function normalizeLogValue({ value, seen = new WeakSet() }) {
 }
 
 /**
- * Normalize log data for transport delivery. The returned value is detached
- * from the caller's object graph, preserves native Error diagnostics, and
- * applies the same recursive sensitive-field redaction as formatted logs.
- *
- * @param {*} data
- * @returns {*}
+ * Normalize data before transport delivery. The result is detached from the
+ * caller's object graph, JSON-compatible where possible, recursively redacted,
+ * and preserves standard Error diagnostics (name, message, stack, cause, errors).
+ * Circular references and throwing getters receive explicit marker strings.
+ * @param {unknown} data
+ * @returns {unknown} Primitive, normalized object/array, undefined, or safe fallback.
  */
 export function normalizeLogData(data) {
   if (['string', 'number', 'boolean'].some((type) => typeof data === type)) {
@@ -151,11 +151,10 @@ export function normalizeLogData(data) {
 }
 
 /**
- * Convert log data to a printable value without allowing hostile objects to
- * make the logging path throw. Native errors are normalized to JSON-compatible
- * objects before serialization so their non-enumerable diagnostics survive.
- *
- * @param {*} data
+ * Convert log data into the value accepted by the console formatter.
+ * Structured values become pretty-printed JSON; primitives remain primitives.
+ * Unsupported values may become undefined or a safe string fallback.
+ * @param {unknown} data
  * @returns {string|number|boolean|undefined}
  */
 export function formatLogContent(data) {

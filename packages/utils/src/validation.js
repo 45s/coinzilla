@@ -1,6 +1,11 @@
 import { EM } from './error-messages.js'
 
+/** @typedef {'number'|'string'|'array'|'function'|'required'|'notEmptyString'|'notUndefined'|'notEmptyArr'} ValidationRule */
+/** @typedef {[value: unknown, rules: ValidationRule[], fieldName?: string]} ValidationItem */
+/** @typedef {{ value: unknown, msgs: string[], fieldName?: string }} ValidationError */
+
 // VR stands for "validation rule"
+/** @type {{ num: 'number', str: 'string', arr: 'array', fn: 'function', required: 'required', notEmptyString: 'notEmptyString', notUndefined: 'notUndefined', notEmptyArr: 'notEmptyArr' }} */
 export const VR = {
   num: 'number',
   str: 'string',
@@ -13,9 +18,12 @@ export const VR = {
 }
 
 /**
- * Validate the declarative [value, rules, fieldName] tuples used by Validator.
- * The function is pure: it returns validation errors or throws without
- * changing the supplied items.
+ * Validate declarative [value, rules, fieldName?] tuples without mutating them.
+ * Soft mode returns all validation errors; hard mode throws that error array.
+ *
+ * @param {{ isSoft?: boolean, items: ValidationItem[] }} options
+ * @returns {ValidationError[]|undefined} Errors in soft mode, otherwise undefined when valid.
+ * @throws {Error|TypeError|ValidationError[]} For missing/malformed items or failed hard-mode validation.
  */
 export function validateItems({ isSoft = true, items } = {}) {
   if (!Array.isArray(items)) {
@@ -75,10 +83,10 @@ export function validateItems({ isSoft = true, items } = {}) {
   }
 }
 
-/** Whether a finite, non-zero number satisfies a required numeric field. */
+/** Whether a finite, non-zero number satisfies a required numeric field. @param {unknown} number @returns {boolean} */
 export const isRequiredNumberValid = (number) =>
   typeof number === 'number' && Number.isFinite(number) && Boolean(number)
 
-/** Whether a string contains at least one non-whitespace character. */
+/** Whether a string contains at least one non-whitespace character. @param {unknown} value @returns {boolean} */
 export const isRequiredNotEmptyString = (value) =>
   typeof value === 'string' && Boolean(value.trim())
