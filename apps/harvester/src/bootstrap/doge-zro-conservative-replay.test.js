@@ -530,7 +530,7 @@ describe("DOGEUSDT Conservative strategy replay", () => {
           [
             symbol,
             "SELL",
-            replay.scenario.sellFillPrice,
+            replay.scenario.sellPrice,
             replay.scenario.expectedSellQuantity,
             replay.scenario.sellFillPrice,
             replay.scenario.expectedSellQuantity,
