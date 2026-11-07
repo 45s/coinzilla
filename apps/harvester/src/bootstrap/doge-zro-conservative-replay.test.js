@@ -472,8 +472,12 @@ async function createReplayHarness(symbol) {
       apiSecret: brokerConfig.apiSecret,
       logger,
     })
-    broker.connect = async () => {}
-    broker.disconnect = async () => {}
+    broker.connect = async () => {
+      broker.connected = true
+    }
+    broker.disconnect = async () => {
+      broker.connected = false
+    }
     broker.tradingConnection.request = async (method, params = {}) => {
       if (method === "order.place") {
         outgoingOrderRequestsList.push({ method, params: { ...params } })
