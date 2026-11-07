@@ -750,6 +750,7 @@ async function createReplayHarness(symbol) {
           symbol,
           id: tradeId,
           orderId: order.brokerOrderId,
+          side: order.side,
           commissionAmount,
           commissionAsset: commissionAsset.code,
           isMaker: order.type === "LIMIT_MAKER",
