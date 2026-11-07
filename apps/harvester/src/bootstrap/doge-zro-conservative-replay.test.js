@@ -1,4 +1,4 @@
-import test from "node:test"
+import test, { before as beforeAll, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
@@ -8,6 +8,29 @@ import { startHarvester } from "./start-harvester.js"
 
 const cycleCompletions = new Map()
 const cycleWaiters = new Map()
+let runtime
+
+beforeAll(() => {
+  assert.deepEqual(
+    Object.keys(config.strategies.CG_coinGrabber.pairs)
+      .filter((symbol) => config.strategies.CG_coinGrabber.pairs[symbol].enabled)
+      .sort(),
+    ["DOGEUSDT", "ZROUSDT"],
+    "replay fixture must enable the DOGE and ZRO markets",
+  )
+})
+
+beforeEach(() => {
+  cycleCompletions.clear()
+  cycleWaiters.clear()
+  runtime = undefined
+})
+
+afterEach(async () => {
+  if (!runtime) return
+  await runtime.stop()
+  runtime = undefined
+})
 
 const config = {
   strategies: {
@@ -96,8 +119,6 @@ test(
   "replays one complete Conservative DOGE/ZRO cycle from issue #645 prices",
   { timeout: 30_000 },
   async () => {
-    cycleCompletions.clear()
-    cycleWaiters.clear()
     const submitted = []
     const outgoingOrderRequests = []
     const receivedPrices = []
@@ -318,7 +339,7 @@ test(
       })
     }
 
-    const runtime = await startHarvester({
+    runtime = await startHarvester({
       loadConfig: async () => config,
       env: {
         HARVESTER_BROKER: "binance",
@@ -348,8 +369,7 @@ test(
       logger: { info() {}, debug() {}, error() {} },
     })
 
-    try {
-      assert.equal(runtime.userDataReady, true)
+    assert.equal(runtime.userDataReady, true)
 
       // The initial market references and resulting BUY orders are from issue #645.
       const dogeBuySubmitted = waitForOrder(submitted, orderWaiters, {
@@ -485,8 +505,5 @@ test(
           ["ZROUSDT", "SELL", "LIMIT"],
         ],
       )
-    } finally {
-      await runtime.stop()
-    }
   },
 )
