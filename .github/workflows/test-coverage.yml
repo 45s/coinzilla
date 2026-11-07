@@ -70,3 +70,20 @@ jobs:
       - name: Enforce ${{ matrix.package }} coverage thresholds
         if: matrix.has_coverage_script
         run: pnpm --filter "${{ matrix.package }}" run test:coverage
+
+  workspace-coverage-gate:
+    name: Workspace test coverage
+    if: always()
+    needs:
+      - coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package coverage job to pass
+        env:
+          MATRIX_RESULT: ${{ needs.coverage.result }}
+        run: |
+          if [[ "$MATRIX_RESULT" != "success" ]]; then
+            echo "::error::At least one package coverage matrix job did not succeed (result: $MATRIX_RESULT)."
+            exit 1
+          fi
+          echo "All package coverage matrix jobs passed."
