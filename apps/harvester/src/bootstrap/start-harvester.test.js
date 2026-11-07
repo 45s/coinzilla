@@ -1859,7 +1859,14 @@ test("logs safe correlation details when an execution report is not owned", asyn
 
   await assert.rejects(
     result.stop(),
-    /USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE/,
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate cleanup and audit failures instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the shutdown AggregateError must retain the incomplete user-data/accounting reconciliation reason",
+      )
+      return true
+    },
     "shutdown must report an incomplete CLOSING audit after rejecting an unowned execution report and retaining the accounting-safety gate",
   )
 })
@@ -2597,6 +2604,12 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   const observedEvents = []
   let submittedOrder
   let canceledOrder
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: submittedOrder && !canceledOrder
+      ? [createOpenOrderSnapshot({ order: submittedOrder })]
+      : [],
+  })
   broker.getCanonicalOrderHistory = async ({ orderId }) => ({
     ok: true,
     data: [canceledOrder ?? submittedOrder].filter((order) => order?.brokerOrderId === orderId),
