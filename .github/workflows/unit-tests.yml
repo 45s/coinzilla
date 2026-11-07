@@ -63,6 +63,23 @@ jobs:
       - name: Run ${{ matrix.package }} tests
         run: pnpm --filter "${{ matrix.package }}" test
 
+  package-tests-gate:
+    name: Run package tests
+    if: always()
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package test to pass
+        env:
+          MATRIX_RESULT: ${{ needs.test.result }}
+        run: |
+          if [[ "$MATRIX_RESULT" != "success" ]]; then
+            echo "::error::At least one package unit-test matrix job did not succeed (result: $MATRIX_RESULT)."
+            exit 1
+          fi
+          echo "All package unit-test matrix jobs passed."
+
   broker-testnet-read-only:
     name: Run read-only Binance TESTNET integration
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.run_broker_testnet_read_only
