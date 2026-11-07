@@ -481,7 +481,7 @@ The current branch regression inventory now includes the formerly missing focuse
 
 This supersedes earlier historical statements in this file that terminal SELL cases or the dust-plus-later-BUY regression were still missing. It does **not** mean tests passed: no focused or full test suite has been executed on the current code head, and no exact-head Actions runs or commit statuses are reported.
 
-The canonical durable-dust-recording requirement remains an unresolved audit gap: exact dust quantity and limiting filter are calculated in the domain but are not persisted in the no-action log/lifecycle event. No Journal, event DTO, broker, exchange, or other production change was made. PR #653 remains OPEN and UNMERGED.
+At this historical checkpoint, exact dust quantity/filter persistence was unresolved. Superseded by the 2026-11-07 completion validation and durable lifecycle event changes recorded below.
 
 ## Owner clarification — dust is retained above keepQuantity (2026-11-06)
 
@@ -489,7 +489,7 @@ The canonical durable-dust-recording requirement remains an unresolved audit gap
 
 This supersedes older findings text that treated above-`keepQuantity` dust as active recovery inventory that must block completion/reset or await a later BUY. Such text is historical, not the current contract.
 
-**Remaining audit work:** inspect the current completion/accounting implementation and tests against this rule; update them only within the approved scope. The separate durable-evidence gap (exact dust amount and limiting filter not persisted in the current decision log/event path) remains unresolved. This documentation-only update does not claim implementation or test conformance.
+**Historical checkpoint (superseded 2026-11-07):** completion/accounting conformance was still under review. The audit-closure section below records the subsequent source and regression changes; exact-head CI is still pending.
 
 ## Audit closure — historical evidence disposition and dust recording
 
