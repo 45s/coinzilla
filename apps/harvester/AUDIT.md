@@ -463,7 +463,7 @@ Latest source/test head known at this checkpoint: `58f9369a5ef4b74b83b8680b174ac
 
 Source/spec review found and corrected stale tests that contradicted the canonical partial-BUY lifecycle: an active PARTIALLY_FILLED BUY suppresses duplicate BUY intent but does not suppress recovery SELL planning; if a recovery SELL is already OPEN/PARTIALLY_FILLED, any new BUY fill requires cancel/reconcile/replace even while the BUY remains partial. Added/updated domain and full-cycle regression assertions. Dust-plus-later-BUY accounting regression is also added. These are test-only changes; no recovery, Journal, or broker implementation was changed.
 
-**Historical checkpoint:** exact dust quantity/filter persistence was unresolved at that time. Superseded by the 2026-11-07 implementation recorded below.
+**Remaining audit gap:** exact `EXCHANGE_CONSTRAINED_DUST` quantity and limiting filter are computed by the domain but omitted from the no-action evaluation log and lifecycle decision event. This violates the canonical requirement to record dust disposition. It is documented as unresolved and intentionally not implemented under the current scope restriction.
 
 Latest exact-head Actions/workflow runs and legacy statuses remain empty; no tests are claimed as passing. PR #653 remains open/unmerged. No TESTNET or exchange actions were performed.
 
@@ -482,7 +482,7 @@ Rule-by-rule source/test inspection confirms the following current coverage: par
 
 **New coverage gap:** the engine has a terminal SELL path for CANCELED, EXPIRED, and REJECTED: it reconciles terminal fill history before reevaluation. Existing generic terminal-state tests exercise BUY orders, while the recovery-SELL tests cover fill-during-cancel and FILLED completion. No focused test directly exercises each terminal SELL outcome (including a partial execution reported with a non-FILLED terminal status) and proves that complete fill/commission reconciliation precedes replacement. See F-011.
 
-No concrete source/spec behavior mismatch was confirmed in the lifecycle paths inspected in this pass. This is not an overall audit PASS. Exact-head Actions query returned no PR-triggered workflow runs; no tests were executed in this session. Keep PR #653 open/unmerged and TESTNET closed. Historical checkpoint only; superseded by the 2026-11-07 dust completion event implementation below.
+No concrete source/spec behavior mismatch was confirmed in the lifecycle paths inspected in this pass. This is not an overall audit PASS. Exact-head Actions query returned no PR-triggered workflow runs; no tests were executed in this session. Keep PR #653 open/unmerged and TESTNET closed. Exact dust quantity/filter durability remains the previously recorded out-of-scope gap; no Journal/event changes were made.
 
 ## F-011 regression follow-up — terminal recovery SELL
 
@@ -503,7 +503,7 @@ Reviewed the current branch source and regression inventory for the complete in-
 
 This is a source/test coverage review, **not a test execution or PASS claim**. Focused Harvester tests and the complete verification matrix remain pending. A local clone attempt failed because this environment could not resolve github.com. The exact PR HEAD at the start of this review had no reported commit statuses or PR-triggered workflow runs.
 
-At this historical checkpoint, exact dust quantity/filter persistence was unresolved. Superseded by the 2026-11-07 application/event implementation below.
+The separate canonical requirement to durably record exact dust quantity and limiting filter remains unresolved. The current domain decision computes that disposition, but the no-action log/lifecycle event does not persist it. No Journal, event DTO, broker, exchange, or other production change was made to address it.
 
 PR #653 remains OPEN and UNMERGED. No TESTNET or exchange actions were performed.
 
@@ -513,7 +513,7 @@ The canonical rule is now explicit: unsellable exchange-constrained dust is reta
 
 This supersedes older audit wording that required above-keep dust to remain active, block completion/reset, or wait for a later BUY to become sellable. Those statements are historical and are not the current owner-approved contract. The canonical authority is `docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md`.
 
-**Historical checkpoint (superseded 2026-11-07):** source/test conformance had not yet been checked against the dust clarification. The audit-closure section below records the subsequent implementation and regression additions. Exact-head CI remains pending.
+**Implementation/audit status:** documentation is aligned; source behavior and regression coverage still need to be checked against this clarification. The previously identified missing durable dust quantity/filter evidence remains a separate audit gap. No production code, Journal, event DTO, broker, recovery, or exchange behavior was changed by this documentation update. PR #653 remains open and unmerged.
 
 ## Audit closure — historical evidence disposition and dust recording
 

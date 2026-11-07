@@ -290,6 +290,7 @@ test("classifies residual quantity below the exchange quantity step instead of s
     quantity: "0.05",
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: "0.1",
+    evaluatedQuantity: "0",
   })
 })
 
