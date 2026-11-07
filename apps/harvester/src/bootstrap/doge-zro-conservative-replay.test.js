@@ -728,7 +728,23 @@ async function createReplayHarness(symbol) {
       right: commissionRate,
     })
     const timestamp = Date.now()
+    const filledOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market: order.market,
+      side: order.side,
+      type: order.type,
+      limitPrice: order.limitPrice,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: new Quantity({ amount: quantity, asset: order.market.baseAsset }),
+      status: "FILLED",
+      createdAt: order.createdAt,
+      acknowledgedAt: order.acknowledgedAt,
+      updatedAt: timestamp,
+      completedAt: timestamp,
+    })
     openOrders.delete(order.clientOrderId)
+    orderHistory.set(order.brokerOrderId, filledOrder)
     return userDataHandler({
       event: {
         eventType: "executionReport",
