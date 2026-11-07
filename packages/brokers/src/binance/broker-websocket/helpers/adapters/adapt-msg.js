@@ -24,6 +24,12 @@ const EXECUTION_REPORT_EVIDENCE_FIELDS = Object.freeze({
   icebergQuantity: "F", selfTradePreventionMode: "V", matchType: "k",
   working: "w", rejectReason: "r",
 })
+/**
+ * Keep a bounded, scalar-only snapshot of Binance's raw execution-report facts.
+ *
+ * @param {Record<string, unknown>} message
+ * @returns {Record<string, unknown>} Safe broker evidence for diagnostics/reconciliation.
+ */
 const createExecutionReportEvidence = (message) => ({
   schemaVersion: 1,
   source: "binance.spot.userData.executionReport",
@@ -34,6 +40,12 @@ const createExecutionReportEvidence = (message) => ({
     return [[field, typeof value === "string" ? value.slice(0, 256) : value]]
   })),
 })
+/**
+ * Normalize an executionReport event and its optional TRADE fill.
+ *
+ * @param {Record<string, unknown>} message
+ * @returns {object} Normalized order event, optional fill, and broker evidence.
+ */
 const adaptExecutedOrder = (message) => {
   const report = adaptUser.executionReport(message)
   const executedOrder = {
