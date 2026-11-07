@@ -1,7 +1,7 @@
 import { defaultLogger } from './logger.js'
 
 /**
- * @typedef {{ error: unknown, where?: string, logger?: { error: (data: unknown) => unknown } }} HandleErrorOptions
+ * @typedef {{ error: *, where?: string, logger?: { error: (data: unknown) => unknown } }} HandleErrorOptions
  */
 
 /**
