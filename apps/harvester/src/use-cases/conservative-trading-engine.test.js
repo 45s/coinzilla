@@ -4926,7 +4926,7 @@ test("shutdown cancellation applies partial BUY fills before confirming cancella
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.ok, true, "shutdown must successfully reconcile the partial BUY fill before reporting cancellation complete")
   assert.equal(accountedFills.length, 1, "the partial BUY execution racing with cancellation must be accounted exactly once")
   assert.equal(accountedFills[0].side, "BUY", "the execution reconciled during shutdown must retain its original BUY side")
   assert.equal(accountedFills[0].quantity.amount, "0.1", "shutdown reconciliation must account for the exact 0.1 DOGE partial BUY fill")
