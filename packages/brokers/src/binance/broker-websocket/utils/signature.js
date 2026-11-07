@@ -10,6 +10,13 @@ function normalizeValue(key, value) {
   )
 }
 
+/**
+ * Build the deterministic query-string payload used for Binance HMAC signing.
+ * Keys are sorted and an existing signature field is omitted.
+ *
+ * @param {Record<string, string|number|boolean>} params
+ * @returns {string}
+ */
 export function buildBinanceSignaturePayload(params) {
   if (!params || typeof params !== "object" || Array.isArray(params)) {
     throw new TypeError("Binance signature params must be an object")
@@ -22,6 +29,13 @@ export function buildBinanceSignaturePayload(params) {
     .join("&")
 }
 
+/**
+ * Sign Binance request parameters using HMAC-SHA-256.
+ *
+ * @param {Record<string, string|number|boolean>} params
+ * @param {string} apiSecret
+ * @returns {string} Lowercase hexadecimal signature.
+ */
 export function signBinanceParams(params, apiSecret) {
   if (typeof apiSecret !== "string" || apiSecret.length === 0) {
     throw new TypeError("Binance API secret is required for signed requests")
@@ -31,6 +45,13 @@ export function signBinanceParams(params, apiSecret) {
   return createHmac("sha256", apiSecret).update(payload, "utf8").digest("hex")
 }
 
+/**
+ * Add API-key, timestamp, optional receive window, and HMAC signature fields.
+ *
+ * @param {Record<string, string|number|boolean>} params
+ * @param {{apiKey: string, apiSecret: string, timestamp?: number, recvWindow?: number}} [options]
+ * @returns {Record<string, string|number|boolean> & {signature: string}}
+ */
 export function createSignedBinanceParams(params, {
   apiKey,
   apiSecret,
