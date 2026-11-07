@@ -16,6 +16,8 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | JavaScript and JSDoc | [docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md](docs/engineering/JAVASCRIPT_JSDOC_STANDARD.md) |
 | Harvester execution priority | [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md) |
 
+JavaScript control-flow style (including braces on all control statements and no nested ternary operators) is defined in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md#javascript-control-flow). Follow that canonical rule in all applications and packages.
+
 ## Mandatory documentation and requirements preflight — hard gate
 
 **Every AI agent and automated contributor MUST complete this preflight before starting any task.** This applies to every task type: code, tests, configuration, documentation, investigation, debugging, refactoring, and operational work.
