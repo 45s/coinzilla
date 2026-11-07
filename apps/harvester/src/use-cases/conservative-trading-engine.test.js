@@ -1024,7 +1024,7 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     side: "BUY",
     price: new Money({ amount: "100", asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    quoteQuantity: new Money({ amount: multiplyDecimal({ left: "100", right: quantity }), asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -3808,8 +3808,8 @@ test("keeps the recovery basis open and classifies exchange-constrained residual
   assert.equal(result.data.residualSellThrough, true)
   assert.equal(result.data.reevaluate, true)
   assert.equal(currentRecoveryLedger.outstandingRecoveryAmount, "0")
-  assert.equal(currentRecoveryLedger.buyCost, "100")
-  assert.ok(Number(currentRecoveryLedger.netSellProceeds) > 100.01)
+  assert.equal(currentRecoveryLedger.buyCost, "105")
+  assert.ok(Number(currentRecoveryLedger.netSellProceeds) > 105.01)
   const position = currentPortfolio.getPosition({ marketId: market.id })
   assert.equal(position.freeBaseQuantity.amount, "0")
   assert.ok(Number(position.baseQuantity.amount) > 0.1)
