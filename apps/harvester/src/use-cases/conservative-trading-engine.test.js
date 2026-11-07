@@ -1869,7 +1869,7 @@ test("reconciles multiple actual SELL fills before completing recovery", async (
 
 
 
-test("reconciles one complete Conservative cycle with partial fills, SELL cancel/fill replacement, and exact-once completion", async () => {
+const runCompleteConservativeCycle = async ({ keepQuantity }) => {
   let currentPortfolio = new Portfolio()
   let currentRecoveryLedger = RecoveryLedger.empty({ market })
   let engine
@@ -1924,6 +1924,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
           ...tradingConfig.strategies.CG_coinGrabber.pairs,
           DOGEUSDT: {
             ...tradingConfig.strategies.CG_coinGrabber.pairs.DOGEUSDT,
+            keepQuantity,
             makerPercent: 0,
             takerPercent: 0,
           },
@@ -2202,7 +2203,7 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
   assert.ok(compareDecimal({ left: completionSnapshot.realizedNetProfit, right: "0.01" }) >= 0)
 
   const completedPosition = currentPortfolio.getPosition({ marketId: market.id })
-  assert.equal(completedPosition.freeBaseQuantity.amount, "0.1")
+  assert.equal(completedPosition.freeBaseQuantity.amount, keepQuantity)
   assert.equal(completedPosition.baseQuantity.amount, "0")
   assert.equal(currentRecoveryLedger.buyCost, "0")
   assert.equal(currentRecoveryLedger.netSellProceeds, "0")
@@ -2248,6 +2249,14 @@ test("reconciles one complete Conservative cycle with partial fills, SELL cancel
     partialBuyReplacementSell.brokerOrderId,
   ])
   assert.deepEqual(harness.pauses, [])
+}
+
+test("completes the full Conservative lifecycle with the supported zero keepQuantity", async () => {
+  await runCompleteConservativeCycle({ keepQuantity: "0" })
+})
+
+test("completes the full Conservative lifecycle with the configured retained quantity", async () => {
+  await runCompleteConservativeCycle({ keepQuantity: "0.1" })
 })
 
 test("does not publish recovery completion when the cycle is ineligible", async () => {
