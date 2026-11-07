@@ -1,7 +1,7 @@
 import nodeTest, { describe, before, beforeEach, afterEach } from "node:test"
 const test = (name, ...args) => nodeTest("[doge-zro-conservative-replay.test.js] " + name, ...args)
 import assert from "node:assert/strict"
-import { Asset, Balance, CanonicalOrder, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Commission, Fill, Money, Quantity } from "@coinzilla/entities"
 import { BinanceWebSocketBroker } from "@coinzilla/brokers"
 import {
   multiplyDecimal,
@@ -605,10 +605,37 @@ async function createReplayHarness(symbol) {
       userDataHandler = (message) => {
         receivedExecutionReportsList.push(message.event)
         const fill = message.event?.fill
-        if (fill?.brokerOrderId) {
-          const fills = canonicalFills.get(fill.brokerOrderId) ?? []
-          fills.push(fill)
-          canonicalFills.set(fill.brokerOrderId, fills)
+        const fillOrderId = fill?.brokerOrderId ?? fill?.orderId
+        if (fill && fillOrderId !== undefined && fillOrderId !== null) {
+          const brokerOrderId = String(fillOrderId)
+          const order = orderHistory.get(brokerOrderId)
+          if (order) {
+            const commissionAsset = fill.commissionAsset === order.market.baseAsset.code
+              ? order.market.baseAsset
+              : order.market.quoteAsset
+            const commissions = fill.commissionAmount && fill.commissionAmount !== "0"
+              ? [new Commission({
+                amount: new Money({ amount: fill.commissionAmount, asset: commissionAsset }),
+              })]
+              : []
+            const canonicalFill = new Fill({
+              tradeId: String(fill.tradeId ?? fill.id),
+              brokerOrderId,
+              clientOrderId: order.clientOrderId,
+              market: order.market,
+              side: fill.side,
+              price: new Money({ amount: fill.price, asset: order.market.quoteAsset }),
+              quantity: new Quantity({ amount: fill.quantity, asset: order.market.baseAsset }),
+              quoteQuantity: new Money({ amount: fill.quoteQuantity, asset: order.market.quoteAsset }),
+              liquidityRole: fill.isMaker ? "MAKER" : "TAKER",
+              executedAt: fill.time,
+              commissions,
+              commissionStatus: "COMPLETE",
+            })
+            const fills = canonicalFills.get(brokerOrderId) ?? []
+            fills.push(canonicalFill)
+            canonicalFills.set(brokerOrderId, fills)
+          }
         }
         return onEvent(message)
       }
