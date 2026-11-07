@@ -9,7 +9,7 @@
 >
 > PR #513 and #515 established the incident lifecycle/accounting baseline. PR #545 added automatic account-wide PREFLIGHT auditing on every broker-connected startup; PR #546 corrected Binance WebSocket fill timestamps to use transaction time `T` for same-process reconciliation; PR #552 recorded the startup-audit completion; PR #553 reconciled the Journal durability policy; PR #554 fixed aggregate BUY/SELL commitment over-allocation; PR #559 added same-process canonical lookup and reconciliation for lost submission acknowledgements. All changes listed above are merged into `develop`; the remaining work is separately authorized TESTNET acceptance. PR-specific CI claims must be verified against each exact final PR head; historical green runs do not certify later commits.
 >
-> The startup audit is a required safety gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
+> The startup audit is a required evidence gate: both full balances and account-wide open orders must be durably journaled before market subscriptions or trading-engine activation. Existing open orders are recorded as external/unowned but do not make the audit a trading-startup rejection. Broader Journal delivery remains asynchronous during trading; Journal is not trading-state authority.
 >
 > **The remaining critical milestone is joint Binance Spot TESTNET validation.** Offline CI is not exchange acceptance. Follow [TESTNET_VALIDATION_RUNBOOK.md](./docs/TESTNET_VALIDATION_RUNBOOK.md); keep Harvester stopped during preparation. No order submission/cancellation or account-setting change is authorized until the operator and assistant explicitly begin the joint session.
 >
@@ -1102,7 +1102,7 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 - [x] Capture and journal account-wide balances on every connected startup, including read-only `pnpm run dev`.
 - [x] Capture and journal account-wide open orders on every connected startup using the existing broker connection.
 - [x] Use shared `PREFLIGHT` phase for trading-enabled and read-only startup; durably flush each event before market subscriptions or engine activation.
-- [x] Record existing orders without adopting or changing them. Trading-enabled startup fails closed when pre-existing unowned orders exist; read-only startup preserves observation-only behavior.
+- [x] Record existing orders without adopting or changing them. Pre-existing unowned orders are an observational audit finding, not a startup prerequisite; trading-enabled and read-only startup may proceed after the account snapshot and open-order audit are durably journaled.
 - [x] Add regressions for exactly-once reads, event ordering and durability, existing-order preservation, query failures, and Journal flush failures.
 - [x] Exact-head CI passed and the implementation merged in PR #545. TESTNET remains stopped pending a separately controlled session.
 
@@ -1121,7 +1121,7 @@ After BUY 698746 is fully reconciled, the Conservative engine intentionally canc
 
 PR #606 previously introduced Journal replay, domain-state restoration, and historical exchange reconciliation. That implementation is not part of the current runtime: `startHarvester` no longer projects or restores Journal records, `index.js` does not require a recovery snapshot, and the Journal service does not read previous sessions during startup.
 
-The supported runtime starts with fresh in-memory Portfolio, RecoveryLedger, and order ownership state. It does not resume prior positions or orders. Existing exchange open orders remain unowned and continue to block trading startup; the current-session PREFLIGHT/CLOSING account audit and durable order/cancel intent barriers remain active.
+The supported runtime starts with fresh in-memory Portfolio, RecoveryLedger, and order ownership state. It does not resume prior positions or orders. Existing exchange open orders remain unowned and are recorded in the PREFLIGHT audit, but their presence alone does not block startup. Harvester never adopts or cancels them. An execution event for an unowned order remains an ownership violation and pauses the affected pair. The current-session PREFLIGHT/CLOSING account audit and durable order/cancel intent barriers remain active.
 
 Do not repair, expand, or re-enable restart recovery as part of the first Conservative TESTNET workflow. It is deferred unless the user explicitly requests it.
 
