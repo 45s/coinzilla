@@ -283,7 +283,7 @@ const createReplayHarness = async (symbol) => {
     })
   }
 
-  const fillOrder = ({ order, price, tradeId }) => {
+  const fillOrder = async ({ order, price, tradeId }) => {
     const quantity = order.originalQuantity.amount
     const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
     const commissionRate = percentageToRate({
@@ -298,7 +298,7 @@ const createReplayHarness = async (symbol) => {
     })
     const timestamp = Date.now()
     openOrders.delete(order.clientOrderId)
-    userDataHandler({
+    return userDataHandler({
       event: {
         eventType: "executionReport",
         executionType: "TRADE",
@@ -333,6 +333,7 @@ const createReplayHarness = async (symbol) => {
 
   return {
     runtime,
+    symbol,
     pair,
     submitted,
     outgoingOrderRequests,
@@ -358,14 +359,9 @@ const getRecoverySell = async (replay) => {
   const buy = await buySubmitted
   const sellSubmitted = waitForOrder("SELL")
   await triggerPrice(pair.buyPrice)
-  fillOrder({ order: buy, price: pair.buyPrice, tradeId: "645-" + pairSymbol(replay) + "-buy" })
+  await fillOrder({ order: buy, price: pair.buyPrice, tradeId: "645-" + replay.symbol.toLowerCase() + "-buy" })
   return sellSubmitted
 }
-
-const pairSymbol = (replay) =>
-  replay.runtime.portfolio.getMarkets?.()[0]?.symbol ??
-  Object.keys(replay.runtime.config?.strategies?.CG_coinGrabber?.pairs ?? {})[0] ??
-  "market"
 
 for (const symbol of Object.keys(pairConfigs)) {
   describe("Conservative " + symbol + " replay", () => {
@@ -436,7 +432,7 @@ for (const symbol of Object.keys(pairConfigs)) {
       const sell = await sellSubmitted
       const cycle = replay.waitForCycle()
       await replay.triggerPrice(replay.pair.sellFillPrice)
-      replay.fillOrder({
+      await replay.fillOrder({
         order: sell,
         price: replay.pair.sellFillPrice,
         tradeId: "645-" + symbol.toLowerCase() + "-sell",
