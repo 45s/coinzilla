@@ -707,7 +707,7 @@ export async function startHarvester({
         : readiness === "RECONCILED"
           ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
           : unownedOrders.length > 0
-          ? "Account-wide open-orders audit blocked trading because open orders are unowned"
+          ? "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
           : "Account-wide open-orders audit is waiting for canonical order reconciliation",
       orderCount: orders.length,
       readiness,
