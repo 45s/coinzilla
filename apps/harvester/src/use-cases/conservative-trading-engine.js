@@ -1551,11 +1551,11 @@ export function makeConservativeTradingEngine({
         if (!replacement.ok) return replacement
         return toResult({
           data: {
+            ...replacement.data,
             order,
             reevaluate: true,
             terminalFillHistoryReconciled: true,
             recoverySellReplaced: true,
-            ...replacement.data,
           },
         })
       }
