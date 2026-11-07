@@ -114,6 +114,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
   };
   let accountSnapshotCalls = 0;
   let openOrderSnapshotCalls = 0;
+  const userDataErrors = [];
   let orderSequence = 0;
   let lastOrder;
   let onPrice;
@@ -187,7 +188,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       BINANCE_API_SECRET_KEY: 'test-secret',
     },
     now: () => 10,
-    logger: { debug() {}, info() {}, error() {} },
+    logger: { debug() {}, info() {}, error(...args) { userDataErrors.push(args) } },
     onUserDataEvent: async ({ event } = {}) => {
       if (event?.executionType === 'TRADE') observedTrade();
     },
@@ -247,7 +248,17 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       fill,
     },
   });
-  await tradeObserved;
+  await waitForTestSignal(
+    tradeObserved,
+    'trade execution observer',
+    () => ({
+      userDataReady: context.userDataReady,
+      userDataStatus: context.userDataStatus,
+      accountedBaseQuantity: context.portfolio.getPosition({ marketId: market.id })?.baseQuantity.amount ?? '0',
+      errors: userDataErrors.map(([entry]) => entry),
+    }),
+    2000,
+  );
   await context.stop();
 
   assert.equal(accountSnapshotCalls, 2);
