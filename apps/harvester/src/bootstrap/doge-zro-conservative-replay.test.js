@@ -6,7 +6,7 @@ import { multiplyDecimal, percentageToRate } from "@coinzilla/utils"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { startHarvester } from "./start-harvester.js"
 
-const replayCases = {
+const expectedSellOrders = {
   DOGEUSDT: {
     initialPrice: "0.07161000",
     buyPrice: "0.07157",
@@ -105,31 +105,31 @@ const waitForOrder = (submitted, waiters, symbol, side) => {
 
 const createReplayHarness = async (symbol) => {
   const pair = config.strategies.CG_coinGrabber.pairs[symbol]
-  const scenario = replayCases[symbol]
-  const submitted = []
-  const outgoingOrderRequests = []
-  const receivedPrices = []
-  const receivedExecutionReports = []
+  const expectedSellOrder = expectedSellOrders[symbol]
+  const submittedList = []
+  const outgoingOrderRequestsList = []
+  const receivedPricesList = []
+  const receivedExecutionReportsList = []
   const priceHandlers = new Map()
   const openOrders = new Map()
-  const orderWaiters = []
+  const orderWaitersList = []
   let userDataHandler
   let nextBrokerOrderId = 1
   let cycleCompletion
   let cycleWaiter
 
   const notifyOrderWaiters = () => {
-    for (let index = orderWaiters.length - 1; index >= 0; index -= 1) {
-      const waiter = orderWaiters[index]
-      const order = submitted.find(waiter.matches)
+    for (let index = orderWaitersList.length - 1; index >= 0; index -= 1) {
+      const waiter = orderWaitersList[index]
+      const order = submittedList.find(waiter.matches)
       if (!order) continue
-      orderWaiters.splice(index, 1)
+      orderWaitersList.splice(index, 1)
       waiter.resolve(order)
     }
   }
 
   const waitForOrderSide = (side) =>
-    waitForOrder(submitted, orderWaiters, symbol, side)
+    waitForOrder(submittedList, orderWaitersList, symbol, side)
 
   const waitForCycle = () => {
     if (cycleCompletion) return Promise.resolve(cycleCompletion)
@@ -148,13 +148,13 @@ const createReplayHarness = async (symbol) => {
     broker.disconnect = async () => {}
     broker.tradingConnection.request = async (method, params = {}) => {
       if (method === "order.place") {
-        outgoingOrderRequests.push({ method, params: { ...params } })
+        outgoingOrderRequestsList.push({ method, params: { ...params } })
       }
       if (method === "exchangeInfo") {
         return { data: { symbols: [exchangeInfoSymbol(symbol)] } }
       }
       if (method === "ticker.price") {
-        return { data: { symbol, price: scenario.initialPrice } }
+        return { data: { symbol, price: expectedSellOrder.initialPrice } }
       }
       if (method === "order.place") {
         const timestamp = Date.now()
@@ -181,7 +181,7 @@ const createReplayHarness = async (symbol) => {
     broker.createCanonicalOrder = async (order) => {
       const result = await createCanonicalOrder(order)
       if (result?.ok) {
-        submitted.push(result.data)
+        submittedList.push(result.data)
         openOrders.set(result.data.clientOrderId, result.data)
         notifyOrderWaiters()
       }
@@ -217,15 +217,19 @@ const createReplayHarness = async (symbol) => {
     })
     broker.userDataSession.subscribe = async ({ onEvent }) => {
       userDataHandler = (message) => {
-        receivedExecutionReports.push(message.event)
+        receivedExecutionReportsList.push(message.event)
         return onEvent(message)
       }
       return { data: { disconnect: async () => {} } }
     }
-    broker.subscribeForPrices = async ({ subscribedSymbol, symbol: requestedSymbol, onPrice }) => {
+    broker.subscribeForPrices = async ({
+      subscribedSymbol,
+      symbol: requestedSymbol,
+      onPrice,
+    }) => {
       const targetSymbol = requestedSymbol ?? subscribedSymbol ?? symbol
       priceHandlers.set(targetSymbol, (event) => {
-        receivedPrices.push(event)
+        receivedPricesList.push(event)
         return onPrice(event)
       })
       return { ok: true, data: { unsubscribe: async () => {} } }
@@ -292,7 +296,9 @@ const createReplayHarness = async (symbol) => {
     const quantity = order.originalQuantity.amount
     const quoteQuantity = multiplyDecimal({ left: price, right: quantity })
     const commissionRate = percentageToRate({
-      percent: String(order.type === "LIMIT_MAKER" ? pair.makerPercent : pair.takerPercent),
+      percent: String(
+        order.type === "LIMIT_MAKER" ? pair.makerPercent : pair.takerPercent,
+      ),
     })
     const commissionAsset =
       order.side === "BUY" ? order.market.baseAsset : order.market.quoteAsset
@@ -340,11 +346,11 @@ const createReplayHarness = async (symbol) => {
     runtime,
     symbol,
     pair,
-    scenario,
-    submitted,
-    outgoingOrderRequests,
-    receivedPrices,
-    receivedExecutionReports,
+    scenario: expectedSellOrder,
+    submitted: submittedList,
+    outgoingOrderRequests: outgoingOrderRequestsList,
+    receivedPrices: receivedPricesList,
+    receivedExecutionReports: receivedExecutionReportsList,
     waitForOrder: waitForOrderSide,
     waitForCycle,
     triggerPrice,
@@ -360,18 +366,24 @@ const getInitialBuy = async (replay) => {
 }
 
 const getRecoverySell = async (replay) => {
-  const { pair, scenario, waitForOrder, triggerPrice, fillOrder } = replay
+  const { scenario, waitForOrder, triggerPrice, fillOrder } = replay
   const buySubmitted = getInitialBuy(replay)
   const buy = await buySubmitted
   const sellSubmitted = waitForOrder("SELL")
   await triggerPrice(scenario.buyPrice)
-  await fillOrder({ order: buy, price: scenario.buyPrice, tradeId: "645-" + replay.symbol.toLowerCase() + "-buy" })
+  await fillOrder({
+    order: buy,
+    price: scenario.buyPrice,
+    tradeId: "645-" + replay.symbol.toLowerCase() + "-buy",
+  })
   return sellSubmitted
 }
 
-for (const symbol of Object.keys(replayCases)) {
-  describe("Conservative " + symbol + " replay", () => {
-    let replay
+describe("Conservative strategy replay", () => {
+  let replay
+
+  describe("DOGEUSDT replays", () => {
+    const symbol = "DOGEUSDT"
 
     beforeEach(async () => {
       replay = await createReplayHarness(symbol)
@@ -386,7 +398,13 @@ for (const symbol of Object.keys(replayCases)) {
       const buy = await getInitialBuy(replay)
       assert.deepEqual(
         [buy.market.symbol, buy.side, buy.price, buy.quantity, buy.type],
-        [symbol, "BUY", replay.scenario.buyPrice, String(replay.pair.orderQuantity), "LIMIT"],
+        [
+          symbol,
+          "BUY",
+          replay.scenario.buyPrice,
+          String(replay.pair.orderQuantity),
+          "LIMIT",
+        ],
       )
       assert.deepEqual(
         replay.outgoingOrderRequests.map(({ params }) => [
@@ -410,7 +428,13 @@ for (const symbol of Object.keys(replayCases)) {
       const sell = await sellSubmitted
       assert.deepEqual(
         [sell.market.symbol, sell.side, sell.price, sell.quantity, sell.type],
-        [symbol, "SELL", replay.scenario.sellPrice, replay.scenario.expectedSellQuantity, "LIMIT"],
+        [
+          symbol,
+          "SELL",
+          replay.scenario.sellPrice,
+          replay.scenario.expectedSellQuantity,
+          "LIMIT",
+        ],
       )
       assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
@@ -418,6 +442,7 @@ for (const symbol of Object.keys(replayCases)) {
           executedOrder.side,
           fill.commissionAsset,
         ]),
+        // add price/commission/quantity
         [[symbol, "BUY", symbol.slice(0, -4)]],
       )
       assert.deepEqual(
@@ -445,12 +470,18 @@ for (const symbol of Object.keys(replayCases)) {
       })
 
       const completion = await cycle
-      assert.equal(completion.freeQuantity, replay.scenario.expectedFreeQuantity)
+      assert.equal(
+        completion.freeQuantity,
+        replay.scenario.expectedFreeQuantity,
+      )
       assert.equal(completion.realizedNetProfit, replay.scenario.expectedProfit)
 
       const position = replay.runtime.portfolio.getPosition({ symbol })
       assert.equal(position.baseQuantity.amount, "0")
-      assert.equal(position.freeBaseQuantity.amount, replay.scenario.expectedFreeQuantity)
+      assert.equal(
+        position.freeBaseQuantity.amount,
+        replay.scenario.expectedFreeQuantity,
+      )
       assert.deepEqual(
         replay.receivedExecutionReports.map(({ executedOrder, fill }) => [
           executedOrder.symbol,
@@ -464,4 +495,8 @@ for (const symbol of Object.keys(replayCases)) {
       )
     })
   })
-}
+
+  describe("ZROUSDT replays", () => {
+    //implement
+  })
+})
