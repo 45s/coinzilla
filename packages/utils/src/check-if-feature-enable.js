@@ -4,7 +4,7 @@ import { defaultLogger } from './logger.js'
 /**
  * @typedef {object} FeatureFlagLogger
  * @property {(data: unknown) => unknown} warn
- * @property {(data: unknown) => unknown} [error]
+ * @property {(data: unknown) => unknown} error
  */
 
 /**
