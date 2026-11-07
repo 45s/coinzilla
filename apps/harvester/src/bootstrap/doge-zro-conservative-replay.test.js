@@ -619,10 +619,11 @@ async function createReplayHarness(symbol) {
                 amount: new Money({ amount: fill.commissionAmount, asset: commissionAsset }),
               })]
               : []
+            // Match adaptCanonicalFill: Binance REST and user-data fills do not
+            // include clientOrderId, so both sources produce identical canonical values.
             const canonicalFill = new Fill({
               tradeId: String(fill.tradeId ?? fill.id),
               brokerOrderId,
-              clientOrderId: order.clientOrderId,
               market: order.market,
               side: fill.side,
               price: new Money({ amount: fill.price, asset: order.market.quoteAsset }),
