@@ -59,7 +59,7 @@ export class BinanceStreamsClient {
   #transportCleanup = null
 
   /**
-   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: Function, clearTimeoutFn?: Function, nowFn?: () => number, onError?: (error: Error) => void}} [options]
+   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
    * @throws {TypeError|RangeError} If a URL, callback, or timing option is invalid.
    */
   constructor({
