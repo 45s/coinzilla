@@ -1,3 +1,9 @@
+/**
+ * Map a broker order request to Binance order.place parameters.
+ *
+ * @param {{input: Record<string, unknown>, clientOrderId?: string, requireClientOrderId?: boolean}} options
+ * @returns {Record<string, unknown>} Binance request parameters with normalized defaults.
+ */
 export function adaptOrderRequestParams({
   input,
   clientOrderId = input.clientOrderId,
