@@ -182,6 +182,7 @@ export function makeConservativeTradingEngine({
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
     processedFillIdsByOrder: new Map(),
+    processedFillsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
@@ -234,6 +235,9 @@ export function makeConservativeTradingEngine({
     if (fillIds.has(fill.id)) return false
     fillIds.add(fill.id)
     state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
+    const fills = state.processedFillsByOrder.get(fill.brokerOrderId) ?? new Map()
+    fills.set(fill.id, fill)
+    state.processedFillsByOrder.set(fill.brokerOrderId, fills)
     return true
   }
 
@@ -1280,9 +1284,18 @@ export function makeConservativeTradingEngine({
     // The terminal stream event is authoritative evidence when REST history lags.
     // Merge it with REST history, retaining the same duplicate-ID conflict checks.
     const fillsById = new Map()
-    const candidateFills = eventFill === undefined
-      ? fillsResult.data
-      : [...fillsResult.data, eventFill]
+    // Keep canonical stream fills as durable-in-transition evidence: REST may
+    // lag behind user-data delivery, including earlier fills from the same
+    // order. Merge every observed fact and let the duplicate-ID parity check
+    // reject conflicting REST/stream representations.
+    const previouslyProcessedFills = [
+      ...(state.processedFillsByOrder.get(order.brokerOrderId)?.values() ?? []),
+    ]
+    const candidateFills = [
+      ...fillsResult.data,
+      ...previouslyProcessedFills,
+      ...(eventFill === undefined ? [] : [eventFill]),
+    ]
     for (const fill of candidateFills) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
           fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
