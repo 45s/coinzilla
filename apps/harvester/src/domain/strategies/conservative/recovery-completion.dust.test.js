@@ -14,11 +14,9 @@ const baseInput = {
 const validDustDisposition = {
   status: "EXCHANGE_CONSTRAINED_DUST",
   quantity: "0.04",
-  reason: "MIN_NOTIONAL",
+  reason: "MIN_QUANTITY",
   minimumQuantity: "1",
-  minimumNotional: "5",
   evaluatedQuantity: "0",
-  evaluatedNotional: "0",
 }
 
 test("completes with exchange-constrained dust retained as a keepQuantity bonus", () => {
@@ -94,4 +92,23 @@ test("does not complete when realized net profit is below the configured minimum
   assert.equal(result.eligible, false)
   assert.equal(result.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
   assert.equal(result.freeQuantity, "0")
+})
+
+test("validates exact MIN_NOTIONAL evidence before retaining dust", () => {
+  const result = evaluateRecoveryCompletion({ ...baseInput, inventoryDisposition: {
+    ...validDustDisposition, reason: "MIN_NOTIONAL", minimumQuantity: "0.01", minimumNotional: "5",
+    evaluatedQuantity: "0.04", evaluatedNotional: "0.004",
+  } })
+  assert.equal(result.eligible, true)
+  assert.equal(result.dust.reason, "MIN_NOTIONAL")
+  assert.equal(result.dust.quantity, "0.04")
+})
+
+test("rejects dust when its claimed MIN_NOTIONAL filter is not limiting", () => {
+  const result = evaluateRecoveryCompletion({ ...baseInput, inventoryDisposition: {
+    ...validDustDisposition, reason: "MIN_NOTIONAL", minimumQuantity: "0.01", minimumNotional: "5",
+    evaluatedQuantity: "0.04", evaluatedNotional: "5",
+  } })
+  assert.equal(result.eligible, false)
+  assert.equal(result.reason, "INVALID_EXCHANGE_CONSTRAINED_DUST_EVIDENCE")
 })

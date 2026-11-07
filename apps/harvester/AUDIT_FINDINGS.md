@@ -490,3 +490,17 @@ The canonical durable-dust-recording requirement remains an unresolved audit gap
 This supersedes older findings text that treated above-`keepQuantity` dust as active recovery inventory that must block completion/reset or await a later BUY. Such text is historical, not the current contract.
 
 **Remaining audit work:** inspect the current completion/accounting implementation and tests against this rule; update them only within the approved scope. The separate durable-evidence gap (exact dust amount and limiting filter not persisted in the current decision log/event path) remains unresolved. This documentation-only update does not claim implementation or test conformance.
+
+## Audit closure — historical evidence disposition and dust recording
+
+**Historical evidence disposition (2026-11-07):**
+- DOGE SELL 1276698 and ZRO BUY 727905 filled after Harvester was stopped. The owner runs Harvester on a personal workstation and does not require 24/7 uptime. These post-shutdown fills are expected exchange behavior; missing same-session in-memory Portfolio/Journal updates are not defects.
+- The complete historical CLOSING open-order payload and a timestamped post-fill account snapshot were not preserved in the supplied evidence. Their identities/balances remain historically UNVERIFIED; no facts are reconstructed or claimed.
+- This historical evidence limitation is dispositioned as non-blocking for this audit. Safe reconciliation of fills during downtime remains a separate restart workstream in #654. The CLOSING audit correctly remained INCOMPLETE at its recorded timestamp.
+- Historical DOGE/ZRO exchange-filter calculations cannot be independently reproduced where contemporaneous filter payloads were not captured. This does not invalidate the trade arithmetic or authorize retroactive assumptions.
+
+**Dust completion evidence:**
+- Completion accepts above-keep residual only with a validated EXCHANGE_CONSTRAINED_DUST disposition whose exact quantity equals active inventory minus configured keepQuantity.
+- The limiting filter must be demonstrated (MIN_QUANTITY, MIN_NOTIONAL, or QUANTITY_INCREMENT); price-filter blocks and unsupported reasons cannot be retained as dust.
+- The completed-cycle lifecycle event records dust quantity, reason, and relevant filter threshold/evaluated values. Retained allocation is keepQuantity plus dust.
+- Dust completion is attempted only after a reconciled FILLED recovery SELL and a fresh strategy evaluation; a subsequent BUY fill or new SELL order invalidates that eligibility.

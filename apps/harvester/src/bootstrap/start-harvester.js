@@ -297,7 +297,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit } = {}) => {
+    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -311,6 +311,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
           activeQuantity: position.baseQuantity.amount,
           keepQuantity,
           minProfit,
+          ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
         }
         logger.debug?.({
           message: "recovery completion evaluation input",

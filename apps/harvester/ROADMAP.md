@@ -1567,7 +1567,7 @@ These are test-only changes. No production, Journal, broker, exchange, restart, 
 - [x] Residual sell-through, quantity-step and MIN_NOTIONAL dust, MAX_QUANTITY/MAX_NOTIONAL caps, exact keepQuantity completion gating, and dust-plus-later-BUY basis preservation are represented in regression tests.
 - [ ] Execute focused Harvester tests and the full Harvester suite.
 - [ ] Verify all required workflows and commit statuses on the exact final PR HEAD.
-- [ ] Resolve the canonical requirement to durably record exact dust quantity and limiting filter. This requires a separately authorized in-scope production change; it was not implemented here.
+- [x] Durably record exact retained-dust quantity and limiting exchange filter in the recovery completion event; completion validates the evidence before allocating keepQuantity + dust.
 
 The checked items above indicate source/test inventory review and test presence only, **not passing test execution**. Local cloning is unavailable because github.com DNS resolution failed; exact-head Actions/status queries currently return no runs/statuses. PR #653 stays OPEN and UNMERGED. The canonical specification remains the sole rule authority; it is unchanged.
 
