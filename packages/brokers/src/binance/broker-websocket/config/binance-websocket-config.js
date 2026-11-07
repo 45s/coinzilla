@@ -1,7 +1,14 @@
 import { isProdMode } from "@coinzilla/utils"
 import { BINANCE_WEBSOCKET_ENDPOINTS } from "../constants/websocket-endpoints.js"
 
+/**
+ * Validated Binance WebSocket endpoints and credentials.
+ */
 export class BinanceWebSocketConfig {
+  /**
+   * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number}} [input]
+   * @throws {Error} If credentials are missing or reconnectDelay is invalid.
+   */
   constructor(input = {}) {
     const {
       apiKey,

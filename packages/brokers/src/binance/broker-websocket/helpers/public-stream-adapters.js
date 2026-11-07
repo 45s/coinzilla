@@ -16,6 +16,13 @@ const userDataEventTypes = new Set([
  * Adapt public market-data events only. Authenticated user-data events are
  * intentionally excluded and remain owned by the WebSocket API session.
  */
+/**
+ * Adapt a public market-data message; reject authenticated user-data events.
+ *
+ * @param {unknown} message - Raw Binance Spot stream event.
+ * @returns {object} Normalized public event or the original event when no adapter exists.
+ * @throws {TypeError} If the payload is invalid or belongs to the user-data API.
+ */
 export function adaptPublicStreamMessage(message) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     throw new TypeError("A public Binance stream event object is required")

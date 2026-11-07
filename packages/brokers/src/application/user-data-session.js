@@ -15,6 +15,9 @@ function validateCallback(callback, name) {
   }
 }
 
+/**
+ * Own subscriber lifecycle, remote user-data subscription, and recovery acknowledgement.
+ */
 export class UserDataSession {
   #subscribers = new Map()
   #nextSubscriberId = 0
@@ -34,6 +37,10 @@ export class UserDataSession {
   #generation = 0
   #clientPorts = new WeakMap()
 
+  /**
+   * @param {{getClient: () => object|null, createClient: () => object, createUserDataClientPort: (client: object) => import("../ports/user-data-client-port.js").UserDataClientPort, setClient: (client: object) => void, setConnected: (connected: boolean) => void, setUnavailable: (unavailable: boolean) => void, logger?: object, reconnectDelay?: number, recoveryWarningThreshold?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
+   * @throws {TypeError|RangeError} If required callbacks, the port factory, or recovery limits are invalid.
+   */
   constructor({
     getClient,
     createClient,
@@ -74,6 +81,7 @@ export class UserDataSession {
     this.clearTimeout = clearTimeoutFn
   }
 
+  /** Start a new session generation and cancel any scheduled reconnect. */
   start() {
     this.#clearReconnectTimer()
     this.#generation += 1
@@ -84,10 +92,12 @@ export class UserDataSession {
     return this.#reconnectPromise !== null
   }
 
+  /** @returns {Promise<void>} Resolves when the current recovery attempt settles. */
   async waitForRecovery() {
     if (this.#reconnectPromise) await this.#reconnectPromise
   }
 
+  /** Bind connection lifecycle listeners after the underlying client opens. */
   onConnected() {
     const client = this.getClient()
     if (!this.#stopped && client && this.#portFor(client).state === "open") {
@@ -95,6 +105,7 @@ export class UserDataSession {
     }
   }
 
+  /** Resume or establish the shared remote subscription for active subscribers. */
   async resume() {
     if (this.#stopped || this.#subscribers.size === 0) return
     this.#clearReconnectTimer()
@@ -109,6 +120,12 @@ export class UserDataSession {
     }
   }
 
+  /**
+   * Register a local subscriber and return its recovery controls.
+   *
+   * @param {{onEvent: (message: {event: object}) => void, onStatus?: (status: object) => void}} options
+   * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
+   */
   async subscribe({ onEvent, onStatus }) {
     validateCallback(onEvent, "onEvent")
     if (onStatus !== undefined) validateCallback(onStatus, "onStatus")
@@ -153,6 +170,7 @@ export class UserDataSession {
     return { data }
   }
 
+  /** Stop recovery, remove subscribers, and detach all client listeners. */
   async stop() {
     this.#generation += 1
     this.#stopped = true
