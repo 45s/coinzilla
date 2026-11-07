@@ -413,7 +413,7 @@ test("fails closed when active inventory has no positive recovery cost basis", (
     recoveryLedger: proceedsOnlyLedger,
     marketMetadata,
     lastBuyPrice: "0.1",
-  }), /Position\\.spent and legacy RecoveryLedger cost mirror diverged/)
+  }), /Position\.spent and legacy RecoveryLedger cost mirror diverged/)
 })
 
 
