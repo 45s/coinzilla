@@ -4,9 +4,9 @@
 **Baseline:** `develop` `4af3434f788b87139513921f220294ae90daf4d5`  
 **Status vocabulary:** PASS / FAIL / PARTIAL / UNVERIFIED / CONFLICT. These labels distinguish evidence quality and reconciliation outcome; they are not a global release approval.
 
-## F-001 — DOGE SELL order state conflicts with closing account state
+## F-001 — DOGE SELL 1276698 filled after shutdown; historical snapshots are time-consistent
 
-**Status: CONFLICT**
+**Status: PASS for exchange execution arithmetic and post-shutdown chronology; UNVERIFIED for the complete historical CLOSING order identity list and later in-process application (non-blocking; #654 owns restart reconciliation).**
 
 **Evidence**
 - DOGE order history reports order 1276698 / client ID `h-971fc65d9a264984ab8aa7-11` as FILLED for 1,196 DOGE and 85.9326 USDT.
@@ -15,11 +15,9 @@
 - The DOGE total balance delta is +1,198.8, exactly the net quantity from three 400-DOGE BUY fills less 1.2 DOGE commissions, with no SELL debit reflected.
 - Closing audit is INCOMPLETE with two unresolved owned orders.
 
-**Assessment:** The sources conflict. The numerical locked amount matches the reported SELL quantity, but the balance event alone does not prove order identity. Do not book the order-history quote amount as proceeds. No cause is established.
+**Assessment (superseding the initial conflict):** The full trade export identifies order 1276698 through trades 221990 and 221991: 1,196 DOGE sold, 85.9326 USDT gross, 0.0859326 USDT quote commission, and 85.8466674 USDT net proceeds. Both fills occurred after the ~07:58Z shutdown/CLOSING snapshot. The Journal OPEN/zero-executed state and earlier CLOSING balances are therefore valid snapshots from before the fills, not contradictory simultaneous states. Same-session Portfolio/RecoveryLedger application was not expected while the workstation process was stopped.
 
-**Status:** CONFLICT for order terminal state; UNVERIFIED for SELL commission, realized net PnL, and final strategy-owned free/locked inventory.
-
-**Next evidence:** Read the original `harvester.log` and `harvester-trace.log` attachments, verify the checksums in #645, correlate order 1276698 through submit/acknowledgement, user-data events, REST order history, CLOSING reconciliation and account snapshot. Do not place or cancel an order to investigate.
+**Historical limitation:** The complete CLOSING open-order payload was not preserved, so the identity of the second unresolved order cannot be proven. This remains UNVERIFIED and non-blocking; safe application of post-shutdown fills on a later startup belongs to #654. Do not reconstruct a missing snapshot or claim later in-process application.
 
 ## F-002 — ZRO trade arithmetic and residual inventory reconcile
 
@@ -34,7 +32,7 @@
 - The extra 0.04 ZRO remains active residual from the conservative fee reserve / quantity-step calculation; the strategy guard prevents residual-only recovery SELL creation.
 - Account ZRO delta is +0.05, matching the trade ledger.
 
-**Open item:** ZRO order 727905/client suffix -23 remains NEW for 5 ZRO at 1.596, with 7.98 USDT locked. The provided open-orders snapshot corroborates it. It is not a fill and is unresolved at shutdown.
+**CLOSING snapshot:** ZRO order 727905/client suffix -23 was NEW for 5 ZRO at 1.596, with 7.98 USDT locked. The supplied later trade export records trade 12182 filling this order after shutdown: 5 ZRO gross, 0.005 ZRO base commission, 4.995 ZRO net credit, and 7.98 USDT quote debit. This is expected downtime behavior, not a current unresolved order. Later in-process reconciliation is outside this audit and tracked in #654.
 
 ## F-003 — ZRO quote cash flow reconciles exactly with account delta
 
@@ -42,7 +40,7 @@
 
 DOGE BUY quote debit = 85.836 USDT. ZRO net quote cash flow = +0.01136454 USDT. Combined expected USDT delta = −85.82463546 USDT, exactly matching 8,868.29204995 − 8,954.11668541.
 
-This account-level match is a cross-check, not a substitute for execution-level accounting or external activity attribution. In particular, it does not validate the DOGE SELL.
+This account-level match is a cross-check, not a substitute for execution-level accounting or external activity attribution. The DOGE SELL is independently reconciled by the later order-specific trade export in F-001; that post-CLOSING fill is not part of the earlier CLOSING cash-flow snapshot.
 
 ## F-004 — Duplicate-fill replay is detected without additional balance delta
 
@@ -50,13 +48,11 @@ This account-level match is a cross-check, not a substitute for execution-level 
 
 The Journal records 13 duplicate notifications: ZRO trade 11661 is duplicated at 07:02:40.928Z, and all 12 distinct applied fills are replayed at CLOSING (07:58:11.075–07:58:11.077Z). No additional applied-fill records are created for those replays. The account balance deltas match the 12 unique fills (with the separate DOGE SELL conflict), and source tests cover idempotent duplicate application and conflicting replay identities. Tests were inspected, not executed.
 
-## F-005 — CLOSING audit correctly remains incomplete with unresolved owned orders
+## F-005 — CLOSING audit correctly remained incomplete at shutdown
 
-**Status:** PASS for the observed `auditStatus=INCOMPLETE` snapshot; PARTIAL for source/test proof of shutdown fail-closed behavior and identification of both orders.
+**Status:** PASS for the observed `auditStatus=INCOMPLETE` snapshot; historical identity of the second unresolved order remains UNVERIFIED and non-blocking.
 
-The CLOSING event is `auditStatus=INCOMPLETE` with `UNRESOLVED_OWNED_ORDERS:2`. The ZRO BUY 727905 is independently confirmed NEW and has 7.98 USDT locked. Parsed TRACE records show DOGE SELL 1276698 OPEN/zero-executed at the last runtime evaluations, while the closing snapshot has 1,196 DOGE locked and exchange order history reports FILLED. DOGE 1276698 is a strong candidate for the second unresolved order, but without the full CLOSING open-order identity list do not assert it is definitively that order.
-
-Source inspection found bootstrap CLOSING-audit logic and regression coverage for an unresolved owned order / reconciliation failure. Tests were not run in this audit.
+The CLOSING event correctly recorded `auditStatus=INCOMPLETE` and `UNRESOLVED_OWNED_ORDERS:2`. The later trade exports establish that DOGE SELL 1276698 and ZRO BUY 727905 both filled after shutdown. The missing full CLOSING order list prevents definitive identification of the second unresolved order at that historical instant. This limitation is now explicitly dispositioned as non-blocking; the original INCOMPLETE status is not retroactively changed. Restart reconciliation remains #654.
 
 ## F-006 — Historical Conservative documentation conflict (superseded 2026-11-06)
 
@@ -94,24 +90,13 @@ The reviewed `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md` §9 marks two
 
 **Status:** PARTIAL.
 
-The accessible evidence establishes a DOGE order/account conflict, not its cause. Do not create a speculative runtime defect issue or implement a speculative reconciliation change. The only follow-ups opened are #646 for confirmed spec/config-boundary drift and #648 for the documented regression-test gap.
+The initial evidence snapshot was incomplete and appeared conflicting. The later full trade export established post-shutdown DOGE execution chronology; no simultaneous order/account contradiction or speculative runtime defect is asserted. The missing historical CLOSING open-order payload remains explicitly UNVERIFIED and non-blocking.
 
 ## Clarification and closure playbooks
 
-### F-001 — DOGE SELL 1276698 / 1,196 DOGE locked (CONFLICT)
+### F-001 — historical DOGE CLOSING identity gap (dispositioned; no further evidence request)
 
-1. Preserve order-history row: orderId 1276698, client ID h-971fc65d9a264984ab8aa7-11, SELL 1,196 at 0.07185, reported quote 85.9326, status FILLED.
-2. Preserve Journal separately: broker acknowledgement OPEN and no applied DOGE SELL fill.
-3. Obtain full CLOSING open-order list and original harvester.log / harvester-trace.log. Verify both SHA-256 checksums before parsing.
-4. Obtain read-only exchange order detail, all DOGE trades from preflight to closing, actual commission amount/asset, and timestamped balances/open orders. Do not submit or cancel an order.
-5. Correlate orderId, clientOrderId, tradeId, and timestamps. Preserve exchange milliseconds and Journal event time separately.
-6. Build state timeline: intent → submit → acknowledgement → user-data update → trade/fill → cancel if any → REST terminal state → closing reconciliation. Mark absent transitions.
-7. Recalculate BUY leg: 1,200 gross; 1.2 DOGE fee; 1,198.8 net; 85.836 USDT debit. Add SELL only when confirmed by trade history and commission evidence.
-8. Reconcile free/locked/total DOGE and USDT. If SELL truly filled, explain the base debit and quote credit; if not, explain the FILLED history row.
-9. Identify the second unresolved order independently; do not assume it is 1276698.
-10. Only after a consistent ledger exists, classify root cause and create a narrow bug issue if warranted, with deterministic regression before implementation.
-
-Closure: terminal state, fills, commissions, balances, reservations, Journal, and both unresolved-order identities reconcile with no unexplained delta.
+Historical disposition: the available order-specific export reconciles the DOGE SELL's two fills and actual quote commission after shutdown. The complete CLOSING open-order payload and post-fill balance snapshot were not preserved; do not request or infer them as prerequisites. Record those two facts as historically UNVERIFIED and non-blocking. Safe restart reconciliation is separate in #654. No exchange action is required for this finding.
 
 ### F-002 / F-003 — ZRO and account cash flow (PASS / PARTIAL)
 
