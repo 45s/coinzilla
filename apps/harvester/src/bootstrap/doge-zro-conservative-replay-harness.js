@@ -143,7 +143,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
         return { data: { symbols: [dogeExchangeInfo] } }
       }
       if (method === "ticker.price") {
-        return { data: { marketSymbol, price: scenarioExpectations.initialPrice } }
+        return { data: { symbol: marketSymbol, price: scenarioExpectations.initialPrice } }
       }
       if (method === "order.place") {
         const timestamp = Date.now()
@@ -241,7 +241,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
       publishUserDataEvent = (message) => {
         receivedExecutionReports.push(message.event)
         const fill = message.event?.fill
-        const publishFullOrderFillId = fill?.brokerOrderId ?? fill?.orderId
+        const fillOrderId = fill?.brokerOrderId ?? fill?.orderId
         if (fill && publishFullOrderFillId !== undefined && publishFullOrderFillId !== null) {
           const brokerOrderId = String(publishFullOrderFillId)
           const order = exchangeOrderHistory.get(brokerOrderId)
@@ -456,7 +456,7 @@ export async function createDogeTradingReplay({ marketSymbol, tradingConfig }) {
     confirmedCanceledOrders,
     brokerOrderPlacementRequests,
     receivedMarketPriceEvents,
-    receivedExecutionReports: receivedExecutionReports,
+    receivedExecutionReports,
     harvesterRuntimeErrors,
     waitForSubmittedOrder: waitForSubmittedOrderSide,
     waitForRecoveryCycleCompletion,
