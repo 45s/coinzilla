@@ -3,6 +3,9 @@ import { assertNativeWebSocketRuntime } from "./runtime.js"
 const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
 
+/**
+ * Own one native WHATWG WebSocket connection and normalize its lifecycle.
+ */
 export class NativeWebSocketTransport {
   #socket = null
   #state = "idle"
@@ -19,6 +22,10 @@ export class NativeWebSocketTransport {
   }
   #handlers = null
 
+  /**
+   * @param {{url: string, WebSocketCtor?: Function, connectTimeout?: number, closeTimeout?: number, setTimeoutFn?: Function, clearTimeoutFn?: Function}} options
+   * @throws {TypeError|RangeError} If the URL or timeout values are invalid.
+   */
   constructor({
     url,
     WebSocketCtor = globalThis.WebSocket,
@@ -60,6 +67,7 @@ export class NativeWebSocketTransport {
     return this.#socket?.readyState ?? null
   }
 
+  /** @returns {Promise<NativeWebSocketTransport>} Resolves when the socket opens. */
   connect() {
     if (this.#state === "open") return Promise.resolve(this)
     if (this.#state === "connecting") return this.#connectPromise
@@ -143,6 +151,7 @@ export class NativeWebSocketTransport {
     return this.#connectPromise
   }
 
+  /** @param {string|ArrayBuffer|ArrayBufferView} data - Data sent only while the socket is open. */
   send(data) {
     if (this.#state !== "open" || this.#socket?.readyState !== this.WebSocketCtor.OPEN) {
       throw new Error("Cannot send WebSocket data while the connection is not open")
@@ -151,18 +160,28 @@ export class NativeWebSocketTransport {
     this.#socket.send(data)
   }
 
+  /** @param {(data: unknown) => void} listener @returns {() => boolean} Removes the listener. */
   onMessage(listener) {
     return this.#subscribe("message", listener)
   }
 
+  /** @param {(error: Error) => void} listener @returns {() => boolean} Removes the listener. */
   onError(listener) {
     return this.#subscribe("error", listener)
   }
 
+  /** @param {(event: {code: number, reason: string, wasClean: boolean}) => void} listener @returns {() => boolean} Removes the listener. */
   onClose(listener) {
     return this.#subscribe("close", listener)
   }
 
+  /**
+   * Close the socket and resolve after its close event or bounded close timeout.
+   *
+   * @param {number} [code=1000] - WebSocket close code.
+   * @param {string} [reason=""] - WebSocket close reason.
+   * @returns {Promise<void>}
+   */
   close(code = 1000, reason = "") {
     if (this.#state === "closed") return Promise.resolve()
     if (this.#closePromise) return this.#closePromise
@@ -185,6 +204,7 @@ export class NativeWebSocketTransport {
     return this.#closePromise
   }
 
+  /** @param {number} [code=1000] @param {string} [reason=""] @returns {Promise<void>} */
   disconnect(code = 1000, reason = "") {
     return this.close(code, reason)
   }
