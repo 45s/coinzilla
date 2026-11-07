@@ -99,6 +99,9 @@ test(
     cycleCompletions.clear()
     cycleWaiters.clear()
     const submitted = []
+    const outgoingOrderRequests = []
+    const receivedPrices = []
+    const receivedExecutionReports = []
     const priceHandlers = new Map()
     const openOrders = new Map()
     const orderWaiters = []
@@ -132,6 +135,9 @@ test(
       // Simulate Binance RPC responses, leaving the real broker's exchange-info,
       // order-request and canonical-order adapters in the execution path.
       broker.tradingConnection.request = async (method, params = {}) => {
+        if (method === "order.place") {
+          outgoingOrderRequests.push({ method, params: { ...params } })
+        }
         if (method === "exchangeInfo") {
           return { data: exchangeInfoResponse(params.symbol) }
         }
@@ -206,11 +212,19 @@ test(
       // Keep BinanceWebSocketBroker.subscribeForUserData() and its execution
       // normalization active; replace only the remote user-data subscription.
       broker.userDataSession.subscribe = async ({ onEvent }) => {
-        userDataHandlers = { onEvent }
+        userDataHandlers = {
+          onEvent: (message) => {
+            receivedExecutionReports.push(message.event)
+            return onEvent(message)
+          },
+        }
         return { data: { disconnect: async () => {} } }
       }
       broker.subscribeForPrices = async ({ symbol, onPrice }) => {
-        priceHandlers.set(symbol, onPrice)
+        priceHandlers.set(symbol, (event) => {
+          receivedPrices.push(event)
+          return onPrice(event)
+        })
         return { ok: true, data: { unsubscribe: async () => {} } }
       }
       broker.subscribeForBookTicker = async () => ({
@@ -344,6 +358,11 @@ test(
       })
       await triggerPrice("DOGEUSDT", "0.07161000")
       const dogeBuy = await dogeBuySubmitted
+      assert.deepEqual(
+        [dogeBuy.market.symbol, dogeBuy.side, dogeBuy.price, dogeBuy.quantity, dogeBuy.type],
+        ["DOGEUSDT", "BUY", "0.07157", "400", "LIMIT"],
+        "the first DOGE price update must produce the expected strategy BUY",
+      )
 
       const zroBuySubmitted = waitForOrder(submitted, orderWaiters, {
         symbol: "ZROUSDT",
@@ -351,6 +370,11 @@ test(
       })
       await triggerPrice("ZROUSDT", "1.60500000")
       const zroBuy = await zroBuySubmitted
+      assert.deepEqual(
+        [zroBuy.market.symbol, zroBuy.side, zroBuy.price, zroBuy.quantity, zroBuy.type],
+        ["ZROUSDT", "BUY", "1.604", "5", "LIMIT"],
+        "the first ZRO price update must produce the expected strategy BUY",
+      )
       assert.deepEqual(
         [dogeBuy.price, dogeBuy.quantity, dogeBuy.type],
         ["0.07157", "400", "LIMIT"],
@@ -425,6 +449,42 @@ test(
       assert.equal(dogePosition.freeBaseQuantity.amount, "1.6")
       assert.equal(zroPosition.baseQuantity.amount, "0")
       assert.equal(zroPosition.freeBaseQuantity.amount, "0.015")
+
+      // Verify both directions at the broker boundary, not only final portfolio state.
+      assert.deepEqual(
+        receivedPrices.map(({ symbol, price }) => [symbol, price]),
+        [
+          ["DOGEUSDT", "0.07161000"],
+          ["ZROUSDT", "1.60500000"],
+          ["DOGEUSDT", "0.07157"],
+          ["ZROUSDT", "1.604"],
+          ["DOGEUSDT", "0.07204"],
+          ["ZROUSDT", "1.615"],
+        ],
+      )
+      assert.deepEqual(
+        receivedExecutionReports.map(({ executedOrder, fill }) => [
+          executedOrder.symbol,
+          executedOrder.side,
+          fill.id,
+          fill.commissionAsset,
+        ]),
+        [
+          ["DOGEUSDT", "BUY", "645-doge-buy", "DOGE"],
+          ["ZROUSDT", "BUY", "645-zro-buy", "ZRO"],
+          ["DOGEUSDT", "SELL", "645-doge-sell", "USDT"],
+          ["ZROUSDT", "SELL", "645-zro-sell", "USDT"],
+        ],
+      )
+      assert.deepEqual(
+        outgoingOrderRequests.map(({ params }) => [params.symbol, params.side, params.type]),
+        [
+          ["DOGEUSDT", "BUY", "LIMIT"],
+          ["ZROUSDT", "BUY", "LIMIT"],
+          ["DOGEUSDT", "SELL", "LIMIT"],
+          ["ZROUSDT", "SELL", "LIMIT"],
+        ],
+      )
     } finally {
       await runtime.stop()
     }
