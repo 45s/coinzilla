@@ -449,6 +449,7 @@ async function createReplayHarness(symbol) {
   const outgoingOrderRequestsList = []
   const receivedPricesList = []
   const receivedExecutionReportsList = []
+  const runtimeErrors = []
   const priceHandlers = new Map()
   const openOrders = new Map()
   const orderHistory = new Map()
@@ -716,7 +717,11 @@ async function createReplayHarness(symbol) {
       },
       flush: async () => ({ ok: true, durable: true }),
     },
-    logger: { info() {}, debug() {}, error() {} },
+    logger: {
+      info() {},
+      debug() {},
+      error: (entry) => runtimeErrors.push(entry),
+    },
   })
 
   assert.equal(runtime.userDataReady, true)
@@ -816,6 +821,7 @@ async function createReplayHarness(symbol) {
     outgoingOrderRequests: outgoingOrderRequestsList,
     receivedPrices: receivedPricesList,
     receivedExecutionReports: receivedExecutionReportsList,
+    runtimeErrors,
     waitForOrder: waitForOrderSide,
     waitForCycle,
     triggerPrice,
@@ -841,9 +847,23 @@ async function getRecoveryOrders(replay) {
     price: scenario.buyPrice,
     tradeId: "645",
   })
-  const [recoverySell, nextStandingBuy] = await Promise.all([
-    recoverySellSubmitted,
-    nextStandingBuySubmitted,
-  ])
+  let recoverySell
+  let nextStandingBuy
+  try {
+    [recoverySell, nextStandingBuy] = await Promise.all([
+      recoverySellSubmitted,
+      nextStandingBuySubmitted,
+    ])
+  } catch (error) {
+    const details = replay.runtimeErrors.map((entry) => ({
+      message: entry.message,
+      symbol: entry.symbol,
+      side: entry.side,
+      orderStatus: entry.orderStatus,
+      errors: entry.errors?.map((item) => item.message ?? String(item)),
+    }))
+    error.message += "\nRuntime errors: " + JSON.stringify(details)
+    throw error
+  }
   return { initialBuy: buy, recoverySell, nextStandingBuy }
 }
