@@ -1,8 +1,8 @@
 # Harvester Conservative Domain Glossary
 
 **Phase:** D0 discovery specification  
-**Authority:** Harvester's approved Conservative domain contract  
-**Status:** Harvester-owned vocabulary for the Conservative domain.
+**Authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole rule source.  
+**Status:** Vocabulary/reference only; this glossary does not define strategy behavior.
 
 ## Purpose and scope
 
@@ -21,24 +21,24 @@ This glossary defines terms used by the Conservative domain. It separates strate
 | Active order | Application-supplied order state that is pending, open, partially filled, or unknown. It prevents duplicate intents on that side. | Application/broker fact |
 | Fill | One confirmed execution, not an order acknowledgement and not an order's cumulative executed quantity. | Canonical broker-normalized input |
 | Fill identity | Stable market-scoped identity for one execution. Harvester's canonical `Fill.id` is used with an execution-facts fingerprint. | Shared entity identity; domain deduplication |
-| Portfolio | Per-market inventory and cash-flow projection, including active strategy quantity and separately retained free quantity. | Domain |
-| Active quantity | Base inventory owned by the strategy and available for strategy recovery SELL planning. Excludes free/retained inventory. | Domain |
-| Free quantity | Base inventory allocated after successful recovery and excluded permanently from future strategy sell quantities. | Domain |
+| Portfolio | Per-market inventory projection, including strategy quantity and separately retained free quantity. Exact Conservative quantity/spent semantics are defined in the canonical specification. | Domain |
+| Active quantity | Strategy-owned base inventory before retained allocation. SELL eligibility and quantity are defined in the canonical specification. | Domain vocabulary |
+| Free quantity | Base inventory allocated after successful recovery; allocation conditions are defined in the canonical specification. | Domain vocabulary |
 | Total quantity | Active quantity plus free quantity. | Derived domain value |
-| RecoveryLedger | Per-market pooled quote-currency recovery accounting: cumulative BUY cost, confirmed net SELL proceeds, observed fee-rate history, and applied fill identities. | Domain |
-| BUY cost / cycle cost | Sum of executed BUY quote notional plus applicable quote-asset BUY commissions. It is not the BUY order's requested notional. | Domain-derived from fills |
+| RecoveryLedger | Per-market recovery accounting that retains the current position's full spent basis, confirmed net SELL proceeds, and applied fill identities until canonical completion. | Domain |
+| Position spent / BUY cost | Entire accumulated BUY quote notional plus actual quote commissions and reliably valued third-asset BUY commissions. Full-cost recovery is defined in the canonical specification. | Domain-derived from fills |
 | Gross SELL proceeds | Executed SELL quote notional before quote-asset commission. | Canonical fill fact |
-| Net SELL proceeds | Gross SELL proceeds less applicable quote-asset SELL commission. | Domain-derived from fills |
+| Net SELL proceeds | Gross SELL proceeds less actual quote-asset SELL commission and reliably valued third-asset SELL commission. See canonical valuation/fail-closed rules. | Domain-derived from fills |
 | Base commission | Commission charged in the market base asset. It changes actual base inventory, not quote recovery cost/proceeds. | Canonical fill fact, applied by domain |
 | Quote commission | Commission charged in the market quote asset. It changes recovery cost or net proceeds. | Canonical fill fact, applied by domain |
-| Third-asset commission | Commission charged in an asset other than the market base or quote asset. Current Conservative strategy execution accounting rejects it; Harvester recovery accounting also rejects it. | Canonical fill fact; unsupported by current policy |
+| Third-asset commission | Commission charged in an asset other than the market base or quote asset. It must have a reliable quote-currency valuation; otherwise accounting fails closed. | Canonical fill fact; see canonical specification |
 | Outstanding recovery amount | `max(0, buyCost - netSellProceeds)`. It is a quote-currency shortfall, not a base-quantity obligation. | Derived domain value |
 | Realized net profit | `netSellProceeds - buyCost`. | Derived domain value |
 | `minProfit` | Required minimum quote-currency profit for a completed recovery cycle. | Strategy setting |
-| `keepQuantity` | Configured base quantity to allocate to free inventory after successful recovery. It is excluded from recovery SELL planning. | Strategy setting |
-| Fee reserve | Conservative assumed rate used only to plan SELL quantity and price. It is not an accounting debit. | Strategy policy |
+| `keepQuantity` | Exact configured base quantity retained after successful recovery. It is the only retained-quantity setting; see canonical specification. | Strategy setting |
+| Fee reserve | Order-type-specific planning estimate only; it is never an actual commission debit. Rates and selection are defined in the canonical specification. | Strategy vocabulary |
 | Actual commission rate | Effective quote-equivalent commission rate calculated from a confirmed fill. | Derived domain observation |
-| Recovery completion | Eligibility decision after the current recovery SELL order is fully reconciled, actual net proceeds meet BUY cost plus minimum profit, and sufficient active inventory remains for keep allocation. | Domain decision |
+| Recovery completion | Eligibility decision after terminal SELL reconciliation, exact retained quantity, full accumulated cost recovery, and minimum realized net profit. Dust and lifecycle requirements are defined in the canonical specification. | Domain decision |
 | Cycle reset | Clear cycle BUY cost and SELL proceeds after successful completion while preserving fill identities. | Domain state transition |
 | Fill replay | Reapplication of a previously seen execution from another event/history source. Identical replay is idempotent; conflicting facts are an error. | Domain/application boundary |
 | Out-of-order fill | A valid execution received before an expected earlier event/order status. Execution facts may still be accounted once, but an order cannot be declared complete from status alone. | Boundary sequencing + domain accounting |

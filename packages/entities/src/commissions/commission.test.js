@@ -26,6 +26,16 @@ describe(Commission.name, () => {
     })
   })
 
+  it("preserves a reliable quote-currency valuation for third-asset commissions", () => {
+    const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+    const quoteValue = new Money({ amount: "0.02", asset: quoteAsset })
+    const commission = createCommission({ quoteValue })
+
+    assert.equal(commission.quoteValue.amount, "0.02")
+    assert.equal(commission.quoteValue.asset.id, "usdt")
+    assert.deepEqual(commission.value.quoteValue, quoteValue.value)
+  })
+
   it("accepts a zero amount", () => {
     const commission = createCommission({
       amount: new Money({ amount: "0", asset }),

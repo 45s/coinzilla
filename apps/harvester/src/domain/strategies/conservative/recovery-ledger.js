@@ -6,11 +6,10 @@ import { calculateRecoveryFillAccounting } from "./recovery-fill-accounting.js"
 /**
  * Immutable strategy-specific pooled recovery ledger for one market.
  *
- * It tracks quote-denominated acquisition cost, confirmed net SELL proceeds,
- * and execution identities. Commission amounts are accounted per fill; fee
- * estimates are strategy-planning inputs, not ledger history. Position
- * separately tracks active/free base inventory and applies base-asset
- * commissions to quantity.
+ * It tracks confirmed net SELL proceeds and execution identities. Position.spent
+ * is the authoritative accumulated BUY cost. buyCost remains only as a
+ * compatibility mirror for the deferred Journal/restart workstream (#654);
+ * Conservative strategy decisions must read Position.spent, never this mirror.
  */
 export class RecoveryLedger {
   #market

@@ -8,7 +8,7 @@ import { addDecimal, assertDecimalString, compareDecimal } from "@coinzilla/util
  * @param {object} input
  * @param {object} input.market Canonical market.
  * @param {object} input.fill Canonical fill.
- * @returns {{ baseCommission: string, quoteCommission: string }}
+ * @returns {{ baseCommission: string, quoteCommission: string, thirdAssetQuoteValue: string }}
  */
 export function validateFillCommissions({ market, fill } = {}) {
   if (!market || !fill) {
@@ -26,6 +26,7 @@ export function validateFillCommissions({ market, fill } = {}) {
 
   let baseCommission = "0"
   let quoteCommission = "0"
+  let thirdAssetQuoteValue = "0"
   for (const commission of fill.commissions) {
     const amount = commission?.amount
     assertDecimalString({ value: amount?.amount, field: "commission.amount" })
@@ -42,9 +43,24 @@ export function validateFillCommissions({ market, fill } = {}) {
       quoteCommission = addDecimal({ left: quoteCommission, right: amount.amount })
       continue
     }
-    throw new TypeError(
-      "Unsupported third-asset commission: " + String(amount.asset?.code ?? "unknown"),
-    )
+    const quoteValue = commission?.quoteValue
+    if (!quoteValue) {
+      throw new TypeError(
+        "Third-asset commission requires reliable quote-currency valuation: " +
+        String(amount.asset?.code ?? "unknown"),
+      )
+    }
+    assertDecimalString({ value: quoteValue.amount, field: "commission.quoteValue.amount" })
+    if (quoteValue.asset?.id !== market.quoteAsset.id) {
+      throw new TypeError("Third-asset commission quote value must use the market quote asset")
+    }
+    if (compareDecimal({ left: quoteValue.amount, right: "0" }) <= 0) {
+      throw new RangeError("Third-asset commission quote value must be greater than zero")
+    }
+    thirdAssetQuoteValue = addDecimal({
+      left: thirdAssetQuoteValue,
+      right: quoteValue.amount,
+    })
   }
 
   assertDecimalString({ value: fill.quantity?.amount, field: "fill.quantity.amount" })
@@ -57,5 +73,5 @@ export function validateFillCommissions({ market, fill } = {}) {
     throw new RangeError("Quote commission exceeds " + limit)
   }
 
-  return Object.freeze({ baseCommission, quoteCommission })
+  return Object.freeze({ baseCommission, quoteCommission, thirdAssetQuoteValue })
 }

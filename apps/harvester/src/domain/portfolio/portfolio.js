@@ -121,6 +121,24 @@ export class Portfolio {
     })
   }
 
+  resetRecoveryBasis({ marketId } = {}) {
+    if (typeof marketId !== "string" || !marketId.trim()) {
+      throw new TypeError("Portfolio.resetRecoveryBasis requires marketId")
+    }
+    const positionIndex = this.#positions.findIndex((item) => item.market.id === marketId)
+    if (positionIndex < 0) {
+      throw new RangeError("Portfolio has no Position for market " + marketId)
+    }
+    const positions = this.#positions.map((item, index) =>
+      index === positionIndex ? item.resetRecoveryBasis() : item,
+    )
+    return new Portfolio({
+      positions,
+      appliedFillIds: this.#appliedFillIds,
+      appliedFillFingerprints: this.#appliedFillFingerprints,
+    })
+  }
+
   get value() {
     return Object.freeze({
       positions: this.#positions.map((position) => position.value),

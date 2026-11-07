@@ -1,6 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
-import { compareDecimal, defaultLogger, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, defaultLogger, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
@@ -194,6 +194,10 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         quoteQuantity: fill.quoteQuantity?.amount,
         commissionStatus: fill.commissionStatus,
         commissions: commissionFacts,
+        thirdAssetCommissionQuoteValues: (fill.commissions ?? [])
+          .filter(({ amount } = {}) => amount?.asset?.id !== fill.market.baseAsset.id &&
+            amount?.asset?.id !== fill.market.quoteAsset.id)
+          .map(({ quoteValue } = {}) => quoteValue?.amount ?? null),
         previousPosition: createPositionLogSummary({ position: previousPosition }),
         previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
       })
@@ -230,21 +234,39 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
               left: nextPosition?.quoteNetCashFlow.amount ?? "0",
               right: previousPosition?.quoteNetCashFlow.amount ?? "0",
             }),
-            buyCost: subtractDecimal({
-              left: nextLedger.buyCost,
-              right: currentLedger.buyCost,
+            positionSpent: subtractDecimal({
+              left: nextPosition?.spent.amount ?? "0",
+              right: previousPosition?.spent.amount ?? "0",
             }),
             netSellProceeds: subtractDecimal({
               left: nextLedger.netSellProceeds,
               right: currentLedger.netSellProceeds,
             }),
             outstandingRecoveryAmount: subtractDecimal({
-              left: nextLedger.outstandingRecoveryAmount,
-              right: currentLedger.outstandingRecoveryAmount,
+              left: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: nextPosition?.spent.amount ?? "0",
+                  right: nextLedger.netSellProceeds,
+                }),
+              }),
+              right: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: previousPosition?.spent.amount ?? "0",
+                  right: currentLedger.netSellProceeds,
+                }),
+              }),
             }),
             realizedNetProfit: subtractDecimal({
-              left: nextLedger.realizedNetProfit,
-              right: currentLedger.realizedNetProfit,
+              left: subtractDecimal({
+                left: nextLedger.netSellProceeds,
+                right: nextPosition?.spent.amount ?? "0",
+              }),
+              right: subtractDecimal({
+                left: currentLedger.netSellProceeds,
+                right: previousPosition?.spent.amount ?? "0",
+              }),
             }),
           },
         })
@@ -275,7 +297,7 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
     processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit } = {}) => {
+    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
       const recoveryLedger = recoveryLedgers.get(marketId)
       const position = portfolio.getPosition({ marketId })
       if (!recoveryLedger || !position) {
@@ -284,11 +306,12 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
       try {
         const completionInput = {
           sellOrderFullyFilled: true,
-          buyCost: recoveryLedger.buyCost,
+          spent: position.spent.amount,
           netSellProceeds: recoveryLedger.netSellProceeds,
           activeQuantity: position.baseQuantity.amount,
           keepQuantity,
           minProfit,
+          ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
         }
         logger.debug?.({
           message: "recovery completion evaluation input",
@@ -302,7 +325,10 @@ const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, i
         if (completion.eligible) {
           const previousPortfolio = portfolio
           const previousLedger = recoveryLedger
-          portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
+            portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          }
+          portfolio = portfolio.resetRecoveryBasis({ marketId })
           const resetLedger = recoveryLedger.resetCycle()
           recoveryLedgers.set(marketId, resetLedger)
           logger.debug?.({
@@ -536,9 +562,24 @@ export async function startHarvester({
         "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
       )
     }
+    const quoteCashFlowBaselineByAssetId = new Map()
+    for (const position of getPortfolio().positions) {
+      const assetId = position.market.quoteAsset.id
+      quoteCashFlowBaselineByAssetId.set(
+        assetId,
+        addDecimal({
+          left: quoteCashFlowBaselineByAssetId.get(assetId) ?? "0",
+          right: position.quoteNetCashFlow.amount,
+        }),
+      )
+    }
     const nextSnapshot = new AccountSnapshot({
       balances: result.data.balances,
       sourceTime: result.data.sourceTime,
+      quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
+        assetId,
+        amount,
+      })),
     })
     const accountAuditMarkets = [...marketMetadata.values()]
       .map(({ market }) => market)

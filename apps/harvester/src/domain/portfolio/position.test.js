@@ -38,7 +38,7 @@ test("calculates BUY accounting with base and quote commissions as a pure functi
       ],
     }),
   })
-  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2" })
+  assert.deepEqual(result, { baseQuantity: "1.99", quoteNetCashFlow: "-200.2", spent: "200.2" })
 })
 
 test("applies BUY fills and base/quote commissions exactly", () => {
@@ -50,7 +50,9 @@ test("applies BUY fills and base/quote commissions exactly", () => {
       ],
     }),
   })
+  assert.equal(position.quantity.amount, "1.99")
   assert.equal(position.baseQuantity.amount, "1.99")
+  assert.equal(position.spent.amount, "200.2")
   assert.equal(position.quoteNetCashFlow.amount, "-200.2")
   assert.equal(position.freeBaseQuantity.amount, "0")
 })
@@ -70,10 +72,11 @@ test("applies SELL fills and base/quote commissions to net holdings", () => {
     }),
   })
   assert.equal(sold.baseQuantity.amount, "0.99")
+  assert.equal(sold.spent.amount, "200")
   assert.equal(sold.quoteNetCashFlow.amount, "-80.1")
 })
 
-test("rejects incomplete commissions and third-asset fees", () => {
+test("rejects incomplete commissions and unvalued third-asset fees but accepts reliable quote valuation", () => {
   assert.throws(
     () => Position.empty({ market }).applyFill({ fill: makeFill({ commissionStatus: "UNKNOWN" }) }),
     /complete commission data/,
@@ -82,7 +85,16 @@ test("rejects incomplete commissions and third-asset fees", () => {
   const thirdAssetFill = makeFill({
     commissions: [new Commission({ amount: new Money({ amount: "0.01", asset: thirdAsset }) })],
   })
-  assert.throws(() => Position.empty({ market }).applyFill({ fill: thirdAssetFill }), /third-asset commission/)
+  assert.throws(() => Position.empty({ market }).applyFill({ fill: thirdAssetFill }), /requires reliable quote-currency valuation/)
+  const valuedThirdAssetFill = makeFill({
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.01", asset: thirdAsset }),
+      quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+    })],
+  })
+  const valuedPosition = Position.empty({ market }).applyFill({ fill: valuedThirdAssetFill })
+  assert.equal(valuedPosition.spent.amount, "200.02")
+  assert.equal(valuedPosition.quoteNetCashFlow.amount, "-200.02")
 })
 
 test("rejects SELL fills that exceed available active inventory", () => {
@@ -187,4 +199,16 @@ test("rejects quote commission greater than BUY quote notional", () => {
   })
 
   assert.throws(() => Position.empty({ market }).applyFill({ fill }), /quote commission exceeds executed quote notional/i)
+})
+
+test("resets only the completed recovery cost basis after exact retained allocation", () => {
+  const position = Position.empty({ market })
+    .applyFill({ fill: makeFill({ quantity: "100", quoteQuantity: "10" }) })
+    .allocateFreeQuantity({ quantity: "1" })
+    .resetRecoveryBasis()
+
+  assert.equal(position.quantity.amount, "99")
+  assert.equal(position.freeBaseQuantity.amount, "1")
+  assert.equal(position.spent.amount, "0")
+  assert.equal(position.quoteNetCashFlow.amount, "-10")
 })

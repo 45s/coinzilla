@@ -86,6 +86,7 @@ const createMarketMetadata = (symbol) => {
 const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {} } = {}) => {
   const subscriptions = new Map()
   const bookSubscriptions = new Map()
+  const fillHistoryByOrder = new Map()
   let userDataHandlers
   let accountSnapshotTime = 0
   return {
@@ -94,7 +95,7 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
     placeOrder: async () => ({ ok: true }),
     cancelOrder: async () => ({ ok: true }),
     getOpenOrders: async () => ({ ok: true, data: [] }),
-    getFills: async () => ({ ok: true, data: [] }),
+    getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(orderId) ?? [] }),
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
@@ -139,7 +140,16 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
         data: { disconnect: async () => calls.push("unsubscribe:user-data") },
       }
     },
-    emitUserDataEvent: (event) => userDataHandlers?.onEvent({ event }),
+    emitUserDataEvent: (event) => {
+      const fill = event?.fill
+      if (fill instanceof Fill) {
+        const existing = fillHistoryByOrder.get(fill.brokerOrderId) ?? []
+        if (!existing.some((item) => item.id === fill.id)) {
+          fillHistoryByOrder.set(fill.brokerOrderId, [...existing, fill])
+        }
+      }
+      return userDataHandlers?.onEvent({ event })
+    },
     emitUserDataStatus: (status) => userDataHandlers?.onStatus(status),
     emitPrice: (symbol, priceEvent) => subscriptions.get(symbol)?.(priceEvent),
     emitBookTicker: (symbol, bookTicker) => bookSubscriptions.get(symbol)?.(bookTicker),
@@ -1264,7 +1274,7 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
         pricePrecision: 2,
         quantityPrecision: 3,
         makerPercent: 0,
-        takerPercent: 0.075,
+        takerPercent: 0,
         },
       },
     },
@@ -1486,16 +1496,17 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     price: "65000.12",
     timestamp: 1000,
   })
-  // The completed recovery cycle retained free inventory but left active
-  // strategy inventory. The existing standing BUY must not be trailed/canceled.
-  assert.equal(submittedOrders.length, 5)
-  assert.equal(buyCancellationCount.value, 0)
+  // The completed cycle sells all active inventory above keepQuantity and
+  // moves exactly the retained amount to free inventory. With no active
+  // position left, the next standing BUY may be trailed normally.
+  assert.equal(submittedOrders.length, 6)
+  assert.equal(buyCancellationCount.value, 1)
   await runtime.stop()
   const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-  assert.equal(position.baseQuantity.amount, "0.001")
+  assert.equal(position.baseQuantity.amount, "0")
   assert.equal(position.freeBaseQuantity.amount, "0.001")
   assert.equal(runtime.getRecoveryLedger({ marketId: marketMetadata.market.id }).buyCost, "0")
-  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY"])
+  assert.deepEqual(submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
 })
 
 
@@ -1907,7 +1918,7 @@ test("emits per-execution debug audit records with commission and before/after a
   assert.equal(committed.nextRecoveryLedger.buyCost, "650")
   assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
   assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01")
-  assert.equal(committed.accountingDelta.buyCost, "650")
+  assert.equal(committed.accountingDelta.positionSpent, "650")
   assert.equal(committed.accountingDelta.netSellProceeds, "0")
   assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
   assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
@@ -2461,3 +2472,4 @@ test("starts from fresh in-memory state without replaying historical Journal rec
 
   await runtime.stop()
 })
+

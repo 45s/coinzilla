@@ -104,7 +104,7 @@ test("applies identical duplicate fills idempotently to both projections", () =>
   assert.equal(duplicate.data.recoveryLedger, first.data.recoveryLedger)
 })
 
-test("rejects unsupported third-asset fees without returning partially updated projections", () => {
+test("fails closed on third-asset fees without quote valuation and accepts a reliable valuation", () => {
   const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
   const fill = makeFill({
     commissions: [
@@ -118,6 +118,25 @@ test("rejects unsupported third-asset fees without returning partially updated p
   assert.equal(result.ok, false)
   assert.equal(portfolio.positions.length, 0)
   assert.equal(recoveryLedger.buyCost, "0")
+})
+
+
+test("includes reliable third-asset commission valuation in Position.spent and RecoveryLedger cost mirror", () => {
+  const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+  const result = updateTradingAccounting({
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market }),
+    fill: makeFill({
+      commissions: [new Commission({
+        amount: new Money({ amount: "0.001", asset: thirdAsset }),
+        quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+      })],
+    }),
+  })
+  assert.equal(result.ok, true)
+  const position = result.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(position.spent.amount, "10.02")
+  assert.equal(result.data.recoveryLedger.buyCost, "10.02")
 })
 
 test("rejects invalid application inputs", () => {
@@ -315,7 +334,7 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
   const position = portfolio.getPosition({ marketId: market.id })
   const completion = evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
-    buyCost: recoveryLedger.buyCost,
+    spent: position.spent.amount,
     netSellProceeds: recoveryLedger.netSellProceeds,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
@@ -326,8 +345,10 @@ test("reconciles fee-adjusted Portfolio cash flow with RecoveryLedger cycle prof
   assert.equal(position.quoteNetCashFlow.amount, "0.97")
   assert.equal(recoveryLedger.buyCost, "10.01")
   assert.equal(recoveryLedger.netSellProceeds, "10.98")
-  assert.equal(completion.eligible, true)
-  assert.equal(completion.freeQuantity, "1")
+  assert.equal(completion.eligible, false)
+  assert.equal(completion.pause, false)
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(completion.freeQuantity, "0")
   assert.equal(completion.realizedNetProfit, "0.97")
   assert.equal(position.quoteNetCashFlow.amount, completion.realizedNetProfit)
 })

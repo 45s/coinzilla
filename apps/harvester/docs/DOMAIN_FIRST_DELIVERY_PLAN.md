@@ -1,5 +1,8 @@
 # Harvester Conservative Domain Delivery Plan
 
+> **Canonical authority:** all Conservative Strategy rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This plan tracks documentation, implementation, and verification work; it is not a second behavior baseline.
+
+
 **Status:** Active  
 **Owner:** Harvester  
 **Strategy:** Conservative standing-order accumulation and capital recovery
@@ -12,19 +15,18 @@ A difference in current Harvester code is an implementation gap by default—not
 
 ## Current state
 
-- **D0 — Domain documentation:** the glossary, specification, accounting invariants, and behavior baseline are being aligned to this direction.
+- **D0 — Domain documentation:** one canonical specification is authoritative. The glossary, accounting matrix, Portfolio notes, and strategy guide are reference/evidence documents only; the old behavior baseline is superseded.
 - **Existing domain:** Portfolio, RecoveryLedger, fill identity, recovery planning, and completion logic already exist.
 - **Integration:** existing Harvester engine/application/broker work is preserved; do not rebuild it.
 - **TESTNET:** verify only after the specific strategy lifecycle is implemented and covered by offline tests.
 
 ## Delivery steps
 
-### D0 — Document the behavior
+### D0 — Establish one authoritative specification
 
-- [x] Define the Conservative glossary, accounting invariants, lifecycle, and behavior baseline.
-- [x] Remove historical application names and source paths from Harvester-owned documentation.
-- [x] Make the domain specification, roadmap, and strategy guide agree.
-- [x] Keep genuine unresolved questions narrow; no blanket list of decisions.
+- [x] Establish the sole Conservative rule definition in the canonical domain specification.
+- [~] Convert every other relevant document into a reference or implementation/test evidence record; remove duplicate rule definitions and mark historical conflicts superseded.
+- [ ] Pass the repository-wide documentation consistency audit before runtime implementation.
 
 ### D1 — Align one behavior at a time
 

@@ -215,6 +215,12 @@ CI is part of the repository's release safety boundary. Before changing a workfl
 8. Verify the exact final commit SHA against every required check before merge. If the tools cannot run checks or read a required ruleset, stop before merge and report the blocker.
 
 
+## User-provided file protection — mandatory
+
+**DO NOT MODIFY PROVIDED FILE WITHOUT MY APPROVAL!**
+
+AI agents MUST NOT modify, overwrite, replace, delete, move, or reformat a file supplied or designated by the user unless the user has explicitly approved modifying that specific file. Treat user-provided files as read-only by default. When changes are needed for tests or experiments, create and modify an isolated copy or fixture instead; preserve the original byte-for-byte. Approval to modify one file does not authorize changes to other provided files. If it is unclear whether a file is user-provided or whether approval covers the proposed change, leave it untouched and ask.
+
 ## AI-agent communication rules
 
 These rules apply to every AI agent and coding assistant in this repository, in every conversation and task:

@@ -1,4 +1,4 @@
-import { evaluateConservativeStrategy } from "./conservative-strategy.js"
+import { evaluateConservativeStrategy } from "./strategy.js"
 import { evaluateTrailingBuyRepricing } from "./trailing-buy-repricing.js"
 
 /** Pure Conservative policy capabilities consumed by the application engine. */
