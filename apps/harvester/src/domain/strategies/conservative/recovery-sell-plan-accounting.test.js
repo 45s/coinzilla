@@ -1,4 +1,5 @@
-import test from "node:test"
+import nodeTest from "node:test"
+const test = (name, ...args) => nodeTest("[recovery-sell-plan-accounting.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
@@ -12,7 +13,7 @@ const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
 const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
 const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
 
-function createInitialAccounting(tradeId) {
+function createInitialAccounting(tradeId, { baseCommission = "0" } = {}) {
   const result = updateTradingAccounting({
     portfolio: new Portfolio(),
     recoveryLedger: RecoveryLedger.empty({ market }),
@@ -25,7 +26,9 @@ function createInitialAccounting(tradeId) {
       price: new Money({ amount: "0.8", asset: quoteAsset }),
       quantity: new Quantity({ amount: "11.1", asset: baseAsset }),
       quoteQuantity: new Money({ amount: "8.88", asset: quoteAsset }),
-      commissions: [],
+      commissions: baseCommission === "0" ? [] : [
+        new Commission({ amount: new Money({ amount: baseCommission, asset: baseAsset }) }),
+      ],
       commissionStatus: "COMPLETE",
       executedAt: 1,
     }),
@@ -38,7 +41,7 @@ function createPlan({ minProfit }) {
   return calculateRecoverySellPlan({
     activeQuantity: "11.1",
     keepQuantity: "1",
-    cycleCost: "8.88",
+    positionSpent: "8.88",
     saleProceeds: "0",
     minProfit,
     feeRate: "0.01",
@@ -85,7 +88,7 @@ function evaluateCompletion(state, minProfit) {
   const position = state.portfolio.getPosition({ marketId: market.id })
   return evaluateRecoveryCompletion({
     sellOrderFullyFilled: true,
-    buyCost: state.recoveryLedger.buyCost,
+    spent: state.recoveryLedger.buyCost,
     netSellProceeds: state.recoveryLedger.netSellProceeds,
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
@@ -149,7 +152,9 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
   const completion = evaluateCompletion(completed, "1.021")
 
   assert.equal(completed.recoveryLedger.netSellProceeds, "9.9099")
-  assert.equal(completion.eligible, true)
+  assert.equal(completion.eligible, false)
+  assert.equal(completion.pause, false)
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
   assert.equal(completion.realizedNetProfit, "1.0299")
 
   const oneTickLower = subtractDecimal({ left: plan.price, right: "0.001" })
@@ -163,7 +168,7 @@ test("quote-asset SELL commission and price-tick rounding meet the net-profit bo
 
   assert.equal(belowTick.recoveryLedger.netSellProceeds, "9.9")
   assert.equal(belowCompletion.eligible, false)
-  assert.equal(belowCompletion.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
+  assert.equal(belowCompletion.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
   assert.equal(belowCompletion.realizedNetProfit, "1.02")
 })
 
@@ -172,7 +177,7 @@ test("exact minProfit equality remains eligible after actual quote commission", 
   assert.equal(plan.price, "1")
   assert.equal(plan.requiredNetProceeds, "9.9")
 
-  const initial = createInitialAccounting("exact-profit-buy")
+  const initial = createInitialAccounting("exact-profit-buy", { baseCommission: "0.1" })
   const completed = applySellFill(initial, {
     tradeId: "exact-profit-sell",
     price: plan.price,

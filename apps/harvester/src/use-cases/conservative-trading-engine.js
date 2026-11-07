@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
@@ -145,7 +145,7 @@ export function makeConservativeTradingEngine({
   }
   const initialRegistry = initialState.orderRegistry ?? OrderRegistry.empty()
   if (!(initialRegistry instanceof OrderRegistry)) throw new TypeError("initialState.orderRegistry must be an OrderRegistry")
-  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "trailingBuySymbols"]) {
+  for (const field of ["pausedMarkets", "durablePausedMarkets", "recoveryManagedPausedMarkets", "recoveryManagedCancellationClientOrderIds", "unrequestedTerminalOrderClientIds", "replacementIntents", "trailingBuyRepriceIntents", "completedOrderClientIds", "reconciledTerminalOrderClientIds", "trailingBuySymbols"]) {
     const values = initialState[field]
     if (values !== undefined && (
       !(Array.isArray(values) || values instanceof Set) ||
@@ -182,6 +182,7 @@ export function makeConservativeTradingEngine({
     buyExecutionTotals: new Map(),
     sellExecutionTotals: new Map(),
     processedFillIdsByOrder: new Map(),
+    processedFillsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
     trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
@@ -194,6 +195,8 @@ export function makeConservativeTradingEngine({
     trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
     deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
+    completedRecoverySellSymbols: new Set(),
+    reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
   }
   const hasPendingRecoveryManagedCancellation = ({ symbol, side } = {}) =>
@@ -232,6 +235,9 @@ export function makeConservativeTradingEngine({
     if (fillIds.has(fill.id)) return false
     fillIds.add(fill.id)
     state.processedFillIdsByOrder.set(fill.brokerOrderId, fillIds)
+    const fills = state.processedFillsByOrder.get(fill.brokerOrderId) ?? new Map()
+    fills.set(fill.id, fill)
+    state.processedFillsByOrder.set(fill.brokerOrderId, fills)
     return true
   }
 
@@ -476,6 +482,7 @@ export function makeConservativeTradingEngine({
       state.deferredEvaluations.add(order.market.symbol)
     },
     onPendingOrder: async ({ order }) => {
+      if (order.side === "SELL") state.completedRecoverySellSymbols.delete(order.market.symbol)
       state.registry = state.registry.registerPending({ order }).registry
       const persisted = await publishDurableIntent({
         eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
@@ -610,50 +617,68 @@ export function makeConservativeTradingEngine({
         return toResult({ error })
       }
       state.registry = update.registry
+      const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
+      if (!terminalStatuses.has(canceledOrder.status)) {
+        publishOrderCancelFailed({
+          order: canceledOrder,
+          outcome: "CANCELLATION_UNCONFIRMED",
+          error: new Error("Recovery SELL did not reach an authoritative terminal state"),
+        })
+        await pause({ symbol, reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED" })
+        return toResult({ error: new Error("Recovery SELL cancellation did not reach a terminal state") })
+      }
       if (canceledOrder.status === "CANCELED") {
         publishOrderCancelled({ order: canceledOrder })
       } else {
         publishOrderCancelFailed({
           order: canceledOrder,
-          outcome: "NOT_CANCELED",
-          error: new Error("Recovery SELL completed instead of being canceled"),
+          outcome: canceledOrder.status === "FILLED" ? "ALREADY_FILLED" : "TERMINAL_STATE_CHANGED",
+          error: new Error("Recovery SELL reached terminal status " + canceledOrder.status + " while cancellation was in flight"),
         })
       }
 
-      const fillsResult = await broker.getFills({
-        symbol,
-        orderId: order.brokerOrderId,
-      })
-      if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-        const errors = fillsResult?.errors ?? [new Error("Unable to reconcile recovery SELL fills after cancellation")]
-        await pause({ symbol, reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED", error: errors[0] })
-        return toResult({ errors })
-      }
-      let reconciledQuantity = "0"
-      const seenFillIds = new Set()
-      for (const fill of fillsResult.data) {
-        if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-            fill.side !== "SELL" || fill.brokerOrderId !== order.brokerOrderId) {
-          await pause({ symbol, reason: "RECOVERY_SELL_FILL_IDENTITY_MISMATCH" })
-          return toResult({ error: new Error("Recovered SELL fill does not match the canceled order") })
+      const terminalReconciliation = await reconcileTerminalOrderFills({ order: canceledOrder })
+      if (!terminalReconciliation?.ok) return terminalReconciliation
+      state.reconciledTerminalOrderClientIds.add(canceledOrder.clientOrderId)
+      if (canceledOrder.status === "FILLED") {
+        state.completedOrderTransitions.add(canceledOrder.clientOrderId)
+        if (compareDecimal({
+          left: canceledOrder.executedQuantity.amount,
+          right: canceledOrder.originalQuantity.amount,
+        }) !== 0) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILLED_QUANTITY_MISMATCH" })
+          return toResult({ error: new Error("FILLED recovery SELL does not reconcile to its original quantity") })
         }
-        const accounting = await updateTradingAccounting({ fill })
-        if (!accounting?.ok) {
-          await pause({ symbol, reason: "RECOVERY_SELL_FILL_ACCOUNTING_FAILED", error: accounting?.errors?.[0] })
-          return toResult({ errors: accounting?.errors ?? [new Error("Recovered SELL fill accounting failed")] })
+        try {
+          assertReconciledSellExecution({ order: canceledOrder })
+        } catch (error) {
+          await pause({ symbol, reason: "RECOVERY_SELL_FILL_RECONCILIATION_FAILED", error })
+          return toResult({ error })
         }
-        if (!seenFillIds.has(fill.id)) {
-          reconciledQuantity = addDecimal({ left: reconciledQuantity, right: fill.quantity.amount })
-          seenFillIds.add(fill.id)
+        const completion = await completeRecoveryCycle({
+          marketId: canceledOrder.market.id,
+          keepQuantity: String(pairs[symbol].keepQuantity),
+          minProfit: String(settings.minProfit),
+        })
+        if (!completion?.ok) {
+          await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
+          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
         }
-      }
-      if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
-        await pause({ symbol, reason: "RECOVERY_SELL_EXECUTED_QUANTITY_MISMATCH" })
-        return toResult({ error: new Error("Canceled SELL cumulative execution does not match reconciled fills") })
-      }
-      if (canceledOrder.status !== "CANCELED") {
-        await pause({ symbol, reason: "RECOVERY_SELL_FILLED_DURING_CANCEL" })
-        return toResult({ error: new Error("Recovery SELL completed while cancellation was being processed; pair paused for reconciliation") })
+        if (!completion.data?.eligible &&
+            !["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason)) {
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
+          return toResult({ error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation") })
+        }
+        state.replacementIntents.delete(symbol)
+        state.sellExecutionTotals.delete(order.brokerOrderId)
+      } else if (
+        compareDecimal({
+          left: canceledOrder.executedQuantity.amount,
+          right: canceledOrder.originalQuantity.amount,
+        }) === 0
+      ) {
+        await pause({ symbol, reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH" })
+        return toResult({ error: new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed") })
       }
     }
     return toResult({ data: { canceled: activeSells.length } })
@@ -727,7 +752,8 @@ export function makeConservativeTradingEngine({
     const seenFillIds = new Set()
     for (const fill of fillsResult.data) {
       if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
-          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId) {
+          fill.side !== "BUY" || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         await pause({ symbol, reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH" })
         return toResult({ error: new Error("Recovered BUY fill does not match the canceled order") })
       }
@@ -741,7 +767,7 @@ export function makeConservativeTradingEngine({
         seenFillIds.add(fill.id)
       }
     }
-    if (reconciledQuantity !== canceledOrder.executedQuantity.amount) {
+    if (compareDecimal({ left: reconciledQuantity, right: canceledOrder.executedQuantity.amount }) !== 0) {
       await pause({ symbol, reason: "TRAILING_BUY_EXECUTED_QUANTITY_MISMATCH" })
       return toResult({ error: new Error("Canceled BUY cumulative execution does not match reconciled fills") })
     }
@@ -773,7 +799,7 @@ export function makeConservativeTradingEngine({
         activePositionQuantity,
         freeBaseQuantity: position?.freeBaseQuantity.amount ?? "0",
       })
-      return evaluateLatestTransition({ symbol })
+      return toResult({ data: { skipped: true, reason: "ACTIVE_POSITION_EXISTS" } })
     }
 
     const referencePrice = state.lastAdjustmentPrices.get(symbol) ?? marketPrice.price
@@ -875,23 +901,46 @@ export function makeConservativeTradingEngine({
         portfolio: portfolioBefore.value,
         recoveryLedger: recoveryLedgerBefore?.value ?? null,
       })
+      if (decision.inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" && state.completedRecoverySellSymbols.has(symbol)) {
+        const completion = await completeRecoveryCycle({ marketId: metadata.market.id,
+          keepQuantity: String(pairs[symbol].keepQuantity), minProfit: String(settings.minProfit),
+          inventoryDisposition: decision.inventoryDisposition })
+        if (!completion?.ok) {
+          await pause({ symbol, reason: "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
+          return toResult({ errors: completion?.errors ?? [new Error("Dust recovery completion failed")] })
+        }
+        if (completion.data?.eligible) {
+          publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+            dataResult: mapRecoveryCycleCompletedData({ symbol, marketId: metadata.market.id,
+              freeQuantity: completion.data.freeQuantity, realizedNetProfit: completion.data.realizedNetProfit,
+              dust: completion.data.dust }) })
+          state.completedRecoverySellSymbols.delete(symbol)
+          state.trailingBuy.set(symbol, true)
+          if (decision.actions.length > 0) return evaluateLatestTransition({ symbol })
+        } else if (completion.data?.pause !== false) {
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED" })
+          return toResult({ error: new Error("Dust recovery completion did not satisfy the Conservative contract") })
+        }
+      }
       if (decision.actions.length === 0) {
-        logger?.debug?.({
-          message: "Harvester Conservative evaluation submitted no orders",
-          evaluationId,
-          symbol,
-          reason: decision.reason ?? executableActions[0]?.reason,
-          activeOrders: activeOrdersBefore.map((order) => order.value),
-        })
+        logger?.debug?.({ message: "Harvester Conservative evaluation submitted no orders",
+          evaluationId, symbol, reason: decision.reason, activeOrders: activeOrdersBefore.map((order) => order.value) })
         return toResult({ data: { decision, submittedOrders: [] } })
       }
       const accountSnapshot = getAccountSnapshot()
       if (!accountSnapshot) throw new Error("Current account snapshot is unavailable")
       const position = portfolioBefore.getPosition({ marketId: metadata.market.id })
       const allPositions = portfolioBefore.positions
-      const quoteCashFlow = allPositions
+      const portfolioQuoteCashFlow = allPositions
         .filter((item) => item.market.quoteAsset.id === metadata.market.quoteAsset.id)
         .reduce((total, item) => addDecimal({ left: total, right: item.quoteNetCashFlow.amount }), "0")
+      const quoteCashFlowBaseline = accountSnapshot.getQuoteCashFlowBaseline?.({
+        assetId: metadata.market.quoteAsset.id,
+      }) ?? "0"
+      const quoteCashFlow = subtractDecimal({
+        left: portfolioQuoteCashFlow,
+        right: quoteCashFlowBaseline,
+      })
       const activeBaseBalance = allPositions
         .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
@@ -952,7 +1001,13 @@ export function makeConservativeTradingEngine({
         quoteCashFlow,
         activeBaseQuantity: position?.baseQuantity.amount ?? "0",
         activeBaseBalance,
-        outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
+        outstandingRecoveryAmount: maxDecimal({
+          left: "0",
+          right: subtractDecimal({
+            left: position?.spent.amount ?? "0",
+            right: recoveryLedgerBefore?.netSellProceeds ?? "0",
+          }),
+        }),
         committedQuote,
         committedQuoteBalance,
         committedBase,
@@ -980,6 +1035,8 @@ export function makeConservativeTradingEngine({
         committedBase,
         committedBaseBalance,
         quoteCashFlow,
+        portfolioQuoteCashFlow,
+        quoteCashFlowBaseline,
       })
       if (executableActions.length === 0) {
         return toResult({
@@ -1039,6 +1096,8 @@ export function makeConservativeTradingEngine({
           quoteFree: accountSnapshot.getFreeBalance({ assetId: metadata.market.quoteAsset.id })?.amount ?? null,
         },
         quoteCashFlow,
+        portfolioQuoteCashFlow,
+        quoteCashFlowBaseline,
         committedQuote,
         committedQuoteBalance,
         committedBase,
@@ -1163,7 +1222,8 @@ export function makeConservativeTradingEngine({
       }
       const symbol = order.market.symbol
       if (fill.market.id !== order.market.id || fill.side !== order.side ||
-          fill.brokerOrderId !== order.brokerOrderId) {
+          fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
         const error = new Error("Canonical Fill identity does not match its registered order")
         publishLifecycleEvent({
           eventPublisher,
@@ -1184,7 +1244,7 @@ export function makeConservativeTradingEngine({
         await pause({ symbol, reason: "EXECUTION_ACCOUNTING_FAILED", error })
         return toResult({ errors: accounting?.errors ?? [error] })
       }
-      if (fill.side === "BUY") recordBuyExecutionFill({ fill })
+      if (fill.side === "BUY") { recordBuyExecutionFill({ fill }); state.completedRecoverySellSymbols.delete(symbol) }
       if (fill.side === "SELL") recordSellExecutionFill({ fill })
       if (accounting.data?.applied === true) {
         publishLifecycleEvent({
@@ -1205,7 +1265,115 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const processUserDataEventTransition = async ({ event, recoveryMode = false } = {}) => {
+  const reconcileTerminalOrderFills = async ({ order, eventFill } = {}) => {
+    const symbol = order?.market?.symbol
+    const terminalStatuses = new Set(["FILLED", "CANCELED", "EXPIRED", "REJECTED"])
+    if (!order || !terminalStatuses.has(order.status)) {
+      return toResult({ error: new TypeError("Terminal fill reconciliation requires a terminal canonical order") })
+    }
+    if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+      await pause({ symbol, reason: "TERMINAL_ORDER_MISSING_BROKER_ID" })
+      return toResult({ error: new Error("Terminal order has no broker order ID for fill reconciliation") })
+    }
+    const fillsResult = await broker.getFills({ symbol, orderId: order.brokerOrderId })
+    if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
+      const error = fillsResult?.errors?.[0] ?? new Error("Unable to retrieve terminal order fill history")
+      await pause({ symbol, reason: "TERMINAL_ORDER_FILL_HISTORY_UNAVAILABLE", error })
+      return toResult({ error })
+    }
+    // Processed user-data fills are canonical in-process facts. Prefer them
+    // over REST rows when the exchange's REST metadata is contradictory; the
+    // final cumulative-quantity check below still requires a complete history.
+    const fillsById = new Map()
+    const previouslyProcessedFills = [
+      ...(state.processedFillsByOrder.get(order.brokerOrderId)?.values() ?? []),
+    ]
+    const streamFills = [
+      ...previouslyProcessedFills,
+      ...(eventFill === undefined ? [] : [eventFill]),
+    ]
+    for (const fill of streamFills) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+        const error = new Error("Terminal stream execution does not match its canonical order")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Terminal stream contains conflicting facts for one fill ID")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
+    }
+    for (const fill of fillsResult.data) {
+      if (!(fill instanceof Fill) || fill.market.id !== order.market.id ||
+          fill.side !== order.side || fill.brokerOrderId !== order.brokerOrderId ||
+          (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
+        // A valid stream execution can supersede a contradictory REST row,
+        // but only if the union still proves the terminal cumulative quantity.
+        if (streamFills.length > 0) continue
+        const error = new Error("Terminal execution history does not match its canonical order")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH", error })
+        return toResult({ error })
+      }
+      const previous = fillsById.get(fill.id)
+      if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
+        const error = new Error("Terminal execution history contains conflicting facts for one fill ID")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE", error })
+        return toResult({ error })
+      }
+      if (!previous) fillsById.set(fill.id, fill)
+    }
+    const fills = [...fillsById.values()].sort((left, right) => {
+      if (left.executedAt !== undefined && right.executedAt !== undefined &&
+          left.executedAt !== right.executedAt) return left.executedAt - right.executedAt
+      return left.tradeId.localeCompare(right.tradeId)
+    })
+    const reconciledQuantity = fills.reduce(
+      (total, fill) => addDecimal({ left: total, right: fill.quantity.amount }),
+      "0",
+    )
+    if (compareDecimal({ left: reconciledQuantity, right: order.executedQuantity.amount }) !== 0) {
+      const error = new Error("Terminal order executed quantity does not match its complete distinct fill history")
+      const reason = order.side === "SELL" && order.status === "FILLED"
+        ? "SELL_FILL_RECONCILIATION_FAILED"
+        : order.side === "BUY" && order.status === "FILLED"
+          ? "BUY_FILL_RECONCILIATION_FAILED"
+          : order.side === "BUY" && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+            compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0
+            ? "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW"
+            : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH"
+      await pause({ symbol, reason, error })
+      return toResult({ error })
+    }
+    const fullExecution = compareDecimal({
+      left: order.executedQuantity.amount,
+      right: order.originalQuantity.amount,
+    }) === 0
+    if ((order.status === "FILLED") !== fullExecution) {
+      const error = new Error("Terminal order status conflicts with its executed/original quantity")
+      await pause({ symbol, reason: "TERMINAL_ORDER_STATUS_QUANTITY_CONFLICT", error })
+      return toResult({ error })
+    }
+    for (const fill of fills) {
+      const applied = await processExecutionFillTransition({ order, fill })
+      if (!applied?.ok) {
+        const error = applied?.errors?.[0] ?? new Error("Terminal order fill could not be applied")
+        await pause({ symbol, reason: "TERMINAL_ORDER_FILL_ACCOUNTING_FAILED", error })
+        return toResult({ errors: applied?.errors ?? [error] })
+      }
+    }
+    return toResult({ data: { reconciled: true, fillCount: fills.length, executedQuantity: reconciledQuantity } })
+  }
+
+  const processUserDataEventTransition = async ({
+    event,
+    recoveryMode = false,
+    terminalFillsReconciled = false,
+  } = {}) => {
     try {
       if (event?.eventType === "executionReport" && event?.brokerEvidence) {
         publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT, dataResult: mapBrokerExecutionReportData({ evidence: event.brokerEvidence }) })
@@ -1231,6 +1399,10 @@ export function makeConservativeTradingEngine({
         publishLifecycleEvent({ eventPublisher, eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED, dataResult: mapOrderUpdatedData({ order, executionType: event.executionType, evidence: event.brokerEvidence }) })
       }
 
+      if (state.reconciledTerminalOrderClientIds.delete(order.clientOrderId)) {
+        return toResult({ data: { ignored: true, terminalStateAlreadyReconciled: true } })
+      }
+
       if (recoveryMode && ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
           state.unrequestedTerminalOrderClientIds.has(order.clientOrderId)) {
         const error = new Error("Recovered Harvester order reached a terminal exchange state without a durable cancellation intent: " + order.clientOrderId)
@@ -1249,11 +1421,20 @@ export function makeConservativeTradingEngine({
         const fillResult = await processExecutionFillTransition({ order, fill: event.fill })
         if (!fillResult.ok) return fillResult
       }
+
+      if (!terminalFillsReconciled &&
+          ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+        const terminal = await reconcileTerminalOrderFills({
+          order,
+          ...(event.executionType === "TRADE" ? { eventFill: event.fill } : {}),
+        })
+        if (!terminal?.ok) return terminal
+      }
       if (update.duplicate || update.stale) {
         const isUnprocessedFill = order.status === "FILLED" &&
           !state.completedOrderTransitions.has(order.clientOrderId)
         if (!isUnprocessedFill) {
-          if (!recoveryMode && order.side === "SELL" && order.status !== "FILLED" &&
+          if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
               order.brokerOrderId && state.replacementIntents.has(symbol)) {
             const cancellation = await cancelAndReconcileRecoverySells({ symbol, marketId: order.market.id })
             if (!cancellation.ok) return cancellation
@@ -1276,7 +1457,7 @@ export function makeConservativeTradingEngine({
         state.completedOrderTransitions.add(order.clientOrderId)
       }
 
-      if (!recoveryMode && order.side === "SELL" && order.status !== "PENDING" && order.status !== "FILLED" &&
+      if (!recoveryMode && order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status) &&
           state.replacementIntents.has(symbol)) {
         const cancellation = await cancelAndReconcileRecoverySells({
           symbol,
@@ -1291,10 +1472,34 @@ export function makeConservativeTradingEngine({
         if (!replacement.ok) return replacement
         return toResult({ data: { order, recoverySellReplaced: true, ...replacement.data } })
       }
+      if (!recoveryMode && order.side === "BUY" && order.status === "PARTIALLY_FILLED" &&
+          state.registry.getActiveOrders({ marketId: order.market.id }).some((active) => active.side === "SELL")) {
+        const cancellation = await cancelAndReconcileRecoverySells({
+          symbol,
+          marketId: order.market.id,
+        })
+        if (!cancellation.ok) return cancellation
+        if (cancellation.data?.deferred === true) {
+          return toResult({ data: { order, replacementDeferred: true, waitingForFullFill: true } })
+        }
+        state.replacementIntents.delete(symbol)
+        const replacement = await evaluateLatestTransition({ symbol })
+        if (!replacement.ok) return replacement
+        return toResult({
+          data: {
+            ...replacement.data,
+            order,
+            recoverySellReplaced: true,
+            waitingForFullFill: true,
+          },
+        })
+      }
       if (order.status === "PARTIALLY_FILLED") {
         return toResult({ data: { order, waitingForFullFill: true } })
       }
-      if (["CANCELED", "EXPIRED"].includes(order.status) && order.executedQuantity.amount !== "0") {
+      if (order.side === "BUY" &&
+          ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+          compareDecimal({ left: order.executedQuantity.amount, right: "0" }) > 0) {
         await pause({ symbol, reason: "PARTIALLY_FILLED_ORDER_CANCELED_REQUIRES_REVIEW" })
         return toResult({ error: new Error("Partially filled order canceled; pair paused for review") })
       }
@@ -1323,7 +1528,39 @@ export function makeConservativeTradingEngine({
         state.lastBuyPrices.set(symbol, executionPrice)
         state.buyExecutionTotals.delete(order.brokerOrderId)
       }
+      if (order.status === "REJECTED") {
+        await pause({ symbol, reason: "ORDER_REJECTED" })
+        return toResult({ data: { order, paused: true } })
+      }
+      if (order.side === "SELL" && ["CANCELED", "EXPIRED"].includes(order.status)) {
+        if (recoveryMode) {
+          // Recovery reconciliation establishes exchange facts only. It must
+          // not submit a replacement until startup has reconciled every
+          // same-market cancellation intent and the runtime resumes trading.
+          state.deferredEvaluations.add(symbol)
+          return toResult({
+            data: {
+              order,
+              terminalFillHistoryReconciled: true,
+              recoveryReplacementDeferred: true,
+            },
+          })
+        }
+        state.replacementIntents.delete(symbol)
+        const replacement = await evaluateLatestTransition({ symbol })
+        if (!replacement.ok) return replacement
+        return toResult({
+          data: {
+            ...replacement.data,
+            order,
+            reevaluate: true,
+            terminalFillHistoryReconciled: true,
+            recoverySellReplaced: true,
+          },
+        })
+      }
       if (order.status === "FILLED" && order.side === "SELL") {
+        state.completedRecoverySellSymbols.add(symbol)
         if (recoveryMode) {
           resolveRecoveryManagedCancellation({ order })
         } else {
@@ -1340,9 +1577,29 @@ export function makeConservativeTradingEngine({
           keepQuantity: String(pairs[symbol].keepQuantity),
           minProfit: String(settings.minProfit),
         })
-        if (!completion?.ok || !completion.data?.eligible) {
+        if (!completion?.ok) {
           await pause({ symbol, reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED", error: completion?.errors?.[0] })
-          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle did not meet completion conditions")] })
+          return toResult({ errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")] })
+        }
+        if (!completion.data?.eligible) {
+          if (["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"].includes(completion.data?.reason) &&
+              completion.data?.pause === false) {
+            // Keep the original cost/proceeds basis. The next serialized
+            // evaluation will plan another SELL for any residual that still
+            // satisfies current exchange filters; untradeable remainder is
+            // reported as dust by the pure strategy until it can be combined.
+            state.sellExecutionTotals.delete(order.brokerOrderId)
+            return toResult({
+              data: {
+                order,
+                reevaluate: true,
+                residualSellThrough: true,
+                realizedNetProfit: completion.data.realizedNetProfit,
+              },
+            })
+          }
+          await pause({ symbol, reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED" })
+          return toResult({ error: new Error("Recovery cycle did not meet completion conditions") })
         }
         publishLifecycleEvent({
           eventPublisher,
@@ -1352,14 +1609,12 @@ export function makeConservativeTradingEngine({
             marketId: order.market.id,
             freeQuantity: completion.data.freeQuantity,
             realizedNetProfit: completion.data.realizedNetProfit,
+            ...(completion.data.dust === undefined ? {} : { dust: completion.data.dust }),
           }),
         })
         state.sellExecutionTotals.delete(order.brokerOrderId)
+        state.completedRecoverySellSymbols.delete(symbol)
         state.trailingBuy.set(symbol, true)
-      }
-      if (order.status === "REJECTED") {
-        await pause({ symbol, reason: "ORDER_REJECTED" })
-        return toResult({ data: { order, paused: true } })
       }
       return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
@@ -1469,7 +1724,8 @@ export function makeConservativeTradingEngine({
             if (
               fill.market.id !== ownedOrder.market.id ||
               fill.brokerOrderId !== ownedOrder.brokerOrderId ||
-              fill.side !== ownedOrder.side
+              fill.side !== ownedOrder.side ||
+              (fill.clientOrderId !== undefined && fill.clientOrderId !== ownedOrder.clientOrderId)
             ) {
               throw new Error("REST fill identity conflicts with owned order " + ownedOrder.brokerOrderId)
             }
@@ -1605,6 +1861,7 @@ export function makeConservativeTradingEngine({
         const processedOrder = await processUserDataEventTransition({
           event: { executedOrder: historyOrder },
           recoveryMode,
+          terminalFillsReconciled: true,
         })
         if (!processedOrder.ok) {
           const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")

@@ -214,6 +214,7 @@ There is exactly one Position per trading pair, shared by both strategies. The T
 - [Trading Strategies](./trading-strategies.md)
 - [Harvester Roadmap](../ROADMAP.md)
 - [Harvester Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md)
+- [Broker–Harvester Trading Flow](./architecture/BROKER_HARVESTER_TRADING_FLOW.md)
 
 
 ## Implementation pattern for use cases
@@ -284,7 +285,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 2. The `updatePortfolio({ portfolio, fill })` workflow receives that normalized fill; it does not parse a raw Binance event.
 3. The use case locates/loads the relevant Portfolio or Position through its injected dependency, then delegates the state transition to the domain.
 4. It persists or publishes the resulting state only through explicit ports, according to the implemented persistence contract.
-5. Duplicate fills, partial fills, invalid quantities, and unsupported third-asset commissions must follow explicit domain/application rules—not be silently discarded. Third-asset commission fills are currently rejected.
+5. Duplicate fills, partial fills, invalid quantities, and third-asset commissions must follow the canonical domain rules—not be silently discarded. A third-asset commission requires reliable quote-currency valuation; otherwise the affected accounting transition fails closed. See [Conservative Domain Specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 **Critical accounting rule:** order submission, acknowledgement, cancellation, rejection, and market-price updates do not change holdings. Only actual normalized fills change Portfolio state, including partial fills and actual commissions. See [Portfolio Domain](./domain/portfolio.md).
 

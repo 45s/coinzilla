@@ -1,6 +1,9 @@
 # Harvester: Trading Workflow and Safety Requirements
 
-**This document is the source of truth for Harvester trading behavior and exchange-safety requirements.** The work-selection section above governs task priority: explicitly selected engineering issues may proceed independently of the TESTNET operational milestone.
+> **Conservative rule authority:** this document sets task priority only. It is not a Conservative behavior specification. All Conservative rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Older strategy-rule summaries and implementation snapshots in this document are historical/superseded and must not be used as current acceptance criteria.
+
+
+**This document is a mandatory execution-priority rule for every AI agent working on Harvester. It overrides any roadmap ordering, architecture ambition, optional capability, or agent preference that would delay the first working trading workflow.**
 
 ## Work selection
 
@@ -50,7 +53,7 @@ When implementing or changing the trading runtime, follow this order:
 1. **Start the application.** Read and validate the trading configuration. Resolve enabled pairs and their strategy settings. Fail with actionable errors for invalid configuration.
 2. **Connect to the broker.** Establish the required broker connection and subscribe to prices for enabled pairs. Keep exchange-specific details inside the broker adapter.
 3. **Receive usable market prices.** Validate incoming prices and make the latest usable price available to the trading workflow. Handle missing/stale prices safely.
-4. **Evaluate the first strategy.** Conservative is the first executable policy. Its initial BUY trails upward by one configured step while active Position quantity is zero. After a BUY fills, the next standing BUY is fixed while active strategy inventory remains. A profitable recovery SELL can restore the trailing phase, but repricing stays suppressed until Portfolio active `baseQuantity.amount` reaches zero; retained free inventory does not count. Recovery SELLs cover cumulative actual BUY cost, actual commissions, and minProfit while retaining keepQuantity. A new BUY fill cancels and reconciles any old recovery SELL before replacement. Do not start Aggressive first or place runtime/broker concerns inside the domain.
+4. **Evaluate the first strategy.** Conservative is the first executable policy. Its complete BUY/SELL, accounting, commission, retained-inventory, partial-fill, cancellation/replacement, dust, and completion behavior is defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). Do not duplicate those rules here. Do not start Aggressive first or place runtime/broker concerns inside the domain.
 5. **Create and submit orders.** Turn the strategy's decision into an order intent, apply the minimum necessary TESTNET execution checks and exchange filters, and submit a real TESTNET order through the broker.
 6. **Receive order updates and executions.** Process acknowledgements, partial fills, final fills, cancellations, and rejections. Update trading state only from actual executions; do not count a requested or acknowledged quantity as filled.
 7. **React and repeat.** Re-evaluate when a relevant price, order-state, or fill event arrives. Place the next required order without waiting for an unrelated new price event. Continue the strategy cycle.
@@ -196,7 +199,7 @@ Binance Spot TESTNET account settings previously showed **Commissions: None**. T
 
 PR #513 has merged and its exact-head CI passed. The MIN_NOTIONAL regression now expects `ok: false`, asserts the validation error, and verifies the pair pauses once without repeated evaluation. PR #515 remains the active offline follow-up: its lifecycle, accounting, fee-policy, and OPENING/CLOSING audit acceptance checks are still in progress. Require fresh exact-head CI for every pushed increment; earlier green runs do not certify later commits.
 
-The maker-only fee-reserve defect is fixed in PR #513: Conservative recovery SELL sizing reserves the greater of configured `makerPercent` and `takerPercent`. Tests cover zero, maker-higher, taker-higher, equal, and invalid fee inputs. Actual commissions remain authoritative for realized fill accounting.
+Historical fee-policy note: the earlier maker-only assumption is superseded. Current Conservative fee reserves and actual commission accounting are defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/stream and concurrent-market-update matrix is moved to the follow-up PR. The future closed-session opening-balance audit is also follow-up work. Keep Harvester stopped; merge of PR #513 does not authorize TESTNET restart or orders.
 
@@ -207,8 +210,7 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 
 #### Implemented in the current PR continuation
 
-- Recovery SELL planning now reserves `max(makerPercent, takerPercent)` until the actual execution role is guaranteed. The fee calculator returns the reserved rate, percentage and role.
-- Fee calculator tests now cover zero, maker-higher, taker-higher, equal and invalid rates. The Conservative strategy test expects the higher taker fee to reduce sellable quantity.
+- Fee-reserve implementation history is retained in source/tests. The current Conservative rule is defined only in the canonical specification.
 - The actual Conservative engine now emits DEBUG records for every market-price event and correlated strategy evaluation, including monotonic market/evaluation IDs, current/previous price, lastBuyPrice/reference overrides, active orders, pair config, readiness/pause state, Portfolio/RecoveryLedger snapshots, trailing-BUY repricing trigger inputs/results, decisions and executable intents. Regression coverage verifies event/evaluation correlation.
 - Bootstrap now emits DEBUG per-fill accounting records, including trade/execution/order identity, side, price, quantities, actual commission facts, before/after Position and RecoveryLedger snapshots, exact per-fill active/free base and quote cash-flow deltas, BUY cost/SELL proceeds deltas, outstanding recovery/profit deltas, and applied/duplicate outcome. Rejected fills log errors and unchanged state.
 - A bootstrap regression test verifies the per-fill accounting trace.
@@ -218,8 +220,8 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 
 1. **The +0.20730 USDT difference is explained.** The historical Journal has 21 BUY fills (8,400 DOGE / 635.85200 USDT) and 8 SELL fills (8,390 DOGE / 636.42265 USDT), net +0.57065 USDT quote cash flow. The five recovery.cycle_completed profits are +0.07808, +0.03285, +0.06053, +0.03584, and +0.36335 USDT; they sum exactly to +0.57065. The previous four cycles sum to +0.20730. The +0.36335 value was the last cycle, not the session total.
 2. **The twelve BUYs were a confirmed stale-state race.** All 12 distinct 400-DOGE BUYs at 0.07598 USDT were acknowledged FILLED before the first execution fill was applied. The engine now awaits complete canonical fill-history retrieval and application before releasing the serialized transition. Tests cover delayed immediate-FILLED reconciliation and 12 sequential fills through the real Conservative policy, verifying that each next BUY uses the preceding reconciled lastBuyPrice.
-3. **Post-cycle residual inventory must remain correctly classified.** Recovery completion allocates exactly keepQuantity to free inventory; extra residual remains active. The Conservative policy now requires positive outstanding recovery before planning another recovery SELL, so residual active inventory alone cannot trigger a new SELL after ledger reset. Invalid strategy-order validation pauses the pair, preventing repeated invalid MIN_NOTIONAL decisions. Pure-policy and new engine-level regression tests cover this path; verify them on the current CI head.
-4. **Fee reserve:** recovery SELL sizing uses the greater of configured maker/taker rates. Tests cover zero, maker-higher, taker-higher, equal, and invalid inputs.
+3. **Residual inventory and dust:** follow the canonical specification's sell-through, exact keepQuantity, dust classification, and accounting-basis rules. Older residual-suppression descriptions in this document are superseded.
+4. **Fee reserve:** follow the canonical specification; this document does not define fee rates or order-type policy.
 5. **Account audit:** trading-enabled startup requires a ready, durably flushable Journal; OPENING all-asset balances are flushed before engine activation. Graceful shutdown reconciles owned orders and flushes CLOSING balances before broker disconnect. The read-only journal:balance-audit command reports per-asset balance deltas and sums per-cycle recovery profits per Journal session.
 
 #### Remaining blockers — work in this order
@@ -245,7 +247,7 @@ The remaining streamed partial/final, duplicate/out-of-order, cancel/fill, REST/
 
 ## Mandatory account snapshot audit
 
-When a fully reconciled recovery SELL has recovered invested capital and met minimum net profit, only the configured keepQuantity is allocated to free inventory. Additional active residual caused by conservative base-fee reserves or quantity-step rounding remains active inventory. It must not, by itself, create another recovery SELL after the RecoveryLedger is reset.
+Conservative completion, exact keepQuantity, residual sell-through, dust, and basis-reset rules are defined only in [the canonical specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The older residual-suppression wording in this document is superseded.
 
 Trading-enabled startup MUST NOT activate the Conservative engine unless the Journal has successfully started and exposes durable flush(). The full broker account snapshot is journaled as account.snapshot_captured / OPENING, including every asset and its exact free, locked, and total quantity; the event must be flushed before the first market subscription can trigger an order. Graceful shutdown drains accepted user-data events, reconciles owned orders, captures and flushes CLOSING while broker REST remains connected, and marks the audit INCOMPLETE if any owned order or accounting state is unresolved. Read-only mode may continue without Journal.
 

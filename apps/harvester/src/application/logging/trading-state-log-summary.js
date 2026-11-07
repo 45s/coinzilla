@@ -12,6 +12,8 @@ export function createPositionLogSummary({ position } = {}) {
   return {
     marketId: position.market.id,
     symbol: position.market.symbol,
+    quantity: position.quantity.amount,
+    spent: position.spent.amount,
     activeBaseQuantity: position.baseQuantity.amount,
     freeBaseQuantity: position.freeBaseQuantity.amount,
     totalBaseQuantity: position.totalBaseQuantity.amount,
@@ -33,7 +35,7 @@ export function createRecoveryLedgerLogSummary({ recoveryLedger } = {}) {
   return {
     marketId: recoveryLedger.market.id,
     symbol: recoveryLedger.market.symbol,
-    buyCost: recoveryLedger.buyCost,
+    legacyBuyCostMirror: recoveryLedger.buyCost,
     netSellProceeds: recoveryLedger.netSellProceeds,
     outstandingRecoveryAmount: recoveryLedger.outstandingRecoveryAmount,
     realizedNetProfit: recoveryLedger.realizedNetProfit,

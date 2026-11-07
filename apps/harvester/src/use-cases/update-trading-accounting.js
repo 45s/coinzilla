@@ -31,6 +31,10 @@ export function updateTradingAccounting({
         portfolioResult.duplicate !== ledgerResult.duplicate) {
       throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
     }
+    const nextPosition = portfolioResult.portfolio.getPosition({ marketId: fill.market.id })
+    if (nextPosition?.spent?.amount !== ledgerResult.ledger.buyCost) {
+      throw new Error("Position.spent and the legacy RecoveryLedger cost mirror are inconsistent")
+    }
 
     return toResult({
       data: {

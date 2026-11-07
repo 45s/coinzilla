@@ -62,6 +62,7 @@ Other repository instructions and task checklists should link to this section ra
 - Tests must clean up resources they create: listeners, timers, servers, temporary files, subscriptions, and pending work.
 - Do not mock away the behavior under test. Mock external boundaries, not every internal function.
 - Do not delete, skip, weaken, or loosen assertions to make a suite pass. If a test is invalid, replace it with an equally strong test and explain why.
+- **Every assertion must include a detailed failure message.** The message must explain the behavior/invariant being checked and, where useful, identify the relevant scenario or expected state; avoid restating only the expected literal (for example, `"expected 2"`). Assertions without a message are not acceptable in new or materially edited tests. When updating an existing test, add meaningful messages to every assertion in the edited test case.
 - Review coverage reports for uncovered lines and branches, especially error and lifecycle paths. Aim for high line and branch coverage; critical behavior and failure branches must be covered. A percentage alone is not proof of test quality.
 - Add or maintain package-specific coverage thresholds where the tooling supports them. A threshold must be meaningful, enforced by CI, and increased deliberately; do not claim coverage is gated when it is not.
 - Run the affected package's test and coverage scripts first, then relevant workspace tests and repository quality checks. Report exact commands and outcomes accurately.

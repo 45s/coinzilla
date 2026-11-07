@@ -36,13 +36,13 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
   if (compareDecimal({ left: quoteQuantity.amount, right: "0" }) <= 0) {
     throw new RangeError("Fill quote quantity must be greater than zero")
   }
-  const { quoteCommission } = validateFillCommissions({ market, fill })
+  const { quoteCommission, thirdAssetQuoteValue } = validateFillCommissions({ market, fill })
 
   if (fill.side === "BUY") {
     return Object.freeze({
       buyCost: addDecimal({
         left: quoteQuantity.amount,
-        right: quoteCommission,
+        right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
       }),
       netSellProceeds: "0",
     })
@@ -50,7 +50,7 @@ export function calculateRecoveryFillAccounting({ market, fill } = {}) {
 
   const netSellProceeds = subtractDecimal({
     left: quoteQuantity.amount,
-    right: quoteCommission,
+    right: addDecimal({ left: quoteCommission, right: thirdAssetQuoteValue }),
   })
   if (compareDecimal({ left: netSellProceeds, right: "0" }) < 0) {
     throw new RangeError("Quote commission exceeds SELL quote proceeds")

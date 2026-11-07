@@ -8,6 +8,8 @@ import {
 
 const position = {
   market: { id: "market-zro-usdt", symbol: "ZROUSDT" },
+  quantity: { amount: "10" },
+  spent: { amount: "10.5" },
   baseQuantity: { amount: "10" },
   freeBaseQuantity: { amount: "0.01" },
   totalBaseQuantity: { amount: "10.01" },
@@ -30,6 +32,8 @@ test("position log summary keeps trading quantities without serializing the full
   assert.deepEqual(createPositionLogSummary({ position }), {
     marketId: "market-zro-usdt",
     symbol: "ZROUSDT",
+    quantity: "10",
+    spent: "10.5",
     activeBaseQuantity: "10",
     freeBaseQuantity: "0.01",
     totalBaseQuantity: "10.01",
@@ -43,7 +47,7 @@ test("recovery ledger log summary keeps accounting totals and fill count, not fi
   assert.deepEqual(summary, {
     marketId: "market-zro-usdt",
     symbol: "ZROUSDT",
-    buyCost: "10.5",
+    legacyBuyCostMirror: "10.5",
     netSellProceeds: "0",
     outstandingRecoveryAmount: "10.5",
     realizedNetProfit: "-10.5",
@@ -69,6 +73,8 @@ test("portfolio log summary is scoped to the evaluated market and exposes only a
     position: {
       marketId: "market-zro-usdt",
       symbol: "ZROUSDT",
+      quantity: "10",
+      spent: "10.5",
       activeBaseQuantity: "10",
       freeBaseQuantity: "0.01",
       totalBaseQuantity: "10.01",

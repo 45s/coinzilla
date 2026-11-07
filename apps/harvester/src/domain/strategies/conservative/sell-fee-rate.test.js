@@ -1,4 +1,5 @@
-import test from "node:test"
+import nodeTest from "node:test"
+const test = (name, ...args) => nodeTest("[sell-fee-rate.test.js] " + name, ...args)
 import assert from "node:assert/strict"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
 
@@ -27,6 +28,28 @@ test("reserves equal maker and taker fees", () => {
   assert.deepEqual(
     calculateSellFeeRate({ makerPercent: "0.1", takerPercent: "0.1" }),
     { feeRate: "0.001", reservedPercent: "0.1", reservedRole: "MAKER" },
+  )
+})
+
+test("uses maker fee for LIMIT_MAKER even when taker fee is higher", () => {
+  assert.deepEqual(
+    calculateSellFeeRate({
+      makerPercent: "0",
+      takerPercent: "0.075",
+      orderType: "LIMIT_MAKER",
+    }),
+    { feeRate: "0", reservedPercent: "0", reservedRole: "MAKER" },
+  )
+})
+
+test("continues to reserve the higher possible fee for ordinary LIMIT orders", () => {
+  assert.deepEqual(
+    calculateSellFeeRate({
+      makerPercent: "0",
+      takerPercent: "0.075",
+      orderType: "LIMIT",
+    }),
+    { feeRate: "0.00075", reservedPercent: "0.075", reservedRole: "TAKER" },
   )
 })
 
