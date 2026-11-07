@@ -25,6 +25,22 @@ const startHarvesterForTest = (input = {}) => {
   return startHarvester({ ...input, eventPublisher })
 }
 
+function waitForTestSignal(promise, label, getDiagnostics, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      let diagnostics
+      try { diagnostics = getDiagnostics?.() } catch (error) { diagnostics = String(error) }
+      reject(new Error(
+        "Timed out waiting for " + label + (diagnostics === undefined ? "" : ": " + JSON.stringify(diagnostics)),
+      ))
+    }, timeoutMs)
+    Promise.resolve(promise).then(
+      (value) => { clearTimeout(timeout); resolve(value) },
+      (error) => { clearTimeout(timeout); reject(error) },
+    )
+  })
+}
+
 
 test('loads configuration before returning the startup context', async () => {
   const tradingConfig = {
@@ -255,7 +271,7 @@ test('ordinary TRADE fills update owned accounting after the startup account aud
       userDataReady: context.userDataReady,
       userDataStatus: context.userDataStatus,
       accountedBaseQuantity: context.portfolio.getPosition({ marketId: market.id })?.baseQuantity.amount ?? '0',
-      errors: userDataErrors.map(([entry]) => entry),
+      errors: userDataErrors.map(([entry]) => entry?.message ?? String(entry)),
     }),
     2000,
   );
