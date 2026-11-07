@@ -38,83 +38,83 @@ The sequence below separates the order acknowledgement from the later execution 
 
 ```mermaid
 sequenceDiagram
-    participant Binance as Binance
-    participant Broker as Binance broker + Harvester adapter
-    participant Bootstrap as Harvester bootstrap / intake
-    participant Engine as Conservative Trading Engine
-    participant Strategy as Conservative strategy
-    participant Accounting as updateTradingAccounting
-    participant Portfolio
-    participant Ledger as RecoveryLedger
+participant Binance as Binance
+participant Broker as Binance broker + Harvester adapter
+participant Bootstrap as Harvester bootstrap / intake
+participant Engine as Conservative Trading Engine
+participant Strategy as Conservative strategy
+participant Accounting as updateTradingAccounting
+participant Portfolio
+participant Ledger as RecoveryLedger
 
-    Note over Bootstrap,Broker: Startup setup for each enabled symbol
-    Bootstrap->>Broker: getSymbolFilters({ symbol })
-    Broker->>Binance: exchangeInfo request
-    Binance-->>Broker: Exchange trading filters
-    Broker-->>Bootstrap: normalized market metadata
+Note over Bootstrap,Broker: Startup setup for each enabled symbol
+Bootstrap->>Broker: getSymbolFilters({ symbol })
+Broker->>Binance: exchangeInfo request
+Binance-->>Broker: Exchange trading filters
+Broker-->>Bootstrap: normalized market metadata
 
-    Note over Bootstrap,Broker: User-data subscription is established before market intake
-    Bootstrap->>Broker: subscribeForUserData({ onEvent })
+Note over Bootstrap,Broker: User-data subscription is established before market intake
+Bootstrap->>Broker: subscribeForUserData({ onEvent })
 
-    opt TESTNET trading — order-book safety input
-        Bootstrap->>Broker: subscribeForBookTicker({ symbol, onBookTicker })
-        Binance-->>Broker: best bid / ask stream update
-        Broker-->>Bootstrap: normalized bookTicker
-        Bootstrap->>Engine: processBookTicker({ symbol, bookTicker })
-        Note over Engine: Cached for fresh LIMIT_MAKER crossing checks; not a strategy price decision
-    end
+opt TESTNET trading — order-book safety input
+    Bootstrap->>Broker: subscribeForBookTicker({ symbol, onBookTicker })
+    Binance-->>Broker: best bid / ask stream update
+    Broker-->>Bootstrap: normalized bookTicker
+    Bootstrap->>Engine: processBookTicker({ symbol, bookTicker })
+    Note over Engine: Cached for fresh LIMIT_MAKER crossing checks; not a strategy price decision
+end
 
-    Bootstrap->>Broker: subscribeForPrices({ symbol, onPrice })
-    Binance-->>Broker: aggregate-trade market price
-    Broker-->>Bootstrap: onPrice(priceEvent)
-    Bootstrap->>Engine: processMarketPrice({ symbol, priceEvent, pairConfig, settings })
-    Engine->>Strategy: evaluate(current price, Portfolio, RecoveryLedger, active orders)
-    Strategy-->>Engine: BUY / SELL decision or NO_ACTION
+Bootstrap->>Broker: subscribeForPrices({ symbol, onPrice })
+Binance-->>Broker: aggregate-trade market price
+Broker-->>Bootstrap: onPrice(priceEvent)
+Bootstrap->>Engine: processMarketPrice({ symbol, priceEvent, pairConfig, settings })
+Engine->>Strategy: evaluate(current price, Portfolio, RecoveryLedger, active orders)
+Strategy-->>Engine: BUY / SELL decision or NO_ACTION
 
-    alt NO_ACTION
-        Note over Engine,Strategy: No order is submitted
-    else BUY or SELL action
-        Engine->>Broker: placeOrder({ order })
-        Note over Broker: Adapter selects createCanonicalOrder(order) when available; otherwise createOrder(order)
-        Broker->>Binance: order.place
-        Binance-->>Broker: order acknowledgement
-        Broker-->>Engine: normalized acknowledged order
-        Note over Engine: Register/update order state; acknowledgement is not a fill
-    end
+alt NO_ACTION
+    Note over Engine,Strategy: No order is submitted
+else BUY or SELL action
+    Engine->>Broker: placeOrder({ order })
+    Note over Broker: Adapter selects createCanonicalOrder(order) when available; otherwise createOrder(order)
+    Broker->>Binance: order.place
+    Binance-->>Broker: order acknowledgement
+    Broker-->>Engine: normalized acknowledged order
+    Note over Engine: Register/update order state; acknowledgement is not a fill
+end
 
-    opt No fresh stream price arrived during startup
-        Bootstrap->>Broker: getPrices({ symbol })
-        Broker->>Binance: ticker.price request/response
-        Binance-->>Broker: initial ticker snapshot
-        Broker-->>Bootstrap: ticker price
-        Bootstrap->>Engine: processMarketPrice({ symbol, priceEvent })
-        Note over Bootstrap: Seed only if no fresh WebSocket price was received
-    end
+opt No fresh stream price arrived during startup
+    Bootstrap->>Broker: getPrices({ symbol })
+    Broker->>Binance: ticker.price request/response
+    Binance-->>Broker: initial ticker snapshot
+    Broker-->>Bootstrap: ticker price
+    Bootstrap->>Engine: processMarketPrice({ symbol, priceEvent })
+    Note over Bootstrap: Seed only if no fresh WebSocket price was received
+end
 
-    Note over Binance,Broker: Actual execution is reported separately from submission acknowledgement
-    Binance-->>Broker: user-data executionReport
-    Note over Broker: Normalize executed order; for executionType=TRADE, normalize canonical Fill
-    Broker-->>Bootstrap: onEvent({ event: normalized execution report })
-    Bootstrap->>Engine: processUserDataEvent({ event })
+Note over Binance,Broker: Actual execution is reported separately from submission acknowledgement
+Binance-->>Broker: user-data executionReport
+Note over Broker: Normalize executed order; for executionType=TRADE, normalize canonical Fill
+Broker-->>Bootstrap: onEvent({ event: normalized execution report })
+Bootstrap->>Engine: processUserDataEvent({ event })
 
-    alt executionType = TRADE
-        Engine->>Engine: Validate registered order and canonical Fill identity
-        Engine->>Accounting: updateTradingAccounting({ fill })
-        Accounting->>Portfolio: applyFill({ fill })
-        Accounting->>Ledger: applyFill({ fill })
-        Accounting-->>Engine: updated Portfolio + RecoveryLedger
-        Note over Portfolio,Ledger: Actual fill facts and commissions update both accounting projections
-        Engine-->>Bootstrap: execution processed
-    else order status update without a trade
-        Engine->>Engine: Update order lifecycle / registry
-        Note over Engine,Portfolio: No fill means no Portfolio or RecoveryLedger accounting change
-    end
+alt executionType = TRADE
+    Engine->>Engine: Validate registered order and canonical Fill identity
+    Engine->>Accounting: updateTradingAccounting({ fill })
+    Accounting->>Portfolio: applyFill({ fill })
+    Accounting->>Ledger: applyFill({ fill })
+    Accounting-->>Engine: updated Portfolio + RecoveryLedger
+    Note over Portfolio,Ledger: Actual fill facts and commissions update both accounting projections
+    Engine-->>Bootstrap: execution processed
+else order status update without a trade
+    Engine->>Engine: Update order lifecycle / registry
+    Note over Engine,Portfolio: No fill means no Portfolio or RecoveryLedger accounting change
+end
 
-    opt Submission acknowledgement already reports FILLED
-        Engine->>Broker: getFills({ symbol, orderId })
-        Broker-->>Engine: canonical execution history
-        Engine->>Accounting: Apply reconciled canonical fills
-    end
+opt Submission acknowledgement already reports FILLED
+    Engine->>Broker: getFills({ symbol, orderId })
+    Broker-->>Engine: canonical execution history
+    Engine->>Accounting: Apply reconciled canonical fills
+end
 ```
 
 ## Startup paths and important distinctions
