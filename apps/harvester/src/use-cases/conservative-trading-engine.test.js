@@ -2656,6 +2656,7 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
     const seeded = makeSeededRecoveryState()
     let currentPortfolio = seeded.portfolio
     let currentRecoveryLedger = seeded.recoveryLedger
+    const accountedFills = []
     let sellFill
     const harness = await createHarness({
       initialPortfolio: seeded.portfolio,
@@ -2667,6 +2668,7 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
       updateTradingAccounting: async ({ fill }) => {
         currentPortfolio = currentPortfolio.applyFill({ fill }).portfolio
         currentRecoveryLedger = currentRecoveryLedger.applyFill({ fill }).ledger
+        accountedFills.push(fill)
         return { ok: true, data: { applied: true, duplicate: false } }
       },
     })
@@ -2714,8 +2716,8 @@ test("terminal recovery SELL reconciles partial fills and commissions before ree
       currentRecoveryLedger.netSellProceeds,
       subtractDecimal({ left: quoteQuantity, right: "0.01" }),
     )
-    assert.equal(harness.accountedFills.length, 1)
-    assert.equal(harness.accountedFills[0].commissions[0].amount.amount, "0.01")
+    assert.equal(accountedFills.length, 1)
+    assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
   }
 })
 
