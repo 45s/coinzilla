@@ -412,13 +412,25 @@ function waitForOrder(submitted, waiters, symbol, side, occurrence = 1) {
   const existing = getOrders()
   if (existing.length >= occurrence)
     return Promise.resolve(existing[occurrence - 1])
-  return new Promise((resolve) =>
-    waiters.push({
+  return new Promise((resolve, reject) => {
+    const waiter = {
       matches,
       isReady: () => getOrders().length >= occurrence,
-      resolve: () => resolve(getOrders()[occurrence - 1]),
-    }),
-  )
+      resolve: () => {
+        clearTimeout(timeout)
+        resolve(getOrders()[occurrence - 1])
+      },
+    }
+    const timeout = setTimeout(() => {
+      const index = waiters.indexOf(waiter)
+      if (index >= 0) waiters.splice(index, 1)
+      reject(new Error(
+        "Timed out waiting for " + symbol + " " + side + " order #" + occurrence +
+        "; observed " + getOrders().length + " matching orders",
+      ))
+    }, 5000)
+    waiters.push(waiter)
+  })
 }
 
 async function createReplayHarness(symbol) {
@@ -462,8 +474,16 @@ async function createReplayHarness(symbol) {
 
   const waitForCycle = () => {
     if (cycleCompletion) return Promise.resolve(cycleCompletion)
-    return new Promise((resolve) => {
-      cycleWaiter = resolve
+    return new Promise((resolve, reject) => {
+      const resolveCycle = (data) => {
+        clearTimeout(timeout)
+        resolve(data)
+      }
+      const timeout = setTimeout(() => {
+        if (cycleWaiter === resolveCycle) cycleWaiter = undefined
+        reject(new Error("Timed out waiting for recovery.cycle_completed for " + symbol))
+      }, 5000)
+      cycleWaiter = resolveCycle
     })
   }
 
