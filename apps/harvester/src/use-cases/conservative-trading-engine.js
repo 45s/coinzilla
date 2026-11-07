@@ -1614,9 +1614,7 @@ export function makeConservativeTradingEngine({
         })
         state.sellExecutionTotals.delete(order.brokerOrderId)
         state.completedRecoverySellSymbols.delete(symbol)
-        const hasStandingBuy = state.registry.getActiveOrders({ marketId: order.market.id })
-          .some((activeOrder) => activeOrder.side === "BUY")
-        state.trailingBuy.set(symbol, !hasStandingBuy)
+        state.trailingBuy.set(symbol, true)
       }
       return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
