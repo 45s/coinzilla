@@ -54,6 +54,21 @@ The migration is complete only when all of the following are true:
 
 ### Overall status
 
+### Accepted cross-domain recovery contract — issue #702 (2026-11-08)
+
+The repository owner approved the compatibility-preserving per-subscriber acknowledgement result contract. This is now authorized implementation work, not a pending product decision.
+
+- [ ] Add `acknowledgeRecoveryResult()` to each user-data subscription handle; preserve the existing `acknowledgeRecovery()` boolean behavior exactly.
+- [ ] Return `{ accepted: true, completed: false }` when this active subscriber's acknowledgement is recorded but another active subscriber remains pending.
+- [ ] Return `{ accepted: true, completed: true }` when this call completes shared recovery.
+- [ ] Reject inactive/stale handles explicitly; reject calls when no recovery is pending without changing subscriber state.
+- [ ] If reconciliation or required durability fails, the consumer does not acknowledge. Recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked.
+- [ ] Preserve exactly one terminal `reconciled` status per recovery generation for each still-active subscriber; removed subscribers receive none.
+- [ ] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status.
+
+**DDD/TDD execution:** the Brokers Application user-data session owns the subscription-handle use case and result contract; the Domain recovery policy remains authoritative for the all-active-subscriber completion invariant; Infrastructure/ Binance adapters remain unchanged. Add deterministic application-session tests first (RED), implement the smallest additive application change (GREEN), then update README and consumer tests. Preserve the existing Broker API for current consumers. No TESTNET/live exchange action is required.
+
+
 - [x] Phase 0 — contract and dependency inventory.
 - [x] Phase 1 — characterization tests and reusable deterministic test seams; PR #256 merged into `migration/binance-native-ws`.
 - [x] Phase 2 — native WebSocket transport; PR #261 merged into the integration branch (merge commit `8397d6bb494d28b5f357fdaa663358e3a4128002`).
@@ -728,7 +743,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 **Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
-**Current next action:** Phase 9 is complete. Phase 8 remains open because read-only TESTNET account reads and recovery assertions have not passed. PR #720 merged into `develop` at `39f6ab666523cdee937f3003944dbc291f62a52e`; diagnostic PR #721 merged at `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. The credential-free GitHub Actions probe confirms that the hosted runner's Spot TESTNET API upgrade is denied with HTTP 451 and Binance's restricted-location eligibility response, while the TESTNET Streams endpoint upgrades successfully with HTTP 101. Do not retry the manual read-only account/recovery workflow on that runner. First arrange a runner in a location where the account owner is eligible to access Binance TESTNET. Then run the manual read-only workflow with both safety flags preserved; verify account reads and user-data recovery/reconciliation before a controlled live recovery/soak. Keep order mutation and externally generated user-data events disabled; preserve fail-closed reconciliation.
+**Current next action:** Phase 9 is complete. Phase 8 remains open because read-only TESTNET account reads and recovery assertions have not passed. PR #720 merged into `develop` at `39f6ab666523cdee937f3003944dbc291f62a52e`; diagnostic PR #721 merged at `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. The credential-free GitHub Actions probe confirms that the hosted runner's Spot TESTNET API upgrade is denied with HTTP 451 and Binance's restricted-location eligibility response, while the TESTNET Streams endpoint upgrades successfully with HTTP 101. Do not retry the manual read-only account/recovery workflow on that runner. Do not ask the operator to change location. The hosted Spot TESTNET account API path is paused because the runner receives HTTP 451 with Binance's restricted-location eligibility response. Keep Phase 8 UNVERIFIED/PAUSED until an eligible, authorized environment is independently available. Do not retry the same blocked runner. Continue offline DDD/TDD work, deterministic tests, and CI. Any later read-only account/recovery validation and controlled soak still require separate authorization and must keep both safety flags preserved. Keep order mutation and externally generated user-data events disabled; preserve fail-closed reconciliation.
 
 **Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
 

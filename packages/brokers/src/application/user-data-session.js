@@ -1,6 +1,12 @@
 import { canCompleteUserDataRecovery } from "../domain/user-data-recovery-policy.js"
 import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
 
+/**
+ * Result of one subscriber's recovery acknowledgement.
+ *
+ * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"}} UserDataRecoveryAcknowledgementResult
+ */
+
 function logSafely(logger, level, ...args) {
   try {
     logger?.[level]?.(...args)
@@ -124,7 +130,7 @@ export class UserDataSession {
    * Register a local subscriber and return its recovery controls.
    *
    * @param {{onEvent: (message: {event: object}) => void, onStatus?: (status: object) => void}} options
-   * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
+   * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, acknowledgeRecoveryResult: () => UserDataRecoveryAcknowledgementResult, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
    */
   async subscribe({ onEvent, onStatus }) {
     validateCallback(onEvent, "onEvent")
@@ -161,6 +167,7 @@ export class UserDataSession {
 
     const data = {
       acknowledgeRecovery: () => this.#acknowledgeRecovery(id),
+      acknowledgeRecoveryResult: () => this.#acknowledgeRecoveryResult(id),
       disconnect: () => this.#removeSubscriber(id),
     }
     Object.defineProperty(data, "subscriptionId", {
@@ -560,10 +567,32 @@ export class UserDataSession {
   }
 
   #acknowledgeRecovery(id) {
+    const result = this.#acknowledgeRecoveryResult(id)
+    return result.accepted && result.completed
+  }
+
+  #acknowledgeRecoveryResult(id) {
     const subscriber = this.#subscribers.get(id)
-    if (!subscriber || !this.#recoveryRequired || this.#subscriptionId === null) return false
+    if (!subscriber || !subscriber.active) {
+      return {
+        accepted: false,
+        completed: false,
+        reason: "stale-or-inactive",
+      }
+    }
+    if (!this.#recoveryRequired || this.#subscriptionId === null) {
+      return {
+        accepted: false,
+        completed: false,
+        reason: "recovery-not-pending",
+      }
+    }
+
     subscriber.recoveryAcknowledged = true
-    return this.#completeRecoveryIfAcknowledged()
+    return {
+      accepted: true,
+      completed: this.#completeRecoveryIfAcknowledged(),
+    }
   }
 
   #completeRecoveryIfAcknowledged() {
