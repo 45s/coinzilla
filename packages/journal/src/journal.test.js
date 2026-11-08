@@ -987,3 +987,35 @@ test("delegates writer lifecycle and record persistence to its injected internal
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("keeps the legacy internal file-handle override forwarded to the store-owned session handle", async () => {
+  const eventBus = new EventBus()
+  const store = { sessionHandle: null }
+  const journal = new Journal({
+    eventBus,
+    directory: "unused-by-store-alias-test",
+    [JOURNAL_STORE]: store,
+  })
+  const replacementHandle = {
+    writeFile: async () => {},
+    sync: async () => {},
+    close: async () => {},
+  }
+
+  try {
+    journal.fileHandle = replacementHandle
+    assert.equal(
+      store.sessionHandle,
+      replacementHandle,
+      "The legacy internal fileHandle override must update the session handle owned by the injected persistence store.",
+    )
+    assert.equal(
+      journal.fileHandle,
+      replacementHandle,
+      "The deprecated internal accessor must continue to expose the same handle for existing package-level failure-injection tests.",
+    )
+  } finally {
+    await eventBus.close()
+  }
+})

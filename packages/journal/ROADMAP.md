@@ -18,6 +18,8 @@ This section supersedes stale checkboxes below where they conflict with merged w
 
    - **TDD evidence:** PR #748 test-first commit `4f541bf9a06420509fefbce8f31f0916bfa59496` produced the expected RED on Node 24.22.2: 54 passed, 1 failed at `src/journal.test.js:903`; Journal returned the physical temporary-directory path instead of the injected store's virtual session path. The failure was an assertion, not a setup or syntax failure.
 
+   - **Compatibility constraint:** The workspace test failure showed that Harvester has an existing test seam that assigns `journal.fileHandle` to simulate a disk write failure. Preserve this as a deprecated internal forwarding accessor to the store-owned session handle; do not edit Harvester or make the adapter public.
+
 3. **J-4 — make orchestration state ownership explicit.**
    - **Why:** session lifecycle, subscription state, pending writes and close state must have one clear owner; otherwise races can accept writes after close or lose an uncertain append.
    - **Do:** map each lifecycle state and transition, define when an event is admitted, persisted, synced and acknowledged, and keep retry semantics explicit. Preserve exclusive directory ownership and write-failure behavior.
