@@ -5699,3 +5699,58 @@ test("repeated market-price events cannot submit duplicate replacements after a 
   assert.equal(harness.orders.length, 2, "Repeated market events must not create a second replacement for the same trailing step")
   assert.equal(harness.cancellationIds.length, 1)
 })
+
+
+test("keeps the standing BUY open when the post-only market book becomes stale", async () => {
+  let marketBookFresh = true
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    isMarketBookFresh: () => marketBookFresh,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  marketBookFresh = false
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reason, "REPLACEMENT_MARKET_DATA_UNAVAILABLE")
+  assert.deepEqual(harness.cancellationIds, [], "A stale post-only book must prevent cancellation of the standing BUY")
+  assert.equal(harness.orders.length, 1, "A stale post-only book must prevent replacement submission")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+test("keeps the standing BUY open when a required exchange trading rule is missing", async () => {
+  let currentMetadata = marketMetadata
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    getMarketMetadata: () => currentMetadata,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  currentMetadata = {
+    ...marketMetadata,
+    tradingRules: new TradingRules({
+      market,
+      constraints: marketMetadata.tradingRules.constraints.filter(
+        ({ type }) => type !== "MIN_NOTIONAL",
+      ),
+    }),
+  }
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /MIN_NOTIONAL/)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
