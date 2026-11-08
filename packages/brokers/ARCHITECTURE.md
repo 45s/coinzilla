@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Current code baseline:** `512b77f4a7745e2b5fbff7849dcfe136830acab8` (after PR #693). Binance DTO/Entity mapping now lives under `src/infrastructure/binance/adapters/`; mapper logic and test assertions are preserved, with relative test imports updated where needed.
+**Code baseline before this slice:** `1685a6a420212c8e6f46add05229f1e0a31a8486` (after PR #694). The tree below reflects this PR's intended test ownership: direct `UserDataSession` tests are co-located under Application; broker-composition suites remain under the Binance broker test tree.
 
 The package is **partially layered already**:
 
@@ -186,7 +186,7 @@ pnpm --filter @coinzilla/brokers test:coverage
 
 The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the broker WebSocket runtime and domain/application/infrastructure paths; Binance DTO adapters are included through the infrastructure glob. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
 
-No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
+The Phase A source audit was read-only. The subsequent PR #693 final-head CI passed Brokers unit tests/coverage, workspace unit tests/coverage, Harvester targeted regression tests, syntax, and dependency audit. No TESTNET integration was run.
 
 ### Verified workspace consumers
 
