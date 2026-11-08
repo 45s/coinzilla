@@ -14,9 +14,10 @@ This section is the current operational status and supersedes older statements b
 
 ### Portfolio stats and user-data lifecycle observability — 2026-11-08
 
-- [~] Emit a compact Portfolio Stats snapshot only after a newly applied BUY/SELL fill changes inventory quantity. Include active, retained, and total base quantity plus exact quote-currency cost/recovery accounting. Do not mix exchange account balances into the in-memory Portfolio snapshot or refresh account balances after every fill.
-- [~] Replace generic repeated user-data status logs with concise, deduplicated connected/disconnected/reconnecting/reconnected/subscription-restored/error transitions. Preserve actual broker error context and do not infer authentication expiry from an unspecified transport error.
-- [ ] Add deterministic offline regressions for partial BUY/SELL fills, duplicate fills, and repeated lifecycle status notifications; preserve existing readiness/recovery behavior.
+- [x] Emit a compact Portfolio Stats snapshot only after a newly applied BUY/SELL fill changes inventory quantity. Include active, retained, and total base quantity plus exact quote-currency cost/recovery accounting. Do not mix exchange account balances into the in-memory Portfolio snapshot or refresh account balances after every fill.
+- [x] Replace generic repeated user-data status logs with concise, deduplicated connected/disconnected/reconnecting/reconnected/subscription-restored/error transitions. Preserve actual broker error context and do not infer authentication expiry from an unspecified transport error.
+- [x] Add deterministic offline regressions for partial BUY/SELL fills, duplicate fills, and repeated lifecycle status notifications; preserve existing readiness/recovery behavior.
+- [x] Exact-head offline CI on PR #744 head `ae2b6435d0e038f53c8fb2a3869570a5fc2648e7`: Harvester unit tests 776/776, configured targeted tests 3/3, Harvester coverage, workspace coverage, JavaScript syntax, actionlint, Utils tests, and production dependency audit passed. Read-only Binance TESTNET integration was skipped; no exchange acceptance is claimed.
 
 ### Recovery contract work
 
