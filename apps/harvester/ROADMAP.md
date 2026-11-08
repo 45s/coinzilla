@@ -19,8 +19,8 @@ This section is the current operational status and supersedes older statements b
   2. Distinguish accepted-but-pending, accepted-and-globally-completed, and stale/inactive rejection.
   3. Preserve one terminal `reconciled` notification per recovery generation for every still-active subscriber; disconnected subscribers receive none.
   4. Keep state-changing RPCs blocked until global recovery completion and keep reminder behavior bounded.
-- Implement #702 using DDD/TDD: define the Brokers-owned domain/application contract and compatibility boundary; write failing broker tests first; implement the smallest broker change; then update consumer tests/docs. Harvester must not infer global readiness from local acknowledgement acceptance.
-- [ ] **#626 — Harvester recovery reliability.** Continue closing the acceptance matrix with deterministic tests and exact-head CI. Keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
+- [x] Implemented #702 with DDD/TDD in PRs #732 and #735: the Brokers Application owns the result contract, the Domain completion invariant is preserved, and Harvester readiness remains closed until the matching global reconciled status. The legacy boolean API remains compatible.
+- [ ] **#626 — Harvester recovery reliability.** Offline code/test hardening is substantially complete. Keep the issue open for final acceptance traceability and the externally paused TESTNET acceptance; keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
 - [x] **#667 — November 7 incident follow-up.** Closed after the owner-approved external-order policy and merged fixes for graceful shutdown (#663), unowned-order startup policy (#664), account-integrity BUY cancellation (#669), configured-asset snapshots (#670), Conservative dust/conformance (#653), and recovery-mode deferred evaluations (#673). TESTNET acceptance remains separately paused/unverified.
 
 ### Other active and deferred work
