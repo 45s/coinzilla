@@ -40,8 +40,9 @@ test("prevents a second process from writing to an active journal directory", as
     import { pathToFileURL } from "node:url"
     const { EventBus } = await import(pathToFileURL(path.resolve("../event-bus/src/index.js")))
     const { Journal } = await import(pathToFileURL(path.resolve("src/index.js")))
-    const eventBus = new EventBus()
-    const journal = new Journal({ eventBus, directory: process.argv[1] })
+    const logger = { info() {}, system() {}, error() {} }
+    const eventBus = new EventBus({ logger })
+    const journal = new Journal({ eventBus, directory: process.argv[1], logger })
     const result = await journal.start()
     const outcome = { ok: result.ok, code: result.errors?.[0]?.code ?? null }
     if (result.ok) {
