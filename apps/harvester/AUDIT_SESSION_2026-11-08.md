@@ -414,3 +414,12 @@ PR [#708](https://github.com/45s/coinzilla/pull/708) is merged. Exact tested hea
 - Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
 
 F-017 is closed. Continue with the next Harvester roadmap item; do not change production source under F-017.
+
+
+## 16. PR #688 branch rescue — 2026-11-08
+
+PR [#688](https://github.com/45s/coinzilla/pull/688) contains a unique application recovery regression for an account-wide open-orders RPC timeout. This scenario is distinct from PR #701's account snapshot timeout: the first `getOpenOrders()` result fails with a typed timeout; the recovery gate stays closed; no account/open-order audit or broker acknowledgement occurs; the task slot is released; and a later reminder retries and completes the same generation.
+
+The old PR branch was 4 commits ahead / 38 behind `develop`. It has been synchronized by a normal two-parent merge commit with current `develop` at `718a313837cd43ace2a9c2daeb17729898fd5867`. The PR's unique test is retained and appended to the current recovery-handler test file; existing current-develop changes, including PR #701 coverage, are preserved. No force-push or branch-protection bypass was used.
+
+The same commit updates this roadmap and F-016 evidence. The new test confirms the contextual timeout message and retry behavior but does not close native Error-cause preservation. Exact-head Harvester and required CI verification are pending; no test pass is claimed yet.
