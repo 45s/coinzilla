@@ -205,6 +205,7 @@ test("clears the application recovery gate only for the locally acknowledged gen
     status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
     recoveryGeneration: 4,
     lastAcknowledgedRecoveryGeneration: 4,
+    recoverySubscriptionId: 42,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -228,6 +229,7 @@ test("does not clear the application recovery gate for a stale reconciled genera
     status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
     recoveryGeneration: 5,
     lastAcknowledgedRecoveryGeneration: 4,
+    recoverySubscriptionId: 42,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -237,6 +239,31 @@ test("does not clear the application recovery gate for a stale reconciled genera
     subscriptionId: 42,
   })
 
+  assert.equal(state.requiresReconciliation, true)
+  assert.equal(state.ready, false)
+})
+
+
+
+test("does not clear the application recovery gate for a different subscription identity", () => {
+  const state = createState({
+    ready: false,
+    requiresReconciliation: true,
+    streamUnsafe: true,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    recoveryGeneration: 5,
+    lastAcknowledgedRecoveryGeneration: 5,
+    recoverySubscriptionId: 42,
+  })
+  const fixture = createHandler({ state })
+  fixture.handler({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: 41,
+  })
+
+  assert.equal(state.streamUnsafe, false)
   assert.equal(state.requiresReconciliation, true)
   assert.equal(state.ready, false)
 })
