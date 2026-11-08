@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill, Order, Quantity, TradingRules } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
