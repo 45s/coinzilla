@@ -55,3 +55,16 @@ When a user asks an AI agent to implement, build, fix, change, configure, or oth
 - This rule does not authorize destructive or irreversible actions outside the user's scope, bypassing security controls, violating domain ownership, weakening tests/CI, exposing secrets, or ignoring financial/production safety requirements. Follow the applicable repository policies and ask only when explicit authorization is genuinely required.
 
 **Default: act and deliver working results; explain only material trade-offs and blockers.**
+
+
+## GitHub-first coding and verification — mandatory
+
+AI agents are responsible for writing and committing the actual source code, tests, and required documentation. GitHub Actions is the execution environment of record for repository tests and CI.
+
+- Do not stop an implementation task merely because a local checkout, shell, package manager, or local test runner is unavailable. Use the available GitHub repository operations to create a task branch, make the source/test/documentation changes, commit them, and open a PR so GitHub Actions can execute the checks.
+- Do not tell the user that the agent cannot implement because it cannot run tests locally. Local execution is optional when unavailable; remote GitHub CI is the required verification path.
+- Never substitute explanations, pseudocode, suggested patches, or a request for the user to perform the implementation for the requested source changes.
+- Write regression tests before or alongside the implementation. Preserve failing tests as meaningful regression coverage; do not weaken, skip, delete, or loosen tests or coverage to obtain a green result.
+- Inspect the exact PR head SHA and all required GitHub Actions checks. Fix failures by changing source/tests and pushing a new commit; allow GitHub to rerun the checks. Repeat until the exact head is green.
+- Merge the task PR into `develop` when every required check passes and branch freshness/ownership requirements are satisfied. Do not claim tests passed until GitHub reports the corresponding checks successful on the exact head SHA.
+- If GitHub permissions or repository services prevent a specific operation, continue with every other implementation step possible and report only the concrete blocked operation. Do not treat inability to run tests locally as a blocker.
