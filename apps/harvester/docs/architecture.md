@@ -600,10 +600,6 @@ Concurrent triggers share one in-flight task. Bootstrap supplies the live
 engine lookup, stopped-process predicate, and logger; the use case does not
 depend on broker SDK or process-global state.
 
-Shutdown preserves the original safety sequence: stop market intake and drain
-accepted market work; drain accepted user-data events; reconcile owned orders;
-cancel owned BUYs; drain cancellation/fill reports and reconcile again; stop
-user-data intake; publish the CLOSING account audit; then disconnect broker
-resources. User-data intake intentionally remains active through cancellation
-and its follow-up reconciliation so late execution reports are still accounted
-before the final audit.
+The source-verified shutdown sequence, cancellation/fill-race handling,
+CLOSING account audit, resource cleanup, and process-lock retention are defined
+in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#normal-shutdown).
