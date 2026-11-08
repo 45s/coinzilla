@@ -22,6 +22,35 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
 
 Email and Discord are roadmap candidates, not implemented transports. Do not create empty placeholder folders or speculative shared abstractions. If another transport is added, keep its API, formatting, tests, and provider-specific behavior inside its own folder. Extract shared functionality only when multiple real transports need the same stable contract.
 
+## Domain-driven boundaries
+
+The package uses lightweight DDD boundaries organized around real responsibilities, not a mandatory folder template:
+
+| Responsibility | Owner | Boundary |
+| --- | --- | --- |
+| Notification policy | Pure formatter and validation functions | Selects supported events, allowlists and normalizes fields, and creates bounded message text without I/O |
+| Application integration | Telegram event subscriber | Coordinates injected EventBus and notifier ports; owns subscription lifecycle, serialized delivery, admission limits, diagnostics, and failure reporting |
+| Infrastructure | TelegramNotifier | Owns Telegram HTTP requests, credentials, timeouts, and provider response validation; uses injected fetch |
+| Composition | Consuming application | Loads environment/configuration and constructs the EventBus, notifier, and subscriber |
+| Public API | Package and provider index files | Re-exports supported contracts only; contains no implementation logic |
+
+The dependency direction is inward: formatting policy does not depend on Telegram networking, and the subscriber depends on injected ports rather than concrete EventBus or trading implementations. The Telegram adapter is the only module that knows the Telegram HTTP protocol. The package never imports application, broker, entity, strategy, or concrete event-bus implementations.
+
+This is deliberately not a generic notification framework. Keep Telegram-specific behavior in src/telegram/. Add another provider only when a real consumer requires it, and introduce shared abstractions only after multiple implemented providers demonstrate the same stable contract.
+
+## Test-driven development
+
+Use the repository's mandatory RED → GREEN → REFACTOR cycle for every behavior change:
+
+1. Write a deterministic test for the observable contract before changing production code.
+2. Run it and confirm it fails for the expected behavioral reason.
+3. Make the smallest production change and rerun the focused test until it passes.
+4. Refactor only while tests remain green.
+5. Keep tests offline and credential-free; inject fetch, EventBus, notifier, and logger boundaries.
+6. Give every assertion a detailed failure message that describes the invariant and scenario.
+
+Architecture regression tests protect the dependency direction and keep composition, notification policy, and Telegram infrastructure separate. A passing test or coverage percentage alone is not proof of a meaningful contract; cover failure, boundary, concurrency, cleanup, and overload paths.
+
 ## Supported API
 
     import {
@@ -109,13 +138,13 @@ High-volume events such as order.execution_report are intentionally excluded. Th
 - **Transport isolation:** Telegram is an event-bus side effect. It must never control trading state, order placement, reconciliation, or strategy decisions.
 - **No secret leakage:** tokens are not included in thrown transport errors. Raw exchange events, stack traces, API keys, and arbitrary event fields are not formatted into messages.
 - **Bounded input:** event fields are normalized, control characters are removed, and each dynamic field is length-limited before formatting.
-- **Response validation:** HTTP response shape, Telegram's `ok` flag, and the returned `message_id` are validated. Array-shaped or otherwise malformed success responses are failures, not false positives.
+- **Response validation:** HTTP response shape, Telegram's ok flag, and the returned message_id are validated. Array-shaped or otherwise malformed success responses are failures, not false positives.
 - **Validation isolation:** configuration validation, message validation, and bounded credential-redacting error sanitization are pure functions in focused modules, independently testable without network access.
 - **Timeout:** requests use AbortSignal.timeout(); the default is 10 seconds. The timeout is configurable and validated.
 - **Serialized sends:** at most one Telegram HTTP request is in flight per subscriber. maxPending defaults to 1,000 and limits queued plus active deliveries. Overflow is reported and rejected/dropped according to the configured logger/event-bus error path; it does not create an unbounded local queue.
 - **Failure handling:** when a logger is supplied, delivery failures are reported once through that logger. Without one, the rejected handler promise is left for the event bus's error reporter. A logging failure does not poison the delivery queue.
 - **Diagnostics:** getDiagnostics() returns a frozen point-in-time snapshot with acceptedCount, deliveredCount, failedCount, overflowCount, pendingCount, and closed. Counters are process-local and cumulative for the subscriber lifetime. acceptedCount means admitted by this subscriber; deliveredCount means sendMessage() resolved successfully (Telegram API acceptance), not that a human read the message. Overflow is counted separately and is not included in acceptedCount.
-- **Cleanup:** partial subscription setup attempts to unsubscribe every successfully registered handler. close() is idempotent, attempts every unsubscribe, and drains already accepted sends. Callers should stop publishing and await eventBus.flush() before notifications.close(); callbacks that begin after close are ignored.
+- **Cleanup:** partial subscription setup attempts to unsubscribe every successfully registered handler. close() is idempotent, attempts every unsubscribe, and drains already accepted sends. Callers should stop publishing and await eventBus.flush(); then await notifications.close(). Callbacks that begin after close are ignored.
 - **No automatic retry:** a timed-out request may have been accepted by Telegram even when its response was lost. Retrying can duplicate a message. Retry/backoff should be added only with explicit duplicate and idempotency semantics.
 - **Best-effort delivery:** no durable outbox exists. A process crash can lose pending notifications. The event bus and this subscriber are in-memory.
 - **No formatting mode:** messages are plain text; HTML/Markdown parse modes are not enabled.
@@ -126,13 +155,13 @@ The subscriber's maxPending is an additional local admission limit. Consumers sh
 
 | Symptom | Likely cause | Action |
 | --- | --- | --- |
-| No notifications appear | Both Telegram variables are unset, or the bot cannot post to the chat | Verify `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`; confirm the bot has been started or added to the group with posting permission |
+| No notifications appear | Both Telegram variables are unset, or the bot cannot post to the chat | Verify TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID; confirm the bot has been started or added to the group with posting permission |
 | Setup fails immediately | Only one credential is configured, or a value is invalid | Configure both values together; keep credentials in the deployment secret manager |
 | Delivery failures are logged | Telegram rejected the request, the network failed, or the request timed out | Inspect the structured error and verify bot token, chat ID, network egress, and chat permissions; never paste the token into an issue or log |
-| Queue overflow is reported | Telegram is slower than the incoming event rate, or the process is under load | Inspect `getDiagnostics()`; tune `maxPending` only after measuring event rate and memory pressure |
-| Shutdown takes time | Accepted sends are being drained | Stop event publishers, await `eventBus.flush()`, then await `notifications.close()` |
+| Queue overflow is reported | Telegram is slower than the incoming event rate, or the process is under load | Inspect getDiagnostics(); tune maxPending only after measuring event rate and memory pressure |
+| Shutdown takes time | Accepted sends are being drained | Stop event publishers, await eventBus.flush(), then await notifications.close() |
 
-Rotate a potentially exposed bot token with BotFather and update the deployment secret. Do not print the token in shell history, CI output, diagnostics, or support logs. A successful `sendMessage` response confirms Telegram accepted the API request; it does not confirm that a user read the message.
+Rotate a potentially exposed bot token with BotFather and update the deployment secret. Do not print the token in shell history, CI output, diagnostics, or support logs. A successful sendMessage response confirms Telegram accepted the API request; it does not confirm that a user read the message.
 
 ## Development and verification
 
@@ -141,10 +170,9 @@ Rotate a potentially exposed bot token with BotFather and update the deployment 
 
 The coverage command enforces at least 90% line and 85% branch coverage across the package's production source files. Tests use Node's built-in test runner and injected transport boundaries; they require no credentials, external packages, or live network access.
 
-
 ## Manual live Telegram smoke test
 
-The default unit and coverage suites never contact Telegram. For an operator-controlled check of real credentials and chat permissions, run the explicit smoke-test command from a trusted environment where `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` have been injected by your approved secret manager:
+The default unit and coverage suites never contact Telegram. For an operator-controlled check of real credentials and chat permissions, run the explicit smoke-test command from a trusted environment where TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID have been injected by your approved secret manager:
 
     pnpm --filter @coinzilla/notifiers test:telegram-smoke
 
