@@ -88,3 +88,15 @@ Read/replay is available while the Journal instance is stopped (before `start()`
 ## Harvester startup account preflight records
 
 Harvester emits two durable lifecycle records on every connected startup, whether trading is enabled or not: `account.snapshot_captured` with `data.phase = "PREFLIGHT"` contains all balances with exact decimal free, locked, and total quantities plus exchange source time; `account.open_orders_captured` with the same phase contains account-wide open orders and their broker/client identifiers, symbol, side, type, price, original/executed quantities, and status. Open-order readiness is `READY` only for an empty result; otherwise it is `BLOCKED` with explicit reasons. Each event is followed by a successful `Journal.flush()` before Harvester proceeds to market subscriptions or engine activation. Existing orders remain externally owned; these records are observations, not adoption instructions.
+
+
+## Development and coverage
+
+Run the deterministic Journal tests and the package-scoped coverage gate from the repository root:
+
+```sh
+pnpm --filter @coinzilla/journal test
+pnpm --filter @coinzilla/journal test:coverage
+```
+
+The coverage command measures only Journal-owned implementation files under `src/` (including `src/helpers/`) and excludes test files and imported workspace dependencies. CI enforces a minimum of 85% line coverage and 80% branch coverage for the Journal package.
