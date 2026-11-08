@@ -557,6 +557,7 @@ export async function startHarvester({
   let userDataRecoveryGeneration = 0
   let lastAcknowledgedRecoveryGeneration = -1
   let userDataRecoveryTask = null
+  let safetyHaltBuyCancellationTask = null
   let userDataStartupComplete = false
   let pendingUserDataRecovery = false
   let stopped = false
@@ -569,6 +570,51 @@ export async function startHarvester({
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
   }
+  const cancelOwnedBuysAfterAccountingFailure = () => {
+    if (!tradingEngine || stopped) return Promise.resolve()
+    if (safetyHaltBuyCancellationTask) return safetyHaltBuyCancellationTask
+
+    const task = (async () => {
+      let reconciliation
+      try {
+        reconciliation = await tradingEngine.reconcileOwnedOrders()
+      } catch (error) {
+        logger.error?.({
+          message: "account-integrity safety halt could not reconcile owned orders before BUY cancellation",
+          error,
+        })
+      }
+      if (reconciliation?.ok !== true) {
+        logger.error?.({
+          message: "account-integrity safety halt could not fully reconcile owned orders before BUY cancellation",
+          result: reconciliation,
+        })
+      }
+
+      let cancellation
+      try {
+        cancellation = await tradingEngine.cancelOwnedBuyOrdersForSafetyHalt()
+      } catch (error) {
+        logger.error?.({
+          message: "account-integrity safety halt failed while canceling owned BUY orders",
+          error,
+        })
+        return
+      }
+      if (cancellation?.ok !== true) {
+        logger.error?.({
+          message: "account-integrity safety halt could not confirm every owned BUY cancellation",
+          result: cancellation,
+        })
+      }
+    })()
+
+    safetyHaltBuyCancellationTask = task.finally(() => {
+      safetyHaltBuyCancellationTask = null
+    })
+    return safetyHaltBuyCancellationTask
+  }
+
   const refreshAccountSnapshot = async () => {
     const result = await broker.getAccountSnapshot()
     if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
@@ -974,6 +1020,7 @@ export async function startHarvester({
           userDataReady = false
           userDataAccountingFailed = true
           userDataStatus = "INVALID_EVENT"
+          void cancelOwnedBuysAfterAccountingFailure()
           return
         }
         userDataEventSequence += 1
@@ -1089,6 +1136,7 @@ export async function startHarvester({
           }
           if (userDataAccountingFailed) {
             userDataReady = false
+            await cancelOwnedBuysAfterAccountingFailure()
             return
           }
           if (userDataRequiresReconciliation) {
@@ -1186,6 +1234,7 @@ export async function startHarvester({
         }
         if (status.type === "executionNormalizationFailed") {
           userDataAccountingFailed = true
+          userDataReady = false
           userDataStatus = "EXECUTION_NORMALIZATION_FAILED"
           logger.error?.({
             message: "Binance execution normalization failed",
@@ -1197,6 +1246,7 @@ export async function startHarvester({
             errorMessage: status.error?.message ?? String(status.error ?? "Unknown normalization error"),
             errorStack: status.error?.stack,
           })
+          void cancelOwnedBuysAfterAccountingFailure()
         }
         const connectionUnsafe = [
           "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
@@ -1252,6 +1302,7 @@ export async function startHarvester({
           userDataAccountingFailed = true
           userDataStatus = "STATUS_HANDLER_FAILED"
           logger.error?.({ message: "user-data status handler failed", error })
+          void cancelOwnedBuysAfterAccountingFailure()
         }
       },
       })

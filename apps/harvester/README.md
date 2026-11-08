@@ -269,6 +269,15 @@ through the Conservative trading engine so strategy decisions, market rules,
 balance checks, order ownership, and fill lifecycle cannot be bypassed by
 runtime callers. Ordinary execution reports do not close the global trading readiness gate; actual accounting failures and disconnect/recovery conditions still do. Strategy evaluations deferred by a genuine readiness gate are retained and resumed when the gate becomes ready, without requiring another market-price tick.
 
+When an unowned/invalid execution event or accounting failure closes the global
+user-data gate, Harvester first reconciles its own order identities and then
+attempts to cancel only its acknowledged OPEN/PARTIALLY_FILLED BUY orders.
+Each cancellation still requires a durable Journal intent and a broker-confirmed
+terminal state; fills racing with cancellation are reconciled from canonical
+history. Existing SELL orders are preserved, and external orders are never
+adopted or canceled. If reconciliation or cancellation is incomplete, the
+global gate remains closed and the CLOSING audit reports the unresolved state.
+
 Startup logging reports the actual mode:
 - **Conservative TESTNET trading enabled:** the engine is composed and waits
   for validated market prices and user-data readiness before acting.

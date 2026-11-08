@@ -1876,7 +1876,9 @@ export function makeConservativeTradingEngine({
     }
   }
 
-  const cancelOwnedBuyOrdersForShutdown = () => runTransition({
+  const cancelOwnedBuyOrders = ({ reason = "PROCESS_SHUTDOWN" } = {}) => {
+    const reasonPrefix = reason === "PROCESS_SHUTDOWN" ? "SHUTDOWN" : "ACCOUNT_INTEGRITY_HALT"
+    return runTransition({
     task: async () => {
       const activeBuyOrders = state.registry.getActiveOrders()
         .filter((order) =>
@@ -1891,7 +1893,7 @@ export function makeConservativeTradingEngine({
         const eligibility = await ensureCancellationEligible({
           symbol,
           order,
-          reason: "SHUTDOWN_BUY_CANCELLATION_INELIGIBLE",
+          reason: reasonPrefix + "_BUY_CANCELLATION_INELIGIBLE",
         })
         if (!eligibility.ok) {
           errors.push(...eligibility.errors)
@@ -1902,12 +1904,12 @@ export function makeConservativeTradingEngine({
           eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLATION_REQUESTED,
           dataResult: mapOrderCancellationRequestedData({
             order,
-            reason: "PROCESS_SHUTDOWN",
+            reason,
           }),
         })
         if (!cancelIntent.ok) {
-          const error = cancelIntent.errors?.[0] ?? new Error("Shutdown BUY cancellation intent was not durably journaled")
-          await pause({ symbol, reason: "SHUTDOWN_BUY_CANCEL_INTENT_NOT_DURABLE", error })
+          const error = cancelIntent.errors?.[0] ?? new Error("BUY cancellation intent was not durably journaled during " + reasonPrefix)
+          await pause({ symbol, reason: reasonPrefix + "_BUY_CANCEL_INTENT_NOT_DURABLE", error })
           errors.push(error)
           continue
         }
@@ -1919,7 +1921,7 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -1927,11 +1929,11 @@ export function makeConservativeTradingEngine({
         }
 
         if (!cancelResult?.ok || !(cancelResult.data instanceof CanonicalOrder)) {
-          const error = cancelResult?.errors?.[0] ?? new Error("Broker did not confirm a canonical shutdown BUY cancellation")
+          const error = cancelResult?.errors?.[0] ?? new Error("Broker did not confirm a canonical BUY cancellation during " + reasonPrefix)
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -1945,11 +1947,11 @@ export function makeConservativeTradingEngine({
           cancellation.market.id !== order.market.id ||
           cancellation.side !== "BUY"
         ) {
-          const error = new Error("Shutdown cancellation response does not match the owned BUY order")
+          const error = new Error("BUY cancellation response does not match the owned order during " + reasonPrefix)
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_IDENTITY_MISMATCH",
+            reason: reasonPrefix + "_BUY_CANCELLATION_IDENTITY_MISMATCH",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -1957,11 +1959,11 @@ export function makeConservativeTradingEngine({
         }
 
         if (!["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(cancellation.status)) {
-          const error = new Error("Shutdown BUY cancellation did not return a terminal order state")
+          const error = new Error("BUY cancellation did not return a terminal order state during " + reasonPrefix)
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -1975,18 +1977,18 @@ export function makeConservativeTradingEngine({
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_RECONCILIATION_FAILED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_RECONCILIATION_FAILED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
           continue
         }
         if (update.unknown) {
-          const error = new Error("Shutdown cancellation response is not registered as a Harvester-owned order")
+          const error = new Error("BUY cancellation response is not registered as a Harvester-owned order")
           const failed = await markCancellationUnknown({
             symbol,
             order,
-            reason: "SHUTDOWN_BUY_CANCELLATION_NOT_REGISTERED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_NOT_REGISTERED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -1995,11 +1997,11 @@ export function makeConservativeTradingEngine({
         state.registry = update.registry
         let reconciledOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId })
         if (update.stale && !["CANCELED", "FILLED", "REJECTED", "EXPIRED"].includes(reconciledOrder.status)) {
-          const error = new Error("Shutdown BUY cancellation response is stale and the owned order remains open")
+          const error = new Error("BUY cancellation response is stale and the owned order remains open")
           const failed = await markCancellationUnknown({
             symbol,
             order: reconciledOrder,
-            reason: "SHUTDOWN_BUY_CANCELLATION_UNCONFIRMED",
+            reason: reasonPrefix + "_BUY_CANCELLATION_UNCONFIRMED",
             error,
           })
           errors.push(...(failed.errors ?? [error]))
@@ -2016,8 +2018,8 @@ export function makeConservativeTradingEngine({
           fillsResult = toResult({ error })
         }
         if (!fillsResult?.ok || !Array.isArray(fillsResult.data)) {
-          const error = fillsResult?.errors?.[0] ?? new Error("Unable to reconcile shutdown BUY execution history")
-          await pause({ symbol, reason: "SHUTDOWN_BUY_FILL_RECONCILIATION_FAILED", error })
+          const error = fillsResult?.errors?.[0] ?? new Error("Unable to reconcile BUY execution history during " + reasonPrefix)
+          await pause({ symbol, reason: reasonPrefix + "_BUY_FILL_RECONCILIATION_FAILED", error })
           errors.push(error)
           continue
         }
@@ -2030,18 +2032,18 @@ export function makeConservativeTradingEngine({
               fill.side !== "BUY" ||
               fill.brokerOrderId !== order.brokerOrderId ||
               (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId)) {
-            invalidFill = new Error("Shutdown BUY execution history contains a fill for a different order")
+            invalidFill = new Error("BUY execution history contains a fill for a different order during " + reasonPrefix)
             break
           }
           const previous = fillsById.get(fill.id)
           if (previous && JSON.stringify(previous.value) !== JSON.stringify(fill.value)) {
-            invalidFill = new Error("Shutdown BUY execution history contains conflicting duplicate fill facts")
+            invalidFill = new Error("BUY execution history contains conflicting duplicate fill facts during " + reasonPrefix)
             break
           }
           if (!previous) fillsById.set(fill.id, fill)
         }
         if (invalidFill) {
-          await pause({ symbol, reason: "SHUTDOWN_BUY_FILL_IDENTITY_MISMATCH", error: invalidFill })
+          await pause({ symbol, reason: reasonPrefix + "_BUY_FILL_IDENTITY_MISMATCH", error: invalidFill })
           errors.push(invalidFill)
           continue
         }
@@ -2059,8 +2061,8 @@ export function makeConservativeTradingEngine({
           left: reconciledQuantity,
           right: reconciledOrder.executedQuantity.amount,
         }) !== 0) {
-          const error = new Error("Shutdown BUY execution history does not match the terminal order executed quantity")
-          await pause({ symbol, reason: "SHUTDOWN_BUY_EXECUTED_QUANTITY_MISMATCH", error })
+          const error = new Error("BUY execution history does not match the terminal order executed quantity during " + reasonPrefix)
+          await pause({ symbol, reason: reasonPrefix + "_BUY_EXECUTED_QUANTITY_MISMATCH", error })
           errors.push(error)
           continue
         }
@@ -2072,7 +2074,7 @@ export function makeConservativeTradingEngine({
             fill,
           })
           if (!processed.ok) {
-            errors.push(...(processed.errors ?? [new Error("Shutdown BUY fill accounting failed")]))
+            errors.push(...(processed.errors ?? [new Error("BUY fill accounting failed during " + reasonPrefix)]))
             fillFailed = true
             break
           }
@@ -2086,7 +2088,7 @@ export function makeConservativeTradingEngine({
         } else {
           publishOrderCancelFailed({
             order: reconciledOrder,
-            outcome: reconciledOrder.status + "_DURING_SHUTDOWN",
+            outcome: reconciledOrder.status + "_DURING_" + reasonPrefix,
             error: new Error("The BUY order reached " + reconciledOrder.status + " before shutdown cancellation completed"),
           })
         }
@@ -2095,7 +2097,11 @@ export function makeConservativeTradingEngine({
       if (errors.length > 0) return toResult({ errors })
       return toResult({ data: { canceled, reconciled } })
     },
-  })
+    })
+  }
+
+  const cancelOwnedBuyOrdersForShutdown = () => cancelOwnedBuyOrders()
+  const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
 
   const reconcileOwnedOrders = async ({ beforeApply, recoveryMode = false } = {}) => {
     const initialOrdersResult = await runTransition({
@@ -2207,6 +2213,7 @@ export function makeConservativeTradingEngine({
     processUserDataEvent,
     reconcileOwnedOrders,
     cancelOwnedBuyOrdersForShutdown,
+    cancelOwnedBuyOrdersForSafetyHalt,
     evaluateLatest,
     resumeDeferredEvaluations,
     getOrders: () => state.registry.orders,
