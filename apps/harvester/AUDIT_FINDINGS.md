@@ -571,8 +571,9 @@ Current source and regression inventory:
 - **Verdict:** CONFIRMED test-coverage gap; no accepted-invalid-data defect confirmed.
 - **Existing source guards:** account snapshots validate canonical Balance records, safe source time, unique assets, non-negative quantities, and required configured market assets. Owned-order reconciliation validates open-order arrays/records, exactly one canonical order-history record per owned order, fill arrays/records, pagination bounds, duplicate fill facts, and cumulative fill/history/stream consistency.
 - **Existing regressions:** missing configured account asset, duplicate/negative/invalid account snapshot values, stale account snapshots, incomplete cumulative fill history, conflicting fill IDs, stale REST history, missing Journal fills, and overlapping stream/REST delivery.
-- **Missing direct envelope injections:** non-array or malformed `getOpenOrders()` data; zero/multiple/non-`CanonicalOrder` `getCanonicalOrderHistory()` entries; non-array, non-`Fill`, or oversized `getFills()` pages.
-- **Disposition:** TESTS NEEDED, PRODUCTION CHANGE NOT JUSTIFIED by current evidence. Preserve existing fail-closed guards and add focused offline regressions before changing the source.
+- **Direct envelope injections added:** eight focused regressions in `src/use-cases/conservative-trading-engine.test.js` cover non-array and malformed `getOpenOrders()`; zero, multiple, and non-`CanonicalOrder` `getCanonicalOrderHistory()`; and non-array, non-`Fill`, and oversized `getFills()` pages.
+- **Expected failure behavior asserted:** each malformed envelope fails owned-order reconciliation, leaves the market paused and order UNKNOWN, applies no fills, and issues no cancel/replace or new order.
+- **Disposition:** Eight regression tests pass on PR #708 exact head `76afa74a6637ddebe9ed8bd3efcdc02bdb5bead5` (Harvester package suite 753/753; all six required offline CI contexts passed). The Harvester coverage job passed, but its package threshold-enforcement step is skipped/not configured. PR merge is pending. PRODUCTION CHANGE NOT JUSTIFIED by current evidence.
 
 ## F-018 — Journal sync failure can produce at-least-once recovery audit records
 

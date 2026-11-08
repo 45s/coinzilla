@@ -5158,3 +5158,255 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
   assert.equal(reconciledOrder.status, "PARTIALLY_FILLED")
   assert.equal(reconciledOrder.executedQuantity.amount, "0.2")
 })
+
+
+async function createMalformedRestEnvelopeFixture({
+  openOrdersResult = { ok: true, data: [] },
+  canonicalOrderHistoryResult,
+  fillsResult = { ok: true, data: [] },
+} = {}) {
+  const makeCanonicalOrder = ({ status }) => new CanonicalOrder({
+    clientOrderId: "malformed-rest-envelope-owned-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const ownedOrder = makeCanonicalOrder({ status: "UNKNOWN" })
+  const canonicalHistoryOrder = makeCanonicalOrder({ status: "CANCELED" })
+  const brokerReadCounts = {
+    openOrders: 0,
+    canonicalOrderHistory: 0,
+    fills: 0,
+  }
+  const harness = await createHarness({
+    initialBook: false,
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [ownedOrder] }),
+    },
+  })
+
+  harness.broker.getOpenOrders = async () => {
+    brokerReadCounts.openOrders += 1
+    return openOrdersResult
+  }
+  harness.broker.getCanonicalOrderHistory = async () => {
+    brokerReadCounts.canonicalOrderHistory += 1
+    return canonicalOrderHistoryResult === undefined
+      ? { ok: true, data: [canonicalHistoryOrder] }
+      : canonicalOrderHistoryResult
+  }
+  harness.broker.getFills = async () => {
+    brokerReadCounts.fills += 1
+    return fillsResult
+  }
+
+  return { harness, ownedOrder, brokerReadCounts }
+}
+
+function assertMalformedRestEnvelopeFailsClosed({
+  fixture,
+  result,
+  scenario,
+  expectedError,
+  expectedCanonicalOrderHistoryReads,
+  expectedFillHistoryReads,
+}) {
+  const { harness, ownedOrder, brokerReadCounts } = fixture
+  assert.equal(
+    result.ok,
+    false,
+    scenario + ": malformed broker REST data must fail owned-order reconciliation rather than being accepted.",
+  )
+  assert.match(
+    result.errors?.[0]?.message ?? "",
+    expectedError,
+    scenario + ": the failure must identify the malformed REST snapshot stage.",
+  )
+  assert.deepEqual(
+    harness.accountedFills,
+    [],
+    scenario + ": no execution may be applied before every owned-order REST envelope is validated.",
+  )
+  assert.deepEqual(
+    harness.engine.getPausedMarkets(),
+    ["DOGEUSDT"],
+    scenario + ": the affected market must remain paused after malformed authoritative REST data.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).status,
+    "UNKNOWN",
+    scenario + ": malformed REST data must not advance the registered owned order from UNKNOWN.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).executedQuantity.amount,
+    "0",
+    scenario + ": malformed REST data must not apply a partial or inferred executed quantity.",
+  )
+  assert.deepEqual(
+    harness.cancellationIds,
+    [],
+    scenario + ": reconciliation failure must not issue an exchange cancellation.",
+  )
+  assert.deepEqual(
+    harness.orders,
+    [],
+    scenario + ": reconciliation failure must not submit a replacement or any other exchange order.",
+  )
+  assert.equal(
+    brokerReadCounts.openOrders,
+    1,
+    scenario + ": reconciliation must make exactly one account-symbol open-order read.",
+  )
+  assert.equal(
+    brokerReadCounts.canonicalOrderHistory,
+    expectedCanonicalOrderHistoryReads,
+    scenario + ": canonical order history must be read only after open-order envelope validation.",
+  )
+  assert.equal(
+    brokerReadCounts.fills,
+    expectedFillHistoryReads,
+    scenario + ": fill history must be read only after canonical order history validation.",
+  )
+}
+
+test("fails closed when owned-order open-orders REST data is not an array", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    openOrdersResult: { ok: true, data: { orders: [] } },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a non-array open-orders response",
+    expectedError: /Open-order snapshot is incomplete or contains invalid Order records/,
+    expectedCanonicalOrderHistoryReads: 0,
+    expectedFillHistoryReads: 0,
+  })
+})
+
+test("fails closed when owned-order open-orders REST data contains a non-Order record", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    openOrdersResult: { ok: true, data: [{ id: "forged-order", status: "NEW" }] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "an open-orders array containing a plain object instead of an Order entity",
+    expectedError: /Open-order snapshot is incomplete or contains invalid Order records/,
+    expectedCanonicalOrderHistoryReads: 0,
+    expectedFillHistoryReads: 0,
+  })
+})
+
+test("fails closed when owned-order canonical REST history contains no order", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: true, data: [] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "an empty canonical order-history response",
+    expectedError: /Canonical order history is incomplete/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 0,
+  })
+})
+
+test("fails closed when owned-order canonical REST history contains multiple orders", async () => {
+  const makeHistoryOrder = () => new CanonicalOrder({
+    clientOrderId: "malformed-rest-envelope-owned-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "CANCELED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: true, data: [makeHistoryOrder(), makeHistoryOrder()] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a canonical order-history response containing multiple orders for one broker order ID",
+    expectedError: /Canonical order history is incomplete/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 0,
+  })
+})
+
+test("fails closed when owned-order canonical REST history contains a non-CanonicalOrder record", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: true, data: [{ brokerOrderId: "broker-malformed-rest-envelope-owned-order" }] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a canonical order-history response containing a plain object instead of a CanonicalOrder entity",
+    expectedError: /Canonical order history is incomplete/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 0,
+  })
+})
+
+test("fails closed when owned-order REST fill history is not an array", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    fillsResult: { ok: true, data: { fills: [] } },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a non-array REST fill-history response",
+    expectedError: /REST fill history is incomplete or invalid/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 1,
+  })
+})
+
+test("fails closed when owned-order REST fill history contains a non-Fill record", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    fillsResult: { ok: true, data: [{ tradeId: "forged-fill" }] },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a REST fill-history array containing a plain object instead of a Fill entity",
+    expectedError: /REST fill history is incomplete or invalid/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 1,
+  })
+})
+
+test("fails closed when owned-order REST fill history exceeds the supported page size", async () => {
+  const fixture = await createMalformedRestEnvelopeFixture({
+    fillsResult: { ok: true, data: Array.from({ length: 1001 }, () => ({})) },
+  })
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+  assertMalformedRestEnvelopeFailsClosed({
+    fixture,
+    result,
+    scenario: "a REST fill-history page containing more than the supported 1000 records",
+    expectedError: /REST fill history is incomplete or invalid/,
+    expectedCanonicalOrderHistoryReads: 1,
+    expectedFillHistoryReads: 1,
+  })
+})
