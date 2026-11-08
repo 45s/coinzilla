@@ -62,9 +62,9 @@ The repository owner approved the compatibility-preserving per-subscriber acknow
 - [x] Return `{ accepted: true, completed: false }` when this active subscriber's acknowledgement is recorded but another active subscriber remains pending.
 - [x] Return `{ accepted: true, completed: true }` when this call completes shared recovery.
 - [x] Reject inactive/stale handles explicitly; reject calls when no recovery is pending without changing subscriber state.
-- [x] Broker-side recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked until all active subscribers acknowledge. Harvester's consumer failure behavior is being completed in PR #735.
+- [x] Broker-side recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked until all active subscribers acknowledge. Harvester's consumer failure behavior is completed in PR #735; rejected acknowledgements remain fail-closed.
 - [x] Preserve exactly one terminal `reconciled` status per recovery generation for each still-active subscriber; removed subscribers receive none (PR #729).
-- [ ] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status. In progress in [PR #735](https://github.com/45s/coinzilla/pull/735).
+- [x] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status. Completed in [PR #735](https://github.com/45s/coinzilla/pull/735); Harvester readiness is matched to recovery generation and active subscription ID.
 
 **DDD/TDD execution:** the Brokers Application user-data session owns the subscription-handle use case and result contract; the Domain recovery policy remains authoritative for the all-active-subscriber completion invariant; Infrastructure/ Binance adapters remain unchanged. Add deterministic application-session tests first (RED), implement the smallest additive application change (GREEN), then update README and consumer tests. Preserve the existing Broker API for current consumers. No TESTNET/live exchange action is required.
 
