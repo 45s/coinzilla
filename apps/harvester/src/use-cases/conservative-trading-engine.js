@@ -1616,6 +1616,7 @@ export function makeConservativeTradingEngine({
         state.completedRecoverySellSymbols.delete(symbol)
         state.trailingBuy.set(symbol, true)
       }
+      if (recoveryMode) state.deferredEvaluations.add(symbol)
       return toResult({ data: { order, reevaluate: true } })
     } catch (error) {
       return toResult({ error })
