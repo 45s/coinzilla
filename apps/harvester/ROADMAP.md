@@ -12,6 +12,12 @@ This section is the current operational status and supersedes older statements b
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
+### Portfolio stats and user-data lifecycle observability — 2026-11-08
+
+- [~] Emit a compact Portfolio Stats snapshot only after a newly applied BUY/SELL fill changes inventory quantity. Include active, retained, and total base quantity plus exact quote-currency cost/recovery accounting. Do not mix exchange account balances into the in-memory Portfolio snapshot or refresh account balances after every fill.
+- [~] Replace generic repeated user-data status logs with concise, deduplicated connected/disconnected/reconnecting/reconnected/subscription-restored/error transitions. Preserve actual broker error context and do not infer authentication expiry from an unspecified transport error.
+- [ ] Add deterministic offline regressions for partial BUY/SELL fills, duplicate fills, and repeated lifecycle status notifications; preserve existing readiness/recovery behavior.
+
 ### Recovery contract work
 
 - [x] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08; broker API and Harvester consumer integration are complete in PRs #732 and #735:
