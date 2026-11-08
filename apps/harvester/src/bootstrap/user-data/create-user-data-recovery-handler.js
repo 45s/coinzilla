@@ -38,10 +38,20 @@ export function createUserDataRecoveryHandler({
       typeof userDataSubscription?.acknowledgeRecoveryResult !== "function" &&
       typeof userDataSubscription?.acknowledgeRecovery !== "function"
     ) {
-    logger.error?.({
-      message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
-    })
-    return
+      logger.error?.({
+        message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
+      })
+      return
+    }
+    const brokerRecoveryGeneration = state.recoveryBrokerGeneration
+    if (
+      typeof userDataSubscription.acknowledgeRecoveryResult === "function" &&
+      !Number.isSafeInteger(brokerRecoveryGeneration)
+    ) {
+      logger.error?.({
+        message: "cannot acknowledge user-data recovery; broker recovery generation is unavailable",
+      })
+      return
     }
 
     state.pendingRecovery = false
@@ -123,7 +133,7 @@ export function createUserDataRecoveryHandler({
         state.lastAcknowledgedRecoveryGeneration = generation
         let acknowledgement
         try {
-          acknowledgement = userDataSubscription.acknowledgeRecoveryResult()
+          acknowledgement = userDataSubscription.acknowledgeRecoveryResult(brokerRecoveryGeneration)
         } catch (error) {
           state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
           throw error

@@ -13,6 +13,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     accountingFailed: false,
     status: "READY",
     recoveryGeneration: 0,
+    recoveryBrokerGeneration: null,
     lastAcknowledgedRecoveryGeneration: -1,
     lastReportedRecoveredGeneration: -1,
     startupComplete: true,
@@ -44,11 +45,15 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   }
 
   const subscription = {
-    acknowledgeRecoveryResult: () => {
-      acknowledgements.push(state.recoveryGeneration)
+    acknowledgeRecoveryResult: (brokerRecoveryGeneration) => {
+      acknowledgements.push({
+        applicationGeneration: state.recoveryGeneration,
+        brokerGeneration: brokerRecoveryGeneration,
+      })
       statusHandler({
         type: "reconciled",
         subscriptionId: 42,
+        recoveryGeneration: brokerRecoveryGeneration,
         recoveryRequired: false,
         reconciliationRequired: false,
       })
@@ -104,7 +109,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   })
 
   statusHandler({ type: "connectionClosed", recoveryRequired: true })
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryRequired: true })
+  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 100, recoveryRequired: true })
   const staleTask = state.recoveryTask
 
   assert.equal(
@@ -123,7 +128,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   )
 
   statusHandler({ type: "connectionClosed", recoveryRequired: true })
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryRequired: true })
+  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 101, recoveryRequired: true })
 
   assert.equal(
     state.recoveryGeneration,
@@ -180,7 +185,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     "The stale recovery task must leave an actionable generation-superseded diagnostic.",
   )
 
-  statusHandler({ type: "recovered", subscriptionId: 42, recoveryRequired: true })
+  statusHandler({ type: "recovered", subscriptionId: 42, recoveryGeneration: 101, recoveryRequired: true })
   const currentTask = state.recoveryTask
   await currentTask
 
@@ -201,8 +206,8 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   )
   assert.deepEqual(
     acknowledgements,
-    [2],
-    "Only the latest recovery generation may be acknowledged after both audits succeed.",
+    [{ applicationGeneration: 2, brokerGeneration: 101 }],
+    "Only the latest application and broker recovery generations may be acknowledged after both audits succeed.",
   )
   assert.deepEqual(
     ownershipReconciliations,

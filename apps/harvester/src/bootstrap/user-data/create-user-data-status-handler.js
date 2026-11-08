@@ -126,6 +126,8 @@ export function createUserDataStatusHandler({
         status.subscriptionId !== undefined &&
         status.subscriptionId !== null &&
         status.subscriptionId === state.recoverySubscriptionId &&
+        status.recoveryGeneration === state.recoveryBrokerGeneration &&
+        Number.isSafeInteger(state.recoveryBrokerGeneration) &&
         state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
         !state.accountingFailed
       ) {
@@ -141,9 +143,13 @@ export function createUserDataStatusHandler({
     if (recoveryInvalidated) {
       state.recoveryGeneration += 1
       state.recoverySubscriptionId = null
+      state.recoveryBrokerGeneration = null
     }
-    if (status.type === "recovered" && status.subscriptionId !== undefined && status.subscriptionId !== null) {
-      state.recoverySubscriptionId = status.subscriptionId
+    if (status.type === "recovered") {
+      state.recoverySubscriptionId = status.subscriptionId ?? null
+      state.recoveryBrokerGeneration = Number.isSafeInteger(status.recoveryGeneration)
+        ? status.recoveryGeneration
+        : null
     }
     if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
       state.streamUnsafe = true
