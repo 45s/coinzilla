@@ -912,12 +912,13 @@ test("keeps one recovery generation single-flight across 254 reminders while dra
       timestamp: 1000,
     })
 
-    const acknowledgedBuyOrder = await waitForTestSignal(
+    await waitForTestSignal(
       orderAcknowledged,
       "initial owned BUY acknowledgement",
       () => ({ submittedOrders: submittedOrders.length, userDataReady: runtime.userDataReady }),
       2_000,
     )
+    const acknowledgedBuyOrder = await orderAcknowledged
     await broker.emitUserDataEvent({
       eventType: "executionReport",
       executionType: "NEW",
