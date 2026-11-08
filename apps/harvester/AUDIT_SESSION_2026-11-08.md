@@ -582,8 +582,8 @@ This addendum is the current tracker view. Sections 12–13 and 27 preserve the 
 
 ### Current cross-domain integration
 
-- **[PR #735](https://github.com/45s/coinzilla/pull/735) — OPEN:** Harvester consumes acknowledgeRecoveryResult() without treating accepted/pending as rejection. It records local acceptance but keeps the application readiness gate closed until a global reconciled status matches both the current recovery generation and active subscription ID. It does not modify start-harvester.js. Test-first RED was confirmed; the synchronized final-head CI was running when this addendum was prepared.
-- **Issue #702:** remains open until PR #735 merges; the Broker API decision is no longer blocked.
+- **[PR #735](https://github.com/45s/coinzilla/pull/735) — MERGED:** Harvester consumes acknowledgeRecoveryResult() without treating accepted/pending as rejection. It records local acceptance but keeps the application readiness gate closed until a global reconciled status matches both the current recovery generation and active subscription ID. It does not modify start-harvester.js. Test-first RED was confirmed; the synchronized exact head passed all six required offline CI workflows.
+- **Issue #702:** closed after PRs #732 and #735 merged; the Broker API and Harvester consumer contract are complete.
 - **Issue #626:** remains open for final recovery closeout and TESTNET acceptance disposition. Offline deterministic engineering continues independently of TESTNET.
 - **Issue #654:** process-restart reconciliation remains explicitly deferred; no Journal replay/restart behavior is claimed.
 
@@ -598,4 +598,4 @@ The hosted Spot API runner returned HTTP 451 for regional eligibility. This is d
 - [#667](https://github.com/45s/coinzilla/issues/667) closed after incident source fixes and regressions merged.
 - [#680](https://github.com/45s/coinzilla/issues/680) closed as investigated/documented; stronger established-socket correlation depends on future Node/Undici observability.
 
-**Current work selection:** finish PR #735 on exact synchronized-head CI, then close #702 and continue #626's offline acceptance traceability. Keep TESTNET PAUSED/UNVERIFIED and #654 deferred. No live process or exchange action is authorized by this audit update.
+**Current work selection:** #702 is complete. Continue #626's offline acceptance traceability while TESTNET remains PAUSED/UNVERIFIED; keep #654 deferred. No live process or exchange action is authorized by this audit update.
