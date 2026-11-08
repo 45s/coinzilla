@@ -1,3 +1,6 @@
+import { randomBytes, createHash } from "node:crypto"
+import { request as httpsRequest } from "node:https"
+
 import { BINANCE_WEBSOCKET_ENDPOINTS } from "../constants/websocket-endpoints.js"
 import { assertNativeWebSocketRuntime } from "../utils/runtime.js"
 
@@ -24,45 +27,90 @@ function httpStatus(...sources) {
   return null
 }
 
-async function probeHttpReachability(name, websocketUrl) {
-  const endpoint = new URL(websocketUrl)
-  endpoint.protocol = "https:"
-  endpoint.search = ""
-  endpoint.hash = ""
+function probeHttpReachability(name, websocketUrl) {
+  return new Promise((resolve) => {
+    const endpoint = new URL(websocketUrl)
+    endpoint.protocol = "https:"
+    endpoint.search = ""
+    endpoint.hash = ""
+    const key = randomBytes(16).toString("base64")
+    let settled = false
 
-  try {
-    const response = await fetch(endpoint, {
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+
+    const request = httpsRequest(endpoint, {
       method: "GET",
-      redirect: "manual",
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(5_000),
+      headers: {
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Key": key,
+        "Sec-WebSocket-Version": "13",
+      },
+    }, (response) => {
+      const chunks = []
+      let size = 0
+      response.on("data", (chunk) => {
+        if (size >= 512) return
+        const remaining = 512 - size
+        const bounded = chunk.subarray(0, remaining)
+        chunks.push(bounded)
+        size += bounded.length
+      })
+      response.on("end", () => {
+        const blockedByLink = response.headers.link?.match(/<([^>]+)>\\s*;\\s*rel=["']?blocked-by["']?/i)?.[1]
+        let blockedByHost = null
+        if (blockedByLink) {
+          try {
+            blockedByHost = new URL(blockedByLink).host
+          } catch {
+            blockedByHost = null
+          }
+        }
+        finish({
+          endpoint: name,
+          reachable: true,
+          httpUpgradeStatus: response.statusCode ?? null,
+          upgraded: false,
+          responseMessage: safeText(Buffer.concat(chunks).toString("utf8")),
+          blockedByHost,
+        })
+      })
     })
-    const responseText = (await response.text()).slice(0, 512)
-    const blockedByLink = response.headers.get("link")?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
-    let blockedByHost = null
-    if (blockedByLink) {
-      try {
-        blockedByHost = new URL(blockedByLink).host
-      } catch {
-        blockedByHost = null
-      }
-    }
-    return {
-      endpoint: name,
-      reachable: true,
-      httpStatus: response.status,
-      responseMessage: safeText(responseText),
-      blockedByHost,
-    }
-  } catch (error) {
-    return {
+
+    request.on("upgrade", (response, socket) => {
+      const expectedAccept = createHash("sha1")
+        .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+        .digest("base64")
+      finish({
+        endpoint: name,
+        reachable: true,
+        httpUpgradeStatus: response.statusCode ?? null,
+        upgraded: true,
+        acceptHeaderValid: response.headers["sec-websocket-accept"] === expectedAccept,
+        responseMessage: null,
+        blockedByHost: null,
+      })
+      socket.destroy()
+    })
+
+    request.on("error", (error) => finish({
       endpoint: name,
       reachable: false,
-      httpStatus: null,
+      httpUpgradeStatus: null,
+      upgraded: false,
       errorName: typeof error?.name === "string" ? error.name : "Error",
       errorMessage: safeText(error?.message),
-    }
-  }
+    }))
+
+    request.setTimeout(5_000, () => {
+      request.destroy(new Error("TESTNET HTTP upgrade probe timed out"))
+    })
+    request.end()
+  })
 }
 
 function probeEndpoint(name, url) {
@@ -165,11 +213,11 @@ const report = {
   },
   authenticated: false,
   orderRequestsSent: false,
-  httpsReachability: [],
+  httpUpgradeProbes: [],
   endpoints: [],
 }
 
-report.httpsReachability = await Promise.all(
+report.httpUpgradeProbes = await Promise.all(
   TARGETS.map(([name, url]) => probeHttpReachability(name, url)),
 )
 
@@ -190,5 +238,7 @@ if (report.runtime.guard === "passed") {
   if (report.endpoints.some((endpoint) => !endpoint.opened)) process.exitCode = 1
 }
 
-if (report.httpsReachability.some((endpoint) => !endpoint.reachable)) process.exitCode = 1
+if (report.httpUpgradeProbes.some((endpoint) =>
+  !endpoint.reachable || !endpoint.upgraded || endpoint.acceptHeaderValid === false
+)) process.exitCode = 1
 console.log(JSON.stringify(report, null, 2))
