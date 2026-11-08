@@ -1502,6 +1502,13 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     },
   })
   assert.equal(runtime.userDataReady, true)
+  const readinessTransitions = [runtime.userDataReady]
+  const recordReadinessTransition = () => {
+    const ready = runtime.userDataReady
+    if (readinessTransitions[readinessTransitions.length - 1] !== ready) {
+      readinessTransitions.push(ready)
+    }
+  }
   assert.equal(submittedOrders.length, 0, "the initial ticker snapshot must wait for a book ticker")
   await bookSubscriptions.get("BTCUSDT")({
     symbol: "BTCUSDT", bestBidPrice: "60000", bestBidQuantity: "1",
@@ -1577,6 +1584,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     recoveryRequired: true,
     reconciliationRequired: true,
   })
+  recordReadinessTransition()
   await waitForTestSignal(
     recoveryHistoryStarted,
     "owned BUY canonical history read during application recovery",
@@ -1596,6 +1604,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
       recoveryRequired: true,
       reconciliationRequired: true,
     })
+    recordReadinessTransition()
   }
 
   assert.equal(
@@ -1647,6 +1656,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     }),
     5_000,
   )
+  recordReadinessTransition()
   await waitForTestSignal(
     recoveryQueuedFillProcessed,
     "queued BUY fill drained during application recovery",
@@ -1760,6 +1770,11 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     runtime.userDataReady,
     true,
     "Trading readiness may reopen only after queued events, canonical reconciliation, durable audits, and broker acknowledgement complete.",
+  )
+  assert.deepEqual(
+    readinessTransitions,
+    [true, false, true],
+    "Readiness must close once for this recovery generation and reopen exactly once after successful global completion.",
   )
 
   await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
