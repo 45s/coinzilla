@@ -149,14 +149,14 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. Slices 1–4 are merged via PRs #596, #599, #602, and #603. Slice 5 moves the Binance implementation of the user-data client port into an explicit infrastructure module.
+**Status:** in progress. Slices 1–5 are merged via PRs #596, #599, #602, #603, and #605. The user-data recovery vertical slice now has a pure domain policy, application coordinator, application-facing client port, and Binance infrastructure adapter.
 
 **Progress**
 - [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged via PR #596. Six pure domain tests; package tests and domain coverage gate passed.
 - [x] Slice 2 — normalize user-data client-port subscription results; merged via PR #599. The adapter unwraps Binance RPC envelopes; the session consumes IDs and ID arrays only. 399/399 broker tests and coverage passed.
 - [x] Slice 3 — normalize Binance user-data events and termination notifications in the adapter; the session retains only generic bounded identity state. Merged via PR #602; 400/400 broker tests and coverage passed.
 - [x] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and define `src/ports/user-data-client-port.js`; runtime port validation and application/port coverage merged via PR #603. 405/405 broker tests and coverage passed.
-- [~] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate its tests, and include infrastructure modules in the package coverage gate. TDD and implementation are in progress.
+- [x] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate deterministic adapter tests, and include infrastructure modules in the package coverage gate; merged via PR #605 on 2026-11-05 (merge commit `675b4c693abceecfd26a6401a7430f148c0ca1cc`).
 
 ---
 
@@ -166,11 +166,11 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 
 | File | Current technical justification | Scoped follow-up plan |
 |---|---|---|
-| `broker.js` (613 lines) | Public facade coordinates the exchange RPC/Streams clients and preserves result/callback contracts. Pure mappings for symbol filters, canonical fills, order history, and order parameters are already extracted. | Keep simple RPC methods cohesive in the facade. `getAccountSnapshot` was inspected: balance normalization already delegates to shared `adaptSpotBalance`, while the only local transformation is a single safe-integer `updateTime` guard with no second caller. A separate one-function adapter would add indirection without improving testability, so this extraction is deliberately not needed. Revisit only if multiple account operations acquire a shared, independently testable mapping. Do not create one wrapper per RPC. |
+| `broker.js` (782 lines) | Public facade coordinates the exchange RPC/Streams clients and preserves result/callback contracts. Pure mappings for symbol filters, canonical fills, order history, and order parameters are already extracted. | Keep simple RPC methods cohesive in the facade. `getAccountSnapshot` was inspected: balance normalization already delegates to shared `adaptSpotBalance`, while the only local transformation is a single safe-integer `updateTime` guard with no second caller. A separate one-function adapter would add indirection without improving testability, so this extraction is deliberately not needed. Revisit only if multiple account operations acquire a shared, independently testable mapping. Do not create one wrapper per RPC. |
 | `src/application/user-data-session.js` | The application coordinator owns subscriber state, reconnect/ack timers, remote subscription identity, and listener cleanup through the injected `UserDataClientPort`. Keep its state machine cohesive; split only when a distinct use case or domain invariant warrants it. |
 | `methods/user-data-session*.test.js` | Lifecycle scenarios share deterministic scheduler, client-port, and broker fixtures. | Split the former 1,645-line suite into focused setup (13 tests), reconnect (8), reconciliation/races (11), and cleanup (10) suites; moved the shared deterministic scheduler/broker fixture into `test-helpers/user-data-session-fixtures.js`. All 42 original test cases and assertions are retained. Keep each suite offline and avoid further splitting unless cohesion or reviewability benefits. |
 | `utils/rpc-client*.test.js` | Request/protocol and transport-lifecycle scenarios share one fake transport and deterministic timer setup. | Split the former 609-line suite into protocol/request (16 tests) and lifecycle/cleanup (13 tests) files; extracted the shared native transport/fake socket/fake clock setup into `test-helpers/rpc-client-fixtures.js`. All 29 test cases remain in their original order with unchanged bodies. |
-| `utils/streams-client.js` (551 lines) | One stateful coordinator owns desired/active streams, request acknowledgements, reconnect, rotation, and control timers. | Keep the lifecycle class cohesive. Consider extracting the pure raw-event-to-stream matching matrix only if it gains independent consumers or a substantially larger rule set. |
+| `utils/streams-client.js` (585 lines) | One stateful coordinator owns desired/active streams, request acknowledgements, reconnect, rotation, and control timers. | Keep the lifecycle class cohesive. Consider extracting the pure raw-event-to-stream matching matrix only if it gains independent consumers or a substantially larger rule set. |
 | `utils/streams-client*.test.js` | Subscription, reconnect, acknowledgement, and cleanup cases share one FakeTransport/FakeClock fixture. | Split the former 661-line suite into protocol/subscription (10 tests) and lifecycle/cleanup (16 tests) files; extracted `FakeTransport`, client factory, flush helper, and acknowledgement helper into `test-helpers/streams-client-fixtures.js`. All 26 test cases remain in original order with unchanged bodies. |
 
 ### Next action
@@ -183,7 +183,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. Slices 1–4 are merged (PRs #596, #599, #602, #603): recovery domain policy, normalized subscription responses, normalized event port, and application session/explicit port contract. Slice 5 moves the Binance port implementation into `src/infrastructure/binance`; the broker facade remains the composition root. Next, continue migrating exchange-specific adapters behind the package-owned ports, one tested capability at a time.
+9. Phase 9 is in progress. Slices 1–5 are merged (PRs #596, #599, #602, #603, #605). The user-data recovery vertical slice is complete across Domain, Application, Port, and Binance Infrastructure. Next, finish the package-wide responsibility/import and consumer audit, then choose a real dependency-inversion or workflow extraction. Keep the broker facade as the current composition boundary until a safer, contract-preserving composition design is demonstrated; do not add one wrapper or port per RPC.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -700,22 +700,18 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 **Architecture source of truth:** [Brokers Package Architecture](./ARCHITECTURE.md). It defines the proposed target tree, dependency rules, responsibility map, TDD method, and phase exit criteria. This section tracks execution status; update both documents together when evidence changes.
 
-### DDD migration status
+### DDD documentation and audit status
 
-- [x] Architecture direction agreed: use Harvester's domain/application/infrastructure separation as the reference, adapted to the Brokers package's exchange-integration responsibility.
-- [x] Proposed target tree and dependency rules documented in `ARCHITECTURE.md`.
-- [~] Phase A — architecture discovery and current responsibility/import map (initial source-tree and key-boundary audit recorded; complete the import/caller graph and baseline measurements).
-- [ ] Phase B — characterization/test baseline for the first extraction slice.
-- [ ] Phase C — domain extraction.
-- [ ] Phase D — application ports and focused use cases.
-- [ ] Phase E — Binance infrastructure adapters and bootstrap composition.
-- [ ] Phase F — dependency-direction and public-contract verification.
+- [x] Target architecture, dependency rules, and proposed tree documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+- [x] Existing user-data recovery vertical slice and current import direction documented.
+- [~] Package-wide responsibility/import and consumer audit is underway; the first source-tree audit and Harvester-owned broker-port boundary are recorded.
+- [x] Confirmed that the infrastructure adapter slice already exists and is merged (PR #605); do not repeat it.
 
-**Current next action:** finish Phase A. The initial source-tree audit found a real existing vertical slice: `domain/user-data-recovery-policy.js` → `application/user-data-session.js` → `ports/user-data-client-port.js` implemented by `infrastructure/binance/user-data-client-adapter.js`. The package is therefore partially layered already. The main boundary-pressure area is the 782-line `binance/broker-websocket/broker.js`, which still creates concrete clients and mixes facade, protocol calls, orchestration, and adaptation. Complete the full import/caller graph, record the package test/coverage baseline, inspect the existing slice's test coverage, and then select the smallest behavior-preserving extraction. Do not create placeholder layers or move files merely to match the target tree.
+**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](#phase-9--dddtdd-architecture-refactor-inside-coinzillabrokers-in-progress) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
-**Verified baseline:** commit `f92fdc518ae35a7ca3d2d6e0aa3276c41ac2ba34`. `application/user-data-session.js` is 658 lines but is a cohesive stateful lifecycle coordinator; review cohesion before any split. Binance canonical adapters under `binance/shared/` are still exchange-specific because they consume Binance DTOs and IDs. See the current implementation snapshot and verified ownership map in [ARCHITECTURE.md](./ARCHITECTURE.md#current-implementation-snapshot-develop-baseline).
+**Current next action:** finish the package-wide responsibility/import and consumer audit, then choose the next smallest vertical slice based on an actual dependency inversion or cohesive responsibility—not a folder move or a one-wrapper-per-RPC exercise. The current broker facade still performs composition and many exchange operations; the audit must determine which of those responsibilities genuinely belong in application workflows versus the Binance infrastructure adapter.
 
-**Important distinction:** the existing WebSocket implementation/lifecycle work and this DDD architecture migration are related but separate tracks. Preserve the completed WebSocket reliability work and its coverage. Do not turn the DDD effort into another WebSocket-layer refactor; move responsibilities only when they belong in a different architectural layer.
+**Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
 
 
 The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
