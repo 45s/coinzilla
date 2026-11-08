@@ -25,6 +25,7 @@ import {
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 
 function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
   const mismatch = (field) => {
@@ -157,6 +158,10 @@ export function makeConservativeTradingEngine({
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
     throw new TypeError("initialState.journalFills must be an array")
   }
+
+  const refreshedMarketMetadata = new Map()
+  const getCurrentMarketMetadata = ({ symbol } = {}) =>
+    refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol })
   const journalFillsById = new Map()
   for (const journalFill of initialState.journalFills ?? []) {
     if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
@@ -779,7 +784,7 @@ export function makeConservativeTradingEngine({
   }
 
   const maybeReplaceTrailingBuy = async ({ symbol, marketPrice } = {}) => {
-    const metadata = getMarketMetadata({ symbol })
+    const metadata = getCurrentMarketMetadata({ symbol })
     const pairConfig = pairs[symbol]
     const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .find((order) => order.side === "BUY")
@@ -823,6 +828,28 @@ export function makeConservativeTradingEngine({
     })
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+
+    let refreshedMetadata
+    try {
+      const refreshedMetadataResult = await broker.getSymbolFilters({ symbol })
+      if (!refreshedMetadataResult?.ok || !refreshedMetadataResult.data) {
+        throw refreshedMetadataResult?.errors?.[0] ??
+          new Error("Fresh Binance exchange metadata is unavailable for " + symbol)
+      }
+      refreshedMetadata = validateMarketTradingReadiness({
+        symbol,
+        pairConfig,
+        marketMetadata: refreshedMetadataResult.data,
+      })
+      if (refreshedMetadata.market.id !== metadata.market.id ||
+          refreshedMetadata.market.symbol !== symbol) {
+        throw new Error("Fresh exchange metadata does not match the active market " + symbol)
+      }
+    } catch (error) {
+      await pause({ symbol, reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE", error })
+      return toResult({ error })
+    }
+    refreshedMarketMetadata.set(symbol, refreshedMetadata)
 
     const preflight = await evaluateLatestTransition({
       symbol,
@@ -887,7 +914,7 @@ export function makeConservativeTradingEngine({
       return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
     }
     try {
-      const metadata = getMarketMetadata({ symbol })
+      const metadata = getCurrentMarketMetadata({ symbol })
       const evaluationId = ++strategyEvaluationSequence
       const portfolioBefore = getPortfolio()
       const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
@@ -1211,7 +1238,7 @@ export function makeConservativeTradingEngine({
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       const marketEventId = ++marketPriceEventSequence
       const previousPrice = state.prices.get(symbol)
-      const metadata = getMarketMetadata({ symbol })
+      const metadata = getCurrentMarketMetadata({ symbol })
       const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
       logger?.debug?.({
         message: "Harvester market price event received",

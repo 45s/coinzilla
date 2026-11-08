@@ -193,3 +193,37 @@ test("exposes canonical order lookup by client order ID through the Harvester br
   assert.equal(await broker.getCanonicalOrder(input), result)
   assert.deepEqual(calls, [["getCanonicalOrder", input]])
 })
+
+
+test("fetches current exchange filters for every metadata request instead of reusing startup rules", async () => {
+  const { calls, client } = createClient()
+  let minNotional = "5"
+  client.getSymbolFilters = async (input) => {
+    calls.push(["getSymbolFilters", input])
+    return {
+      ok: true,
+      data: {
+        symbol: "BTCUSDT",
+        baseAsset: "BTC",
+        quoteAsset: "USDT",
+        tickSize: "0.01",
+        stepSize: "0.00001",
+        minQuantity: "0.0001",
+        minNotional,
+        supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+      },
+    }
+  }
+  const broker = createBinanceBrokerAdapter({ config, brokerFactory: () => client })
+
+  const startupMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  minNotional = "10"
+  const refreshedMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(startupMetadata.data.tradingRules.constraints.find(({ type }) => type === "MIN_NOTIONAL").value.amount, "5", "The first metadata response must preserve the initial exchange minimum notional")
+  assert.equal(refreshedMetadata.data.tradingRules.constraints.find(({ type }) => type === "MIN_NOTIONAL").value.amount, "10", "A later request must expose changed exchange rules instead of stale cached constraints")
+  assert.deepEqual(calls, [
+    ["getSymbolFilters", { symbol: "BTCUSDT" }],
+    ["getSymbolFilters", { symbol: "BTCUSDT" }],
+  ], "Every metadata request must reach the broker so runtime replacement can validate current exchange rules")
+})

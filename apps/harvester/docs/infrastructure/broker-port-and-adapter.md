@@ -98,6 +98,8 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
 
 The package-specific `createOrder` name stays inside the adapter. A simulator or another exchange adapter can implement the same Harvester-facing port without changing use cases. Do not invent request-field transformations; use the canonical shared contracts.
 
+**Trading-rule freshness:** each Harvester `getSymbolFilters({ symbol })` call fetches current exchange metadata; the adapter does not retain a process-lifetime filter cache. Before replacing a standing Conservative trailing BUY, the engine fetches these rules again, checks that they still identify the active market, and uses that refreshed metadata for both preflight validation and the subsequent replacement submission. A failed, incomplete, or mismatched refresh pauses the pair before cancellation, leaving the standing BUY untouched.
+
 ## Implemented application use case
 
 The application workflow is implemented in `src/use-cases/place-order.js`. It receives an order request and calls only the Harvester broker port. It does not construct a broker, apply strategy policy, or convert a thrown state-changing transport error into a definite failure result.

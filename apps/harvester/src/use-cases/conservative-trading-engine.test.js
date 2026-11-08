@@ -60,7 +60,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, getSymbolFilters: getSymbolFiltersOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -74,6 +74,12 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
   let placeOrderCallCount = 0
   const broker = {
+    getSymbolFilters: async ({ symbol }) => getSymbolFiltersOverride
+      ? getSymbolFiltersOverride({ symbol })
+      : {
+          ok: true,
+          data: getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
+        },
     placeOrder: async ({ order }) => {
       placeOrderCallCount += 1
       orders.push(order)
@@ -5623,10 +5629,10 @@ test("keeps the standing BUY open when the replacement trading rules become unav
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
-  assert.match(result.errors[0].message, /trading rules/, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
+  assert.match(result.errors[0].message, /TradingRules|trading rules/i, "A refreshed metadata response without canonical trading rules must fail closed")
   assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
   assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
-  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The original standing BUY must remain open when refreshed trading rules are unavailable")
 })
 
 test("does not submit a replacement when cancellation fails", async () => {
@@ -5753,4 +5759,68 @@ test("keeps the standing BUY open when a required exchange trading rule is missi
   assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
   assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+
+test("uses freshly fetched exchange trading rules instead of the startup snapshot", async () => {
+  const refreshedMetadata = {
+    ...marketMetadata,
+    tradingRules: new TradingRules({
+      market,
+      constraints: marketMetadata.tradingRules.constraints.map((constraint) =>
+        constraint.type === "MIN_NOTIONAL"
+          ? { ...constraint, value: new Money({ amount: "10", asset: quoteAsset }) }
+          : constraint,
+      ),
+    }),
+  }
+  let refreshedRuleReads = 0
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "60", replacementQuantity: "0.1" }),
+    getMarketMetadata: () => marketMetadata,
+    getSymbolFilters: async () => {
+      refreshedRuleReads += 1
+      return { ok: true, data: refreshedMetadata }
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A candidate valid under startup rules must be rejected under the refreshed exchange rules")
+  assert.match(result.errors[0].message, /MIN_NOTIONAL/, "The refreshed minimum-notional constraint must govern preflight")
+  assert.equal(refreshedRuleReads, 1, "The engine must fetch current exchange rules before replacement preflight")
+  assert.deepEqual(harness.cancellationIds, [], "A replacement rejected by refreshed rules must not cancel the standing BUY")
+  assert.equal(harness.orders.length, 1, "A replacement rejected by refreshed rules must not be submitted")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The standing BUY must remain open under refreshed-rule rejection")
+})
+
+test("keeps the standing BUY open when fetching current exchange trading rules fails", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    getSymbolFilters: async () => ({
+      ok: false,
+      errors: [new Error("exchangeInfo request unavailable")],
+    }),
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A failed current-rule request must block replacement")
+  assert.match(result.errors[0].message, /exchangeInfo request unavailable/, "The refresh failure must remain visible to the caller")
+  assert.deepEqual(harness.cancellationIds, [], "Unavailable current rules must not cancel the standing BUY")
+  assert.equal(harness.orders.length, 1, "Unavailable current rules must not submit a replacement")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The previously valid order must remain open when rules cannot be refreshed")
+  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"), "A failed exchange-rule refresh must pause the pair")
 })
