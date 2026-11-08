@@ -27,6 +27,10 @@ A transient file-content sync failure after queued writes have completed does no
 
 New records retain the original event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
 
+## Directory ownership
+
+Every active writer owns its directory through an exclusive `.coinzilla-journal.lock` file. This prevents cooperating Journal instances in separate processes from creating concurrent session writers. The lock is a process-lifecycle guard, not a durability acknowledgement; directory-entry fsync remains outside the Journal durability contract.
+
 ## Reading after restart
 
 Create a stopped Journal instance and read before starting its writer:
@@ -74,7 +78,11 @@ if (!result.ok) {
 
 The complete journal is validated before the first handler runs. Handlers then execute sequentially in deterministic order. If a handler fails, replay stops and reports `replayed` and `failedRecordId`. Replay is not exactly-once: a process can crash after a handler applies a record but before the caller durably checkpoints that application. Consumers must make replay idempotent using the stable record ID and must reconcile external systems independently.
 
-Only one writer may own a journal directory at a time; Journal does not currently acquire an inter-process lock, so the application/deployment must enforce this. Read/replay is available while the Journal instance is stopped (before `start()` or after `close()`); it is rejected while that instance is writing. The directory must already exist: a missing directory returns `JOURNAL_DIRECTORY_NOT_FOUND` instead of being treated as an empty history.
+A Journal writer acquires `.coinzilla-journal.lock` with exclusive file creation before creating a session file. The lock records the owning process ID and acquisition time for diagnostics, and requests owner-only file permissions where the filesystem supports them. A competing writer receives `JOURNAL_DIRECTORY_LOCKED`; it must not remove or overwrite the existing lock. The lock is released only after the active session has been synchronized and its file handle closed. Startup rollback also releases a lock acquired by that attempt.
+
+A process crash can leave a stale lock. Journal never removes an existing lock automatically because it cannot safely distinguish a crashed owner from a live writer. Before manually removing `.coinzilla-journal.lock`, an operator must independently confirm that no process is still writing to the directory. The recorded PID and timestamp are diagnostic hints, not proof that the lock is stale.
+
+Read/replay is available while the Journal instance is stopped (before `start()` or after `close()`); it is rejected while that instance is writing. Read/replay does not acquire a separate lock, so callers must ensure no other process is writing while they read. A concurrent read can observe an incomplete tail and will fail closed rather than return a partial history. The directory must already exist for read/replay: a missing directory returns `JOURNAL_DIRECTORY_NOT_FOUND` instead of being treated as an empty history.
 
 
 ## Harvester startup account preflight records
