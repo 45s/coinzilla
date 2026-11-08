@@ -84,7 +84,7 @@ test("rejects non-canonical fill input without mutating Portfolio state", async 
   const result = await workflow.updateTradingAccounting({ fill: { tradeId: "untrusted-event" } })
 
   assert.equal(result.ok, false, "Accounting must reject a plain event object instead of treating it as a canonical Fill.")
-  assert.ok(result.error instanceof TypeError, "The rejected input must expose the canonical-Fill contract violation.")
+  assert.ok(result.errors?.[0] instanceof TypeError, "The rejected input must expose the canonical-Fill contract violation in the normalized errors array.")
   assert.equal(
     workflow.getPortfolio().positions.length,
     0,
