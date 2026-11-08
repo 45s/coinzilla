@@ -28,7 +28,7 @@ The package remains plain JavaScript. JSDoc improves editor type information; it
 
 ## Runtime and configuration
 
-- Node.js **24 or newer** is required. The native transport also checks the bundled Undici version at runtime.
+- The broker package declares a standalone floor of Node.js **22.23.4 or newer**. The repository workspace currently requires Node.js **24 or newer**. The native transport also checks the bundled Undici version at runtime; the Node major version alone does not prove that the bundled version is patched.
 - Construct the broker with non-empty `apiKey` and `apiSecret`.
 - The default endpoint pair is selected by the repository's `isProdMode` setting: production endpoints in production mode, TESTNET endpoints otherwise.
 - `websocketApiUrl` and `websocketStreamsUrl` can be supplied explicitly for controlled environments. Do not point integration tests at production.
