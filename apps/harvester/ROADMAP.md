@@ -32,6 +32,26 @@ remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN
 no strategy behavior change or TESTNET acceptance is claimed. The focused
 tests and full Harvester suite still require execution on the exact PR head.
 
+## Future improvements — planned, not implemented
+
+These items are intentionally recorded for future work. They are not current trading requirements, do not block the Conservative strategy, and must not be implemented as part of unrelated work without selecting them explicitly.
+
+### C. Consolidated trading-session statistics
+
+- [ ] Design and implement a clear per-session/per-market trading report using confirmed, deduplicated fills and actual commission amounts/assets as the source of truth.
+- [ ] Report total BUY/SELL quantities and quote values, actual commissions by asset, total invested quote, recovered net proceeds, remaining recovery amount, and realized net profit.
+- [ ] Report retained/free inventory separately from active strategy inventory, including any exchange-constrained dust.
+- [ ] Show current/open order status and partial execution quantities without treating unfilled orders as executions.
+- [ ] Keep calculations consistent with Portfolio and RecoveryLedger; do not introduce a second accounting source or mutate trading state for reporting.
+- [ ] Provide a readable CLI/session summary first; decide on export/persistence only when that work is selected.
+
+### D. Optional Telegram notifications
+
+- [ ] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications.
+- [ ] Define a small allowlisted set of useful operational events (startup/connection status, trading pause or safety halt, order/fill lifecycle milestones, and shutdown) before implementation.
+- [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
+- [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
+- [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
 ## Current work selection
 
 - [~] Close the 2026-11-07/08 session follow-up: account-integrity halt leaving an owned BUY live is fixed in [PR #669](https://github.com/45s/coinzilla/pull/669); configured-asset snapshot correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670). Tracking issue: [#667](https://github.com/45s/coinzilla/issues/667); evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667).
@@ -44,7 +64,7 @@ Trading safety requirements remain in force: live trading stays disabled unless 
 
 ## Strategy-scoped trading configuration
 
-- [~] Nest the former Free-Roll configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
+- [x] Keep Harvester configuration under `strategies.CG_coinGrabber`, including the strategy enabled flag, settings, and all market pairs.
 - [~] Keep Conservative and Aggressive mode toggles under `CG_coinGrabber.settings`; Conservative remains enabled and Aggressive remains disabled/deferred.
 - [~] Update runtime consumers, validation/bootstrap tests, and configuration documentation together.
 
@@ -864,7 +884,7 @@ A review of PR #513's immediate-FILLED acknowledgement reconciliation found one 
 
 ### TESTNET commission configuration change — 2026-11-04
 
-The operator inspected the Binance Spot TESTNET API Keys / Account settings page. The earlier screenshot showed **Commissions: None**. The operator then changed the account-level commission setting to **0.1% maker & taker** (the later screenshot shows this selected setting). Treat the incident's reported zero per-trade commissions as consistent with the earlier `None` setting; do not assume those historical fills were charged 0.1%. For all subsequent TESTNET executions, expect the configured 0.1% maker/taker rate, but reconcile the actual commission amount and commission asset returned on every trade rather than calculating or assuming fees from the UI setting alone. This is an account setting, not a per-order or per-strategy setting; the page shows four registered API keys (`test-api-key`, `cryptonian`, `bot`, `bot-free-roll`) with TRADE, USER_DATA, and USER_STREAM permissions. Record the setting change timestamp before the next controlled run, and verify the effective commission configuration before submitting any order. This change does not resolve the existing +0.57065 USDT gross / +0.36335 USDT journal discrepancy; historical trades remain zero-commission according to the supplied trade records.
+The operator inspected the Binance Spot TESTNET API Keys / Account settings page. The earlier screenshot showed **Commissions: None**. The operator then changed the account-level commission setting to **0.1% maker & taker** (the later screenshot shows this selected setting). Treat the incident's reported zero per-trade commissions as consistent with the earlier `None` setting; do not assume those historical fills were charged 0.1%. For all subsequent TESTNET executions, expect the configured 0.1% maker/taker rate, but reconcile the actual commission amount and commission asset returned on every trade rather than calculating or assuming fees from the UI setting alone. This is an account setting, not a per-order or per-strategy setting; the page shows four registered API keys with TRADE, USER_DATA, and USER_STREAM permissions. Record the setting change timestamp before the next controlled run, and verify the effective commission configuration before submitting any order. This change does not resolve the existing +0.57065 USDT gross / +0.36335 USDT journal discrepancy; historical trades remain zero-commission according to the supplied trade records.
 
 ## Latest PR #513 review — 2026-11-04
 
@@ -1374,7 +1394,7 @@ The canonical specification is [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/dom
 
 - [x] Rewrite the canonical specification so earlier sections contain no obsolete or conflicting rules; keep one derived Mermaid algorithm in that document.
 - [x] Convert README, trading-strategies, Accounting Invariants, Portfolio notes, glossary, behavior baseline, runbook, delivery plan, broker guide, and relevant roadmap sections to reference/evidence roles.
-- [x] Mark historical decisions, implementation snapshots, and legacy Free-Roll artifacts as superseded/historical where they conflict.
+- [x] Mark historical decisions and implementation snapshots as superseded where they conflict with current Harvester contracts.
 - [x] Reconcile #645, #646, #653, and #655 references with the canonical contract; remove duplicate owner-decision summaries from issue trackers.
 - [x] Search the repository for coinToKeep/keepCoinQuantity, proportional cost recovery, maker-only fee assumptions, residual-suppression, partial SELL repricing, third-asset commission handling, and unresolved zero-value decisions.
 - [x] Review the Conservative-matching documentation and README/roadmap results, plus the relevant source/test references. No active competing Conservative rule definition remains.

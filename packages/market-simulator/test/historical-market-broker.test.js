@@ -27,15 +27,8 @@ function createTimers() {
   }
 }
 
-test("loads the repository DOGE history with all 10,080 candles", async () => {
-  const broker = new HistoricalMarketBroker()
-  await broker.connect()
-  assert.equal(broker.history.symbol, "DOGEUSDT")
-  assert.equal(broker.history.interval, "1m")
-  assert.equal(broker.history.history.length, 10080)
-  assert.equal(broker.history.history[0].close, "0.08478000")
-  assert.equal(broker.history.history.at(-1).close, "0.08135000")
-  await broker.disconnect()
+test("requires an explicit history file or in-memory history", () => {
+  assert.throws(() => new HistoricalMarketBroker(), /filePath or history is required/)
 })
 
 test("implements CoreBroker price subscription and emits historical candle closes", async () => {

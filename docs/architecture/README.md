@@ -8,8 +8,8 @@ This directory records cross-cutting architecture principles and decisions for t
 
 ## Authority and change policy
 
-- [Free-Roll strategy specification](../../apps/bot-free-roll/README.md) is authoritative for the currently documented Free-Roll behavior.
-- [Free-Roll engineering roadmap](../../apps/bot-free-roll/ROADMAP.md) is authoritative for that application's engineering invariants and backlog.
+- [Harvester Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authority for Conservative trading behavior.
+- [Harvester Roadmap](../../apps/harvester/ROADMAP.md) tracks implementation status and planned improvements.
 - Each application owns its strategy-specific rules, workflows, configuration, and runtime composition.
 - Shared entities, broker contracts, event delivery, journal behavior, and utilities remain owned by their respective packages.
 - Repository-wide engineering standards and the AI-agent workflow remain mandatory.

@@ -29,7 +29,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - Both value types require an existing canonical `Asset` instance; ticker strings alone are not sufficient identity.
 - Amounts are decimal strings only, trimmed and canonicalized without floating-point conversion. Leading integer zeros and trailing fractional zeros are removed; negative zero becomes `0`.
 - Plain decimal notation is accepted. Exponent notation, non-finite values, malformed syntax, and unsupported precision are rejected.
-- Maximum supported precision is 256 total digits and 100 fractional digits, matching the existing Free-Roll decimal arithmetic bounds.
+- Maximum supported precision is 256 total digits and 100 fractional digits, matching the supported decimal arithmetic bounds.
 - `Money` permits negative values for losses, adjustments, and deltas. `Quantity` represents a magnitude and rejects negative values.
 - Both entities are immutable and expose independent `value` snapshots containing the canonical amount and an Asset snapshot. They intentionally provide no arithmetic methods.
 - Existing `Coin`, `Order`, and `ExecutedOrder` behavior is unchanged.

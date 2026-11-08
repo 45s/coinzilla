@@ -19,7 +19,6 @@ Deterministic market replay and simulation for strategy testing. The simulator m
 
 - Package roadmap: [`apps/market-simulator/ROADMAP.md`](../apps/market-simulator/ROADMAP.md)
 - Unit tests: `pnpm --filter @coinzilla/market-simulator test`
-- Initial DOGE history fixture migration is blocked because the existing Free-Roll `doge-history.json` is empty.
 
 ## Shared packages
 
@@ -89,7 +88,6 @@ When a package is added, removed, renamed, or its public responsibility changes,
 
 The paths above are ownership boundaries for independent AI workstreams. Each domain's local `AGENTS.md` and `ROADMAP.md` are authoritative for its backlog and local conventions:
 
-- `apps/bot-free-roll/` — Free-Roll application and strategy.
 - `apps/market-simulator/` — CoreBroker-compatible mock that streams historical market prices from the existing DOGEUSDT fixture.
 - `packages/entities/` — shared domain entities and value contracts.
 - `packages/brokers/` — broker abstractions, exchange adapters, and broker-facing contracts.

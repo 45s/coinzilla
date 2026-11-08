@@ -28,7 +28,6 @@ Do not build a new REST trading client. Move symbol-filter retrieval from REST t
 ### Non-goals and hard scope boundaries
 
 - Do not add trading strategy or bot product features.
-- Do not modify `apps/bot-free-roll` or any other bot application code as part of this migration. Bot source may be inspected read-only to verify the consumer contract.
 - Do not add another third-party WebSocket package as a shortcut.
 - Do not add credentials, Ed25519 keys, or a new authentication setup for the current HMAC signature-subscription flow.
 - Do not remove public exports or change consumer-facing method/event/result shapes without an explicit compatibility decision supported by repository-wide consumer checks.
@@ -214,32 +213,6 @@ The current `packages/brokers/src/index.js` exports:
 | `wsEventsMap` | `binance/websocket-stream/adapters/index.js` | Preserve unless consumer search proves it unused and removal is explicitly planned. |
 | `CoreBroker` | `broker.core.js` | Preserve shared base-class contract. |
 
-### Current repository consumer
-
-The Phase 0 audit found `apps/bot-free-roll` as the only workspace package declaring `@coinzilla/brokers`. Its source is read-only during this migration.
-
-The audited bot calls:
-- `connect()` and `disconnect()`.
-- `subscribeForUserData({ onEvent })`.
-- `subscribeForPrices({ symbol, onPrice })`.
-- `getSymbolFilters({ symbol })`.
-- `getExchangeMarkets()` for the exchange-wide canonical market catalog used by complete account trade-history reconciliation.
-- `createOrder(input)`.
-- `cancelOrder({ symbol, orderId })`.
-- `getMyTrades({ symbol, orderId, limit })`.
-
-Compatibility includes the existing Promise/result behavior, callback payload shape, symbol casing, client order ID mapping, order defaults, normalized order/fill fields, and exact decimal strings for quantity, price, commission, and commission asset. Re-inspect the consumer and broker adapter tests before changing any of these assumptions.
-
-Other SDK broker methods remain compatibility candidates even if the current bot does not call them:
-- `getAssets()`
-- `getOpenOrders({ symbol? })`
-- `getOrder({ symbol, orderId })` or `getOrder({ symbol, clientOrderId })`
-- `getOrderHistory({ symbol, orderId?, limit? })`
-- `cancelAllOpenOrders({ symbol })`
-- `getPrices({ symbol })`
-
-Do not silently drop public methods because one current consumer does not call them.
-
 ### Broker method to Binance operation map
 
 | Broker method | Binance Spot WebSocket API method | Security class |
@@ -275,7 +248,6 @@ The old exported `BinanceStreamClient` exposes these stream methods, which need 
 | `aggTrade({ tickets })` | `<symbol>@aggTrade` |
 | `userData()` | Legacy REST listen-key path; do not confuse with the current SDK broker user-data subscription. |
 
-The audited current bot uses aggregate trade prices through `BinanceSdkBroker.subscribeForPrices()`. The other exported stream methods still require an explicit compatibility decision.
 
 ---
 
@@ -445,10 +417,7 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Verify failure-safe startup cleanup, partial-shutdown cleanup, idempotent disconnect, and callback/resource cleanup with deterministic tests; exact-head CI remains the verification gate.
 - [x] Complete the full broker contract and regression suite on the native client interfaces; Unit Tests, Utils Unit Tests, JavaScript Syntax, and Dependency Audit all pass on the exact PR head.
 - [x] Re-audit current consumers read-only against latest `main`; no bot application files were changed.
-**Read-only consumer contract audit (main `49c5aba675e71490123181d757641376be35c78a`):**
 
-- `apps/bot-free-roll/src/prepare-broker.js` constructs `BinanceSdkConfig` and `BinanceSdkBroker`, calls `connect()`, and calls `disconnect()` on startup failure. Constructor and lifecycle remain compatible.
-- `bot-free-roll.js` expects `subscribeForUserData()` to return a lifecycle handle with `disconnect()`, and each `subscribeForPrices()` result to expose `unsubscribe()`. The native broker returns both expected cleanup methods.
 - The bot consumes `getSymbolFilters()` as decimal strings and converts them to numbers itself; exact string outputs are preserved.
 - Fill reconciliation expects `getMyTrades()` to return an array of canonical fills. `adaptTrade` remains the normalizer.
 - Order execution consumes `createOrder()`/`cancelOrder()` results with IDs, status, and original/executed quantities. `adaptOrder` remains the normalizer.
@@ -494,8 +463,6 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
 - [x] Add opt-in Binance TESTNET coverage for signature subscription, forced API socket disconnect, reconnect/resubscription, read-only account/order/trade reconciliation queries, and explicit recovery acknowledgement.
 - [x] Add an additional opt-in event-receipt test gated by `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1`; it requires external testnet activity while the test runs and never places an order.
 - [~] Run the opt-in integration suite with real, read-only-capable Binance TESTNET credentials and record the result. The repository owner has reported configuring repository secrets `BINANCE_TESTNET_API_KEY` and `BINANCE_TESTNET_API_SECRET_KEY`; secret presence/value is intentionally not inspected by agents. The **Unit Tests** workflow's `run_broker_testnet_read_only` manual input rejects placeholders and hard-disables order mutations and externally triggered live-event checks. **Next: dispatch on `develop` and record the exact run/commit/results.** Use a dedicated TESTNET key with account-read access and Spot trading/withdrawal permissions disabled. Default CI remains offline.
-- [x] Complete bot consumer adoption tracked in [issue #304](https://github.com/45s/coinzilla/issues/304) via [PR #314](https://github.com/45s/coinzilla/pull/314); [PR #315](https://github.com/45s/coinzilla/pull/315) adds repeated-interruption and shutdown hardening. This is bot-domain work; no bot files are changed by the Brokers domain.
-- [x] Re-audit the read-only bot consumer contract; broker changes do not modify bot application files.
 - **Exit criteria:** deterministic recovery tests and opt-in testnet verification pass; callback/resource lifecycle is safe; consumer reconciliation is implemented by its owning domain; recovery acknowledgement contract is clear and adopted.
 ### Phase 7 — Remove the SDK and retire legacy REST implementation
 
@@ -525,8 +492,6 @@ Each phase should be a separate, reviewable PR unless a tightly coupled test or 
   The raw matcher’s fallback remains a defensive false result: `validateStreamName` is the only ingress into the desired-stream map and rejects unsupported names; the raw-event matrix covers every supported event family. The array recursion fallback is not used by dispatch: `#handleMessage` expands parsed array payloads before calling the matcher. PR #573 synchronized exact CI head `22a961bbb4565962ff86021002bbcc674c963f5c` passed all 5 required checks with 387/387 broker tests; `streams-client.js` measured 98.57% lines / 92.80% branches / 82.76% functions.
   Earlier lifecycle cleanup remains covered by PRs #347, #350, #351, #353, #354, #355, #357, #359, #361, #362, #365, #366, #532, #534, #543, #548, and #569.
 - [x] Verify timers, sockets, pending requests, and listeners are cleaned up on shutdown and failure. Deterministic coverage spans transport connect/close timeouts and listener removal, RPC pending-request/timer settlement and listener removal, Streams reconnect/manual shutdown cleanup, user-data reconnect/stop/final-subscriber races, and broker dual-client shutdown. PRs #532, #534, #543, and #548 add the late replacement-client, late resubscription, transport close, and Streams pending-request cleanup regressions.
-- [x] Re-audit all consumers and public exports on `develop`. The package entry point exports `BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`; Bot imports the broker/config, Harvester's infrastructure adapter imports the broker/ID normalizer, and the adapter validates the required book-ticker/user-data/market/order capabilities. `CoreBroker` remains a compatibility export with no active consumer in the current `develop` tree. No consumer implementation was changed by this broker-owned audit.
-- [x] Audit application-scope exceptions rather than claiming no application files changed. PR #333 changed `apps/bot-free-roll/src/prepare-broker.js` to adopt the renamed native broker/config exports and removed the obsolete REST-only `apps/bot-free-roll/fetch-price-history.js`. PR #530 also included Harvester-owned application/docs changes alongside the broker TESTNET safety gate. These historical cross-domain changes are explicit scope exceptions; broker-only follow-up work must not modify application-owned implementation.
 - **Exit criteria:** all required checks pass on the exact final PR head; opt-in integration results are recorded against the supported TESTNET environment; `develop` contains the verified implementation; all definition-of-done items in Section 1 are evidenced.
 
 ---
@@ -702,21 +667,18 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Preserve legacy `getAssets()` and its `Coin` result shape for compatibility; do not use its Number-based values for financial reconciliation.
 - [x] Keep raw Binance asset codes intact when constructing canonical Asset identities; do not rewrite prefixed codes into another asset.
 - [x] Include zero balances in the canonical snapshot so consumers can distinguish a confirmed zero from an omitted/unreported asset.
-- [x] Consumer: Free-Roll recovery request #304 is integrated and verified through PRs #314/#315.
 
 ### Timestamped reconciliation snapshot ports (request #316)
 - [x] Add `getServerTime()` using Binance `time` and `getAccountSnapshot()` exposing canonical balances with account `updateTime`.
 - [x] Add validated `fromId` pagination to `getMyTrades()` and canonical `getFills()`, plus time-window filters to `getOrderHistory()` while preserving existing result shapes.
 - [x] Validate response-side trade, fill, and order cursor IDs before exposing them; reject values outside JavaScript's safe-integer range ([PR #322](https://github.com/45s/coinzilla/pull/322)).
 - [x] Keep full pages potentially incomplete by returning unchanged array results without a false `complete` claim; tests prove inclusive cursors can continue from the last returned ID + 1 without duplicates.
-- Consumer: Free-Roll FR-057. Broker implementation is owned here; the consumer must not call Binance RPC methods directly.
 
 ### Canonical order-history records (request #321)
 - [x] Add additive `getCanonicalOrderHistory()` returning immutable Entities `CanonicalOrder[]` while preserving the raw `getOrderHistory()` compatibility contract. Broker implementation and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
 - [x] Extend `getOrder()` to accept exactly one of `orderId` or `clientOrderId`; only Binance `order.status` error `-2013` maps to a successful `data: null`. Implemented and verified in PR #573, merged into `develop` at `c146309ac7edf1d525670b5cb7f8bda751d4b9a5`; 387/387 broker tests and the coverage gate passed.
 - Use exact `exchangeInfo` metadata for Market/Asset identity, preserve decimal strings and source timestamps, and map unsupported lifecycle states to canonical `UNKNOWN` without leaking Binance field names.
 - Reject unsupported order types, malformed records, and unsafe numeric IDs; do not convert financial values through JavaScript `Number`.
-- Consumer: Free-Roll FR-057 snapshot collection. Request: [#321](https://github.com/45s/coinzilla/issues/321).
 
 ## 13. Shared Entities contract adoption
 
@@ -724,11 +686,10 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 - [x] Additive `getFills({ symbol, orderId?, fromId?, startTime?, endTime?, limit? })` returns immutable Entities `Fill` values backed by canonical `Market`, exact `Money`/`Quantity`, and `Commission` values. Broker API and deterministic adapter/broker tests are complete on `develop`; consumer adoption remains a separate domain-owned task.
 - [x] Add `getExchangeMarkets()` to return canonical `Market` values for every symbol in the current unfiltered Binance `exchangeInfo` catalog and prime the broker's canonical market cache; delisted symbols remain outside this catalog.
-- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate bot code in this Brokers-owned change.
+- Preserve `getMyTrades()` and its existing plain-object result shape for current consumers; do not silently migrate application consumers in this Brokers-owned change.
 - Derive base/quote Asset identity only from the exact Binance `exchangeInfo` response for the requested symbol. Do not parse or split venue symbols.
 - Preserve exact exchange decimal strings. Unknown commission denomination remains `UNKNOWN`; a confirmed zero commission is `COMPLETE` with an empty collection.
-- Consumer migration is separate work. The Free-Roll recovery flow currently continues to use the compatibility `getMyTrades()` API until its owning domain deliberately adopts canonical fills.
-- Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the bot domain.
+- Canonical fill API implementation is present on `develop`; consumer migration remains separately owned by the consuming application domains.
 
 
 ## Accepted cross-domain capability — Harvester book ticker (#506)

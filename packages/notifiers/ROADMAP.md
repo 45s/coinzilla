@@ -50,7 +50,7 @@ Each provider owns its transport client, provider-specific formatter, event inte
 - [x] Format an explicit allowlist of lifecycle, recovery, pair-pause, order-fill, and execution-fill events.
 - [x] Exclude raw exchange payloads and high-volume execution reports.
 - [x] Serialize sends and expose explicit subscriber cleanup.
-- [x] Integrate optional Telegram notifications into apps/bot-free-roll (consumer PR #346, merged).
+- [ ] Integrate optional Telegram notifications into Harvester when selected as future work; reuse this package and keep delivery isolated from trading execution.
 - [x] Keep notifications disabled when both credentials are absent; reject partial configuration.
 
 **Acceptance:** Telegram is optional, isolated from trading behavior, and usable without adding a runtime dependency.

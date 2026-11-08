@@ -93,10 +93,10 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Area | Existing implementations observed | Initial disposition |
 | --- | --- | --- |
 | Shared logger | packages/utils/src/logger.js, exported as Logger and defaultLogger | Reuse this public API; inspect application adapters and direct console usage during the audit. |
-| Exact decimal arithmetic | Previously duplicated in Free-Roll, Harvester, Market Simulator, and Entities | [x] Consolidated in `packages/utils/src/decimal.js`; consumers now import the shared API. Domain-level accounting, trading rules, and market validation remain local. |
+| Exact decimal arithmetic | Previously duplicated across trading and shared packages | [x] Consolidated in `packages/utils/src/decimal.js`; consumers now import the shared API. Domain-level accounting, trading rules, and market validation remain local. |
 | Decimal normalization | Previously implemented in packages/entities/src/values/normalize-decimal-string.js | [x] Generic canonicalization now lives in `@coinzilla/utils`; Entities retains its result-envelope adapter and domain-facing validation contract. |
-| Percentage arithmetic | Previously implemented in apps/bot-free-roll/src/bot/helpers/percentage.js | [x] Exact percentage-rate, percentage-of, percentage-change, and apply-change functions now live in `@coinzilla/utils`. |
-| Keyed async queue | Previously implemented in apps/bot-free-roll/src/bot/helpers/lifecycle.js | [x] Generic per-key serial task queue now lives in `@coinzilla/utils`; subscription disconnection remains app-local. |
+| Percentage arithmetic | Previously implemented in application-local percentage helpers | [x] Exact percentage-rate, percentage-of, percentage-change, and apply-change functions now live in `@coinzilla/utils`. |
+| Keyed async queue | Previously implemented in application-local lifecycle helpers | [x] Generic per-key serial task queue now lives in `@coinzilla/utils`; subscription disconnection remains app-local. |
 | Object input assertion | Previously implemented in packages/event-bus/src/helpers/object-input.js | [x] Generic non-null, non-array object assertion now lives in `@coinzilla/utils`; EventBus still owns its event-specific input semantics. |
 | Numeric helpers | packages/utils/src/number-operations.js, number-helper.js and app-specific numeric calculations | Reuse existing Number-based helpers only for ordinary non-financial calculations. Do not use binary floating-point helpers for exact financial amounts. |
 | Time and wait | packages/utils/src/calculate-time-diff.js, format-time-relatively.js, wait.js, wait-duration.js | Existing shared capability; search before adding alternatives. |
@@ -109,7 +109,7 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 
 The original three application decimal modules were not interchangeable as-is:
 
-- Free-Roll had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
+- application-local had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
 - Harvester had a smaller signed decimal-string API.
 - Market Simulator had positional arguments and rejected negative subtraction results; its market/order rules remain domain-owned.
 - Entities had independent canonicalization and subtraction implementations; both now delegate to shared primitives while preserving the existing `toResult` contract.
@@ -121,7 +121,7 @@ The shared API accepts decimal strings (and bigint for parsing) and intentionall
 - [~] Inventory application and package helper/utility modules and classify candidates. The source-tree/helper inventory and current dispositions are recorded below; routine console-use verification and any future candidates remain.
 - [~] Review direct console use and application logger adapters; Harvester's default logger was migrated and existing shared logger consumers were confirmed. A repository-wide automated guard remains.
 - [x] Design and test the shared exact decimal API with explicit bounds and rounding behavior.
-- [x] Migrate Harvester, Market Simulator, Free-Roll, Entities, and EventBus consumers while keeping business-specific rules local.
+- [x] Migrate Harvester, Market Simulator, application-local, Entities, and EventBus consumers while keeping business-specific rules local.
 - [x] Identify and extract additional generic helpers (percentage calculations, keyed task queue, object-input assertion); classify remaining package helpers by domain ownership.
 - [x] Update package READMEs, exports, consumer tests, and domain roadmaps for the extracted capabilities.
 - [ ] Add automated checks where reliable (for example, detecting direct console usage outside approved infrastructure/CLI paths).
@@ -135,12 +135,12 @@ The source-tree audit covers the applications and workspace packages present in 
 
 | Area | Audit disposition |
 | --- | --- |
-| Free-Roll exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in Free-Roll. |
+| application-local exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in application-local. |
 | Harvester portfolio arithmetic | [x] Removed app-local decimal engine and its duplicate unit suite; position accounting imports shared arithmetic. Position and fill invariants remain in Harvester/Entities. |
 | Market Simulator arithmetic | [x] Removed app-local arithmetic engine; order matching uses shared comparison and a thin object-input facade delegates arithmetic while preserving the simulator's non-negative subtraction invariant. Candle validation and fill semantics remain local. |
 | Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
-| Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from Free-Roll; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
-| Logging | [x] Harvester now defaults to `defaultLogger`; Free-Roll uses `defaultLogger`; Coin Farmer's adapter intentionally narrows the shared logger to its application port. |
+| Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
+| Logging | [x] Harvester now defaults to `defaultLogger`; application-local uses `defaultLogger`; Coin Farmer's adapter intentionally narrows the shared logger to its application port. |
 | Brokers | Keep Binance signing, protocol payloads, stream adapters, and broker-specific normalization in `packages/brokers`; they depend on exchange contracts. |
 | Event Bus | Keep event-name validation, payload rules, queue capacity, and delivery semantics in `packages/event-bus`; they define event-bus contracts. |
 | Notifiers | Keep Telegram formatting, Telegram API validation, and Telegram delivery behavior in `packages/notifiers`; these are channel-specific. |
@@ -166,7 +166,7 @@ The following helper groups were inspected and retained because their behavior b
 | `packages/brokers/**/test-helpers` | Fake broker clients, fake clock, fake WebSocket | Test doubles are scoped to broker protocol tests; they are not production runtime utilities. |
 | `packages/event-bus/src/helpers` | Event-name validation, payload/options validation, delivery capacity | These define EventBus-specific contracts. The one generic object-shape assertion was extracted. |
 | `packages/notifiers/src/telegram` | Telegram request/message validation and token-aware safe error formatting | These depend on Telegram API behavior and token handling. |
-| `apps/bot-free-roll/src/bot/helpers` | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on Free-Roll strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
+| Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
 | `apps/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
 | `apps/bot-coin-farmer/test/helpers` | Configuration test fixtures | Test-only fixtures are not production shared utilities. |
