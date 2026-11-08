@@ -243,7 +243,7 @@ binance/broker-websocket/broker.js
     └──> Binance response adapters
 ```
 
-The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The remaining `infrastructure/binance/broker-websocket/` tree is also infrastructure, though it has not yet been relocated under the infrastructure folder.
+The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The complete former Binance implementation, including the `broker-websocket/` tree, is now physically under `src/infrastructure/binance/` (PR #697); its internal module layout was preserved.
 
 ### Current gaps and boundary pressure
 
@@ -253,7 +253,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
 - The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
 - `infrastructure/binance/adapters/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Their Binance DTO and identifier dependencies make them Infrastructure adapters, not exchange-neutral domain modules.
-- `infrastructure/binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure. Their lifecycle and protocol tests are valuable and should remain with those components during migration.
+- `infrastructure/binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure, now grouped under `src/infrastructure/binance/`. Their lifecycle and protocol tests remain colocated with those components.
 - `broker.core.js` is a compatibility base class with default unsupported-method behavior and shared maps. Its long-term ownership is unresolved; do not automatically treat a base class as a domain entity or port.
 
 ### Verified ownership map
@@ -265,7 +265,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 | `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
 | `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
 | `infrastructure/binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
-| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; move/group under `infrastructure/binance/` incrementally |
+| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/` by PR #697 |
 | `infrastructure/binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
 | `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
 | `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
@@ -415,4 +415,4 @@ The architecture test has three cases: the real package source graph must be cle
 
 `src/index.contract.test.js` asserts the exact four public exports (`BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`) and verifies public Binance broker construction/method availability without opening a network connection. Existing broker operation, normalized DTO, and user-data port/event suites remain the behavior contract; see the package roadmap and `docs/brokers-websocket-contract.md` for the named suites.
 
-Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed GitHub Actions Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions; thresholds 90/80/80), all workspace unit-test and coverage jobs, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The later documentation-only commit does not change source or tests; its final-head CI must also pass before merge. The read-only TESTNET job was skipped; no exchange integration was run. The earlier RED-stage failure was intentional.
+Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed GitHub Actions Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions; thresholds 90/80/80), all workspace unit-test and coverage jobs, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The documentation-only follow-up was included in final PR head `f611175838f99cf1861ab7a0a9b0e9fee849723c`; all required checks passed on that exact head, and PR #704 merged into `develop` at `216f7c8397d83837c4e6d3202778469c2a4e85bf`. The read-only TESTNET job was skipped; no exchange integration was run. The earlier RED-stage failure was intentional.
