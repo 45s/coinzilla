@@ -20,10 +20,6 @@ export class FileSystemJournalStore {
   }
 
   /**
-   * Create the journal directory when it does not already exist.
-   * @returns {Promise<void>}
-   */
- /**
    * Compatibility view used only by the deprecated Journal.fileHandle accessor.
    * The adapter continues to own both the real and any replacement handle.
    *
@@ -43,8 +39,10 @@ export class FileSystemJournalStore {
     this.sessionHandleOverride = handle
   }
 
-
-
+  /**
+   * Create the journal directory when it does not already exist.
+   * @returns {Promise<void>}
+   */
   async ensureDirectory() {
     await mkdir(this.directory, { recursive: true })
   }
