@@ -97,7 +97,10 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 | `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Keep public API/composition thin while preserving compatibility |
 | `src/broker.core.js` | Exported shared base class with default unimplemented methods and state maps; Market Simulator extends it | Preserve construction, inherited state, and unsupported-method behavior; any redesign requires a separate consumer migration |
 | `binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
+| `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
+| `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |
 | `src/application/user-data-session.js` | Subscriber state, reconnect scheduling, remote subscription lifecycle, reconciliation acknowledgement through an injected client port | Correctly placed in Application; preserve state-machine cohesion and keep Binance RPC/event vocabulary in Infrastructure |
+| `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
 | `binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
 | `binance/shared/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Exchange-specific Infrastructure mapping; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
@@ -191,12 +194,12 @@ The user-data lifecycle coordinator now lives at `src/application/user-data-sess
 
 The package coverage command includes `src/application/**/*.js` (including application-owned ports) and excludes `*.test.js`, so the Application layer remains subject to the existing coverage thresholds.
 
-### Phase 9 implementation slice 6 — application-owned port location
-
-The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged. PR #691 merged with package unit tests, the 90/80/80 Brokers coverage gate, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
-
 ### Phase 9 implementation slice 5 — Binance infrastructure adapter
 
 The Binance implementation of `UserDataClientPort` now lives in `src/infrastructure/binance/user-data-client-adapter.js`. The broker facade composes this adapter with the application session; the adapter owns Binance request names, HMAC signing options, response-envelope normalization, canonical user-data event mapping, termination conversion, and exchange-specific event identity generation. Its deterministic tests live beside the infrastructure implementation.
 
 The broker coverage command now includes `src/infrastructure/**/*.js` and excludes infrastructure test files, applying the same existing coverage thresholds to the adapter layer.
+### Phase 9 implementation slice 6 — application-owned port location
+
+The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged. PR #691 merged with package unit tests, the 90/80/80 Brokers coverage gate, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
+
