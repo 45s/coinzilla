@@ -349,9 +349,9 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 ### Phase E — Infrastructure adapters and composition
 - [ ] Group Binance API, Streams, transport, sessions, signing/configuration, and response adapters under infrastructure by responsibility.
 - [ ] Implement application ports through adapters without changing the public facade.
-- [ ] Add a bootstrap factory/composition root and keep public exports thin.
+- [ ] Evaluate whether a dedicated bootstrap factory removes a real coupling or clarifies ownership without changing the public constructor. Keep composition in the concrete infrastructure facade if that remains the simplest correct boundary; document the decision either way. Keep public exports thin.
 - [ ] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes remain safe.
-- **Exit:** concrete Binance dependencies are constructed only at bootstrap/infrastructure boundaries.
+- **Exit:** concrete Binance dependencies are constructed only at infrastructure/composition boundaries; a separate bootstrap module exists only if it provides a demonstrated benefit.
 
 ### Phase F — Dependency and compatibility verification
 - [ ] Verify dependency direction (static import audit or focused architecture tests where practical).
