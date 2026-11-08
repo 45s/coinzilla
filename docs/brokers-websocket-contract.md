@@ -2,7 +2,7 @@
 
 ## Source layout
 
-The current source tree has a partial Domain / Application / Infrastructure split. Binance protocol code remains under `src/binance/` and will move only through focused, tested architecture slices; it is not yet fully nested under `src/infrastructure/binance/`.
+The current source tree has a partial Domain / Application / Infrastructure split. The main `src/binance/broker-websocket/` implementation remains under `src/binance/`; Binance DTO/Entity adapters now live under `src/infrastructure/binance/adapters/`. Remaining Binance protocol modules will move only through focused, tested architecture slices.
 
 ```text
 packages/brokers/src/
@@ -20,18 +20,19 @@ packages/brokers/src/
 │   └── user-data-session.js
 ├── infrastructure/
 │   └── binance/
+│       ├── adapters/
+│       │   ├── adapt-canonical-fill.js
+│       │   ├── adapt-canonical-order.js
+│       │   ├── adapt-fill.js
+│       │   ├── adapt-order.js
+│       │   ├── adapt-spot-asset.js
+│       │   ├── adapt-spot-balance.js
+│       │   ├── normalize-binance-id.js
+│       │   └── *.test.js
 │       ├── user-data-client-adapter.js
 │       └── user-data-client-adapter.test.js
 └── binance/
     ├── index.js
-    ├── shared/
-    │   ├── adapt-canonical-fill.js
-    │   ├── adapt-canonical-order.js
-    │   ├── adapt-fill.js
-    │   ├── adapt-order.js
-    │   ├── adapt-spot-asset.js
-    │   ├── adapt-spot-balance.js
-    │   └── normalize-binance-id.js
     └── broker-websocket/
         ├── index.js
         ├── broker.js
@@ -72,7 +73,7 @@ The lifecycle implementation itself is `src/application/user-data-session.js`; `
 - `binance/broker-websocket/constants/` owns fixed Binance endpoint values.
 - `binance/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
 - `binance/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
-- `binance/shared/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
+- `src/infrastructure/binance/adapters/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
 - `broker-websocket/tests/` groups broker-operation contract tests; focused module tests remain colocated with their implementation.
 - `broker-websocket/test-helpers/` contains test-only fakes shared by broker tests; it is not part of the package's public API.
 
@@ -102,7 +103,7 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 | `src/application/user-data-session.js` | Subscriber state, reconnect scheduling, remote subscription lifecycle, reconciliation acknowledgement through an injected client port | Correctly placed in Application; preserve state-machine cohesion and keep Binance RPC/event vocabulary in Infrastructure |
 | `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
 | `binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
-| `binance/shared/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Exchange-specific Infrastructure mapping; canonical shared entity invariants remain in `@coinzilla/entities` |
+| `src/infrastructure/binance/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
 | `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
 
@@ -202,4 +203,8 @@ The broker coverage command now includes `src/infrastructure/**/*.js` and exclud
 ### Phase 9 implementation slice 6 — application-owned port location
 
 The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged. PR #691 merged with package unit tests, the 90/80/80 Brokers coverage gate, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
+
+### Phase 9 implementation slice 7 — Binance DTO/Entity adapters under Infrastructure
+
+The Binance-specific adapters for canonical orders/fills, legacy orders/trades, spot assets/balances, and Binance ID normalization now live under `src/infrastructure/binance/adapters/`. Their deterministic mapper tests move with them unchanged. The broker facade, canonical fill/history helpers, and package root export are updated to import from the infrastructure location. The obsolete `src/binance/shared/` coverage include/exclude is removed because `src/infrastructure/**/*.js` now covers these modules. Public root exports, method signatures, result shapes, decimal handling, and mapping behavior are unchanged.
 
