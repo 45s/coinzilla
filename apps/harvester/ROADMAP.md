@@ -1370,12 +1370,14 @@ Owner decisions are closed and recorded in the canonical specification. This his
 
 ### Gate 5 — user-data recovery (#626)
 
-- [ ] Re-read original #626 acceptance criteria; #627/#629 merges are not acceptance evidence.
-- [ ] Map each criterion to source, deterministic regression, failure mode, and exact CI head.
+- [x] Re-read original #626 acceptance criteria; #627/#629 merges are not acceptance evidence.
+- [x] Map each criterion to source, deterministic regression, failure mode, and exact CI head in [AUDIT_SESSION_2026-11-08.md §12](./AUDIT_SESSION_2026-11-08.md).
 - [x] Bound unchanged `recovered` lifecycle/INFO diagnostics to once per application recovery generation while preserving reminder-driven retries; merged [PR #674](https://github.com/45s/coinzilla/pull/674).
 - [x] Add fail-closed regressions for broker acknowledgement rejection/exception, startup-only pending-recovery semantics, owned-order reconciliation failure, account-wide open-orders REST failure, account snapshot read failure, and durable open-orders audit failure; merged PRs [#675](https://github.com/45s/coinzilla/pull/675)–[#678](https://github.com/45s/coinzilla/pull/678).
-- [ ] Cover reconnect/resubscribe, lost/late/duplicate/reordered fills, unknown submission outcomes, cancel/fill races, and remaining interrupted recovery boundaries.
-- [x] Revalidate generation, accounting state, and user-data event sequence between durable account and open-orders audits; merged [PR #679](https://github.com/45s/coinzilla/pull/679).
+- [x] Cover reconnect/resubscribe, lost/late/duplicate/reordered fills, unknown submission outcomes, and order-mutation gates with deterministic broker/engine tests; exact-head CI recorded in the acceptance matrix.
+- [~] Add direct tests for a second disconnect during a later retry, app-level REST timeout injection, and exactly-one terminal broker `reconciled` notification; replay the full Journal sequence if practical.
+- [x] Revalidate generation/accounting/event sequence between durable account and open-orders audits and before the final event drain; merged [PR #679](https://github.com/45s/coinzilla/pull/679) and [PR #682](https://github.com/45s/coinzilla/pull/682).
+- [x] Assert repeated recovered reminders are single-flight and invoke owned-order reconciliation exactly once per in-flight generation; merged [PR #683](https://github.com/45s/coinzilla/pull/683).
 - [~] Resolve the empty Undici TypeError's source and request broker-side cause preservation through [cross-domain request #680](https://github.com/45s/coinzilla/issues/680); the source is identified, but the underlying network cause and broker implementation remain open.
 - [ ] Keep #626 open until every criterion has a verified disposition and owner acceptance.
 
