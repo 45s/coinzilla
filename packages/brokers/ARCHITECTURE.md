@@ -100,6 +100,18 @@ Owns the broker capabilities as seen by callers and the workflows that coordinat
 
 A use case is justified when it represents an application goal and coordinates collaborators. Do not wrap every existing method in a one-line use case or create an interface for every class. Ports should describe the capability the application needs, not mirror the entire Binance API.
 
+### Important: do not force application use cases into a broker adapter
+
+`@coinzilla/brokers` is an integration package, not a trading application. A public method that performs one Binance RPC and maps its response is normally an infrastructure-adapter operation; it does not become an application use case merely because it has a business-sounding name.
+
+The Application layer is justified where the package owns a genuine workflow across capabilities or lifecycle boundaries. The existing user-data session is such a case: it coordinates multiple local subscribers, one remote subscription, reconnect/recovery, and acknowledgements across an injected client port.
+
+Consequently:
+- Do not create `application/use-cases/` wrappers for every `get*`, `createOrder`, or `cancelOrder` method.
+- Do not create `domain/orders/`, `domain/market/`, or `domain/account/` just because those folders appear in the illustrative tree. First establish a Brokers-owned invariant or policy that is not already owned by `@coinzilla/entities` or the consuming application.
+- Keep simple Binance request construction, response mapping, and protocol validation in infrastructure adapters.
+- If the audit shows no meaningful application workflow beyond user-data session coordination, a small Application layer is the correct DDD outcome. Architectural completeness is not measured by equal folder sizes.
+
 ### Infrastructure
 
 Owns all Binance-specific and technical details:
