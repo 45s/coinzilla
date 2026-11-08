@@ -85,22 +85,22 @@ The package entry point currently exports exactly `BinanceWebSocketBroker`, `Bin
 
 ## DDD responsibility map (current implementation and Phase 9 target boundaries)
 
-The first DDD/TDD tranche established deterministic tests, selected ports, and focused Binance adapters. It did **not** complete the intended DDD architecture inside `@coinzilla/brokers`. Phase 9 in [the broker roadmap](../../packages/brokers/ROADMAP.md) tracks that package-scoped refactor.
+The first DDD/TDD tranche established deterministic tests, selected ports, and focused Binance adapters. The package-scoped Phase 9 refactor subsequently completed through PR #697 (full Binance Infrastructure placement) and PR #704 (executable dependency-direction and public API guards). The roadmap records the merged slices and verification evidence.
 
 **Scope:** `@coinzilla/brokers` owns the broker domain, broker application workflows, ports, and exchange infrastructure adapters. It does not own portfolio/position policy, trading strategies, or bot product behavior. Those concerns remain outside this package; this is not a reason to exclude broker-owned domain/application concepts from it.
 
-### Current implementation (starting point, not target architecture)
+### Current implementation (verified source tree)
 
 | Current module | Current responsibility | Refactoring consideration |
 |---|---|---|
-| `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Keep public API/composition thin while preserving compatibility |
+| `src/index.js`, `src/infrastructure/binance/index.js`, `src/infrastructure/binance/broker-websocket/index.js` | Public exports and Binance infrastructure module composition | Keep public API/composition thin while preserving compatibility |
 | `src/broker.core.js` | Exported shared base class with default unimplemented methods and state maps; Market Simulator extends it | Preserve construction, inherited state, and unsupported-method behavior; any redesign requires a separate consumer migration |
 | `infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
 | `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
 | `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |
 | `src/application/user-data-session.js` and `src/application/user-data-session.test.js` | Application subscriber lifecycle, reconnect/recovery coordination, reconciliation acknowledgement, and direct tests through an injected client port | Correctly placed in Application; keep direct tests independent of Binance and preserve state-machine cohesion |
 | `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
-| `infrastructure/binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
+| `infrastructure/binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Keep Binance request construction and protocol-specific event mapping in Infrastructure; promote a rule only when it is demonstrably exchange-neutral and independently owned |
 | `src/infrastructure/binance/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
 | `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
@@ -142,6 +142,8 @@ Required test responsibilities:
 ### Phase 9 completion criteria
 
 Do not mark the architecture refactor complete until the package has implemented and documented dependency boundaries; domain/application code is independent of concrete Binance infrastructure; ports have contract-tested Binance adapters; important failure and lifecycle behavior has deterministic coverage; public contracts remain compatible or have an approved migration; and package tests/coverage pass on the exact merged PR head.
+
+**Verified completion:** the criteria were satisfied on the merged PR #704 head `f611175838f99cf1861ab7a0a9b0e9fee849723c` and integrated into `develop` at merge commit `216f7c8397d83837c4e6d3202778469c2a4e85bf`. The full Binance Infrastructure relocation was merged separately in PR #697 at `ae5d1a8a9c474cff46a6db72f4258787bb071669`. Brokers tests/coverage, workspace tests/coverage, Harvester targeted regressions, syntax, actionlint, and dependency audit passed. The opt-in TESTNET workflow was not run; its operational validation remains tracked as Phase 8.
 
 ### Verified package coverage snapshot
 
