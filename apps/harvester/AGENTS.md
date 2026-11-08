@@ -12,6 +12,10 @@ Before any implementation or state-changing action, provide a concise preflight 
 
 Follow the selected issue's scope and repository task workflow. Journal evidence is an explicitly selected Harvester workstream; it must not change strategy decisions, become trading-state authority, or add blocking I/O to market, broker-event, or fill-accounting paths.
 
+## Visual technical documentation
+
+Follow the repository-wide [visual technical documentation convention](../../AGENTS.md#visual-technical-documentation). For complex Harvester trading, order-lifecycle, and recovery workflows, prefer a source-verified Mermaid flowchart or sequence diagram in the closest existing architecture document. Include exchange failure paths, deferred readiness, unknown outcomes, fill reconciliation, and the exact safety boundary; keep the diagram aligned with Harvester source and regression tests.
+
 ## Product priority
 
 [TRADING_FIRST.md](./docs/TRADING_FIRST.md) remains the source of truth for trading behavior and exchange-safety requirements. It does not impose a blanket acceptance gate on separately selected engineering work.

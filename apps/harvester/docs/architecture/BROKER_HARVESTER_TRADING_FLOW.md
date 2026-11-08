@@ -117,9 +117,64 @@ opt Submission acknowledgement already reports FILLED
 end
 ```
 
+
+## Conservative trailing-BUY replacement safety
+
+The following flow is the implemented replacement lifecycle, including the preflight boundary and failure handling after the old order is canceled.
+
+```mermaid
+flowchart TD
+    A[Market-price event enters serialized transition] --> B{Acknowledged active BUY and no active position?}
+    B -- No --> Z[Continue normal Conservative evaluation]
+    B -- Yes --> C{Trailing repricing trigger reached and engine not stopping?}
+    C -- No --> Z
+    C -- Yes --> D[Fetch current Binance symbol filters]
+    D --> E{Refresh complete and same active market?}
+    E -- No --> P[Pause pair; leave existing BUY untouched]
+    E -- Yes --> F[Evaluate Conservative at current price; exclude old BUY from commitments]
+    F --> G[Allocate commitments and build executable actions]
+    G --> H{Executable replacement BUY exists?}
+    H -- No --> K[Keep existing BUY; skip or defer replacement]
+    H -- Yes --> I[Build canonical preflight order]
+    I --> J[Validate exchange filters and submission readiness]
+    J --> L{Preflight admissible?}
+    L -- Invalid --> P
+    L -- Not ready --> K
+    L -- Yes --> M[Check cancellation eligibility and durably record cancel intent]
+    M --> N{Cancellation may proceed?}
+    N -- No --> P
+    N -- Yes --> O[Cancel existing BUY and request canonical confirmation]
+    O --> Q{Canonical cancellation result received?}
+    Q -- No or unknown --> R[Mark old order UNKNOWN; pause and reconcile]
+    Q -- Yes --> S[Update registry; fetch fills; verify identity and executed quantity; apply actual fills]
+    S --> T{Order is CANCELED with zero reconciled fills?}
+    T -- No --> U[Pause; do not replace after fill race or reconciliation failure]
+    T -- Yes --> V{Still trading-ready and not stopping?}
+    V -- No --> W[Leave old BUY canceled; defer until readiness returns]
+    V -- Yes --> X[Re-evaluate with refreshed rules and current-price reference]
+    X --> Y[Rebuild and revalidate actual order; register PENDING and durably record submission intent]
+    Y --> AA{Broker submission outcome?}
+    AA -- Acknowledged --> AB[Register acknowledgement; continue trading]
+    AA -- Definite POST_ONLY would-take --> AC[Remove pending; clear book; defer until fresh book]
+    AA -- Other rejection or unknown outcome --> AD[Mark replacement UNKNOWN; pause; reconcile by clientOrderId before retry]
+    Y -. Journal intent cannot be persisted .-> AE[Remove pending; pause; do not call broker]
+```
+
+### Why preflight happens before cancellation
+
+The engine runs this work inside its serialized market-price transition. It first confirms that an acknowledged BUY is eligible for repricing and that no active strategy position blocks the operation. It then fetches fresh Binance filters, validates the refreshed market metadata, evaluates the Conservative policy using the current market price as the replacement reference, and allocates commitments while excluding only the BUY that would be canceled. That exclusion models the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
+
+The resulting executable action is converted into a canonical preflight order and checked against the refreshed exchange rules (including quantity/price increments and minimum notional) and the submission-readiness gate. For `LIMIT_MAKER`, readiness also requires a fresh same-symbol book and a price that does not cross the opposite best quote. If filters are missing, incomplete, mismatched, or the candidate fails exchange validation, the pair is paused and the existing BUY remains untouched. If market/book readiness is temporarily unavailable or no executable replacement BUY exists, replacement is deferred and the old BUY is retained. This ordering prevents a failed candidate from removing the only standing BUY and leaving the pair without its intended order.
+
+### Cancellation and post-cancellation failure handling
+
+Only an admissible preflight proceeds to cancellation. The engine verifies cancellation eligibility and durably records the cancellation intent before calling the broker. An unconfirmed cancellation is represented as UNKNOWN and pauses the pair. After a canonical cancellation result, the engine updates the order registry, retrieves canonical fills, validates fill/order identity, applies actual fills, and checks that reconciled fill quantity matches the broker's cumulative executed quantity. A fill racing with cancellation, a non-CANCELED terminal result, incomplete history, or any mismatch pauses the pair; no replacement is submitted.
+
+After a confirmed CANCELED order with zero reconciled fills, the engine stores the current market price as the new reference and re-evaluates using the refreshed filters. It validates the actual order again, registers it as PENDING, and durably records the submission intent before broker I/O. If that intent cannot be persisted, the pending record is removed, the pair is paused, and the broker is not called. A generic rejection, transport error, or uncertain acknowledgement leaves the replacement explicitly UNKNOWN and pauses the pair; reconcile it by canonical `clientOrderId` before any retry. Binance's definite `POST_ONLY_WOULD_TAKE` rejection is handled separately: the pending record is removed, the cached book is discarded, and evaluation is deferred until fresh book data arrives.
+
 ## Startup paths and important distinctions
 
-- **Market filters:** bootstrap loads `getSymbolFilters({ symbol })` for every enabled symbol before it starts market subscriptions. The adapter caches normalized metadata for reuse.
+- **Market filters:** bootstrap loads `getSymbolFilters({ symbol })` for every enabled symbol before it starts market subscriptions. The adapter fetches current exchange metadata on every request; it does not retain a process-lifetime filter cache.
 - **Initial price fallback:** bootstrap first establishes every enabled market-price subscription. It then calls `getPrices({ symbol })` and seeds the engine only when no fresh WebSocket price was received for that symbol. The current Binance implementation sends `ticker.price` as a request/response operation over its WebSocket API; it is **not an HTTP REST call**.
 - **Book ticker:** when TESTNET trading is enabled, bootstrap subscribes to best bid/ask updates and forwards them to `processBookTicker()`. The engine uses fresh same-symbol book data to reject a crossing `LIMIT_MAKER` order before submission.
 - **Acknowledgement versus execution:** `placeOrder()` returns an order acknowledgement/status. It is not evidence that any quantity traded. A later `executionReport` with `executionType: "TRADE"` carries the actual execution. If the submission acknowledgement itself is already `FILLED`, the engine retrieves canonical fills with `getFills()` and reconciles/applies them before completing that serialized transition.
