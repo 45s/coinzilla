@@ -31,6 +31,8 @@ export class Journal {
 
     this.started = false
     this.starting = false
+    this.startPromise = null
+    this.startupCleanupErrors = []
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -79,17 +81,34 @@ export class Journal {
     }
 
     this.starting = true
+    const startPromise = this.startLifecycle()
+    this.startPromise = startPromise
+    return startPromise
+  }
+
+  /**
+   * Acquire resources and subscribe while the public start() promise tracks completion.
+   *
+   * @private
+   * @returns {Promise<object>} Startup result after success or complete rollback.
+   */
+  async startLifecycle() {
     try {
       await this.store.ensureDirectory()
       if (this.closing || this.closed) {
         return toResult({ error: new Error("Journal was closed during startup") })
       }
       await this.store.acquireWriter()
+      if (this.closing || this.closed) {
+        const errors = [new Error("Journal was closed during startup")]
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
+        return toResult({ errors })
+      }
       const { filePath } = await this.store.createSession()
       this.filePath = filePath
       if (this.closing || this.closed) {
         const errors = [new Error("Journal was closed during startup")]
-        await this.cleanupStoreResources(errors)
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
       const result = this.eventBus.subscribeAll({
@@ -102,7 +121,7 @@ export class Journal {
       })
       if (!result.ok) {
         const errors = [...result.errors]
-        await this.cleanupStoreResources(errors)
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
       this.subscription = result.subscription
@@ -115,11 +134,12 @@ export class Journal {
       return toResult({ filePath: this.filePath })
     } catch (error) {
       const errors = [error]
-      await this.cleanupStoreResources(errors)
+      this.startupCleanupErrors = await this.cleanupStoreResources(errors)
       this.reportError({ message: "Failed to start journal", errors })
       return toResult({ errors })
     } finally {
       this.starting = false
+      this.startPromise = null
     }
   }
 
@@ -131,17 +151,22 @@ export class Journal {
    * @param {Error[]} errors - Cleanup errors are appended without replacing the original failure.
    */
   async cleanupStoreResources(errors) {
+    const cleanupErrors = []
     try {
       await this.store.closeSession()
     } catch (error) {
       errors.push(error)
+      cleanupErrors.push(error)
     }
     try {
       await this.store.releaseWriter()
     } catch (error) {
       errors.push(error)
+      cleanupErrors.push(error)
     }
+    return cleanupErrors
   }
+
   async record({ event } = {}) {
     if (!this.started || this.closing || this.closed || !this.filePath) {
       return toResult({
@@ -282,8 +307,28 @@ export class Journal {
       })
     }
 
+    if (this.starting) {
+      this.closing = true
+      const startPromise = this.startPromise
+      if (startPromise) {
+        await startPromise
+      }
+    }
+
     if (!this.started) {
       this.closed = true
+      this.closing = false
+      const cleanupErrors = this.startupCleanupErrors
+      this.startupCleanupErrors = []
+      if (cleanupErrors.length > 0) {
+        this.closeDurable = false
+        this.reportError({
+          message: "Journal startup cancellation left cleanup errors",
+          errors: cleanupErrors,
+          filePath: this.filePath,
+        })
+        return toResult({ errors: cleanupErrors, closed: true, durable: false })
+      }
       this.closeDurable = true
       return toResult({ closed: true, durable: true })
     }

@@ -446,7 +446,7 @@ test("rejects overlapping startup attempts without leaking a session file or sub
   }
 })
 
-test("closes a session file created after close cancels startup", async () => {
+test("waits for startup cancellation to release the writer lock before close resolves", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
   const eventBus = new EventBus()
   const journal = new Journal({ eventBus, directory })
@@ -460,33 +460,80 @@ test("closes a session file created after close cancels startup", async () => {
     releaseCreateSessionFile = resolve
   })
   const originalCreateSession = journal.store.createSession.bind(journal.store)
-
   journal.store.createSession = async () => {
     signalCreateSessionFileStarted()
     await createSessionFileGate
     return originalCreateSession()
   }
 
+  let startPromise
+  let closePromise
   try {
-    const startPromise = journal.start()
+    startPromise = journal.start()
     await createSessionFileStarted
 
-    const closeResult = await journal.close()
-    assert.equal(closeResult.ok, true)
-    assert.equal(journal.closed, true)
+    let closeSettled = false
+    closePromise = journal.close().then((result) => {
+      closeSettled = true
+      return result
+    })
+
+    await Promise.resolve()
+    assert.equal(
+      closeSettled,
+      false,
+      "Close must remain pending while startup still owns a writer lock and session creation has not completed its cancellation cleanup.",
+    )
 
     releaseCreateSessionFile()
-
     const startResult = await startPromise
-    assert.equal(startResult.ok, false)
-    assert.match(startResult.errors[0].message, /closed during startup/)
-    assert.equal(journal.started, false)
-    assert.equal(journal.starting, false)
-    assert.equal(journal.store.sessionHandle, null)
-    assert.equal(journal.subscription, null)
-    assert.equal((await readdir(directory)).length, 1)
+    const closeResult = await closePromise
+
+    assert.equal(
+      startResult.ok,
+      false,
+      "Startup must report cancellation when close is requested before the session has become active.",
+    )
+    assert.match(
+      startResult.errors[0].message,
+      /closed during startup/,
+      "The startup result must identify that close cancelled the in-flight startup attempt.",
+    )
+    assert.equal(
+      closeResult.ok,
+      true,
+      "Close must report success after the cancelled startup attempt has released all resources it acquired.",
+    )
+    assert.equal(
+      journal.closed,
+      true,
+      "The Journal must enter its terminal closed state after startup cancellation has settled.",
+    )
+    assert.equal(
+      journal.store.sessionHandle,
+      null,
+      "No session file handle may remain open when close reports completion after startup cancellation.",
+    )
+    const remainingFiles = await readdir(directory)
+    assert.equal(
+      remainingFiles.includes(".coinzilla-journal.lock"),
+      false,
+      "The cancelled startup must release its exclusive writer lock before close resolves.",
+    )
+    const retainedSessions = remainingFiles.filter((fileName) => fileName.endsWith(".jsonl"))
+    assert.equal(
+      retainedSessions.length,
+      1,
+      "The session file created before startup cancellation must remain as an empty historical session rather than being deleted.",
+    )
+    assert.equal(
+      await readFile(path.join(directory, retainedSessions[0]), "utf8"),
+      "",
+      "The retained session file must remain empty because startup was cancelled before any event could be accepted.",
+    )
   } finally {
     releaseCreateSessionFile()
+    await Promise.allSettled([startPromise, closePromise].filter(Boolean))
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
   }
@@ -1019,3 +1066,4 @@ test("keeps the legacy internal file-handle override forwarded to the store-owne
     await eventBus.close()
   }
 })
+

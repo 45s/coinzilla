@@ -73,7 +73,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `e992f9c754eff744d11f315be744afbc067ef12b` (2026-11-08; includes merged PRs #745–#749).
+**Audit checkpoint:** `develop` at `efe2e9a7a0cde66487de386b2ea323c7a217d91c` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
@@ -205,8 +205,8 @@ TDD and documentation:
 
 ### J-4 — Make orchestration state ownership explicit
 
-**Status:** [ ] planned  
-**Depends on:** J-3  
+**Status:** [~] in progress  
+**Depends on:** J-3 (merged in PR #748)  
 **Intent:** ensure the Journal service owns lifecycle policy while the adapter owns resource mechanics.
 
 Scope:
@@ -294,8 +294,9 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] [PR #742](https://github.com/45s/coinzilla/pull/742) merged: package-scoped Journal coverage is enforced at 85% lines / 80% branches. Exact PR head `86a63d3d9dfb0acdf30bcf77aa92937e324f5491` measured 88.24% lines / 83.50% branches / 100% functions; all six required offline CI workflows passed.
 - [x] [J-1 / PR #746](https://github.com/45s/coinzilla/pull/746) — Defined source-event, persisted-record, and recovered-record vocabulary; documented public contracts and JSDoc. Merged to `develop` as `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`; all six required checks passed on exact PR head `2631c3b14dd46270ff0a2919851ccc700b95fa6a`.
 - [x] [J-2 / PR #747](https://github.com/45s/coinzilla/pull/747) — Centralized stable record-ID validation, rejected root-level enumerable `toJSON` hooks, and added serialization/recovery contract tests. Merged to `develop` as `5d38c1659d1fca187386ebe7c737b97540279419`; all six required checks passed on exact PR head `89f01ebde410d705e88bc48647557c5b36f6c201`.
-- [~] J-3 — Isolate filesystem persistence behind an internal adapter (test-first in progress on PR #748 / `feature/journal/filesystem-store`).
-- [ ] J-4 — Make orchestration state ownership explicit.
+- [x] [J-3 / PR #748](https://github.com/45s/coinzilla/pull/748) — Isolated filesystem persistence and resource ownership behind the package-private `FileSystemJournalStore`; retained the deprecated internal `fileHandle` test seam without leaking the original descriptor. Merged to `develop` as `9ec03aaf7df3f49f7dbc42187baf9a099de7fe79`; all required CI checks passed on exact PR head `e550803eb47100aa23123aa8f6e42f2b0d1eedb6`.
+- [~] J-4 startup/close race: test-first commit `318df35b7d41d76cda25f96565ba5e9e2b9b961b` added a deterministic deferred-session-creation regression. On the exact RED head, Journal unit tests reported 59 passed / 1 failed; the failure was the expected assertion that `close()` must remain pending until startup cleanup releases its lock (actual `closeSettled: true`).
+- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/lifecycle-state-ownership`).
 - [ ] J-5 — Contract conformance and operational documentation.
 
 ## Current contract
@@ -323,4 +324,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `e992f9c754eff744d11f315be744afbc067ef12b`.
+**Current `develop` checkpoint:** `efe2e9a7a0cde66487de386b2ea323c7a217d91c`.

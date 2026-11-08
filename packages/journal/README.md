@@ -26,7 +26,7 @@ Construct `Journal` with an EventBus, a directory path, and an optional logger. 
 | `start()` | Creates the directory if needed, acquires exclusive writer ownership, creates a session, and subscribes to EventBus messages. A second active writer for the same directory is rejected. |
 | `record({ event })` | Appends one validated source event in queue order. A successful result means the write completed and reports `durable: false`; it does not confirm file-content sync. |
 | `flush()` | Flushes EventBus delivery, waits for queued writes, and syncs the active session file. Success reports `durable: true`; failure does not claim durability. |
-| `close()` | Unsubscribes, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. A failed close remains a failed durability outcome on repeated calls. |
+| `close()` | Cancels and waits for an in-progress startup to finish rolling back its owned resources, or unsubscribes an active writer, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. A failed close remains a failed durability outcome on repeated calls. |
 | `read(options)` | Reads and validates a complete bounded snapshot while this Journal instance is stopped. It does not acquire a cross-process reader lock. |
 | `replay(options)` | Validates the complete snapshot, then awaits the handler sequentially for each recovered record. A handler failure stops replay and reports completed progress. |
 
@@ -62,6 +62,9 @@ if (!closed.ok) throw closed.errors[0]
 A transient file-content sync failure after queued writes have completed does not poison the active Journal writer: a later `flush()` on the same instance can retry the sync and make those earlier writes durable. If a caller republishes the same logical audit after an unconfirmed flush, Journal stores that publication as a new record; a later successful sync can make both records durable. Journal does not deduplicate records by business meaning. This is at-least-once publication, so consumers must use stable record IDs and idempotent processing rather than deleting, overwriting, or deduplicating historical evidence. A `writeFile()` failure is different: it poisons the active Journal instance, and later writes/flushes continue failing until operator-level recovery or process restart.
 
 New records retain the original event fields at the JSONL top level and add a reserved `__coinzillaJournal` metadata field containing schema version 1 and the stable record ID. This additive shape preserves compatibility with existing consumers that read event fields directly. Existing raw event JSONL records without metadata are supported as legacy schema-v1 records.
+
+
+If `close()` is called while `start()` is still acquiring the writer lock or creating the session, close marks startup for cancellation and does not resolve until that startup attempt has completed cleanup of every resource it acquired. The startup promise reports cancellation; the close promise reports whether the resulting stopped state was reached safely. If resource cleanup itself fails, close returns those cleanup errors and does not claim durable closure. The timestamped session file created before cancellation is retained as an empty JSONL file; its handle is closed and its lock is released rather than deleting or rewriting session history.
 
 ## Directory ownership
 
