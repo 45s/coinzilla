@@ -33,7 +33,7 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - **Composition/public API:** preserve the public broker contract while wiring application services to Binance adapters. Keep `src/index.js` and exchange entry points thin.
 - The existing `broker-websocket/broker.js`, `src/application/user-data-session.js`, `src/application/ports/user-data-client-port.js`, `helpers/`, `utils/`, and `shared/` are the evolving implementation. `src/application/user-data-session.js` owns the exchange-neutral user-data lifecycle; `src/application/ports/user-data-client-port.js` owns its injected client contract; `src/infrastructure/binance/user-data-client-adapter.js` implements that contract. Move remaining infrastructure responsibilities incrementally when tests demonstrate a better boundary.
 - `apps/harvester` owns portfolio/position policy, strategies, and bot application behavior. That boundary does not make brokers merely an infrastructure-only package.
-- Create `domain/`, `application/`, `ports/`, or `infrastructure/` modules only when they contain real responsibilities; do not create empty template folders.
+- Create `domain/`, `application/`, `application/ports/`, or `infrastructure/` modules only when they contain real responsibilities; do not create empty template folders or a separate top-level `ports/` directory.
 
 Keep order-changing calls gated on user-data readiness/reconciliation and marked `stateChanging: true`. An uncertain timeout/disconnect is an unknown outcome; never blindly replay the operation.
 
