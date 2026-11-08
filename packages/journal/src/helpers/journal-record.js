@@ -1,6 +1,10 @@
 const JOURNAL_METADATA_KEY = "__coinzillaJournal"
 const SUPPORTED_SCHEMA_VERSION = 1
 
+function isValidJournalRecordId(value) {
+  return typeof value === "string" && value.trim() !== ""
+}
+
 function createJournalError({ code, message, details = {} }) {
   const error = new Error(message)
   error.code = code
@@ -9,15 +13,17 @@ function createJournalError({ code, message, details = {} }) {
 }
 
 /**
- * Serialize a stable event with additive versioned journal metadata.
+ * Serialize a stable source event with additive versioned journal metadata.
+ * Source events must not provide Journal's reserved metadata or a root toJSON hook.
  * @param {{ event: object }} input
  * @returns {string}
+ * @throws {TypeError} If the event shape, stable identity, or reserved-field contract is invalid.
  */
 export function serializeJournalRecord({ event } = {}) {
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     throw new TypeError("A valid event object is required")
   }
-  if (typeof event.id !== "string" || event.id.trim() === "") {
+  if (!isValidJournalRecordId(event.id)) {
     throw new TypeError("Journal events require a non-empty stable id")
   }
 
@@ -25,15 +31,20 @@ export function serializeJournalRecord({ event } = {}) {
     throw new TypeError(`Event field ${JOURNAL_METADATA_KEY} is reserved by Journal`)
   }
 
+  // A copied root toJSON hook could replace the whole envelope during stringify.
+  const record = { ...event }
+  if (typeof record.toJSON === "function") {
+    throw new TypeError("Journal source events cannot define an own enumerable toJSON function")
+  }
+
   // Keep event fields at the JSONL top level for existing consumers that
   // inspect persisted events directly; the metadata is additive.
-  const record = {
-    ...event,
+  Object.assign(record, {
     [JOURNAL_METADATA_KEY]: {
       schemaVersion: SUPPORTED_SCHEMA_VERSION,
       id: event.id,
     },
-  }
+  })
 
   return `${JSON.stringify(record)}\n`
 }
@@ -42,7 +53,8 @@ export function serializeJournalRecord({ event } = {}) {
  * Parse one complete JSONL session. No partial or malformed record is ignored.
  * Legacy raw event records without metadata are interpreted as schema version 1.
  * @param {{ content: string, fileName: string, maxRecordBytes: number }} input
- * @returns {Array<{ id: string, schemaVersion: number, payload: object, position: object }>}
+ * @returns {Array<{ id: string, schemaVersion: number, payload: object, position: { fileName: string, lineNumber: number } }>}
+ * @throws {TypeError|Error} If options are invalid or any line violates the record contract.
  */
 export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) {
   if (typeof content !== "string" || typeof fileName !== "string") {
@@ -126,8 +138,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
         })
       }
       if (
-        typeof id !== "string" ||
-        id.trim() === "" ||
+        !isValidJournalRecordId(id) ||
         !payload ||
         typeof payload !== "object" ||
         Array.isArray(payload) ||
@@ -144,7 +155,7 @@ export function parseJournalSession({ content, fileName, maxRecordBytes } = {}) 
       id = parsed.id
       schemaVersion = SUPPORTED_SCHEMA_VERSION
       payload = parsed
-      if (typeof id !== "string" || id.trim() === "") {
+      if (!isValidJournalRecordId(id)) {
         throw createJournalError({
           code: "JOURNAL_MALFORMED_RECORD",
           message: `Legacy journal record at ${fileName}:${lineNumber} has no stable id`,

@@ -34,7 +34,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `a8c316dd74cdff359ba631c8db149b248c991f69` (2026-11-08; includes merged PR #745).
+**Audit checkpoint:** `develop` at `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae` (2026-11-08; includes merged PRs #745 and #746).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
@@ -101,6 +101,7 @@ Scope:
 - Keep serialization and parsing at the format boundary; keep record invariants in the record contract.
 - Keep source event payload fields compatible with the existing top-level JSONL representation and retain the reserved `__coinzillaJournal` metadata format.
 - Make validation results/errors and schema-version handling consistent and explicit.
+- Reject an own enumerable root-level `toJSON` hook on source events so JSON serialization cannot replace Journal's persisted record envelope.
 - Keep the current public `Journal` API and recovered-record shape unless tests demonstrate a necessary compatibility-preserving clarification.
 
 Acceptance criteria:
@@ -119,7 +120,7 @@ Required test matrix:
 - Non-mutation/aliasing behavior for caller input and returned record values, if immutability is adopted as part of the contract.
 
 TDD and documentation:
-- First commit adds focused tests and updates the README contract; run the tests and record the expected RED result.
+- Test-first commit `a1c0807962008ee981e1caff31fe96d2e53c66af` added focused tests and the README contract. On Node 24.22.2, `pnpm --filter @coinzilla/journal test` produced the expected RED: 51 passed, 1 failed because the source event's root `toJSON` hook was not rejected (`src/journal-record.test.js:61`).
 - Implementation commit makes the smallest change that turns those tests GREEN and updates JSDoc/README to the actual behavior.
 - Refactor only after GREEN; keep tests passing and update affected docs in that same commit.
 - Do not bundle filesystem adapter work into this PR.
@@ -252,8 +253,8 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits.
 - [x] [PR #741](https://github.com/45s/coinzilla/pull/741) merged: exclusive directory ownership is acquired before session creation, competing/stale locks are preserved, and startup rollback/durable close release the owned lock. Cross-process, stale-lock, and rollback regressions were confirmed RED before implementation; all required CI passed on exact PR head `74ad5a7369aee444940b5d7feb009ee0d17ffc7d`.
 - [x] [PR #742](https://github.com/45s/coinzilla/pull/742) merged: package-scoped Journal coverage is enforced at 85% lines / 80% branches. Exact PR head `86a63d3d9dfb0acdf30bcf77aa92937e324f5491` measured 88.24% lines / 83.50% branches / 100% functions; all six required offline CI workflows passed.
-- [~] J-1 — Define the record vocabulary and contract (documentation and public API contract comments in progress on `docs/journal-record-vocabulary`).
-- [ ] J-2 — Establish a lightweight JournalRecord domain contract.
+- [x] [J-1 / PR #746](https://github.com/45s/coinzilla/pull/746) — Defined source-event, persisted-record, and recovered-record vocabulary; documented public contracts and JSDoc. Merged to `develop` as `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`; all six required checks passed on exact PR head `2631c3b14dd46270ff0a2919851ccc700b95fa6a`.
+- [~] J-2 — Establish a lightweight JournalRecord domain contract (test-first work in progress on `feature/journal/record-contract`).
 - [ ] J-3 — Isolate filesystem persistence behind an internal adapter.
 - [ ] J-4 — Make orchestration state ownership explicit.
 - [ ] J-5 — Contract conformance and operational documentation.
@@ -283,4 +284,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `a8c316dd74cdff359ba631c8db149b248c991f69`.
+**Current `develop` checkpoint:** `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`.
