@@ -436,3 +436,20 @@ PR [#688](https://github.com/45s/coinzilla/pull/688) is merged into `develop`. E
 - Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
 
 The regression closes the distinct account-wide open-orders timeout/retry proof gap. F-016's native Error-cause/stack preservation remains a separate unimplemented production diagnostic fix.
+
+
+## 18. F-016 native broker Error-cause preservation — test-first regressions
+
+Branch: `fix/harvester/preserve-rest-error-causes`, based on `develop` at `554ac983504f8947570e20ba33218158b08d989d`.
+
+Added test-first assertions for the original broker Error to survive as native `cause` through:
+- account snapshot REST failure;
+- account-wide open-orders snapshot REST failure;
+- owned-order open-orders REST failure;
+- canonical order-history REST failure;
+- REST fill-history failure;
+- application recovery structured error logging.
+
+Existing contextual messages, retry behavior, readiness gates, and acknowledgement ordering are asserted unchanged. The shared `@coinzilla/utils` logger already serializes nested Error causes; no utility/logger implementation change is required.
+
+**Production source is unchanged in this commit.** Expected-RED focused CI verification is pending. The implementation must not begin until those regressions fail for the missing-cause/log-field behavior rather than for fixture or syntax errors.

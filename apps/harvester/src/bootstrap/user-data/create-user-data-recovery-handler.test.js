@@ -965,18 +965,14 @@ test("retries application recovery after an account snapshot REST timeout releas
 
 test("keeps recovery blocked and retries after an account-wide open-orders RPC timeout", async () => {
   let openOrderReads = 0
+  const timeout = Object.assign(
+    new Error("account-wide open-orders RPC timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
   const fixture = createRecovery({
     getOpenOrders: async () => {
       openOrderReads += 1
       if (openOrderReads === 1) {
-        class RpcTimeoutError extends Error {
-          constructor(message) {
-            super(message)
-            this.name = "RpcTimeoutError"
-          }
-        }
-        const timeout = new RpcTimeoutError("account-wide open-orders RPC timed out")
-        timeout.code = "RPC_TIMEOUT"
         return { ok: false, errors: [timeout] }
       }
       return { ok: true, data: [] }
@@ -1021,6 +1017,16 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
     fixture.logs.error[0]?.errorName,
     "Error",
     "The recovery coordinator wraps failed broker results in its own application-level Error.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.error?.cause,
+    timeout,
+    "The structured recovery failure log must retain the exact original broker timeout as the wrapper Error's cause.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.error?.name,
+    "Error",
+    "The structured recovery failure log must include the native contextual Error object, not only flattened fields.",
   )
   assert.equal(
     fixture.logs.error[0]?.errorMessage,
