@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Current code baseline:** `512b77f4a7745e2b5fbff7849dcfe136830acab8` (after PR #693). Binance DTO/Entity mapping now lives under `src/infrastructure/binance/adapters/`; mapper logic and test assertions are preserved, with relative test imports updated where needed.
+**Code baseline before this slice:** `1685a6a420212c8e6f46add05229f1e0a31a8486` (after PR #694). The tree below reflects this PR's intended test ownership: direct `UserDataSession` tests are co-located under Application; broker-composition suites remain under the Binance broker test tree.
 
 The package is **partially layered already**:
 
@@ -140,7 +140,8 @@ src/
 ├── application/
 │   ├── ports/
 │   │   └── user-data-client-port.js
-│   └── user-data-session.js
+│   ├── user-data-session.js
+│   └── user-data-session.test.js
 ├── domain/
 │   └── user-data-recovery-policy.js
 ├── infrastructure/
@@ -160,7 +161,7 @@ src/
 │       ├── config/
 │       ├── constants/
 │       ├── helpers/
-│       ├── methods/
+│       ├── tests/
 │       └── utils/
 ├── broker.core.js
 └── index.js
@@ -173,7 +174,8 @@ The package already has a deterministic test suite for the partial vertical slic
 - `domain/user-data-recovery-policy.test.js`
 - `application/ports/user-data-client-port.test.js`
 - `infrastructure/binance/user-data-client-adapter.test.js`
-- `binance/broker-websocket/methods/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` cover the application session even though these lifecycle suites remain under the older Binance-oriented test tree; their shared fixtures live in `binance/broker-websocket/test-helpers/user-data-session-fixtures.js`.
+- `application/user-data-session.test.js` directly exercises `UserDataSession` through its injected client port without a Binance broker.
+- `binance/broker-websocket/tests/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` characterize the broker/application composition; the opt-in `user-data-session.integration.js` remains with these infrastructure tests. Shared broker fixtures stay in `binance/broker-websocket/test-helpers/`.
 
 The package scripts on the audited baseline are:
 
@@ -184,7 +186,7 @@ pnpm --filter @coinzilla/brokers test:coverage
 
 The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the broker WebSocket runtime and domain/application/infrastructure paths; Binance DTO adapters are included through the infrastructure glob. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
 
-No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
+The Phase A source audit was read-only. The subsequent PR #693 final-head CI passed Brokers unit tests/coverage, workspace unit tests/coverage, Harvester targeted regression tests, syntax, and dependency audit. No TESTNET integration was run.
 
 ### Verified workspace consumers
 
@@ -334,6 +336,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 
 ### Phase B — Characterization and test preparation
 - [ ] Identify public behaviors and safety-critical edge cases not already characterized.
+- [x] Add direct Application unit tests for `UserDataSession` through its injected `UserDataClientPort`; keep broker-composition and opt-in exchange integration tests in the infrastructure test suite.
 - [ ] Add only missing characterization tests; do not inflate test count for its own sake.
 - [ ] Capture public exports, result/error shapes, callback semantics, decimal fidelity, and state-changing RPC uncertainty.
 - [ ] Ensure deterministic fakes control clocks, timers, sockets, and concurrency without arbitrary sleeps.
