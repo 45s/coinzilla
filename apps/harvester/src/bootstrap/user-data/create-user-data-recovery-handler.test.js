@@ -607,3 +607,55 @@ test("repeats the recovery snapshots without publishing stale open orders when a
     "Recovery may be acknowledged only after the account and open-orders audits describe a stable event window.",
   )
 })
+
+test("does not drain queued user-data events after recovery is superseded during the open-orders audit", async () => {
+  let fixture
+  fixture = createRecovery({
+    publishOpenOrdersSnapshot: async () => {
+      fixture.state.recoveryGeneration += 1
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A recovery generation superseded during the open-orders audit must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A recovery generation superseded during the open-orders audit must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "The account snapshot audit must already have completed before the open-orders stage is invalidated.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "The in-flight open-orders audit may finish, but it must not authorize any later recovery work.",
+  )
+  assert.equal(
+    fixture.calls.drains,
+    3,
+    "A superseded generation must be detected before the old recovery task drains additional user-data events.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "A superseded recovery generation must never acknowledge the broker after the open-orders audit.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A superseded recovery generation must release the in-flight task slot after the audit completes.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "User-data recovery generation was superseded",
+    "The superseded recovery generation must leave an actionable failure diagnostic.",
+  )
+})
