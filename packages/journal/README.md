@@ -62,6 +62,22 @@ flowchart TD
 
 Startup cancellation preserves the distinction between the startup result (cancelled) and the close result (whether cleanup completed safely). The filesystem adapter continues to own file handles and the lock; the Journal service owns cancellation and lifecycle sequencing.
 
+### Serializing active close calls
+
+Only one active close operation may own shutdown. A concurrent `close()` call returns the existing `Journal is already closing` failure without starting another EventBus flush or touching storage. This operation guard is separate from the `closing` admission flag: the flag is set only after the owning close has awaited `EventBus.flush()`, allowing messages already queued for Journal to be recorded before new records are rejected.
+
+```mermaid
+flowchart TD
+  A[First close call] --> B[Claim close operation]
+  B --> C[Unsubscribe and await EventBus.flush]
+  D[Concurrent close call] --> E{Close operation already claimed?}
+  E -- yes --> F[Return already closing error]
+  E -- no --> B
+  C --> G[Set closing to reject new records]
+  G --> H[Drain writes, sync, close session, release lock]
+  H --> I[Release close operation guard]
+```
+
 ## Internal persistence boundary
 
 `Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
