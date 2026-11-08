@@ -4,7 +4,7 @@ import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
 /**
  * Result of one subscriber's recovery acknowledgement.
  *
- * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"}} UserDataRecoveryAcknowledgementResult
+ * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"|"stale-recovery-generation"}} UserDataRecoveryAcknowledgementResult
  */
 
 function logSafely(logger, level, ...args) {
@@ -39,6 +39,7 @@ export class UserDataSession {
   #removeCloseListener = null
   #stopped = false
   #recoveryRequired = false
+  #recoveryGeneration = 0
   #eventIdentities = new Set()
   #generation = 0
   #clientPorts = new WeakMap()
@@ -130,7 +131,7 @@ export class UserDataSession {
    * Register a local subscriber and return its recovery controls.
    *
    * @param {{onEvent: (message: {event: object}) => void, onStatus?: (status: object) => void}} options
-   * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, acknowledgeRecoveryResult: () => UserDataRecoveryAcknowledgementResult, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
+   * @returns {Promise<{data: {acknowledgeRecovery: () => boolean, acknowledgeRecoveryResult: (recoveryGeneration: number) => UserDataRecoveryAcknowledgementResult, disconnect: () => Promise<void>, subscriptionId: number|null}} >}
    */
   async subscribe({ onEvent, onStatus }) {
     validateCallback(onEvent, "onEvent")
@@ -167,7 +168,7 @@ export class UserDataSession {
 
     const data = {
       acknowledgeRecovery: () => this.#acknowledgeRecovery(id),
-      acknowledgeRecoveryResult: () => this.#acknowledgeRecoveryResult(id),
+      acknowledgeRecoveryResult: (recoveryGeneration) => this.#acknowledgeRecoveryResult(id, recoveryGeneration),
       disconnect: () => this.#removeSubscriber(id),
     }
     Object.defineProperty(data, "subscriptionId", {
@@ -443,6 +444,7 @@ export class UserDataSession {
     this.#clearAcknowledgementTimer()
     this.#acknowledgementAttempts = 0
     this.#recoveryRequired = true
+    this.#recoveryGeneration += 1
     this.setUnavailable(true)
     for (const subscriber of this.#subscribers.values()) {
       subscriber.recoveryAcknowledged = false
@@ -545,6 +547,7 @@ export class UserDataSession {
       subscriptionId: this.#subscriptionId,
       reconciliationRequired: true,
       recoveryRequired: true,
+      recoveryGeneration: this.#recoveryGeneration,
     }
     for (const subscriber of [...this.#subscribers.values()]) {
       if (!subscriber.recoveryAcknowledged) this.#notifySubscriber(subscriber, status)
@@ -567,11 +570,11 @@ export class UserDataSession {
   }
 
   #acknowledgeRecovery(id) {
-    const result = this.#acknowledgeRecoveryResult(id)
+    const result = this.#acknowledgeRecoveryResult(id, this.#recoveryGeneration)
     return result.accepted && result.completed
   }
 
-  #acknowledgeRecoveryResult(id) {
+  #acknowledgeRecoveryResult(id, recoveryGeneration) {
     const subscriber = this.#subscribers.get(id)
     if (!subscriber || !subscriber.active) {
       return {
@@ -585,6 +588,13 @@ export class UserDataSession {
         accepted: false,
         completed: false,
         reason: "recovery-not-pending",
+      }
+    }
+    if (!Number.isSafeInteger(recoveryGeneration) || recoveryGeneration !== this.#recoveryGeneration) {
+      return {
+        accepted: false,
+        completed: false,
+        reason: "stale-recovery-generation",
       }
     }
 
@@ -611,6 +621,7 @@ export class UserDataSession {
     this.#notify({
       type: "reconciled",
       subscriptionId: this.#subscriptionId,
+      recoveryGeneration: this.#recoveryGeneration,
       recoveryRequired: false,
     })
     return true
