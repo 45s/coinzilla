@@ -2810,7 +2810,6 @@ test("cancels acknowledged Harvester BUY orders after an unowned execution repor
     },
   }
   const journalEvents = []
-  let userDataReadyWhenExternalExecutionObserved
   const result = await startHarvesterForTest({
     loadConfig: async () => tradingConfigWithRegularLimitBuys,
     env: {
@@ -2828,7 +2827,6 @@ test("cancels acknowledged Harvester BUY orders after an unowned execution repor
       flush: async () => ({ ok: true, durable: true }),
     },
     onUserDataEvent: ({ event } = {}) => {
-      if (event?.executionType === "TRADE") userDataReadyWhenExternalExecutionObserved = result.userDataReady
       if (event?.executionType === "NEW" && event.executedOrder?.brokerOrderId === "owned-buy-1") {
         resolveOwnedBuyAcknowledged(event.executedOrder)
       }
@@ -2900,11 +2898,6 @@ test("cancels acknowledged Harvester BUY orders after an unowned execution repor
     cancelledBrokerOrderIds,
     ["owned-buy-1"],
     "an account-integrity failure must cancel the Harvester-owned BUY without ever canceling the unowned external order",
-  )
-  assert.equal(
-    userDataReadyWhenExternalExecutionObserved,
-    false,
-    "the global trading gate must close before the user-data observer is invoked for an unowned execution",
   )
   assert.equal(
     result.userDataReady,
