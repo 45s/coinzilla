@@ -200,7 +200,8 @@ flowchart TD
     Q --> R{Canonical cancellation response received?}
     R -- No or unknown --> S[Mark old order UNKNOWN; pause and reconcile]
     R -- Yes --> T[Update registry; fetch canonical fills; verify identity and quantity; apply fills]
-    T --> U{Status CANCELED and reconciled fill quantity is zero?}
+    T --> T1[Apply each verified fill; total reconciled executed quantity]
+    T1 --> U{Status CANCELED and reconciled fill quantity is zero?}
     U -- No --> V[Pause; do not replace after fill race or reconciliation failure]
     U -- Yes --> W{Still trading-ready and not stopping?}
     W -- No --> X[Old BUY remains canceled; defer until readiness]
