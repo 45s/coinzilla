@@ -171,47 +171,68 @@ No TESTNET order, cancellation, restart, or other exchange action is authorized 
 
 ## 8. Conservative trailing-BUY replacement safety
 
-The following flowchart documents the implemented application workflow for replacing an existing Conservative trailing BUY. It is derived from the Conservative Trading Engine and strategy-decision execution path; the implementation and tests remain the evidence for exact behavior.
+The following flowchart documents the implemented application workflow for replacing an existing Conservative trailing BUY. It is derived from the Conservative Trading Engine, Binance adapter, and strategy-decision execution path; source code and regression tests remain the evidence for exact behavior.
 
 ```mermaid
 flowchart TD
-    A[Market price event] --> B{Active strategy position exists?}
-    B -- Yes --> Z[Do not trail or replace BUY]
-    B -- No --> C[Check active BUY and trailing trigger]
-    C -->|No trigger| Z
-    C -->|Trigger| D[Fetch fresh Binance exchange filters]
-    D --> E[Validate complete market trading readiness and market identity]
-    E --> F[Evaluate Conservative replacement using current price]
-    F --> G[Exclude standing BUY commitment and allocate commitments]
-    G --> H[Construct canonical pending-order candidate]
-    H --> I[Validate exchange filters and current post-only book readiness]
-    I --> J{Replacement admissible?}
-
-    J -- No: not admissible --> K[Keep existing BUY untouched]
-    J -- Validation error --> L[Pause pair; keep existing BUY untouched]
-
-    J -- Yes --> M[Check cancellation eligibility and persist cancellation intent]
-    M --> N[Request cancellation of existing BUY]
-    N --> O{Cancellation authoritatively confirmed?}
-    O -- No or unknown --> P[Mark cancellation UNKNOWN; pause and reconcile]
-    O -- Yes --> Q[Reconcile canonical BUY fills and execution quantity]
-    Q --> R{All fills match canceled order and status is CANCELED?}
-    R -- No --> S[Apply verified fills; pause pair; do not replace]
-    R -- Yes --> T{Trading still ready and process not stopping?}
-    T -- No --> U[Leave pair waiting for readiness; do not submit]
-    T -- Yes --> V[Re-evaluate Conservative decision with replacement reference]
-    V --> W[Construct and validate actual pending order]
-    W --> X[Submit replacement BUY]
-    X --> Y{Submission outcome?}
-    Y -- Acknowledged --> AA[Continue Conservative trading]
-    Y -- Failed or uncertain --> AB[Record UNKNOWN outcome; pause and reconcile]
+    A[Market-price event] --> B{Active BUY and trailing enabled?}
+    B -- No --> Z[Run normal Conservative evaluation]
+    B -- Yes --> C{Active strategy position quantity above zero?}
+    C -- Yes --> Z2[Do not reprice the BUY]
+    C -- No --> D{Trailing trigger reached and engine not stopping?}
+    D -- No --> Z
+    D -- Yes --> E[Fetch current Binance exchange filters]
+    E --> F{Refresh complete, valid, and same market?}
+    F -- No --> G[Pause pair; keep existing BUY untouched]
+    F -- Yes --> H[Evaluate at current price; exclude old BUY from commitments]
+    H --> I[Allocate commitments and build executable actions]
+    I --> J{Executable replacement BUY exists?}
+    J -- No --> K[Keep existing BUY; skip or defer]
+    J -- Yes --> L[Build canonical preflight order candidates]
+    L --> M[Validate exchange filters and submission readiness]
+    M --> N{Preflight admissible?}
+    N -- Validation error --> G
+    N -- Not ready --> K
+    N -- Yes --> O[Check cancellation eligibility; persist cancel intent]
+    O --> P{Cancellation may proceed?}
+    P -- No --> G
+    P -- Yes --> Q[Cancel existing BUY]
+    Q --> R{Canonical cancellation response received?}
+    R -- No or unknown --> S[Mark old order UNKNOWN; pause and reconcile]
+    R -- Yes --> T[Update registry; fetch canonical fills; verify identity and quantity; apply fills]
+    T --> T1[Apply each verified fill; total reconciled executed quantity]
+    T1 --> U{Status CANCELED and reconciled fill quantity is zero?}
+    U -- No --> V[Pause; do not replace after fill race or reconciliation failure]
+    U -- Yes --> W{Still trading-ready and not stopping?}
+    W -- No --> X[Old BUY remains canceled; defer until readiness]
+    W -- Yes --> Y[Re-evaluate with refreshed rules and current-price reference]
+    Y --> AA[Build and validate actual canonical order]
+    AA --> AB{Actual order validation succeeds?}
+    AB -- No --> AC[Pause; old BUY remains canceled; do not submit]
+    AB -- Yes --> AD[Register PENDING; persist submission intent]
+    AD --> AE{Submission intent durable?}
+    AE -- No --> AF[Remove PENDING; pause; broker is not called]
+    AE -- Yes --> AG[Submit replacement to Binance]
+    AG --> AH{Submission outcome?}
+    AH -- Acknowledged --> AI[Register acknowledgement; continue trading]
+    AH -- Definite POST_ONLY would-take --> AJ[Remove PENDING; clear book; defer until fresh book]
+    AH -- Other rejection or unknown --> AK[Mark replacement UNKNOWN; pause; reconcile by clientOrderId before retry]
 ```
 
-The preflight is deliberately performed **before cancellation**. It evaluates the replacement with the standing BUY excluded from active commitments, uses the current market price as the replacement reference, refreshes exchange filters, and checks the candidate through the canonical order-validation and submission-readiness path. A candidate that is not admissible must never cause the existing BUY to be canceled. A validation failure pauses the pair; a normal non-admissible/deferred result leaves the existing order in place.
+### Why preflight happens before cancellation
 
-After a successful preflight, cancellation is not treated as complete merely because a request was sent. Harvester requires an eligible order, a durable cancellation intent, an authoritative canonical cancellation response, and reconciliation of the order's canonical fills against its executed quantity. An uncertain cancellation, mismatched fill, fill during cancellation, or non-CANCELED terminal result blocks replacement and pauses the pair.
+The engine runs this work inside its serialized market-price transition. It first requires an acknowledged active BUY, trailing enabled, no active strategy position, a reached repricing trigger, and a process that is not stopping. It then fetches current Binance symbol filters and validates that the refreshed market metadata is complete and still identifies the active symbol and market. The Conservative policy is evaluated using the current market price as the replacement reference. Commitment allocation excludes only the existing BUY that would be canceled, modeling the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
 
-Only after cancellation and fill reconciliation succeed does the engine re-evaluate the strategy and submit the replacement. This second evaluation is intentional: preflight does not submit or register a real order. If trading readiness is lost or shutdown begins after cancellation, Harvester waits rather than submitting. If replacement submission has an unknown outcome after the old BUY was canceled, the pending order is retained as UNKNOWN, the pair is paused, and reconciliation is required before further trading.
+The executable replacement candidate is converted into canonical preflight order(s) and checked against the refreshed exchange rules, including quantity and price increments and minimum notional. The same submission-readiness gate checks current market-price freshness and, for `LIMIT_MAKER`, a fresh same-symbol book and a price that does not cross the opposite best quote. A validation error pauses the pair; unavailable readiness or the absence of an executable replacement BUY defers/skips the replacement. In every preflight failure or deferral case, the existing BUY remains open and untouched. This is essential: canceling first would remove the existing standing order even though the replacement might be rejected by exchange filters or could not safely be submitted, leaving the pair without its intended BUY.
+
+### Cancellation and post-cancellation failure handling
+
+Only an admissible preflight proceeds to cancellation. Harvester verifies cancellation eligibility and durably records the cancellation intent before calling the broker. If the intent cannot be persisted, no cancellation request is sent. An exception, rejected response, or otherwise unconfirmed cancellation is represented as UNKNOWN and pauses the pair for reconciliation.
+
+After a canonical cancellation response, the engine updates the order registry, retrieves canonical fills, validates each fill's order identity, applies actual fills, and checks that the reconciled quantity equals the broker's cumulative executed quantity. Replacement proceeds only when the canonical order status is CANCELED and the reconciled fill quantity is zero. A fill racing with cancellation, a non-CANCELED terminal status, unavailable or incomplete fill history, or any identity/quantity mismatch pauses the pair; no replacement is submitted.
+
+After confirmed cancellation with zero fills, the engine stores the current market price as the new reference and re-evaluates the Conservative policy using the refreshed filters. The actual order is rebuilt and validated again. Harvester registers it as PENDING and durably records the submission intent before broker I/O. If that intent cannot be persisted, the pending record is removed, the pair is paused, and the broker is not called. A generic broker rejection, transport error, or uncertain acknowledgement leaves the replacement explicitly UNKNOWN and pauses the pair; reconcile it by canonical `clientOrderId` before any retry. Binance's definite `POST_ONLY_WOULD_TAKE` rejection is a known rejection rather than an unknown outcome: the pending record is removed, the cached book is discarded, and evaluation is deferred until fresh book data arrives. An acknowledgement is not itself a fill; an immediately FILLED acknowledgement is reconciled against canonical execution history before the serialized transition completes.
+
 
 ## 9. Derived algorithm schema
 

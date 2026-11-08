@@ -10,6 +10,8 @@ This document defines how independent AI workstreams collaborate in the Coinzill
 
 Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md). Harvester agents must read and follow that document; do not duplicate its product priorities here.
 
+Visual workflow diagrams follow the canonical [visual documentation and workflow schemas standard](ENGINEERING_STANDARDS.md#visual-documentation-and-workflow-schemas). Consider flowcharts and sequence diagrams for complex work, and keep them aligned with source code and tests.
+
 ## 1. The short version
 ## 0. Mandatory documentation and requirements preflight
 
