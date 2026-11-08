@@ -3,6 +3,9 @@
 > **Current status — 2026-11-07:** The in-scope Conservative Strategy implementation/documentation audit is CLOSED on PR #653. Residual sell-through, exact keepQuantity, exchange-constrained dust evidence, partial-fill/cancel/replace lifecycle, terminal SELL reconciliation, and exact-once completion are implemented and represented by offline regressions. Test execution and exact-head CI are the next verification phase; no test-pass claim is made. The controlled Binance Spot TESTNET acceptance gate remains CLOSED. Process-restart reconstruction remains separately deferred to [#654](https://github.com/45s/coinzilla/issues/654). See [Harvester Roadmap](./ROADMAP.md) and [Conservative Strategy audit](./AUDIT.md).
 
 
+> **Latest TESTNET session audit — 2026-11-08:** The 2026-11-07/08 supplied session exposed startup-readiness, ZRO dust completion, DOGE follow-up SELL, account snapshot scope, and shutdown-audit discrepancies. See the [session audit in AUDIT.md](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667) and [tracking issue #667](https://github.com/45s/coinzilla/issues/667). This is retrospective evidence, not TESTNET acceptance or authorization to trade.
+
+
 > **AI WORK PRIORITY — HARD RULE:** Until the bulletproof real Binance Spot TESTNET acceptance gate passes, Harvester work is trading workflow only. No Journal recovery/replay, new databases, persistence projects, unrelated infrastructure, observability, refactoring, optimization, or side quests. Only a narrowly targeted fix for a demonstrated immediate trading-safety blocker is allowed. Read [TRADING_FIRST.md](./docs/TRADING_FIRST.md) before doing any work.
 
 
