@@ -30,34 +30,32 @@ packages/brokers/src/
 │       │   ├── adapt-spot-balance.js
 │       │   ├── normalize-binance-id.js
 │       │   └── *.test.js
+│       ├── broker-websocket/
+│       │   ├── index.js
+│       │   ├── broker.js
+│       │   ├── broker.*.test.js
+│       │   ├── broker.integration.js
+│       │   ├── config/
+│       │   ├── constants/
+│       │   ├── helpers/
+│       │   │   └── adapters/
+│       │   ├── tests/
+│       │   │   ├── user-data-session.setup.test.js
+│       │   │   ├── user-data-session.recovery.test.js
+│       │   │   ├── user-data-session.reconciliation.test.js
+│       │   │   ├── user-data-session.cleanup.test.js
+│       │   │   └── user-data-session.integration.js
+│       │   ├── test-helpers/
+│       │   └── utils/
+│       │       ├── rpc-client.js
+│       │       ├── runtime.js
+│       │       ├── signature.js
+│       │       ├── streams-client.js
+│       │       ├── streams-protocol.js
+│       │       └── transport.js
+│       ├── index.js
 │       ├── user-data-client-adapter.js
 │       └── user-data-client-adapter.test.js
-└── binance/
-    ├── index.js
-    └── broker-websocket/
-        ├── index.js
-        ├── broker.js
-        ├── broker.*.test.js
-        ├── broker.integration.js
-        ├── config/
-        ├── constants/
-        ├── helpers/
-        │   └── adapters/
-        ├── tests/
-        │   ├── user-data-session.setup.test.js
-        │   ├── user-data-session.recovery.test.js
-        │   ├── user-data-session.reconciliation.test.js
-        │   ├── user-data-session.cleanup.test.js
-        │   └── user-data-session.integration.js
-        ├── test-helpers/
-        ├── testnet-integration-guards.js
-        └── utils/
-            ├── rpc-client.js
-            ├── runtime.js
-            ├── signature.js
-            ├── streams-client.js
-            ├── streams-protocol.js
-            └── transport.js
 ```
 
 The lifecycle implementation and its direct unit tests live together in `src/application/user-data-session.js` and `src/application/user-data-session.test.js`; these tests exercise the injected client port without constructing a Binance broker. Broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test live under `src/infrastructure/binance/broker-websocket/tests/` because they exercise the concrete broker/application composition. Their shared deterministic fixtures remain under `broker-websocket/test-helpers/`.
@@ -68,11 +66,11 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 - `src/application/user-data-session.js` owns subscriber lifecycle, reconnect/recovery coordination, and reconciliation acknowledgement state.
 - `src/application/ports/user-data-client-port.js` owns the exchange-neutral client capability required by the application session.
 - `src/infrastructure/binance/user-data-client-adapter.js` implements that port and owns Binance RPC/event-envelope translation for user-data.
-- `binance/broker-websocket/broker.js` is the public broker facade and current composition boundary. It coordinates the RPC/Streams clients and preserves public result/callback contracts. Keep simple RPC methods cohesive; extract only a demonstrated composition seam or a distinct stateful/application responsibility.
-- `binance/broker-websocket/config/` owns validated runtime configuration; `BinanceWebSocketConfig` is Coinzilla-owned and does not depend on the removed Binance SDK.
-- `binance/broker-websocket/constants/` owns fixed Binance endpoint values.
-- `binance/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
-- `binance/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
+- `infrastructure/binance/broker-websocket/broker.js` is the public broker facade and current composition boundary. It coordinates the RPC/Streams clients and preserves public result/callback contracts. Keep simple RPC methods cohesive; extract only a demonstrated composition seam or a distinct stateful/application responsibility.
+- `infrastructure/binance/broker-websocket/config/` owns validated runtime configuration; `BinanceWebSocketConfig` is Coinzilla-owned and does not depend on the removed Binance SDK.
+- `infrastructure/binance/broker-websocket/constants/` owns fixed Binance endpoint values.
+- `infrastructure/binance/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
+- `infrastructure/binance/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
 - `src/infrastructure/binance/adapters/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
 - `broker-websocket/tests/` groups broker-operation contract tests; focused module tests remain colocated with their implementation.
 - `broker-websocket/test-helpers/` contains test-only fakes shared by broker tests; it is not part of the package's public API.
@@ -97,12 +95,12 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 |---|---|---|
 | `src/index.js`, `binance/index.js`, `broker-websocket/index.js` | Public exports and module composition | Keep public API/composition thin while preserving compatibility |
 | `src/broker.core.js` | Exported shared base class with default unimplemented methods and state maps; Market Simulator extends it | Preserve construction, inherited state, and unsupported-method behavior; any redesign requires a separate consumer migration |
-| `binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
+| `infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
 | `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
 | `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |
 | `src/application/user-data-session.js` and `src/application/user-data-session.test.js` | Application subscriber lifecycle, reconnect/recovery coordination, reconciliation acknowledgement, and direct tests through an injected client port | Correctly placed in Application; keep direct tests independent of Binance and preserve state-machine cohesion |
 | `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
-| `binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
+| `infrastructure/binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Determine which rules are broker-domain/application behavior versus Binance protocol translation |
 | `src/infrastructure/binance/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
 | `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
