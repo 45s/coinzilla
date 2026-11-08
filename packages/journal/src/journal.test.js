@@ -979,12 +979,11 @@ test("delegates writer lifecycle and record persistence to its injected internal
       "The Journal service must delegate writer lifecycle, append, sync, bounded discovery/read, close, and release operations in order.",
     )
     const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
-    assert.match(
-      appendCall.line,
-      /journal\\.store_delegation_verified/,
+    assert.equal(
+      appendCall.line.includes("journal.store_delegation_verified"),
+      true,
       "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
-    )
-  } finally {
+    )  } finally {
     await journal.close()
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
