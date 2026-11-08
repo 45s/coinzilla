@@ -18,6 +18,18 @@ Keep notification delivery independent from trading strategy, broker execution, 
 - Do not create a generic cross-provider interface until multiple implemented transports demonstrate a concrete shared contract.
 - Preserve existing public exports when restructuring unless a breaking API change is explicitly planned and all consumers are migrated.
 
+## Domain boundaries
+
+Use lightweight DDD boundaries without introducing ceremonial aggregates, repositories, or folders that do not represent real responsibilities.
+
+- **Notification policy:** the provider-local formatter and validation functions own deterministic event selection, field allowlisting, normalization, and message rules. Keep these functions independent of network I/O, application configuration, and mutable infrastructure.
+- **Application integration:** the event subscriber coordinates the injected event-bus and notifier ports. It owns subscription lifecycle, admission limits, ordering, failure reporting, and delivery diagnostics; it must not construct either dependency.
+- **Infrastructure:** the Telegram notifier owns Telegram HTTP requests, credential handling, provider response validation, and timeout behavior. Inject fetch so network effects remain replaceable in tests.
+- **Composition:** consuming applications own environment/configuration loading and instantiate the EventBus and Telegram adapter. The notifier package must not import application, trading, broker, entity, or concrete event-bus implementations.
+- **Public API:** src/index.js and the provider-local index.js are intentional export facades, not implementation modules.
+
+Keep these responsibilities inside the owning transport folder as specified above. Do not add a cross-provider contract until a second real transport demonstrates a stable shared need.
+
 ## Engineering rules
 
 - Prefer Node.js built-ins and injected side-effect boundaries; do not add dependencies without a documented concrete need.
@@ -41,5 +53,3 @@ Keep notification delivery independent from trading strategy, broker execution, 
     pnpm run quality
 
 Run focused package checks first, then applicable workspace checks. Report any command that could not be run and why.
-
-
