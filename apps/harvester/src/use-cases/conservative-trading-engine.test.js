@@ -5160,7 +5160,6 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
 })
 
 
-
 async function createMalformedRestEnvelopeFixture({
   openOrdersResult = { ok: true, data: [] },
   canonicalOrderHistoryResult,

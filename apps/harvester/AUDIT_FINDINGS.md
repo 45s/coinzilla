@@ -573,7 +573,8 @@ Current source and regression inventory:
 - **Existing regressions:** missing configured account asset, duplicate/negative/invalid account snapshot values, stale account snapshots, incomplete cumulative fill history, conflicting fill IDs, stale REST history, missing Journal fills, and overlapping stream/REST delivery.
 - **Direct envelope injections added:** eight focused regressions in `src/use-cases/conservative-trading-engine.test.js` cover non-array and malformed `getOpenOrders()`; zero, multiple, and non-`CanonicalOrder` `getCanonicalOrderHistory()`; and non-array, non-`Fill`, and oversized `getFills()` pages.
 - **Expected failure behavior asserted:** each malformed envelope fails owned-order reconciliation, leaves the market paused and order UNKNOWN, applies no fills, and issues no cancel/replace or new order.
-- **Disposition:** REGRESSION TESTS ADDED on `test/harvester/malformed-rest-envelope-regressions`; exact-head focused/full verification is pending. PRODUCTION CHANGE NOT JUSTIFIED by current evidence.
+- **Disposition:** Eight regression tests pass on PR #708 exact head `76afa74a6637ddebe9ed8bd3efcdc02bdb5bead5` (Harvester package suite 753/753; all six required offline CI contexts passed). The Harvester coverage job passed, but its package threshold-enforcement step is skipped/not configured. PR merge is pending. PRODUCTION CHANGE NOT JUSTIFIED by current evidence.
+
 ## F-018 — Journal sync failure can produce at-least-once recovery audit records
 
 - **Severity:** Medium — audit duplication/operational diagnosis; no premature broker acknowledgement found.
