@@ -298,6 +298,8 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
+
+Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 

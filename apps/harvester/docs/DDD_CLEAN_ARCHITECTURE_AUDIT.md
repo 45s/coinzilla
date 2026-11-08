@@ -386,3 +386,10 @@ The first DDD-04 extraction is implemented on the current Harvester branch:
 - Direct tests cover concurrent fill application, duplicate delivery, invalid fill rejection through the shared `toResult().errors` contract, and the resulting Portfolio state. The first full workspace run caught an assertion that expected a singular `error` field; the test now follows the actual shared result contract and asserts the normalized first error.
 
 This is an internal application-boundary refactor. It does not change strategy decisions, exchange behavior, Journal durability requirements, or process-restart guarantees. Remaining bootstrap responsibilities—account snapshot coordination, user-data intake/readiness, market/book subscriptions, and process shutdown—are deliberately left for later focused extractions. Test/CI status must be read from the exact PR head; source edits alone are not verification.
+
+
+## Bootstrap resource-cleanup extraction — 2026-11-08
+
+Broker resource teardown has been separated from `start-harvester.js` into `src/bootstrap/broker/cleanup-broker.js`. The module coordinates market-price, book-ticker, and user-data intake shutdown, then broker disconnect, and preserves the broker-disconnected lifecycle event and aggregate error reporting. Focused tests cover successful cleanup ordering and multiple rejected cleanup operations.
+
+This is intentionally still a bootstrap module: resource ownership, subscription teardown, broker disconnection, and process lifecycle are infrastructure orchestration rather than business workflows. It does not move broker protocol normalization or change the trading engine's shutdown cancellation/reconciliation policy. Exact-head CI must validate this extraction before it is treated as complete.

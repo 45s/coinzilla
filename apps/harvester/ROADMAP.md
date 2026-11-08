@@ -702,6 +702,16 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Bootstrap resource-cleanup extraction — 2026-11-08
+
+- [x] Move broker intake teardown and disconnect coordination into `src/bootstrap/broker/cleanup-broker.js`; keep it in bootstrap because it owns process resources and lifecycle ordering.
+- [x] Preserve best-effort cleanup of market-price, book-ticker, and user-data subscriptions; attempt broker disconnect even when earlier cleanup operations reject.
+- [x] Preserve the broker-disconnected lifecycle event and aggregate every cleanup error for the caller.
+- [x] Add focused tests for successful cleanup ordering and multiple simultaneous cleanup failures.
+- [ ] Continue extracting the account snapshot manager, market metadata loading, user-data coordinator, and shutdown orchestration in later increments.
+
+This is process-lifecycle infrastructure, not trading policy. It does not alter the required shutdown BUY-cancellation/SELL-retention rules or the CLOSING account-audit barrier.
+
 ### DDD-05 — Decompose Conservative Trading Engine incrementally
 
 - [ ] Map engine-owned mutable state to its responsible workflow or coordination boundary.
