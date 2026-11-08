@@ -846,3 +846,118 @@ test("recovers safely when a second disconnect supersedes a later retry", async 
     "Successful reconciliation of the latest generation must clear the application reconciliation requirement.",
   )
 })
+
+
+test("retries application recovery after an account snapshot REST timeout releases the task slot", async () => {
+  const timeout = Object.assign(
+    new Error("canonical account snapshot REST request timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  let accountSnapshotReads = 0
+  let openOrderReads = 0
+  const fixture = createRecovery({
+    refreshAccountSnapshot: async () => {
+      accountSnapshotReads += 1
+      if (accountSnapshotReads === 1) throw timeout
+      return { sourceTime: 101 }
+    },
+    getOpenOrders: async () => {
+      openOrderReads += 1
+      return { ok: true, data: [] }
+    },
+  })
+
+  fixture.start()
+  const failedAttempt = fixture.state.recoveryTask
+  await failedAttempt
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "An account snapshot REST timeout must keep the application trading-readiness gate closed.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "An account snapshot REST timeout must preserve the requirement for authoritative reconciliation.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged after the account snapshot REST request times out.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "The recovery account audit must not be published without a successful authoritative account snapshot.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "The account-wide open-orders audit must not begin after its prerequisite account snapshot REST request times out.",
+  )
+  assert.equal(
+    openOrderReads,
+    0,
+    "The account-wide open-orders REST request must not run after the account snapshot REST request fails.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The failed account snapshot REST attempt must release the in-flight recovery task slot for a later reminder.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorName,
+    "RpcTimeoutError",
+    "The application recovery diagnostic must preserve the original typed account snapshot timeout.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "canonical account snapshot REST request timed out",
+    "The application recovery diagnostic must retain the original account snapshot timeout message.",
+  )
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    accountSnapshotReads,
+    2,
+    "A later recovered reminder must repeat the account snapshot REST request after the transient timeout.",
+  )
+  assert.equal(
+    openOrderReads,
+    1,
+    "The retry may read account-wide open orders only after the account snapshot succeeds.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "Only the successful account snapshot retry may publish a recovery account audit.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "The successful retry must continue through the account-wide open-orders audit.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The broker may be acknowledged exactly once after the successful retry completes both durable audits.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "A successful retry of the same recovery generation must clear the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    1,
+    "The successful retry must acknowledge the original still-current recovery generation.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The successful recovery retry must release its task slot after acknowledgement.",
+  )
+})
