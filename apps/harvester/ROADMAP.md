@@ -1749,3 +1749,25 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 - [x] Keep process-stop checks, engine lookup, and logger injection explicit at the bootstrap boundary; the workflow coalesces concurrent safety-halt triggers and preserves failure logging.
 - [x] Confirm the extracted shutdown handler retains the original order: stop market intake, drain market/user-data work, reconcile, cancel owned BUYs, drain and reconcile cancellation/fill reports, stop user-data intake, audit CLOSING, then disconnect.
 - [x] Exact-head GitHub Actions on `900a4207df64d075608907eeb4f22e63764fc0a8`: Harvester unit tests, Harvester coverage, targeted tests, workspace unit tests/coverage, JavaScript syntax, dependency audit, Utils unit tests, and actionlint all passed. The read-only Binance TESTNET integration job was skipped by its workflow condition; no exchange operation was performed.
+
+
+## Harvester recovery hardening follow-up — 2026-11-08
+
+### Completed offline recovery regressions
+
+- [x] [PR #700](https://github.com/45s/coinzilla/pull/700): owned-order REST fill-history timeout fails closed without applying partial fills; a later retry applies the canonical fill exactly once. Tested head `e2c80515fa9624a13163d7fd47ecddaa4695bfc1`; merged as `3c0c5b81d7c70f1c86aeed5b0b3836e00045bc69`.
+- [x] [PR #701](https://github.com/45s/coinzilla/pull/701): account snapshot REST timeout coverage at both the account-snapshot manager and application recovery handler; no premature audit or acknowledgement, failed task slot released, and a later same-generation reminder completes both durable audits before one acknowledgement. Tested head `a137f33f872776791e4bc02b5ce314067ed6c6f2`; merged as `2e04a77c19357cec89111892fd910276ae8b1619`.
+- [x] All six required offline CI contexts passed on both exact PR heads. Read-only TESTNET integration was skipped; no TESTNET acceptance is claimed.
+- [x] Confirmed the existing retry path: the broker's capped acknowledgement reminders are forwarded by the Harvester status handler; failed application tasks release their single-flight slot and a later reminder can retry. No additional Harvester retry timer is justified.
+
+### Confirmed risks and remaining proof gaps
+
+- [ ] Add direct malformed REST-envelope regressions for owned-order `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()`. Source guards already fail closed; the missing cases are regression-proof gaps, not confirmed accepted-invalid-data defects.
+- [ ] Preserve original broker errors as `cause` through account snapshot and owned-order REST wrappers, and include the Error object in structured recovery logs. The current wrappers discard the original typed error class/stack/cause; the fill-history wrapper can also discard its message. See F-016 in `AUDIT_FINDINGS.md`.
+- [ ] Add a transient Journal flush/sync failure retry regression. Recovery correctly remains blocked and unacknowledged until `durable: true`; a retry after a completed write but failed sync can make both the first and second audit records durable (at-least-once audit publication). A Journal write failure poisons that Journal instance, so repeated reminders cannot recover it in place. Do not delete, overwrite, or deduplicate Journal evidence.
+- [ ] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity with the Brokers owner. See [cross-domain request #702](https://github.com/45s/coinzilla/issues/702). Single-subscriber recovery remains fail-closed and guarded.
+- [ ] Add an exact-count broker assertion for one terminal `reconciled` notification per generation and retain the second-disconnect-during-retry end-to-end scenario as an explicit proof target.
+- [ ] Continue the #626 required-check investigation without changing protections: documented required contexts are `actionlint`, `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. PR #688 is 4 commits ahead / 11 behind current `develop` at `2e04a77c19357cec89111892fd910276ae8b1619`; strict up-to-date protection explains why the old-head successes are insufficient. Use GitHub's normal Update branch action and rerun checks; do not bypass or weaken the rules.
+- [ ] PR #699 is superseded by PR #701; its old branch is stale and must not be merged. It remains open with a superseded-by comment pending normal repository cleanup.
+
+**Current `develop` checkpoint:** `2e04a77c19357cec89111892fd910276ae8b1619`. No production trading, exchange, broker, Journal, or logging implementation changed in PRs #700/#701. Process-restart reconciliation remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). TESTNET acceptance remains separate and unclaimed.
