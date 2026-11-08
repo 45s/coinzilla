@@ -174,7 +174,7 @@ export async function main({
     if (telegramToken && telegramChatId) {
       try {
         const notifier = createTelegramNotifier({ token: telegramToken, chatId: telegramChatId })
-        telegramNotifications = subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger })
+        telegramNotifications = await subscribeHarvesterTelegramNotifications({ eventBus, notifier, logger })
         logSystem(logger, "Telegram notifications enabled.")
       } catch (error) {
         logger.error?.({ message: "Telegram notifications could not be enabled; Harvester will continue without them.", error })
