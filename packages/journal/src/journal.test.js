@@ -586,7 +586,7 @@ test("retries a transient disk sync failure and durably persists records written
     )
 
     const firstWrittenContent = await readFile(context.filePath, "utf8")
-    const firstWrittenRecord = JSON.parse(firstWrittenContent.trim().split("\\n")[0])
+    const firstWrittenRecord = JSON.parse(firstWrittenContent.trim().split("\n")[0])
     assert.equal(
       firstWrittenRecord.__coinzillaJournal.id,
       first.event.id,
@@ -623,7 +623,7 @@ test("retries a transient disk sync failure and durably persists records written
 
     const records = (await readFile(context.filePath, "utf8"))
       .trim()
-      .split("\\n")
+      .split("\n")
       .map((line) => JSON.parse(line))
     assert.equal(
       records.length,
