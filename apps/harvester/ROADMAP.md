@@ -1783,7 +1783,7 @@ PR [#718](https://github.com/45s/coinzilla/pull/718) merged into `develop` as `6
 
 **Current `develop` checkpoint at the time of merge:** `6236f49dca53a2938b016b52802f907c90611b44`.
 - [x] [PR #688](https://github.com/45s/coinzilla/pull/688) merged: account-wide open-orders RPC timeout keeps recovery blocked, releases the task slot, and retries the same generation successfully. Exact tested head `d52dad2347e8f9a76aa17b1f3def309e4d45f230`, merged as `a66e5f9114395fbc1ab776ccdffc55bdcb2a8f5a`; Harvester unit tests 754/754, configured targeted tests 3/3, and all six required offline CI contexts passed. Harvester coverage execution passed; package threshold enforcement is not configured. TESTNET integration was skipped.
-- [ ] PR #699 is superseded by PR #701; its old branch is stale and must not be merged. It remains open with a superseded-by comment pending normal repository cleanup.
+- [x] PRs #698 and #699 are closed unmerged as superseded. Do not reopen, merge, or recreate their work. The account-snapshot timeout retry regression is covered by merged PR #701.
 
 **Current `develop` checkpoint:** `2e04a77c19357cec89111892fd910276ae8b1619`. No production trading, exchange, broker, Journal, or logging implementation changed in PRs #700/#701. Process-restart reconciliation remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). TESTNET acceptance remains separate and unclaimed.
 
@@ -1818,3 +1818,22 @@ PR [#711](https://github.com/45s/coinzilla/pull/711) merged into `develop` as `2
 The fix preserves the first native broker Error as `cause` through the relevant REST wrappers and includes the contextual Error object in structured recovery logs. Existing flattened log fields, contextual messages, retry behavior, recovery gates, and broker acknowledgement ordering remain unchanged.
 
 **Current `develop` checkpoint:** `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
+
+
+## 2026-11-08 recovery roadmap closeout — PR #719 merged
+
+PR [#719](https://github.com/45s/coinzilla/pull/719) merged into `develop` as `1e3ada9294ed0cdb6968ab05f0991a8dd2a7e922`.
+
+- Exact tested PR head: `76c9139c5f2e3bc2b7dde8fa6ba40ec037a342ce`.
+- Branch freshness at merge: 2 commits ahead, 0 behind `develop`.
+- All six required offline CI workflows passed on that exact head: actionlint, Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, and Audit production dependencies.
+- Harvester package tests: 761/761 passed; configured Harvester targeted regression files: 3/3 passed.
+- Brokers package tests: 414/414 passed; Journal package tests: 43/43 passed.
+- Harvester coverage execution passed; package threshold enforcement is not configured.
+- Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
+- The merged documentation marks the Harvester second-disconnect consumer proof complete while leaving the Brokers-owned multi-subscriber contract #702 open.
+- The synchronized task branch was removed after merge; no open PR remains at this checkpoint.
+
+PRs #698 and #699 remain closed as superseded; no work from those branches is to be recreated.
+
+**Current `develop` checkpoint:** `1e3ada9294ed0cdb6968ab05f0991a8dd2a7e922`.
