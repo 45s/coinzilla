@@ -243,7 +243,7 @@ binance/broker-websocket/broker.js
     └──> Binance response adapters
 ```
 
-The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The remaining `infrastructure/binance/broker-websocket/` tree is also infrastructure, though it has not yet been relocated under the infrastructure folder.
+The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The complete former Binance implementation, including the `broker-websocket/` tree, is now physically under `src/infrastructure/binance/` (PR #697); its internal module layout was preserved.
 
 ### Current gaps and boundary pressure
 
@@ -253,7 +253,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
 - The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
 - `infrastructure/binance/adapters/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Their Binance DTO and identifier dependencies make them Infrastructure adapters, not exchange-neutral domain modules.
-- `infrastructure/binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure. Their lifecycle and protocol tests are valuable and should remain with those components during migration.
+- `infrastructure/binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure, now grouped under `src/infrastructure/binance/`. Their lifecycle and protocol tests remain colocated with those components.
 - `broker.core.js` is a compatibility base class with default unsupported-method behavior and shared maps. Its long-term ownership is unresolved; do not automatically treat a base class as a domain entity or port.
 
 ### Verified ownership map
@@ -265,7 +265,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 | `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
 | `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
 | `infrastructure/binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
-| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; move/group under `infrastructure/binance/` incrementally |
+| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/` by PR #697 |
 | `infrastructure/binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
 | `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
 | `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
