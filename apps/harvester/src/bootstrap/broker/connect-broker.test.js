@@ -9,6 +9,12 @@ const createFixture = ({ connect, disconnect } = {}) => {
   const calls = []
   const events = []
   const broker = {
+    placeOrder: async () => ({ ok: true }),
+    cancelOrder: async () => ({ ok: true }),
+    getFills: async () => ({ ok: true, data: [] }),
+    getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
+    getCanonicalOrder: async () => ({ ok: true, data: undefined }),
+    getExchangeMarkets: async () => ({ ok: true, data: [] }),
     connect: async () => {
       calls.push("connect")
       if (connect) await connect()
@@ -21,6 +27,7 @@ const createFixture = ({ connect, disconnect } = {}) => {
     getOpenOrders: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: {} }),
     subscribeForPrices: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
+    subscribeForBookTicker: async () => ({ ok: true, data: { unsubscribe: async () => {} } }),
     subscribeForUserData: async () => ({ ok: true, data: { disconnect: async () => {} } }),
   }
   const eventPublisher = { publish: (event) => { events.push(event); return { ok: true } } }
