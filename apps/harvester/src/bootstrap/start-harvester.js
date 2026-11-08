@@ -16,6 +16,7 @@ import { createAccountSnapshotManager } from "./account/create-account-snapshot-
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
+import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
@@ -333,123 +334,19 @@ export async function startHarvester({
     }
   }
 
-  const startUserDataRecovery = () => {
-    if (stopped || !userDataState.startupComplete || !userDataState.requiresReconciliation ||
-        userDataState.accountingFailed || userDataState.recoveryTask ||
-        userDataState.lastAcknowledgedRecoveryGeneration === userDataState.recoveryGeneration) {
-      userDataState.pendingRecovery = true
-      return
-    }
-    if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
-      logger.error?.({
-        message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
-      })
-      return
-    }
-
-    userDataState.pendingRecovery = false
-    const generation = userDataState.recoveryGeneration
-    const isCurrentGeneration = () => !stopped && generation === userDataState.recoveryGeneration
-    const recoveryTask = (async () => {
-      try {
-        logger.info?.({
-          message: "application recovery started after user-data transport reconnect",
-          generation,
-        })
-
-        let reconciliation = { ok: true, data: { reconciled: 0, symbols: [] } }
-        if (tradingEnabled) {
-          if (!tradingEngine) throw new Error("Trading engine is unavailable during user-data recovery")
-          reconciliation = await tradingEngine.reconcileOwnedOrders({
-            recoveryMode: true,
-            beforeApply: drainUserDataEvents,
-          })
-          if (!reconciliation?.ok) {
-            throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
-          }
-          hasCanonicalOwnershipReconciliation = true
-        }
-        while (true) {
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
-
-          // Keep the account and open-order snapshots on the same side of all
-          // user-data events observed during the REST reads and durable flushes.
-          const eventSequence = userDataState.eventSequence
-          const snapshot = await refreshAccountSnapshot()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          const openOrdersResult = await broker.getOpenOrders({})
-          if (!openOrdersResult?.ok || !Array.isArray(openOrdersResult.data)) {
-            const details = openOrdersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-            throw new Error(
-              "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
-            )
-          }
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
-          if (eventSequence !== userDataState.eventSequence) continue
-
-          await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
-          await publishOpenOrdersSnapshot({
-            phase: "RECOVERY",
-            blockOnExistingOrders: tradingEnabled,
-            ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
-            orders: openOrdersResult.data,
-          })
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
-          if (eventSequence === userDataState.eventSequence) break
-        }
-
-        // The broker only emits "reconciled" after every subscriber acknowledges.
-        // Keep the application gate closed unless this generation has passed
-        // order/fill reconciliation and durable account/order audits.
-        userDataState.requiresReconciliation = false
-        const acknowledged = userDataSubscription.acknowledgeRecovery()
-        if (acknowledged !== true) {
-          userDataState.requiresReconciliation = true
-          throw new Error("Broker rejected the application recovery acknowledgement")
-        }
-        userDataState.lastAcknowledgedRecoveryGeneration = generation
-        logger.info?.({
-          message: "application recovery completed and broker acknowledgement accepted",
-          generation,
-          reconciledOrders: reconciliation.data?.reconciled ?? 0,
-        })
-      } catch (error) {
-        userDataState.ready = false
-        userDataState.requiresReconciliation = true
-        userDataState.status = userDataState.accountingFailed
-          ? "EXECUTION_ACCOUNTING_FAILED"
-          : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-        logger.error?.({
-          message: "application recovery failed; trading remains blocked",
-          generation,
-          errorName: error?.name ?? "Error",
-          errorMessage: error?.message || String(error),
-          errorStack: error?.stack,
-        })
-      } finally {
-        if (userDataState.recoveryTask === recoveryTask) userDataState.recoveryTask = null
-      }
-    })()
-    userDataState.recoveryTask = recoveryTask
-  }
-
-  const handleUserDataStatus = createUserDataStatusHandler({
+  const startUserDataRecovery = createUserDataRecoveryHandler({
     state: userDataState,
     isStopped: () => stopped,
-    eventPublisher,
-    brokerName,
-    logger,
+    getUserDataSubscription: () => userDataSubscription,
+    getTradingEngine: () => tradingEngine,
     tradingEnabled,
-    startUserDataRecovery,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onUserDataStatus,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled: (value) => { hasCanonicalOwnershipReconciliation = value },
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
   })
 
   const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })

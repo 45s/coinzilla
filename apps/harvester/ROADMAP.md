@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### User-data recovery coordinator extraction — 2026-11-08
+
+- [x] Move the application recovery task into `src/bootstrap/user-data/create-user-data-recovery-handler.js`.
+- [x] Preserve owned-order REST reconciliation, event-sequence bracketing/retry of account and open-order snapshots, durable RECOVERY audit publication, and explicit broker acknowledgement.
+- [x] Preserve recovery-generation invalidation and fail-closed behavior when reconciliation, snapshots, Journal durability, or acknowledgement fail.
+- [x] Add direct tests for startup gating, successful recovery, superseded generations, events during REST audit reads, and durable audit failure.
+
 ### User-data status/recovery handler extraction — 2026-11-08
 
 - [x] Move broker status publication, transport-unsafe transitions, recovery-generation invalidation, readiness updates, and observer failure handling into `src/bootstrap/user-data/create-user-data-status-handler.js`.

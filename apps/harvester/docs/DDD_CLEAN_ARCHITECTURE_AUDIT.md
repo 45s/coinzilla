@@ -438,3 +438,10 @@ The status-handler extraction follow-up corrected the same mechanical relocation
 
 
 The status-handler CI regression pinpointed one remaining doubled state qualifier in the recovered-generation guard. That reference is corrected to the injected state object's `lastAcknowledgedRecoveryGeneration` field; the failure was isolated to this guard, and the existing integration cases for recovery sequencing are retained.
+
+
+## User-data recovery coordinator extraction — 2026-11-08
+
+The application recovery task now lives in `src/bootstrap/user-data/create-user-data-recovery-handler.js`. It preserves owned-order REST reconciliation, generation checks, serialized event draining, repeated account/open-order REST reads when the event sequence changes, durable RECOVERY account/open-order audits, and explicit broker acknowledgement. It does not let the broker's transport-level `recovered` or `reconciled` status alone reopen trading.
+
+Direct tests cover startup gating, successful acknowledgement after both audits, superseded generations, events arriving during REST reads, and durable audit failure. The coordinator remains bootstrap-owned because it sequences broker I/O, the user-data stream, and Journal barriers.
