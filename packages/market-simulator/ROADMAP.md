@@ -2,7 +2,11 @@
 
 ## Priority execution plan — current develop direction (2026-11-08)
 
-### IMPORTANT — make simulation results trustworthy before using them to validate strategies
+### LOW PRIORITY — deferred until a real consumer exists
+
+**Current usage:** no application or production workflow currently consumes this package. The simulator is retained as an available offline tool, but there is no demonstrated operational need to invest in additional correctness, realism, determinism or coverage work now. Do not schedule these items ahead of active application/package work. Revisit this section only when a concrete consumer and validation use case are identified.
+
+The following items are intentionally deferred; they are not current release blockers.
 
 1. **Propagate failed broker snapshot results instead of producing partial reports.**
    - **Why:** the simulation finalization path currently reads balances, order history and fills without consistently checking each result's `ok` state. A failed query can therefore be represented as an empty section and make an incomplete simulation look valid.
@@ -24,7 +28,7 @@
    - **Do:** add a scoped coverage command and negative CI self-check after the above regressions; set a measured baseline and enforce at least 90% lines / 80% branches / 80% functions, raising thresholds only with evidence.
    - **Verify:** CI must fail when a deliberately insufficient threshold is configured and pass on the exact PR head. Prioritize error/cleanup/time/partial-fill branches over percentage-only tests.
 
-### DEFERRED — do not expand the simulator prematurely
+### FUTURE — only after a consumer and execution model are agreed
 
 5. **Improve matching realism only against a documented execution model.**
    - **Why:** fees, partial fills, queue priority, spread and liquidity assumptions can materially change strategy conclusions. Adding realism without a stated model creates false confidence.
@@ -118,7 +122,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 
 These limitations are intentional. Extend the model only with explicit semantics and tests.
 
-## Quality gates
+## Quality gates (when the package becomes actively used)
 
 - Run package tests and coverage plus repository CI.
 - Verify Node 22 and Node 24.

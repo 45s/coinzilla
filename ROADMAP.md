@@ -17,27 +17,24 @@
 3. **Process-restart reconciliation (#654)** — current trading ownership/accounting state is process-local. Before unattended restarts, persist order/fill identity, reservations, Portfolio/Position and strategy-control state, then reconcile persisted state with exchange balances/open orders/history before READY. Fail closed on incomplete or conflicting history.
    - Owner: [Harvester](apps/harvester/ROADMAP.md).
 
-### IMPORTANT — trustworthy simulation, persistence and contracts
+### IMPORTANT — persistence and operational contracts
 
-4. **Market Simulator correctness and determinism** — propagate failed final broker reads, always attempt disconnect after unsubscribe failure, and replace wall-clock timestamps with an injected/simulation clock. Without these guarantees, incomplete or non-repeatable simulations can mislead strategy decisions.
-   - Owner: [Market Simulator](packages/market-simulator/ROADMAP.md).
-
-5. **Journal persistence boundary** — finish the internal filesystem adapter (J-3), explicit orchestration state ownership (J-4), and conformance/operational docs (J-5). Preserve required Harvester PREFLIGHT/CLOSING and pre-side-effect durability barriers; optional diagnostic evidence must not add trading gates.
+4. **Journal persistence boundary** — finish the internal filesystem adapter (J-3), explicit orchestration state ownership (J-4), and conformance/operational docs (J-5). Preserve required Harvester PREFLIGHT/CLOSING and pre-side-effect durability barriers; optional diagnostic evidence must not add trading gates.
    - J-1 and J-2 are complete in PRs #746 and #747.
    - Owner: [Journal](packages/journal/ROADMAP.md).
 
-6. **Package-owned test quality** — add scoped coverage and negative self-checks where the audit found gaps, especially Market Simulator and Entities. Workspace aggregate coverage alone can hide a weak package. Prioritize meaningful error, cleanup, concurrency, duplicate-event and partial-failure branches; never add tests just to inflate percentages.
-   - Owners: [Entities](packages/entities/ROADMAP.md), [Market Simulator](packages/market-simulator/ROADMAP.md), [Harvester](apps/harvester/ROADMAP.md).
+5. **Package-owned test quality** — add scoped coverage and negative self-checks where the audit found gaps in actively used packages. Workspace aggregate coverage alone can hide a weak package. Prioritize meaningful error, cleanup, concurrency, duplicate-event and partial-failure branches; never add tests just to inflate percentages.
+   - Owners: [Entities](packages/entities/ROADMAP.md), [Harvester](apps/harvester/ROADMAP.md).
 
-7. **Broker protocol acceptance** — resolve the native WebSocket read-only TESTNET handshake gap in an authorized environment and record exact runtime/commit/evidence. Preserve recovery generation fencing and keep mutation tests disabled unless separately authorized.
+6. **Broker protocol acceptance** — resolve the native WebSocket read-only TESTNET handshake gap in an authorized environment and record exact runtime/commit/evidence. Preserve recovery generation fencing and keep mutation tests disabled unless separately authorized.
    - Owner: [Brokers](packages/brokers/ROADMAP.md).
 
 ### IMPORTANT — architecture and package ownership
 
-8. **Decompose oversized Harvester/Brokers modules only after behavior is protected by tests.** Extract cohesive workflows, preserve public contracts, and add executable dependency-boundary tests. Avoid broad speculative rewrites.
-9. **Keep shared Entities and Utils contracts pure and stable.** Use exact decimal strings, explicit unknown/incomplete states, narrow imports and architecture tests. Do not move business rules into generic utilities.
-10. **Use DB only for a real domain-owned persistence requirement.** Define repository ports in the owning context, keep SQL in adapters, and test transactions, locking, migration and backup/restore before deployment.
-11. **Keep Event Bus and Notifiers bounded and optional by contract.** Preserve explicit delivery, failure and shutdown semantics. Do not add retries, dead-letter queues, new transports or durable notification outboxes without a concrete consumer requirement.
+7. **Decompose oversized Harvester/Brokers modules only after behavior is protected by tests.** Extract cohesive workflows, preserve public contracts, and add executable dependency-boundary tests. Avoid broad speculative rewrites.
+8. **Keep shared Entities and Utils contracts pure and stable.** Use exact decimal strings, explicit unknown/incomplete states, narrow imports and architecture tests. Do not move business rules into generic utilities.
+9. **Use DB only for a real domain-owned persistence requirement.** Define repository ports in the owning context, keep SQL in adapters, and test transactions, locking, migration and backup/restore before deployment.
+10. **Keep Event Bus and Notifiers bounded and optional by contract.** Preserve explicit delivery, failure and shutdown semantics. Do not add retries, dead-letter queues, new transports or durable notification outboxes without a concrete consumer requirement.
 
 ## Application and package execution map
 
@@ -47,9 +44,14 @@
 - [Entities](packages/entities/ROADMAP.md) — exact financial contracts, dependency boundaries and package coverage.
 - [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery, failure semantics and lifecycle guarantees.
 - [Journal](packages/journal/ROADMAP.md) — record contract, filesystem adapter, orchestration and durability documentation.
-- [Market Simulator](packages/market-simulator/ROADMAP.md) — correct failure propagation, deterministic time and coverage.
+- [Market Simulator](packages/market-simulator/ROADMAP.md) — currently unused; low-priority maintenance only, deferred until a real consumer exists.
 - [Notifiers](packages/notifiers/ROADMAP.md) — safe optional delivery and operator-controlled live smoke test.
 - [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, logger API and generic helper reuse.
+
+### LOW PRIORITY — unused package maintenance
+
+11. **Market Simulator correctness and determinism** — defer all simulator correctness, deterministic-time, cleanup and coverage work until an application or workflow actually consumes this package. There is currently no demonstrated production use, so it must not compete with active trading, recovery or persistence work. Keep the existing package and its tests intact; do not expand it proactively.
+   - Owner and deferred notes: [Market Simulator](packages/market-simulator/ROADMAP.md).
 
 ## Delivery and verification rules
 
