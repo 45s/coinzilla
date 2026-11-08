@@ -131,6 +131,8 @@ TDD and documentation:
 **Depends on:** J-2  
 **Intent:** separate Journal lifecycle/orchestration from Node filesystem mechanics and provide deterministic control of I/O in service tests.
 
+**TDD plan:** First add a deterministic service test using the non-public store injection token; verify it fails because the current Journal bypasses the injected store. Then implement the adapter and retain real temporary-directory/child-process integration tests.
+
 Scope:
 - Define a small package-private persistence contract for the operations Journal actually needs: exclusive writer ownership, session creation/append, file-content sync, session close, bounded session discovery/read, and ownership release.
 - Move Node filesystem calls, JSONL session file mechanics, lock-file creation/metadata, and lock cleanup into one filesystem implementation with cohesive responsibilities.

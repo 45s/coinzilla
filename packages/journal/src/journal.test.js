@@ -862,7 +862,7 @@ test("delegates writer lifecycle and record persistence to its injected internal
   const storeCalls = []
   const expectedFilePath = "virtual-journal/session.jsonl"
   const sessionFileName = "2026-11-08_12-30-00.jsonl"
-  const sessionContent = `${JSON.stringify({ id: "stored-record", name: "stored.event" })}\\n`
+  const sessionContent = `${JSON.stringify({ id: "stored-record", name: "stored.event" })}\n`
   const store = {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
