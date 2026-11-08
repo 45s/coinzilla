@@ -812,7 +812,7 @@ test("logs stack and cause details when a user-data RPC error has an empty messa
   broker.emitUserDataStatus({ type: "rpcError", error, recoveryRequired: false })
 
   const diagnostic = diagnostics.find((entry) =>
-    entry?.message === "Binance user-data transport reported an error")
+    entry?.message === "User-data stream error")
   assert.ok(diagnostic)
   assert.equal(diagnostic.statusType, "rpcError")
   assert.equal(diagnostic.errorName, "TypeError")
@@ -1960,7 +1960,7 @@ test("logs lifecycle readiness at SYSTEM and routine market evaluation at DEBUG"
   assert.ok(typeof targetMarketEvaluation.action === "string" && targetMarketEvaluation.action.length > 0)
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
   assert.ok(systemMessages.includes("Trading configuration validated"))
-  assert.ok(systemMessages.includes("Binance user-data subscription established"))
+  assert.ok(systemMessages.includes("User-data stream connected"))
   assert.ok(systemMessages.includes("Exchange account snapshot loaded"))
   assert.ok(systemMessages.includes("Conservative TESTNET trading engine activated"))
   assert.ok(systemMessages.includes("Book ticker subscribed"))
