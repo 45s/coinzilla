@@ -7,7 +7,7 @@ A deterministic, offline market simulator for testing Coinzilla strategies again
 
 ## What it provides
 
-- Replay the bundled 10,080 one-minute DOGEUSDT candles.
+- Replay caller-supplied historical candles.
 - Stream candle close prices through a `CoreBroker`-compatible broker.
 - Run a strategy with `onStart`, `onPrice`, and `onStop` lifecycle hooks.
 - Simulate MARKET, LIMIT, and LIMIT_MAKER spot orders.
