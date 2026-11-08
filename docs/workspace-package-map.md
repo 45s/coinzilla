@@ -56,7 +56,7 @@ Durable JSONL event recording and recovery of persisted records. Journal stores 
 
 ### `packages/market-simulator/` — `@coinzilla/market-simulator`
 
-Offline historical market replay and simulated spot execution through the existing broker contract. History and market metadata are supplied explicitly by the caller; do not assume a bundled market-history fixture.
+Offline historical market replay and simulated spot execution through the existing broker contract. No current application or production workflow consumes it, so it is a low-priority optional tool; enhancements are deferred until a concrete consumer exists. History and market metadata are supplied explicitly by the caller; do not assume a bundled market-history fixture.
 
 - Roadmap: [packages/market-simulator/ROADMAP.md](../packages/market-simulator/ROADMAP.md)
 
