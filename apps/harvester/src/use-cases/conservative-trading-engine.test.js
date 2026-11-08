@@ -5410,3 +5410,89 @@ test("fails closed when owned-order REST fill history exceeds the supported page
     expectedFillHistoryReads: 1,
   })
 })
+
+
+function assertBrokerRestFailurePreservesOriginalCause({ result, timeout, scenario, expectedMessage }) {
+  assert.equal(
+    result.ok,
+    false,
+    scenario + ": a failed broker REST result must fail owned-order reconciliation.",
+  )
+  const failure = result.errors?.[0]
+  assert.ok(
+    failure instanceof Error,
+    scenario + ": reconciliation must return the contextual Error wrapper for the failed REST stage.",
+  )
+  assert.equal(
+    failure.message,
+    expectedMessage,
+    scenario + ": preserving the cause must not change the existing contextual reconciliation message.",
+  )
+  assert.equal(
+    failure.cause,
+    timeout,
+    scenario + ": the contextual reconciliation Error must retain the exact original broker Error as native cause.",
+  )
+  assert.equal(
+    failure.cause?.name,
+    "RpcTimeoutError",
+    scenario + ": the native cause must preserve the broker's typed timeout name for diagnosis.",
+  )
+}
+
+test("preserves the original broker error as cause when owned-order open-orders REST retrieval fails", async () => {
+  const timeout = Object.assign(
+    new Error("owned-order open-orders RPC timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  const fixture = await createMalformedRestEnvelopeFixture({
+    openOrdersResult: { ok: false, errors: [timeout] },
+  })
+
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assertBrokerRestFailurePreservesOriginalCause({
+    result,
+    timeout,
+    scenario: "an account-symbol open-orders RPC timeout during owned-order recovery",
+    expectedMessage: "Open-order snapshot is incomplete or contains invalid Order records for DOGEUSDT",
+  })
+})
+
+test("preserves the original broker error as cause when canonical order-history REST retrieval fails", async () => {
+  const timeout = Object.assign(
+    new Error("canonical order-history RPC timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  const fixture = await createMalformedRestEnvelopeFixture({
+    canonicalOrderHistoryResult: { ok: false, errors: [timeout] },
+  })
+
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assertBrokerRestFailurePreservesOriginalCause({
+    result,
+    timeout,
+    scenario: "a canonical order-history RPC timeout during owned-order recovery",
+    expectedMessage: "Canonical order history is incomplete for owned order broker-malformed-rest-envelope-owned-order",
+  })
+})
+
+test("preserves the original broker error as cause when REST fill-history retrieval fails", async () => {
+  const timeout = Object.assign(
+    new Error("owned-order fill-history RPC timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  const fixture = await createMalformedRestEnvelopeFixture({
+    fillsResult: { ok: false, errors: [timeout] },
+  })
+
+  const result = await fixture.harness.engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assertBrokerRestFailurePreservesOriginalCause({
+    result,
+    timeout,
+    scenario: "a REST fill-history RPC timeout during owned-order recovery",
+    expectedMessage: "REST fill history is incomplete or invalid for owned order broker-malformed-rest-envelope-owned-order",
+  })
+})

@@ -6,7 +6,7 @@ import { createAccountSnapshotManager } from "./create-account-snapshot-manager.
 
 const test = (name, ...args) => nodeTest("[create-account-snapshot-manager.test.js] " + name, ...args)
 
-const createFixture = ({ accountSnapshots = [], openOrders = [] } = {}) => {
+const createFixture = ({ accountSnapshots = [], openOrders = [], openOrdersResult } = {}) => {
   const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
   const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
   const market = new Market({ venue: "binance", symbol: "BTCUSDT", baseAsset, quoteAsset })
@@ -16,7 +16,7 @@ const createFixture = ({ accountSnapshots = [], openOrders = [] } = {}) => {
   const manager = createAccountSnapshotManager({
     broker: {
       getAccountSnapshot: async () => accountSnapshots[Math.min(snapshotIndex++, accountSnapshots.length - 1)],
-      getOpenOrders: async () => ({ ok: true, data: openOrders }),
+      getOpenOrders: async () => openOrdersResult ?? ({ ok: true, data: openOrders }),
     },
     eventPublisher: {
       publish: (event) => {
@@ -158,8 +158,25 @@ test("retries an account snapshot after a REST timeout without publishing a prem
 
   await assert.rejects(
     fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
-    /Unable to load canonical exchange account balances: account\.status request timed out/,
-    "A failed broker account snapshot result must fail the recovery audit with its actionable timeout message.",
+    (error) => {
+      assert.equal(
+        error.message,
+        "Unable to load canonical exchange account balances: account.status request timed out",
+        "The account snapshot wrapper must retain its existing contextual timeout message.",
+      )
+      assert.equal(
+        error.cause,
+        timeout,
+        "The account snapshot wrapper must preserve the exact original broker timeout as native Error.cause.",
+      )
+      assert.equal(
+        error.cause?.name,
+        "RpcTimeoutError",
+        "The native account snapshot error cause must retain the broker's typed timeout name.",
+      )
+      return true
+    },
+    "A failed broker account snapshot result must fail the recovery audit with its actionable timeout message and original cause.",
   )
 
   assert.equal(
@@ -204,5 +221,50 @@ test("retries an account snapshot after a REST timeout without publishing a prem
     fixture.getFlushCount(),
     1,
     "The successful retry must durably flush exactly one recovery account audit.",
+  )
+})
+
+
+test("preserves the original broker error as cause when the account-wide open-orders snapshot fails", async () => {
+  const timeout = Object.assign(
+    new Error("account-wide open-orders RPC timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  const fixture = createFixture({
+    openOrdersResult: { ok: false, errors: [timeout] },
+  })
+
+  await assert.rejects(
+    fixture.manager.publishOpenOrdersSnapshot(),
+    (error) => {
+      assert.equal(
+        error.message,
+        "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
+        "The open-orders snapshot wrapper must retain its existing contextual timeout message.",
+      )
+      assert.equal(
+        error.cause,
+        timeout,
+        "The open-orders snapshot wrapper must preserve the exact original broker timeout as native Error.cause.",
+      )
+      assert.equal(
+        error.cause?.name,
+        "RpcTimeoutError",
+        "The native open-orders snapshot cause must retain the broker's typed timeout name.",
+      )
+      return true
+    },
+    "A failed account-wide open-orders REST read must fail the audit with its original broker Error as cause.",
+  )
+
+  assert.equal(
+    fixture.publishedEvents.length,
+    0,
+    "A failed account-wide open-orders REST read must not publish an audit event without authoritative data.",
+  )
+  assert.equal(
+    fixture.getFlushCount(),
+    0,
+    "A failed account-wide open-orders REST read must not flush an audit event that was never published.",
   )
 })

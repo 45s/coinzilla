@@ -1638,7 +1638,11 @@ export function makeConservativeTradingEngine({
               typeof order.id !== "string" || typeof order.symbol !== "string" ||
               typeof order.originalQuantity !== "string" || typeof order.executedQuantity !== "string" ||
               !["NEW", "PARTIALLY_FILLED"].includes(order.status))) {
-          throw new Error("Open-order snapshot is incomplete or contains invalid Order records for " + symbol)
+          const cause = result?.errors?.find?.((error) => error instanceof Error)
+          throw new Error(
+            "Open-order snapshot is incomplete or contains invalid Order records for " + symbol,
+            { cause },
+          )
         }
         openOrdersBySymbol.set(symbol, result.data)
       }
@@ -1654,7 +1658,11 @@ export function makeConservativeTradingEngine({
         if (!historyResult?.ok || !Array.isArray(historyResult.data) ||
             historyResult.data.length !== 1 ||
             !(historyResult.data[0] instanceof CanonicalOrder)) {
-          throw new Error("Canonical order history is incomplete for owned order " + ownedOrder.brokerOrderId)
+          const cause = historyResult?.errors?.find?.((error) => error instanceof Error)
+          throw new Error(
+            "Canonical order history is incomplete for owned order " + ownedOrder.brokerOrderId,
+            { cause },
+          )
         }
         const historyOrder = historyResult.data[0]
         const limitPriceMatches = historyOrder.limitPrice === undefined
@@ -1720,7 +1728,11 @@ export function makeConservativeTradingEngine({
           if (!fillsResult?.ok || !Array.isArray(fillsResult.data) ||
               fillsResult.data.length > fillPageLimit ||
               fillsResult.data.some((fill) => !(fill instanceof Fill))) {
-            throw new Error("REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId)
+            const cause = fillsResult?.errors?.find?.((error) => error instanceof Error)
+            throw new Error(
+              "REST fill history is incomplete or invalid for owned order " + ownedOrder.brokerOrderId,
+              { cause },
+            )
           }
           let pageLastTradeId
           for (const fill of fillsResult.data) {

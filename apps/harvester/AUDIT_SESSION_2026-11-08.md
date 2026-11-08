@@ -436,3 +436,37 @@ PR [#688](https://github.com/45s/coinzilla/pull/688) is merged into `develop`. E
 - Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
 
 The regression closes the distinct account-wide open-orders timeout/retry proof gap. F-016's native Error-cause/stack preservation remains a separate unimplemented production diagnostic fix.
+
+
+## 18. F-016 native broker Error-cause preservation — test-first regressions
+
+Branch: `fix/harvester/preserve-rest-error-causes`, based on `develop` at `554ac983504f8947570e20ba33218158b08d989d`.
+
+Added test-first assertions for the original broker Error to survive as native `cause` through:
+- account snapshot REST failure;
+- account-wide open-orders snapshot REST failure;
+- owned-order open-orders REST failure;
+- canonical order-history REST failure;
+- REST fill-history failure;
+- application recovery structured error logging.
+
+Existing contextual messages, retry behavior, readiness gates, and acknowledgement ordering are asserted unchanged. The shared `@coinzilla/utils` logger already serializes nested Error causes; no utility/logger implementation change is required.
+
+**Production source was unchanged in the test-first commit.** Expected RED was confirmed: 758 Harvester tests, 752 passed, 6 failed exactly on missing native causes / missing structured Error field. The subsequent implementation commit preserved native causes and added the Error object to structured recovery logs without changing messages or recovery behavior. PR #711 exact head `e68da711eb44bc64bfeb5b1e8027f1f0a19f58dc` passed Harvester unit tests (758/758), configured targeted tests (3/3), and all six required offline CI contexts. Workspace coverage passed; Harvester package threshold enforcement is not configured. TESTNET integration was skipped. PR merge is pending.
+
+
+## 19. F-016 cause-preservation implementation — 2026-11-08
+
+The test-only commit `918a3a6644c92cbe089919874177cba7b8193249` produced the expected RED result in the Harvester package suite: 758 tests, 752 passed, 6 failed. The six failures were exactly the new assertions for missing native broker Error causes and the missing Error object in structured recovery logs. No fixture or syntax failure was observed.
+
+The implementation now preserves the first native Error from each broker result as the contextual wrapper's `cause` in:
+- `createAccountSnapshotManager.refreshAccountSnapshot()`;
+- `createAccountSnapshotManager.publishOpenOrdersSnapshot()`;
+- owned-order `getOpenOrders()`;
+- owned-order `getCanonicalOrderHistory()`;
+- owned-order `getFills()`;
+- application recovery's account-wide `getOpenOrders()`.
+
+The application recovery failure log now includes the Error object in addition to the existing flattened `errorName`, `errorMessage`, and `errorStack` fields. The shared logger's existing serializer preserves the nested cause and stack; no shared utility or logging implementation was changed.
+
+No retry timing, recovery gate, acknowledgement, trading policy, Journal durability, broker protocol, or exchange behavior was changed. Exact-head GREEN verification is pending.
