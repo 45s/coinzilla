@@ -8,8 +8,8 @@ function safeDiagnosticText(value) {
   if (typeof value !== "string" || value.length === 0) return null
   return value
     .slice(0, MAX_DIAGNOSTIC_TEXT_LENGTH)
-    .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
-    .replace(/https?:\\/\\/[^\\s]+/gi, "[redacted-url]")
+    .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
 }
 
 function readHttpUpgradeStatus(...sources) {
