@@ -7,6 +7,7 @@ import path from "node:path"
 
 import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "../src/index.js"
+import { JOURNAL_STORE } from "./journal-store-injection.js"
 
 async function createTestJournal() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-"))
@@ -851,5 +852,96 @@ test("retries a transient disk sync failure and durably persists records written
     await context.journal.close()
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("delegates writer lifecycle and record persistence to its injected internal store", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-injection-"))
+  const eventBus = new EventBus()
+  const storeCalls = []
+  const expectedFilePath = "virtual-journal/session.jsonl"
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: expectedFilePath }
+    },
+    append: async (line) => storeCalls.push({ operation: "append", line }),
+    sync: async () => storeCalls.push("sync"),
+    closeSession: async () => storeCalls.push("closeSession"),
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+    listSessions: async () => [],
+    statSession: async () => ({ size: 0 }),
+    readSession: async () => Buffer.alloc(0),
+  }
+  const journal = new Journal({
+    eventBus,
+    directory,
+    [JOURNAL_STORE]: store,
+  })
+
+  try {
+    const startResult = await journal.start()
+    assert.equal(
+      startResult.ok,
+      true,
+      "Journal startup must succeed when its injected persistence store completes directory acquisition and session creation.",
+    )
+    assert.equal(
+      startResult.filePath,
+      expectedFilePath,
+      "The session path returned by Journal must come from the injected store rather than direct filesystem access.",
+    )
+
+    const published = eventBus.publish({
+      name: "journal.store_delegation_verified",
+      source: "unit-test",
+      data: { contract: "internal-store" },
+    })
+    assert.equal(
+      published.ok,
+      true,
+      "The EventBus must accept a source event while Journal delegates persistence to the injected store.",
+    )
+
+    const flushResult = await journal.flush()
+    assert.equal(
+      flushResult.ok,
+      true,
+      "Journal flush must delegate file-content synchronization to the injected store after draining EventBus and queued writes.",
+    )
+
+    const closeResult = await journal.close()
+    assert.equal(
+      closeResult.ok,
+      true,
+      "Journal close must close the injected session and release only the writer ownership acquired through that store.",
+    )
+    assert.deepEqual(
+      storeCalls.map((call) => typeof call === "string" ? call : call.operation),
+      [
+        "ensureDirectory",
+        "acquireWriter",
+        "createSession",
+        "append",
+        "sync",
+        "sync",
+        "closeSession",
+        "releaseWriter",
+      ],
+      "The Journal service must delegate directory, lock, session, append, sync, close, and release operations in lifecycle order.",
+    )
+    const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
+    assert.match(
+      appendCall.line,
+      /journal\.store_delegation_verified/,
+      "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
   }
 })
