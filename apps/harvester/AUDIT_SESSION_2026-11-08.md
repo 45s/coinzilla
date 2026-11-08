@@ -536,3 +536,16 @@ Brokers PR [#721](https://github.com/45s/coinzilla/pull/721) merged into `develo
 - The manual read-only TESTNET account/recovery integration was skipped. No authenticated account request, order operation, or TESTNET acceptance is claimed.
 
 The separate established-socket 1006 path remains open under cross-domain request [#680](https://github.com/45s/coinzilla/issues/680). Do not infer an underlying network cause from code 1006 alone; deterministic post-connect error/close correlation and any runtime limitation still require Brokers-owner verification. No Harvester workaround or broker contract change was made.
+
+
+## 26. F-015 established-socket 1006 diagnostic limitation — 2026-11-08
+
+[Brokers PR #725](https://github.com/45s/coinzilla/pull/725) merged into `develop` as `bf9e51e298535cf14f113343a5216f4b8a1ec80f`. Exact tested head: `b50d453d8846e82a2918b5d4752dfc8d81412ceb`.
+
+- Added an offline loopback test using Node 24.x native WebSocket. The server completes the upgrade and then resets the established connection without sending a WebSocket close frame.
+- The client closes with code 1006. Undici's `websocket:open` and `websocket:close` diagnostic channels identify the WebSocket instance, but `websocket:socket_error` emits no event for this reset.
+- Undici documents the socket-error channel payload as an Error only, without a WebSocket identity. A process-wide listener therefore cannot safely attribute such an error to the Binance API or Streams client when both are active.
+- The first exact-head attempt expected one socket-error event and observed zero (414/415 Brokers tests passed). The test was corrected to assert the actual runtime behavior; the final exact head passed Brokers tests 415/415, Brokers coverage, and all six required offline CI workflows.
+- No production diagnostics subscriber, socket monkey-patch, timing heuristic, dependency, transport change, public broker contract change, or Harvester workaround was introduced. No TESTNET or exchange operation was performed.
+
+The established-socket path is now characterized as a Node/Undici runtime observability limitation for the reproduced 1006 peer reset. Do not infer a specific network/TLS cause from 1006. Cross-domain issue [#680](https://github.com/45s/coinzilla/issues/680) can be closed as investigated/documented; a future Node/Undici runtime change may make stronger correlation possible.
