@@ -428,7 +428,8 @@ export async function startHarvester({
     try {
       userDataResult = await broker.subscribeForUserData({
       onEvent: handleUserDataEvent,
-      onStatus: handleUserDataStatus,      })
+      onStatus: handleUserDataStatus,
+      })
     } catch (error) {
       publishLifecycleEvent({
         eventPublisher,

@@ -118,6 +118,4 @@ export function createUserDataRecoveryHandler({
     })()
     state.recoveryTask = recoveryTask
   }
-
-  }
 }

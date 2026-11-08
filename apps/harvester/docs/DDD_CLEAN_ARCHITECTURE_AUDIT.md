@@ -451,3 +451,6 @@ The recovery-handler source review corrected the extracted function's remaining 
 
 
 The recovery extraction initially captured the adjacent status-handler composition block as part of the new recovery module, producing a syntax error and removing the status-handler initialization from bootstrap. The follow-up restores the composition to `start-harvester.js` and leaves the recovery module with only the recovery factory. The syntax and Harvester workflows must pass on the updated head before this step is accepted.
+
+
+A follow-up source/syntax review removed one duplicate closing brace left by the recovery-function extraction and restored the normal multiline subscription options formatting. This is a mechanical syntax correction; the recovery logic and status-handler composition are otherwise unchanged.
