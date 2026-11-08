@@ -564,3 +564,38 @@ The established-socket path is now characterized as a Node/Undici runtime observ
 - This was test/documentation only. No broker production source, public acknowledgement return semantics, Harvester consumer, or bootstrap code changed.
 
 The broker-owned exact terminal-notification-count proof is complete. F-019/#702 remains open only for agreement on the additive per-subscriber acknowledgement result and the corresponding consumer compatibility behavior. Do not reinterpret the legacy boolean or add a Harvester workaround before owner coordination.
+
+
+## 28. Current disposition superseding earlier acceptance-matrix notes — 2026-11-08
+
+This addendum is the current tracker view. Sections 12–13 and 27 preserve the state at the time they were written; statements there describing later-closed gaps are historical, not current blockers.
+
+### Resolved offline engineering gaps
+
+- **F-017 malformed REST envelopes:** closed by [PR #708](https://github.com/45s/coinzilla/pull/708); eight deterministic malformed-envelope cases merged, exact-head offline CI passed.
+- **F-016 native broker Error causes:** closed by [PR #711](https://github.com/45s/coinzilla/pull/711); native causes survive broker-result wrappers and structured recovery logs.
+- **F-018 transient Journal sync retry:** characterized by [PR #714](https://github.com/45s/coinzilla/pull/714) and [PR #716](https://github.com/45s/coinzilla/pull/716); uncertain first and distinct retry records remain durable in append order, and Harvester withholds acknowledgement after a failed required audit flush. Permanent writeFile poisoning remains documented and unchanged.
+- **Second disconnect during in-flight recovery:** covered end-to-end by [PR #718](https://github.com/45s/coinzilla/pull/718); stale generation work publishes no audits and never acknowledges.
+- **Broker handshake / established-socket diagnostics:** characterized by [PR #721](https://github.com/45s/coinzilla/pull/721) and [PR #725](https://github.com/45s/coinzilla/pull/725). A later credential-free Spot API upgrade returned HTTP 451 for regional eligibility; the Streams upgrade returned HTTP 101. A reproduced post-upgrade reset closes with 1006, while current Undici diagnostics cannot safely correlate that socket error to one of multiple WebSockets. Do not infer that the later 451 proves the original incident's cause.
+- **Broker multi-subscriber terminal notification count:** proven by [PR #729](https://github.com/45s/coinzilla/pull/729); active subscribers receive one terminal reconciled status, removed subscribers receive none, reminders clear, and state-changing RPCs remain blocked until global completion.
+- **Broker acknowledgement result API:** merged in [PR #732](https://github.com/45s/coinzilla/pull/732). The additive acknowledgeRecoveryResult() distinguishes accepted/pending, accepted/completed, stale/inactive, and no-recovery-pending while preserving the legacy boolean API. Its exact final head passed all six required offline CI workflows.
+
+### Current cross-domain integration
+
+- **[PR #735](https://github.com/45s/coinzilla/pull/735) — MERGED:** Harvester consumes acknowledgeRecoveryResult() without treating accepted/pending as rejection. It records local acceptance but keeps the application readiness gate closed until a global reconciled status matches both the current recovery generation and active subscription ID. It does not modify start-harvester.js. Test-first RED was confirmed; the synchronized exact head passed all six required offline CI workflows.
+- **Issue #702:** closed after PRs #732 and #735 merged; the Broker API and Harvester consumer contract are complete.
+- **Issue #626:** remains open for final recovery closeout and TESTNET acceptance disposition. Offline deterministic engineering continues independently of TESTNET.
+- **Issue #654:** process-restart reconciliation remains explicitly deferred; no Journal replay/restart behavior is claimed.
+
+### TESTNET external limitation
+
+The hosted Spot API runner returned HTTP 451 for regional eligibility. This is documented as PAUSED/UNVERIFIED in the Harvester roadmap and TESTNET runbook by merged [PR #731](https://github.com/45s/coinzilla/pull/731). The operator cannot change location; do not ask them to do so or retry the same blocked path. The read-only integration workflow remains skipped. No TESTNET acceptance, authenticated account validation, order submission/cancellation, or live operation is claimed.
+
+### Tracker cleanup
+
+- [#650](https://github.com/45s/coinzilla/issues/650) closed against PR #652; evidence matrix, allowlisted executionReport facts, lifecycle evidence, trading-rule snapshots, and durability boundary are implemented.
+- [#646](https://github.com/45s/coinzilla/issues/646) and [#656](https://github.com/45s/coinzilla/issues/656) closed against PR #653.
+- [#667](https://github.com/45s/coinzilla/issues/667) closed after incident source fixes and regressions merged.
+- [#680](https://github.com/45s/coinzilla/issues/680) closed as investigated/documented; stronger established-socket correlation depends on future Node/Undici observability.
+
+**Current work selection:** #702 is complete. Continue #626's offline acceptance traceability while TESTNET remains PAUSED/UNVERIFIED; keep #654 deferred. No live process or exchange action is authorized by this audit update.

@@ -14,25 +14,25 @@ This section is the current operational status and supersedes older statements b
 
 ### Recovery contract work
 
-- [ ] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08:
+- [x] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08; broker API and Harvester consumer integration are complete in PRs #732 and #735:
   1. Add an explicit per-subscriber acknowledgement result API while preserving the existing boolean API and its meaning.
   2. Distinguish accepted-but-pending, accepted-and-globally-completed, and stale/inactive rejection.
   3. Preserve one terminal `reconciled` notification per recovery generation for every still-active subscriber; disconnected subscribers receive none.
   4. Keep state-changing RPCs blocked until global recovery completion and keep reminder behavior bounded.
-- Implement #702 using DDD/TDD: define the Brokers-owned domain/application contract and compatibility boundary; write failing broker tests first; implement the smallest broker change; then update consumer tests/docs. Harvester must not infer global readiness from local acknowledgement acceptance.
-- [ ] **#626 — Harvester recovery reliability.** Continue closing the acceptance matrix with deterministic tests and exact-head CI. Keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
-- [ ] **#667 — November 7 incident follow-up.** Close only with source/test evidence and exact-head CI; do not conflate it with the regional TESTNET pause.
+- [x] Implemented #702 with DDD/TDD in PRs #732 and #735: the Brokers Application owns the result contract, the Domain completion invariant is preserved, and Harvester readiness remains closed until the matching global reconciled status. The legacy boolean API remains compatible.
+- [ ] **#626 — Harvester recovery reliability.** Offline code/test hardening is substantially complete. Keep the issue open for final acceptance traceability and the externally paused TESTNET acceptance; keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
+- [x] **#667 — November 7 incident follow-up.** Closed after the owner-approved external-order policy and merged fixes for graceful shutdown (#663), unowned-order startup policy (#664), account-integrity BUY cancellation (#669), configured-asset snapshots (#670), Conservative dust/conformance (#653), and recovery-mode deferred evaluations (#673). TESTNET acceptance remains separately paused/unverified.
 
 ### Optional operational notifications
 
-- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps only selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package retains formatting, bounded serialized delivery, and transport ownership.
+- [x] Integrate Telegram through the existing `@coinzilla/notifiers` package at the Harvester composition boundary. Harvester maps selected lifecycle, pause, applied-fill, recovery-completion, and accounting-failure events; the notifier package owns formatting, bounded serialized delivery, and transport.
 - Notifications are disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Setup/delivery failures are isolated from trading. Shutdown drains accepted EventBus work before closing the notifier.
 - Delivery is best-effort, in-memory, and not a durable outbox. No trading behavior, exchange integration, or financial accounting rules are changed.
 
 ### Other active and deferred work
 
 - [ ] **#650 — Journal evidence completeness:** continue the bounded, allowlisted evidence coverage work; preserve mandatory durability barriers and keep additional diagnostics best-effort.
-- [ ] **#646 / #656 — Conservative conformance and dust:** resolve remaining implementation/test gaps against the canonical Conservative specification.
+- [x] **#646 / #656 — Conservative conformance and dust:** completed in PR #653; exact-head offline CI passed. Issues #646 and #656 are closed.
 - [ ] **#654 — process-restart reconciliation:** explicitly deferred; not a blocker for current in-process recovery or strategy work.
 - **#377 — Free Roll/Grid extraction:** separate application workstream; not part of Harvester recovery.
 
@@ -90,8 +90,8 @@ These items are intentionally recorded for future work. They are not current tra
 - [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
 ## Current work selection
 
-- [~] Close the 2026-11-07/08 session follow-up: account-integrity halt leaving an owned BUY live is fixed in [PR #669](https://github.com/45s/coinzilla/pull/669); configured-asset snapshot correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670). Tracking issue: [#667](https://github.com/45s/coinzilla/issues/667); evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667).
-- [~] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Tracking PR: [#663](https://github.com/45s/coinzilla/pull/663).
+- [x] Close the 2026-11-07/08 session follow-up: source-level findings are resolved by PRs [#653](https://github.com/45s/coinzilla/pull/653), [#663](https://github.com/45s/coinzilla/pull/663), [#664](https://github.com/45s/coinzilla/pull/664), [#669](https://github.com/45s/coinzilla/pull/669), [#670](https://github.com/45s/coinzilla/pull/670), and [#673](https://github.com/45s/coinzilla/pull/673). Tracking audit [#667](https://github.com/45s/coinzilla/issues/667) is closed; evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). TESTNET acceptance is separate and paused/unverified.
+- [x] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Implemented and merged in [PR #663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.

@@ -18,14 +18,20 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
-  const calls = { acknowledgements: 0, accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
+const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, acknowledgeRecoveryResult, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
+  const calls = { acknowledgements: 0, acknowledgementResults: 0, accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
   const logs = { info: [], error: [] }
   const userDataSubscription = {
     acknowledgeRecovery: () => {
       calls.acknowledgements += 1
       return acknowledgeRecovery ? acknowledgeRecovery() : true
     },
+    ...(acknowledgeRecoveryResult ? {
+      acknowledgeRecoveryResult: () => {
+        calls.acknowledgementResults += 1
+        return acknowledgeRecoveryResult(calls, state)
+      },
+    } : {}),
   }
   const broker = {
     getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true, data: [] }),
@@ -86,6 +92,39 @@ test("acknowledges recovery only after owned-order reconciliation and durable ac
   assert.equal(fixture.calls.orderAudits[0].phase, "RECOVERY", "The open-order snapshot must be labeled as a recovery audit.")
   assert.equal(fixture.calls.acknowledgements, 1, "The broker must be acknowledged only after both audits complete.")
   assert.equal(fixture.state.recoveryTask, null, "The completed recovery task must release its in-flight slot.")
+})
+
+
+test("records local acknowledgement but keeps readiness blocked until global reconciliation completes", async () => {
+  const fixture = createRecovery({
+    acknowledgeRecoveryResult: () => ({ accepted: true, completed: false }),
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.calls.acknowledgementResults, 1, "The application must use the explicit acknowledgement result contract.")
+  assert.equal(fixture.calls.acknowledgements, 0, "The legacy boolean method must not be called when the result API exists.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 1, "Local acceptance must be recorded for this recovery generation.")
+  assert.equal(fixture.state.requiresReconciliation, true, "Local acceptance must not clear the application reconciliation gate.")
+  assert.equal(fixture.state.ready, false, "Local acceptance must not make trading ready before global broker completion.")
+  assert.equal(fixture.logs.error.length, 0, "Accepted-but-pending acknowledgement is not a recovery failure.")
+})
+
+test("keeps recovery blocked when the explicit broker result rejects acknowledgement", async () => {
+  const fixture = createRecovery({
+    acknowledgeRecoveryResult: () => ({
+      accepted: false,
+      completed: false,
+      reason: "stale-or-inactive",
+    }),
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(fixture.state.ready, false, "A rejected acknowledgement must keep trading blocked.")
+  assert.equal(fixture.state.requiresReconciliation, true, "A rejected acknowledgement must keep reconciliation required.")
+  assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 0, "A rejected acknowledgement must not record the generation.")
+  assert.equal(fixture.logs.error[0]?.errorMessage, "Broker rejected the application recovery acknowledgement: stale-or-inactive")
 })
 
 test("does not acknowledge a recovery generation superseded during order reconciliation", async () => {
