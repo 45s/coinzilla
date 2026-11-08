@@ -123,5 +123,8 @@ test("exposes the live subscription to bootstrap before PREFLIGHT audit work can
     /journal flush failed/,
     "A PREFLIGHT audit failure must still propagate to bootstrap cleanup.",
   )
-  assert.equal(capturedSubscription, fixture.subscription, "Bootstrap must retain the live subscription handle before later startup work can fail.")
+  assert.equal(capturedSubscription, subscription, "Bootstrap must retain the live subscription handle before later startup work can fail.")
+  await capturedSubscription.disconnect()
+  assert.deepEqual(calls, ["disconnect"], "Bootstrap must be able to clean up the retained subscription after PREFLIGHT failure.")
+  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED, "The established subscription must be recorded before PREFLIGHT audit work.")
 })
