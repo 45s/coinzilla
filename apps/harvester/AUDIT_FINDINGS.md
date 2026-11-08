@@ -565,7 +565,7 @@ Current source and regression inventory:
 - **Relevant locations:** `src/bootstrap/account/create-account-snapshot-manager.js`; `src/use-cases/conservative-trading-engine.js`; `src/bootstrap/user-data/create-user-data-recovery-handler.js`.
 - **Disposition:** FIX JUSTIFIED, NOT YET IMPLEMENTED. Keep this as a separate TDD change; do not alter retry policy, broker protocol, Journal durability, or trading behavior.
 
-- **Related retry regression:** PR #688 adds an application-level account-wide open-orders timeout/retry case. It proves the market remains blocked, no recovery audits or acknowledgement occur after the failed read, the task slot is released, the timeout message remains in the contextual wrapper, and a later reminder succeeds. It does **not** preserve the original typed broker Error as native `cause`; the F-016 diagnostic fix remains open.
+- **Related retry regression:** PR #688 adds an application-level account-wide open-orders timeout/retry case, passing on exact head `52e1002eac6c2a429821b26c866ff96d17db3b49` (Harvester unit tests 754/754; all six required offline CI contexts passed). It proves the market remains blocked, no recovery audits or acknowledgement occur after the failed read, the task slot is released, the timeout message remains in the contextual wrapper, and a later reminder succeeds. It does **not** preserve the original typed broker Error as native `cause`; the F-016 diagnostic fix remains open.
 
 ## F-017 — Malformed REST response-envelope regression coverage — complete
 
