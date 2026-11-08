@@ -397,7 +397,20 @@ Added eight deterministic offline cases to `src/use-cases/conservative-trading-e
 
 Every case asserts a failed reconciliation result, the stage-specific error, a retained market pause, unchanged UNKNOWN order state and zero executed quantity, no applied fills, no cancel/replace or new order, and no reads beyond the malformed stage.
 
-**Production source is unchanged.** The source already rejects these envelopes; this work closes the direct regression-proof gap identified by F-017. PR [#708](https://github.com/45s/coinzilla/pull/708) exact head `76afa74a6637ddebe9ed8bd3efcdc02bdb5bead5` passed Harvester unit tests (753/753), configured Harvester targeted tests (3/3), and all six required offline CI contexts. The Harvester coverage job passed, but the Harvester threshold-enforcement step is skipped/not configured. The read-only TESTNET integration was skipped; no TESTNET acceptance is claimed. PR merge is pending. No TESTNET operation or process restart was performed.
+**Production source is unchanged.** PR [#708](https://github.com/45s/coinzilla/pull/708) exact head `b3f5ed25d11ab093836dc50d563b8c590b09439f` passed Harvester unit tests (753/753), configured Harvester targeted tests (3/3), and all six required offline CI contexts. The Harvester coverage job passed, but the Harvester threshold-enforcement step is not configured. The read-only TESTNET integration was skipped; no TESTNET acceptance is claimed. PR #708 merged into `develop` as `982ddc8c4366658ce75a9cfac9432b4f3e81381e`. No TESTNET operation or process restart was performed.
 
 
 The fixture helper was kept asynchronous and all newly added assertions carry scenario-specific failure messages. This follow-up changes no production behavior.
+
+
+## 15. F-017 merge confirmation — 2026-11-08
+
+PR [#708](https://github.com/45s/coinzilla/pull/708) is merged. Exact tested head: `b3f5ed25d11ab093836dc50d563b8c590b09439f`. Merge commit and current `develop` checkpoint at this update: `982ddc8c4366658ce75a9cfac9432b4f3e81381e`.
+
+- Harvester package unit tests: 753/753 passed, including all eight malformed-envelope regressions.
+- Configured Harvester targeted tests: 3/3 files passed.
+- All six required offline CI contexts passed.
+- Workspace coverage passed; Harvester coverage execution passed, but Harvester-specific threshold enforcement is not configured.
+- Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
+
+F-017 is closed. Continue with the next Harvester roadmap item; do not change production source under F-017.
