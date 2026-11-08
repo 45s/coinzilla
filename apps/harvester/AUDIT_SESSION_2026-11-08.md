@@ -616,3 +616,18 @@ The hosted Spot API runner returned HTTP 451 for regional eligibility. This is d
 - The regression reproduces the 254-reminder pattern, but does not replay the complete raw incident Journal byte-for-byte. It uses only a deterministic fake broker; no TESTNET or live exchange operation occurs.
 
 The configured Harvester Targeted Tests workflow passed on test head `1355ae1b76aea67ba4b9c2db9592627ccdfc6dff`: all 3 configured files passed (63/63 tests total; `start-harvester.test.js` 54/54). A subsequent test-only commit adds the explicit `[true, false, true]` readiness-transition assertion; final exact PR-head tests, workspace CI, and coverage are rerun after this follow-up.
+
+
+---
+
+## Additional same-day runtime session — 2026-11-08 16:33:33–22:42:05 UTC
+
+A second, distinct Harvester runtime session from later on November 8 was supplied after this earlier reconnect/recovery incident report. It has its own Journal, process start, startup audit, and successful shutdown. Do not merge its events or balances into the earlier 03:20–03:45 UTC failure timeline.
+
+The complete separate audit is [AUDIT_SESSION_2026-11-08_16-33-33.md](./AUDIT_SESSION_2026-11-08_16-33-33.md). It includes all three artifact hashes and parse counts, per-symbol market event cadence, unique-fill accounting, exact balance reconciliation, shutdown observations, and missing closing-order evidence.
+
+Key distinctions:
+- The afternoon process was not globally frozen in the supplied evidence; DOGE market events and trading lifecycle processing continued, and shutdown completed successfully.
+- ZRO had a 54m 2.118s maximum inter-event gap with no corresponding afternoon market-stream error. This remains unresolved rather than a confirmed outage and is tracked separately in [#760](https://github.com/45s/coinzilla/issues/760).
+- The 48 unique fills reconcile exactly to the closing asset balances. Repeated duplicate-fill observations did not change accounting.
+- The CLOSING balance audit is complete, but no CLOSING open-orders payload was recorded; exact final order states remain unverified.

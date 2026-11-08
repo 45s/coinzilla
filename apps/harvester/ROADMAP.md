@@ -1947,3 +1947,19 @@ PR [#719](https://github.com/45s/coinzilla/pull/719) merged into `develop` as `1
 PRs #698 and #699 remain closed as superseded; no work from those branches is to be recreated.
 
 **Current `develop` checkpoint:** `1e3ada9294ed0cdb6968ab05f0991a8dd2a7e922`.
+
+
+ 
+## 2026-11-09 forensic follow-up — November 8 evening session
+
+The separate 2026-11-08 16:33:33–22:42:05 UTC session has been fully parsed and its evidence inventory, hashes, event counts, accounting reconciliation, and unresolved findings are recorded in [AUDIT_SESSION_2026-11-08_16-33-33.md](./AUDIT_SESSION_2026-11-08_16-33-33.md).
+
+- [x] Parse all three supplied artifacts completely: 859 Journal records, 18,671 main-log lines, and 21,458 TRACE-log lines; zero malformed JSONL records. Original filenames, exact byte sizes, time coverage, SHA-256 hashes, and relevant line ranges are preserved in the report.
+- [x] Reconstruct the afternoon runtime separately from the earlier 03:20 UTC recovery incident. No global process freeze is demonstrated in the afternoon session; market processing and trading continued and shutdown completed successfully.
+- [x] Reconcile 48 unique applied fills to all five PREFLIGHT/CLOSING asset totals, including base-asset and quote-asset commissions. The 162 duplicate-fill notifications map to those same 48 identities and did not create duplicate accounting.
+- [ ] **[#760](https://github.com/45s/coinzilla/issues/760) — investigate per-symbol market-data liveness.** ZROUSDT recorded only 61 market-price events versus 1,494 for DOGEUSDT, including a 54m 2.118s maximum gap with no corresponding afternoon market-stream error. This is an anomaly, not a proven feed outage. Add bounded per-symbol freshness observability and deterministic stale-stream tests before defining any trading pause policy.
+- [x] Correlate the two 48-record duplicate-fill batches with the two intentional shutdown `reconcileOwnedOrders()` passes (before and after BUY cancellation). Each pass re-reads complete owned-order fill history and replays it through idempotent accounting; no duplicate application occurred. See F-021 in `AUDIT_FINDINGS.md` and F-02 in the session report.
+- [ ] **[#766](https://github.com/45s/coinzilla/issues/766) — measure and reduce shutdown reconciliation latency.** Fifty owned orders require approximately 102 sequential REST requests per pass; the two required passes correlate with the two ~105-second waits. Add bounded stage/RPC timings and evaluate safe bounded concurrency without weakening reconciliation.
+- [ ] **[#764](https://github.com/45s/coinzilla/issues/764) — decide whether to capture a complete account-wide open-order snapshot in the CLOSING audit.** Source confirms the current shutdown handler writes CLOSING balances only; exact final order IDs/statuses are not preserved. Keep this separate from deferred process-restart reconciliation #654.
+
+No runtime or exchange changes were made during this audit. No TESTNET acceptance is claimed. The earlier same-day user-data recovery failure remains tracked under #626 and must not be conflated with this later successful process session.

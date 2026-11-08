@@ -606,3 +606,52 @@ Current source and regression inventory:
   - [PR #732](https://github.com/45s/coinzilla/pull/732) added `acknowledgeRecoveryResult()` while preserving the legacy boolean API. It distinguishes accepted/pending, accepted/completed, and rejected stale/inactive or no-recovery-pending calls. Exact tested head `1eb0c1a0d3cb6f7e0f957f2c10308f4510995abf`, merge `adb3639e6c1a1b03e885d394a07f8ce4c05356dd`; all six workflow runs succeeded.
   - [PR #735](https://github.com/45s/coinzilla/pull/735) consumes the additive result without treating accepted/pending as rejection. Harvester records local acceptance but keeps readiness closed until a global `reconciled` status matches the active recovery generation and subscription ID. Exact tested head `541bf9d65e5fd4f073e3619fdba5c6d36734deaa`, merge `899b939e471a4d11b2fdfff0aaedb145da61c420`; all six workflow runs succeeded.
   - No `start-harvester.js` change was required for this contract integration. TESTNET integration was skipped on both PRs; no TESTNET recovery acceptance is claimed. The application readiness gate remains fail-closed until global completion.
+
+
+---
+
+## F-020 — Per-symbol market-data liveness is not independently observable
+
+**Classification:** PARTIAL / UNVERIFIED  
+**Severity:** High investigation priority; no confirmed market-data outage  
+**Tracking:** [#760](https://github.com/45s/coinzilla/issues/760)
+
+**Evidence:** In the 2026-11-08 16:33:33–22:42:05 UTC session, DOGEUSDT produced 1,494 `Harvester market price event received` records (median interval 8.819 seconds; maximum 111.729 seconds). ZROUSDT produced 61 (median interval 88.908 seconds; maximum 3,242.118 seconds). The longest ZRO interval ran from 20:31:06.687 to 21:25:08.805 UTC. DOGE events continued during the gap; no error-level or market-stream error was logged in the afternoon session.
+
+**Expected:** Operators and the application should be able to distinguish an active transport, a confirmed subscription, a recently delivering per-symbol stream, and a stale/silent stream. A connected socket alone is not proof that every desired stream is fresh.
+
+**Actual:** The inspected Streams client retains desired subscriptions, confirms initial subscription state, and reconnects after observed transport closure. The supplied runtime logs do not expose per-symbol last-event age or a silent-stream watchdog. The 54-minute ZRO gap could be low `aggTrade` activity or a delivery/subscription problem; there is no independent exchange feed in the supplied evidence to decide.
+
+**Impact:** A symbol-specific feed stall could be hidden while another symbol continues to trade, and current logs cannot distinguish that from a genuinely quiet market. Do not assert that stale-price decisions occurred; that is not demonstrated.
+
+**Required follow-up:** trace the adapter-to-Harvester path, identify an independent freshness signal (for example bookTicker freshness or a documented exchange heartbeat), add bounded per-symbol last-event-age and stale/recovered diagnostics, and define any trading gate only through an explicit domain policy. Add fake-clock tests for one symbol stalling while another remains active, recovery, repeated notifications, and legitimate quiet periods. No TESTNET writes are required.
+
+## F-021 — Shutdown repeats complete fill-history reconciliation
+
+**Classification:** SOURCE-EXPLAINED / LATENCY STRONGLY CORRELATED  
+**Severity:** Medium operational concern  
+**Tracking:** [#766](https://github.com/45s/coinzilla/issues/766)
+
+**Evidence:** Shutdown began at 22:38:29.849 UTC. At approximately 22:40:15 and 22:41:59 UTC, the runtime emitted two batches of 48 duplicate-fill observations. Both batches contained the same 48 fill identities already applied during the process. The accounting path reported `applied: false`, `duplicate: true`, and zero delta. Shutdown captured a complete CLOSING balance snapshot and completed successfully at 22:42:05.491 UTC.
+
+**Owned-order reconstruction:** The Journal records 90 unique submitted orders, 40 unique cancellations without fills, 48 distinct fill-bearing orders (all latest statuses `FILLED`), and two remaining OPEN SELL orders: DOGEUSDT 1333893 and ZROUSDT 756212. Thus 50 owned orders remained in the registry for shutdown reconciliation.
+
+**Source correlation:** `create-shutdown-handler.js` invokes `reconcileOwnedOrders()` before BUY cancellation and again after cancellation/user-data queue drain. Each pass calls `collectOwnedOrderSnapshots()`, which fetches open orders once per symbol (2 calls), canonical history sequentially for each owned order (50 calls), then complete fill history sequentially for each owned order (50 calls in this session; one page each). This is approximately 102 sequential REST calls per pass, or 204 across both passes. The two 48-record batches align with the two passes and represent idempotent re-observation, not duplicate accounting.
+
+**Latency assessment:** The first batch appears about 105 seconds after shutdown start; the second appears about 104 seconds later. The approximately 102 sequential REST calls per pass strongly correlate with these waits (roughly one second per call if evenly distributed), but the logs do not contain per-request timings. Exact latency attribution is not measured.
+
+**Required follow-up:** [#766](https://github.com/45s/coinzilla) tracks bounded stage/RPC timing and evaluation of safe bounded concurrency/batching. Preserve both reconciliation passes, full order/fill validation, pagination, idempotent accounting, and fail-closed behavior. Do not cancel open SELLs or skip historical fills.
+
+## F-022 — CLOSING balance audit omits the final open-order set
+
+**Classification:** SOURCE-CONFIRMED EVIDENCE GAP / HISTORICAL ORDER SET UNVERIFIED  
+**Severity:** Medium evidence gap  
+**Tracking:** [#764](https://github.com/45s/coinzilla/issues/764). Process-restart reconciliation #654 remains separately deferred.
+
+**Evidence:** The supplied Journal contains one PREFLIGHT `account.open_orders_captured` event and no CLOSING open-orders payload. The CLOSING account snapshot is marked COMPLETE and includes five asset balances, but this is a balance audit, not an independently recorded final order list. CLOSING locked balances were 3,189 DOGE and 59.87 ZRO.
+
+**Source confirmation:** The current shutdown handler invokes `publishAccountSnapshot()` with `phase: "CLOSING"`, but its injected dependencies and shutdown sequence do not include `publishOpenOrdersSnapshot()`. The missing CLOSING order payload is therefore an implementation-level evidence gap, not merely a suspected missing log line.
+
+**Impact:** Exact final exchange order IDs, client IDs, prices, quantities, and statuses cannot be reconstructed from the supplied three artifacts. Locked balances are clues, not a substitute for an open-orders response. A COMPLETE CLOSING balance audit must not be interpreted as a COMPLETE final-order audit.
+
+**Required follow-up:** decide and implement, with DDD/TDD, whether CLOSING should durably capture the complete account-wide open-order set while broker REST remains connected. Specify completeness/failure semantics and preserve open SELL orders; this is read-only evidence capture, not permission to mutate orders. Keep the decision separate from deferred process-restart reconciliation #654.
