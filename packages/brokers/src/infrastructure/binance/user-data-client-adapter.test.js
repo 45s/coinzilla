@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createBinanceUserDataClientPort } from "./user-data-client-adapter.js"
-import { createFakeRpcClient } from "../../binance/broker-websocket/test-helpers/fake-broker-clients.js"
+import { createFakeRpcClient } from "./broker-websocket/test-helpers/fake-broker-clients.js"
 
 test("maps user-data port operations to the exact signed Binance RPC contract", async () => {
   const client = createFakeRpcClient({

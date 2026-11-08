@@ -1,5 +1,5 @@
-import { adaptMsg } from "../../binance/broker-websocket/helpers/adapters/adapt-msg.js"
-import { getUserDataEventIdentity } from "../../binance/broker-websocket/helpers/user-data-event-deduplicator.js"
+import { adaptMsg } from "./broker-websocket/helpers/adapters/adapt-msg.js"
+import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-deduplicator.js"
 
 /**
  * Adapt the Binance RPC client to the exchange-neutral user-data client port.
