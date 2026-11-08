@@ -214,3 +214,24 @@ The six tests that instantiate `UserDataSession` directly now live in `src/appli
 
 The former `src/binance/index.js` and all 87 files under `src/binance/broker-websocket/` now live under `src/infrastructure/binance/`. The existing `broker-websocket` internal folder structure and tests are preserved. The root package entry point, broker facade, user-data adapter, canonical mapping helpers, and the two adapter test cross-references update only their relative paths. Coverage now includes the relocated broker implementation through the existing Infrastructure glob and excludes its integration/test-helper files at their new paths. The `test:user-data-integration` and `test:websocket` package scripts now point to the relocated integration suites. Public root exports, broker methods, request/response shapes, decimal fidelity, event semantics, and protocol behavior are unchanged. No WebSocket client redesign or new wrapper layer is part of this slice.
 
+
+
+## Dependency direction and executable guard
+
+The package dependency rules are now stated as enforceable contracts:
+
+- Domain has no imports from Application, Infrastructure, or Bootstrap.
+- Application may depend on Domain and its own ports, but not Infrastructure or Bootstrap.
+- Infrastructure may implement Application ports and depend inward on Application/Domain; it must not depend on Bootstrap.
+- Bootstrap, if introduced, is the composition root for concrete wiring. There is no `src/bootstrap/` directory in the current tree; the Binance broker facade remains the Infrastructure composition boundary.
+- The root `src/index.js` exposes only the four supported public contracts. Internal Binance clients, protocol helpers, DTO adapters, and application ports remain private.
+
+The guard is part of the normal package `node --test` run:
+
+- `src/architecture-boundaries.test.js` checks the real production source graph and contains negative/control fixtures.
+- `src/test-helpers/architecture-boundaries.js` performs deterministic static import analysis with Node built-ins; it reports the source file, import specifier, resolved target, and rule.
+- `src/index.contract.test.js` pins the public export allow-list and verifies Binance broker construction/method availability without connecting.
+
+Existing normalized contract coverage remains in the focused broker operation suites (including `get-prices-response.test.js`, `get-prices-error-result.test.js`, order create/cancel and history suites), the canonical order/fill adapter tests, and `user-data-client-adapter.test.js` plus user-data session/event tests. The Harvester adapter remains the compatibility consumer; the repository's Harvester targeted-test workflow is required on the final PR head.
+
+The first RED-stage architecture test commit intentionally lacked its scanner module; its Brokers test and coverage jobs failed, establishing the RED baseline. Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed Brokers unit tests (411/411), package coverage (98.73% lines / 93.62% branches / 94.94% functions), workspace unit tests and coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The subsequent documentation-only commit is `43caec1a636b289e97e7ac1ee1b93b019af744fa`; its final-head CI must pass before merge. The TESTNET job was skipped and no exchange integration was run.

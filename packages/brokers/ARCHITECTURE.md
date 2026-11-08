@@ -393,3 +393,26 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - Introducing a new domain model where `@coinzilla/entities` already owns the concept.
 - Changing public APIs as incidental cleanup.
 - Adding speculative generic infrastructure or a dependency-injection framework.
+
+
+## Enforced dependency direction (PR #704)
+
+The current physical source boundaries are enforceable contracts, not directory naming conventions. Production imports must obey:
+
+- `domain/` must not import `application/`, `infrastructure/`, or `bootstrap/`.
+- `application/` may import Domain modules and application-owned ports; it must not import `infrastructure/` or `bootstrap/`.
+- `infrastructure/` may implement Application ports and depend inward on Application and Domain. It must not import the composition root.
+- `bootstrap/`, when present, is the composition root and may wire concrete Infrastructure to Application and Domain.
+- `src/index.js` is a public re-export surface. Its exported names are allow-listed by the public contract test; internal clients, adapters, ports, and helpers are not public API.
+
+The package currently has no `src/bootstrap/` directory. The Binance broker facade in `src/infrastructure/binance/broker-websocket/broker.js` remains the existing Infrastructure composition boundary; this enforcement change does not introduce a new factory or move the preserved WebSocket internals.
+
+### Executable enforcement and coverage
+
+`src/architecture-boundaries.test.js` runs as part of the existing `node --test` package suite. Its dependency scanner is implemented in `src/test-helpers/architecture-boundaries.js` using Node built-ins only. It scans production JavaScript under Domain, Application, Infrastructure, optional Bootstrap, and the package entry point; test and opt-in integration files are excluded from the production graph. It recognizes static imports, re-exports, literal dynamic imports, and literal CommonJS `require()` calls. Violations report the importing file, original import specifier, resolved target, and violated rule.
+
+The architecture test has three cases: the real package source graph must be clean; synthetic forbidden Domain/Application-to-Infrastructure imports must be reported with actionable file/specifier details; and allowed inward dependencies plus Bootstrap composition must remain accepted.
+
+`src/index.contract.test.js` asserts the exact four public exports (`BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `CoreBroker`, and `normalizeBinanceId`) and verifies public Binance broker construction/method availability without opening a network connection. Existing broker operation, normalized DTO, and user-data port/event suites remain the behavior contract; see the package roadmap and `docs/brokers-websocket-contract.md` for the named suites.
+
+Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed GitHub Actions Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions; thresholds 90/80/80), all workspace unit-test and coverage jobs, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The later documentation-only commit does not change source or tests; its final-head CI must also pass before merge. The read-only TESTNET job was skipped; no exchange integration was run. The earlier RED-stage failure was intentional.
