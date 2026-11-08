@@ -44,6 +44,12 @@ Before changing an execution path, compare it with the approved Conservative Dom
 
 These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
 
+## Operational notifications
+
+Telegram is an optional outbound observer composed at the process boundary. Harvester owns the mapping from its application event vocabulary to the shared notifier package's allowlisted notification vocabulary; `@coinzilla/notifiers` owns Telegram formatting, queueing, delivery, and transport validation. The domain and trading engine must not depend on Telegram or its credentials.
+
+Notification setup and delivery are best-effort. A missing or invalid optional configuration disables notifications without blocking the trading workflow. Notifications must never be awaited from order submission, fill accounting, strategy evaluation, or recovery transitions. During process shutdown, stop event production, flush accepted EventBus work, and drain/close the notifier before closing the EventBus. Delivery is not durable and must not be represented as an audit record or trading-state authority.
+
 ## Entity versus policy
 
 A **domain entity** represents something whose state and business invariants matter to the domain. Portfolio and Position are examples: actual executions change their state, and their rules govern valid accounting transitions.

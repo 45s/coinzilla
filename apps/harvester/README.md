@@ -69,6 +69,14 @@ The lock records PID, hostname, start time, and a random ownership token. The ho
 
 This is a same-host, same-OS-user guard, not a distributed lock. It does not coordinate separate machines or different OS users. It intentionally allows only one Harvester trading process per broker under that OS user, even when credentials or Journal directories differ.
 
+### Optional Telegram notifications
+
+Harvester can send low-volume operational notifications through the shared `@coinzilla/notifiers` package. Configure both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the local environment to enable it; leave both unset to disable notifications. If only one value is present or notifier setup fails, notifications remain disabled and Harvester continues without Telegram. Never commit bot credentials.
+
+The Harvester bootstrap maps its own lifecycle, pair-pause, applied-fill, recovery-completion, and execution-accounting-failure events into the notifier package's explicit allowlist. The package owns message formatting, serialized bounded delivery, and transport errors. Market prices, raw broker messages, account snapshots, and order chatter are not forwarded. Delivery is best-effort and is not a durable outbox; Telegram failure must not change strategy decisions, order placement, accounting, or recovery.
+
+On shutdown, Harvester drains accepted EventBus work and then closes the Telegram subscriber before closing the EventBus. Telegram delivery is optional and is never a prerequisite for trading startup or shutdown safety.
+
 ### Operational event journal
 
 Harvester publishes allowlisted operational, strategy/order, execution, and recovery events through one in-process EventBus. It does not publish every market-price update. The Journal is enabled by default. Applied-fill records include stable trade identity, exact execution quantities, actual commission amounts, and commission asset identity. The current bootstrap does not replay prior Journal sessions into Portfolio, RecoveryLedger, or OrderRegistry; process-restart reconciliation is deferred to [#654](https://github.com/45s/coinzilla/issues/654). Set `HARVESTER_JOURNAL_ENABLED=false` only for configuration-only/no-broker operation; every broker-connected startup requires Journal persistence for the durable PREFLIGHT account audit. Set `HARVESTER_JOURNAL_DIRECTORY` to select a relative-to-app or absolute directory. The default is `apps/harvester/logs/`.
