@@ -4900,10 +4900,7 @@ test("shutdown cancellation cancels only strategy-owned BUY orders and preserves
   })
   const { engine, cancellationIds } = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder, secondBuyOrder, sellOrder] }) },
-    eventPublisher: {
-      publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
-    },
+    eventPublisher: { publish: () => ({ ok: true }) },
   })
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()

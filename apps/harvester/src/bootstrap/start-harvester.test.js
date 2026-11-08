@@ -1826,7 +1826,7 @@ test("logs safe correlation details when an execution report is not owned", asyn
     side: "BUY",
     type: "LIMIT",
     limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "59.87", asset: metadata.market.baseAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
     executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
