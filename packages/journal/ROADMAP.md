@@ -73,7 +73,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `efe2e9a7a0cde66487de386b2ea323c7a217d91c` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
+**Audit checkpoint:** `develop` at `518a4600cc8088bc3af29092a42cd3184ed2579d` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
@@ -324,4 +324,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `efe2e9a7a0cde66487de386b2ea323c7a217d91c`.
+**Current `develop` checkpoint:** `518a4600cc8088bc3af29092a42cd3184ed2579d`.

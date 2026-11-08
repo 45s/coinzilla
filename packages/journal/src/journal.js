@@ -66,8 +66,9 @@ export class Journal {
 
   /**
    * Acquire directory ownership, create a session, and subscribe to EventBus messages.
+   * If close() races with startup, this promise resolves after startup cancellation and rollback.
    *
-   * @returns {Promise<object>} Result indicating whether startup succeeded.
+   * @returns {Promise<object>} Result indicating whether startup succeeded or was cancelled.
    */
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
@@ -149,6 +150,7 @@ export class Journal {
    *
    * @private
    * @param {Error[]} errors - Cleanup errors are appended without replacing the original failure.
+   * @returns {Promise<Error[]>} Cleanup errors, also appended to errors.
    */
   async cleanupStoreResources(errors) {
     const cleanupErrors = []
@@ -285,7 +287,8 @@ export class Journal {
   }
 
   /**
-   * Stop accepting events, drain and sync writes, close the session, and release this writer's lock.
+   * Cancel and await an in-progress startup, or stop an active writer and release its owned resources.
+   * Active writers are unsubscribed, drained, synced, and closed before the lock is released.
    *
    * @returns {Promise<object>} Result describing close and durability success or failure.
    */
