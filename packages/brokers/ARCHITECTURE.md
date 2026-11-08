@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Code baseline before this slice:** `1a95316b45a8bba4ef26fabb6f68a524b601e944` (after PR #690). The tree below reflects this PR's intended result: the application-owned port and its tests live under `application/ports/`; this is a path/ownership clarification with no port contract or runtime behavior change.
+**Current code baseline:** `bec19bcbe3d92e3357d290bf10bd70685e15f142` (after PR #691). The user-data client port and its unchanged contract tests now live under `application/ports/`, making the Application ownership explicit.
 
 The package is **partially layered already**:
 
