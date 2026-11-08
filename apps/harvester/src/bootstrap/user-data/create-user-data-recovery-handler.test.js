@@ -734,3 +734,115 @@ test("does not drain queued user-data events after recovery is superseded during
     "The superseded recovery generation must leave an actionable failure diagnostic.",
   )
 })
+
+test("recovers safely when a second disconnect supersedes a later retry", async () => {
+  let resolveSecondReconciliation
+  const secondReconciliation = new Promise((resolve) => { resolveSecondReconciliation = resolve })
+  let reconciliationCalls = 0
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => {
+      reconciliationCalls += 1
+      if (reconciliationCalls === 1) {
+        return {
+          ok: false,
+          errors: [new Error("temporary owned-order history failure")],
+        }
+      }
+      if (reconciliationCalls === 2) return secondReconciliation
+      return { ok: true, data: { reconciled: 2 } }
+    },
+  })
+
+  fixture.start()
+  const firstAttempt = fixture.state.recoveryTask
+  await firstAttempt
+
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A failed first attempt must release its task slot so a broker reminder can retry the same generation.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "A failed first attempt must not acknowledge the broker.",
+  )
+
+  fixture.start()
+  const secondAttempt = fixture.state.recoveryTask
+
+  assert.notEqual(
+    secondAttempt,
+    null,
+    "A later recovered reminder must start a retry after the first attempt has failed.",
+  )
+  assert.equal(
+    reconciliationCalls,
+    2,
+    "The retry must begin a new owned-order reconciliation after the prior task has released its slot.",
+  )
+
+  fixture.state.recoveryGeneration = 2
+  resolveSecondReconciliation({ ok: true, data: { reconciled: 2 } })
+  await secondAttempt
+
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    false,
+    "The second disconnect must prevent the superseded retry from certifying canonical ownership.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The superseded retry must not acknowledge either the old or new recovery generation.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A second disconnect during retry must leave application reconciliation required.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The superseded retry must release its task slot so the new generation can recover.",
+  )
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    reconciliationCalls,
+    3,
+    "The new generation must start its own owned-order reconciliation after the stale retry exits.",
+  )
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    true,
+    "Only the current recovery generation may certify canonical ownership.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "Only the current recovery generation may publish the recovery account audit.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "Only the current recovery generation may publish the recovery open-orders audit.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "Only the current recovery generation may acknowledge the broker.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    2,
+    "The final acknowledgement must be recorded against the latest recovery generation.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "Successful reconciliation of the latest generation must clear the application reconciliation requirement.",
+  )
+})
