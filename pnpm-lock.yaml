@@ -183,6 +183,9 @@ importers:
       '@coinzilla/journal':
         specifier: workspace:*
         version: link:../../packages/journal
+      '@coinzilla/notifiers':
+        specifier: workspace:*
+        version: link:../../packages/notifiers
       '@coinzilla/utils':
         specifier: workspace:*
         version: link:../../packages/utils
