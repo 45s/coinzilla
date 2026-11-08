@@ -707,7 +707,7 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [~] Package-wide responsibility/import and consumer audit is underway; the first source-tree audit and Harvester-owned broker-port boundary are recorded.
 - [x] Confirmed that the infrastructure adapter slice already exists and is merged (PR #605); do not repeat it.
 
-**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](#phase-9--dddtdd-architecture-refactor-inside-coinzillabrokers-in-progress) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
+**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
 **Current next action:** finish the package-wide responsibility/import and consumer audit, then choose the next smallest vertical slice based on an actual dependency inversion or cohesive responsibility—not a folder move or a one-wrapper-per-RPC exercise. The current broker facade still performs composition and many exchange operations; the audit must determine which of those responsibilities genuinely belong in application workflows versus the Binance infrastructure adapter.
 
