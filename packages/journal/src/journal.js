@@ -8,6 +8,16 @@ import { replayJournalRecords } from "./replay-journal-records.js"
 
 const JOURNAL_DIRECTORY_LOCK_FILE = ".coinzilla-journal.lock"
 
+/**
+ * Persist EventBus source events as ordered JSONL records and recover them later.
+ * Journal preserves event fields and adds its own stable identity/schema metadata;
+ * consumers retain ownership of business interpretation and replay effects.
+ *
+ * @param {object} options
+ * @param {object} options.eventBus - EventBus exposing subscribeAll({ handler }) and flush().
+ * @param {string} options.directory - Directory used for session files and the exclusive writer lock.
+ * @param {object} [options.logger] - Optional logger; defaults to the workspace logger.
+ */
 export class Journal {
   constructor({ eventBus, directory, logger = defaultLogger } = {}) {
     this.eventBus = eventBus
@@ -30,6 +40,11 @@ export class Journal {
     this.closeDurable = false
   }
 
+  /**
+   * Acquire directory ownership, create a session, and subscribe to EventBus messages.
+   *
+   * @returns {Promise<object>} Result indicating whether startup succeeded.
+   */
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
       return toResult({
@@ -237,6 +252,13 @@ export class Journal {
     }
   }
 
+  /**
+   * Queue one source event for append to the active JSONL session.
+   * A successful result acknowledges the completed write, not durable storage.
+   *
+   * @param {{ event: object }} input - Source event with a non-empty stable string id.
+   * @returns {Promise<object>} Result containing the written record identity on success.
+   */
   async record({ event } = {}) {
     if (!this.started || this.closing || this.closed || !this.fileHandle) {
       return toResult({
@@ -311,6 +333,11 @@ export class Journal {
     })
   }
 
+  /**
+   * Flush EventBus delivery and queued writes, then sync the active session file.
+   *
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
   async flush({} = {}) {
     if (!this.started || !this.fileHandle || this.closing || this.closed) {
       return toResult({ error: new Error("Journal must be started to flush durable records") })
@@ -347,6 +374,11 @@ export class Journal {
     return toResult({ flushed: true, durable: true, filePath: this.filePath })
   }
 
+  /**
+   * Stop accepting events, drain and sync writes, close the session, and release this writer's lock.
+   *
+   * @returns {Promise<object>} Result describing close and durability success or failure.
+   */
   async close({} = {}) {
     if (this.closed) {
       if (!this.closeDurable) {
