@@ -221,8 +221,12 @@ test("keeps trading blocked when the broker throws during recovery acknowledgeme
 test("does not mark another recovery request pending while reconciliation is already running", async () => {
   let resolveReconciliation
   const reconciliation = new Promise((resolve) => { resolveReconciliation = resolve })
+  let reconciliationCalls = 0
   const fixture = createRecovery({
-    reconcileOwnedOrders: () => reconciliation,
+    reconcileOwnedOrders: () => {
+      reconciliationCalls += 1
+      return reconciliation
+    },
   })
   fixture.start()
   const inFlightRecovery = fixture.state.recoveryTask
@@ -236,6 +240,16 @@ test("does not mark another recovery request pending while reconciliation is alr
   fixture.start()
 
   assert.equal(
+    fixture.state.recoveryTask,
+    inFlightRecovery,
+    "A repeated reminder must retain the original in-flight recovery task instead of replacing it with a duplicate.",
+  )
+  assert.equal(
+    reconciliationCalls,
+    1,
+    "A repeated reminder while reconciliation is in flight must not start a second owned-order reconciliation.",
+  )
+  assert.equal(
     fixture.state.pendingRecovery,
     false,
     "A reminder received during an active recovery task must not be mislabeled as a pre-startup pending request.",
@@ -248,6 +262,11 @@ test("does not mark another recovery request pending while reconciliation is alr
     fixture.state.pendingRecovery,
     false,
     "Completing the active recovery task must not leave a stale pending-recovery flag.",
+  )
+  assert.equal(
+    reconciliationCalls,
+    1,
+    "The same recovery generation must perform owned-order reconciliation exactly once despite repeated reminders.",
   )
   assert.equal(
     fixture.calls.acknowledgements,
