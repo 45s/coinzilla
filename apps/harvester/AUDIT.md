@@ -775,7 +775,7 @@ The complete four-artifact evidence inventory, session timeline, 16-fill ledger,
 
 **Confirmed defect:** while application reconciliation was pending after transport reconnect, bootstrap processed queued user-data order events without the engine's recovery-mode flag. A BUY fill therefore attempted to cancel a recovery SELL while the broker still reported the user-data stream unavailable. Both cancellation attempts failed, the orders became UNKNOWN, accounting readiness closed, and application recovery failed. A second gap failed to retain the required post-recovery evaluation for terminal events consumed while the bootstrap correctly deferred normal evaluation.
 
-**Fix under verification:** [PR #673](https://github.com/45s/coinzilla/pull/673) routes queued order events through recovery mode and retains affected symbols in the engine's deferred-evaluation set until recovery acknowledgement. It does not weaken the durable reconciliation gate or enable exchange actions during recovery.
+**Fix verified by CI on implementation/test head `aa9196fb8b9121a95d0a566fbc2fc7585408bd3c`:** [PR #673](https://github.com/45s/coinzilla/pull/673) routes queued order events through recovery mode and retains affected symbols in the engine's deferred-evaluation set until recovery acknowledgement. Harvester targeted tests, 672/672 package tests, coverage, syntax, dependency audit, and workspace checks passed. TESTNET acceptance remains separate and is not claimed.
 
 **Accounting verdict:** all 16 unique applied fills reconcile exactly to the PREFLIGHT/CLOSING asset deltas. The 93 duplicate-fill notifications represent duplicate observations of 16 trade identities, not additional applied fills. Accounting correctness does not imply trading recovery succeeded.
 
