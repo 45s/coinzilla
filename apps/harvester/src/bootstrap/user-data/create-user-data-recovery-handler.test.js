@@ -217,3 +217,79 @@ test("keeps trading blocked when the broker throws during recovery acknowledgeme
     "The original acknowledgement exception message must remain visible in the recovery failure diagnostic.",
   )
 })
+
+test("does not mark another recovery request pending while reconciliation is already running", async () => {
+  let resolveReconciliation
+  const reconciliation = new Promise((resolve) => { resolveReconciliation = resolve })
+  const fixture = createRecovery({
+    reconcileOwnedOrders: () => reconciliation,
+  })
+  fixture.start()
+  const inFlightRecovery = fixture.state.recoveryTask
+
+  assert.notEqual(
+    inFlightRecovery,
+    null,
+    "The first recovered notification must start one in-flight application reconciliation task.",
+  )
+
+  fixture.start()
+
+  assert.equal(
+    fixture.state.pendingRecovery,
+    false,
+    "A reminder received during an active recovery task must not be mislabeled as a pre-startup pending request.",
+  )
+
+  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  await inFlightRecovery
+
+  assert.equal(
+    fixture.state.pendingRecovery,
+    false,
+    "Completing the active recovery task must not leave a stale pending-recovery flag.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "A duplicate reminder during the same in-flight generation must not create a second acknowledgement.",
+  )
+})
+
+test("does not leave recovery pending when startup is complete but recovery is blocked", () => {
+  const blockedStates = [
+    {
+      description: "accounting has failed",
+      state: createState({ accountingFailed: true }),
+    },
+    {
+      description: "the current recovery generation is already acknowledged",
+      state: createState({ lastAcknowledgedRecoveryGeneration: 1 }),
+    },
+    {
+      description: "application reconciliation is not required",
+      state: createState({ requiresReconciliation: false }),
+    },
+  ]
+
+  for (const blockedCase of blockedStates) {
+    const fixture = createRecovery({ state: blockedCase.state })
+    fixture.start()
+
+    assert.equal(
+      fixture.state.pendingRecovery,
+      false,
+      `A completed startup with ${blockedCase.description} must not retain a pre-startup pending-recovery request.`,
+    )
+    assert.equal(
+      fixture.state.recoveryTask,
+      null,
+      `A completed startup with ${blockedCase.description} must not start an application reconciliation task.`,
+    )
+    assert.equal(
+      fixture.calls.acknowledgements,
+      0,
+      `A completed startup with ${blockedCase.description} must not acknowledge a recovery generation.`,
+    )
+  }
+})
