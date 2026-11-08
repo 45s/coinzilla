@@ -15,8 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {} } = {}) => {
-  const calls = []
+const createShutdown = ({ state = createState(), tradingEnabled = false, engine, disconnectBroker, stopMarketIntake, stopUserDataIntake, publishAccountSnapshot, subscriptions = [], bookSubscriptions = [], marketPriceIntake = new Map(), userDataSubscription = {}, calls = [] } = {}) => {
   const stop = createShutdownHandler({
     state,
     logger: {},
@@ -39,7 +38,7 @@ const createShutdown = ({ state = createState(), tradingEnabled = false, engine,
     },
     stopUserDataIntake: async () => {
       calls.push("user-data-intake-stop")
-      if (stopUserDataIntake) return stopUserDataIntake(calls)
+      if (stopUserDataIntake) return stopUserDataIntake(calls, userDataSubscription)
       if (typeof userDataSubscription?.disconnect === "function") await userDataSubscription.disconnect()
       return []
     },
@@ -62,6 +61,7 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
   const state = createState()
   const stop = createShutdown({
     state,
+    calls,
     tradingEnabled: true,
     marketPriceIntake,
     engine,
@@ -71,7 +71,11 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     publishAccountSnapshot: async (input) => calls.push("audit-status:" + input.auditStatus),
     disconnectBroker: async () => { calls.push("broker-disconnect"); return [] },
     stopMarketIntake: async () => { calls.push("market-intake-stop"); return [] },
-    stopUserDataIntake: async () => { calls.push("user-data-intake-stop"); return [] },
+    stopUserDataIntake: async (timeline, subscription) => {
+      timeline.push("user-data-intake-stop")
+      await subscription.disconnect()
+      return []
+    },
   })
   marketPriceIntake.set("BTCUSDT", {
     latestWebSocketPriceTask: Promise.resolve().then(() => stop.calls.push("market-task-drained")),
