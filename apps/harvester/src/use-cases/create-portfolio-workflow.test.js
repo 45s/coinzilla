@@ -121,7 +121,7 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
     total: "0.01 BTC",
   }, "The second partial BUY snapshot must show the cumulative active and total BTC inventory.")
   assert.deepEqual(infoLogs[1].accounting, {
-    buyCostBasis: "650 USDT",
+    cycleBuyCost: "650 USDT",
     netQuoteCashFlow: "-650 USDT",
     outstandingRecovery: "650 USDT",
     realizedNetProfit: "-650 USDT",
@@ -147,7 +147,7 @@ test("logs Portfolio Stats for each applied BUY or SELL fill that changes invent
     total: "0.006 BTC",
   }, "The SELL snapshot must show the reduced active and total BTC inventory.")
   assert.deepEqual(infoLogs[2].accounting, {
-    buyCostBasis: "650 USDT",
+    cycleBuyCost: "650 USDT",
     netQuoteCashFlow: "-350 USDT",
     outstandingRecovery: "350 USDT",
     realizedNetProfit: "-350 USDT",
