@@ -3038,3 +3038,116 @@ test("account snapshots include every configured pair asset, including disabled 
     "CLOSING Journal snapshot must preserve the same configured-asset allowlist as PREFLIGHT",
   )
 })
+
+
+test("identifies user-data events received during application recovery as recovery-mode work", async () => {
+  const broker = createBroker()
+  const getAccountSnapshot = broker.getAccountSnapshot
+  let accountReads = 0
+  let resolveRecoverySnapshotStarted
+  let releaseRecoverySnapshot
+  const recoverySnapshotStarted = new Promise((resolve) => {
+    resolveRecoverySnapshotStarted = resolve
+  })
+  const recoverySnapshotGate = new Promise((resolve) => {
+    releaseRecoverySnapshot = resolve
+  })
+  broker.getAccountSnapshot = async () => {
+    accountReads += 1
+    if (accountReads === 2) {
+      resolveRecoverySnapshotStarted()
+      await recoverySnapshotGate
+    }
+    return getAccountSnapshot()
+  }
+
+  let observedRecoveryMode
+  let resolveObservedEvent
+  const observedEvent = new Promise((resolve) => {
+    resolveObservedEvent = resolve
+  })
+  let resolveRecoveryAcknowledged
+  const recoveryAcknowledged = new Promise((resolve) => {
+    resolveRecoveryAcknowledged = resolve
+  })
+  const subscribeForUserData = broker.subscribeForUserData
+  broker.subscribeForUserData = async (handlers) => {
+    const result = await subscribeForUserData(handlers)
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        acknowledgeRecovery: () => {
+          handlers.onStatus({
+            type: "reconciled",
+            recoveryRequired: false,
+            reconciliationRequired: false,
+          })
+          resolveRecoveryAcknowledged()
+          return true
+        },
+      },
+    }
+  }
+
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => tradingConfig,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    onUserDataEvent: async ({ recoveryMode }) => {
+      observedRecoveryMode = recoveryMode
+      resolveObservedEvent()
+    },
+    logger: { info() {}, error() {} },
+  })
+
+  try {
+    broker.emitUserDataStatus({
+      type: "recovered",
+      subscriptionId: 17,
+      recoveryRequired: true,
+      reconciliationRequired: true,
+    })
+    await waitForTestSignal(
+      recoverySnapshotStarted,
+      "application recovery account snapshot",
+      () => ({ accountReads, userDataReady: runtime.userDataReady }),
+      2_000,
+    )
+
+    broker.emitUserDataEvent({ eventType: "outboundAccountPosition" })
+    await waitForTestSignal(
+      observedEvent,
+      "user-data event observed during application recovery",
+      () => ({ observedRecoveryMode, userDataReady: runtime.userDataReady }),
+      2_000,
+    )
+
+    assert.equal(
+      observedRecoveryMode,
+      true,
+      "an event accepted while authoritative recovery is pending must be classified as recovery-mode work",
+    )
+
+    releaseRecoverySnapshot()
+    await waitForTestSignal(
+      recoveryAcknowledged,
+      "application recovery acknowledgement after durable snapshots",
+      () => ({ accountReads, userDataReady: runtime.userDataReady }),
+      2_000,
+    )
+    assert.equal(
+      runtime.userDataReady,
+      true,
+      "trading readiness must return only after the application acknowledges the fully reconciled recovery generation",
+    )
+  } finally {
+    releaseRecoverySnapshot()
+    await runtime.stop().catch(() => {})
+  }
+})
