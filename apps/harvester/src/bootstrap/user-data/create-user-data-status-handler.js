@@ -24,7 +24,7 @@ export function createUserDataStatusHandler({
       })
     }
     if (status.type === "recovered" &&
-        userDataState.state.lastAcknowledgedRecoveryGeneration === userDataState.recoveryGeneration) return
+        state.state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) return
     if ([
       "connectionClosed",
       "recovering",
@@ -67,7 +67,7 @@ export function createUserDataStatusHandler({
       errorName: status.error?.name,
       errorMessage: status.error?.message,
     })
-    userDataState.status = status.type ?? "UNKNOWN"
+    state.status = status.type ?? "UNKNOWN"
     if (status.type === "rpcError" || status.type === "recoveryFailed") {
       const error = status.error
       const cause = error?.cause
@@ -88,9 +88,9 @@ export function createUserDataStatusHandler({
       })
     }
     if (status.type === "executionNormalizationFailed") {
-      userDataState.accountingFailed = true
-      userDataState.ready = false
-      userDataState.status = "EXECUTION_NORMALIZATION_FAILED"
+      state.accountingFailed = true
+      state.ready = false
+      state.status = "EXECUTION_NORMALIZATION_FAILED"
       logger.error?.({
         message: "Binance execution normalization failed",
         symbol: status.symbol,
@@ -112,50 +112,50 @@ export function createUserDataStatusHandler({
       status.recoveryRequired !== true &&
       status.reconciliationRequired !== true
     ) {
-      userDataState.streamUnsafe = false
+      state.streamUnsafe = false
     }
     const recoveryInvalidated = [
       "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
       "executionNormalizationFailed",
     ].includes(status.type)
-    if (recoveryInvalidated) userDataState.recoveryGeneration += 1
+    if (recoveryInvalidated) state.recoveryGeneration += 1
     if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
-      userDataState.streamUnsafe = true
-      userDataState.requiresReconciliation = true
-      userDataState.ready = false
-      userDataState.status = status.type === "executionNormalizationFailed"
+      state.streamUnsafe = true
+      state.requiresReconciliation = true
+      state.ready = false
+      state.status = status.type === "executionNormalizationFailed"
         ? "EXECUTION_NORMALIZATION_FAILED"
-        : userDataState.accountingFailed
+        : state.accountingFailed
           ? "EXECUTION_ACCOUNTING_FAILED"
           : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (userDataState.requiresReconciliation) {
+    } else if (state.requiresReconciliation) {
       // A stream-level status cannot clear the application gate unless the
       // application has completed reconciliation and acknowledged recovery.
-      userDataState.ready = false
-      userDataState.status = userDataState.accountingFailed
+      state.ready = false
+      state.status = state.accountingFailed
         ? "EXECUTION_ACCOUNTING_FAILED"
         : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    } else if (userDataState.accountingFailed) {
-      userDataState.ready = false
-      userDataState.status = "EXECUTION_ACCOUNTING_FAILED"
-    } else if (userDataState.initialAccountSnapshotReady && tradingEnabled) {
-      userDataState.ready = true
-      userDataState.status = "READY"
+    } else if (state.accountingFailed) {
+      state.ready = false
+      state.status = "EXECUTION_ACCOUNTING_FAILED"
+    } else if (state.initialAccountSnapshotReady && tradingEnabled) {
+      state.ready = true
+      state.status = "READY"
       resumeDeferredStrategyEvaluations()
-    } else if (!userDataState.initialAccountSnapshotReady) {
-      userDataState.ready = false
-      userDataState.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
+    } else if (!state.initialAccountSnapshotReady) {
+      state.ready = false
+      state.status = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
     }
     if (status.type === "recovered" && status.recoveryRequired === true) {
-      if (userDataState.startupComplete) startUserDataRecovery()
-      else userDataState.pendingRecovery = true
+      if (state.startupComplete) startUserDataRecovery()
+      else state.pendingRecovery = true
     }
     try {
-      onUserDataStatus({ status, ready: userDataState.ready })
+      onUserDataStatus({ status, ready: state.ready })
     } catch (error) {
-      userDataState.ready = false
-      userDataState.accountingFailed = true
-      userDataState.status = "STATUS_HANDLER_FAILED"
+      state.ready = false
+      state.accountingFailed = true
+      state.status = "STATUS_HANDLER_FAILED"
       logger.error?.({ message: "user-data status handler failed", error })
       void cancelOwnedBuysAfterAccountingFailure()
     }

@@ -432,3 +432,6 @@ The user-data handler extraction follow-up also corrected the state-object hando
 Broker status event publication and readiness transitions now live in `src/bootstrap/user-data/create-user-data-status-handler.js`. The handler owns transport-unsafe classification, recovery-generation invalidation, application readiness transitions, execution-normalization failure handling, and status-observer failure containment.
 
 The application reconciliation gate remains distinct from the broker's stream-level `reconciled` status. A stream status alone cannot reopen trading; the existing REST/stream reconciliation, durable account/open-order audit, and explicit broker recovery acknowledgement remain in the still-bootstrap-owned recovery task. Direct tests cover disconnect, reconciled-but-blocked, recovered-before-startup, normalization failure, and observer failure.
+
+
+The status-handler extraction follow-up corrected the same mechanical relocation issue as the event handler: the new module now references only its injected `state` object, not the former bootstrap-local variable name. Exact-head CI is required to validate both extracted handlers and the shared state transitions.
