@@ -1608,6 +1608,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     userDataHandlers.onStatus({
       type: "recovered",
       subscriptionId: 17,
+      recoveryGeneration: 1,
       recoveryRequired: true,
       reconciliationRequired: true,
     })
