@@ -45,32 +45,22 @@ export function createBinanceBrokerAdapter({
   }
 
   const client = brokerFactory({ config, logger })
-  const markets = new Map()
-  const marketRequests = new Map()
 
+  // Exchange filters are dynamic exchange facts, not process-lifetime cache
+  // entries. Each request must fetch current exchangeInfo before a replacement
+  // order can be considered admissible.
   const getCanonicalMarketMetadata = async ({ symbol } = {}) => {
-    if (markets.has(symbol)) return markets.get(symbol)
-    if (marketRequests.has(symbol)) return marketRequests.get(symbol)
-
-    const request = Promise.resolve().then(async () => {
-      const result = await client.getSymbolFilters({ symbol })
-      if (!result?.ok || !result.data) {
-        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
-          "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
-        )
-      }
-      if (result.data.symbol !== symbol) {
-        throw new TypeError("Binance market metadata symbol does not match " + symbol)
-      }
-      const metadata = createBinanceMarketMetadata({ symbolFilters: result.data })
-      markets.set(symbol, metadata)
-      return metadata
-    }).finally(() => {
-      marketRequests.delete(symbol)
-    })
-    marketRequests.set(symbol, request)
-    return request
+    const result = await client.getSymbolFilters({ symbol })
+    if (!result?.ok || !result.data) {
+      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      throw new Error(
+        "Unable to load Binance market metadata for " + symbol + (details ? ": " + details : ""),
+      )
+    }
+    if (result.data.symbol !== symbol) {
+      throw new TypeError("Binance market metadata symbol does not match " + symbol)
+    }
+    return createBinanceMarketMetadata({ symbolFilters: result.data })
   }
 
 
