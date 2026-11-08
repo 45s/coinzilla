@@ -100,6 +100,18 @@ Owns the broker capabilities as seen by callers and the workflows that coordinat
 
 A use case is justified when it represents an application goal and coordinates collaborators. Do not wrap every existing method in a one-line use case or create an interface for every class. Ports should describe the capability the application needs, not mirror the entire Binance API.
 
+### Important: do not force application use cases into a broker adapter
+
+`@coinzilla/brokers` is an integration package, not a trading application. A public method that performs one Binance RPC and maps its response is normally an infrastructure-adapter operation; it does not become an application use case merely because it has a business-sounding name.
+
+The Application layer is justified where the package owns a genuine workflow across capabilities or lifecycle boundaries. The existing user-data session is such a case: it coordinates multiple local subscribers, one remote subscription, reconnect/recovery, and acknowledgements across an injected client port.
+
+Consequently:
+- Do not create `application/use-cases/` wrappers for every `get*`, `createOrder`, or `cancelOrder` method.
+- Do not create `domain/orders/`, `domain/market/`, or `domain/account/` just because those folders appear in the illustrative tree. First establish a Brokers-owned invariant or policy that is not already owned by `@coinzilla/entities` or the consuming application.
+- Keep simple Binance request construction, response mapping, and protocol validation in infrastructure adapters.
+- If the audit shows no meaningful application workflow beyond user-data session coordination, a small Application layer is the correct DDD outcome. Architectural completeness is not measured by equal folder sizes.
+
 ### Infrastructure
 
 Owns all Binance-specific and technical details:
@@ -117,22 +129,157 @@ Bootstrap constructs concrete Binance infrastructure, injects it into applicatio
 
 Keep the current public broker API stable during this internal migration. Any proposed public API change requires a separate compatibility analysis and consumer migration plan.
 
+## Current implementation snapshot (develop baseline)
+
+**Baseline commit:** `f92fdc518ae35a7ca3d2d6e0aa3276c41ac2ba34` (after PR #689). The following is verified from the current production source tree; it supersedes earlier assumptions that the package had no DDD structure.
+
+The package is **partially layered already**:
+
+```text
+src/
+├── application/
+│   └── user-data-session.js
+├── domain/
+│   └── user-data-recovery-policy.js
+├── infrastructure/
+│   └── binance/
+│       └── user-data-client-adapter.js
+├── ports/
+│   └── user-data-client-port.js
+├── binance/
+│   ├── broker-websocket/
+│   │   ├── broker.js
+│   │   ├── config/
+│   │   ├── constants/
+│   │   ├── helpers/
+│   │   ├── methods/
+│   │   └── utils/
+│   └── shared/
+├── broker.core.js
+└── index.js
+```
+
+### Existing test and coverage baseline
+
+The package already has a deterministic test suite for the partial vertical slice:
+
+- `domain/user-data-recovery-policy.test.js`
+- `ports/user-data-client-port.test.js`
+- `infrastructure/binance/user-data-client-adapter.test.js`
+- `binance/broker-websocket/methods/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` cover the application session even though these lifecycle suites remain under the older Binance-oriented test tree; their shared fixtures live in `binance/broker-websocket/test-helpers/user-data-session-fixtures.js`.
+
+The package scripts on the audited baseline are:
+
+```sh
+pnpm --filter @coinzilla/brokers test
+pnpm --filter @coinzilla/brokers test:coverage
+```
+
+The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the active broker WebSocket/shared runtime and the newer domain/application/ports/infrastructure paths. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
+
+No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
+
+### Verified workspace consumers
+
+A manifest scan of the current `develop` workspace found two production consumers of `@coinzilla/brokers`:
+
+| Consumer | How it uses Brokers | Compatibility implication |
+| --- | --- | --- |
+| `apps/harvester` | Wraps `BinanceWebSocketBroker` in Harvester's own infrastructure adapter, implementing the application-owned `BrokerPort`. | Preserve the public Binance broker methods, normalized results/events, exact decimal strings, and recovery acknowledgement behavior. |
+| `packages/market-simulator` | Imports `CoreBroker`; `HistoricalMarketBroker` extends it, and `SimulatedExecutionBroker` extends the historical broker. | Preserve `CoreBroker` construction, inherited state/maps, and unsupported-method behavior unless a separate consumer migration is planned. |
+
+This makes `CoreBroker` more than an unused legacy base class: it is a live shared extension point for the simulator. Its ownership and long-term contract need an explicit decision before any redesign. The Brokers refactor must not change the Market Simulator domain or implementation as incidental cleanup; use it as a read-only compatibility consumer and add broker-owned contract tests where appropriate.
+
+### Consumer boundary: Harvester owns the broker application port
+
+The current Harvester implementation confirms an important ownership rule:
+
+- `apps/harvester/src/application/ports/broker.port.js` owns Harvester's application-facing `BrokerPort` contract.
+- `apps/harvester/src/infrastructure/brokers/binance-broker-adapter.js` implements that port by composing `BinanceWebSocketBroker` and translating Harvester's normalized order/workflow contracts to the package's public API.
+- Harvester bootstrap composes the concrete adapter. The broker package must not import Harvester or own Harvester's trading workflow. The separate Market Simulator consumer also proves that `CoreBroker` is a live public extension point, not merely an internal implementation detail.
+
+Therefore, do **not** add a duplicate package-level `application/ports/broker.port.js` that mirrors the entire public Binance broker API. The existing `src/ports/user-data-client-port.js` is a different, internal port: it abstracts the RPC/user-data client needed by the Brokers package's own user-data session coordinator.
+
+This is the intended hexagonal boundary: the consuming application owns the port it needs; the package's Binance implementation is an infrastructure detail from the application's perspective. Within the Brokers package, use an Application port only where an internal application workflow (currently user-data session) needs to invert a dependency.
+
+### Existing vertical slice: user-data recovery
+
+This is the strongest existing example of the intended architecture:
+
+- `domain/user-data-recovery-policy.js` exports the pure `canCompleteUserDataRecovery` policy. It has no imports and decides whether recovery is complete from explicit facts.
+- `application/user-data-session.js` owns subscriber lifecycle, remote subscription coordination, reconnect attempts, timers, recovery acknowledgements, and event delivery. It depends on the domain policy and an injected port contract/factory, not directly on Binance RPC classes.
+- `ports/user-data-client-port.js` defines and validates the application-facing user-data client capability. Its current location is `src/ports/`; the target location is `src/application/ports/` once a dedicated move is justified.
+- `infrastructure/binance/user-data-client-adapter.js` adapts the Binance RPC client to the exchange-neutral port, including Binance event-envelope normalization, subscription methods, and event identity.
+
+This is a real, working vertical slice—not just empty architectural folders. Preserve it as the pattern to study when extending boundaries. It also shows that application code can own a lifecycle coordinator without importing a concrete Binance client.
+
+### Observed dependency direction
+
+The current import edges for the new vertical slice are already pointing inward:
+
+```text
+application/user-data-session.js
+    ├──> domain/user-data-recovery-policy.js
+    └──> ports/user-data-client-port.js
+
+infrastructure/binance/user-data-client-adapter.js
+    └──> Binance protocol helpers (adapt-msg, event identity)
+
+binance/broker-websocket/broker.js
+    ├──> application/user-data-session.js
+    ├──> infrastructure/binance/user-data-client-adapter.js
+    ├──> Binance RPC / Streams / transport / protocol helpers
+    └──> Binance response adapters
+```
+
+The inspected `domain/` policy and `ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The Binance adapter translates to the port, while the broker facade currently performs the composition by injecting the adapter factory into the application session. This is a sound dependency direction inside the vertical slice, with composition still embedded in the large concrete broker facade.
+
+### Current gaps and boundary pressure
+
+- `binance/broker-websocket/broker.js` is 782 lines and imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. Its constructor creates concrete clients and wires the user-data session; its public methods also coordinate request workflows and normalization. It currently combines public facade, composition, exchange I/O, and application coordination.
+- The existing `src/ports/` folder is outside `application/`, unlike Harvester's application-owned port location. This is a placement inconsistency, not a reason to move it before checking all imports and consumers.
+- There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
+- There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
+- The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
+- `binance/shared/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Despite their current `shared/` path and canonical Entities output, they are exchange-specific infrastructure adapters, not exchange-neutral domain modules.
+- `binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure. Their lifecycle and protocol tests are valuable and should remain with those components during migration.
+- `broker.core.js` is a compatibility base class with default unsupported-method behavior and shared maps. Its long-term ownership is unresolved; do not automatically treat a base class as a domain entity or port.
+
+### Verified ownership map
+
+| Current path | Verified responsibility | Architectural status / likely destination |
+| --- | --- | --- |
+| `domain/user-data-recovery-policy.js` | Pure recovery-completion policy | Correctly placed in Domain |
+| `application/user-data-session.js` | Subscriber/session lifecycle and recovery coordination | Application coordinator; retain state ownership and test behavior |
+| `ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Application-owned port; consider nesting under `application/ports/` |
+| `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
+| `binance/broker-websocket/broker.js` | Public broker facade plus client construction, protocol calls, orchestration, mapping | Main boundary-pressure area; split only after responsibility/import audit |
+| `binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; move/group under `infrastructure/binance/` incrementally |
+| `binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
+| `binance/shared/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
+| `binance/shared/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
+| `broker.core.js` | Compatibility base class and shared in-memory maps | Ownership decision pending; inspect consumers before redesign |
+
+The 658-line `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
+
+The 782-line broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
+
 ## Existing code: initial responsibility map
 
 This map is a starting hypothesis based on the current tree. Validate each module and its import graph before moving it.
 
 | Existing module / area | Primary responsibility | Target owner |
 | --- | --- | --- |
-| `src/broker.core.js` | Shared broker base contract and compatibility behavior | Application-facing contract (or retained compatibility surface); review before redesign |
-| `src/binance/broker-websocket/broker.js` | Public broker facade, request construction, orchestration, adaptation | Split by responsibility across application, infrastructure, and bootstrap |
+| `src/broker.core.js` | Shared broker base class and contract used by Market Simulator | Public compatibility extension point; preserve constructor/state/default-method behavior until consumers are migrated |
+| `src/binance/broker-websocket/broker.js` | 782-line public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
 | `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
 | `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
 | `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
-| `methods/user-data-session.js` | User-data subscription/recovery lifecycle | Infrastructure session; application-facing recovery contract stays inward |
+| `application/user-data-session.js` | User-data subscriber/recovery lifecycle coordinator | Existing Application layer; injected port and domain policy already separate |
 | `utils/signature.js`, `helpers/history-query-params.js`, endpoint/config modules | Binance signing, request construction, protocol configuration | Infrastructure / Binance API |
-| `shared/adapt-canonical-*.js` | Canonical order/fill adaptation | Inspect field semantics: exchange-neutral transformations may belong in domain; Binance-specific mappings stay in infrastructure adapters |
+| `shared/adapt-canonical-*.js` | Binance DTO to canonical Entities adaptation | Infrastructure / Binance adapters; canonical output does not make Binance mapping domain logic |
 | `shared/adapt-*.js`, `helpers/adapters/*` | External response/event mapping | Infrastructure adapters unless proven protocol-neutral |
-| `helpers/user-data-event-deduplicator.js` | Event identity/deduplication policy | Determine whether this is generic domain behavior or Binance-session lifecycle; keep ownership explicit |
+| `helpers/user-data-event-deduplicator.js` | Binance user-data event identity/deduplication | Infrastructure adapter/session support until a protocol-neutral policy is demonstrated |
 | `test-helpers/*`, `*.test.js`, `tests/*` | Deterministic fixtures and behavioral specifications | Stay near the unit under test; shared fixtures remain test-only |
 
 Do not move a file based on its name alone. Inspect imports, callers, state ownership, side effects, and the meaning of each exported function. A single current file may contain responsibilities for more than one target layer.
@@ -202,9 +349,9 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 ### Phase E — Infrastructure adapters and composition
 - [ ] Group Binance API, Streams, transport, sessions, signing/configuration, and response adapters under infrastructure by responsibility.
 - [ ] Implement application ports through adapters without changing the public facade.
-- [ ] Add a bootstrap factory/composition root and keep public exports thin.
+- [ ] Evaluate whether a dedicated bootstrap factory removes a real coupling or clarifies ownership without changing the public constructor. Keep composition in the concrete infrastructure facade if that remains the simplest correct boundary; document the decision either way. Keep public exports thin.
 - [ ] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes remain safe.
-- **Exit:** concrete Binance dependencies are constructed only at bootstrap/infrastructure boundaries.
+- **Exit:** concrete Binance dependencies are constructed only at infrastructure/composition boundaries; a separate bootstrap module exists only if it provides a demonstrated benefit.
 
 ### Phase F — Dependency and compatibility verification
 - [ ] Verify dependency direction (static import audit or focused architecture tests where practical).
