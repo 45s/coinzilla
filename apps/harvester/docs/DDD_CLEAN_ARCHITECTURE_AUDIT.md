@@ -445,3 +445,6 @@ The status-handler CI regression pinpointed one remaining doubled state qualifie
 The application recovery task now lives in `src/bootstrap/user-data/create-user-data-recovery-handler.js`. It preserves owned-order REST reconciliation, generation checks, serialized event draining, repeated account/open-order REST reads when the event sequence changes, durable RECOVERY account/open-order audits, and explicit broker acknowledgement. It does not let the broker's transport-level `recovered` or `reconciled` status alone reopen trading.
 
 Direct tests cover startup gating, successful acknowledgement after both audits, superseded generations, events arriving during REST reads, and durable audit failure. The coordinator remains bootstrap-owned because it sequences broker I/O, the user-data stream, and Journal barriers.
+
+
+The recovery-handler source review corrected the extracted function's remaining references to the old bootstrap-local `userDataState` identifier. The module now reads and updates only the injected `state` object, matching the event/status handler interfaces. Exact-head CI remains the acceptance gate.

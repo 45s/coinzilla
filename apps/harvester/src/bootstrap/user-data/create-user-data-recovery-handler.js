@@ -14,10 +14,10 @@ export function createUserDataRecoveryHandler({
   return function startUserDataRecovery() {
     const userDataSubscription = getUserDataSubscription()
     const tradingEngine = getTradingEngine()
-    if (isStopped() || !userDataState.startupComplete || !userDataState.requiresReconciliation ||
-      userDataState.accountingFailed || userDataState.recoveryTask ||
-      userDataState.lastAcknowledgedRecoveryGeneration === userDataState.recoveryGeneration) {
-    userDataState.pendingRecovery = true
+    if (isStopped() || !state.startupComplete || !state.requiresReconciliation ||
+      state.accountingFailed || state.recoveryTask ||
+      state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {
+    state.pendingRecovery = true
     return
     }
     if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
@@ -27,9 +27,9 @@ export function createUserDataRecoveryHandler({
     return
     }
 
-    userDataState.pendingRecovery = false
-    const generation = userDataState.recoveryGeneration
-    const isCurrentGeneration = () => !isStopped() && generation === userDataState.recoveryGeneration
+    state.pendingRecovery = false
+    const generation = state.recoveryGeneration
+    const isCurrentGeneration = () => !isStopped() && generation === state.recoveryGeneration
     const recoveryTask = (async () => {
     try {
       logger.info?.({
@@ -52,11 +52,11 @@ export function createUserDataRecoveryHandler({
       while (true) {
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
 
         // Keep the account and open-order snapshots on the same side of all
         // user-data events observed during the REST reads and durable flushes.
-        const eventSequence = userDataState.eventSequence
+        const eventSequence = state.eventSequence
         const snapshot = await refreshAccountSnapshot()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         const openOrdersResult = await broker.getOpenOrders({})
@@ -68,8 +68,8 @@ export function createUserDataRecoveryHandler({
         }
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
-        if (eventSequence !== userDataState.eventSequence) continue
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        if (eventSequence !== state.eventSequence) continue
 
         await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
         await publishOpenOrdersSnapshot({
@@ -80,29 +80,29 @@ export function createUserDataRecoveryHandler({
         })
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-        if (userDataState.accountingFailed) throw new Error("User-data accounting failed during recovery")
-        if (eventSequence === userDataState.eventSequence) break
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        if (eventSequence === state.eventSequence) break
       }
 
       // The broker only emits "reconciled" after every subscriber acknowledges.
       // Keep the application gate closed unless this generation has passed
       // order/fill reconciliation and durable account/order audits.
-      userDataState.requiresReconciliation = false
+      state.requiresReconciliation = false
       const acknowledged = userDataSubscription.acknowledgeRecovery()
       if (acknowledged !== true) {
-        userDataState.requiresReconciliation = true
+        state.requiresReconciliation = true
         throw new Error("Broker rejected the application recovery acknowledgement")
       }
-      userDataState.lastAcknowledgedRecoveryGeneration = generation
+      state.lastAcknowledgedRecoveryGeneration = generation
       logger.info?.({
         message: "application recovery completed and broker acknowledgement accepted",
         generation,
         reconciledOrders: reconciliation.data?.reconciled ?? 0,
       })
     } catch (error) {
-      userDataState.ready = false
-      userDataState.requiresReconciliation = true
-      userDataState.status = userDataState.accountingFailed
+      state.ready = false
+      state.requiresReconciliation = true
+      state.status = state.accountingFailed
         ? "EXECUTION_ACCOUNTING_FAILED"
         : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
       logger.error?.({
@@ -113,10 +113,10 @@ export function createUserDataRecoveryHandler({
         errorStack: error?.stack,
       })
     } finally {
-      if (userDataState.recoveryTask === recoveryTask) userDataState.recoveryTask = null
+      if (state.recoveryTask === recoveryTask) state.recoveryTask = null
     }
     })()
-    userDataState.recoveryTask = recoveryTask
+    state.recoveryTask = recoveryTask
   }
 
   const handleUserDataStatus = createUserDataStatusHandler({
