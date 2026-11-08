@@ -393,18 +393,52 @@ test("rejects overlapping startup attempts without leaking a session file or sub
   try {
     const [first, second] = await Promise.all([journal.start(), journal.start()])
 
-    assert.equal([first, second].filter((result) => result.ok).length, 1)
-    assert.equal([first, second].filter((result) => !result.ok).length, 1)
-    assert.equal(journal.started, true)
-    assert.equal(journal.starting, false)
-    assert.ok(journal.fileHandle)
-    assert.ok(journal.subscription)
+    assert.equal(
+      [first, second].filter((result) => result.ok).length,
+      1,
+      "Only one overlapping start call on the same Journal instance may become the active writer.",
+    )
+    assert.equal(
+      [first, second].filter((result) => !result.ok).length,
+      1,
+      "The concurrent start call must fail instead of creating another session or subscription.",
+    )
+    assert.equal(
+      journal.started,
+      true,
+      "The accepted start call must leave the Journal in its active state.",
+    )
+    assert.equal(
+      journal.starting,
+      false,
+      "The Journal must clear its startup-in-progress flag after both start calls settle.",
+    )
+    assert.ok(
+      journal.fileHandle,
+      "The accepted start call must retain exactly one active session file handle.",
+    )
+    assert.ok(
+      journal.subscription,
+      "The accepted start call must retain exactly one EventBus subscription.",
+    )
 
     const files = await readdir(directory)
-    assert.equal(files.length, 1)
+    assert.equal(
+      files.filter((fileName) => fileName.endsWith(".jsonl")).length,
+      1,
+      "Concurrent start calls must create exactly one JSONL session file, excluding the separate lock metadata file.",
+    )
+    assert.ok(
+      files.includes(".coinzilla-journal.lock"),
+      "The active Journal must retain its exclusive directory lock while the session is open.",
+    )
 
     const closeResult = await journal.close()
-    assert.equal(closeResult.ok, true)
+    assert.equal(
+      closeResult.ok,
+      true,
+      "The single accepted Journal session must close durably and release its directory lock.",
+    )
   } finally {
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
