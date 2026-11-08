@@ -20,6 +20,7 @@ const createState = (overrides = {}) => ({
 
 const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
   const calls = { acknowledgements: 0, accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
+  const logs = { info: [], error: [] }
   const userDataSubscription = {
     acknowledgeRecovery: () => {
       calls.acknowledgements += 1
@@ -53,9 +54,12 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
       calls.orderAudits.push(input)
       if (publishOpenOrdersSnapshot) await publishOpenOrdersSnapshot(input, calls)
     },
-    logger: { info: () => {}, error: () => {} },
+    logger: {
+      info: (entry) => { logs.info.push(entry) },
+      error: (entry) => { logs.error.push(entry) },
+    },
   })
-  return { start, state, calls }
+  return { start, state, calls, logs }
 }
 
 test("waits for user-data startup completion before beginning recovery", () => {
@@ -124,4 +128,92 @@ test("keeps recovery blocked and skips acknowledgement when durable account audi
 
   assert.equal(fixture.state.requiresReconciliation, true, "A failed durable account audit must keep reconciliation required.")
   assert.equal(fixture.calls.acknowledgements, 0, "The broker must not be acknowledged after an audit failure.")
+})
+
+test("keeps trading blocked when the broker rejects recovery acknowledgement", async () => {
+  const fixture = createRecovery({
+    acknowledgeRecovery: () => false,
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A rejected broker acknowledgement must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A rejected broker acknowledgement must restore the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A rejected broker acknowledgement must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    0,
+    "A rejected broker acknowledgement must not record the current recovery generation as acknowledged.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The application must make one acknowledgement attempt after the durable recovery audits complete.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A rejected acknowledgement must release the in-flight task slot so a later reminder can retry recovery.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "Broker rejected the application recovery acknowledgement",
+    "A rejected acknowledgement must leave an actionable application-recovery failure diagnostic.",
+  )
+})
+
+test("keeps trading blocked when the broker throws during recovery acknowledgement", async () => {
+  const fixture = createRecovery({
+    acknowledgeRecovery: () => { throw new Error("acknowledgement transport failed") },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "An acknowledgement transport exception must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "An acknowledgement transport exception must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "An acknowledgement transport exception must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    0,
+    "An acknowledgement transport exception must not record the current recovery generation as acknowledged.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The application must make one acknowledgement attempt after the durable recovery audits complete.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "An acknowledgement transport exception must release the in-flight task slot for a later retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "acknowledgement transport failed",
+    "The original acknowledgement exception message must remain visible in the recovery failure diagnostic.",
+  )
 })
