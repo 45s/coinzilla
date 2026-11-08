@@ -20,6 +20,10 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 A workflow trigger starting a run does not, by itself, make that check a merge requirement. Configure the repository's branch protection or ruleset to require the appropriate checks.
 
+## Manual broker TESTNET validation
+
+The `unit-tests.yml` workflow exposes an opt-in `run_broker_testnet_read_only` dispatch input on `develop`. The TESTNET job uses repository secrets only in its final integration step; checkout, tool setup, and dependency installation do not receive exchange credentials. The step rejects missing or case-insensitive placeholder credentials before running the read-only broker integration suite. It fixes order mutations and externally triggered user-data event waiting to `0`; it does not upload integration artifacts. Ordinary package tests remain offline and credential-free.
+
 ## Local equivalents
 
 Run these commands from the repository root with the Node.js and pnpm versions specified in the root `package.json`:
