@@ -639,14 +639,16 @@ Current source and regression inventory:
 
 **Required follow-up:** add bounded shutdown-stage and owned-order REST reconciliation duration telemetry. Preserve both reconciliation passes and existing fill-idempotency/safety guarantees; do not add speculative retries.
 
-## F-022 — CLOSING account snapshot does not establish final open-order state
+## F-022 — CLOSING balance audit omits the final open-order set
 
-**Classification:** UNVERIFIED  
+**Classification:** SOURCE-CONFIRMED EVIDENCE GAP / HISTORICAL ORDER SET UNVERIFIED  
 **Severity:** Medium evidence gap  
-**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654) remains deferred.
+**Tracking:** [#764](https://github.com/45s/coinzilla/issues/764). Process-restart reconciliation #654 remains separately deferred.
 
 **Evidence:** The supplied Journal contains one PREFLIGHT `account.open_orders_captured` event and no CLOSING open-orders payload. The CLOSING account snapshot is marked COMPLETE and includes five asset balances, but this is a balance audit, not an independently recorded final order list. CLOSING locked balances were 3,189 DOGE and 59.87 ZRO.
 
-**Impact:** Exact final exchange order IDs, client IDs, quantities, and statuses cannot be reconstructed from the supplied three artifacts. Locked balances are clues, not a substitute for an open-orders response.
+**Source confirmation:** The current shutdown handler invokes `publishAccountSnapshot()` with `phase: "CLOSING"`, but its injected dependencies and shutdown sequence do not include `publishOpenOrdersSnapshot()`. The missing CLOSING order payload is therefore an implementation-level evidence gap, not merely a suspected missing log line.
 
-**Required follow-up:** retain this as an evidence gap and address durable order/open-order reconciliation through the separately deferred process-restart work. Do not infer order status from balances alone.
+**Impact:** Exact final exchange order IDs, client IDs, prices, quantities, and statuses cannot be reconstructed from the supplied three artifacts. Locked balances are clues, not a substitute for an open-orders response. A COMPLETE CLOSING balance audit must not be interpreted as a COMPLETE final-order audit.
+
+**Required follow-up:** decide and implement, with DDD/TDD, whether CLOSING should durably capture the complete account-wide open-order set while broker REST remains connected. Specify completeness/failure semantics and preserve open SELL orders; this is read-only evidence capture, not permission to mutate orders. Keep the decision separate from deferred process-restart reconciliation #654.
