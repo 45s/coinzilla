@@ -39,7 +39,9 @@ const createShutdown = ({ state = createState(), tradingEnabled = false, engine,
     },
     stopUserDataIntake: async () => {
       calls.push("user-data-intake-stop")
-      return stopUserDataIntake ? stopUserDataIntake(calls) : []
+      if (stopUserDataIntake) return stopUserDataIntake(calls)
+      if (typeof userDataSubscription?.disconnect === "function") await userDataSubscription.disconnect()
+      return []
     },
     disconnectBroker: async () => {
       calls.push("broker-disconnect")

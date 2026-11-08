@@ -38,11 +38,6 @@ export function createShutdownHandler({
       logSystem(logger, { message: "Shutdown started" })
       const tradingEngine = getTradingEngine()
       const userDataSubscription = getUserDataSubscription()
-  if (stopped) return
-  stopped = true
-  userDataState.ready = false
-  userDataState.status = "STOPPING"
-  logSystem(logger, { message: "Shutdown started" })
 
   const auditReasons = []
   let snapshotError
@@ -72,7 +67,7 @@ export function createShutdownHandler({
     .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
     .filter(Boolean)
   await Promise.all(pendingMarketTasks)
-  await userDataState.eventQueue
+  await state.eventQueue
 
   if (tradingEnabled && tradingEngine) {
     // Resolve PENDING submissions to canonical broker identities first.
@@ -108,7 +103,7 @@ export function createShutdownHandler({
 
     // Keep execution reports flowing until cancellation responses and
     // fills racing with cancellation have been processed.
-    await userDataState.eventQueue
+    await state.eventQueue
     try {
       const reconciliation = await tradingEngine.reconcileOwnedOrders()
       if (reconciliation?.ok !== true) {
@@ -130,9 +125,9 @@ export function createShutdownHandler({
   }
 
   const userDataIntakeErrors = await stopUserDataIntake({ userDataSubscription })
-  userDataState.intakeStopped = true
+  state.intakeStopped = true
   if (userDataIntakeErrors.length > 0) auditReasons.push("USER_DATA_INTAKE_SHUTDOWN_FAILED")
-  await userDataState.eventQueue
+  await state.eventQueue
 
   if (tradingEnabled && tradingEngine) {
     const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
@@ -142,7 +137,7 @@ export function createShutdownHandler({
       return true
     })
     if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
-    if (userDataState.accountingFailed || userDataState.requiresReconciliation) {
+    if (state.accountingFailed || state.requiresReconciliation) {
       auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
     }
   }
@@ -159,7 +154,7 @@ export function createShutdownHandler({
     logger.error?.({ message: "closing account snapshot failed", error })
   }
 
-  userDataState.status = "STOPPED"
+  state.status = "STOPPED"
   const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
   const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
     [

@@ -464,3 +464,6 @@ The extraction also fixes concurrent stop semantics: callers share one in-flight
 
 
 The recovery-handler CI run caught one remaining dependency on the former bootstrap-local ownership-reconciliation flag during RECOVERY open-order publication. The extracted coordinator now tracks the successful reconciliation result locally for the duration of its recovery pass while updating the shared bootstrap flag, preserving the original ownership classification.
+
+
+The first shutdown-module review corrected two mechanical extraction leftovers before acceptance: the moved handler now uses its injected `state` object and no longer repeats the shutdown guard/state transition/log entry already owned by the shared-promise wrapper. The direct shutdown test fixture now models user-data disconnect as part of intake teardown.
