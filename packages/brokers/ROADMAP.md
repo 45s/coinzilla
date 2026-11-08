@@ -799,3 +799,14 @@ Cross-domain request [#680](https://github.com/45s/coinzilla/issues/680) asks wh
 - **Verified and merged:** PR #725 merged into `develop` as `bf9e51e298535cf14f113343a5216f4b8a1ec80f`; exact tested head `b50d453d8846e82a2918b5d4752dfc8d81412ceb`. Brokers tests passed 415/415, Brokers coverage passed, and all six required offline CI workflows passed. The corrected test confirms the silent `socket_error` channel on the reproduced post-connect 1006 reset.
 - **Disposition:** established-socket diagnostic characterization is complete as a documented Node/Undici limitation for this failure shape. No safe per-client error correlation is exposed by the tested runtime. Do not add timing-based attribution or a global monkey-patch. Cross-domain issue #680 may be closed as investigated/documented; revisit only if a supported runtime exposes a reliable per-WebSocket socket-error correlation.
 
+
+
+## 2026-11-08 — multi-subscriber terminal recovery notification count
+
+Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) includes a broker-owned proof requirement that is independent of the still-open public acknowledgement-result contract.
+
+- Added exact per-subscriber assertions to the existing two-subscriber reconnect/recovery regression: the first local acknowledgement remains recorded-but-globally-pending (legacy boolean `false`), the final acknowledgement completes recovery, each still-active subscriber receives exactly one `reconciled` status for subscription `110`, and a repeated acknowledgement cannot publish another terminal status.
+- Asserted the acknowledgement reminder timer is cleared at global completion and the existing order-mutation gate remains blocked until that point.
+- Added a second regression proving that when the first subscriber has acknowledged and the second disconnects, the remaining active subscriber receives exactly one terminal `reconciled` status while the removed subscriber receives none.
+- No broker source, public API, Harvester consumer, or acknowledgement return semantics changed. The additive result-shape proposal remains pending owner agreement.
+- Exact-head CI verification is pending; do not mark the cross-domain contract issue complete until the agreed public acknowledgement semantics and consumer compatibility work are resolved.
