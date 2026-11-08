@@ -1068,3 +1068,112 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
     "The successful retry must clear the application reconciliation requirement.",
   )
 })
+
+
+test("keeps recovery blocked and retries the same generation after a transient account audit flush failure", async () => {
+  let accountFlushAttempts = 0
+  const fixture = createRecovery({
+    publishAccountSnapshot: async () => {
+      accountFlushAttempts += 1
+      if (accountFlushAttempts === 1) {
+        throw new Error("Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure")
+      }
+    },
+  })
+
+  fixture.start()
+  const failedAttempt = fixture.state.recoveryTask
+  await failedAttempt
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A transient account audit flush failure must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A transient account audit flush failure must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "The first account audit publication must remain recorded even though its flush did not confirm durability.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "The account-wide open-orders audit must not start until the account snapshot audit is durably flushed.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged after an account audit flush fails.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The failed account audit flush must release the single-flight task slot for a later reminder.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "Unable to durably persist RECOVERY account snapshot: simulated Journal file sync failure",
+    "The transient Journal sync failure must remain visible in the recovery diagnostic.",
+  )
+
+  const firstAuditPublication = fixture.calls.accountAudits[0]
+  fixture.start()
+  const retryAttempt = fixture.state.recoveryTask
+  await retryAttempt
+
+  assert.equal(
+    accountFlushAttempts,
+    2,
+    "A later broker reminder must retry the account audit flush on the same recovery generation.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    2,
+    "The retry must publish a second account audit while preserving the first uncertain publication.",
+  )
+  assert.notEqual(
+    firstAuditPublication,
+    fixture.calls.accountAudits[1],
+    "The second recovery audit publication must be a distinct event input rather than a rewrite of the first.",
+  )
+  assert.deepEqual(
+    fixture.calls.accountAudits.map((audit) => audit.phase),
+    ["RECOVERY", "RECOVERY"],
+    "Both account audit publications must retain the RECOVERY phase for the same recovery generation.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "The successful retry must proceed to publish exactly one account-wide open-orders audit.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "The broker may be acknowledged exactly once after both durable recovery audits succeed.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "The successful retry must clear the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.recoveryGeneration,
+    1,
+    "A transient audit flush failure must retry the original recovery generation rather than creating a new one.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    1,
+    "The successful retry must acknowledge the original still-current recovery generation.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The successful retry must release the in-flight recovery task slot after acknowledgement.",
+  )
+})
