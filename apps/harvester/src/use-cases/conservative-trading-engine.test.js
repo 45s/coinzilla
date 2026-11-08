@@ -5818,9 +5818,9 @@ test("keeps the standing BUY open when fetching current exchange trading rules f
   })
 
   assert.equal(result.ok, false, "A failed current-rule request must block replacement")
-  assert.match(result.errors[0].message, /exchangeInfo request unavailable/)
+  assert.match(result.errors[0].message, /exchangeInfo request unavailable/, "The refresh failure must remain visible to the caller")
   assert.deepEqual(harness.cancellationIds, [], "Unavailable current rules must not cancel the standing BUY")
   assert.equal(harness.orders.length, 1, "Unavailable current rules must not submit a replacement")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The previously valid order must remain open when rules cannot be refreshed")
-  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"))
+  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE"), "A failed exchange-rule refresh must pause the pair")
 })
