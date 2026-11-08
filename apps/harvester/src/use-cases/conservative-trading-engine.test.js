@@ -5629,10 +5629,10 @@ test("keeps the standing BUY open when the replacement trading rules become unav
   })
 
   assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
-  assert.match(result.errors[0].message, /trading rules/, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
+  assert.match(result.errors[0].message, /TradingRules|trading rules/i, "A refreshed metadata response without canonical trading rules must fail closed")
   assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
   assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
-  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The original standing BUY must remain open when refreshed trading rules are unavailable")
 })
 
 test("does not submit a replacement when cancellation fails", async () => {
