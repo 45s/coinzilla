@@ -853,8 +853,8 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
     getOpenOrders: async () => {
       openOrderReads += 1
       if (openOrderReads === 1) {
-        const timeout = new Error("account-wide open-orders RPC timed out")
-        timeout.name = "RpcTimeoutError"
+        class RpcTimeoutError extends Error {}
+        const timeout = new RpcTimeoutError("account-wide open-orders RPC timed out")
         timeout.code = "RPC_TIMEOUT"
         return { ok: false, errors: [timeout] }
       }
