@@ -14,7 +14,7 @@ This section is the current operational status and supersedes older statements b
 
 ### Recovery contract work
 
-- [ ] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08:
+- [x] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08; broker API and Harvester consumer integration are complete in PRs #732 and #735:
   1. Add an explicit per-subscriber acknowledgement result API while preserving the existing boolean API and its meaning.
   2. Distinguish accepted-but-pending, accepted-and-globally-completed, and stale/inactive rejection.
   3. Preserve one terminal `reconciled` notification per recovery generation for every still-active subscriber; disconnected subscribers receive none.
