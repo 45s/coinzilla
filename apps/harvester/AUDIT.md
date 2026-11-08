@@ -547,3 +547,159 @@ This supersedes older audit wording that required above-keep dust to remain acti
 - The limiting filter must be demonstrated (MIN_QUANTITY, MIN_NOTIONAL, or QUANTITY_INCREMENT); price-filter blocks and unsupported reasons cannot be retained as dust.
 - The completed-cycle lifecycle event records dust quantity, reason, and relevant filter threshold/evaluated values. Retained allocation is keepQuantity plus dust.
 - Dust completion is attempted only after a reconciled FILLED recovery SELL and a fresh strategy evaluation; a subsequent BUY fill or new SELL order invalidates that eligibility.
+
+
+---
+
+## 2026-11-07/08 Binance Spot TESTNET session audit — issue #667
+
+**Evidence window:** 2026-11-07 23:08:17.676 UTC through 2026-11-08 01:06:27.840 UTC  
+**Runtime:** Conservative strategy, trading enabled, Binance Spot TESTNET  
+**Markets:** DOGEUSDT and ZROUSDT  
+**Sources:** supplied 130-event session Journal, matching DEBUG/TRACE logs, and `.harvester-trading.lock`. This is a log/evidence audit, not a live account query. No exchange actions were performed during this review.
+
+### Executive disposition
+
+This session is **not a clean acceptance run**. It completed one DOGE recovery cycle and one profitable ZRO SELL, but it also exposed unresolved startup-readiness semantics, a ZRO residual/dust completion discrepancy, a DOGE BUY-to-next-SELL gap, and a failed CLOSING audit. The session must not be described as a successful end-to-end run.
+
+The supplied session Journal contains 130 events. The DEBUG log covers multiple historical runs; the concrete order/fill ledger below is restricted to the 2026-11-07/08 Journal session.
+
+### 1. PREFLIGHT and startup behavior
+
+Configuration validated with trading enabled in Conservative mode for DOGEUSDT and ZROUSDT. Binance connection, exchange trading rules, and user-data subscription were established.
+
+The PREFLIGHT snapshot at 23:08:20.848 UTC recorded:
+
+| Asset | Free | Locked | Total |
+|---|---:|---:|---:|
+| DOGE | 19,125.4 | 1,196 | 20,321.4 |
+| USDT | 8,762.07271735 | 0 | 8,762.07271735 |
+| ZRO | 250.24 | 59.87 | 310.11 |
+
+The account-wide open-order query at 23:08:21.141 UTC found two pre-existing SELL orders, both from a different client-ID namespace and therefore unowned by this process:
+
+| Symbol | Broker order ID | Client order ID | Side | Quantity | Limit |
+|---|---:|---|---|---:|---:|
+| DOGEUSDT | 1317237 | `h-9861b2fcc16b4609add7ee-24` | SELL | 1,196 DOGE | 0.07206 |
+| ZROUSDT | 746804 | `h-9861b2fcc16b4609add7ee-31` | SELL | 59.87 ZRO | 1.639 |
+
+The durable `account.open_orders_captured` event recorded `readiness: BLOCKED` and `UNOWNED_OPEN_ORDERS:2`. Nevertheless, the same process activated the Conservative trading engine, published `harvester.started`, and submitted new Harvester orders. This is observed behavior, not an inferred startup failure.
+
+**Contract discrepancy:** the current bootstrap durably records the readiness result but does not reject trading-enabled startup solely because the result is BLOCKED. The roadmap describes existing unowned orders as not automatically rejecting startup, while the README says trading-enabled startup remains blocked and TRADING_FIRST says not to trade blindly when pre-existing orders make the test ambiguous. The runtime's `BLOCKED` label is therefore misleading unless its precise meaning and operator implications are made explicit. Issue [#667](https://github.com/45s/coinzilla/issues/667) tracks the policy decision and required regression. This report does not silently choose a new trading policy.
+
+### 2. Complete Harvester order ledger
+
+The 12 Harvester-submitted orders in this session are listed below. “Actual fill” is the exchange execution price, not the submitted limit. A BUY limit filling below its limit is price improvement and is not, by itself, an invalid order.
+
+| Broker order | Symbol | Side | Submitted limit × quantity | Actual result |
+|---:|---|---|---|---|
+| 1319921 | DOGEUSDT | BUY | 0.07136 × 400 | CANCELED, 0 filled; trailing repricing |
+| 747804 | ZROUSDT | BUY | 1.636 × 5 | FILLED 5 at 1.628, TAKER |
+| 747805 | ZROUSDT | SELL | 1.639 × 4.98 | FILLED 4.98 at 1.639, MAKER |
+| 747806 | ZROUSDT | BUY | 1.627 × 5 | CANCELED at shutdown, 0 filled |
+| 1320040 | DOGEUSDT | BUY | 0.07141 × 400 | FILLED 400 at 0.07141, MAKER |
+| 1320210 | DOGEUSDT | SELL | 0.07187 × 398 | CANCELED, 0 filled; recalculated after BUY fill |
+| 1320212 | DOGEUSDT | BUY | 0.07137 × 400 | FILLED 400 at 0.07011, TAKER |
+| 1320213 | DOGEUSDT | SELL | 0.07112 × 797 | FILLED 797 at 0.07112, MAKER |
+| 1320214 | DOGEUSDT | BUY | 0.07007 × 400 | CANCELED, 0 filled; trailing repricing |
+| 1320261 | DOGEUSDT | BUY | 0.07084 × 400 | CANCELED, 0 filled; trailing repricing |
+| 1320262 | DOGEUSDT | BUY | 0.07108 × 400 | CANCELED, 0 filled; trailing repricing |
+| 1320270 | DOGEUSDT | BUY | 0.07141 × 400 | FILLED 400 at 0.07141, MAKER |
+
+No rejection is recorded for these 12 Harvester submissions. Six were filled and six were canceled without execution. The six distinct applied fills are ZRO trade IDs 12352 and 12355, and DOGE trade IDs 230454, 230472, 230478, and 230696. Repeated delivery of already-applied fills was logged as duplicate and ignored; the supplied evidence does not show duplicate accounting application.
+
+All submitted prices align with the captured exchange price increments (DOGE 0.00001; ZRO 0.001), and quantities align with the captured quantity increments (DOGE 1; ZRO 0.01). The submitted notionals shown above exceed the captured minimum notionals (DOGE 1 USDT; ZRO 5 USDT). No invalid tick/step/minimum-notional order is demonstrated by this session.
+
+### 3. External order execution — not a Harvester order
+
+At 23:38:39.319 UTC, pre-existing ZRO SELL order 746804 (client ID `h-9861b2fcc16b4609add7ee-31`) filled:
+
+- Trade ID: 12354
+- Side/quantity/price: SELL 59.87 ZRO at 1.639
+- Gross quote: 98.12693 USDT
+- Commission: 0.09812693 USDT
+- Net quote after that commission: 98.02880307 USDT
+
+This was not submitted by the current Harvester process and must not be attributed to its strategy PnL. Harvester emitted `execution.unowned_order`, rejected the event because neither client nor broker order ID matched its registry, and paused ZRO with `UNKNOWN_OR_EXTERNAL_ORDER_EVENT`. The ownership rejection is the expected protective response to an unowned execution; the unresolved question is why the process was allowed to begin trading with this order already present and how the resulting global/user-data readiness should affect the other pair.
+
+The pre-existing DOGE SELL 1317237 was also external/unowned. The closing DOGE locked balance remained 1,196, consistent with that quantity remaining locked, but the supplied Journal does not contain a CLOSING open-order payload; its exact terminal exchange status at shutdown is therefore **not independently verified**.
+
+### 4. ZRO accounting and incomplete dust completion
+
+Harvester BUY order 747804 was submitted as LIMIT 1.636 × 5 and filled as TAKER at 1.628 × 5:
+
+- Gross BUY quote: 8.14 USDT
+- Base commission: 0.005 ZRO
+- Net strategy position after BUY: 4.995 ZRO
+- Accumulated spent: 8.14 USDT
+
+Harvester SELL order 747805 filled 4.98 ZRO at 1.639 as MAKER:
+
+- Gross SELL quote: 8.16222 USDT
+- Quote commission: 0.00816222 USDT
+- Net SELL proceeds: 8.15405778 USDT
+- Realized net profit: 0.01405778 USDT
+
+The configured `keepQuantity` was 0.01 ZRO. The remaining position was 0.015 ZRO, leaving 0.005 ZRO above keepQuantity. The captured ZRO quantity increment was 0.01, so the 0.005 remainder is below one quantity step and is a candidate for exchange-constrained dust. At the recorded price it is also far below the 5 USDT minimum notional.
+
+Despite the actual net profit exceeding the 0.01 minimum, the DEBUG log reports `RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH`; no `recovery.cycle_completed` event was recorded for ZRO. The log's completion input shows activeQuantity 0.015, keepQuantity 0.01, spent 8.14, and netSellProceeds 8.15405778. This conflicts with the canonical specification's dust-plus-keep completion contract unless an additional safety condition (including the earlier unowned-order pause or unavailable free quantity) explains the result. Treat this as an unresolved implementation/evidence discrepancy, not as a proven safe completion or a proven sellable residual. Issue [#667](https://github.com/45s/coinzilla/issues/667) requires a focused regression with exact exchange-filter and free/locked-quantity evidence.
+
+### 5. DOGE recovery cycle and subsequent BUY with no recovery SELL
+
+The first DOGE recovery cycle is accounted in the logs as follows:
+
+| Execution | Gross quote | Commission | Net base/quote effect |
+|---|---:|---:|---|
+| BUY 400 at 0.07141 | 28.564 USDT | 0.4 DOGE | +399.6 DOGE |
+| BUY 400 at 0.07011 | 28.044 USDT | 0.4 DOGE | +399.6 DOGE |
+| SELL 797 at 0.07112 | 56.68264 USDT | 0.05668264 USDT | +56.62595736 USDT net |
+
+The cycle's accumulated BUY cost was 56.608 USDT. Net SELL proceeds were 56.62595736 USDT, yielding realized net profit of 0.01795736 USDT. The position retained 2.2 DOGE: configured keepQuantity 1 DOGE plus 1.2 DOGE classified as `EXCHANGE_CONSTRAINED_DUST` due MIN_NOTIONAL. The journal/log record `recovery.cycle_completed`; this cycle's arithmetic and dust disposition are internally consistent with the supplied evidence.
+
+The later DOGE BUY order 1320270 filled at 00:34:50.045 UTC: 400 DOGE at 0.07141, gross quote 28.564 USDT, base commission 0.4 DOGE, net active addition 399.6 DOGE. The DEBUG state then showed DOGE active position 399.6, spent 28.564 USDT, and prior retained/free quantity 2.2 DOGE.
+
+After this accepted BUY fill, repeated DOGE market evaluations reported `NO_ACTION`; no subsequent recovery SELL was submitted before shutdown. The session therefore ended with a new active DOGE recovery position and no SELL order for it. The supplied evidence does not establish why the next required recovery action was not generated. This is a high-priority decision/lifecycle investigation, not a claim that the BUY itself was invalid.
+
+### 6. Shutdown, closing balances, and lock retention
+
+At 01:06:05.933 UTC, Harvester requested cancellation of its own open ZRO BUY order 747806 (5 ZRO at 1.627, zero executed). The exchange cancellation was confirmed at 01:06:07.369 UTC. The external DOGE order was not canceled by Harvester, consistent with the policy that external orders are not owned or automatically modified.
+
+The CLOSING account snapshot at 01:06:22.817 UTC was marked `INCOMPLETE` with reason `USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE`:
+
+| Asset | Free | Locked | Total |
+|---|---:|---:|---:|
+| DOGE | 19,527.2 | 1,196 | 20,723.2 |
+| USDT | 8,831.56953556 | 0 | 8,831.56953556 |
+| ZRO | 250.255 | 0 | 250.255 |
+
+The shutdown error was `AggregateError: Harvester shutdown was incomplete`, containing `CLOSING account audit is incomplete: USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE`. The process then disconnected from Binance and closed the Journal, but the stopped event recorded `outcome: failed`. Observability cleanup retained the trading lock because runtime shutdown was not confirmed.
+
+The supplied `.harvester-trading.lock` contains PID 10208, hostname `lpv1`, start time `2026-11-07T23:08:17.659Z`, and an ownership token. The file's presence is evidence that the lock was retained; it is not proof that PID 10208 is still running or that the lock is safe to delete. Verify the process owner on the recorded host before any manual cleanup. Never remove the lock merely to make a subsequent start succeed.
+
+### 7. Account snapshot scope discrepancy
+
+The exchange snapshot source contained 517 balances, but each persisted Journal account snapshot in this session contains only three assets: DOGE, USDT, and ZRO. DEBUG summaries report `sourceAssetCount: 517` and `assetCount: 3`. The current bootstrap passes only enabled markets' base/quote asset codes as `allowedAssetCodes` to the account-snapshot mapper.
+
+This does not match README wording that the PREFLIGHT/CLOSING audit contains every asset returned by the broker. The 517-asset source response was not fully represented in the persisted event. Resolve whether the actual contract is all returned assets or only configured market assets, then align code, event metadata, and docs. If the contract is all assets, add an offline regression with unrelated assets and preserve all of them in the durable event. This is tracked in [#667](https://github.com/45s/coinzilla/issues/667).
+
+### 8. Final classification
+
+**Confirmed correct/expected behavior in the supplied evidence**
+- Binance accepted the 12 Harvester orders; no rejection is recorded.
+- BUY fills below their submitted limit prices are favorable LIMIT executions, not evidence of an incorrect price.
+- Exchange increments and minimum notionals are satisfied by the submitted order prices/quantities.
+- The six canonical fills were applied once; duplicate delivery was recognized and ignored.
+- The first DOGE recovery cycle's proceeds, commission, profit, and 1.2 DOGE MIN_NOTIONAL dust are internally consistent.
+- The pre-existing ZRO order was rejected as unowned and caused ZRO to pause; it was not misattributed to Harvester's own order registry.
+
+**Unresolved/high-priority discrepancies**
+- PREFLIGHT readiness says BLOCKED while trading starts; docs disagree about whether unowned open orders should block.
+- ZRO's 0.005 remainder above keepQuantity was not classified/completed as dust in the recorded cycle.
+- DOGE's later 400-unit BUY fill did not result in a recovery SELL before shutdown.
+- CLOSING audit failed due unresolved user-data/accounting reconciliation.
+- The persisted account snapshots contain only 3 of 517 source assets despite all-asset documentation.
+- The process lock was retained after failed shutdown and requires host/PID verification before manual removal.
+
+**Not established:** a wrong-side Harvester order, an exchange-filter-invalid submitted order, an exchange rejection, duplicate fill accounting, or a successful overall session. No live account state was queried during this retrospective audit.
+
+**Scope:** this evidence report and documentation alignment do not implement the runtime fixes, do not enable Journal replay/process-restart recovery, and do not authorize any TESTNET or production exchange writes. See [issue #667](https://github.com/45s/coinzilla/issues/667) for implementation/regression follow-up.
