@@ -12,6 +12,7 @@ const createState = (overrides = {}) => ({
   accountingFailed: false,
   status: "READY",
   recoveryGeneration: 0,
+  recoveryBrokerGeneration: null,
   lastAcknowledgedRecoveryGeneration: -1,
   lastReportedRecoveredGeneration: -1,
   startupComplete: true,
@@ -114,6 +115,8 @@ test("repeated recovered reminders publish and log once while retrying applicati
   })
   const recoveredReminder = {
     type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
     recoveryRequired: true,
     reconciliationRequired: true,
   }
@@ -147,6 +150,8 @@ test("a new recovery generation publishes a fresh recovered status", () => {
   const { handler, events, logs, actions } = createHandler()
   const recoveredReminder = {
     type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
     recoveryRequired: true,
     reconciliationRequired: true,
   }
@@ -206,6 +211,7 @@ test("clears the application recovery gate only for the locally acknowledged gen
     recoveryGeneration: 4,
     lastAcknowledgedRecoveryGeneration: 4,
     recoverySubscriptionId: 42,
+    recoveryBrokerGeneration: 77,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -213,6 +219,7 @@ test("clears the application recovery gate only for the locally acknowledged gen
     recoveryRequired: false,
     reconciliationRequired: false,
     subscriptionId: 42,
+    recoveryGeneration: 77,
   })
 
   assert.equal(state.requiresReconciliation, false)
@@ -230,6 +237,7 @@ test("does not clear the application recovery gate for a stale reconciled genera
     recoveryGeneration: 5,
     lastAcknowledgedRecoveryGeneration: 4,
     recoverySubscriptionId: 42,
+    recoveryBrokerGeneration: 77,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -237,6 +245,7 @@ test("does not clear the application recovery gate for a stale reconciled genera
     recoveryRequired: false,
     reconciliationRequired: false,
     subscriptionId: 42,
+    recoveryGeneration: 76,
   })
 
   assert.equal(state.requiresReconciliation, true)
@@ -244,6 +253,48 @@ test("does not clear the application recovery gate for a stale reconciled genera
 })
 
 
+
+test("stores the broker recovery token and refuses terminal completion from a different broker generation", () => {
+  const state = createState({
+    ready: false,
+    requiresReconciliation: true,
+    streamUnsafe: true,
+    recoveryGeneration: 3,
+    lastAcknowledgedRecoveryGeneration: 2,
+    recoverySubscriptionId: 42,
+  })
+  const fixture = createHandler({ state })
+  fixture.handler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 88,
+    recoveryRequired: true,
+  })
+  state.lastAcknowledgedRecoveryGeneration = 3
+  assert.equal(
+    state.recoveryBrokerGeneration,
+    88,
+    "The Harvester must retain the broker-issued generation token associated with its active subscription.",
+  )
+
+  fixture.handler({
+    type: "reconciled",
+    subscriptionId: 42,
+    recoveryGeneration: 87,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+  })
+  assert.equal(
+    state.requiresReconciliation,
+    true,
+    "A terminal status from a different broker generation must not clear the application recovery gate.",
+  )
+  assert.equal(
+    state.ready,
+    false,
+    "A stale broker-generation terminal status must not make Harvester trading-ready.",
+  )
+})
 
 test("does not clear the application recovery gate for a different subscription identity", () => {
   const state = createState({
