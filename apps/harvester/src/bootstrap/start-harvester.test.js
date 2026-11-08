@@ -135,13 +135,22 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
       canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
       return { ok: true, data: canceledOrder }
     },
-    getOpenOrders: async ({ symbol } = {}) => ({
-      ok: true,
-      data: [...canonicalOrdersByBrokerId.values()]
-        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-        .filter((order) => !symbol || order.market.symbol === symbol)
-        .map((order) => createOpenOrderSnapshot({ order })),
-    }),
+    getOpenOrders: async ({ symbol } = {}) => {
+      if (recoveryPending) {
+        if (symbol) {
+          recoveryOwnedOpenOrderReads += 1
+        } else {
+          recoveryAccountWideOpenOrderReads += 1
+        }
+      }
+      return {
+        ok: true,
+        data: [...canonicalOrdersByBrokerId.values()]
+          .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+          .filter((order) => !symbol || order.market.symbol === symbol)
+          .map((order) => createOpenOrderSnapshot({ order })),
+      }
+    },
     getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
       ok: true,
@@ -729,430 +738,6 @@ test("starts application reconciliation on transport recovery and acknowledges o
   await result.stop()
 })
 
-test("keeps one recovery generation single-flight across 254 reminders while draining a fill before durable acknowledgement", { timeout: 20_000 }, async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const submittedOrders = []
-  const publishedEvents = []
-  const durableFlushes = []
-  const logs = { info: [], error: [] }
-  const recoveryFillTradeId = "recovery-reminder-fill"
-  const recoveryConfig = {
-    ...tradingConfig,
-    strategies: {
-      ...tradingConfig.strategies,
-      CG_coinGrabber: {
-        ...tradingConfig.strategies.CG_coinGrabber,
-        pairs: {
-          ...tradingConfig.strategies.CG_coinGrabber.pairs,
-          BTCUSDT: {
-            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-            investment: 2_000,
-          },
-        },
-      },
-    },
-  }
-
-  let resolveOrderAcknowledged
-  let resolveNewOrderProcessed
-  let resolveHistoryReadStarted
-  let releaseHistoryRead
-  let resolveQueuedFillProcessed
-  let resolveRecoveryAcknowledged
-  const orderAcknowledged = new Promise((resolve) => { resolveOrderAcknowledged = resolve })
-  const newOrderProcessed = new Promise((resolve) => { resolveNewOrderProcessed = resolve })
-  const historyReadStarted = new Promise((resolve) => { resolveHistoryReadStarted = resolve })
-  const historyReadGate = new Promise((resolve) => { releaseHistoryRead = resolve })
-  const queuedFillProcessed = new Promise((resolve) => { resolveQueuedFillProcessed = resolve })
-  const recoveryAcknowledged = new Promise((resolve) => { resolveRecoveryAcknowledged = resolve })
-
-  let canonicalHistoryReads = 0
-  let fillHistoryReads = 0
-  let accountWideOpenOrderReads = 0
-  let ownedOpenOrderReads = 0
-  let acknowledgementCount = 0
-  let queuedFillProcessedCount = 0
-  let queuedFillRecoveryMode
-  let acknowledgementObservation
-
-  const originalGetOpenOrders = broker.getOpenOrders
-  broker.getOpenOrders = async (input = {}) => {
-    if (input.symbol) {
-      ownedOpenOrderReads += 1
-    } else {
-      accountWideOpenOrderReads += 1
-    }
-    return originalGetOpenOrders(input)
-  }
-
-  const originalGetCanonicalOrderHistory = broker.getCanonicalOrderHistory
-  broker.getCanonicalOrderHistory = async (input) => {
-    canonicalHistoryReads += 1
-    if (canonicalHistoryReads === 1) {
-      resolveHistoryReadStarted()
-      await historyReadGate
-    }
-    return originalGetCanonicalOrderHistory(input)
-  }
-
-  const originalGetFills = broker.getFills
-  broker.getFills = async (input) => {
-    fillHistoryReads += 1
-    return originalGetFills(input)
-  }
-
-  broker.placeOrder = async ({ order }) => {
-    const acknowledgedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: "broker-" + order.clientOrderId,
-      market: order.market,
-      side: order.side,
-      type: order.type,
-      limitPrice: new Money({ amount: order.price, asset: order.market.quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity, asset: order.market.baseAsset }),
-      executedQuantity: new Quantity({ amount: "0", asset: order.market.baseAsset }),
-      status: "OPEN",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-    })
-    submittedOrders.push(acknowledgedOrder)
-    resolveOrderAcknowledged(acknowledgedOrder)
-    return { ok: true, data: acknowledgedOrder }
-  }
-
-  const subscribeForUserData = broker.subscribeForUserData
-  broker.subscribeForUserData = async (handlers) => {
-    const result = await subscribeForUserData(handlers)
-    return {
-      ...result,
-      data: {
-        ...result.data,
-        acknowledgeRecoveryResult: () => {
-          acknowledgementCount += 1
-          const hasDurableRecoveryAccountAudit = durableFlushes.some((flush) =>
-            flush.some((event) =>
-              event.name === "account.snapshot_captured" && event.phase === "RECOVERY"))
-          const hasDurableRecoveryOpenOrdersAudit = durableFlushes.some((flush) =>
-            flush.some((event) =>
-              event.name === "account.open_orders_captured" && event.phase === "RECOVERY"))
-          acknowledgementObservation = {
-            queuedFillProcessedCount,
-            queuedFillRecoveryMode,
-            fillAppliedCount: publishedEvents.filter((event) =>
-              event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId).length,
-            hasDurableRecoveryAccountAudit,
-            hasDurableRecoveryOpenOrdersAudit,
-          }
-          handlers.onStatus({
-            type: "reconciled",
-            subscriptionId: 17,
-            recoveryRequired: false,
-            reconciliationRequired: false,
-          })
-          resolveRecoveryAcknowledged()
-          return { accepted: true, completed: true }
-        },
-      },
-    }
-  }
-
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => recoveryConfig,
-    env: {
-      ...binanceEnv,
-      HARVESTER_ENABLE_TRADING: "true",
-      HARVESTER_TRADING_MODE: "testnet",
-      NODE_ENV: "test",
-    },
-    brokerAdapterFactory: () => broker,
-    now: () => 1000,
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push(event)
-        return { ok: true }
-      },
-      flush: async () => {
-        durableFlushes.push(publishedEvents.map((event) => ({
-          name: event.name,
-          phase: event.data?.phase,
-        })))
-        return { ok: true, durable: true }
-      },
-    },
-    onUserDataEvent: async ({ event, recoveryMode }) => {
-      if (event?.executionType === "NEW") {
-        resolveNewOrderProcessed()
-      }
-      if (event?.fill?.tradeId === recoveryFillTradeId) {
-        queuedFillProcessedCount += 1
-        queuedFillRecoveryMode = recoveryMode
-        resolveQueuedFillProcessed()
-      }
-    },
-    logger: {
-      info: (entry) => logs.info.push(entry),
-      error: (entry) => logs.error.push(entry),
-    },
-  })
-
-  try {
-    assert.equal(
-      runtime.userDataReady,
-      true,
-      "The trading readiness gate must be open before the simulated transport recovery begins.",
-    )
-
-    await broker.emitBookTicker("BTCUSDT", {
-      symbol: "BTCUSDT",
-      bestBidPrice: "60000",
-      bestBidQuantity: "1",
-      bestAskPrice: "70000",
-      bestAskQuantity: "1",
-      timestamp: 1000,
-    })
-
-    await waitForTestSignal(
-      orderAcknowledged,
-      "initial owned BUY acknowledgement",
-      () => ({ submittedOrders: submittedOrders.length, userDataReady: runtime.userDataReady }),
-      2_000,
-    )
-    const acknowledgedBuyOrder = await orderAcknowledged
-    await broker.emitUserDataEvent({
-      eventType: "executionReport",
-      executionType: "NEW",
-      executedOrder: acknowledgedBuyOrder,
-    })
-    await waitForTestSignal(
-      newOrderProcessed,
-      "initial owned BUY order update",
-      () => ({ submittedOrders: submittedOrders.length, userDataReady: runtime.userDataReady }),
-      2_000,
-    )
-
-    broker.emitUserDataStatus({
-      type: "recovered",
-      subscriptionId: 17,
-      recoveryRequired: true,
-      reconciliationRequired: true,
-    })
-    await waitForTestSignal(
-      historyReadStarted,
-      "owned-order canonical history read during recovery",
-      () => ({
-        canonicalHistoryReads,
-        accountWideOpenOrderReads,
-        ownedOpenOrderReads,
-        userDataReady: runtime.userDataReady,
-      }),
-      2_000,
-    )
-
-    const filledBuyOrder = new CanonicalOrder({
-      clientOrderId: acknowledgedBuyOrder.clientOrderId,
-      brokerOrderId: acknowledgedBuyOrder.brokerOrderId,
-      market: acknowledgedBuyOrder.market,
-      side: "BUY",
-      type: acknowledgedBuyOrder.type,
-      limitPrice: acknowledgedBuyOrder.limitPrice,
-      originalQuantity: acknowledgedBuyOrder.originalQuantity,
-      executedQuantity: acknowledgedBuyOrder.originalQuantity,
-      status: "FILLED",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 2,
-      completedAt: 2,
-    })
-    const queuedFill = new Fill({
-      tradeId: recoveryFillTradeId,
-      brokerOrderId: filledBuyOrder.brokerOrderId,
-      clientOrderId: filledBuyOrder.clientOrderId,
-      market: filledBuyOrder.market,
-      side: "BUY",
-      price: filledBuyOrder.limitPrice,
-      quantity: filledBuyOrder.originalQuantity,
-      quoteQuantity: new Money({
-        amount: multiplyDecimal({
-          left: filledBuyOrder.limitPrice.amount,
-          right: filledBuyOrder.originalQuantity.amount,
-        }),
-        asset: filledBuyOrder.market.quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    })
-
-    const recoveryReminderCount = 254
-    for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
-      broker.emitUserDataStatus({
-        type: "recovered",
-        subscriptionId: 17,
-        recoveryRequired: true,
-        reconciliationRequired: true,
-      })
-    }
-
-    const queuedFillDelivery = broker.emitUserDataEvent({
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: filledBuyOrder,
-      fill: queuedFill,
-    })
-
-    assert.equal(
-      canonicalHistoryReads,
-      1,
-      "All 254 recovered reminders must share the original in-flight owned-order reconciliation instead of starting duplicate REST history reads.",
-    )
-    assert.equal(
-      acknowledgementCount,
-      0,
-      "No recovery reminder may acknowledge the broker while canonical reconciliation is still unresolved.",
-    )
-    assert.equal(
-      runtime.userDataReady,
-      false,
-      "The application readiness gate must remain closed throughout the unresolved recovery generation.",
-    )
-    assert.equal(
-      publishedEvents.filter((event) =>
-        ["account.snapshot_captured", "account.open_orders_captured"].includes(event.name) &&
-        event.data?.phase === "RECOVERY").length,
-      0,
-      "Recovery account audits must not be published before the pending owned-order reconciliation finishes.",
-    )
-
-    releaseHistoryRead()
-    await waitForTestSignal(
-      recoveryAcknowledged,
-      "single successful broker recovery acknowledgement",
-      () => ({
-        canonicalHistoryReads,
-        acknowledgementCount,
-        queuedFillProcessedCount,
-        userDataReady: runtime.userDataReady,
-      }),
-      5_000,
-    )
-    await waitForTestSignal(
-      queuedFillProcessed,
-      "queued BUY fill drained during application recovery",
-      () => ({
-        queuedFillProcessedCount,
-        queuedFillRecoveryMode,
-        userDataReady: runtime.userDataReady,
-      }),
-      2_000,
-    )
-    await queuedFillDelivery
-
-    const fillAppliedEvents = publishedEvents.filter((event) =>
-      event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId)
-    const reconciledStatusEvents = publishedEvents.filter((event) =>
-      event.name === "broker.status_changed" && event.data?.status === "reconciled")
-    const recoveryCompletionLogs = logs.info.filter((entry) =>
-      entry.message === "application recovery completed and broker acknowledgement accepted")
-    const position = runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
-
-    assert.equal(
-      recoveryReminderCount,
-      254,
-      "The incident regression must deliver exactly the 254 recovered reminders recorded in the original Journal.",
-    )
-    assert.equal(
-      canonicalHistoryReads,
-      1,
-      "One pending recovery generation must reconcile the owned order exactly once despite all 254 reminders.",
-    )
-    assert.equal(
-      fillHistoryReads,
-      1,
-      "One recovery generation must retrieve canonical fill history once for the owned order.",
-    )
-    assert.equal(
-      accountWideOpenOrderReads,
-      2,
-      "Only startup PREFLIGHT and one completed RECOVERY account-wide open-order snapshot may be read.",
-    )
-    assert.equal(
-      ownedOpenOrderReads,
-      1,
-      "The owned-order reconciliation must perform one symbol-scoped open-order read for the single owned BUY.",
-    )
-    assert.equal(
-      queuedFillProcessedCount,
-      1,
-      "The queued execution report must be drained once rather than replayed for each recovered reminder.",
-    )
-    assert.equal(
-      queuedFillRecoveryMode,
-      true,
-      "A queued execution report drained during recovery must be processed in recovery mode.",
-    )
-    assert.equal(
-      fillAppliedEvents.length,
-      1,
-      "The queued stream fill and canonical REST fill history must account for the trade exactly once.",
-    )
-    assert.equal(
-      position?.baseQuantity.amount,
-      acknowledgedBuyOrder.originalQuantity.amount,
-      "The Portfolio must contain exactly one BUY quantity after stream/REST overlap, not a duplicate application.",
-    )
-    assert.equal(
-      acknowledgementCount,
-      1,
-      "The broker acknowledgement result must be accepted exactly once for the recovered generation.",
-    )
-    assert.equal(
-      acknowledgementObservation.queuedFillProcessedCount,
-      1,
-      "The queued fill must be drained before the broker recovery acknowledgement is attempted.",
-    )
-    assert.equal(
-      acknowledgementObservation.queuedFillRecoveryMode,
-      true,
-      "The recovery acknowledgement must wait until the queued fill has been processed in recovery mode.",
-    )
-    assert.equal(
-      acknowledgementObservation.fillAppliedCount,
-      1,
-      "The canonical fill must already be applied exactly once when recovery acknowledgement begins.",
-    )
-    assert.equal(
-      acknowledgementObservation.hasDurableRecoveryAccountAudit,
-      true,
-      "The RECOVERY account snapshot must have completed a durable Journal flush before broker acknowledgement.",
-    )
-    assert.equal(
-      acknowledgementObservation.hasDurableRecoveryOpenOrdersAudit,
-      true,
-      "The RECOVERY account-wide open-orders audit must have completed a durable Journal flush before broker acknowledgement.",
-    )
-    assert.equal(
-      reconciledStatusEvents.length,
-      1,
-      "One successful recovery generation must publish exactly one terminal reconciled status.",
-    )
-    assert.equal(
-      recoveryCompletionLogs.length,
-      1,
-      "One successful recovery generation must emit exactly one application recovery completion diagnostic.",
-    )
-    assert.equal(
-      runtime.userDataReady,
-      true,
-      "Trading readiness may reopen only after the queued event, canonical reconciliation, durable audits, and broker acknowledgement complete.",
-    )
-
-    await runtime.stop()
-  } finally {
-    releaseHistoryRead()
-  }
-})
-
 test("repeats recovery snapshots when a user-data event arrives during REST audit reads", async () => {
   const broker = createBroker()
   const getAccountSnapshot = broker.getAccountSnapshot
@@ -1660,7 +1245,7 @@ test("does not clear the read-only ownership gate after stream recovery acknowle
 })
 
 
-test("explicit TESTNET trading submits the first Conservative BUY and reacts to its full fill", { timeout: 90_000 }, async () => {
+test("explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle", { timeout: 90_000 }, async () => {
   const calls = []
   const buyCancellationCount = { value: 0 }
   const subscriptions = new Map()
@@ -1676,6 +1261,35 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
   const runtimeErrors = []
   const runtimeDebug = []
   const runtimeInfo = []
+  const publishedEvents = []
+  const durableFlushes = []
+  const recoveryFillTradeId = "testnet-buy-fill"
+  let recoveryPending = false
+  let recoveryCanonicalHistoryReads = 0
+  let recoveryFillHistoryReads = 0
+  let recoveryAccountWideOpenOrderReads = 0
+  let recoveryOwnedOpenOrderReads = 0
+  let recoveryAccountSnapshotReads = 0
+  let recoveryAcknowledgementCount = 0
+  let recoveryQueuedFillProcessedCount = 0
+  let recoveryQueuedFillMode
+  let recoveryAcknowledgementObservation
+  let resolveRecoveryHistoryStarted
+  let releaseRecoveryHistory
+  let resolveRecoveryQueuedFillProcessed
+  let resolveRecoveryAcknowledged
+  const recoveryHistoryStarted = new Promise((resolve) => {
+    resolveRecoveryHistoryStarted = resolve
+  })
+  const recoveryHistoryGate = new Promise((resolve) => {
+    releaseRecoveryHistory = resolve
+  })
+  const recoveryQueuedFillProcessed = new Promise((resolve) => {
+    resolveRecoveryQueuedFillProcessed = resolve
+  })
+  const recoveryAcknowledged = new Promise((resolve) => {
+    resolveRecoveryAcknowledged = resolve
+  })
   let resolveThreeOrders
   let resolveFiveOrders
   const threeOrdersSubmitted = new Promise((resolve) => { resolveThreeOrders = resolve })
@@ -1714,18 +1328,28 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
       return { ok: true, data: canceledOrder }
     },
-    getFills: async ({ orderId } = {}) => ({
-      ok: true,
-      data: fillHistoryByOrder.get(String(orderId)) ?? [],
-    }),
-    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
-      ok: true,
-      data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
-        (!orderId || order.brokerOrderId === String(orderId)) &&
-        (!symbol || order.market.symbol === symbol)),
-    }),
+    getFills: async ({ orderId } = {}) => {
+      if (recoveryPending) recoveryFillHistoryReads += 1
+      return { ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }
+    },
+    getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => {
+      if (recoveryPending) {
+        recoveryCanonicalHistoryReads += 1
+        if (recoveryCanonicalHistoryReads === 1) {
+          resolveRecoveryHistoryStarted()
+          await recoveryHistoryGate
+        }
+      }
+      return {
+        ok: true,
+        data: [...canonicalOrdersByBrokerId.values()].filter((order) =>
+          (!orderId || order.brokerOrderId === String(orderId)) &&
+          (!symbol || order.market.symbol === symbol)),
+      }
+    },
     getCanonicalOrder: async () => ({ ok: false, errors: [new Error("order not found")] }),
     getAccountSnapshot: async () => {
+      if (recoveryPending) recoveryAccountSnapshotReads += 1
       snapshotTime += 1
       const balances = [
         new Balance({
@@ -1758,7 +1382,33 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
           return handlers.onEvent(message)
         },
       }
-      return { ok: true, data: { disconnect: async () => calls.push("unsubscribe:user-data") } }
+      return {
+        ok: true,
+        data: {
+          disconnect: async () => calls.push("unsubscribe:user-data"),
+          acknowledgeRecoveryResult: () => {
+            recoveryAcknowledgementCount += 1
+            recoveryAcknowledgementObservation = {
+              queuedFillProcessedCount: recoveryQueuedFillProcessedCount,
+              queuedFillMode: recoveryQueuedFillMode,
+              fillAppliedCount: publishedEvents.filter((event) =>
+                event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId).length,
+              accountAuditDurable: durableFlushes.some((flush) =>
+                flush.some((event) => event.name === "account.snapshot_captured" && event.phase === "RECOVERY")),
+              openOrdersAuditDurable: durableFlushes.some((flush) =>
+                flush.some((event) => event.name === "account.open_orders_captured" && event.phase === "RECOVERY")),
+            }
+            handlers.onStatus({
+              type: "reconciled",
+              subscriptionId: 17,
+              recoveryRequired: false,
+              reconciliationRequired: false,
+            })
+            resolveRecoveryAcknowledged()
+            return { accepted: true, completed: true }
+          },
+        },
+      }
     },
     subscribeForPrices: async ({ symbol, onPrice }) => {
       subscriptions.set(symbol, onPrice)
@@ -1825,9 +1475,24 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
+        publishedEvents.push(event)
         if (event.name === "recovery.cycle_completed") signalRecoveryCompleted()
         return { ok: true }
       },
+      flush: async () => {
+        durableFlushes.push(publishedEvents.map((event) => ({
+          name: event.name,
+          phase: event.data?.phase,
+        })))
+        return { ok: true, durable: true }
+      },
+    },
+    onUserDataEvent: async ({ event, recoveryMode }) => {
+      if (event?.fill?.tradeId === recoveryFillTradeId) {
+        recoveryQueuedFillProcessedCount += 1
+        recoveryQueuedFillMode = recoveryMode
+        resolveRecoveryQueuedFillProcessed()
+      }
     },
     now: () => 1000,
     logger: {
@@ -1905,8 +1570,52 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+  recoveryPending = true
+  userDataHandlers.onStatus({
+    type: "recovered",
+    subscriptionId: 17,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  await waitForTestSignal(
+    recoveryHistoryStarted,
+    "owned BUY canonical history read during application recovery",
+    () => ({
+      recoveryCanonicalHistoryReads,
+      recoveryAcknowledgementCount,
+      userDataReady: runtime.userDataReady,
+    }),
+    2_000,
+  )
+
+  const recoveryReminderCount = 254
+  for (let reminderNumber = 0; reminderNumber < recoveryReminderCount; reminderNumber += 1) {
+    userDataHandlers.onStatus({
+      type: "recovered",
+      subscriptionId: 17,
+      recoveryRequired: true,
+      reconciliationRequired: true,
+    })
+  }
+
+  assert.equal(
+    recoveryCanonicalHistoryReads,
+    1,
+    "All 254 reminders must share one in-flight owned-order reconciliation rather than starting duplicate canonical-history reads.",
+  )
+  assert.equal(
+    recoveryAcknowledgementCount,
+    0,
+    "The broker must not be acknowledged while the owned BUY canonical history read is unresolved.",
+  )
+  assert.equal(
+    runtime.userDataReady,
+    false,
+    "Trading readiness must remain closed for the full pending recovery generation.",
+  )
+
   baseBalance = "0.01"
-  userDataHandlers.onEvent({
+  const queuedFillDelivery = userDataHandlers.onEvent({
     event: {
       eventType: "executionReport",
       executionType: "TRADE",
@@ -1914,6 +1623,146 @@ test("explicit TESTNET trading submits the first Conservative BUY and reacts to 
       fill,
     },
   })
+
+  assert.equal(
+    recoveryQueuedFillProcessedCount,
+    0,
+    "The execution report must remain queued while the owned-order REST reconciliation is still pending.",
+  )
+  assert.equal(
+    recoveryAcknowledgementCount,
+    0,
+    "Repeated reminders and a queued fill must not trigger a premature broker acknowledgement.",
+  )
+
+  releaseRecoveryHistory()
+  await waitForTestSignal(
+    recoveryAcknowledged,
+    "one successful global broker recovery acknowledgement",
+    () => ({
+      recoveryCanonicalHistoryReads,
+      recoveryAcknowledgementCount,
+      recoveryQueuedFillProcessedCount,
+      userDataReady: runtime.userDataReady,
+    }),
+    5_000,
+  )
+  await waitForTestSignal(
+    recoveryQueuedFillProcessed,
+    "queued BUY fill drained during application recovery",
+    () => ({
+      recoveryQueuedFillProcessedCount,
+      recoveryQueuedFillMode,
+      userDataReady: runtime.userDataReady,
+    }),
+    2_000,
+  )
+  await queuedFillDelivery
+  recoveryPending = false
+
+  const recoveryFillAppliedEvents = publishedEvents.filter((event) =>
+    event.name === "execution.fill_applied" && event.data?.tradeId === recoveryFillTradeId)
+  const recoveryReconciledStatusEvents = publishedEvents.filter((event) =>
+    event.name === "broker.status_changed" && event.data?.status === "reconciled")
+  const recoveryCompletionLogs = runtimeInfo.filter((entry) =>
+    entry.message === "application recovery completed and broker acknowledgement accepted")
+
+  assert.equal(
+    recoveryReminderCount,
+    254,
+    "The recovery regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
+  )
+  assert.equal(
+    recoveryCanonicalHistoryReads,
+    1,
+    "The same unresolved recovery generation must reconcile its owned BUY exactly once despite all repeated reminders.",
+  )
+  assert.equal(
+    recoveryFillHistoryReads,
+    1,
+    "The one owned BUY must have its canonical fill history retrieved once during recovery.",
+  )
+  assert.equal(
+    recoveryOwnedOpenOrderReads,
+    1,
+    "Owned-order reconciliation must perform one symbol-scoped open-order read for the single owned BUY.",
+  )
+  assert.equal(
+    recoveryAccountWideOpenOrderReads,
+    1,
+    "The completed recovery generation must perform exactly one account-wide open-orders audit.",
+  )
+  assert.equal(
+    recoveryAccountSnapshotReads,
+    1,
+    "The completed recovery generation must perform exactly one fresh account snapshot read.",
+  )
+  assert.equal(
+    recoveryQueuedFillProcessedCount,
+    1,
+    "The queued BUY execution report must be drained once, not replayed for each recovered reminder.",
+  )
+  assert.equal(
+    recoveryQueuedFillMode,
+    true,
+    "The queued BUY execution report must be processed in recovery mode.",
+  )
+  assert.equal(
+    recoveryFillAppliedEvents.length,
+    1,
+    "The stream fill and matching REST fill history must update accounting exactly once.",
+  )
+  assert.equal(
+    runtime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
+    "0.01",
+    "The Portfolio must contain exactly the one executed BUY quantity after stream/REST overlap.",
+  )
+  assert.equal(
+    recoveryAcknowledgementCount,
+    1,
+    "The broker recovery acknowledgement result must be accepted exactly once for the current generation.",
+  )
+  assert.equal(
+    recoveryAcknowledgementObservation.queuedFillProcessedCount,
+    1,
+    "The queued fill must be drained before the broker acknowledgement is attempted.",
+  )
+  assert.equal(
+    recoveryAcknowledgementObservation.queuedFillMode,
+    true,
+    "The queued fill must be processed in recovery mode before broker acknowledgement.",
+  )
+  assert.equal(
+    recoveryAcknowledgementObservation.fillAppliedCount,
+    1,
+    "The canonical BUY fill must already be applied exactly once when broker acknowledgement begins.",
+  )
+  assert.equal(
+    recoveryAcknowledgementObservation.accountAuditDurable,
+    true,
+    "The RECOVERY account snapshot must be durably flushed before broker acknowledgement.",
+  )
+  assert.equal(
+    recoveryAcknowledgementObservation.openOrdersAuditDurable,
+    true,
+    "The RECOVERY account-wide open-orders audit must be durably flushed before broker acknowledgement.",
+  )
+  assert.equal(
+    recoveryReconciledStatusEvents.length,
+    1,
+    "The successful recovery generation must publish exactly one terminal reconciled status.",
+  )
+  assert.equal(
+    recoveryCompletionLogs.length,
+    1,
+    "The successful recovery generation must emit exactly one application completion diagnostic.",
+  )
+  assert.equal(
+    runtime.userDataReady,
+    true,
+    "Trading readiness may reopen only after queued events, canonical reconciliation, durable audits, and broker acknowledgement complete.",
+  )
+
   await waitForTestSignal(threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
     submittedOrders: submittedOrders.map(({ side, price }) => ({ side, price })),
     userDataReady: runtime.userDataReady,
