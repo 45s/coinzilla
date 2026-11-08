@@ -448,3 +448,6 @@ Direct tests cover startup gating, successful acknowledgement after both audits,
 
 
 The recovery-handler source review corrected the extracted function's remaining references to the old bootstrap-local `userDataState` identifier. The module now reads and updates only the injected `state` object, matching the event/status handler interfaces. Exact-head CI remains the acceptance gate.
+
+
+The recovery extraction initially captured the adjacent status-handler composition block as part of the new recovery module, producing a syntax error and removing the status-handler initialization from bootstrap. The follow-up restores the composition to `start-harvester.js` and leaves the recovery module with only the recovery factory. The syntax and Harvester workflows must pass on the updated head before this step is accepted.

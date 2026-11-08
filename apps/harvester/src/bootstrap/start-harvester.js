@@ -349,6 +349,19 @@ export async function startHarvester({
     logger,
   })
 
+  const handleUserDataStatus = createUserDataStatusHandler({
+    state: userDataState,
+    isStopped: () => stopped,
+    eventPublisher,
+    brokerName,
+    logger,
+    tradingEnabled,
+    startUserDataRecovery,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onUserDataStatus,
+  })
+
   const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
   const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
 

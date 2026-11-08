@@ -119,18 +119,5 @@ export function createUserDataRecoveryHandler({
     state.recoveryTask = recoveryTask
   }
 
-  const handleUserDataStatus = createUserDataStatusHandler({
-    state: userDataState,
-    isStopped: () => isStopped(),
-    eventPublisher,
-    brokerName,
-    logger,
-    tradingEnabled,
-    startUserDataRecovery,
-    cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations,
-    onUserDataStatus,
-  })
-
   }
 }
