@@ -75,10 +75,16 @@ For user data:
 1. Call `subscribeForUserData({ onEvent, onStatus })` after `connect()`.
 2. The broker uses `userDataStream.subscribe.signature` on the WebSocket API connection. It uses the existing HMAC API key/secret flow; it does not require Ed25519 or `session.logon`.
 3. Multiple local subscribers share one remote subscription on the API connection.
-4. The returned subscription data provides `disconnect()` and `acknowledgeRecovery()`.
+4. The returned subscription data provides `disconnect()`, the legacy `acknowledgeRecovery()` boolean, and the additive `acknowledgeRecoveryResult()` result contract.
 5. A `terminated` or `connectionClosed` status means the event history has a gap. The broker reconnects and resubscribes, then emits `recovered` with `reconciliationRequired: true`.
-6. The consumer must reconcile current account/order/trade state before calling `acknowledgeRecovery()`. Trading remains fail-closed until every active subscriber acknowledges.
-7. A `reconciled` status indicates that all active subscribers acknowledged the recovery.
+6. The consumer must reconcile current account/order/trade state before acknowledging. Prefer `acknowledgeRecoveryResult()`, which returns:
+   - `{ accepted: true, completed: false }`: this subscriber's acknowledgement was recorded; another active subscriber is still pending.
+   - `{ accepted: true, completed: true }`: this acknowledgement completed shared recovery.
+   - `{ accepted: false, completed: false, reason: "stale-or-inactive" }`: this subscription handle is no longer active.
+   - `{ accepted: false, completed: false, reason: "recovery-not-pending" }`: no active recovery acknowledgement can be accepted.
+7. The legacy `acknowledgeRecovery()` method remains unchanged: it returns `true` only when this call completes shared recovery, and `false` while other subscribers are pending or when the acknowledgement is not accepted.
+8. If application reconciliation or a required durability barrier fails, the consumer must not acknowledge. The broker keeps recovery required, continues its bounded reminders, and keeps state-changing RPCs blocked until all active subscribers acknowledge.
+9. A `reconciled` status indicates that all active subscribers acknowledged the recovery; local acceptance alone is not global readiness.
 
 The recommended reconciliation inputs are:
 
