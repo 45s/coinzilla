@@ -861,6 +861,8 @@ test("delegates writer lifecycle and record persistence to its injected internal
   const eventBus = new EventBus()
   const storeCalls = []
   const expectedFilePath = "virtual-journal/session.jsonl"
+  const sessionFileName = "2026-11-08_12-30-00.jsonl"
+  const sessionContent = `${JSON.stringify({ id: "stored-record", name: "stored.event" })}\\n`
   const store = {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
@@ -872,9 +874,18 @@ test("delegates writer lifecycle and record persistence to its injected internal
     sync: async () => storeCalls.push("sync"),
     closeSession: async () => storeCalls.push("closeSession"),
     releaseWriter: async () => storeCalls.push("releaseWriter"),
-    listSessions: async () => [],
-    statSession: async () => ({ size: 0 }),
-    readSession: async () => Buffer.alloc(0),
+    listSessions: async () => {
+      storeCalls.push("listSessions")
+      return [{ name: sessionFileName, isFile: true }]
+    },
+    statSession: async () => {
+      storeCalls.push("statSession")
+      return { size: Buffer.byteLength(sessionContent) }
+    },
+    readSession: async () => {
+      storeCalls.push("readSession")
+      return Buffer.from(sessionContent)
+    },
   }
   const journal = new Journal({
     eventBus,
@@ -919,6 +930,34 @@ test("delegates writer lifecycle and record persistence to its injected internal
       true,
       "Journal close must close the injected session and release only the writer ownership acquired through that store.",
     )
+
+    const readResult = await journal.read()
+    assert.equal(
+      readResult.ok,
+      true,
+      "Journal read must discover and load sessions through the same injected persistence boundary after the writer stops.",
+    )
+    assert.equal(
+      readResult.records[0].id,
+      "stored-record",
+      "The recovered snapshot must contain the record supplied by the injected store rather than the physical test directory.",
+    )
+
+    const replayedIds = []
+    const replayResult = await journal.replay({
+      handler: async ({ record }) => replayedIds.push(record.id),
+    })
+    assert.equal(
+      replayResult.ok,
+      true,
+      "Journal replay must validate and replay records obtained through the injected persistence boundary.",
+    )
+    assert.deepEqual(
+      replayedIds,
+      ["stored-record"],
+      "The replay handler must receive the recovered record supplied by the injected store.",
+    )
+
     assert.deepEqual(
       storeCalls.map((call) => typeof call === "string" ? call : call.operation),
       [
@@ -930,13 +969,19 @@ test("delegates writer lifecycle and record persistence to its injected internal
         "sync",
         "closeSession",
         "releaseWriter",
+        "listSessions",
+        "statSession",
+        "readSession",
+        "listSessions",
+        "statSession",
+        "readSession",
       ],
-      "The Journal service must delegate directory, lock, session, append, sync, close, and release operations in lifecycle order.",
+      "The Journal service must delegate writer lifecycle, append, sync, bounded discovery/read, close, and release operations in order.",
     )
     const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
     assert.match(
       appendCall.line,
-      /journal\.store_delegation_verified/,
+      /journal\\.store_delegation_verified/,
       "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
     )
   } finally {
