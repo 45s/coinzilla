@@ -58,13 +58,13 @@ The migration is complete only when all of the following are true:
 
 The repository owner approved the compatibility-preserving per-subscriber acknowledgement result contract. This is now authorized implementation work, not a pending product decision.
 
-- [ ] Add `acknowledgeRecoveryResult()` to each user-data subscription handle; preserve the existing `acknowledgeRecovery()` boolean behavior exactly.
-- [ ] Return `{ accepted: true, completed: false }` when this active subscriber's acknowledgement is recorded but another active subscriber remains pending.
-- [ ] Return `{ accepted: true, completed: true }` when this call completes shared recovery.
-- [ ] Reject inactive/stale handles explicitly; reject calls when no recovery is pending without changing subscriber state.
-- [ ] If reconciliation or required durability fails, the consumer does not acknowledge. Recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked.
-- [ ] Preserve exactly one terminal `reconciled` status per recovery generation for each still-active subscriber; removed subscribers receive none.
-- [ ] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status.
+- [x] Add `acknowledgeRecoveryResult()` to each user-data subscription handle; preserve the existing `acknowledgeRecovery()` boolean behavior exactly. Merged in PR #732 (`adb3639e6c1a1b03e885d394a07f8ce4c05356dd`).
+- [x] Return `{ accepted: true, completed: false }` when this active subscriber's acknowledgement is recorded but another active subscriber remains pending.
+- [x] Return `{ accepted: true, completed: true }` when this call completes shared recovery.
+- [x] Reject inactive/stale handles explicitly; reject calls when no recovery is pending without changing subscriber state.
+- [x] Broker-side recovery remains required, bounded reminders continue, and state-changing RPCs remain blocked until all active subscribers acknowledge. Harvester's consumer failure behavior is being completed in PR #735.
+- [x] Preserve exactly one terminal `reconciled` status per recovery generation for each still-active subscriber; removed subscribers receive none (PR #729).
+- [ ] Update the Harvester consumer only after the broker contract is merged. Local acceptance must never open the application readiness gate before the matching global `reconciled` status. In progress in [PR #735](https://github.com/45s/coinzilla/pull/735).
 
 **DDD/TDD execution:** the Brokers Application user-data session owns the subscription-handle use case and result contract; the Domain recovery policy remains authoritative for the all-active-subscriber completion invariant; Infrastructure/ Binance adapters remain unchanged. Add deterministic application-session tests first (RED), implement the smallest additive application change (GREEN), then update README and consumer tests. Preserve the existing Broker API for current consumers. No TESTNET/live exchange action is required.
 
