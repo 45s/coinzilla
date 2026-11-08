@@ -422,4 +422,17 @@ PR [#688](https://github.com/45s/coinzilla/pull/688) contains a unique applicati
 
 The old PR branch was 4 commits ahead / 38 behind `develop`. It has been synchronized by a normal two-parent merge commit with current `develop` at `718a313837cd43ace2a9c2daeb17729898fd5867`. The PR's unique test is retained and appended to the current recovery-handler test file; existing current-develop changes, including PR #701 coverage, are preserved. No force-push or branch-protection bypass was used.
 
-The same merge commit updates this roadmap and F-016 evidence. Exact head `52e1002eac6c2a429821b26c866ff96d17db3b49` passed Harvester package tests (754/754), configured targeted tests (3/3), and all six required offline CI contexts. The coverage workflow passed, but Harvester threshold enforcement is not configured. Read-only TESTNET integration was skipped. The new test confirms contextual timeout-message retention and retry behavior but does not close native Error-cause preservation. PR merge is pending.
+The same merge commit updates this roadmap and F-016 evidence. Exact head `52e1002eac6c2a429821b26c866ff96d17db3b49` passed Harvester package tests (754/754), configured targeted tests (3/3), and all six required offline CI contexts. The coverage workflow passed, but Harvester threshold enforcement is not configured. Read-only TESTNET integration was skipped. The new test confirms contextual timeout-message retention and retry behavior but does not close native Error-cause preservation. PR #688 merged into `develop` as `a66e5f9114395fbc1ab776ccdffc55bdcb2a8f5a`.
+
+
+## 17. PR #688 merge confirmation — 2026-11-08
+
+PR [#688](https://github.com/45s/coinzilla/pull/688) is merged into `develop`. Exact tested head: `d52dad2347e8f9a76aa17b1f3def309e4d45f230`. Merge commit and current `develop` checkpoint at this update: `a66e5f9114395fbc1ab776ccdffc55bdcb2a8f5a`.
+
+- Harvester package unit tests: 754/754 passed, including the account-wide open-orders timeout/retry regression.
+- Configured Harvester targeted tests: 3/3 files passed.
+- All six required offline CI contexts passed.
+- Workspace coverage passed; Harvester coverage execution passed, but Harvester-specific threshold enforcement is not configured.
+- Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
+
+The regression closes the distinct account-wide open-orders timeout/retry proof gap. F-016's native Error-cause/stack preservation remains a separate unimplemented production diagnostic fix.
