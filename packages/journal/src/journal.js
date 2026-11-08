@@ -33,6 +33,7 @@ export class Journal {
     this.starting = false
     this.startPromise = null
     this.startupCleanupErrors = []
+    // Serializes close calls while `closing` remains the later record-admission gate.
     this.closeInProgress = false
     this.closing = false
     this.closed = false
@@ -288,8 +289,8 @@ export class Journal {
   }
 
   /**
-   * Cancel and await an in-progress startup, or stop an active writer and release its owned resources.
-   * Active writers are unsubscribed, drained, synced, and closed before the lock is released.
+   * Serialize close requests, then cancel startup or stop the active writer and release owned resources.
+   * A concurrent close is rejected; active writers are drained before new record admission is stopped.
    *
    * @returns {Promise<object>} Result describing close and durability success or failure.
    */
