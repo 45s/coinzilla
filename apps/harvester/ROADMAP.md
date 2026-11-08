@@ -12,6 +12,13 @@ This section is the current operational status and supersedes older statements b
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
+### Portfolio stats and user-data lifecycle observability — 2026-11-08
+
+- [x] Emit a compact Portfolio Stats snapshot only after a newly applied BUY/SELL fill changes inventory quantity. Include active, retained, and total base quantity plus exact quote-currency cost/recovery accounting. Do not mix exchange account balances into the in-memory Portfolio snapshot or refresh account balances after every fill.
+- [x] Replace generic repeated user-data status logs with concise, deduplicated connected/disconnected/reconnecting/reconnected/subscription-restored/error transitions. Preserve actual broker error context and do not infer authentication expiry from an unspecified transport error.
+- [x] Add deterministic offline regressions for partial BUY/SELL fills, duplicate fills, and repeated lifecycle status notifications; preserve existing readiness/recovery behavior.
+- [x] Exact-head offline CI on PR #744 head `ae2b6435d0e038f53c8fb2a3869570a5fc2648e7`: Harvester unit tests 776/776, configured targeted tests 3/3, Harvester coverage, workspace coverage, JavaScript syntax, actionlint, Utils tests, and production dependency audit passed. Read-only Binance TESTNET integration was skipped; no exchange acceptance is claimed.
+
 ### Recovery contract work
 
 - [x] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08; broker API and Harvester consumer integration are complete in PRs #732 and #735:
@@ -20,7 +27,9 @@ This section is the current operational status and supersedes older statements b
   3. Preserve one terminal `reconciled` notification per recovery generation for every still-active subscriber; disconnected subscribers receive none.
   4. Keep state-changing RPCs blocked until global recovery completion and keep reminder behavior bounded.
 - [x] Implemented #702 with DDD/TDD in PRs #732 and #735: the Brokers Application owns the result contract, the Domain completion invariant is preserved, and Harvester readiness remains closed until the matching global reconciled status. The legacy boolean API remains compatible.
-- [ ] **#626 — Harvester recovery reliability.** Offline code/test hardening is substantially complete. Keep the issue open for final acceptance traceability and the externally paused TESTNET acceptance; keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
+- [x] Follow-up generation fencing in PR #740: the broker emits a monotonic recovery-generation token; Harvester passes the token it reconciled to `acknowledgeRecoveryResult()` and requires the terminal status to match that token, its local recovery generation, and the active subscription ID. A missing token fails closed. The legacy no-argument boolean API remains available but cannot fence stale asynchronous work.
+- [ ] **#626 — Harvester recovery reliability.** Offline code/test hardening is substantially complete. Keep the issue open for final acceptance traceability and the externally paused TESTNET acceptance; keep readiness fail-closed and preserve durable audit barriers. The bootstrap composition root is available for inspection and changes; the refactor is complete.
+- [x] **PR #739 — 254-reminder recovery regression.** The offline Harvester integration test holds an owned-order canonical-history read pending, delivers 254 repeated `recovered` reminders for the same generation, queues a matching BUY fill, and proves single-flight reconciliation, one-time fill accounting, queued-event drain, durable RECOVERY account/open-orders audits before acknowledgement, one terminal completion, and readiness reopening. Existing failure and second-disconnect regressions remain in place. This does not claim a byte-for-byte replay of the full incident Journal.
 - [x] **#667 — November 7 incident follow-up.** Closed after the owner-approved external-order policy and merged fixes for graceful shutdown (#663), unowned-order startup policy (#664), account-integrity BUY cancellation (#669), configured-asset snapshots (#670), Conservative dust/conformance (#653), and recovery-mode deferred evaluations (#673). TESTNET acceptance remains separately paused/unverified.
 
 ### Optional operational notifications

@@ -17,11 +17,13 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - [x] Document the current journal record schema and public API. Versioned schema-v1 metadata is additive; legacy raw event records remain readable. See [README](./README.md). Schema-v1 metadata is added alongside the original top-level event fields; legacy raw event records remain readable as schema v1. See [README](./README.md).
 - [x] Verify append/read ordering and behavior after partial write failures.
 - [x] [PR #714](https://github.com/45s/coinzilla/pull/714) merged: a transient file-content sync failure is reported as non-durable; a later flush on the same Journal instance succeeds and durably preserves both the original completed write and the retry record in append order. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed. No source change, deduplication, record rewrite, or deletion.
-- [~] Characterize retry after a transient file-content sync failure and the resulting at-least-once audit publication. The focused test must prove that a later successful sync makes both the original completed write and the retry record durable without rewriting or deduplicating either record. Deterministic ordering, incomplete-tail rejection, write-failure poisoning, and explicit file-sync acknowledgement are covered by tests. Read/replay is deterministic and bounded; a write failure poisons the active session and incomplete tails fail closed. Runtime tests still need execution.
+- [x] Characterize retry after a transient file-content sync failure and the resulting at-least-once audit publication. Completed in PR #714: the focused test proves a later successful sync makes both the original completed write and retry record durable without rewriting or deduplicating either record. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed.
 - [x] Define and test duplicate/replay handling and stable record identity. Stable IDs are required, duplicates fail recovery, and replay is sequential/idempotency-aware. Record IDs are required and duplicates fail recovery; replay is ordered and consumers must remain idempotent.
 - [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. Unknown versions fail explicitly; legacy records remain readable.
 - [x] Verify recovery behavior after process interruption and malformed records. Restart read/replay, invalid UTF-8, malformed/incomplete data, unsupported versions, and missing-directory failures are covered. Incomplete, empty, malformed, invalid-encoding, and unsupported records return explicit errors; no automatic truncation is performed.
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits. Recovery has configurable session-count, record-count, total-byte, and per-record limits.
+- [~] Enforce Journal-owned coverage in CI. PR #742 adds a package-scoped coverage command that excludes imported workspace dependencies and enforces 85% lines / 80% branches. Exact-source coverage is 88.24% lines / 83.50% branches; all six required workflows passed on exact PR head `0a6199dd8ac7aba65b958b0abe84a225c5c5e8b0`. Merge remains pending.
+- [x] Enforce single-writer directory ownership across processes. Completed in [PR #741](https://github.com/45s/coinzilla/pull/741), merged to `develop` as `72600e4c34824885d0b38a20d5ea4514369f3f05` from exact tested head `74ad5a7369aee444940b5d7feb009ee0d17ffc7d`. The implementation acquires an exclusive lock before session creation, rejects competing/stale locks without stealing them, and releases ownership on startup rollback and durable close. Cross-process, stale-lock preservation, and startup-rollback regressions were confirmed RED before implementation; all required CI passed on the exact PR head.
 
 ## Current contract
 
@@ -31,13 +33,13 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - `read({ maxRecords, maxBytes, maxRecordBytes })` validates all session files in filename and line order before returning records. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record.
 - `replay({ handler, ...limits })` validates the entire journal before calling the handler sequentially. A handler failure stops replay and reports the number already applied. Replay is at-least-once across crashes; consumers must use stable record IDs idempotently.
 - A partial final line, malformed record, duplicate ID, unsupported schema version, or limit violation fails the entire read/replay. Journal never silently truncates or discards historical facts.
-- Only one writer may own a journal directory at a time (not enforced by an inter-process lock yet). Read/replay is available while the Journal instance is stopped, before start or after close. A missing directory is an explicit failure, not an empty-history success.
+- Only one writer may own a journal directory at a time. `start()` enforces this with an exclusive `.coinzilla-journal.lock` file acquired before session creation and released after the session file is synchronized and closed. Existing locks fail closed with `JOURNAL_DIRECTORY_LOCKED`; stale locks require operator verification and manual removal. Read/replay does not acquire a lock and must not overlap another process's writer.
 
 ## Delivered implementation
 
 The bounded read/replay capability was merged into `develop` in [PR #430](https://github.com/45s/coinzilla/pull/430), merge commit `46ac949a4f1b32e887e39bebbff299a7e97fb5ed`. Required CI passed on the PR head, including 42/42 Journal tests on Node 22.23.4 and Node 24.x.
 
-Operational limitation: the package documents a single-writer-per-directory requirement but does not yet acquire an inter-process lock. File-content fsync is acknowledged; directory-entry fsync is not part of the current contract.
+PR #741 is merged to `develop` as `72600e4c34824885d0b38a20d5ea4514369f3f05`; the exclusive directory ownership guard is now part of the current contract. File-content fsync is acknowledged; directory-entry fsync is not part of the current contract.
 
 ## Completion policy
 
@@ -54,4 +56,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - The test confirms two distinct event IDs remain in append order and become durable after the later successful sync.
 - `writeFile()` failure poisoning remains unchanged. No Journal production source changed.
 
-**Current `develop` checkpoint:** `0638c8bbc51607805bd95299fc8b4e69363c774e`.
+**Current `develop` checkpoint:** `72600e4c34824885d0b38a20d5ea4514369f3f05` (includes merged PRs #740 and #741).

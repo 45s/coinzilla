@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot } = {}) => {
+const createFixture = ({ tradingEnabled = false, state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -30,7 +30,7 @@ const createFixture = ({ tradingEnabled = false, state = createState(), subscrib
     },
     brokerName: "binance",
     eventPublisher,
-    logger: {},
+    logger,
     state,
     tradingEnabled,
     enabledSymbols: ["BTCUSDT"],
@@ -130,4 +130,23 @@ test("exposes the live subscription to bootstrap before PREFLIGHT audit work can
   await capturedSubscription.disconnect()
   assert.deepEqual(calls, ["disconnect"], "Bootstrap must be able to clean up the retained subscription after PREFLIGHT failure.")
   assert.equal(events[0].name, HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED, "The established subscription must be recorded before PREFLIGHT audit work.")
+})
+
+
+test("logs the user-data stream connection only after the subscription is established", async () => {
+  const systemLogs = []
+  const fixture = createFixture({ logger: { system: (entry) => { systemLogs.push(entry) } } })
+
+  await fixture.result
+
+  assert.equal(
+    systemLogs.some((entry) => entry.message === "User-data stream connected"),
+    true,
+    "A successful broker user-data subscription must produce one explicit connected system message.",
+  )
+  assert.equal(
+    systemLogs.some((entry) => entry.message === "Binance user-data subscription established"),
+    false,
+    "The startup log must use the agreed user-data stream wording instead of the old verbose message.",
+  )
 })

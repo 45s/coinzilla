@@ -1,6 +1,7 @@
 import test from "node:test"
+import { spawnSync } from "node:child_process"
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -28,6 +29,175 @@ async function createTestJournal() {
 
   return { directory, eventBus, journal, logs, filePath: result.filePath }
 }
+
+
+test("prevents a second process from writing to an active journal directory", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+  const childScript = `
+    import path from "node:path"
+    import { pathToFileURL } from "node:url"
+    const { EventBus } = await import(pathToFileURL(path.resolve("../event-bus/src/index.js")))
+    const { Journal } = await import(pathToFileURL(path.resolve("src/index.js")))
+    const logger = { info() {}, system() {}, error() {} }
+    const eventBus = new EventBus({ logger })
+    const journal = new Journal({ eventBus, directory: process.argv[1], logger })
+    const result = await journal.start()
+    const outcome = { ok: result.ok, code: result.errors?.[0]?.code ?? null }
+    if (result.ok) {
+      const closeResult = await journal.close()
+      outcome.closeOk = closeResult.ok
+    }
+    await eventBus.close()
+    process.stdout.write(JSON.stringify(outcome))
+  `
+  const runChildJournal = () => spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", childScript, directory],
+    { encoding: "utf8", timeout: 5000 },
+  )
+
+  try {
+    const parentStart = await journal.start()
+    assert.equal(
+      parentStart.ok,
+      true,
+      "The first process must acquire exclusive ownership before creating its Journal session.",
+    )
+
+    const competingProcess = runChildJournal()
+    assert.equal(
+      competingProcess.error,
+      undefined,
+      "The competing process must finish its lock attempt without a spawn or timeout error.",
+    )
+    assert.equal(
+      competingProcess.status,
+      0,
+      `The competing process must exit cleanly after reporting lock contention; stderr: ${competingProcess.stderr}`,
+    )
+    assert.deepEqual(
+      JSON.parse(competingProcess.stdout),
+      { ok: false, code: "JOURNAL_DIRECTORY_LOCKED" },
+      "A separate process must fail closed while another process owns the same Journal directory.",
+    )
+
+    const parentClose = await journal.close()
+    assert.equal(
+      parentClose.ok,
+      true,
+      "The owning process must finish its durable close before relinquishing directory ownership.",
+    )
+
+    const afterRelease = runChildJournal()
+    assert.equal(
+      afterRelease.error,
+      undefined,
+      "A new process must be able to attempt ownership after the previous writer closes.",
+    )
+    assert.equal(
+      afterRelease.status,
+      0,
+      `The post-close process must exit cleanly; stderr: ${afterRelease.stderr}`,
+    )
+    assert.deepEqual(
+      JSON.parse(afterRelease.stdout),
+      { ok: true, code: null, closeOk: true },
+      "A different process may acquire the directory only after the prior writer has durably closed.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("refuses to take over an existing journal directory lock", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-stale-lock-"))
+  const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
+  const existingLock = JSON.stringify({ pid: 98765, startedAt: "2026-11-08T00:00:00.000Z" }) + "\n"
+  await writeFile(lockFilePath, existingLock, { flag: "wx" })
+  const logger = { info() {}, system() {}, error() {} }
+  const eventBus = new EventBus({ logger })
+  const journal = new Journal({ eventBus, directory, logger })
+
+  try {
+    const result = await journal.start()
+    assert.equal(
+      result.ok,
+      false,
+      "A Journal must not start when the directory already contains another writer's lock.",
+    )
+    assert.equal(
+      result.errors[0].code,
+      "JOURNAL_DIRECTORY_LOCKED",
+      "Lock contention must return a stable error code that callers can distinguish from unrelated startup failures.",
+    )
+    assert.equal(
+      await readFile(lockFilePath, "utf8"),
+      existingLock,
+      "A failed contender must preserve the existing lock byte-for-byte rather than stealing or rewriting it.",
+    )
+    assert.equal(
+      (await readdir(directory)).filter((name) => name.endsWith(".jsonl")).length,
+      0,
+      "A contender must not create a session file when directory ownership was not acquired.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("releases directory ownership when session-file creation fails during startup", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-lock-rollback-"))
+  const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+  let observedLockBeforeSessionCreation = false
+
+  journal.createSessionFile = async () => {
+    try {
+      await readFile(lockFilePath, "utf8")
+      observedLockBeforeSessionCreation = true
+    } catch {
+      observedLockBeforeSessionCreation = false
+    }
+    throw new Error("simulated session-file creation failure")
+  }
+
+  try {
+    const result = await journal.start()
+    assert.equal(
+      observedLockBeforeSessionCreation,
+      true,
+      "The exclusive directory lock must be acquired before any session-file creation attempt.",
+    )
+    assert.equal(
+      result.ok,
+      false,
+      "A session-file creation failure must remain a failed startup rather than leaving a partially active Journal.",
+    )
+    assert.match(
+      result.errors[0].message,
+      /simulated session-file creation failure/,
+      "Startup must retain the original session-file creation failure for diagnosis.",
+    )
+    assert.equal(
+      (await readdir(directory)).includes(path.basename(lockFilePath)),
+      false,
+      "A failed startup must release its own lock so a later process is not stranded.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 test("creates a timestamped JSONL session file", async () => {
   const context = await createTestJournal()
@@ -223,18 +393,52 @@ test("rejects overlapping startup attempts without leaking a session file or sub
   try {
     const [first, second] = await Promise.all([journal.start(), journal.start()])
 
-    assert.equal([first, second].filter((result) => result.ok).length, 1)
-    assert.equal([first, second].filter((result) => !result.ok).length, 1)
-    assert.equal(journal.started, true)
-    assert.equal(journal.starting, false)
-    assert.ok(journal.fileHandle)
-    assert.ok(journal.subscription)
+    assert.equal(
+      [first, second].filter((result) => result.ok).length,
+      1,
+      "Only one overlapping start call on the same Journal instance may become the active writer.",
+    )
+    assert.equal(
+      [first, second].filter((result) => !result.ok).length,
+      1,
+      "The concurrent start call must fail instead of creating another session or subscription.",
+    )
+    assert.equal(
+      journal.started,
+      true,
+      "The accepted start call must leave the Journal in its active state.",
+    )
+    assert.equal(
+      journal.starting,
+      false,
+      "The Journal must clear its startup-in-progress flag after both start calls settle.",
+    )
+    assert.ok(
+      journal.fileHandle,
+      "The accepted start call must retain exactly one active session file handle.",
+    )
+    assert.ok(
+      journal.subscription,
+      "The accepted start call must retain exactly one EventBus subscription.",
+    )
 
     const files = await readdir(directory)
-    assert.equal(files.length, 1)
+    assert.equal(
+      files.filter((fileName) => fileName.endsWith(".jsonl")).length,
+      1,
+      "Concurrent start calls must create exactly one JSONL session file, excluding the separate lock metadata file.",
+    )
+    assert.ok(
+      files.includes(".coinzilla-journal.lock"),
+      "The active Journal must retain its exclusive directory lock while the session is open.",
+    )
 
     const closeResult = await journal.close()
-    assert.equal(closeResult.ok, true)
+    assert.equal(
+      closeResult.ok,
+      true,
+      "The single accepted Journal session must close durably and release its directory lock.",
+    )
   } finally {
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })

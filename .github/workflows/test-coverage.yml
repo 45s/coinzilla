@@ -34,7 +34,7 @@ jobs:
           - package: "@coinzilla/event-bus"
             has_coverage_script: true
           - package: "@coinzilla/journal"
-            has_coverage_script: false
+            has_coverage_script: true
           - package: "@coinzilla/market-simulator"
             has_coverage_script: true
           - package: "@coinzilla/notifiers"

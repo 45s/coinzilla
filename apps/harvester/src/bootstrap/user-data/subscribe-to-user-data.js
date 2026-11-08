@@ -83,7 +83,7 @@ export async function subscribeToUserData({
   })
   const userDataSubscription = userDataResult.data
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem(logger, { message: "Binance user-data subscription established" })
+  logSystem(logger, { message: "User-data stream connected" })
 
   state.ready = false
   state.status = state.accountingFailed

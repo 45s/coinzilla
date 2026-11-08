@@ -11,6 +11,7 @@ const createState = (overrides = {}) => ({
   status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
   eventSequence: 0,
   recoveryGeneration: 1,
+  recoveryBrokerGeneration: 42,
   lastAcknowledgedRecoveryGeneration: 0,
   recoveryTask: null,
   startupComplete: true,
@@ -19,7 +20,7 @@ const createState = (overrides = {}) => ({
 })
 
 const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOrders, refreshAccountSnapshot, publishAccountSnapshot, publishOpenOrdersSnapshot, acknowledgeRecovery, acknowledgeRecoveryResult, drainUserDataEvents, setCanonicalOwnershipReconciled } = {}) => {
-  const calls = { acknowledgements: 0, acknowledgementResults: 0, accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
+  const calls = { acknowledgements: 0, acknowledgementResults: 0, brokerRecoveryGenerations: [], accountAudits: [], orderAudits: [], drains: 0, ownershipReconciled: false }
   const logs = { info: [], error: [] }
   const userDataSubscription = {
     acknowledgeRecovery: () => {
@@ -27,9 +28,10 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
       return acknowledgeRecovery ? acknowledgeRecovery() : true
     },
     ...(acknowledgeRecoveryResult ? {
-      acknowledgeRecoveryResult: () => {
+      acknowledgeRecoveryResult: (recoveryGeneration) => {
         calls.acknowledgementResults += 1
-        return acknowledgeRecoveryResult(calls, state)
+        calls.brokerRecoveryGenerations.push(recoveryGeneration)
+        return acknowledgeRecoveryResult(calls, state, recoveryGeneration)
       },
     } : {}),
   }
@@ -103,11 +105,37 @@ test("records local acknowledgement but keeps readiness blocked until global rec
   await fixture.state.recoveryTask
 
   assert.equal(fixture.calls.acknowledgementResults, 1, "The application must use the explicit acknowledgement result contract.")
+  assert.deepEqual(fixture.calls.brokerRecoveryGenerations, [42], "The Harvester consumer must pass the exact broker-issued recovery generation it reconciled.")
   assert.equal(fixture.calls.acknowledgements, 0, "The legacy boolean method must not be called when the result API exists.")
   assert.equal(fixture.state.lastAcknowledgedRecoveryGeneration, 1, "Local acceptance must be recorded for this recovery generation.")
   assert.equal(fixture.state.requiresReconciliation, true, "Local acceptance must not clear the application reconciliation gate.")
   assert.equal(fixture.state.ready, false, "Local acceptance must not make trading ready before global broker completion.")
   assert.equal(fixture.logs.error.length, 0, "Accepted-but-pending acknowledgement is not a recovery failure.")
+})
+
+test("does not call the result acknowledgement API when the broker generation token is missing", async () => {
+  const fixture = createRecovery({
+    state: createState({ recoveryBrokerGeneration: null }),
+    acknowledgeRecoveryResult: () => ({ accepted: false, completed: false, reason: "stale-recovery-generation" }),
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.calls.acknowledgementResults,
+    0,
+    "The application must fail closed rather than submit an acknowledgement without the broker generation token.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A missing broker generation token must leave application reconciliation required.",
+  )
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A missing broker generation token must never reopen trading readiness.",
+  )
 })
 
 test("keeps recovery blocked when the explicit broker result rejects acknowledgement", async () => {

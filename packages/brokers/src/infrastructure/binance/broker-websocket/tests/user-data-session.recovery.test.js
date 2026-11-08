@@ -118,11 +118,11 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(scheduler.pendingCount, 0)
     assert.deepEqual(
       firstStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
     )
     assert.deepEqual(
       secondStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
     )
     assert.equal(second.data.acknowledgeRecovery(), false)
     assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
@@ -165,7 +165,7 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(scheduler.pendingCount, 0)
     assert.deepEqual(
       firstStatuses.filter((status) => status.type === "reconciled"),
-      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+      [{ type: "reconciled", subscriptionId: 110, recoveryGeneration: 1, recoveryRequired: false }],
     )
     assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
 

@@ -77,14 +77,16 @@ For user data:
 3. Multiple local subscribers share one remote subscription on the API connection.
 4. The returned subscription data provides `disconnect()`, the legacy `acknowledgeRecovery()` boolean, and the additive `acknowledgeRecoveryResult()` result contract.
 5. A `terminated` or `connectionClosed` status means the event history has a gap. The broker reconnects and resubscribes, then emits `recovered` with `reconciliationRequired: true`.
-6. The consumer must reconcile current account/order/trade state before acknowledging. Prefer `acknowledgeRecoveryResult()`, which returns:
-   - `{ accepted: true, completed: false }`: this subscriber's acknowledgement was recorded; another active subscriber is still pending.
-   - `{ accepted: true, completed: true }`: this acknowledgement completed shared recovery.
+6. The broker includes a monotonically increasing `recoveryGeneration` in each `recovered` reminder and the terminal `reconciled` status. A consumer must retain the token for the recovery work it is performing; a later disconnect/recovery produces a strictly newer token.
+7. The consumer must reconcile current account/order/trade state before acknowledging. Prefer `acknowledgeRecoveryResult(recoveryGeneration)`, passing the exact token from the matching `recovered` status. It returns:
+   - `{ accepted: true, completed: false }`: this subscriber's acknowledgement was recorded for that generation; another active subscriber is still pending.
+   - `{ accepted: true, completed: true }`: this acknowledgement completed shared recovery for that generation.
    - `{ accepted: false, completed: false, reason: "stale-or-inactive" }`: this subscription handle is no longer active.
    - `{ accepted: false, completed: false, reason: "recovery-not-pending" }`: no active recovery acknowledgement can be accepted.
-7. The legacy `acknowledgeRecovery()` method remains unchanged: it returns `true` only when this call completes shared recovery, and `false` while other subscribers are pending or when the acknowledgement is not accepted.
-8. If application reconciliation or a required durability barrier fails, the consumer must not acknowledge. The broker keeps recovery required, continues its bounded reminders, and keeps state-changing RPCs blocked until all active subscribers acknowledge.
-9. A `reconciled` status indicates that all active subscribers acknowledged the recovery; local acceptance alone is not global readiness.
+   - `{ accepted: false, completed: false, reason: "stale-recovery-generation" }`: the supplied token is missing, malformed, or belongs to an older recovery generation. The acknowledgement is not recorded.
+8. The legacy `acknowledgeRecovery()` method remains callable with no arguments and preserves its boolean behavior: it returns `true` only when this call completes shared recovery, and `false` while other subscribers are pending or when the acknowledgement is not accepted. Because the legacy signature carries no generation token, consumers needing stale-work fencing must migrate to `acknowledgeRecoveryResult(recoveryGeneration)`.
+9. If application reconciliation or a required durability barrier fails, the consumer must not acknowledge. The broker keeps recovery required, continues its bounded reminders, and keeps state-changing RPCs blocked until all active subscribers acknowledge the current generation.
+10. A `reconciled` status indicates that all active subscribers acknowledged the same current generation; local acceptance alone is not global readiness. Consumers must also correlate the terminal status to the token and subscription identity they reconciled.
 
 The recommended reconciliation inputs are:
 

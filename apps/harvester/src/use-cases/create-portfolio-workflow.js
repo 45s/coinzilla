@@ -7,6 +7,7 @@ import { makeProcessMarketPrice } from "./process-market-price.js"
 import { updateTradingAccounting as applyTradingAccounting } from "./update-trading-accounting.js"
 import {
   createPortfolioLogSummary,
+  createPortfolioStatsLogSummary,
   createPositionLogSummary,
   createRecoveryLedgerLogSummary,
 } from "../application/logging/trading-state-log-summary.js"
@@ -118,6 +119,19 @@ export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortf
         recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
         const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
         const nextLedger = result.data.recoveryLedger
+        if (
+          result.data.applied === true &&
+          compareDecimal({
+            left: previousPosition?.totalBaseQuantity.amount ?? "0",
+            right: nextPosition?.totalBaseQuantity.amount ?? "0",
+          }) !== 0
+        ) {
+          const portfolioStats = createPortfolioStatsLogSummary({
+            position: nextPosition,
+            recoveryLedger: nextLedger,
+          })
+          if (portfolioStats) logger.info?.(portfolioStats)
+        }
         logger.debug?.({
           message: "Execution accounted",
           executionId: fill.id,
