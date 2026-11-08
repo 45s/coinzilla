@@ -31,6 +31,16 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
+
+/**
+ * Establish market/book subscriptions for every enabled pair, then seed missing
+ * first prices only after all WebSocket streams are active.
+ */
+export async function subscribeToMarketData({
+  broker, brokerName, eventPublisher, logger, tradingEnabled, pairs, settings,
+  processMarketPrice, processMarketBook, isMarketPriceFresh, now, isStopped,
+  onMarketPriceError, subscriptions, bookSubscriptions, marketPriceIntake,
+} = {}) {
 const reportPriceError = (details) => {
   try {
     onMarketPriceError(details)
@@ -42,15 +52,6 @@ const reportPriceError = (details) => {
   }
 }
 
-/**
- * Establish market/book subscriptions for every enabled pair, then seed missing
- * first prices only after all WebSocket streams are active.
- */
-export async function subscribeToMarketData({
-  broker, brokerName, eventPublisher, logger, tradingEnabled, pairs, settings,
-  processMarketPrice, processMarketBook, isMarketPriceFresh, now, isStopped,
-  onMarketPriceError, subscriptions, bookSubscriptions, marketPriceIntake,
-} = {}) {
   // Establish every enabled market stream before doing any REST ticker
   // seeding or waiting for an initial strategy evaluation. A slow first
   // market must never prevent later enabled markets from receiving prices.
@@ -63,7 +64,7 @@ export async function subscribeToMarketData({
         bookResult = await broker.subscribeForBookTicker({
           symbol,
           onBookTicker: (bookTicker) => {
-            if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+            if (isStopped()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
             return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
               if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
               return processed
@@ -97,7 +98,7 @@ export async function subscribeToMarketData({
       result = await broker.subscribeForPrices({
         symbol,
         onPrice: (priceEvent) => {
-          if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+          if (isStopped()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
           try {
             if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {

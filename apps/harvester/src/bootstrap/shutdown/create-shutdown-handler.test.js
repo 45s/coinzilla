@@ -53,7 +53,7 @@ const createShutdown = ({ state = createState(), tradingEnabled = false, engine,
 
 test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, then disconnects", async () => {
   const calls = []
-  const marketTask = Promise.resolve().then(() => calls.push("market-task-drained"))
+  const marketPriceIntake = new Map()
   const engine = {
     reconcileOwnedOrders: async () => { calls.push("reconcile"); return { ok: true } },
     cancelOwnedBuyOrdersForShutdown: async () => { calls.push("cancel-owned-buys"); return { ok: true } },
@@ -63,6 +63,7 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
   const stop = createShutdown({
     state,
     tradingEnabled: true,
+    marketPriceIntake,
     engine,
     subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
     bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
@@ -72,6 +73,9 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     disconnectBroker: async () => { calls.push("broker-disconnect"); return [] },
     stopMarketIntake: async () => { calls.push("market-intake-stop"); return [] },
     stopUserDataIntake: async () => { calls.push("user-data-intake-stop"); return [] },
+  })
+  marketPriceIntake.set("BTCUSDT", {
+    latestWebSocketPriceTask: Promise.resolve().then(() => stop.calls.push("market-task-drained")),
   })
 
   await stop.stop()
@@ -98,8 +102,13 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
 test("concurrent stop callers share one in-flight shutdown promise", async () => {
   let resolveDisconnect
   const disconnectGate = new Promise((resolve) => { resolveDisconnect = resolve })
+  let signalDisconnectStarted
+  const disconnectStarted = new Promise((resolve) => { signalDisconnectStarted = resolve })
   const fixture = createShutdown({
-    disconnectBroker: async () => disconnectGate.then(() => []),
+    disconnectBroker: async () => {
+      signalDisconnectStarted()
+      return disconnectGate.then(() => [])
+    },
   })
 
   const first = fixture.stop()
@@ -108,7 +117,7 @@ test("concurrent stop callers share one in-flight shutdown promise", async () =>
   let secondSettled = false
   first.then(() => { firstSettled = true })
   second.then(() => { secondSettled = true })
-  await Promise.resolve()
+  await disconnectStarted
 
   assert.equal(fixture.calls.filter((call) => call === "broker-disconnect").length, 1, "Concurrent stop calls must not duplicate broker cleanup.")
   assert.equal(firstSettled, false, "The first caller must remain pending until cleanup completes.")

@@ -474,3 +474,6 @@ The first shutdown-module review corrected two mechanical extraction leftovers b
 Market-price and book-ticker intake setup now lives in `src/bootstrap/subscriptions/subscribe-to-market-data.js`. The module owns per-enabled-market subscription setup, callback processing/error containment, subscription lifecycle events, all-symbol subscription verification, and REST first-price seeding after all WebSocket streams are established.
 
 It preserves fresh WebSocket first-price preference (avoiding redundant REST seeds), read-only mode without book subscriptions/REST seeding, and unsubscribe handles for shutdown. Direct tests cover ordering, fresh WebSocket behavior, read-only behavior, and failed subscription evidence.
+
+
+The first full test run after adding subscription/shutdown/recovery unit tests identified test-fixture ordering issues rather than production regressions: the shutdown market-task promise used a different call log, the concurrent-stop test asserted before the broker-disconnect phase was reached, and the recovery test omitted its mutable state argument. Those fixtures are corrected; the market subscription reporter is now scoped inside its injected coordinator and stop-state checks use the injected predicate.

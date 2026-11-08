@@ -27,7 +27,7 @@ const createRecovery = ({ state = createState(), reconcileOwnedOrders, getOpenOr
     },
   }
   const broker = {
-    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls) : ({ ok: true, data: [] }),
+    getOpenOrders: async () => getOpenOrders ? getOpenOrders(calls, state) : ({ ok: true, data: [] }),
   }
   const start = createUserDataRecoveryHandler({
     state,
