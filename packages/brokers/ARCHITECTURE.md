@@ -179,13 +179,24 @@ The coverage gate currently enforces **90% lines, 80% branches, and 80% function
 
 No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
 
+### Verified workspace consumers
+
+A manifest scan of the current `develop` workspace found two production consumers of `@coinzilla/brokers`:
+
+| Consumer | How it uses Brokers | Compatibility implication |
+| --- | --- | --- |
+| `apps/harvester` | Wraps `BinanceWebSocketBroker` in Harvester's own infrastructure adapter, implementing the application-owned `BrokerPort`. | Preserve the public Binance broker methods, normalized results/events, exact decimal strings, and recovery acknowledgement behavior. |
+| `packages/market-simulator` | Imports `CoreBroker`; `HistoricalMarketBroker` extends it, and `SimulatedExecutionBroker` extends the historical broker. | Preserve `CoreBroker` construction, inherited state/maps, and unsupported-method behavior unless a separate consumer migration is planned. |
+
+This makes `CoreBroker` more than an unused legacy base class: it is a live shared extension point for the simulator. Its ownership and long-term contract need an explicit decision before any redesign. The Brokers refactor must not change the Market Simulator domain or implementation as incidental cleanup; use it as a read-only compatibility consumer and add broker-owned contract tests where appropriate.
+
 ### Consumer boundary: Harvester owns the broker application port
 
 The current Harvester implementation confirms an important ownership rule:
 
 - `apps/harvester/src/application/ports/broker.port.js` owns Harvester's application-facing `BrokerPort` contract.
 - `apps/harvester/src/infrastructure/brokers/binance-broker-adapter.js` implements that port by composing `BinanceWebSocketBroker` and translating Harvester's normalized order/workflow contracts to the package's public API.
-- Harvester bootstrap composes the concrete adapter. The broker package must not import Harvester or own Harvester's trading workflow.
+- Harvester bootstrap composes the concrete adapter. The broker package must not import Harvester or own Harvester's trading workflow. The separate Market Simulator consumer also proves that `CoreBroker` is a live public extension point, not merely an internal implementation detail.
 
 Therefore, do **not** add a duplicate package-level `application/ports/broker.port.js` that mirrors the entire public Binance broker API. The existing `src/ports/user-data-client-port.js` is a different, internal port: it abstracts the RPC/user-data client needed by the Brokers package's own user-data session coordinator.
 
@@ -259,7 +270,7 @@ This map is a starting hypothesis based on the current tree. Validate each modul
 
 | Existing module / area | Primary responsibility | Target owner |
 | --- | --- | --- |
-| `src/broker.core.js` | Shared broker base contract and compatibility behavior | Compatibility surface; long-term ownership remains unresolved |
+| `src/broker.core.js` | Shared broker base class and contract used by Market Simulator | Public compatibility extension point; preserve constructor/state/default-method behavior until consumers are migrated |
 | `src/binance/broker-websocket/broker.js` | 782-line facade, concrete client construction, RPC calls, orchestration, and response adaptation | Main boundary-pressure area; inspect and extract incrementally |
 | `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
 | `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
