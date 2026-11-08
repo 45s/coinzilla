@@ -195,7 +195,7 @@ export class Journal {
       pid: process.pid,
       startedAt: new Date().toISOString(),
     }
-    await lockFileHandle.writeFile(`${JSON.stringify(metadata)}\\n`, "utf8")
+    await lockFileHandle.writeFile(`${JSON.stringify(metadata)}\n`, "utf8")
   }
 
   /**
