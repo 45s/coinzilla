@@ -2,6 +2,21 @@
 
 ## Priority execution plan — current develop direction (2026-11-08)
 
+### IN PROGRESS — build and runtime provenance (issue #763 / PR #765)
+
+**Why:** rapid development changes `develop` between process starts. Journal and TRACE evidence must identify the exact application version, Git revision, working-tree state, and runtime process that produced it.
+
+**Utilities-owned scope:**
+- Capture allowlisted Git metadata once at process startup: full/short SHA, branch, commit subject/date, and clean/dirty state.
+- Use explicit `COINZILLA_BUILD_*` variables only when Git metadata is unavailable; missing values remain unknown.
+- Add opt-in Logger context that is separate from caller data, redacted, frozen, replaceable, and backward-compatible when unset.
+- Preserve native Node.js APIs and avoid new dependencies.
+
+**Coordinated consumer rollout:** after this shared capability is merged, Harvester will add a distinct process-start Journal event with PID, UTC start time, runtime session ID, package version, and source identity. That consumer change belongs to the Harvester roadmap and a separate owner-scoped PR. It must preserve non-blocking optional read-only Journal initialization and mandatory durable Journal barriers for TESTNET trading.
+
+**Verification:** native unit tests and package coverage; workspace CI, JavaScript syntax, dependency audit, and actionlint on the exact final PR head. No CI thresholds or assertions may be weakened.
+
+
 ### IMPORTANT — protect shared helper correctness and dependency direction
 
 1. **Complete the repository-wide utility reuse inventory.**
@@ -67,6 +82,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
+- [~] Capture build provenance and structured Logger context (issue #763 / PR #765). Test-first contract commit is in place; GitHub CI confirmed the expected missing-API RED result. Implementation and consumer rollout remain in progress.
 - [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
 - [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
