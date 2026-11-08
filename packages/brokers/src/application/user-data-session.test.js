@@ -150,4 +150,133 @@ describe("Application user-data session", () => {
     assert.equal(listeners.close.size, 0)
   })
 
+
+function createRecoveryFixture() {
+  let currentClient = { name: "initial" }
+  const initialClient = currentClient
+  const reconnectClient = { name: "reconnected" }
+  const ports = new WeakMap()
+  const timers = new Map()
+  let nextTimerId = 0
+
+  function createPort(subscriptionId) {
+    const listeners = {
+      event: new Set(),
+      error: new Set(),
+      close: new Set(),
+    }
+    return {
+      state: "open",
+      async connect() {
+        this.state = "open"
+      },
+      async disconnect() {
+        this.state = "closed"
+      },
+      async subscribe() {
+        return subscriptionId
+      },
+      async listSubscriptions() {
+        return [subscriptionId]
+      },
+      async unsubscribe() {},
+      onEvent(listener) {
+        listeners.event.add(listener)
+        return () => listeners.event.delete(listener)
+      },
+      onError(listener) {
+        listeners.error.add(listener)
+        return () => listeners.error.delete(listener)
+      },
+      onClose(listener) {
+        listeners.close.add(listener)
+        return () => listeners.close.delete(listener)
+      },
+      close() {
+        this.state = "closed"
+        for (const listener of [...listeners.close]) listener({ code: 1006 })
+      },
+    }
+  }
+
+  const session = new UserDataSession({
+    getClient: () => currentClient,
+    createClient: () => reconnectClient,
+    createUserDataClientPort: (client) => {
+      if (!ports.has(client)) {
+        ports.set(client, createPort(client === initialClient ? 17 : 18))
+      }
+      return ports.get(client)
+    },
+    setClient: (client) => {
+      currentClient = client
+    },
+    setConnected() {},
+    setUnavailable() {},
+    reconnectDelay: 1,
+    setTimeoutFn: (callback) => {
+      const id = ++nextTimerId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimeoutFn: (id) => {
+      timers.delete(id)
+    },
+  })
+
+  return {
+    session,
+    closeInitialConnection() {
+      ports.get(initialClient).close()
+    },
+    async reconnect() {
+      const pending = [...timers.entries()][0]
+      assert.ok(pending, "expected a scheduled reconnect")
+      timers.delete(pending[0])
+      await pending[1]()
+      await session.waitForRecovery()
+    },
+  }
+}
+
+
+  it("reports local acknowledgement acceptance separately from shared recovery completion", async () => {
+    const fixture = createRecoveryFixture()
+    fixture.session.start()
+    const first = await fixture.session.subscribe({ onEvent() {} })
+    const second = await fixture.session.subscribe({ onEvent() {} })
+
+    fixture.closeInitialConnection()
+    await fixture.reconnect()
+
+    assert.deepEqual(first.data.acknowledgeRecoveryResult(), {
+      accepted: true,
+      completed: false,
+    })
+    assert.deepEqual(second.data.acknowledgeRecoveryResult(), {
+      accepted: true,
+      completed: true,
+    })
+
+    await fixture.session.stop()
+  })
+
+  it("rejects a recovery acknowledgement from a disconnected subscriber", async () => {
+    const fixture = createRecoveryFixture()
+    fixture.session.start()
+    const subscription = await fixture.session.subscribe({ onEvent() {} })
+
+    fixture.closeInitialConnection()
+    await fixture.reconnect()
+    await subscription.data.disconnect()
+
+    assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
+      accepted: false,
+      completed: false,
+      reason: "stale-or-inactive",
+    })
+
+    await fixture.session.stop()
+  })
+
 })
