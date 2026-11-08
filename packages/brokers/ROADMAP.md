@@ -704,14 +704,16 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 - [x] Architecture direction agreed: use Harvester's domain/application/infrastructure separation as the reference, adapted to the Brokers package's exchange-integration responsibility.
 - [x] Proposed target tree and dependency rules documented in `ARCHITECTURE.md`.
-- [ ] Phase A — architecture discovery and current responsibility/import map.
+- [~] Phase A — architecture discovery and current responsibility/import map (initial source-tree and key-boundary audit recorded; complete the import/caller graph and baseline measurements).
 - [ ] Phase B — characterization/test baseline for the first extraction slice.
 - [ ] Phase C — domain extraction.
 - [ ] Phase D — application ports and focused use cases.
 - [ ] Phase E — Binance infrastructure adapters and bootstrap composition.
 - [ ] Phase F — dependency-direction and public-contract verification.
 
-**Current next action:** complete Phase A against the current `develop` tree. Inspect every production source module, exports, import edges, state ownership, side effects, and consumers. Update the responsibility map with verified findings and identify the smallest safe first extraction. Do not move files or create placeholder layers during discovery.
+**Current next action:** finish Phase A. The initial source-tree audit found a real existing vertical slice: `domain/user-data-recovery-policy.js` → `application/user-data-session.js` → `ports/user-data-client-port.js` implemented by `infrastructure/binance/user-data-client-adapter.js`. The package is therefore partially layered already. The main boundary-pressure area is the 782-line `binance/broker-websocket/broker.js`, which still creates concrete clients and mixes facade, protocol calls, orchestration, and adaptation. Complete the full import/caller graph, record the package test/coverage baseline, inspect the existing slice's test coverage, and then select the smallest behavior-preserving extraction. Do not create placeholder layers or move files merely to match the target tree.
+
+**Verified baseline:** commit `f92fdc518ae35a7ca3d2d6e0aa3276c41ac2ba34`. `application/user-data-session.js` is 658 lines but is a cohesive stateful lifecycle coordinator; review cohesion before any split. Binance canonical adapters under `binance/shared/` are still exchange-specific because they consume Binance DTOs and IDs. See the current implementation snapshot and verified ownership map in [ARCHITECTURE.md](./ARCHITECTURE.md#current-implementation-snapshot-develop-baseline).
 
 **Important distinction:** the existing WebSocket implementation/lifecycle work and this DDD architecture migration are related but separate tracks. Preserve the completed WebSocket reliability work and its coverage. Do not turn the DDD effort into another WebSocket-layer refactor; move responsibilities only when they belong in a different architectural layer.
 
