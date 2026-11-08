@@ -1763,7 +1763,7 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 ### Confirmed risks and remaining proof gaps
 
 - [x] [PR #708](https://github.com/45s/coinzilla/pull/708) merged: eight direct offline malformed REST-envelope regressions for non-array/malformed `getOpenOrders()`, zero/multiple/non-`CanonicalOrder` `getCanonicalOrderHistory()`, and non-array/non-`Fill`/oversized `getFills()`. Exact tested head `b3f5ed25d11ab093836dc50d563b8c590b09439f`, merged as `982ddc8c4366658ce75a9cfac9432b4f3e81381e`. Harvester unit tests 753/753 and configured targeted tests 3/3 passed; all six required offline contexts passed. Harvester coverage passed; package threshold enforcement is not configured. TESTNET integration was skipped.
-- [~] Implemented native broker Error-cause preservation on PR #711 exact head `e68da711eb44bc64bfeb5b1e8027f1f0a19f58dc`: Harvester unit tests 758/758, configured targeted tests 3/3, and all six required offline CI contexts passed. Workspace coverage passed; Harvester coverage execution passed but package threshold enforcement is not configured. TESTNET integration was skipped. Merge is pending.
+- [x] [PR #711](https://github.com/45s/coinzilla/pull/711) merged: native broker Error causes preserved through account snapshot, account-wide open-orders, owned-order open-orders, canonical-history, and fill-history wrappers; recovery logs include the native Error object. Exact tested head `661046e2c7142c879b9a8c5327e46f804f4e048a`, merged as `2a57a8e291bb54a2474df525a4cd20e8d51747e8`. Test-first RED: 752/758 passed with exactly six expected missing-cause/log-object failures; GREEN: 758/758 passed. Configured targeted tests 3/3 and all six required offline CI contexts passed. Harvester coverage execution passed; package threshold enforcement is not configured. TESTNET integration was skipped.
 - [ ] Add a transient Journal flush/sync failure retry regression. Recovery correctly remains blocked and unacknowledged until `durable: true`; a retry after a completed write but failed sync can make both the first and second audit records durable (at-least-once audit publication). A Journal write failure poisons that Journal instance, so repeated reminders cannot recover it in place. Do not delete, overwrite, or deduplicate Journal evidence.
 - [ ] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity with the Brokers owner. See [cross-domain request #702](https://github.com/45s/coinzilla/issues/702). The single-subscriber path is guarded; the current Harvester subscriber count remains unverified because `start-harvester.js` is under active refactoring.
 - [ ] Add an exact-count broker assertion for one terminal `reconciled` notification per generation and retain the second-disconnect-during-retry end-to-end scenario as an explicit proof target.
@@ -1789,3 +1789,17 @@ PR #688 contains a distinct application-recovery case not covered by the account
 The old task branch was 4 commits ahead / 38 behind `develop`. It has been synchronized with current `develop` at `718a313837cd43ace2a9c2daeb17729898fd5867` using a two-parent merge commit; the unique regression is retained and appended after the current recovery-handler tests. No existing develop changes were discarded and no force-push was used.
 
 This test-only change also updates the F-016 evidence: the open-orders failure path retains the timeout message in its contextual wrapper and retries, but still loses the original typed Error as native `cause`. F-016's production diagnostic fix therefore remains open. Exact-head verification passed: Harvester package unit tests 754/754, configured targeted tests 3/3, and all six required offline CI contexts. The coverage workflow passed; Harvester threshold enforcement is not configured. TESTNET integration was skipped. PR #688 merged into `develop` as `a66e5f9114395fbc1ab776ccdffc55bdcb2a8f5a`.
+
+
+## 2026-11-08 F-016 native broker Error-cause preservation — complete
+
+PR [#711](https://github.com/45s/coinzilla/pull/711) merged into `develop` as `2a57a8e291bb54a2474df525a4cd20e8d51747e8`. Exact tested head: `661046e2c7142c879b9a8c5327e46f804f4e048a`.
+
+- RED verified on test-only head `918a3a6644c92cbe089919874177cba7b8193249`: 758 tests, 752 passed, 6 failed exactly on missing cause/log Error assertions.
+- GREEN verified on final head: Harvester unit tests 758/758; configured targeted tests 3/3; all six required offline CI contexts passed.
+- Workspace coverage passed; Harvester coverage execution passed, but Harvester package threshold enforcement is not configured.
+- Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
+
+The fix preserves the first native broker Error as `cause` through the relevant REST wrappers and includes the contextual Error object in structured recovery logs. Existing flattened log fields, contextual messages, retry behavior, recovery gates, and broker acknowledgement ordering remain unchanged.
+
+**Current `develop` checkpoint:** `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
