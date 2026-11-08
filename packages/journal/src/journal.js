@@ -1,10 +1,12 @@
-import { mkdir, open } from "node:fs/promises"
+import { mkdir, open, unlink } from "node:fs/promises"
 import path from "node:path"
 
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { serializeJournalRecord } from "./helpers/journal-record.js"
 import { readJournalRecords } from "./read-journal-records.js"
 import { replayJournalRecords } from "./replay-journal-records.js"
+
+const JOURNAL_DIRECTORY_LOCK_FILE = ".coinzilla-journal.lock"
 
 export class Journal {
   constructor({ eventBus, directory, logger = defaultLogger } = {}) {
@@ -14,6 +16,8 @@ export class Journal {
 
     this.fileHandle = null
     this.filePath = null
+    this.lockFileHandle = null
+    this.lockFilePath = null
     this.subscription = null
     this.writeQueue = Promise.resolve()
 
@@ -56,18 +60,30 @@ export class Journal {
         })
       }
 
+      await this.acquireDirectoryLock()
+
       const { fileHandle, filePath } = await this.createSessionFile()
 
       this.fileHandle = fileHandle
       this.filePath = filePath
 
       if (this.closing || this.closed) {
-        await this.fileHandle.close()
+        const errors = [new Error("Journal was closed during startup")]
+
+        try {
+          await this.fileHandle.close()
+        } catch (error) {
+          errors.push(error)
+        }
         this.fileHandle = null
 
-        return toResult({
-          error: new Error("Journal was closed during startup"),
-        })
+        try {
+          await this.releaseDirectoryLock()
+        } catch (error) {
+          errors.push(error)
+        }
+
+        return toResult({ errors })
       }
 
       const result = this.eventBus.subscribeAll({
@@ -86,12 +102,22 @@ export class Journal {
       })
 
       if (!result.ok) {
-        await this.fileHandle.close()
+        const errors = [...result.errors]
+
+        try {
+          await this.fileHandle.close()
+        } catch (error) {
+          errors.push(error)
+        }
         this.fileHandle = null
 
-        return toResult({
-          errors: result.errors,
-        })
+        try {
+          await this.releaseDirectoryLock()
+        } catch (error) {
+          errors.push(error)
+        }
+
+        return toResult({ errors })
       }
 
       this.subscription = result.subscription
@@ -109,19 +135,81 @@ export class Journal {
         filePath: this.filePath,
       })
     } catch (error) {
+      const errors = [error]
+
       if (this.fileHandle) {
-        await this.fileHandle.close().catch(() => {})
+        try {
+          await this.fileHandle.close()
+        } catch (cleanupError) {
+          errors.push(cleanupError)
+        }
         this.fileHandle = null
+      }
+
+      try {
+        await this.releaseDirectoryLock()
+      } catch (cleanupError) {
+        errors.push(cleanupError)
       }
 
       this.reportError({
         message: "Failed to start journal",
-        errors: [error],
+        errors,
       })
 
-      return toResult({ error })
+      return toResult({ errors })
     } finally {
       this.starting = false
+    }
+  }
+
+  /**
+   * Acquire exclusive ownership before creating a session file.
+   * An existing lock is never removed automatically; it may belong to a live
+   * process or be a stale lock left by a process that did not close cleanly.
+   */
+  async acquireDirectoryLock() {
+    const lockFilePath = path.join(this.directory, JOURNAL_DIRECTORY_LOCK_FILE)
+    let lockFileHandle
+
+    try {
+      lockFileHandle = await open(lockFilePath, "wx", 0o600)
+    } catch (cause) {
+      if (cause.code !== "EEXIST") {
+        throw cause
+      }
+
+      const error = new Error(
+        `Journal directory is already locked: ${this.directory}. Verify that no writer is active before removing ${lockFilePath}.`,
+      )
+      error.code = "JOURNAL_DIRECTORY_LOCKED"
+      error.details = { directory: this.directory, lockFilePath }
+      error.cause = cause
+      throw error
+    }
+
+    this.lockFileHandle = lockFileHandle
+    this.lockFilePath = lockFilePath
+
+    const metadata = {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+    }
+    await lockFileHandle.writeFile(`${JSON.stringify(metadata)}\\n`, "utf8")
+  }
+
+  /**
+   * Release this instance's directory lock after its session file is closed.
+   */
+  async releaseDirectoryLock() {
+    if (this.lockFileHandle) {
+      await this.lockFileHandle.close()
+      this.lockFileHandle = null
+    }
+
+    if (this.lockFilePath) {
+      await unlink(this.lockFilePath)
+      this.lockFilePath = null
     }
   }
 
@@ -326,6 +414,12 @@ export class Journal {
       }
 
       this.fileHandle = null
+    }
+
+    try {
+      await this.releaseDirectoryLock()
+    } catch (error) {
+      errors.push(error)
     }
 
     this.closed = true
