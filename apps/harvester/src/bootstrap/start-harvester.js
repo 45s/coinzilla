@@ -1,40 +1,25 @@
-import { Fill } from "@coinzilla/entities"
-import { createMarketPrice } from "../domain/market-price.js"
-import { addDecimal, compareDecimal, defaultLogger, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
+import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { AccountSnapshot } from "../domain/account/account-snapshot.js"
-import { assertAccountSnapshotCoversMarkets } from "../domain/account/assert-account-snapshot-covers-markets.js"
-import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
-import { assertBrokerPort } from "../application/ports/broker.port.js"
-import { makeProcessMarketPrice } from "../use-cases/process-market-price.js"
-import { updateTradingAccounting as applyTradingAccounting } from "../use-cases/update-trading-accounting.js"
-import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
-import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
-import {
-  createPortfolioLogSummary,
-  createPositionLogSummary,
-  createRecoveryLedgerLogSummary,
-} from "../application/logging/trading-state-log-summary.js"
-import {
-  mapBrokerConnectedData,
-  mapBrokerConnectionFailedData,
-  mapBrokerDisconnectedData,
-  mapBrokerStatusChangedData,
-  mapBrokerSubscriptionEstablishedData,
-  mapBrokerSubscriptionFailedData,
-  mapConfigValidatedData,
-  mapAccountSnapshotCapturedData,
-  mapAccountOpenOrdersCapturedData,
-  mapMarketTradingRulesCapturedData,
-  mapBrokerExecutionReportData,
-} from "../application/events/lifecycle-event-dtos.js"
+import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
+import { evaluateReadOnlyConservativeStrategy } from "../use-cases/evaluate-read-only-conservative-strategy.js"
+import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { cleanupBroker } from "./broker/cleanup-broker.js"
+import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
+import { loadMarketMetadata } from "./market/load-market-metadata.js"
+import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
+import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
+import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
+import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
+import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
+import { connectBroker } from "./broker/connect-broker.js"
+import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -42,343 +27,6 @@ function logSystem(logger, data) {
     return
   }
   logger?.info?.(data)
-}
-
-async function stopMarketIntake({ subscriptions, bookSubscriptions = [] }) {
-  const results = await Promise.allSettled([
-    ...bookSubscriptions.map(({ unsubscribe }) => {
-      return Promise.resolve().then(() => unsubscribe())
-    }),
-    ...subscriptions.map(({ unsubscribe }) => {
-      return Promise.resolve().then(() => unsubscribe())
-    }),
-  ])
-  return results
-    .filter((result) => result.status === "rejected")
-    .map((result) => result.reason)
-}
-
-async function stopUserDataIntake({ userDataSubscription }) {
-  if (typeof userDataSubscription?.disconnect !== "function") return []
-  const result = await Promise.allSettled([
-    Promise.resolve().then(() => userDataSubscription.disconnect()),
-  ])
-  return result
-    .filter((entry) => entry.status === "rejected")
-    .map((entry) => entry.reason)
-}
-
-async function stopBrokerIntake({ subscriptions, bookSubscriptions = [], userDataSubscription }) {
-  const [marketErrors, userDataErrors] = await Promise.all([
-    stopMarketIntake({ subscriptions, bookSubscriptions }),
-    stopUserDataIntake({ userDataSubscription }),
-  ])
-  return [...marketErrors, ...userDataErrors]
-}
-
-async function disconnectBroker({ broker, brokerName, eventPublisher }) {
-  const results = await Promise.allSettled([
-    Promise.resolve().then(() => {
-      return broker.disconnect()
-    }),
-  ])
-  const brokerDisconnect = results[0]
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
-    dataResult: mapBrokerDisconnectedData({
-      broker: brokerName,
-      outcome: brokerDisconnect.status === "fulfilled" ? "success" : "failed",
-      ...(brokerDisconnect.status === "rejected" ? { error: brokerDisconnect.reason } : {}),
-    }),
-  })
-  return results
-    .filter((result) => result.status === "rejected")
-    .map((result) => result.reason)
-}
-
-async function cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions = [], userDataSubscription }) {
-  const intakeErrors = await stopBrokerIntake({ subscriptions, bookSubscriptions, userDataSubscription })
-  const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher })
-  const errors = [...intakeErrors, ...disconnectErrors]
-
-  return errors
-}
-
-const MAX_MARKET_PRICE_AGE_MS = 5_000
-const MAX_MARKET_PRICE_FUTURE_SKEW_MS = 1_000
-
-const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
-  strategy: "CONSERVATIVE",
-  symbol: marketPrice?.symbol,
-  action: "NO_ACTION",
-  reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
-  position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
-})
-
-function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
-  if (!processed?.ok) return
-
-  const { decision } = processed.data ?? {}
-  const action = decision?.action ??
-    (decision?.actions?.length
-      ? decision.actions.map(({ side }) => side).join("+")
-      : "NO_ACTION")
-  logger.debug?.({
-    message: "Market price evaluated",
-    symbol,
-    price: priceEvent?.price,
-    action,
-  })
-}
-
-const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers } = {}) => {
-  if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
-  }
-  if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
-    throw new TypeError("initialRecoveryLedgers must be a Map")
-  }
-  let portfolio = initialPortfolio ?? new Portfolio()
-  const recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
-  let updateQueue = Promise.resolve()
-
-  const tracedEvaluateStrategy = (input = {}) => {
-    const marketId = input.marketMetadata?.market?.id
-    const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
-    logger.debug?.({
-      message: "Strategy evaluation input",
-      symbol: input.marketPrice?.symbol,
-      marketPrice: input.marketPrice,
-      lastBuyPrice: input.lastBuyPrice,
-      activeOrders: input.activeOrders,
-      pairConfig: input.pairConfig,
-      settings: input.settings,
-      portfolio: createPortfolioLogSummary({ portfolio, marketId }),
-      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-    })
-    const decision = evaluateStrategy(input)
-    logger.debug?.({
-      message: "Strategy evaluation result",
-      symbol: input.marketPrice?.symbol,
-      action: decision?.action,
-      reason: decision?.reason,
-      actions: decision?.actions,
-      position: decision?.position,
-      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-    })
-    return decision
-  }
-  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
-
-  const updateTradingAccounting = ({ fill } = {}) => {
-    const task = updateQueue.then(() => {
-      if (!(fill instanceof Fill)) {
-        logger.error?.({
-          message: "accounting rejected non-canonical fill",
-          fillType: fill?.constructor?.name ?? typeof fill,
-        })
-        return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
-      }
-
-      const previousPortfolio = portfolio
-      const currentLedger = recoveryLedgers.get(fill.market.id) ??
-        RecoveryLedger.empty({ market: fill.market })
-      const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id })
-      const commissionFacts = (fill.commissions ?? []).map(({ amount } = {}) => ({
-        amount: amount?.amount,
-        asset: amount?.asset?.code,
-        assetId: amount?.asset?.id,
-      }))
-
-      logger.debug?.({
-        message: "Execution received",
-        executionId: fill.id,
-        tradeId: fill.tradeId,
-        brokerOrderId: fill.brokerOrderId,
-        clientOrderId: fill.clientOrderId,
-        marketId: fill.market.id,
-        symbol: fill.market.symbol,
-        side: fill.side,
-        liquidityRole: fill.liquidityRole,
-        executedAt: fill.executedAt,
-        price: fill.price?.amount,
-        quantity: fill.quantity?.amount,
-        quoteQuantity: fill.quoteQuantity?.amount,
-        commissionStatus: fill.commissionStatus,
-        commissions: commissionFacts,
-        thirdAssetCommissionQuoteValues: (fill.commissions ?? [])
-          .filter(({ amount } = {}) => amount?.asset?.id !== fill.market.baseAsset.id &&
-            amount?.asset?.id !== fill.market.quoteAsset.id)
-          .map(({ quoteValue } = {}) => quoteValue?.amount ?? null),
-        previousPosition: createPositionLogSummary({ position: previousPosition }),
-        previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
-      })
-
-      const result = applyTradingAccounting({
-        portfolio,
-        recoveryLedger: currentLedger,
-        fill,
-      })
-      if (result.ok) {
-        portfolio = result.data.portfolio
-        recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
-        const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
-        const nextLedger = result.data.recoveryLedger
-        logger.debug?.({
-          message: "Execution accounted",
-          executionId: fill.id,
-          tradeId: fill.tradeId,
-          symbol: fill.market.symbol,
-          applied: result.data.applied,
-          duplicate: result.data.duplicate,
-          nextPosition: createPositionLogSummary({ position: nextPosition }),
-          nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: nextLedger }),
-          accountingDelta: {
-            portfolioActiveBase: subtractDecimal({
-              left: nextPosition?.baseQuantity.amount ?? "0",
-              right: previousPosition?.baseQuantity.amount ?? "0",
-            }),
-            portfolioFreeBase: subtractDecimal({
-              left: nextPosition?.freeBaseQuantity.amount ?? "0",
-              right: previousPosition?.freeBaseQuantity.amount ?? "0",
-            }),
-            portfolioQuoteCashFlow: subtractDecimal({
-              left: nextPosition?.quoteNetCashFlow.amount ?? "0",
-              right: previousPosition?.quoteNetCashFlow.amount ?? "0",
-            }),
-            positionSpent: subtractDecimal({
-              left: nextPosition?.spent.amount ?? "0",
-              right: previousPosition?.spent.amount ?? "0",
-            }),
-            netSellProceeds: subtractDecimal({
-              left: nextLedger.netSellProceeds,
-              right: currentLedger.netSellProceeds,
-            }),
-            outstandingRecoveryAmount: subtractDecimal({
-              left: maxDecimal({
-                left: "0",
-                right: subtractDecimal({
-                  left: nextPosition?.spent.amount ?? "0",
-                  right: nextLedger.netSellProceeds,
-                }),
-              }),
-              right: maxDecimal({
-                left: "0",
-                right: subtractDecimal({
-                  left: previousPosition?.spent.amount ?? "0",
-                  right: currentLedger.netSellProceeds,
-                }),
-              }),
-            }),
-            realizedNetProfit: subtractDecimal({
-              left: subtractDecimal({
-                left: nextLedger.netSellProceeds,
-                right: nextPosition?.spent.amount ?? "0",
-              }),
-              right: subtractDecimal({
-                left: currentLedger.netSellProceeds,
-                right: previousPosition?.spent.amount ?? "0",
-              }),
-            }),
-          },
-        })
-      } else {
-        logger.error?.({
-          message: "accounting execution rejected",
-          executionId: fill.id,
-          tradeId: fill.tradeId,
-          symbol: fill.market.symbol,
-          errors: (result.errors ?? []).map((error) => ({
-            name: error?.name,
-            message: error?.message ?? String(error),
-            stack: error?.stack,
-          })),
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId }),
-          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
-        })
-      }
-      return result
-    })
-    updateQueue = task.then(() => undefined, () => undefined)
-    return task
-  }
-
-  return {
-    updatePortfolio: updateTradingAccounting,
-    updateTradingAccounting,
-    processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
-    getPortfolio: () => portfolio,
-    getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
-    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
-      const recoveryLedger = recoveryLedgers.get(marketId)
-      const position = portfolio.getPosition({ marketId })
-      if (!recoveryLedger || !position) {
-        return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
-      }
-      try {
-        const completionInput = {
-          sellOrderFullyFilled: true,
-          spent: position.spent.amount,
-          netSellProceeds: recoveryLedger.netSellProceeds,
-          activeQuantity: position.baseQuantity.amount,
-          keepQuantity,
-          minProfit,
-          ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
-        }
-        logger.debug?.({
-          message: "recovery completion evaluation input",
-          marketId,
-          symbol: recoveryLedger.market.symbol,
-          completionInput,
-          position: createPositionLogSummary({ position }),
-          recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-        })
-        const completion = evaluateRecoveryCompletion(completionInput)
-        if (completion.eligible) {
-          const previousPortfolio = portfolio
-          const previousLedger = recoveryLedger
-          if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
-            portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
-          }
-          portfolio = portfolio.resetRecoveryBasis({ marketId })
-          const resetLedger = recoveryLedger.resetCycle()
-          recoveryLedgers.set(marketId, resetLedger)
-          logger.debug?.({
-            message: "Recovery cycle completed",
-            marketId,
-            symbol: recoveryLedger.market.symbol,
-            completion,
-            previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
-            nextPosition: createPositionLogSummary({ position: portfolio.getPosition({ marketId }) }),
-            previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
-            nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
-          })
-        } else {
-          logger.debug?.({
-            message: "recovery cycle not completed",
-            marketId,
-            symbol: recoveryLedger.market.symbol,
-            completion,
-            unchangedPosition: createPositionLogSummary({ position }),
-            unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-          })
-        }
-        return toResult({ data: completion })
-      } catch (error) {
-        logger.error?.({
-          message: "recovery completion evaluation failed",
-          marketId,
-          errorName: error?.name,
-          errorMessage: error?.message ?? String(error),
-          errorStack: error?.stack,
-          unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
-          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
-        })
-        return toResult({ error })
-      }
-    },
-  }
 }
 
 export async function startHarvester({
@@ -401,47 +49,14 @@ export async function startHarvester({
   onUserDataStatus = () => {},
   now = Date.now,
 } = {}) {
-  const tradingConfig = await loadConfig(configSource)
-  const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
-  if (strategyConfig?.enabled !== true) {
-    throw new Error("CG_coinGrabber strategy must remain enabled in trading config")
-  }
-  if (strategyConfig.settings?.conservative?.enabled !== true) {
-    throw new Error("Conservative strategy must remain enabled in CG_coinGrabber settings")
-  }
-  if (strategyConfig.settings?.aggressive?.enabled === true) {
-    throw new Error("Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false")
-  }
-  const { settings, pairs } = strategyConfig
-  const enabledSymbols = Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig.enabled)
-    .map(([symbol]) => symbol)
-  const brokerName = env.HARVESTER_BROKER
-  if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
-    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
-  }
-  const tradingRequested = env.HARVESTER_ENABLE_TRADING === "true"
-  if (tradingRequested && enabledSymbols.length === 0) {
-    throw new Error("Conservative TESTNET trading requires at least one enabled pair")
-  }
-  if (tradingRequested && (brokerName === undefined || brokerName === "")) {
-    throw new Error("HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true")
-  }
-  const tradingEnabled = brokerName === "binance" && tradingRequested
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
-    dataResult: mapConfigValidatedData({
-      enabledMarkets: enabledSymbols,
-      strategyMode: tradingEnabled ? "conservative" : "read-only",
-      tradingEnabled,
-    }),
-  })
-  logSystem(logger, {
-    message: "Trading configuration validated",
+  const {
+    tradingConfig,
+    settings,
+    pairs,
     enabledSymbols,
-    strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
-  })
+    brokerName,
+    tradingEnabled,
+  } = await resolveHarvesterOptions({ configSource, loadConfig, env, eventPublisher, logger })
 
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let recoveredState = Object.freeze({
@@ -468,9 +83,9 @@ export async function startHarvester({
   const getRecoveryLedger = (...args) => portfolioWorkflow.getRecoveryLedger(...args)
   const completeRecoveryCycle = (...args) => portfolioWorkflow.completeRecoveryCycle(...args)
   const marketMetadata = new Map()
-  let accountSnapshot
+  let accountSnapshotManager
   const getMarketMetadata = ({ symbol } = {}) => marketMetadata.get(symbol)
-  const getAccountSnapshot = () => accountSnapshot
+  const getAccountSnapshot = () => accountSnapshotManager?.getAccountSnapshot()
   let tradingEngine
   let hasCanonicalOwnershipReconciliation = false
 
@@ -498,433 +113,113 @@ export async function startHarvester({
     throw new Error("Harvester order execution requires HARVESTER_TRADING_MODE=testnet and non-production NODE_ENV")
   }
 
-  const broker = assertBrokerPort({
-    broker: brokerAdapterFactory({
-      config: {
-        apiKey: env.BINANCE_API_KEY,
-        apiSecret: env.BINANCE_API_SECRET_KEY,
-      },
-    }),
-  })
-
-  try {
-    logSystem(logger, { message: "Connecting to Binance broker" })
-
-    await broker.connect()
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
-      dataResult: mapBrokerConnectedData({ broker: brokerName }),
-    })
-  } catch (error) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
-      dataResult: mapBrokerConnectionFailedData({ broker: brokerName, error }),
-    })
-    logger.error?.({
-      message: "Binance broker connection failed",
-      errorName: error?.name,
-      errorMessage: error?.message ?? String(error),
-      errorStack: error?.stack,
-    })
-    try {
-      await broker.disconnect()
-    } catch (disconnectError) {
-      throw new AggregateError(
-        [error, disconnectError],
-        "Harvester broker connection failed and disconnect cleanup also failed",
-      )
-    }
-    throw error
-  }
+  const broker = await connectBroker({ brokerAdapterFactory, env, brokerName, eventPublisher, logger })
 
   const subscriptions = []
   const marketPriceIntake = new Map()
   const bookSubscriptions = []
   let userDataSubscription
-  let userDataReady = false
-  let initialAccountSnapshotReady = false
-  // Journal replay is disabled; only current-session state is owned. Stream
-  // disconnects and explicit broker reconciliation requirements still close the gate.
-  let userDataRequiresReconciliation = !tradingEnabled
-  let userDataStreamUnsafe = false
-  let userDataAccountingFailed = false
-  let userDataStatus = "NOT_SUBSCRIBED"
-  let userDataEventQueue = Promise.resolve()
-  let userDataEventSequence = 0
-  let userDataReconciliationQueued = false
-  let userDataRecoveryGeneration = 0
-  let lastAcknowledgedRecoveryGeneration = -1
-  let userDataRecoveryTask = null
-  let safetyHaltBuyCancellationTask = null
-  let userDataStartupComplete = false
-  let pendingUserDataRecovery = false
-  let stopped = false
-  let userDataIntakeStopped = false
+  // One explicit state object makes user-data readiness and queue ownership visible.
+  const userDataState = {
+    stopped: false,
+    ready: false,
+    initialAccountSnapshotReady: false,
+    requiresReconciliation: !tradingEnabled,
+    streamUnsafe: false,
+    accountingFailed: false,
+    status: "NOT_SUBSCRIBED",
+    eventQueue: Promise.resolve(),
+    eventSequence: 0,
+    recoveryGeneration: 0,
+    lastAcknowledgedRecoveryGeneration: -1,
+    recoveryTask: null,
+    startupComplete: false,
+    pendingRecovery: false,
+    intakeStopped: false,
+  }
+  accountSnapshotManager = createAccountSnapshotManager({
+    broker,
+    eventPublisher,
+    marketMetadata,
+    getPortfolio,
+    getTradingEngine: () => tradingEngine,
+    getRecoveredState: () => recoveredState,
+    getHasCanonicalOwnershipReconciliation: () => hasCanonicalOwnershipReconciliation,
+    logger,
+    now,
+  })
+  const {
+    refreshAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    publishAccountSnapshot,
+  } = accountSnapshotManager
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
-    if (!tradingEngine || !userDataReady || stopped) return
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped) return
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
       if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
     }).catch((error) => {
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
   }
-  const cancelOwnedBuysAfterAccountingFailure = () => {
-    if (!tradingEngine || stopped) return Promise.resolve()
-    if (safetyHaltBuyCancellationTask) return safetyHaltBuyCancellationTask
+  const cancelOwnedBuysAfterAccountingFailure = createAccountIntegritySafetyHalt({
+    getTradingEngine: () => tradingEngine,
+    isStopped: () => userDataState.stopped,
+    logger,
+  })
 
-    const task = (async () => {
-      let reconciliation
-      try {
-        reconciliation = await tradingEngine.reconcileOwnedOrders()
-      } catch (error) {
-        logger.error?.({
-          message: "account-integrity safety halt could not reconcile owned orders before BUY cancellation",
-          error,
-        })
-      }
-      if (reconciliation?.ok !== true) {
-        logger.error?.({
-          message: "account-integrity safety halt could not fully reconcile owned orders before BUY cancellation",
-          result: reconciliation,
-        })
-      }
-
-      let cancellation
-      try {
-        cancellation = await tradingEngine.cancelOwnedBuyOrdersForSafetyHalt()
-      } catch (error) {
-        logger.error?.({
-          message: "account-integrity safety halt failed while canceling owned BUY orders",
-          error,
-        })
-        return
-      }
-      if (cancellation?.ok !== true) {
-        logger.error?.({
-          message: "account-integrity safety halt could not confirm every owned BUY cancellation",
-          result: cancellation,
-        })
-      }
-    })()
-
-    safetyHaltBuyCancellationTask = task.catch((error) => {
-      logger.error?.({ message: "account-integrity safety halt workflow failed", error })
-    }).finally(() => {
-      safetyHaltBuyCancellationTask = null
-    })
-    return safetyHaltBuyCancellationTask
-  }
-
-  const refreshAccountSnapshot = async () => {
-    const result = await broker.getAccountSnapshot()
-    if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
-      const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error(
-        "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
-      )
-    }
-    const quoteCashFlowBaselineByAssetId = new Map()
-    for (const position of getPortfolio().positions) {
-      const assetId = position.market.quoteAsset.id
-      quoteCashFlowBaselineByAssetId.set(
-        assetId,
-        addDecimal({
-          left: quoteCashFlowBaselineByAssetId.get(assetId) ?? "0",
-          right: position.quoteNetCashFlow.amount,
-        }),
-      )
-    }
-    const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
-    const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
-      market.baseAsset.code,
-      market.quoteAsset.code,
-    ]))
-    const configuredBalances = result.data.balances.filter((balance) =>
-      configuredAssetCodes.has(balance?.asset?.code))
-    const nextSnapshot = new AccountSnapshot({
-      balances: configuredBalances,
-      sourceTime: result.data.sourceTime,
-      quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
-        assetId,
-        amount,
-      })),
-    })
-    assertAccountSnapshotCoversMarkets({
-      accountSnapshot: nextSnapshot,
-      markets: accountAuditMarkets,
-    })
-    if (accountSnapshot && nextSnapshot.sourceTime < accountSnapshot.sourceTime) {
-      throw new Error("Exchange account snapshot is older than the previously accepted snapshot")
-    }
-    accountSnapshot = nextSnapshot
-    logSystem(logger, {
-      message: "Exchange account snapshot loaded",
-      balanceCount: nextSnapshot.balances.length,
-      sourceTime: nextSnapshot.sourceTime,
-    })
-
-    return nextSnapshot
-  }
-
-  const publishOpenOrdersSnapshot = async ({
-    phase = "PREFLIGHT",
-    ownershipReconciled = hasCanonicalOwnershipReconciliation,
-    orders: suppliedOrders,
-  } = {}) => {
-    let orders = suppliedOrders
-    if (orders === undefined) {
-      const result = await broker.getOpenOrders({})
-      if (!result?.ok || !Array.isArray(result.data)) {
-        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
-      }
-      orders = result.data
-    }
-    if (!Array.isArray(orders)) throw new TypeError("publishOpenOrdersSnapshot orders must be an array")
-    const restoredOrders = tradingEngine?.getOrders?.() ?? recoveredState.orderRegistry?.orders ?? []
-    const matchedOwnedClientIds = new Set()
-    const unownedOrders = orders.filter((order) => {
-      const clientOrderId = order?.clientOrderId
-      const brokerOrderId = order?.brokerOrderId ?? order?.id
-      const symbol = order?.market?.symbol ?? order?.symbol
-      if (typeof clientOrderId !== "string" || !clientOrderId.trim() ||
-          typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-          typeof symbol !== "string" || !symbol.trim()) return true
-      const owned = restoredOrders.find((candidate) =>
-        candidate.clientOrderId === clientOrderId ||
-        (candidate.brokerOrderId !== undefined && candidate.brokerOrderId === brokerOrderId)
-      )
-      if (!owned || matchedOwnedClientIds.has(owned.clientOrderId)) return true
-      if (owned.status === "CANCELED" || owned.status === "REJECTED") return true
-      if (owned.brokerOrderId !== undefined && owned.brokerOrderId !== brokerOrderId) return true
-      const actualPrice = order.originalPrice ?? order.limitPrice?.amount ?? order.price?.amount ?? order.price
-      const expectedPrice = owned.limitPrice?.amount
-      const actualQuantity = order.originalQuantity?.amount ?? order.originalQuantity
-      if (
-        owned.clientOrderId !== clientOrderId ||
-        owned.market.symbol !== symbol ||
-        owned.side !== order.side ||
-        owned.type !== order.type ||
-        compareDecimal({ left: owned.originalQuantity.amount, right: actualQuantity }) !== 0 ||
-        (expectedPrice === undefined
-          ? actualPrice !== undefined
-          : actualPrice === undefined || compareDecimal({ left: expectedPrice, right: String(actualPrice) }) !== 0)
-      ) return true
-      matchedOwnedClientIds.add(owned.clientOrderId)
-      return false
-    })
-    const blockReasons = unownedOrders.length > 0
-      ? ["UNOWNED_OPEN_ORDERS:" + unownedOrders.length]
-      : orders.length > 0 && !ownershipReconciled
-        ? ["CANONICAL_ORDER_RECONCILIATION_REQUIRED"]
-        : []
-    const readiness = blockReasons.length > 0
-      ? "BLOCKED"
-      : orders.length > 0
-        ? "RECONCILED"
-        : "READY"
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-      dataResult: mapAccountOpenOrdersCapturedData({
-        phase,
-        observedAt: now(),
-        orders,
-        readiness,
-        blockReasons,
-      }),
-    })
-    if (!published?.ok) {
-      const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      throw new Error("Unable to publish account open-orders audit event" + (details ? ": " + details : ""))
-    }
-    if (typeof eventPublisher?.flush === "function") {
-      const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to durably persist account open-orders audit" + (details ? ": " + details : ""))
-      }
-    } else {
-      throw new Error("Harvester startup requires a durable open-orders audit before market subscriptions")
-    }
-    logger.info?.({
-      message: readiness === "READY"
-        ? "Account-wide open-orders audit complete; no open orders found"
-        : readiness === "RECONCILED"
-          ? "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
-          : unownedOrders.length > 0
-          ? "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched"
-          : "Account-wide open-orders audit is waiting for canonical order reconciliation",
-      orderCount: orders.length,
-      readiness,
-      symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
-    })
-    return orders
-  }
-
-  const publishAccountSnapshot = async ({
-    phase,
-    auditStatus = "COMPLETE",
-    auditReasons = [],
-    snapshot: suppliedSnapshot,
-  } = {}) => {
-    const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
-    const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
-    const published = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
-      dataResult: mapAccountSnapshotCapturedData({
-        phase,
-        snapshot,
-        allowedAssetCodes: configuredAssetCodes,
-        auditStatus,
-        auditReasons,
-      }),
-    })
-    if (!published?.ok) throw new Error("Unable to publish " + phase + " account snapshot audit event")
-    if (typeof eventPublisher?.flush === "function") {
-      const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to durably persist " + phase + " account snapshot" + (details ? ": " + details : ""))
-      }
-    } else {
-      throw new Error("Harvester startup requires a durable Journal flush before market subscriptions")
-    }
-    logSystem(logger, {
-      message: "Account snapshot captured and durably journaled",
-      phase, auditStatus, assetCount: configuredAssetCodes.length, sourceAssetCount: snapshot.balances.length, sourceTime: snapshot.sourceTime, auditReasons,
-    })
-    return snapshot
-  }
+  const handleUserDataEvent = createUserDataEventHandler({
+    state: userDataState,
+    getTradingEngine: () => tradingEngine,
+    isTradingEnabled: () => tradingEnabled,
+    isStopped: () => userDataState.stopped,
+    logger,
+    onUserDataEvent,
+    getPortfolio,
+    getRecoveryLedger,
+    updatePortfolio,
+    updateTradingAccounting,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+  })
 
   const drainUserDataEvents = async () => {
     while (true) {
-      const queuedEvents = userDataEventQueue
+      const queuedEvents = userDataState.eventQueue
       await queuedEvents
-      if (queuedEvents === userDataEventQueue) return
+      if (queuedEvents === userDataState.eventQueue) return
     }
   }
 
-  const startUserDataRecovery = () => {
-    if (stopped || !userDataStartupComplete || !userDataRequiresReconciliation ||
-        userDataAccountingFailed || userDataRecoveryTask ||
-        lastAcknowledgedRecoveryGeneration === userDataRecoveryGeneration) {
-      pendingUserDataRecovery = true
-      return
-    }
-    if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
-      logger.error?.({
-        message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
-      })
-      return
-    }
+  const startUserDataRecovery = createUserDataRecoveryHandler({
+    state: userDataState,
+    isStopped: () => userDataState.stopped,
+    getUserDataSubscription: () => userDataSubscription,
+    getTradingEngine: () => tradingEngine,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled: (value) => { hasCanonicalOwnershipReconciliation = value },
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  })
 
-    pendingUserDataRecovery = false
-    const generation = userDataRecoveryGeneration
-    const isCurrentGeneration = () => !stopped && generation === userDataRecoveryGeneration
-    const recoveryTask = (async () => {
-      try {
-        logger.info?.({
-          message: "application recovery started after user-data transport reconnect",
-          generation,
-        })
+  const handleUserDataStatus = createUserDataStatusHandler({
+    state: userDataState,
+    isStopped: () => userDataState.stopped,
+    eventPublisher,
+    brokerName,
+    logger,
+    tradingEnabled,
+    startUserDataRecovery,
+    cancelOwnedBuysAfterAccountingFailure,
+    resumeDeferredStrategyEvaluations,
+    onUserDataStatus,
+  })
 
-        let reconciliation = { ok: true, data: { reconciled: 0, symbols: [] } }
-        if (tradingEnabled) {
-          if (!tradingEngine) throw new Error("Trading engine is unavailable during user-data recovery")
-          reconciliation = await tradingEngine.reconcileOwnedOrders({
-            recoveryMode: true,
-            beforeApply: drainUserDataEvents,
-          })
-          if (!reconciliation?.ok) {
-            throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
-          }
-          hasCanonicalOwnershipReconciliation = true
-        }
-        while (true) {
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
-
-          // Keep the account and open-order snapshots on the same side of all
-          // user-data events observed during the REST reads and durable flushes.
-          const eventSequence = userDataEventSequence
-          const snapshot = await refreshAccountSnapshot()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          const openOrdersResult = await broker.getOpenOrders({})
-          if (!openOrdersResult?.ok || !Array.isArray(openOrdersResult.data)) {
-            const details = openOrdersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-            throw new Error(
-              "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
-            )
-          }
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
-          if (eventSequence !== userDataEventSequence) continue
-
-          await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
-          await publishOpenOrdersSnapshot({
-            phase: "RECOVERY",
-            blockOnExistingOrders: tradingEnabled,
-            ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
-            orders: openOrdersResult.data,
-          })
-          await drainUserDataEvents()
-          if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
-          if (userDataAccountingFailed) throw new Error("User-data accounting failed during recovery")
-          if (eventSequence === userDataEventSequence) break
-        }
-
-        // The broker only emits "reconciled" after every subscriber acknowledges.
-        // Keep the application gate closed unless this generation has passed
-        // order/fill reconciliation and durable account/order audits.
-        userDataRequiresReconciliation = false
-        const acknowledged = userDataSubscription.acknowledgeRecovery()
-        if (acknowledged !== true) {
-          userDataRequiresReconciliation = true
-          throw new Error("Broker rejected the application recovery acknowledgement")
-        }
-        lastAcknowledgedRecoveryGeneration = generation
-        logger.info?.({
-          message: "application recovery completed and broker acknowledgement accepted",
-          generation,
-          reconciledOrders: reconciliation.data?.reconciled ?? 0,
-        })
-      } catch (error) {
-        userDataReady = false
-        userDataRequiresReconciliation = true
-        userDataStatus = userDataAccountingFailed
-          ? "EXECUTION_ACCOUNTING_FAILED"
-          : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-        logger.error?.({
-          message: "application recovery failed; trading remains blocked",
-          generation,
-          errorName: error?.name ?? "Error",
-          errorMessage: error?.message || String(error),
-          errorStack: error?.stack,
-        })
-      } finally {
-        if (userDataRecoveryTask === recoveryTask) userDataRecoveryTask = null
-      }
-    })()
-    userDataRecoveryTask = recoveryTask
-  }
-
-  const isMarketPriceFresh = (marketPrice) => {
-    const ageMs = now() - marketPrice.timestamp
-    return Number.isSafeInteger(ageMs) &&
-      ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS &&
-      ageMs <= MAX_MARKET_PRICE_AGE_MS
-  }
-  const isMarketBookFresh = (marketBook) => {
-    const ageMs = now() - marketBook.timestamp
-    return Number.isSafeInteger(ageMs) && ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS && ageMs <= MAX_MARKET_PRICE_AGE_MS
-  }
+  const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
+  const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
 
   const activateTradingEngine = () => {
     if (!tradingEnabled) return
@@ -939,7 +234,7 @@ export async function startHarvester({
       getAccountSnapshot,
       updateTradingAccounting,
       completeRecoveryCycle,
-      canTrade: () => userDataReady,
+      canTrade: () => userDataState.ready,
       isMarketPriceFresh,
       isMarketBookFresh,
       logger,
@@ -956,7 +251,7 @@ export async function startHarvester({
         completedOrderClientIds: recoveredState.completedOrderClientIds,
         trailingBuySymbols: recoveredState.trailingBuySymbols,
       },
-      isStopping: () => stopped,
+      isStopping: () => userDataState.stopped,
       onPause: async ({ symbol, reason, error }) => {
         logger.error?.({ message: "paused a trading pair", symbol, reason, error })
       },
@@ -964,635 +259,49 @@ export async function startHarvester({
     processMarketPrice = tradingEngine.processMarketPrice
     processMarketBook = tradingEngine.processBookTicker
   }
-  const reportPriceError = (details) => {
-    try {
-      onMarketPriceError(details)
-    } catch (error) {
-      logger.error?.({
-        message: "market price error handler failed",
-        error,
-      })
-    }
-  }
-
   try {
-    for (const [symbol, pairConfig] of Object.entries(pairs)) {
-      const filtersResult = await broker.getSymbolFilters({ symbol })
-      if (!filtersResult?.ok || !filtersResult.data) {
-        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
-          "Unable to load exchange market metadata for configured pair " + symbol +
-          (details ? ": " + details : ""),
-        )
-      }
-      const market = filtersResult.data.market
-      if (
-        !market ||
-        market.symbol !== symbol ||
-        !market.baseAsset?.code ||
-        !market.quoteAsset?.code
-      ) {
-        throw new Error("Configured pair " + symbol + " does not expose canonical base/quote asset metadata")
-      }
-      if (!pairConfig.enabled) {
-        marketMetadata.set(symbol, filtersResult.data)
-        logSystem(logger, {
-          message: "Configured disabled market asset metadata loaded",
-          symbol,
-          baseAsset: market.baseAsset.code,
-          quoteAsset: market.quoteAsset.code,
-        })
-        continue
-      }
-
-      const validatedMetadata = validateMarketTradingReadiness({
-        symbol,
-        pairConfig,
-        marketMetadata: filtersResult.data,
-      })
-      marketMetadata.set(symbol, validatedMetadata)
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
-        dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
-      })
-      logSystem(logger, { message: "Exchange trading rules validated", symbol })
-    }
-
+    await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
     // Durable Journal replay is intentionally disabled. Harvester starts with
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.
     if (tradingEnabled) activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
-    logSystem(logger, { message: "Subscribing to Binance user-data events" })
-
-    let userDataResult
-    try {
-      userDataResult = await broker.subscribeForUserData({
-      onEvent: ({ event } = {}) => {
-        if (userDataIntakeStopped) return
-        const isExecution = event?.eventType === "executionReport" &&
-          event?.executionType === "TRADE"
-        const isOrderUpdate = event?.eventType === "executionReport"
-        if (!event || typeof event !== "object" || Array.isArray(event)) {
-          userDataReady = false
-          userDataAccountingFailed = true
-          userDataStatus = "INVALID_EVENT"
-          void cancelOwnedBuysAfterAccountingFailure()
-          return
-        }
-        userDataEventSequence += 1
-        let reevaluateSymbol
-
-        if (isExecution) {
-          logger.info?.({
-            message: "Trade execution received",
-            symbol: event.fill?.market?.symbol ?? event.executedOrder?.market?.symbol,
-            side: event.fill?.side ?? event.executedOrder?.side,
-          })
-        }
-        const task = userDataEventQueue.then(async () => {
-          const recoveryMode = userDataRequiresReconciliation || userDataRecoveryTask !== null
-          if (tradingEngine && isOrderUpdate) {
-            const processed = await tradingEngine.processUserDataEvent({
-              event,
-              recoveryMode,
-            })
-            if (!processed.ok) {
-              userDataReady = false
-              userDataAccountingFailed = true
-              userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
-              const rejectedOrder = event.executedOrder
-              const registeredOrders = tradingEngine.getOrders()
-              const incomingBrokerOrderId = rejectedOrder?.brokerOrderId ?? event.fill?.brokerOrderId
-              const incomingClientOrderId = rejectedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId
-              const clientIdMatch = registeredOrders.find((order) =>
-                order.clientOrderId === incomingClientOrderId)
-              const brokerIdMatch = registeredOrders.find((order) =>
-                incomingBrokerOrderId !== undefined &&
-                order.brokerOrderId === incomingBrokerOrderId)
-              logger.error?.({
-                message: "rejected an unowned or invalid order event",
-                eventType: event.eventType ?? "UNKNOWN",
-                executionType: event.executionType,
-                symbol: rejectedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-                brokerOrderId: incomingBrokerOrderId,
-                clientOrderId: incomingClientOrderId,
-                originalClientOrderId: event.originalClientOrderId,
-                side: rejectedOrder?.side ?? event.fill?.side,
-                orderStatus: rejectedOrder?.status,
-                executionId: event.fill?.id ?? event.executionId,
-                registryMatchedByClientOrderId: Boolean(clientIdMatch),
-                registryMatchedByBrokerOrderId: Boolean(brokerIdMatch),
-                clientIdMatchStatus: clientIdMatch?.status,
-                clientIdMatchBrokerOrderId: clientIdMatch?.brokerOrderId,
-                brokerIdMatchClientOrderId: brokerIdMatch?.clientOrderId,
-                errors: (processed.errors ?? []).map((error) => ({
-                  name: error?.name ?? "Error",
-                  message: error?.message ?? String(error),
-                  stack: error?.stack,
-                })),
-              })
-              return
-            }
-            logger.info?.({
-              message: "Order update processed",
-              eventType: event.eventType ?? "UNKNOWN",
-              executionType: event.executionType,
-              symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-              brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
-              clientOrderId: event.executedOrder?.clientOrderId ?? event.clientOrderId ?? event.fill?.clientOrderId,
-              originalClientOrderId: event.originalClientOrderId,
-              side: event.executedOrder?.side ?? event.fill?.side,
-              price: event.executedOrder?.limitPrice?.amount ?? null,
-              quantity: event.executedOrder?.originalQuantity?.amount,
-              orderStatus: event.executedOrder?.status,
-              executionId: event.fill?.id,
-              outcome: processed.data?.ignored === true ? "IGNORED" : "ACCEPTED",
-              ignored: processed.data?.ignored === true,
-              fillApplied: event.executionType === "TRADE" && processed.data?.ignored !== true,
-            })
-            if (processed.data?.reevaluate === true) reevaluateSymbol = event.executedOrder.market.symbol
-          } else if (isOrderUpdate && tradingEnabled) {
-            userDataAccountingFailed = true
-            userDataReady = false
-            userDataStatus = "UNOWNED_ORDER_EVENT_BEFORE_ENGINE_READY"
-            logger.error?.({
-              message: "received an order report before its order-ownership registry was ready",
-              symbol: event.executedOrder?.market?.symbol ?? event.fill?.market?.symbol,
-              brokerOrderId: event.executedOrder?.brokerOrderId ?? event.fill?.brokerOrderId,
-            })
-            return
-          }
-
-          try {
-            await onUserDataEvent({
-              event,
-              recoveryMode,
-              portfolio: getPortfolio(),
-              recoveryLedger: event.fill instanceof Fill
-                ? getRecoveryLedger({ marketId: event.fill.market.id })
-                : undefined,
-              updatePortfolio,
-              updateTradingAccounting,
-            })
-          } catch (error) {
-            // Observability hooks must not roll back a fill already committed
-            // to both immutable accounting projections.
-            logger.error?.({
-              message: "user-data observer failed",
-              eventType: event.eventType ?? "UNKNOWN",
-              error,
-            })
-          }
-        }).catch((error) => {
-          userDataAccountingFailed = true
-          userDataReady = false
-          userDataStatus = "EVENT_QUEUE_FAILED"
-          logger.error?.({ message: "user-data event queue failed", error })
-        }).finally(async () => {
-          if (stopped) {
-            userDataReady = false
-            userDataStatus = "STOPPED"
-            return
-          }
-          if (userDataAccountingFailed) {
-            userDataReady = false
-            await cancelOwnedBuysAfterAccountingFailure()
-            return
-          }
-          if (userDataRequiresReconciliation) {
-            userDataReady = false
-            userDataStatus = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-            return
-          }
-          if (!initialAccountSnapshotReady) {
-            userDataReady = false
-            userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
-            return
-          }
-          userDataReady = true
-          userDataStatus = "READY"
-          if (reevaluateSymbol && tradingEngine) {
-            const reevaluated = await tradingEngine.evaluateLatest({ symbol: reevaluateSymbol })
-            if (!reevaluated.ok) logger.error?.({ message: "next strategy evaluation failed", errors: reevaluated.errors })
-          }
-          resumeDeferredStrategyEvaluations()
-        })
-        userDataEventQueue = task
-      },
-      onStatus: (status = {}) => {
-        if (stopped) return
-        if (status.brokerEvidence) {
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.BROKER_EXECUTION_REPORT,
-            dataResult: mapBrokerExecutionReportData({ evidence: status.brokerEvidence }),
-          })
-        }
-        if (status.type === "recovered" &&
-            lastAcknowledgedRecoveryGeneration === userDataRecoveryGeneration) return
-        if ([
-          "connectionClosed",
-          "recovering",
-          "recoveryFailed",
-          "recovered",
-          "reconciled",
-          "terminated",
-          "rpcError",
-          "executionNormalizationFailed",
-        ].includes(status.type)) {
-          publishLifecycleEvent({
-            eventPublisher,
-            eventName: HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED,
-            dataResult: mapBrokerStatusChangedData({
-              broker: brokerName,
-              stream: "user-data",
-              status: status.type,
-              recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
-              attempt: status.attempt,
-              code: status.code,
-              error: status.error,
-            }),
-          })
-        }
-        logger.info?.({
-          message: "User-data stream status changed",
-          statusType: status.type ?? "UNKNOWN",
-          subscriptionId: status.subscriptionId,
-          attempt: status.attempt,
-          recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
-          reconciliationRequired: status.reconciliationRequired === true,
-          executionPending: status.executionPending === true,
-          orderUpdatePending: status.orderUpdatePending === true,
-          code: status.code,
-          reason: status.reason,
-          symbol: status.symbol,
-          brokerOrderId: status.brokerOrderId,
-          clientOrderId: status.clientOrderId,
-          executionId: status.executionId,
-          errorName: status.error?.name,
-          errorMessage: status.error?.message,
-        })
-        userDataStatus = status.type ?? "UNKNOWN"
-        if (status.type === "rpcError" || status.type === "recoveryFailed") {
-          const error = status.error
-          const cause = error?.cause
-          logger.error?.({
-            message: "Binance user-data transport reported an error",
-            statusType: status.type,
-            attempt: status.attempt,
-            errorName: error?.name ?? "Error",
-            errorMessage: typeof error?.message === "string" && error.message
-              ? error.message
-              : "(empty error message)",
-            errorStack: error?.stack,
-            causeName: cause instanceof Error ? cause.name : undefined,
-            causeMessage: cause instanceof Error
-              ? (cause.message || "(empty cause message)")
-              : cause === undefined ? undefined : String(cause),
-            causeStack: cause instanceof Error ? cause.stack : undefined,
-          })
-        }
-        if (status.type === "executionNormalizationFailed") {
-          userDataAccountingFailed = true
-          userDataReady = false
-          userDataStatus = "EXECUTION_NORMALIZATION_FAILED"
-          logger.error?.({
-            message: "Binance execution normalization failed",
-            symbol: status.symbol,
-            brokerOrderId: status.brokerOrderId,
-            clientOrderId: status.clientOrderId,
-            executionId: status.executionId,
-            errorName: status.error?.name ?? "Error",
-            errorMessage: status.error?.message ?? String(status.error ?? "Unknown normalization error"),
-            errorStack: status.error?.stack,
-          })
-          void cancelOwnedBuysAfterAccountingFailure()
-        }
-        const connectionUnsafe = [
-          "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated", "rpcError",
-          "executionNormalizationFailed",
-        ].includes(status.type)
-        if (
-          status.type === "reconciled" &&
-          status.recoveryRequired !== true &&
-          status.reconciliationRequired !== true
-        ) {
-          userDataStreamUnsafe = false
-        }
-        const recoveryInvalidated = [
-          "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
-          "executionNormalizationFailed",
-        ].includes(status.type)
-        if (recoveryInvalidated) userDataRecoveryGeneration += 1
-        if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
-          userDataStreamUnsafe = true
-          userDataRequiresReconciliation = true
-          userDataReady = false
-          userDataStatus = status.type === "executionNormalizationFailed"
-            ? "EXECUTION_NORMALIZATION_FAILED"
-            : userDataAccountingFailed
-              ? "EXECUTION_ACCOUNTING_FAILED"
-              : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-        } else if (userDataRequiresReconciliation) {
-          // A stream-level status cannot clear the application gate unless the
-          // application has completed reconciliation and acknowledged recovery.
-          userDataReady = false
-          userDataStatus = userDataAccountingFailed
-            ? "EXECUTION_ACCOUNTING_FAILED"
-            : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-        } else if (userDataAccountingFailed) {
-          userDataReady = false
-          userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
-        } else if (initialAccountSnapshotReady && tradingEnabled) {
-          userDataReady = true
-          userDataStatus = "READY"
-          resumeDeferredStrategyEvaluations()
-        } else if (!initialAccountSnapshotReady) {
-          userDataReady = false
-          userDataStatus = "INITIAL_ACCOUNT_SNAPSHOT_PENDING"
-        }
-        if (status.type === "recovered" && status.recoveryRequired === true) {
-          if (userDataStartupComplete) startUserDataRecovery()
-          else pendingUserDataRecovery = true
-        }
-        try {
-          onUserDataStatus({ status, ready: userDataReady })
-        } catch (error) {
-          userDataReady = false
-          userDataAccountingFailed = true
-          userDataStatus = "STATUS_HANDLER_FAILED"
-          logger.error?.({ message: "user-data status handler failed", error })
-          void cancelOwnedBuysAfterAccountingFailure()
-        }
-      },
-      })
-    } catch (error) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-        dataResult: mapBrokerSubscriptionFailedData({
-          broker: brokerName,
-          stream: "user-data",
-          error,
-        }),
-      })
-      throw error
-    }
-
-    if (!userDataResult?.ok || typeof userDataResult.data?.disconnect !== "function") {
-      const details = userDataResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      const error = new Error(
-        "Unable to subscribe to user data" + (details ? ": " + details : ""),
-      )
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-        dataResult: mapBrokerSubscriptionFailedData({ broker: brokerName, stream: "user-data", error }),
-      })
-      throw error
-    }
-    publishLifecycleEvent({
+    userDataSubscription = await subscribeToUserData({
+      broker,
+      brokerName,
       eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-      dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
-    })
-    userDataSubscription = userDataResult.data
-    logSystem(logger, { message: "Binance user-data subscription established" })
-
-    userDataReady = false
-    userDataStatus = userDataAccountingFailed
-      ? "EXECUTION_ACCOUNTING_FAILED"
-      : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-
-    const initialSnapshotTask = userDataEventQueue.then(async () => {
-      await publishAccountSnapshot({ phase: "PREFLIGHT" })
-    })
-    userDataEventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
-    await initialSnapshotTask
-    initialAccountSnapshotReady = true
-
-    if (!tradingEnabled) {
-      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-    }
-
-    if (tradingEnabled) {
-      if (userDataAccountingFailed) {
-        throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
-      }
-
-      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-
-      while (true) {
-        const queuedEvents = userDataEventQueue
-        await queuedEvents
-        if (queuedEvents === userDataEventQueue) break
-      }
-      const unsafeUserDataStatuses = new Set([
-        "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated",
-        "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
-      ])
-      if (userDataAccountingFailed || unsafeUserDataStatuses.has(userDataStatus)) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
-      }
-      if (userDataRequiresReconciliation) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
-      }
-      logSystem(logger, {
-        message: "Conservative TESTNET startup checks passed; current account audit is complete",
-        enabledSymbols,
-        accountSnapshotSourceTime: accountSnapshot.sourceTime,
-      })
-      userDataRequiresReconciliation = false
-      userDataReady = true
-      userDataStatus = "READY"
-      resumeDeferredStrategyEvaluations()
-      logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
-    }
-
-    // Establish every enabled market stream before doing any REST ticker
-    // seeding or waiting for an initial strategy evaluation. A slow first
-    // market must never prevent later enabled markets from receiving prices.
-    for (const [symbol, pairConfig] of Object.entries(pairs)) {
-      if (!pairConfig.enabled) continue
-
-      if (tradingEnabled) {
-        let bookResult
-        try {
-          bookResult = await broker.subscribeForBookTicker({
-            symbol,
-            onBookTicker: (bookTicker) => {
-              if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-              return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
-                if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
-                return processed
-              }).catch((error) => {
-                logger.error?.({ message: "market book processing failed", symbol, error })
-                return toResult({ error })
-              })
-            },
-          })
-        } catch (error) {
-          bookResult = toResult({ error })
-        }
-        if (!bookResult?.ok || typeof bookResult.data?.unsubscribe !== "function") {
-          const details = bookResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-          throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
-        }
-        bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
-        logSystem(logger, {
-          message: "Book ticker subscribed",
-          symbol,
-          stream: bookResult.data.stream ?? null,
-        })
-      }
-
-      const intakeState = {
-        hasFreshWebSocketPrice: false,
-        latestWebSocketPriceTask: null,
-      }
-      let result
-      try {
-        result = await broker.subscribeForPrices({
-          symbol,
-          onPrice: (priceEvent) => {
-            if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-
-            try {
-              if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
-                intakeState.hasFreshWebSocketPrice = true
-              }
-            } catch {
-              // The trading engine reports malformed events through its normal result.
-            }
-
-            intakeState.latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
-              symbol,
-              priceEvent,
-              pairConfig,
-              settings,
-            })).then((processed) => {
-              if (!processed.ok) {
-                reportPriceError({ symbol, errors: processed.errors })
-              } else {
-                logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
-              }
-              return processed
-            }).catch((error) => {
-              reportPriceError({ symbol, error })
-              return { ok: false, errors: [error] }
-            })
-            return intakeState.latestWebSocketPriceTask
-          },
-        })
-      } catch (error) {
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-          dataResult: mapBrokerSubscriptionFailedData({
-            broker: brokerName,
-            stream: "market-price",
-            market: symbol,
-            error,
-          }),
-        })
-        throw error
-      }
-
-      if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
-        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        const error = new Error(
-          "Unable to subscribe to market prices for " + symbol + (details ? ": " + details : ""),
-        )
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-          dataResult: mapBrokerSubscriptionFailedData({
-            broker: brokerName,
-            stream: "market-price",
-            market: symbol,
-            error,
-          }),
-        })
-        throw error
-      }
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-        dataResult: mapBrokerSubscriptionEstablishedData({
-          broker: brokerName,
-          stream: "market-price",
-          market: symbol,
-        }),
-      })
-      subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
-      marketPriceIntake.set(symbol, intakeState)
-      logSystem(logger, {
-        message: "Market data subscribed",
-        symbol,
-        stream: result.data.stream ?? null,
-      })
-    }
-
-    const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
-    const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
-    if (missingSubscriptions.length > 0) {
-      throw new Error("Harvester startup did not establish market-price subscriptions for every enabled pair: " + missingSubscriptions.join(", "))
-    }
-    logSystem(logger, {
-      message: "Market data subscriptions ready",
+      logger,
+      state: userDataState,
+      tradingEnabled,
       enabledSymbols,
-      subscribedSymbols,
+      onEvent: handleUserDataEvent,
+      onStatus: handleUserDataStatus,
+      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
+      publishAccountSnapshot,
+      publishOpenOrdersSnapshot,
+      getAccountSnapshot,
+      resumeDeferredStrategyEvaluations,
     })
 
-    // Only after all enabled symbols have active stream subscriptions may
-    // startup perform REST price seeding and wait for outstanding first ticks.
-    if (tradingEnabled) {
-      for (const [symbol, pairConfig] of Object.entries(pairs)) {
-        if (!pairConfig.enabled) continue
-        const intakeState = marketPriceIntake.get(symbol)
-        if (!intakeState) throw new Error("Missing market-price intake state for enabled pair " + symbol)
-
-        let tickerResult
-        try {
-          tickerResult = await broker.getPrices({ symbol })
-        } catch (error) {
-          tickerResult = toResult({ error })
-        }
-        if (intakeState.latestWebSocketPriceTask) await intakeState.latestWebSocketPriceTask
-
-        if (!intakeState.hasFreshWebSocketPrice) {
-          if (!tickerResult?.ok || !tickerResult.data) {
-            const details = tickerResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-            throw new Error(
-              "Unable to load initial market price for " + symbol + (details ? ": " + details : ""),
-            )
-          }
-          const priceEvent = {
-            symbol: tickerResult.data.symbol,
-            price: tickerResult.data.price,
-            timestamp: now(),
-          }
-          const marketPrice = createMarketPrice({ priceEvent })
-          if (marketPrice.symbol !== symbol) {
-            throw new Error("Initial ticker price symbol does not match enabled market " + symbol)
-          }
-          const processed = await processMarketPrice({
-            symbol,
-            priceEvent,
-            pairConfig,
-            settings,
-          })
-          if (!processed.ok) {
-            reportPriceError({ symbol, errors: processed.errors })
-          } else {
-            logMarketPriceEvaluation({ logger, symbol, processed })
-          }
-        }
-      }
-    }
+    await subscribeToMarketData({
+      broker,
+      brokerName,
+      eventPublisher,
+      logger,
+      tradingEnabled,
+      pairs,
+      settings,
+      processMarketPrice,
+      processMarketBook,
+      isMarketPriceFresh,
+      now,
+      isStopped: () => userDataState.stopped,
+      onMarketPriceError,
+      subscriptions,
+      bookSubscriptions,
+      marketPriceIntake,
+    })
   } catch (error) {
     logger.error?.({
       message: "Broker startup step failed",
@@ -1600,7 +309,7 @@ export async function startHarvester({
       errorMessage: error?.message ?? String(error),
       errorStack: error?.stack,
     })
-    await userDataEventQueue
+    await userDataState.eventQueue
     const cleanupErrors = await cleanupBroker({ broker, brokerName, eventPublisher, subscriptions, bookSubscriptions, userDataSubscription })
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
@@ -1611,163 +320,31 @@ export async function startHarvester({
     throw error
   }
 
-  userDataStartupComplete = true
-  if (pendingUserDataRecovery) startUserDataRecovery()
+  userDataState.startupComplete = true
+  if (userDataState.pendingRecovery) startUserDataRecovery()
 
-  const stop = async () => {
-    if (stopped) return
-    stopped = true
-    userDataReady = false
-    userDataStatus = "STOPPING"
-    logSystem(logger, { message: "Shutdown started" })
-
-    const auditReasons = []
-    let snapshotError
-    const logShutdownFailure = ({ message, stage, result, error } = {}) => {
-      const errors = error
-        ? [error]
-        : result?.errors?.length
-          ? result.errors
-          : [new Error(message)]
-      logger.error?.({
-        message,
-        stage,
-        errors: errors.map((entry) => ({
-          name: entry?.name,
-          message: entry?.message ?? String(entry),
-          stack: entry?.stack,
-        })),
-      })
-    }
-    const marketIntakeErrors = await stopMarketIntake({ subscriptions, bookSubscriptions })
-    if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
-
-    // Unsubscribing prevents new callbacks; drain callbacks already accepted
-    // before reconciling or cancelling orders. Otherwise an in-flight price
-    // evaluation can submit a fresh BUY after the shutdown cancellation pass.
-    const pendingMarketTasks = [...marketPriceIntake.values()]
-      .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
-      .filter(Boolean)
-    await Promise.all(pendingMarketTasks)
-    await userDataEventQueue
-
-    if (tradingEnabled && tradingEngine) {
-      // Resolve PENDING submissions to canonical broker identities first.
-      // Only then can shutdown safely select and cancel owned BUY orders.
-      try {
-        const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) {
-          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-          logShutdownFailure({
-            message: "Shutdown order reconciliation failed",
-            stage: "BEFORE_BUY_CANCELLATION",
-            result: reconciliation,
-          })
-        }
-      } catch (error) {
-        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown order reconciliation failed",
-          stage: "BEFORE_BUY_CANCELLATION",
-          error,
-        })
-      }
-
-      const cancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
-      if (cancellation?.ok !== true) {
-        auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown BUY cancellation failed",
-          stage: "CANCEL_OWNED_BUYS",
-          result: cancellation,
-        })
-      }
-
-      // Keep execution reports flowing until cancellation responses and
-      // fills racing with cancellation have been processed.
-      await userDataEventQueue
-      try {
-        const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) {
-          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-          logShutdownFailure({
-            message: "Shutdown order reconciliation failed",
-            stage: "AFTER_BUY_CANCELLATION",
-            result: reconciliation,
-          })
-        }
-      } catch (error) {
-        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown order reconciliation failed",
-          stage: "AFTER_BUY_CANCELLATION",
-          error,
-        })
-      }
-    }
-
-    const userDataIntakeErrors = await stopUserDataIntake({ userDataSubscription })
-    userDataIntakeStopped = true
-    if (userDataIntakeErrors.length > 0) auditReasons.push("USER_DATA_INTAKE_SHUTDOWN_FAILED")
-    await userDataEventQueue
-
-    if (tradingEnabled && tradingEngine) {
-      const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
-      const unresolvedOrders = tradingEngine.getOrders().filter((order) => {
-        if (terminalStatuses.has(order.status)) return false
-        if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) return false
-        return true
-      })
-      if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
-      if (userDataAccountingFailed || userDataRequiresReconciliation) {
-        auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
-      }
-    }
-    try {
-      if (tradingEnabled) {
-        await publishAccountSnapshot({
-          phase: "CLOSING",
-          auditStatus: auditReasons.length === 0 ? "COMPLETE" : "INCOMPLETE",
-          auditReasons,
-        })
-      }
-    } catch (error) {
-      snapshotError = error
-      logger.error?.({ message: "closing account snapshot failed", error })
-    }
-
-    userDataStatus = "STOPPED"
-    const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
-      [
-        "OWNED_BUY_CANCELLATION_FAILED",
-        "OWNED_ORDER_RECONCILIATION_FAILED",
-        "USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE",
-      ].includes(reason) || reason.startsWith("UNRESOLVED_OWNED_ORDERS:")
-    )
-    const auditError = cancellationAuditFailed
-      ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
-      : undefined
-    const cleanupErrors = [
-      ...marketIntakeErrors,
-      ...userDataIntakeErrors,
-      ...disconnectErrors,
-      ...(snapshotError ? [snapshotError] : []),
-      ...(auditError ? [auditError] : []),
-    ]
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
-    }
-    logSystem(logger, { message: "Shutdown completed" })
-  }
+  const stop = createShutdownHandler({
+    state: userDataState,
+    logger,
+    tradingEnabled,
+    getTradingEngine: () => tradingEngine,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+    getUserDataSubscription: () => userDataSubscription,
+    broker,
+    brokerName,
+    eventPublisher,
+    publishAccountSnapshot,
+  })
 
   return Object.freeze({
     tradingConfig,
     eventPublisher,
     tradingEnabled,
     strategyMode: tradingEnabled ? "conservative" : "read-only",
-    get userDataReady() { return userDataReady },
-    get userDataStatus() { return userDataStatus },
+    get userDataReady() { return userDataState.ready },
+    get userDataStatus() { return userDataState.status },
     processMarketPrice,
     updatePortfolio,
     get portfolio() { return getPortfolio() },

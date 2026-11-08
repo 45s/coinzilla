@@ -373,3 +373,173 @@ The repository's ADR-0001 already adopts Clean Architecture, Hexagonal boundarie
 ---
 
 **Final judgment:** Harvester has a credible DDD/Hexagonal foundation and should evolve by extracting cohesive workflows and clarifying consistency/ownership boundaries—not by adding architectural ceremony. Keep the first working trading cycle as the delivery priority.
+
+
+## DDD-04 implementation progress — 2026-11-08
+
+The first DDD-04 extraction is implemented on the current Harvester branch:
+
+- `createPortfolioWorkflow` moved from `src/bootstrap/start-harvester.js` to `src/use-cases/create-portfolio-workflow.js`.
+- The extracted use case owns the in-memory Portfolio/RecoveryLedger references, serialized fill-accounting queue, accounting diagnostics, recovery completion/free-inventory allocation, ledger reset, and market-price workflow composition.
+- Domain invariants remain in the existing Portfolio, RecoveryLedger, and recovery-completion modules. The extracted use case delegates to the existing `updateTradingAccounting` use case; no trading policy or broker protocol was moved.
+- Bootstrap now imports and composes the workflow. Its external runtime API and user-data event serialization are intended to remain unchanged.
+- Direct tests cover concurrent fill application, duplicate delivery, invalid fill rejection through the shared `toResult().errors` contract, and the resulting Portfolio state. The first full workspace run caught an assertion that expected a singular `error` field; the test now follows the actual shared result contract and asserts the normalized first error.
+
+This is an internal application-boundary refactor. It does not change strategy decisions, exchange behavior, Journal durability requirements, or process-restart guarantees. Remaining bootstrap responsibilities—account snapshot coordination, user-data intake/readiness, market/book subscriptions, and process shutdown—are deliberately left for later focused extractions. Test/CI status must be read from the exact PR head; source edits alone are not verification.
+
+
+## Bootstrap resource-cleanup extraction — 2026-11-08
+
+Broker resource teardown has been separated from `start-harvester.js` into `src/bootstrap/broker/cleanup-broker.js`. The module coordinates market-price, book-ticker, and user-data intake shutdown, then broker disconnect, and preserves the broker-disconnected lifecycle event and aggregate error reporting. Focused tests cover successful cleanup ordering and multiple rejected cleanup operations.
+
+This is intentionally still a bootstrap module: resource ownership, subscription teardown, broker disconnection, and process lifecycle are infrastructure orchestration rather than business workflows. It does not move broker protocol normalization or change the trading engine's shutdown cancellation/reconciliation policy. Exact-head CI must validate this extraction before it is treated as complete.
+
+
+## Account snapshot lifecycle extraction — 2026-11-08
+
+The account snapshot lifecycle has been moved from `start-harvester.js` into `src/bootstrap/account/create-account-snapshot-manager.js`. It owns the current accepted account snapshot, validates that configured market assets are present, rejects stale source timestamps, classifies account-wide open orders against known in-memory ownership, and publishes/flushes the existing account audit events.
+
+The extraction preserves the account-versus-strategy boundary: exchange balances remain availability/audit facts and are not copied into Portfolio. It also preserves the required durable PREFLIGHT/OPENING/CLOSING audit barrier; no additional per-fill snapshot loop or Journal replay was introduced. Direct tests cover successful durable publication, missing assets, stale snapshots, and external open-order classification.
+
+
+The first source review of this extraction caught two mechanical relocation issues before acceptance: the account manager needed its own local system-log adapter, and the bootstrap readiness diagnostic needed to read the snapshot through the manager accessor. Both are corrected in the follow-up commit; exact-head workflow results remain the verification source.
+
+
+## Market metadata loading extraction — 2026-11-08
+
+The configured-market metadata loop now lives in `src/bootstrap/market/load-market-metadata.js`. It retains the original broker filter reads, canonical symbol/base/quote validation, enabled-market trading-readiness policy, market metadata map updates, lifecycle DTO publication, and system logging. Disabled configured markets continue to load canonical asset metadata for account audit coverage, but do not undergo order-readiness validation or publish trading-rule events.
+
+Focused tests cover enabled/disabled behavior, broker metadata failure, and symbol mismatch. The domain readiness validator remains in `src/domain/market/`; the new module only coordinates broker reads and bootstrap lifecycle publication.
+
+
+## Pure market-data freshness policy — 2026-11-08
+
+The identical market-price and book-ticker age/future-skew checks have been consolidated into the pure `src/domain/market/is-market-data-fresh.js` helper. The caller supplies the timestamp and current time, so the helper remains deterministic and has no hidden clock or infrastructure dependency. Boundary tests cover the inclusive maximum age and future skew, stale/future events, invalid timestamps, and explicit threshold overrides.
+
+
+## User-data event-handler extraction — 2026-11-08
+
+The user-data event callback has been moved from `start-harvester.js` into `src/bootstrap/user-data/create-user-data-event-handler.js`. A single explicit state object now groups readiness, accounting-failure, event-queue, sequence, recovery-generation, and intake lifecycle flags. The extracted handler serializes accepted event processing, delegates order events to the Conservative engine, invokes the existing accounting/observer callbacks, restores readiness only under the same gates, and requests the existing BUY safety halt after invalid/accounting failures.
+
+The handler preserves the existing event processing and observer-failure isolation semantics. Direct tests cover successful serialized events, malformed event rejection, engine rejection of unowned order events, and observer failures that must not roll back committed accounting. User-data status/recovery handling remains in bootstrap and is the next separate boundary; no recovery acknowledgement or reconciliation semantics were changed in this extraction.
+
+
+The user-data handler extraction follow-up also corrected the state-object handoff: the new handler now uses only its injected `state` argument, and the bootstrap state initializer retains plain property keys. The full suite/syntax workflow on the exact updated head is required to accept this mechanical state-boundary change.
+
+
+## User-data status/recovery handler extraction — 2026-11-08
+
+Broker status event publication and readiness transitions now live in `src/bootstrap/user-data/create-user-data-status-handler.js`. The handler owns transport-unsafe classification, recovery-generation invalidation, application readiness transitions, execution-normalization failure handling, and status-observer failure containment.
+
+The application reconciliation gate remains distinct from the broker's stream-level `reconciled` status. A stream status alone cannot reopen trading; the existing REST/stream reconciliation, durable account/open-order audit, and explicit broker recovery acknowledgement remain in the still-bootstrap-owned recovery task. Direct tests cover disconnect, reconciled-but-blocked, recovered-before-startup, normalization failure, and observer failure.
+
+
+The status-handler extraction follow-up corrected the same mechanical relocation issue as the event handler: the new module now references only its injected `state` object, not the former bootstrap-local variable name. Exact-head CI is required to validate both extracted handlers and the shared state transitions.
+
+
+The status-handler CI regression pinpointed one remaining doubled state qualifier in the recovered-generation guard. That reference is corrected to the injected state object's `lastAcknowledgedRecoveryGeneration` field; the failure was isolated to this guard, and the existing integration cases for recovery sequencing are retained.
+
+
+## User-data recovery coordinator extraction — 2026-11-08
+
+The application recovery task now lives in `src/bootstrap/user-data/create-user-data-recovery-handler.js`. It preserves owned-order REST reconciliation, generation checks, serialized event draining, repeated account/open-order REST reads when the event sequence changes, durable RECOVERY account/open-order audits, and explicit broker acknowledgement. It does not let the broker's transport-level `recovered` or `reconciled` status alone reopen trading.
+
+Direct tests cover startup gating, successful acknowledgement after both audits, superseded generations, events arriving during REST reads, and durable audit failure. The coordinator remains bootstrap-owned because it sequences broker I/O, the user-data stream, and Journal barriers.
+
+
+The recovery-handler source review corrected the extracted function's remaining references to the old bootstrap-local `userDataState` identifier. The module now reads and updates only the injected `state` object, matching the event/status handler interfaces. Exact-head CI remains the acceptance gate.
+
+
+The recovery extraction initially captured the adjacent status-handler composition block as part of the new recovery module, producing a syntax error and removing the status-handler initialization from bootstrap. The follow-up restores the composition to `start-harvester.js` and leaves the recovery module with only the recovery factory. The syntax and Harvester workflows must pass on the updated head before this step is accepted.
+
+
+A follow-up source/syntax review removed one duplicate closing brace left by the recovery-function extraction and restored the normal multiline subscription options formatting. This is a mechanical syntax correction; the recovery logic and status-handler composition are otherwise unchanged.
+
+
+## Shutdown handler extraction — 2026-11-08
+
+The ordered process shutdown workflow now lives in `src/bootstrap/shutdown/create-shutdown-handler.js`. It preserves market/book intake teardown, draining accepted market/user-data work, owned-order reconciliation before and after BUY cancellation, user-data disconnect, unresolved-order checks, durable CLOSING account audit, broker disconnect, and aggregate error reporting.
+
+The extraction also fixes concurrent stop semantics: callers share one in-flight shutdown promise and all observe its completion/failure. Direct tests cover the safety-critical sequence, concurrent callers, and multiple cleanup failures. This does not change the policy to cancel owned BUY orders while retaining eligible open SELL orders.
+
+
+The recovery-handler CI run caught one remaining dependency on the former bootstrap-local ownership-reconciliation flag during RECOVERY open-order publication. The extracted coordinator now tracks the successful reconciliation result locally for the duration of its recovery pass while updating the shared bootstrap flag, preserving the original ownership classification.
+
+
+The first shutdown-module review corrected two mechanical extraction leftovers before acceptance: the moved handler now uses its injected `state` object and no longer repeats the shutdown guard/state transition/log entry already owned by the shared-promise wrapper. The direct shutdown test fixture now models user-data disconnect as part of intake teardown.
+
+
+## Market subscription coordinator extraction — 2026-11-08
+
+Market-price and book-ticker intake setup now lives in `src/bootstrap/subscriptions/subscribe-to-market-data.js`. The module owns per-enabled-market subscription setup, callback processing/error containment, subscription lifecycle events, all-symbol subscription verification, and REST first-price seeding after all WebSocket streams are established.
+
+It preserves fresh WebSocket first-price preference (avoiding redundant REST seeds), read-only mode without book subscriptions/REST seeding, and unsubscribe handles for shutdown. Direct tests cover ordering, fresh WebSocket behavior, read-only behavior, and failed subscription evidence.
+
+
+The first full test run after adding subscription/shutdown/recovery unit tests identified test-fixture ordering issues rather than production regressions: the shutdown market-task promise used a different call log, the concurrent-stop test asserted before the broker-disconnect phase was reached, and the recovery test omitted its mutable state argument. Those fixtures are corrected; the market subscription reporter is now scoped inside its injected coordinator and stop-state checks use the injected predicate.
+
+
+## Broker connection lifecycle extraction — 2026-11-08
+
+Broker adapter construction, broker-port assertion, connection lifecycle publication, failure diagnostics, and disconnect-on-connect-failure cleanup now live in `src/bootstrap/broker/connect-broker.js`. It preserves the original behavior of rethrowing the connection error after successful cleanup and raising an AggregateError containing both failures when disconnect cleanup also fails.
+
+Direct tests cover connection success, connection failure with cleanup, and dual-failure aggregation. The broker adapter's exchange protocol implementation remains in the infrastructure/broker layer.
+
+
+## User-data subscription/startup gate extraction — 2026-11-08
+
+User-data subscription establishment and the initial PREFLIGHT account/open-order audits now live in `src/bootstrap/user-data/subscribe-to-user-data.js`. It preserves subscription-before-snapshot ordering, serializes the initial account audit behind accepted user-data events, requires the open-order audit, and opens TESTNET readiness only after the event queue and stream state are safe. Read-only mode still performs the PREFLIGHT account/open-order audits but never opens trading readiness.
+
+Direct tests cover read-only startup, successful trading startup, malformed subscription failure evidence, and unsafe events observed before order ownership initialization.
+
+
+## Startup configuration/read-only policy extraction — 2026-11-08
+
+Harvester config loading, strategy/pair validation, broker/mode resolution, TESTNET/non-production safety gates, and CONFIG_VALIDATED lifecycle publication now live in `src/bootstrap/config/resolve-harvester-options.js`. The read-only Conservative no-action decision is a separate deterministic use-case helper in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+
+Direct tests cover read-only mode, all explicit TESTNET gates, invalid configuration flags, and immutable no-action evaluation. No default or production trading permission is broadened.
+
+
+The broker-connection test fixture now implements the complete structural BrokerPort contract, not only the methods exercised by connection itself. This keeps the unit test aligned with the production composition-boundary assertion.
+
+
+The first integrated startup regression run found that a PREFLIGHT audit failure could occur after the broker subscription was created but before the new helper returned its handle to outer cleanup. The helper now reports the established subscription to bootstrap immediately, before snapshot work, so the existing failure cleanup can always disconnect it. The same run found that the extracted market subscription module relied on the old bootstrap-local `enabledSymbols`; it now derives the enabled list from its injected pair config.
+
+
+The develop synchronization incorporated the confirmed #626 recovery fix (PR #673): user-data order events accepted while application reconciliation is pending must be processed in recovery mode, and terminal recovery events must retain deferred strategy evaluation until acknowledgement. The extracted event handler now computes that mode at serialized task execution time and passes it to both the trading engine and observer. The upstream engine regression and integration tests are preserved in this branch.
+
+## CI regression fixes — 2026-11-08
+
+The first exact-head CI run identified a missing BrokerPort fixture method, an unnecessary REST ticker call despite a fresh WebSocket tick, missing recovery-mode propagation into the trading engine, and two test-fixture defects. These are corrected in the current branch; the exact-head CI suite is being rerun before the refactor is considered verified.
+
+
+## Bootstrap extraction follow-up — 2026-11-08
+
+The bootstrap workflow extraction now covers the main independent process
+responsibilities: startup configuration resolution, broker connection and
+cleanup, account snapshot management, market metadata loading, market/book
+subscription orchestration, user-data subscription/PREFLIGHT gating, serialized
+user-data event/status/recovery handlers, and ordered shutdown. The composition
+root wires these modules rather than duplicating their implementations.
+
+One remaining application workflow was identified during the final composition
+review: the account-integrity safety halt. It reconciles owned order identities
+before cancelling owned BUYs and coalesces concurrent triggers. This now lives
+in `src/use-cases/create-account-integrity-safety-halt.js` with direct tests
+for sequencing, concurrency, stopped-process behavior, and failure reporting.
+
+The extracted shutdown handler was compared with the original implementation
+on `develop`. The original ordering is retained: market intake stop and drain,
+user-data queue drain, pre-cancellation reconciliation, owned BUY cancellation,
+post-cancellation event drain and reconciliation, user-data intake stop,
+CLOSING audit, and broker disconnect. The test was corrected to observe all
+participants on a shared timeline; production ordering was not changed to fit
+the failing assertion.
+
+The PREFLIGHT subscription regression now uses a locally scoped subscription
+and event fixture, awaits the expected audit rejection, and verifies the
+captured handle remains disconnectable by outer bootstrap cleanup.
+
+These changes improve separation and testability without moving financial
+accounting invariants out of domain/application workflows or changing order,
+fill, recovery, or readiness semantics. Exact-head GitHub Actions on commit `900a4207df64d075608907eeb4f22e63764fc0a8` subsequently passed Harvester unit tests, Harvester coverage, targeted tests, workspace unit tests and coverage, JavaScript syntax, dependency audit, Utils unit tests, and actionlint. The read-only Binance TESTNET integration job was skipped by its workflow condition; no exchange operation was performed.

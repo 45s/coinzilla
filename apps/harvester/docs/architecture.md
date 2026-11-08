@@ -294,14 +294,20 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Responsibility | Harvester location / owner |
 | --- | --- |
 | Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
+
+Market-data timestamp freshness is a deterministic domain policy in `src/domain/market/is-market-data-fresh.js`; the caller supplies the current time and policy bounds.
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
+
+Broker adapter construction, port validation, connection, and failure cleanup are coordinated by `src/bootstrap/broker/connect-broker.js`. Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading. The normalized user-data event queue and observer boundary are handled by `src/bootstrap/user-data/create-user-data-event-handler.js`; the process coordinator supplies mutable readiness state and safety actions. User-data subscription establishment and the durable PREFLIGHT readiness gate are coordinated by `src/bootstrap/user-data/subscribe-to-user-data.js`. Broker status/readiness transitions are handled by `src/bootstrap/user-data/create-user-data-status-handler.js`; transport recovery remains distinct from application reconciliation. The application recovery task and its REST/stream sequence plus durable Journal barriers are coordinated by `src/bootstrap/user-data/create-user-data-recovery-handler.js`. The shutdown sequence is owned by `src/bootstrap/shutdown/create-shutdown-handler.js`, including shared in-flight shutdown completion for concurrent stop callers. Market-price/book subscription setup and initial REST ticker seeding are composed by `src/bootstrap/subscriptions/subscribe-to-market-data.js`, which owns the WebSocket-before-REST ordering.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 
-Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The current market-price workflow injects `evaluateStrategy`; the current `updatePortfolio` workflow is a direct function because it has no external dependencies. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
+Startup configuration validation and environment gates are coordinated by `src/bootstrap/config/resolve-harvester-options.js`; the deterministic read-only strategy fallback lives in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+
+Use dependency-injected functions for application workflows and plain pure functions for all meaningful deterministic calculations and policies. The market-price workflow injects `evaluateStrategy`. The state-owning `createPortfolioWorkflow` factory in `src/use-cases/create-portfolio-workflow.js` serializes fill accounting and recovery completion while delegating immutable state transitions to Portfolio and RecoveryLedger. This is mandatory: meaningful pure logic must be extracted into cohesive, independently testable modules, even with one caller. Use classes only for concepts that own state and enforce lifecycle invariants. Do not introduce classes or one-function files mechanically; follow the class-versus-function rules above and the repository's cohesion standards.
 
 ### Testing pattern
 
@@ -563,3 +569,31 @@ trading remains paused rather than guessing.
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
+
+Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
+
+
+## Bootstrap composition and safety-halt workflow
+
+`bootstrap/start-harvester.js` is the process composition root. It resolves
+configuration, constructs domain/application state, connects adapters, wires
+user-data and market-data handlers, establishes startup gates, and exposes the
+runtime stop operation. It delegates account snapshots, market metadata,
+subscription setup, user-data event/status/recovery handling, and shutdown
+sequencing to focused bootstrap modules.
+
+The account-integrity safety halt is an application workflow in
+`src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
+execution or accounting failure is observed, it reconciles broker-owned order
+identities before asking the trading engine to cancel only strategy-owned BUYs.
+Concurrent triggers share one in-flight task. Bootstrap supplies the live
+engine lookup, stopped-process predicate, and logger; the use case does not
+depend on broker SDK or process-global state.
+
+Shutdown preserves the original safety sequence: stop market intake and drain
+accepted market work; drain accepted user-data events; reconcile owned orders;
+cancel owned BUYs; drain cancellation/fill reports and reconcile again; stop
+user-data intake; publish the CLOSING account audit; then disconnect broker
+resources. User-data intake intentionally remains active through cancellation
+and its follow-up reconciliation so late execution reports are still accounted
+before the final audit.

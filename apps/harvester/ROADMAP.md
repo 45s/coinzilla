@@ -55,7 +55,6 @@ These items are intentionally recorded for future work. They are not current tra
 ## Current work selection
 
 - [~] Close the 2026-11-07/08 session follow-up: account-integrity halt leaving an owned BUY live is fixed in [PR #669](https://github.com/45s/coinzilla/pull/669); configured-asset snapshot correction is implemented in [PR #670](https://github.com/45s/coinzilla/pull/670). Tracking issue: [#667](https://github.com/45s/coinzilla/issues/667); evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667).
-- [~] Fix the #626 reconnect-recovery event-mode regression: process queued user-data events in recovery mode while authoritative reconciliation is pending, and preserve deferred strategy evaluation until acknowledgement. Regression and implementation are in [PR #673](https://github.com/45s/coinzilla/pull/673); keep transport recovery distinct from application readiness and retain all existing fail-closed/durable reconciliation gates.
 - [~] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Tracking PR: [#663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
@@ -695,12 +694,98 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 ### DDD-04 — Extract accounting/recovery workflows from bootstrap
 
-- [ ] Extract fill accounting coordination into a focused injected application workflow.
-- [ ] Extract recovery completion/free-inventory allocation and ledger reset if still implemented in bootstrap.
-- [ ] Keep bootstrap as composition root and process-lifecycle owner.
-- [ ] Preserve serialized event processing and add workflow/composition regression tests.
+- [x] Extract the state-owning Portfolio/RecoveryLedger workflow factory into `src/use-cases/create-portfolio-workflow.js`. It owns serialized canonical-fill accounting, immutable projection commits, recovery completion/free-inventory allocation, ledger reset, and market-price workflow composition.
+- [x] Keep the domain invariants in `Portfolio`, `RecoveryLedger`, and `evaluateRecoveryCompletion`; the extracted use case coordinates them and preserves the existing result/runtime API.
+- [x] Add direct use-case tests for concurrent fills, duplicate delivery, invalid non-canonical input, and resulting Portfolio/RecoveryLedger state without starting Harvester.
+- [x] Keep bootstrap as the composition root for this workflow and preserve the existing user-data event queue and process-lifecycle sequencing.
+- [~] Continue the remaining bootstrap decomposition (account snapshot coordination, user-data intake/readiness, market/book subscriptions, and shutdown/resource cleanup) in small independently tested increments.
 
-**Acceptance:** accounting and recovery transitions can be tested without starting Harvester; bootstrap primarily wires dependencies and resources.
+**Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
+
+### Startup configuration and read-only policy extraction — 2026-11-08
+
+- [x] Move config loading, strategy/pair validation, environment safety gates, mode selection, and CONFIG_VALIDATED lifecycle publication into `src/bootstrap/config/resolve-harvester-options.js`.
+- [x] Move the deterministic read-only Conservative fallback decision into `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+- [x] Add direct tests for read-only resolution, explicit TESTNET gates, invalid strategy flags, and immutable no-action decisions.
+
+### Broker connection lifecycle extraction — 2026-11-08
+
+- [x] Move broker adapter construction, broker-port validation, connection lifecycle publication, failure logging, and disconnect-on-connect-failure cleanup into `src/bootstrap/broker/connect-broker.js`.
+- [x] Preserve the AggregateError contract when both connection and cleanup fail.
+- [x] Add direct tests for successful connection, failed connection cleanup, and dual-failure aggregation.
+
+### Market subscription coordinator extraction — 2026-11-08
+
+- [x] Move book-ticker and market-price subscription setup, callback processing, subscription event publication, all-symbol readiness validation, and initial REST ticker seeding into `src/bootstrap/subscriptions/subscribe-to-market-data.js`.
+- [x] Preserve the ordering guarantee that every enabled WebSocket stream is established before any REST ticker seed is fetched.
+- [x] Preserve fresh WebSocket first-price preference, read-only mode behavior, callback error containment, and shutdown-owned unsubscribe handles.
+- [x] Add direct tests for subscription/seed ordering, fresh WebSocket suppression of REST seed, read-only mode, and subscription failure evidence.
+
+### Shutdown handler extraction — 2026-11-08
+
+- [x] Move the process shutdown sequence into `src/bootstrap/shutdown/create-shutdown-handler.js`.
+- [x] Preserve market-intake unsubscribe and in-flight callback draining, owned-order reconciliation before/after BUY cancellation, user-data drain/disconnect, unresolved-order checks, CLOSING account audit, error aggregation, and final broker disconnect.
+- [x] Improve concurrent stop idempotency: all callers now await the same in-flight shutdown promise instead of later callers returning before cleanup completes.
+- [x] Add direct tests for safety-critical ordering, concurrent callers, and aggregated cleanup failures.
+
+### User-data subscription/startup gate extraction — 2026-11-08
+
+- [x] Move user-data subscription setup, success/failure lifecycle evidence, serialized initial PREFLIGHT account audit, open-order audit, and TESTNET readiness gate into `src/bootstrap/user-data/subscribe-to-user-data.js`.
+- [x] Preserve subscription-before-snapshot ordering, expose the live subscription handle to outer cleanup before PREFLIGHT audit work, and open readiness only after durable account/open-order audits plus safe stream state.
+- [x] Add direct tests for read-only startup, safe trading startup, malformed subscriptions, and unsafe pre-initialization events.
+
+### User-data recovery coordinator extraction — 2026-11-08
+
+- [x] Move the application recovery task into `src/bootstrap/user-data/create-user-data-recovery-handler.js`.
+- [x] Preserve owned-order REST reconciliation, event-sequence bracketing/retry of account and open-order snapshots, durable RECOVERY audit publication, and explicit broker acknowledgement.
+- [x] Preserve recovery-generation invalidation and fail-closed behavior when reconciliation, snapshots, Journal durability, or acknowledgement fail.
+- [x] Add direct tests for startup gating, successful recovery, superseded generations, events during REST audit reads, and durable audit failure.
+
+### User-data status/recovery handler extraction — 2026-11-08
+
+- [x] Move broker status publication, transport-unsafe transitions, recovery-generation invalidation, readiness updates, and observer failure handling into `src/bootstrap/user-data/create-user-data-status-handler.js`.
+- [x] Preserve the distinction between broker stream recovery and application REST/stream reconciliation; only the application recovery coordinator may acknowledge recovery and reopen trading.
+- [x] Add direct tests for disconnect invalidation, reconciled-but-still-blocked state, recovered-before-startup handling, execution normalization failure, and observer failure.
+- [ ] Extract the REST/stream recovery task itself and its account-audit/acknowledgement sequence.
+
+### User-data event handler extraction — 2026-11-08
+
+- [x] Group user-data readiness, sequencing, recovery-generation, and intake flags in one explicit bootstrap state object.
+- [x] Move serialized user-data event processing, canonical engine event handling, accounting/observer dispatch, readiness restoration, and failure-triggered safety-halt requests into `src/bootstrap/user-data/create-user-data-event-handler.js`.
+- [x] Add direct tests for successful event sequencing, malformed input, unowned/invalid engine results, and observer isolation.
+- [ ] Extract the user-data status/recovery coordinator while preserving generation invalidation, REST/stream reconciliation, durable account audits, and the broker recovery acknowledgement barrier.
+
+### Market-data freshness policy extraction — 2026-11-08
+
+- [x] Move the shared market-price/book timestamp freshness decision into the pure domain helper `src/domain/market/is-market-data-fresh.js`.
+- [x] Keep time acquisition injected at the bootstrap/engine boundary; the helper has no clock, I/O, or mutable state.
+- [x] Add deterministic tests for inclusive age/future-skew boundaries, stale/future timestamps, invalid values, and explicit policy overrides.
+
+### Market metadata loading extraction — 2026-11-08
+
+- [x] Move broker market-filter reads, canonical symbol/asset checks, enabled-pair readiness validation, market metadata storage, and trading-rule lifecycle publication into `src/bootstrap/market/load-market-metadata.js`.
+- [x] Preserve metadata loading for disabled configured pairs so account audits still include their base/quote assets; only enabled pairs undergo trading readiness validation.
+- [x] Add tests for enabled/disabled pair behavior, metadata-load failure, and symbol mismatch.
+- [ ] Continue separating market/book subscription setup and initial ticker seeding.
+
+### Account snapshot manager extraction — 2026-11-08
+
+- [x] Move broker account-balance capture, configured-asset validation, account-wide open-order ownership classification, and durable PREFLIGHT/OPENING/CLOSING event publication into `src/bootstrap/account/create-account-snapshot-manager.js`.
+- [x] Keep broker reads and mandatory Journal flush barriers in the bootstrap lifecycle boundary; preserve account-versus-strategy inventory ownership.
+- [x] Add direct tests for durable publication, missing configured assets, stale snapshots, and unowned open orders.
+- [ ] Continue separating the user-data event/readiness coordinator and market/book subscription lifecycle.
+
+The manager does not replay Journal history, adopt external balances/orders, add per-fill REST snapshots, or weaken any durability barrier.
+
+### Bootstrap resource-cleanup extraction — 2026-11-08
+
+- [x] Move broker intake teardown and disconnect coordination into `src/bootstrap/broker/cleanup-broker.js`; keep it in bootstrap because it owns process resources and lifecycle ordering.
+- [x] Preserve best-effort cleanup of market-price, book-ticker, and user-data subscriptions; attempt broker disconnect even when earlier cleanup operations reject.
+- [x] Preserve the broker-disconnected lifecycle event and aggregate every cleanup error for the caller.
+- [x] Add focused tests for successful cleanup ordering and multiple simultaneous cleanup failures.
+- [ ] Continue extracting the account snapshot manager, market metadata loading, user-data coordinator, and shutdown orchestration in later increments.
+
+This is process-lifecycle infrastructure, not trading policy. It does not alter the required shutdown BUY-cancellation/SELL-retention rules or the CLOSING account-audit barrier.
 
 ### DDD-05 — Decompose Conservative Trading Engine incrementally
 
@@ -1636,3 +1721,24 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 **Explicitly outside this closure:** workstation process-restart reconstruction remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). The historical CLOSING open-order payload and post-fill account snapshot were not preserved; those historical facts remain UNVERIFIED and non-blocking. Exact historical DOGE/ZRO exchange filters were not captured, so no candidate filter assumptions are represented as historical facts. No TESTNET acceptance is claimed.
 
 **Next phase — verification only:** execute the focused Conservative tests, full Harvester test suite, and required exact-head CI. The tests are present but have not yet been run on this updated head; no passing test or CI result is claimed. Fix any failures in that separate phase. This audit closure does not authorize TESTNET writes, bot restarts, or merging PR #653.
+
+- [~] Fix the #626 reconnect-recovery event-mode regression: process queued user-data events in recovery mode while authoritative reconciliation is pending, and preserve deferred strategy evaluation until acknowledgement. Regression and implementation are in [PR #673](https://github.com/45s/coinzilla/pull/673); keep transport recovery distinct from application readiness and retain all existing fail-closed/durable reconciliation gates.
+
+
+### CI regression fixes — 2026-11-08
+
+- [x] Make the broker connection test fixture satisfy the full structural BrokerPort contract.
+- [x] Avoid unnecessary REST ticker requests when a fresh WebSocket price arrives during subscription setup.
+- [x] Pass the recovery-mode classification through to the trading engine as well as the observer.
+- [x] Verify shutdown ordering against the original `develop` implementation; the test now records engine, intake, audit, and disconnect operations on one shared timeline without weakening the safety order.
+- [x] Fix the PREFLIGHT failure test to own its subscription/event fixtures, await the expected rejection, and prove bootstrap can disconnect the subscription handle after audit failure.
+- [x] Extract account-integrity safety-halt orchestration into `src/use-cases/create-account-integrity-safety-halt.js`; directly test reconciliation-before-cancellation, concurrent trigger coalescing, stopped-process behavior, and observable failures.
+- [x] Remove stale imports left in `start-harvester.js`; all current bootstrap and use-case extractions are wired into the composition root.
+
+
+### Bootstrap composition follow-up — 2026-11-08
+
+- [x] Move the account-integrity safety-halt workflow (owned-order reconciliation followed by owned BUY cancellation) from the composition root into a directly tested application use case.
+- [x] Keep process-stop checks, engine lookup, and logger injection explicit at the bootstrap boundary; the workflow coalesces concurrent safety-halt triggers and preserves failure logging.
+- [x] Confirm the extracted shutdown handler retains the original order: stop market intake, drain market/user-data work, reconcile, cancel owned BUYs, drain and reconcile cancellation/fill reports, stop user-data intake, audit CLOSING, then disconnect.
+- [x] Exact-head GitHub Actions on `900a4207df64d075608907eeb4f22e63764fc0a8`: Harvester unit tests, Harvester coverage, targeted tests, workspace unit tests/coverage, JavaScript syntax, dependency audit, Utils unit tests, and actionlint all passed. The read-only Binance TESTNET integration job was skipped by its workflow condition; no exchange operation was performed.

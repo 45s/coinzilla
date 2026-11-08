@@ -1,0 +1,275 @@
+import { Fill } from "@coinzilla/entities"
+import { compareDecimal, maxDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
+import { makeProcessMarketPrice } from "./process-market-price.js"
+import { updateTradingAccounting as applyTradingAccounting } from "./update-trading-accounting.js"
+import {
+  createPortfolioLogSummary,
+  createPositionLogSummary,
+  createRecoveryLedgerLogSummary,
+} from "../application/logging/trading-state-log-summary.js"
+
+/**
+ * Create the in-memory Portfolio and RecoveryLedger workflow used by Harvester.
+ *
+ * Owns serialized canonical-fill accounting and recovery-cycle completion.
+ * Bootstrap composes this stateful workflow with broker and process lifecycle
+ * resources; the domain transitions remain in Portfolio and RecoveryLedger.
+ *
+ * @param {object} options
+ * @param {Function} options.evaluateStrategy Strategy evaluator used by market-price processing.
+ * @param {object} options.logger Structured logger used for workflow diagnostics.
+ * @param {Portfolio} [options.initialPortfolio] Initial immutable portfolio.
+ * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
+ * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
+ */
+export const createPortfolioWorkflow = ({ evaluateStrategy, logger, initialPortfolio, initialRecoveryLedgers } = {}) => {
+  if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
+    throw new TypeError("initialRecoveryLedgers must be a Map")
+  }
+  let portfolio = initialPortfolio ?? new Portfolio()
+  const recoveryLedgers = new Map(initialRecoveryLedgers ?? [])
+  let updateQueue = Promise.resolve()
+
+  const tracedEvaluateStrategy = (input = {}) => {
+    const marketId = input.marketMetadata?.market?.id
+    const recoveryLedger = marketId ? recoveryLedgers.get(marketId) : undefined
+    logger.debug?.({
+      message: "Strategy evaluation input",
+      symbol: input.marketPrice?.symbol,
+      marketPrice: input.marketPrice,
+      lastBuyPrice: input.lastBuyPrice,
+      activeOrders: input.activeOrders,
+      pairConfig: input.pairConfig,
+      settings: input.settings,
+      portfolio: createPortfolioLogSummary({ portfolio, marketId }),
+      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+    })
+    const decision = evaluateStrategy(input)
+    logger.debug?.({
+      message: "Strategy evaluation result",
+      symbol: input.marketPrice?.symbol,
+      action: decision?.action,
+      reason: decision?.reason,
+      actions: decision?.actions,
+      position: decision?.position,
+      recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+    })
+    return decision
+  }
+  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
+
+  const updateTradingAccounting = ({ fill } = {}) => {
+    const task = updateQueue.then(() => {
+      if (!(fill instanceof Fill)) {
+        logger.error?.({
+          message: "accounting rejected non-canonical fill",
+          fillType: fill?.constructor?.name ?? typeof fill,
+        })
+        return toResult({ error: new TypeError("updateTradingAccounting requires a canonical Fill") })
+      }
+
+      const previousPortfolio = portfolio
+      const currentLedger = recoveryLedgers.get(fill.market.id) ??
+        RecoveryLedger.empty({ market: fill.market })
+      const previousPosition = previousPortfolio.getPosition({ marketId: fill.market.id })
+      const commissionFacts = (fill.commissions ?? []).map(({ amount } = {}) => ({
+        amount: amount?.amount,
+        asset: amount?.asset?.code,
+        assetId: amount?.asset?.id,
+      }))
+
+      logger.debug?.({
+        message: "Execution received",
+        executionId: fill.id,
+        tradeId: fill.tradeId,
+        brokerOrderId: fill.brokerOrderId,
+        clientOrderId: fill.clientOrderId,
+        marketId: fill.market.id,
+        symbol: fill.market.symbol,
+        side: fill.side,
+        liquidityRole: fill.liquidityRole,
+        executedAt: fill.executedAt,
+        price: fill.price?.amount,
+        quantity: fill.quantity?.amount,
+        quoteQuantity: fill.quoteQuantity?.amount,
+        commissionStatus: fill.commissionStatus,
+        commissions: commissionFacts,
+        thirdAssetCommissionQuoteValues: (fill.commissions ?? [])
+          .filter(({ amount } = {}) => amount?.asset?.id !== fill.market.baseAsset.id &&
+            amount?.asset?.id !== fill.market.quoteAsset.id)
+          .map(({ quoteValue } = {}) => quoteValue?.amount ?? null),
+        previousPosition: createPositionLogSummary({ position: previousPosition }),
+        previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
+      })
+
+      const result = applyTradingAccounting({
+        portfolio,
+        recoveryLedger: currentLedger,
+        fill,
+      })
+      if (result.ok) {
+        portfolio = result.data.portfolio
+        recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+        const nextPosition = portfolio.getPosition({ marketId: fill.market.id })
+        const nextLedger = result.data.recoveryLedger
+        logger.debug?.({
+          message: "Execution accounted",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          applied: result.data.applied,
+          duplicate: result.data.duplicate,
+          nextPosition: createPositionLogSummary({ position: nextPosition }),
+          nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: nextLedger }),
+          accountingDelta: {
+            portfolioActiveBase: subtractDecimal({
+              left: nextPosition?.baseQuantity.amount ?? "0",
+              right: previousPosition?.baseQuantity.amount ?? "0",
+            }),
+            portfolioFreeBase: subtractDecimal({
+              left: nextPosition?.freeBaseQuantity.amount ?? "0",
+              right: previousPosition?.freeBaseQuantity.amount ?? "0",
+            }),
+            portfolioQuoteCashFlow: subtractDecimal({
+              left: nextPosition?.quoteNetCashFlow.amount ?? "0",
+              right: previousPosition?.quoteNetCashFlow.amount ?? "0",
+            }),
+            positionSpent: subtractDecimal({
+              left: nextPosition?.spent.amount ?? "0",
+              right: previousPosition?.spent.amount ?? "0",
+            }),
+            netSellProceeds: subtractDecimal({
+              left: nextLedger.netSellProceeds,
+              right: currentLedger.netSellProceeds,
+            }),
+            outstandingRecoveryAmount: subtractDecimal({
+              left: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: nextPosition?.spent.amount ?? "0",
+                  right: nextLedger.netSellProceeds,
+                }),
+              }),
+              right: maxDecimal({
+                left: "0",
+                right: subtractDecimal({
+                  left: previousPosition?.spent.amount ?? "0",
+                  right: currentLedger.netSellProceeds,
+                }),
+              }),
+            }),
+            realizedNetProfit: subtractDecimal({
+              left: subtractDecimal({
+                left: nextLedger.netSellProceeds,
+                right: nextPosition?.spent.amount ?? "0",
+              }),
+              right: subtractDecimal({
+                left: currentLedger.netSellProceeds,
+                right: previousPosition?.spent.amount ?? "0",
+              }),
+            }),
+          },
+        })
+      } else {
+        logger.error?.({
+          message: "accounting execution rejected",
+          executionId: fill.id,
+          tradeId: fill.tradeId,
+          symbol: fill.market.symbol,
+          errors: (result.errors ?? []).map((error) => ({
+            name: error?.name,
+            message: error?.message ?? String(error),
+            stack: error?.stack,
+          })),
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio: previousPortfolio, marketId }),
+          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: currentLedger }),
+        })
+      }
+      return result
+    })
+    updateQueue = task.then(() => undefined, () => undefined)
+    return task
+  }
+
+  return {
+    updatePortfolio: updateTradingAccounting,
+    updateTradingAccounting,
+    processMarketPrice: (input = {}) => processMarketPrice({ ...input, portfolio }),
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: ({ marketId } = {}) => recoveryLedgers.get(marketId),
+    completeRecoveryCycle: ({ marketId, keepQuantity, minProfit, inventoryDisposition } = {}) => {
+      const recoveryLedger = recoveryLedgers.get(marketId)
+      const position = portfolio.getPosition({ marketId })
+      if (!recoveryLedger || !position) {
+        return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
+      }
+      try {
+        const completionInput = {
+          sellOrderFullyFilled: true,
+          spent: position.spent.amount,
+          netSellProceeds: recoveryLedger.netSellProceeds,
+          activeQuantity: position.baseQuantity.amount,
+          keepQuantity,
+          minProfit,
+          ...(inventoryDisposition === undefined ? {} : { inventoryDisposition }),
+        }
+        logger.debug?.({
+          message: "recovery completion evaluation input",
+          marketId,
+          symbol: recoveryLedger.market.symbol,
+          completionInput,
+          position: createPositionLogSummary({ position }),
+          recoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+        })
+        const completion = evaluateRecoveryCompletion(completionInput)
+        if (completion.eligible) {
+          const previousPortfolio = portfolio
+          const previousLedger = recoveryLedger
+          if (compareDecimal({ left: completion.freeQuantity, right: "0" }) > 0) {
+            portfolio = portfolio.allocateFreeQuantity({ marketId, quantity: completion.freeQuantity })
+          }
+          portfolio = portfolio.resetRecoveryBasis({ marketId })
+          const resetLedger = recoveryLedger.resetCycle()
+          recoveryLedgers.set(marketId, resetLedger)
+          logger.debug?.({
+            message: "Recovery cycle completed",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            previousPosition: createPositionLogSummary({ position: previousPortfolio.getPosition({ marketId }) }),
+            nextPosition: createPositionLogSummary({ position: portfolio.getPosition({ marketId }) }),
+            previousRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: previousLedger }),
+            nextRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger: resetLedger }),
+          })
+        } else {
+          logger.debug?.({
+            message: "recovery cycle not completed",
+            marketId,
+            symbol: recoveryLedger.market.symbol,
+            completion,
+            unchangedPosition: createPositionLogSummary({ position }),
+            unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+          })
+        }
+        return toResult({ data: completion })
+      } catch (error) {
+        logger.error?.({
+          message: "recovery completion evaluation failed",
+          marketId,
+          errorName: error?.name,
+          errorMessage: error?.message ?? String(error),
+          errorStack: error?.stack,
+          unchangedPortfolio: createPortfolioLogSummary({ portfolio, marketId }),
+          unchangedRecoveryLedger: createRecoveryLedgerLogSummary({ recoveryLedger }),
+        })
+        return toResult({ error })
+      }
+    },
+  }
+}
