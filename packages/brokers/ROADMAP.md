@@ -149,7 +149,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. Slices 1–5 are merged via PRs #596, #599, #602, #603, and #605. The user-data recovery vertical slice now has a pure domain policy, application coordinator, application-facing client port, and Binance infrastructure adapter.
+**Status:** in progress. Slices 1–6 are merged via PRs #596, #599, #602, #603, #605, and #691. The user-data recovery vertical slice now has a pure domain policy, application coordinator, application-owned client port, and Binance infrastructure adapter.
 
 **Progress**
 - [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged via PR #596. Six pure domain tests; package tests and domain coverage gate passed.
@@ -157,7 +157,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - [x] Slice 3 — normalize Binance user-data events and termination notifications in the adapter; the session retains only generic bounded identity state. Merged via PR #602; 400/400 broker tests and coverage passed.
 - [x] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and initially define `src/ports/user-data-client-port.js` (relocated under `src/application/ports/` by Slice 6); runtime port validation and application/port coverage merged via PR #603. 405/405 broker tests and coverage passed.
 - [x] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate deterministic adapter tests, and include infrastructure modules in the package coverage gate; merged via PR #605 on 2026-11-05 (merge commit `675b4c693abceecfd26a6401a7430f148c0ca1cc`).
-- [~] Slice 6 — move the application-owned `UserDataClientPort` contract and its deterministic contract tests from `src/ports/` to `src/application/ports/`; update application/adapter imports, package coverage includes, and architecture/roadmap docs. No runtime behavior or port contract changes.
+- [x] Slice 6 — move the application-owned `UserDataClientPort` contract and its deterministic contract tests from `src/ports/` to `src/application/ports/`; update application/adapter imports, package coverage includes, and architecture/roadmap docs. Merged via PR #691; contract/test contents unchanged, and package/workspace verification passed.
 
 ---
 
@@ -719,11 +719,11 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Existing user-data recovery vertical slice and current import direction documented.
 - [~] Package-wide responsibility/import and consumer audit is underway; the first source-tree/import audit and both workspace consumers are recorded: Harvester owns its application BrokerPort; Market Simulator extends the public CoreBroker base class.
 - [x] Confirmed that the infrastructure adapter slice already exists and is merged (PR #605); do not repeat it.
-- [~] Slice 6 — move the existing user-data client port into `src/application/ports/` to make Application ownership explicit; preserve its contract and tests.
+- [x] Slice 6 — move the existing user-data client port into `src/application/ports/`; merged via [PR #691](https://github.com/45s/coinzilla/pull/691) at `bec19bcbe3d92e3357d290bf10bd70685e15f142`. Port and test contents were unchanged; package tests, Brokers coverage, workspace coverage, Harvester targeted regression tests, syntax, and dependency audit passed.
 
 **Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
-**Current next action:** complete Slice 6 in this PR: move the application-owned port and its contract tests under `src/application/ports/`, keep the port contract unchanged, and verify package tests/coverage plus Harvester and Market Simulator consumer suites. After merge, finish the package-wide responsibility/import audit and choose the next slice only where an actual dependency inversion or cohesive responsibility warrants it—not a folder move or one-wrapper-per-RPC exercise. The current broker facade still performs composition and exchange operations. The audit must distinguish a genuine application workflow or composition seam from simple RPC forwarding, which may correctly remain in the infrastructure facade.
+**Current next action:** finish the package-wide responsibility/import audit and choose the next slice only where an actual dependency inversion or cohesive responsibility warrants it—not a folder move or one-wrapper-per-RPC exercise. The user-data recovery vertical slice is now complete across Domain, Application, Application Ports, and Binance Infrastructure. The current broker facade still performs composition and exchange operations; distinguish a genuine application workflow or composition seam from simple RPC forwarding, which may correctly remain in the infrastructure facade. The current broker facade still performs composition and exchange operations. The audit must distinguish a genuine application workflow or composition seam from simple RPC forwarding, which may correctly remain in the infrastructure facade.
 
 **Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
 
