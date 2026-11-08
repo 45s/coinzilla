@@ -149,7 +149,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - Package tests and the configured coverage gates pass on the exact final PR head.
 - Architecture docs and this roadmap describe the shipped code; Phase 9 is marked complete only after merge into `develop` and required validation.
 
-**Status:** in progress. Slices 1–8 are merged via PRs #596, #599, #602, #603, #605, #691, #693, and #695. Slice 9 moves the complete Binance implementation under Infrastructure while preserving its internal module layout. Phase A architecture/import/consumer discovery is complete, and Application unit tests are separated from broker-composition tests.
+**Status:** Phase 9 implementation slices 1–9 are merged via PRs #596, #599, #602, #603, #605, #691, #693, #695, and #697. Phase A discovery and Phase E Infrastructure placement are complete. Phase F dependency-direction and public-contract verification remains.
 
 **Progress**
 - [x] Slice 1 — extract the exchange-neutral user-data recovery completion invariant into `src/domain/user-data-recovery-policy.js`; merged via PR #596. Six pure domain tests; package tests and domain coverage gate passed.
@@ -160,7 +160,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - [x] Slice 6 — move the application-owned `UserDataClientPort` contract and its deterministic contract tests from `src/ports/` to `src/application/ports/`; update application/adapter imports, package coverage includes, and architecture/roadmap docs. Merged via PR #691; contract/test contents unchanged, and package/workspace verification passed.
 - [x] Slice 7 — move the Binance-specific DTO/Entity adapters from `src/binance/shared/` to `src/infrastructure/binance/adapters/`; move all direct mapper tests with assertions unchanged; update relative test imports where needed, update the broker/root/helper imports, remove the obsolete shared coverage glob (the infrastructure glob now covers these modules), and preserve public exports/results. Merged via [PR #693](https://github.com/45s/coinzilla/pull/693) at `512b77f4a7745e2b5fbff7849dcfe136830acab8`; Brokers tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit passed.
 - [x] Slice 8 — extract the six direct `UserDataSession` tests from the broker setup suite into `src/application/user-data-session.test.js`; move broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test from `methods/` to `infrastructure/binance/broker-websocket/tests/`. Preserve assertions and keep application tests independent of Binance. Merged via [PR #695](https://github.com/45s/coinzilla/pull/695) at `5e7313a22303534dc555522fed22ccac0d3b08d9`; Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit passed.
-- [~] Slice 9 — move `src/binance/index.js` and the complete `src/binance/broker-websocket/` subtree under `src/infrastructure/binance/`, preserving the internal `broker-websocket` structure and all tests. Update the root entrypoint, broker facade, user-data adapter, mapper helper/test imports, coverage globs, and opt-in integration script paths; keep public root exports, broker methods, result shapes, and protocol behavior unchanged.
+- [x] Slice 9 — move `src/binance/index.js` and the complete `src/binance/broker-websocket/` subtree under `src/infrastructure/binance/`, preserving the internal `broker-websocket` structure and all tests. Update the root entrypoint, broker facade, user-data adapter, mapper helper/test imports, coverage globs, and opt-in integration script paths; keep public root exports, broker methods, result shapes, and protocol behavior unchanged. Merged via [PR #697](https://github.com/45s/coinzilla/pull/697) at `ae5d1a8a9c474cff46a6db72f4258787bb071669`; Brokers tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit passed. The opt-in TESTNET job was skipped.
 
 ---
 
@@ -187,7 +187,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. Slices 1–8 are merged (PRs #596, #599, #602, #603, #605, #691, #693, #695); Slice 9 moves the entire Binance implementation under Infrastructure without changing its internal layout. Phase A responsibility/import/consumer discovery is complete; the user-data recovery vertical slice is separated across Domain, Application, Application Ports, and Binance Infrastructure, and direct Application tests live beside their workflow. Keep the broker facade as the current composition boundary; do not add one wrapper or port per RPC.
+9. Phase 9 implementation slices 1–9 are merged (PRs #596, #599, #602, #603, #605, #691, #693, #695, #697). The package now has a physical Domain / Application / Infrastructure tree; the complete Binance implementation is under Infrastructure, while the recovery policy and session workflow remain exchange-neutral. Phase F remains: enforce dependency direction with a static architecture test and verify public exports/contracts. Keep the broker facade as the current composition boundary; do not add one wrapper or port per RPC.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
@@ -722,11 +722,11 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 - [x] Existing user-data recovery vertical slice and current import direction documented.
 - [x] Package-wide responsibility/import and consumer audit is complete: production module imports, dependency direction, state ownership, test/coverage baseline, and both workspace consumers are recorded in ARCHITECTURE.md.
 - [x] Confirmed that the user-data infrastructure adapter slice is merged (PR #605); do not repeat it.
-- [x] Phase 9 slices 1–8 are merged; Slice 9 is in progress (see the single implementation tracker below).
+- [x] Phase 9 slices 1–9 are merged; Phase E Infrastructure placement is complete. Phase F verification remains (see the single implementation tracker below).
 
 **Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
-**Current next action:** complete Slice 9 in this PR: move `src/binance/index.js` and the full `src/binance/broker-websocket/` subtree into `src/infrastructure/binance/`, update the small set of cross-boundary imports, coverage globs, and opt-in integration script paths, and preserve all internal module/test paths and protocol behavior. Do not split or redesign RPC, Streams, or transport internals.
+**Current next action:** complete Phase F by adding a static import-direction test that protects Domain → Application → Infrastructure boundaries, and verify the public root export/broker contract with focused tests. Then rerun package/workspace checks. Keep TESTNET opt-in; do not run it without explicit safe configuration.
 
 **Important distinction:** WebSocket protocol/lifecycle hardening and DDD architecture migration are separate tracks. Preserve completed reliability work and its coverage. The goal is the correct Domain → Application/Ports → Infrastructure ownership, not adding more WebSocket layers.
 
