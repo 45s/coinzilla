@@ -1378,7 +1378,7 @@ Owner decisions are closed and recorded in the canonical specification. This his
 - [~] Add direct tests for a second disconnect during a later retry, app-level REST timeout injection, and exactly-one terminal broker `reconciled` notification; replay the full Journal sequence if practical.
 - [x] Revalidate generation/accounting/event sequence between durable account and open-orders audits and before the final event drain; merged [PR #679](https://github.com/45s/coinzilla/pull/679) and [PR #682](https://github.com/45s/coinzilla/pull/682).
 - [x] Assert repeated recovered reminders are single-flight and invoke owned-order reconciliation exactly once per in-flight generation; merged [PR #683](https://github.com/45s/coinzilla/pull/683).
-- [~] Revalidate generation and accounting immediately after owned-order reconciliation, before canonical ownership is certified; regression in [PR #685](https://github.com/45s/coinzilla/pull/685).
+- [x] Revalidate generation and accounting immediately after owned-order reconciliation, before canonical ownership is certified; merged [PR #685](https://github.com/45s/coinzilla/pull/685).
 - [~] Resolve the empty Undici TypeError's source and request broker-side cause preservation through [cross-domain request #680](https://github.com/45s/coinzilla/issues/680); the source is identified, but the underlying network cause and broker implementation remain open.
 - [ ] Keep #626 open until every criterion has a verified disposition and owner acceptance.
 
