@@ -626,16 +626,18 @@ Current source and regression inventory:
 
 **Required follow-up:** trace the adapter-to-Harvester path, identify an independent freshness signal (for example bookTicker freshness or a documented exchange heartbeat), add bounded per-symbol last-event-age and stale/recovered diagnostics, and define any trading gate only through an explicit domain policy. Add fake-clock tests for one symbol stalling while another remains active, recovery, repeated notifications, and legitimate quiet periods. No TESTNET writes are required.
 
-## F-021 — Shutdown repeated duplicate-fill history observations
+## F-021 — Shutdown repeats complete fill-history reconciliation
 
-**Classification:** OBSERVED / ROOT CAUSE UNKNOWN  
+**Classification:** SOURCE-EXPLAINED / DURATION UNRESOLVED  
 **Severity:** Medium observability concern
 
 **Evidence:** Shutdown began at 22:38:29.849 UTC. At approximately 22:40:15 and 22:41:59 UTC, the runtime emitted two batches of 48 duplicate-fill observations. Both batches contained the same 48 fill identities already applied during the process. The accounting path reported `applied: false`, `duplicate: true`, and zero delta. Shutdown then captured a complete CLOSING account snapshot and completed successfully at 22:42:05.491 UTC.
 
-**Impact:** No duplicate accounting is demonstrated. The two batches and approximately 3m35s shutdown duration are nevertheless unexplained by the supplied logs.
+**Source correlation:** `create-shutdown-handler.js` intentionally invokes `reconcileOwnedOrders()` before BUY cancellation and again after cancellation/user-data queue drain. Each call runs `collectOwnedOrderSnapshots()`, which retrieves complete canonical fill history for each owned order. `applyOwnedOrderSnapshotsTransition()` passes all returned fills through normal idempotent accounting. The two 48-record batches align with these two explicit reconciliation passes. This explains the repeated observations and does not indicate duplicate accounting.
 
-**Required follow-up:** correlate the batches with shutdown's read-only history/audit operations and source sequence. Add bounded stage-duration diagnostics if the existing lifecycle does not already explain the wait. Do not add speculative retry behavior.
+**Remaining impact:** The successful shutdown still took approximately 3m35s. The supplied logs do not record per-stage or per-RPC timings, so they cannot explain the approximately 105-second wait before the first batch or the approximately 104-second interval between batches.
+
+**Required follow-up:** add bounded shutdown-stage and owned-order REST reconciliation duration telemetry. Preserve both reconciliation passes and existing fill-idempotency/safety guarantees; do not add speculative retries.
 
 ## F-022 — CLOSING account snapshot does not establish final open-order state
 
