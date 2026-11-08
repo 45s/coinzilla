@@ -516,7 +516,7 @@ Current source and regression inventory:
 ## F-013 — User-data events during reconnect recovery trigger normal cancel/replace effects
 
 - **Severity:** High — trading availability and order-lifecycle safety.
-- **Verdict:** CONFIRMED; implementation fix in PR #673, exact-head verification pending.
+- **Verdict:** CONFIRMED; implementation fix verified by PR #673 CI on code/test head `aa9196fb8b9121a95d0a566fbc2fc7585408bd3c`; TESTNET acceptance remains pending.
 - **Evidence:** 2026-11-08 Journal events #266, #269–270, #285, #288–289, and #397–399; DEBUG lines 9307, 9351, 9362, 9398–9400, 9470, 9699–9703; TRACE lines 10942–10943, 11005–11006, 11024–11026, 11080–11084, 11186–11187, 11489–11498. Original artifact hashes and full parsed evidence are in [AUDIT_SESSION_2026-11-08.md](./AUDIT_SESSION_2026-11-08.md).
 - **Expected contract:** no order submission, cancellation, replacement, or retry while authoritative user-data recovery is unresolved; queued execution facts may be reconciled, and any required strategy evaluation must be retained until the broker recovery acknowledgement reopens readiness.
 - **Observed:** after transport reported `recovered`, DOGE BUY trade 231208 and ZRO BUY trade 12374 were applied exactly once. Their subsequent duplicate/replayed execution events were processed through the normal engine path. That path requested cancellation of owned recovery SELLs 1323350 (797 DOGE) and 749343 (24.94 ZRO) while the broker still rejected order changes because the user-data stream was unavailable. Both cancellations became UNKNOWN/UNCONFIRMED, both markets paused, and application recovery failed at 03:23:00.631Z.
