@@ -64,7 +64,11 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
   } else if (
     status.type === "reconciled" &&
     status.recoveryRequired !== true &&
-    status.reconciliationRequired !== true
+    status.reconciliationRequired !== true &&
+    status.subscriptionId === state.recoverySubscriptionId &&
+    status.recoveryGeneration === state.recoveryBrokerGeneration &&
+    Number.isSafeInteger(state.recoveryBrokerGeneration) &&
+    state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration
   ) {
     key = "restored:" + (status.recoveryGeneration ?? status.subscriptionId ?? "unknown")
     message = "User-data stream subscription restored"
