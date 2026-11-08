@@ -5526,7 +5526,7 @@ const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQu
 
 test("keeps the standing BUY open when the proposed trailing replacement violates MIN_NOTIONAL", async () => {
   const harness = await createHarness({
-    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "100", replacementQuantity: "0.04" }),
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "49.99", replacementQuantity: "0.1" }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
