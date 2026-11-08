@@ -744,7 +744,7 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 
 
 
-### Phase 9 implementation slice 10 — executable dependency-direction enforcement (PR #704) <badge>
+### Phase 9 implementation slice 10 — executable dependency-direction enforcement (PR #704)
 
 **Scope:** architecture enforcement and public API contract characterization only. No Binance WebSocket internals, runtime behavior, consumer adapter, or public export was changed.
 
@@ -753,9 +753,9 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - [x] Enforce Domain → no Application/Infrastructure/Bootstrap; Application → no Infrastructure/Bootstrap; Infrastructure → no Bootstrap. Bootstrap composition and Infrastructure → Application/Domain remain allowed.
 - [x] Add synthetic negative/control cases proving forbidden imports are detected and inward/composition imports are accepted.
 - [x] Add `src/index.contract.test.js` for the exact four root exports and public Binance broker construction/method availability without connecting.
-- [x] Verify the real source graph and all package/consumer checks on the final PR head. Final head `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed: Brokers unit tests 411/411; Brokers coverage 98.73% lines / 93.62% branches / 94.94% functions against 90/80/80 thresholds; all workspace unit-test and coverage jobs; Harvester targeted regressions; JavaScript syntax; actionlint; production dependency audit. TESTNET integration was skipped.
+- [x] Verify the real source graph and all package/consumer checks on the final PR head. Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed: Brokers unit tests 411/411; Brokers coverage 98.73% lines / 93.62% branches / 94.94% functions against 90/80/80 thresholds; all workspace unit-test and coverage jobs; Harvester targeted regressions; JavaScript syntax; actionlint; production dependency audit. TESTNET integration was skipped. The subsequent documentation-only commit is `43caec1a636b289e97e7ac1ee1b93b019af744fa`; its final-head CI must also pass before merge.
 
-**Exact contract coverage:** `src/architecture-boundaries.test.js`; `src/index.contract.test.js`; existing `src/infrastructure/binance/broker-websocket/broker.test.js` and operation suites under `src/infrastructure/binance/broker-websocket/tests/`; `src/infrastructure/binance/adapters/*.test.js`; `src/infrastructure/binance/user-data-client-adapter.test.js`; `src/infrastructure/binance/broker-websocket/helpers/adapters/user.test.js`. Harvester compatibility remains covered by the repository's `harvester-targeted-tests.yml` workflow and must be checked on the final PR head.
+**Exact contract coverage:** `src/architecture-boundaries.test.js`; `src/index.contract.test.js`; existing `src/infrastructure/binance/broker-websocket/broker.test.js` and operation suites under `src/infrastructure/binance/broker-websocket/tests/`; `src/infrastructure/binance/adapters/*.test.js`; `src/infrastructure/binance/user-data-client-adapter.test.js`; `src/infrastructure/binance/broker-websocket/helpers/adapters/user.test.js`. Harvester compatibility passed in the repository's `harvester-targeted-tests.yml` workflow on the verified source/test commit.
 
 **Next-action checklist for the next session:**
 
