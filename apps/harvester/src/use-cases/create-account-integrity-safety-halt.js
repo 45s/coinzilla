@@ -8,7 +8,7 @@
 export function createAccountIntegritySafetyHalt({
   getTradingEngine,
   isStopped = () => false,
-  logger,
+  logger = {},
 } = {}) {
   let cancellationTask
 
