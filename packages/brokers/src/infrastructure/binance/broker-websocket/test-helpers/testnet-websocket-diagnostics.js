@@ -27,21 +27,32 @@ function httpStatus(...sources) {
 async function probeHttpReachability(name, websocketUrl) {
   const endpoint = new URL(websocketUrl)
   endpoint.protocol = "https:"
-  endpoint.pathname = "/"
   endpoint.search = ""
   endpoint.hash = ""
 
   try {
     const response = await fetch(endpoint, {
-      method: "HEAD",
+      method: "GET",
       redirect: "manual",
+      headers: { accept: "application/json" },
       signal: AbortSignal.timeout(5_000),
     })
-    await response.body?.cancel()
+    const responseText = (await response.text()).slice(0, 512)
+    const blockedByLink = response.headers.get("link")?.match(/<([^>]+)>\\s*;\\s*rel=["']?blocked-by["']?/i)?.[1]
+    let blockedByHost = null
+    if (blockedByLink) {
+      try {
+        blockedByHost = new URL(blockedByLink).host
+      } catch {
+        blockedByHost = null
+      }
+    }
     return {
       endpoint: name,
       reachable: true,
       httpStatus: response.status,
+      responseMessage: safeText(responseText),
+      blockedByHost,
     }
   } catch (error) {
     return {
@@ -69,6 +80,8 @@ function probeEndpoint(name, url) {
       closeCode: null,
       closeReason: null,
       wasClean: null,
+      closeRequested: false,
+      closeTimedOut: false,
     }
 
     const finish = () => {
@@ -91,23 +104,37 @@ function probeEndpoint(name, url) {
       return
     }
 
-    timer = setTimeout(() => {
-      details.errorMessage ??= "WebSocket diagnostic timed out"
-      try {
-        socket.close()
-      } catch {
-        // A timed-out diagnostic must still finish without affecting the workflow.
-      }
-      finish()
-    }, 5_000)
+    const armTimeout = (delay) => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (opened) {
+          details.closeTimedOut = true
+        } else {
+          details.errorMessage ??= "WebSocket handshake timed out"
+          try {
+            socket.close()
+          } catch {
+            // A timed-out diagnostic must still finish without affecting the workflow.
+          }
+        }
+        finish()
+      }, delay)
+    }
+    armTimeout(5_000)
 
     socket.addEventListener("open", () => {
       opened = true
+      details.closeRequested = true
       try {
         socket.close(1000, "read-only diagnostic complete")
       } catch {
+        details.closeTimedOut = true
         finish()
+        return
       }
+      // A successful upgrade is the protocol signal; a peer that ignores our
+      // diagnostic close frame must not be misreported as a failed handshake.
+      armTimeout(1_000)
     }, { once: true })
 
     socket.addEventListener("error", (event) => {
