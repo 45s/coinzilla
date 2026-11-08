@@ -33,6 +33,7 @@ export class Journal {
     this.starting = false
     this.startPromise = null
     this.startupCleanupErrors = []
+    this.closeInProgress = false
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -303,13 +304,27 @@ export class Journal {
       }
       return toResult({ closed: true, durable: true })
     }
-
-    if (this.closing) {
+    if (this.closeInProgress || this.closing) {
       return toResult({
         error: new Error("Journal is already closing"),
       })
     }
 
+    this.closeInProgress = true
+    try {
+      return await this.closeLifecycle()
+    } finally {
+      this.closeInProgress = false
+    }
+  }
+
+  /**
+   * Perform the single owning shutdown sequence after close admission is claimed.
+   *
+   * @private
+   * @returns {Promise<object>} Result describing close and durability success or failure.
+   */
+  async closeLifecycle() {
     if (this.starting) {
       this.closing = true
       const startPromise = this.startPromise
