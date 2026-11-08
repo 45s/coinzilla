@@ -473,6 +473,7 @@ test("disconnects when a market price subscription fails", async () => {
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -1021,7 +1022,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "filters:ETHUSDT", "disconnect"])
 })
 
 test("does not expose a broker port that could bypass the trading engine", async () => {
