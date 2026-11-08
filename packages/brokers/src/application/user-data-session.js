@@ -1,6 +1,12 @@
 import { canCompleteUserDataRecovery } from "../domain/user-data-recovery-policy.js"
 import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
 
+/**
+ * Result of one subscriber's recovery acknowledgement.
+ *
+ * @typedef {{accepted: true, completed: boolean}|{accepted: false, completed: false, reason: "stale-or-inactive"|"recovery-not-pending"}} UserDataRecoveryAcknowledgementResult
+ */
+
 function logSafely(logger, level, ...args) {
   try {
     logger?.[level]?.(...args)
