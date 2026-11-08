@@ -262,7 +262,7 @@ The inspected `domain/` policy and `ports/` contract have no imports. The Applic
 
 The 658-line `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
-The 782-line broker facade is a stronger extraction candidate because its imports and constructor already reveal multiple reasons to change. However, no code movement is authorized by this snapshot alone. Complete the import/caller audit and identify a behavior-preserving first slice.
+The 782-line broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
 
 ## Existing code: initial responsibility map
 
@@ -271,7 +271,7 @@ This map is a starting hypothesis based on the current tree. Validate each modul
 | Existing module / area | Primary responsibility | Target owner |
 | --- | --- | --- |
 | `src/broker.core.js` | Shared broker base class and contract used by Market Simulator | Public compatibility extension point; preserve constructor/state/default-method behavior until consumers are migrated |
-| `src/binance/broker-websocket/broker.js` | 782-line facade, concrete client construction, RPC calls, orchestration, and response adaptation | Main boundary-pressure area; inspect and extract incrementally |
+| `src/binance/broker-websocket/broker.js` | 782-line public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
 | `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
 | `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
 | `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
