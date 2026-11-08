@@ -552,3 +552,43 @@ Current source and regression inventory:
 - **Required follow-up:** [cross-domain request #680](https://github.com/45s/coinzilla/issues/680) asks the Brokers domain to test both paths, preserve the handshake cause, and evaluate safe capture/correlation of underlying socket errors.
 - **Ownership:** `packages/brokers`; no broker implementation was modified by Harvester.
 - **Related issue:** #626. The empty TypeError's source is identified, but the underlying network cause and broker-side diagnostic improvement remain open.
+
+
+## F-016 — Harvester recovery REST wrappers discard original broker error context
+
+- **Severity:** Medium — production diagnostic and incident-triage impact; current recovery behavior remains fail-closed.
+- **Verdict:** CONFIRMED source-level behavior.
+- **Reproduction:** a broker REST method returns `{ ok: false, errors: [typedBrokerError] }` during account snapshot or owned-order reconciliation.
+- **Actual behavior:** `createAccountSnapshotManager.refreshAccountSnapshot()` creates a new generic `Error` from the broker error message without a `cause`. `collectOwnedOrderSnapshots()` similarly creates generic errors for failed open-order, canonical-order-history, and fill-history results; the fill-history path can discard the original broker error message entirely. The application recovery handler logs only the wrapper's `errorName`, `errorMessage`, and `errorStack`, so the original typed error class, stack, and cause are not available in the structured recovery diagnostic.
+- **Expected behavior:** preserve the original broker Error as the wrapper's native `cause`, retain existing outer contextual messages, and pass the Error object as structured log data. The shared logger already serializes native Error cause/stack recursively; no new logger or logging file is needed.
+- **Impact:** a transient RPC timeout can become indistinguishable from malformed/missing REST data, reducing diagnostic quality and making failure classification harder. This does not currently authorize trading or acknowledge recovery prematurely.
+- **Relevant locations:** `src/bootstrap/account/create-account-snapshot-manager.js`; `src/use-cases/conservative-trading-engine.js`; `src/bootstrap/user-data/create-user-data-recovery-handler.js`.
+- **Disposition:** FIX JUSTIFIED, NOT YET IMPLEMENTED. Keep this as a separate TDD change; do not alter retry policy, broker protocol, Journal durability, or trading behavior.
+
+## F-017 — Malformed REST response-envelope regression coverage is incomplete
+
+- **Severity:** Low/Medium — regression-proof gap.
+- **Verdict:** CONFIRMED test-coverage gap; no accepted-invalid-data defect confirmed.
+- **Existing source guards:** account snapshots validate canonical Balance records, safe source time, unique assets, non-negative quantities, and required configured market assets. Owned-order reconciliation validates open-order arrays/records, exactly one canonical order-history record per owned order, fill arrays/records, pagination bounds, duplicate fill facts, and cumulative fill/history/stream consistency.
+- **Existing regressions:** missing configured account asset, duplicate/negative/invalid account snapshot values, stale account snapshots, incomplete cumulative fill history, conflicting fill IDs, stale REST history, missing Journal fills, and overlapping stream/REST delivery.
+- **Missing direct envelope injections:** non-array or malformed `getOpenOrders()` data; zero/multiple/non-`CanonicalOrder` `getCanonicalOrderHistory()` entries; non-array, non-`Fill`, or oversized `getFills()` pages.
+- **Disposition:** TESTS NEEDED, PRODUCTION CHANGE NOT JUSTIFIED by current evidence. Preserve existing fail-closed guards and add focused offline regressions before changing the source.
+
+## F-018 — Journal sync failure can produce at-least-once recovery audit records
+
+- **Severity:** Medium — audit duplication/operational diagnosis; no premature broker acknowledgement found.
+- **Verdict:** CONFIRMED behavior from the current Journal and recovery publication sequence.
+- **Reproduction:** lifecycle event publication and Journal write succeed, but the subsequent file sync in `Journal.flush()` fails; a later recovery reminder retries the audit and its flush succeeds.
+- **Actual behavior:** the first record may already be present in the process file cache even though durability was not confirmed. The retry publishes a new event with a new ID. If the later sync succeeds, both records can become durable. This is at-least-once audit publication; the current recovery audit has no generation idempotency key.
+- **Separate permanent failure mode:** a Journal `writeFile()` failure sets `writeFailed=true`; future writes/flushes for that Journal instance continue failing. Recovery remains safely blocked and unacknowledged, but reminders can cause repeated futile REST/audit attempts until an operator-level recovery/restart path exists.
+- **Expected safety behavior:** never acknowledge until `flush()` confirms `durable: true`; never delete, overwrite, rotate, or deduplicate the uncertain first record. Duplicate audit evidence is preferable to silently assuming an unconfirmed write was durable.
+- **Test gap:** current Harvester tests inject thrown audit failures and verify no acknowledgement, but do not inject a transient flush/sync failure followed by a successful retry or characterize the possible duplicate pair.
+- **Disposition:** DOCUMENTED RISK; focused test and any idempotency contract decision remain open. Do not change Journal internals or introduce another log file under this finding.
+
+## F-019 — Multi-subscriber broker acknowledgement result can strand Harvester recovery
+
+- **Severity:** Medium — conditional recovery liveness risk; fail-closed safety is preserved.
+- **Verdict:** CONFIRMED contract interaction; requires multiple active local subscribers sharing one broker user-data session.
+- **Actual behavior:** `UserDataSession.#acknowledgeRecovery(id)` marks the caller's subscriber acknowledged, then returns the global `completeRecoveryIfAcknowledged()` result. The first subscriber therefore receives `false` while other subscribers remain pending, despite its own acknowledgement having been recorded. Harvester currently interprets `false` as rejection, restores `requiresReconciliation=true`, and does not record its generation. When the final subscriber acknowledges, the broker emits `reconciled` and stops reminders, but Harvester does not clear its application gate from that status.
+- **Impact:** Harvester can remain blocked indefinitely in a supported multi-subscriber session. This does not create an unsafe trading window. The current single-subscriber composition avoids the case.
+- **Disposition:** CROSS-DOMAIN REQUEST OPEN — [Brokers issue #702](https://github.com/45s/coinzilla/issues/702). Do not patch the broker contract privately or reinterpret the boolean without owner coordination.
