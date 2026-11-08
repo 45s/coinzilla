@@ -1,5 +1,7 @@
 # Binance WebSocket broker operations
 
+For the package's target DDD structure, dependency rules, responsibility map, and migration phases, see [Architecture](./ARCHITECTURE.md) and the execution status in [Roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution).
+
 The active Binance implementation is `BinanceWebSocketBroker`. It uses two independent native Node.js WebSocket connections:
 
 - **WebSocket API** (`wss://ws-api...`): signed RPC for account, order, history, metadata, and the signature-based user-data subscription.

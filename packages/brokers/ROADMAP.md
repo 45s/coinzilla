@@ -698,6 +698,24 @@ The [Phase 0 broker contract audit](../../docs/brokers-websocket-contract.md) re
 
 ## 14. Mandatory autonomous DDD refactoring execution
 
+**Architecture source of truth:** [Brokers Package Architecture](./ARCHITECTURE.md). It defines the proposed target tree, dependency rules, responsibility map, TDD method, and phase exit criteria. This section tracks execution status; update both documents together when evidence changes.
+
+### DDD migration status
+
+- [x] Architecture direction agreed: use Harvester's domain/application/infrastructure separation as the reference, adapted to the Brokers package's exchange-integration responsibility.
+- [x] Proposed target tree and dependency rules documented in `ARCHITECTURE.md`.
+- [ ] Phase A — architecture discovery and current responsibility/import map.
+- [ ] Phase B — characterization/test baseline for the first extraction slice.
+- [ ] Phase C — domain extraction.
+- [ ] Phase D — application ports and focused use cases.
+- [ ] Phase E — Binance infrastructure adapters and bootstrap composition.
+- [ ] Phase F — dependency-direction and public-contract verification.
+
+**Current next action:** complete Phase A against the current `develop` tree. Inspect every production source module, exports, import edges, state ownership, side effects, and consumers. Update the responsibility map with verified findings and identify the smallest safe first extraction. Do not move files or create placeholder layers during discovery.
+
+**Important distinction:** the existing WebSocket implementation/lifecycle work and this DDD architecture migration are related but separate tracks. Preserve the completed WebSocket reliability work and its coverage. Do not turn the DDD effort into another WebSocket-layer refactor; move responsibilities only when they belong in a different architectural layer.
+
+
 The DDD modernization is an internal refactor of a working package. **Do not rebuild or replace the working broker.** Preserve public contracts, runtime behavior, exchange integrations, result/event semantics, exact decimal handling, and consumer compatibility while improving internal boundaries.
 
 - Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
