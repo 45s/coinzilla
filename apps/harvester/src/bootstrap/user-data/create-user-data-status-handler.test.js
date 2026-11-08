@@ -322,7 +322,7 @@ test("does not clear the application recovery gate for a different subscription 
 
 
 test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
-  const { handler, logs } = createHandler()
+  const { handler, state, logs } = createHandler()
   const disconnected = { type: "connectionClosed", reason: "connection_lost", recoveryRequired: true }
   handler(disconnected)
   handler(disconnected)
@@ -339,6 +339,7 @@ test("logs concise user-data stream lifecycle transitions once and suppresses du
   }
   handler(reconnected)
   handler(reconnected)
+  state.lastAcknowledgedRecoveryGeneration = state.recoveryGeneration
   const restored = {
     type: "reconciled",
     subscriptionId: 42,
