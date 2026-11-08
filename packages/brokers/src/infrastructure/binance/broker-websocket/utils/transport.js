@@ -22,7 +22,7 @@ function readHttpUpgradeStatus(...sources) {
   return null
 }
 
-function createHandshakeError(event) {
+function createWebSocketError(event, phase) {
   const source = event?.error instanceof Error ? event.error : null
   const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
   const cause = source ? new Error(causeMessage) : undefined
@@ -37,7 +37,7 @@ function createHandshakeError(event) {
   const error = new Error(message, cause ? { cause } : undefined)
   if (source && typeof source.name === "string") error.name = source.name
   error.diagnostics = {
-    phase: "websocket-handshake",
+    phase,
     httpUpgradeStatus: readHttpUpgradeStatus(event, source),
     closeCode: null,
     closeReason: null,
@@ -143,7 +143,10 @@ export class NativeWebSocketTransport {
         },
         message: (event) => this.#emit("message", event.data),
         error: (event) => {
-          const error = createHandshakeError(event)
+          const error = createWebSocketError(
+            event,
+            this.#state === "connecting" ? "websocket-handshake" : "websocket",
+          )
           this.#emit("error", error)
           if (this.#state === "connecting") {
             this.#connectError = error
