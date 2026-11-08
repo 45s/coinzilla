@@ -159,7 +159,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
   const timers = new Map()
   let nextTimerId = 0
 
-  function createPort(subscriptionId) {
+  function createPort(subscriptionId, isReconnectClient = false) {
     const listeners = {
       event: new Set(),
       error: new Set(),
@@ -168,7 +168,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     return {
       state: "open",
       async connect() {
-        if (client === reconnectClient && failReconnect) {
+        if (isReconnectClient && failReconnect) {
           throw new Error("reconnect unavailable")
         }
         this.state = "open"
@@ -207,7 +207,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     createClient: () => reconnectClient,
     createUserDataClientPort: (client) => {
       if (!ports.has(client)) {
-        ports.set(client, createPort(client === initialClient ? 17 : 18))
+        ports.set(client, createPort(client === initialClient ? 17 : 18, client === reconnectClient))
       }
       return ports.get(client)
     },
