@@ -7,6 +7,7 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { evaluateReadOnlyConservativeStrategy } from "../use-cases/evaluate-read-only-conservative-strategy.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
@@ -132,7 +133,6 @@ export async function startHarvester({
     recoveryGeneration: 0,
     lastAcknowledgedRecoveryGeneration: -1,
     recoveryTask: null,
-    safetyHaltBuyCancellationTask: null,
     startupComplete: false,
     pendingRecovery: false,
     intakeStopped: false,
@@ -161,52 +161,11 @@ export async function startHarvester({
       logger.error?.({ message: "deferred strategy evaluation failed", error })
     })
   }
-  const cancelOwnedBuysAfterAccountingFailure = () => {
-    if (!tradingEngine || userDataState.stopped) return Promise.resolve()
-    if (userDataState.safetyHaltBuyCancellationTask) return userDataState.safetyHaltBuyCancellationTask
-
-    const task = (async () => {
-      let reconciliation
-      try {
-        reconciliation = await tradingEngine.reconcileOwnedOrders()
-      } catch (error) {
-        logger.error?.({
-          message: "account-integrity safety halt could not reconcile owned orders before BUY cancellation",
-          error,
-        })
-      }
-      if (reconciliation?.ok !== true) {
-        logger.error?.({
-          message: "account-integrity safety halt could not fully reconcile owned orders before BUY cancellation",
-          result: reconciliation,
-        })
-      }
-
-      let cancellation
-      try {
-        cancellation = await tradingEngine.cancelOwnedBuyOrdersForSafetyHalt()
-      } catch (error) {
-        logger.error?.({
-          message: "account-integrity safety halt failed while canceling owned BUY orders",
-          error,
-        })
-        return
-      }
-      if (cancellation?.ok !== true) {
-        logger.error?.({
-          message: "account-integrity safety halt could not confirm every owned BUY cancellation",
-          result: cancellation,
-        })
-      }
-    })()
-
-    userDataState.safetyHaltBuyCancellationTask = task.catch((error) => {
-      logger.error?.({ message: "account-integrity safety halt workflow failed", error })
-    }).finally(() => {
-      userDataState.safetyHaltBuyCancellationTask = null
-    })
-    return userDataState.safetyHaltBuyCancellationTask
-  }
+  const cancelOwnedBuysAfterAccountingFailure = createAccountIntegritySafetyHalt({
+    getTradingEngine: () => tradingEngine,
+    isStopped: () => userDataState.stopped,
+    logger,
+  })
 
   const handleUserDataEvent = createUserDataEventHandler({
     state: userDataState,
