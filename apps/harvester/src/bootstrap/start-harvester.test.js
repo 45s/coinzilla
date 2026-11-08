@@ -2943,7 +2943,7 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
 test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
   const calls = []
   const broker = createBroker(calls)
-  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "ZROFDUSD", "SOLFDUSD"]
+  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
   const snapshotConfig = {
     ...tradingConfig,
     strategies: {
@@ -2952,6 +2952,11 @@ test("account snapshots include every configured pair asset, including disabled 
         ...tradingConfig.strategies.CG_coinGrabber,
         pairs: {
           ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          DOGEUSDT: {
+            enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
+            makerPercent: 0, takerPercent: 0.1,
+          },
           ZROFDUSD: {
             enabled: false, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
             priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
@@ -2972,7 +2977,7 @@ test("account snapshots include every configured pair asset, including disabled 
     assetsByCode.set(market.baseAsset.code, market.baseAsset)
     assetsByCode.set(market.quoteAsset.code, market.quoteAsset)
   }
-  const unrelatedAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const unrelatedAsset = new Asset({ id: "asset:XRP", code: "XRP" })
   const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
     free: new Quantity({ amount: "10", asset }),
     locked: new Quantity({ amount: "0", asset }),
@@ -2997,21 +3002,21 @@ test("account snapshots include every configured pair asset, including disabled 
     logger: { info() {}, error() {}, debug() {} },
   })
 
-  const expectedAssetCodes = ["BTC", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
+  const expectedAssetCodes = ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
   const preflight = events.find((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
   assert.ok(preflight, "read-only startup must durably capture its configured-asset PREFLIGHT snapshot")
   assert.deepEqual(
     preflight.data.balances.map((balance) => balance.asset),
     expectedAssetCodes,
-    "PREFLIGHT Journal snapshot must include every configured base/quote asset, including disabled pairs, and exclude unrelated DOGE",
+    "PREFLIGHT Journal snapshot must include every configured base/quote asset, including disabled pairs, and exclude unrelated XRP",
   )
   assert.deepEqual(
     runtime.getAccountSnapshot().balances.map((balance) => balance.asset.code).sort(),
     expectedAssetCodes,
     "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
   )
-  for (const symbol of ["ETHUSDT", "ZROFDUSD", "SOLFDUSD"]) {
+  for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
     assert.ok(
       calls.includes("filters:" + symbol),
       "startup must resolve base/quote metadata for disabled configured pair " + symbol + " so its assets are included in the audit snapshot",
