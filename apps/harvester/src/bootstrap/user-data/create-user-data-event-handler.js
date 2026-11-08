@@ -41,6 +41,7 @@ export function createUserDataEventHandler({
       if (tradingEngine && isOrderUpdate) {
         const processed = await tradingEngine.processUserDataEvent({
           event,
+          recoveryMode,
         })
         if (!processed.ok) {
           state.ready = false

@@ -507,3 +507,7 @@ The first integrated startup regression run found that a PREFLIGHT audit failure
 
 
 The develop synchronization incorporated the confirmed #626 recovery fix (PR #673): user-data order events accepted while application reconciliation is pending must be processed in recovery mode, and terminal recovery events must retain deferred strategy evaluation until acknowledgement. The extracted event handler now computes that mode at serialized task execution time and passes it to both the trading engine and observer. The upstream engine regression and integration tests are preserved in this branch.
+
+## CI regression fixes — 2026-11-08
+
+The first exact-head CI run identified a missing BrokerPort fixture method, an unnecessary REST ticker call despite a fresh WebSocket tick, missing recovery-mode propagation into the trading engine, and two test-fixture defects. These are corrected in the current branch; the exact-head CI suite is being rerun before the refactor is considered verified.

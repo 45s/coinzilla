@@ -569,3 +569,5 @@ trading remains paused rather than guessing.
 ## Cancellation preconditions
 
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
+
+Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.

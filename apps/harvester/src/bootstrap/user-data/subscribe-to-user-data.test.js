@@ -99,9 +99,6 @@ test("fails closed when accounting has already become unsafe during subscription
 })
 
 test("exposes the live subscription to bootstrap before PREFLIGHT audit work can fail", async () => {
-  const fixture = createFixture({
-    publishAccountSnapshot: async () => { throw new Error("journal flush failed") },
-  })
   let capturedSubscription
 
   await assert.rejects(

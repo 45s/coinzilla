@@ -196,15 +196,15 @@ const reportPriceError = (details) => {
       const intakeState = marketPriceIntake.get(symbol)
       if (!intakeState) throw new Error("Missing market-price intake state for enabled pair " + symbol)
 
-      let tickerResult
-      try {
-        tickerResult = await broker.getPrices({ symbol })
-      } catch (error) {
-        tickerResult = toResult({ error })
-      }
       if (intakeState.latestWebSocketPriceTask) await intakeState.latestWebSocketPriceTask
 
       if (!intakeState.hasFreshWebSocketPrice) {
+        let tickerResult
+        try {
+          tickerResult = await broker.getPrices({ symbol })
+        } catch (error) {
+          tickerResult = toResult({ error })
+        }
         if (!tickerResult?.ok || !tickerResult.data) {
           const details = tickerResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
           throw new Error(

@@ -1723,3 +1723,12 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 **Next phase — verification only:** execute the focused Conservative tests, full Harvester test suite, and required exact-head CI. The tests are present but have not yet been run on this updated head; no passing test or CI result is claimed. Fix any failures in that separate phase. This audit closure does not authorize TESTNET writes, bot restarts, or merging PR #653.
 
 - [~] Fix the #626 reconnect-recovery event-mode regression: process queued user-data events in recovery mode while authoritative reconciliation is pending, and preserve deferred strategy evaluation until acknowledgement. Regression and implementation are in [PR #673](https://github.com/45s/coinzilla/pull/673); keep transport recovery distinct from application readiness and retain all existing fail-closed/durable reconciliation gates.
+
+
+### CI regression fixes — 2026-11-08
+
+- [x] Make the broker connection test fixture satisfy the full structural BrokerPort contract.
+- [x] Avoid unnecessary REST ticker requests when a fresh WebSocket price arrives during subscription setup.
+- [x] Pass the recovery-mode classification through to the trading engine as well as the observer.
+- [x] Correct the shutdown test fixture to use its locally-owned market-intake map.
+- [x] Remove an unobserved rejected startup promise from the subscription cleanup regression test.

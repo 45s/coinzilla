@@ -67,7 +67,6 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     engine,
     subscriptions: [{ unsubscribe: async () => calls.push("price-unsubscribe") }],
     bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
-    marketPriceIntake: new Map([["BTCUSDT", { latestWebSocketPriceTask: marketTask }]]),
     userDataSubscription: { disconnect: async () => calls.push("user-data-disconnect") },
     publishAccountSnapshot: async (input) => calls.push("audit-status:" + input.auditStatus),
     disconnectBroker: async () => { calls.push("broker-disconnect"); return [] },

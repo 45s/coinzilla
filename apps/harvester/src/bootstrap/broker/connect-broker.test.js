@@ -15,6 +15,7 @@ const createFixture = ({ connect, disconnect } = {}) => {
     getCanonicalOrderHistory: async () => ({ ok: true, data: [] }),
     getCanonicalOrder: async () => ({ ok: true, data: undefined }),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
+    getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
     connect: async () => {
       calls.push("connect")
       if (connect) await connect()
