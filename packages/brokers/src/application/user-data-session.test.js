@@ -151,7 +151,7 @@ describe("Application user-data session", () => {
   })
 
 
-function createRecoveryFixture() {
+function createRecoveryFixture({ failReconnect = false } = {}) {
   let currentClient = { name: "initial" }
   const initialClient = currentClient
   const reconnectClient = { name: "reconnected" }
@@ -168,6 +168,9 @@ function createRecoveryFixture() {
     return {
       state: "open",
       async connect() {
+        if (client === reconnectClient && failReconnect) {
+          throw new Error("reconnect unavailable")
+        }
         this.state = "open"
       },
       async disconnect() {
@@ -240,6 +243,31 @@ function createRecoveryFixture() {
 }
 
 
+
+
+  it("keeps recovery pending and rejects acknowledgement while reconnect is unavailable", async () => {
+    const statuses = []
+    const fixture = createRecoveryFixture({ failReconnect: true })
+    fixture.session.start()
+    const subscription = await fixture.session.subscribe({
+      onEvent() {},
+      onStatus: (status) => statuses.push(status),
+    })
+
+    fixture.closeInitialConnection()
+    await fixture.reconnect()
+
+    assert.ok(statuses.some((status) =>
+      status.type === "recoveryFailed" && status.recoveryRequired === true
+    ))
+    assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
+      accepted: false,
+      completed: false,
+      reason: "recovery-not-pending",
+    })
+
+    await fixture.session.stop()
+  })
 
   it("does not accept an acknowledgement when no recovery is pending", async () => {
     const fixture = createRecoveryFixture()
