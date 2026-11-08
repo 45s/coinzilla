@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Code baseline before this slice:** `fb1b40c4780f476dc41045825c759b9c801e11b9` (after PR #696). The tree below reflects the completed Infrastructure placement: the complete Binance adapter and broker-websocket implementation live under `src/infrastructure/binance/`.
+**Current code baseline:** `ae5d1a8a9c474cff46a6db72f4258787bb071669` (after PR #697). The complete Binance adapter and broker-websocket implementation now live under `src/infrastructure/binance/`.
 
 The package now has a physical Domain / Application / Infrastructure split. The existing `broker-websocket` implementation remains internally organized as before; this slice relocates it under Infrastructure without redesigning protocol clients or decomposing folders for their own sake.
 
@@ -362,15 +362,15 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 - [x] Group all Binance-specific runtime, API/Streams, transport, sessions, signing/configuration, and response adapters under `src/infrastructure/binance/`, preserving the existing `broker-websocket` internal structure.
 - [x] Implement application ports through the Binance infrastructure adapters without changing the public facade.
 - [x] Evaluate a dedicated bootstrap factory: keep composition in the concrete infrastructure broker facade because no separate bootstrap currently removes a demonstrated coupling or improves ownership. Keep public exports thin.
-- [ ] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes remain safe.
+- [x] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes remain safe; PR #697 final-head CI passed Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit. TESTNET remained opt-in and was skipped.
 - **Exit:** concrete Binance dependencies are constructed only at infrastructure/composition boundaries; a separate bootstrap module exists only if it provides a demonstrated benefit.
 
 ### Phase F — Dependency and compatibility verification
 - [ ] Verify dependency direction (static import audit or focused architecture tests where practical).
 - [ ] Run public export and broker contract tests.
-- [ ] Run full package tests and coverage; run workspace quality gates.
+- [x] Run full package tests and coverage; run workspace quality gates (PR #697 final-head CI passed).
 - [ ] Run opt-in TESTNET verification only when explicitly configured and safe.
-- [ ] Update package README, architecture, roadmap, and any consumer-facing docs.
+- [x] Update package README, architecture, roadmap, and any consumer-facing docs.
 - **Exit:** migration is integrated into `develop`, all required CI checks pass, and the roadmap records the final tree and verified evidence.
 
 ## Per-PR delivery checklist
