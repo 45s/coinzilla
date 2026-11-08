@@ -13,6 +13,7 @@ const createState = (overrides = {}) => ({
   status: "READY",
   recoveryGeneration: 0,
   lastAcknowledgedRecoveryGeneration: -1,
+  lastReportedRecoveredGeneration: -1,
   startupComplete: true,
   pendingRecovery: false,
   initialAccountSnapshotReady: true,
@@ -131,5 +132,58 @@ test("repeated recovered reminders publish and log once while retrying applicati
     actions.recoveries,
     2,
     "Every recovered reminder must still reach the application recovery coordinator so a failed reconciliation can be retried.",
+  )
+})
+
+test("a new recovery generation publishes a fresh recovered status", () => {
+  const { handler, events, logs, actions } = createHandler()
+  const recoveredReminder = {
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  }
+
+  handler(recoveredReminder)
+  handler({ type: "connectionClosed", recoveryRequired: true })
+  handler(recoveredReminder)
+
+  assert.equal(
+    events.filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED).length,
+    3,
+    "A new recovery generation must publish a fresh recovered transition after recording its disconnect.",
+  )
+  assert.equal(
+    logs.info.filter((entry) => entry.statusType === "recovered").length,
+    2,
+    "A genuinely new recovery generation must produce its own recovered diagnostic.",
+  )
+  assert.equal(
+    actions.recoveries,
+    2,
+    "Each distinct recovered generation must start application reconciliation.",
+  )
+})
+
+test("an already acknowledged recovery ignores later recovered reminders", () => {
+  const { handler, events, logs, actions } = createHandler({
+    state: createState({ lastAcknowledgedRecoveryGeneration: 0 }),
+  })
+
+  handler({ type: "recovered", recoveryRequired: true })
+
+  assert.equal(
+    events.length,
+    0,
+    "A reminder for an already acknowledged generation must not publish another lifecycle event.",
+  )
+  assert.equal(
+    logs.info.length,
+    0,
+    "A reminder for an already acknowledged generation must not recreate recovery diagnostics.",
+  )
+  assert.equal(
+    actions.recoveries,
+    0,
+    "An acknowledged recovery generation must not restart application reconciliation.",
   )
 })

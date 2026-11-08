@@ -527,3 +527,15 @@ Current source and regression inventory:
 - **Regression tests:** bootstrap recovery-mode classification and engine deferred-evaluation retention. Both were observed RED on test-only PR head `4368c5d65651b55dd5c34bea619ca6b99160264d`: actual `undefined` vs expected `true`, and actual `[]` vs expected `["DOGEUSDT"]`. Exact-head GREEN/CI verification remains pending.
 - **Related issue:** #626. No new duplicate issue created.
 - **Safety boundary:** no TESTNET/production order actions, process restart, account change, or lock cleanup was performed. Original empty-message TypeError cause remains UNKNOWN; close code 1006 is not treated as proof of the lower-level cause.
+
+
+## F-014 — Repeated recovered acknowledgement reminders duplicate application diagnostics
+
+- **Severity:** Low — operational observability noise; repeated status publication obscures meaningful lifecycle transitions and grows Journal/log volume during a prolonged acknowledgement wait.
+- **Verdict:** CONFIRMED; regression reproduced on PR #674 test-only head and implementation added in the follow-up commit.
+- **Evidence:** `UserDataSession.#notifyRecoveryReady()` sends the same `recovered` status to subscribers while `#scheduleAcknowledgementReminder()` continues its bounded exponential reminder schedule (capped at 30 seconds). The Harvester status handler previously published `broker.status_changed` and an INFO record for every callback. The November 8 incident recorded 47 `recovered` notifications in one process session.
+- **Required behavior:** report an unchanged `recovered` state once per application recovery generation, while continuing to process reminders as retry triggers. A new generation must produce a new lifecycle event and diagnostic. Acknowledged generations must remain ignored.
+- **Fix:** the status handler tracks the last reported recovered generation and suppresses only duplicate lifecycle publication and INFO logging. It still invokes `startUserDataRecovery()` for every reminder, preserves the status observer callback, and leaves all readiness/reconciliation gates unchanged.
+- **Regression coverage:** repeated reminders publish/log once but invoke recovery twice; a new generation publishes a fresh status; an acknowledged generation ignores later reminders.
+- **Related issue:** #626. This closes the repeated-status diagnostic portion of its acceptance criteria, not the complete issue.
+- **Documentation impact:** architecture and recovery roadmap now describe generation-scoped diagnostics and reminder-driven retry semantics.

@@ -1372,6 +1372,7 @@ Owner decisions are closed and recorded in the canonical specification. This his
 
 - [ ] Re-read original #626 acceptance criteria; #627/#629 merges are not acceptance evidence.
 - [ ] Map each criterion to source, deterministic regression, failure mode, and exact CI head.
+- [~] Bound unchanged `recovered` lifecycle/INFO diagnostics to once per application recovery generation while preserving reminder-driven retries; implementation and regression are in [PR #674](https://github.com/45s/coinzilla/pull/674).
 - [ ] Cover reconnect/resubscribe, REST reconciliation, lost/late/duplicate/reordered fills, unknown submission outcomes, cancel/fill races, and interrupted recovery boundaries.
 - [ ] Keep #626 open until every criterion has a verified disposition and owner acceptance.
 
