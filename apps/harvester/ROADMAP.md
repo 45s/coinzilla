@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### User-data event handler extraction — 2026-11-08
+
+- [x] Group user-data readiness, sequencing, recovery-generation, and intake flags in one explicit bootstrap state object.
+- [x] Move serialized user-data event processing, canonical engine event handling, accounting/observer dispatch, readiness restoration, and failure-triggered safety-halt requests into `src/bootstrap/user-data/create-user-data-event-handler.js`.
+- [x] Add direct tests for successful event sequencing, malformed input, unowned/invalid engine results, and observer isolation.
+- [ ] Extract the user-data status/recovery coordinator while preserving generation invalidation, REST/stream reconciliation, durable account audits, and the broker recovery acknowledgement barrier.
+
 ### Market-data freshness policy extraction — 2026-11-08
 
 - [x] Move the shared market-price/book timestamp freshness decision into the pure domain helper `src/domain/market/is-market-data-fresh.js`.

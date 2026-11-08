@@ -415,3 +415,10 @@ Focused tests cover enabled/disabled behavior, broker metadata failure, and symb
 ## Pure market-data freshness policy — 2026-11-08
 
 The identical market-price and book-ticker age/future-skew checks have been consolidated into the pure `src/domain/market/is-market-data-fresh.js` helper. The caller supplies the timestamp and current time, so the helper remains deterministic and has no hidden clock or infrastructure dependency. Boundary tests cover the inclusive maximum age and future skew, stale/future events, invalid timestamps, and explicit threshold overrides.
+
+
+## User-data event-handler extraction — 2026-11-08
+
+The user-data event callback has been moved from `start-harvester.js` into `src/bootstrap/user-data/create-user-data-event-handler.js`. A single explicit state object now groups readiness, accounting-failure, event-queue, sequence, recovery-generation, and intake lifecycle flags. The extracted handler serializes accepted event processing, delegates order events to the Conservative engine, invokes the existing accounting/observer callbacks, restores readiness only under the same gates, and requests the existing BUY safety halt after invalid/accounting failures.
+
+The handler preserves the existing event processing and observer-failure isolation semantics. Direct tests cover successful serialized events, malformed event rejection, engine rejection of unowned order events, and observer failures that must not roll back committed accounting. User-data status/recovery handling remains in bootstrap and is the next separate boundary; no recovery acknowledgement or reconciliation semantics were changed in this extraction.
