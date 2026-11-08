@@ -15,11 +15,24 @@ export function createUserDataRecoveryHandler({
     const userDataSubscription = getUserDataSubscription()
     const tradingEngine = getTradingEngine()
     let hasCanonicalOwnershipReconciliation = false
-    if (isStopped() || !state.startupComplete || !state.requiresReconciliation ||
-      state.accountingFailed || state.recoveryTask ||
+    if (isStopped()) {
+      state.pendingRecovery = false
+      return
+    }
+    if (!state.startupComplete) {
+      state.pendingRecovery = state.requiresReconciliation &&
+        !state.accountingFailed &&
+        !state.recoveryTask &&
+        state.lastAcknowledgedRecoveryGeneration !== state.recoveryGeneration
+      return
+    }
+
+    // This flag only represents work deferred by the startup barrier. Once
+    // startup is complete, reminders either start/retry recovery or are ignored.
+    state.pendingRecovery = false
+    if (!state.requiresReconciliation || state.accountingFailed || state.recoveryTask ||
       state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {
-    state.pendingRecovery = true
-    return
+      return
     }
     if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
     logger.error?.({
