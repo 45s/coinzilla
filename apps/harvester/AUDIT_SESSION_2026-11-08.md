@@ -549,3 +549,18 @@ The separate established-socket 1006 path remains open under cross-domain reques
 - No production diagnostics subscriber, socket monkey-patch, timing heuristic, dependency, transport change, public broker contract change, or Harvester workaround was introduced. No TESTNET or exchange operation was performed.
 
 The established-socket path is now characterized as a Node/Undici runtime observability limitation for the reproduced 1006 peer reset. Do not infer a specific network/TLS cause from 1006. Cross-domain issue [#680](https://github.com/45s/coinzilla/issues/680) can be closed as investigated/documented; a future Node/Undici runtime change may make stronger correlation possible.
+
+
+## 27. F-019 broker multi-subscriber terminal notification proof — 2026-11-08
+
+[Brokers PR #729](https://github.com/45s/coinzilla/pull/729) merged into `develop` as `ba0992116a34b91ac907218203562880475c9dfd`. Exact tested head: `fc7467a260f7813e27fe1a7506317e18fe044e53`.
+
+- The existing two-subscriber recovery regression now asserts that the first acknowledgement remains locally recorded while global recovery is pending (legacy boolean `false`), and the final acknowledgement completes recovery.
+- Each still-active subscriber receives exactly one terminal `reconciled` status for the generation.
+- A repeated acknowledgement cannot publish a duplicate terminal status, and the acknowledgement reminder is cleared on completion.
+- A second regression proves that when the first subscriber has acknowledged and the second disconnects, only the remaining active subscriber receives `reconciled`; the removed subscriber receives none.
+- The existing state-changing RPC gate remains closed until global recovery completion and opens only after the final acknowledgement.
+- Brokers tests passed 416/416. All six required offline CI contexts and workspace coverage passed. Read-only TESTNET integration was skipped; no TESTNET acceptance is claimed.
+- This was test/documentation only. No broker production source, public acknowledgement return semantics, Harvester consumer, or bootstrap code changed.
+
+The broker-owned exact terminal-notification-count proof is complete. F-019/#702 remains open only for agreement on the additive per-subscriber acknowledgement result and the corresponding consumer compatibility behavior. Do not reinterpret the legacy boolean or add a Harvester workaround before owner coordination.
