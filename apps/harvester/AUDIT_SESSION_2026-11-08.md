@@ -523,3 +523,16 @@ PR [#718](https://github.com/45s/coinzilla/pull/718) is merged. Exact tested hea
 - TESTNET integration was skipped.
 
 The Harvester consumer proof is complete. F-019 remains open only for the Brokers-owned per-subscriber acknowledgement contract and exact terminal `reconciled` notification count in issue #702. No `start-harvester.js` inspection or broker contract change was made.
+
+
+## 25. F-015 broker handshake diagnostic follow-up — 2026-11-08
+
+Brokers PR [#721](https://github.com/45s/coinzilla/pull/721) merged into `develop` as `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. Exact tested head: `ad48ae4bb71d81d0318a031f101f582a67cca083`.
+
+- The native transport preserves a sanitized underlying handshake Error as `cause`, safe HTTP upgrade status when the runtime exposes it, and close code/reason/clean-close state as structured diagnostics.
+- Deterministic offline transport regressions cover an Undici-style blank-message `TypeError`, optional HTTP status metadata, close metadata, underlying cause, and credential/URL redaction.
+- Node.js v24.22.2 and bundled Undici 7.30.1 were verified. The credential-free Spot TESTNET API upgrade returned HTTP 451 with Binance's restricted-location eligibility response; the Streams upgrade returned HTTP 101 with a valid accept hash.
+- Brokers tests passed 414/414; Brokers coverage was 98.72% statements, 93.39% branches, and 94.98% functions. All six required offline CI workflows passed on the exact PR head.
+- The manual read-only TESTNET account/recovery integration was skipped. No authenticated account request, order operation, or TESTNET acceptance is claimed.
+
+The separate established-socket 1006 path remains open under cross-domain request [#680](https://github.com/45s/coinzilla/issues/680). Do not infer an underlying network cause from code 1006 alone; deterministic post-connect error/close correlation and any runtime limitation still require Brokers-owner verification. No Harvester workaround or broker contract change was made.
