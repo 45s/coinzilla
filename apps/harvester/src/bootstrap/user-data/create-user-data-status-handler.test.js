@@ -130,7 +130,7 @@ test("repeated recovered reminders publish and log once while retrying applicati
     "An unchanged recovered reminder must publish only one broker-status lifecycle event per recovery generation.",
   )
   assert.equal(
-    logs.info.filter((entry) => entry.message === "User-data stream status changed").length,
+    logs.info.filter((entry) => entry.message === "User-data stream reconnected").length,
     1,
     "An unchanged recovered reminder must not repeat the same INFO diagnostic for one recovery generation.",
   )
@@ -166,7 +166,7 @@ test("a new recovery generation publishes a fresh recovered status", () => {
     "A new recovery generation must publish a fresh recovered transition after recording its disconnect.",
   )
   assert.equal(
-    logs.info.filter((entry) => entry.statusType === "recovered").length,
+    logs.info.filter((entry) => entry.message === "User-data stream reconnected").length,
     2,
     "A genuinely new recovery generation must produce its own recovered diagnostic.",
   )
