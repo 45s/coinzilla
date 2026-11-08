@@ -702,6 +702,15 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Account snapshot manager extraction — 2026-11-08
+
+- [x] Move broker account-balance capture, configured-asset validation, account-wide open-order ownership classification, and durable PREFLIGHT/OPENING/CLOSING event publication into `src/bootstrap/account/create-account-snapshot-manager.js`.
+- [x] Keep broker reads and mandatory Journal flush barriers in the bootstrap lifecycle boundary; preserve account-versus-strategy inventory ownership.
+- [x] Add direct tests for durable publication, missing configured assets, stale snapshots, and unowned open orders.
+- [ ] Continue separating the user-data event/readiness coordinator and market/book subscription lifecycle.
+
+The manager does not replay Journal history, adopt external balances/orders, add per-fill REST snapshots, or weaken any durability barrier.
+
 ### Bootstrap resource-cleanup extraction — 2026-11-08
 
 - [x] Move broker intake teardown and disconnect coordination into `src/bootstrap/broker/cleanup-broker.js`; keep it in bootstrap because it owns process resources and lifecycle ordering.

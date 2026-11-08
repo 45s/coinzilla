@@ -393,3 +393,10 @@ This is an internal application-boundary refactor. It does not change strategy d
 Broker resource teardown has been separated from `start-harvester.js` into `src/bootstrap/broker/cleanup-broker.js`. The module coordinates market-price, book-ticker, and user-data intake shutdown, then broker disconnect, and preserves the broker-disconnected lifecycle event and aggregate error reporting. Focused tests cover successful cleanup ordering and multiple rejected cleanup operations.
 
 This is intentionally still a bootstrap module: resource ownership, subscription teardown, broker disconnection, and process lifecycle are infrastructure orchestration rather than business workflows. It does not move broker protocol normalization or change the trading engine's shutdown cancellation/reconciliation policy. Exact-head CI must validate this extraction before it is treated as complete.
+
+
+## Account snapshot lifecycle extraction — 2026-11-08
+
+The account snapshot lifecycle has been moved from `start-harvester.js` into `src/bootstrap/account/create-account-snapshot-manager.js`. It owns the current accepted account snapshot, validates that configured market assets are present, rejects stale source timestamps, classifies account-wide open orders against known in-memory ownership, and publishes/flushes the existing account audit events.
+
+The extraction preserves the account-versus-strategy boundary: exchange balances remain availability/audit facts and are not copied into Portfolio. It also preserves the required durable PREFLIGHT/OPENING/CLOSING audit barrier; no additional per-fill snapshot loop or Journal replay was introduced. Direct tests cover successful durable publication, missing assets, stale snapshots, and external open-order classification.
