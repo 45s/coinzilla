@@ -216,6 +216,7 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     },
     setConnected() {},
     setUnavailable() {},
+    recoveryWarningThreshold: 1,
     reconnectDelay: 1,
     setTimeoutFn: (callback) => {
       const id = ++nextTimerId
