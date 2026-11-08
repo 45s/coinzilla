@@ -11,12 +11,13 @@ import { loadTradingConfig } from "../infrastructure/config/load-trading-config.
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
-import { cleanupBroker, disconnectBroker, stopMarketIntake, stopUserDataIntake } from "./broker/cleanup-broker.js"
+import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
+import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
@@ -223,6 +224,7 @@ export async function startHarvester({
   let userDataSubscription
   // One explicit state object makes user-data readiness and queue ownership visible.
   const userDataState = {
+    stopped: false,
     ready: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: !tradingEnabled,
@@ -239,8 +241,7 @@ export async function startHarvester({
     pendingRecovery: false,
     intakeStopped: false,
   }
-  let stopped = false
-  accountSnapshotManager = createAccountSnapshotManager({
+    accountSnapshotManager = createAccountSnapshotManager({
     broker,
     eventPublisher,
     marketMetadata,
@@ -257,7 +258,7 @@ export async function startHarvester({
     publishAccountSnapshot,
   } = accountSnapshotManager
   const resumeDeferredStrategyEvaluations = ({} = {}) => {
-    if (!tradingEngine || !userDataState.ready || stopped) return
+    if (!tradingEngine || !userDataState.ready || userDataState.stopped) return
     void tradingEngine.resumeDeferredEvaluations().then((result) => {
       if (!result.ok) logger.error?.({ message: "deferred strategy evaluation failed", errors: result.errors })
     }).catch((error) => {
@@ -265,7 +266,7 @@ export async function startHarvester({
     })
   }
   const cancelOwnedBuysAfterAccountingFailure = () => {
-    if (!tradingEngine || stopped) return Promise.resolve()
+    if (!tradingEngine || userDataState.stopped) return Promise.resolve()
     if (userDataState.safetyHaltBuyCancellationTask) return userDataState.safetyHaltBuyCancellationTask
 
     const task = (async () => {
@@ -315,7 +316,7 @@ export async function startHarvester({
     state: userDataState,
     getTradingEngine: () => tradingEngine,
     isTradingEnabled: () => tradingEnabled,
-    isStopped: () => stopped,
+    isStopped: () => userDataState.stopped,
     logger,
     onUserDataEvent,
     getPortfolio,
@@ -336,7 +337,7 @@ export async function startHarvester({
 
   const startUserDataRecovery = createUserDataRecoveryHandler({
     state: userDataState,
-    isStopped: () => stopped,
+    isStopped: () => userDataState.stopped,
     getUserDataSubscription: () => userDataSubscription,
     getTradingEngine: () => tradingEngine,
     tradingEnabled,
@@ -351,7 +352,7 @@ export async function startHarvester({
 
   const handleUserDataStatus = createUserDataStatusHandler({
     state: userDataState,
-    isStopped: () => stopped,
+    isStopped: () => userDataState.stopped,
     eventPublisher,
     brokerName,
     logger,
@@ -395,7 +396,7 @@ export async function startHarvester({
         completedOrderClientIds: recoveredState.completedOrderClientIds,
         trailingBuySymbols: recoveredState.trailingBuySymbols,
       },
-      isStopping: () => stopped,
+      isStopping: () => userDataState.stopped,
       onPause: async ({ symbol, reason, error }) => {
         logger.error?.({ message: "paused a trading pair", symbol, reason, error })
       },
@@ -525,7 +526,7 @@ export async function startHarvester({
           bookResult = await broker.subscribeForBookTicker({
             symbol,
             onBookTicker: (bookTicker) => {
-              if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+              if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
               return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
                 if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
                 return processed
@@ -559,7 +560,7 @@ export async function startHarvester({
         result = await broker.subscribeForPrices({
           symbol,
           onPrice: (priceEvent) => {
-            if (stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+            if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
             try {
               if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
@@ -715,152 +716,20 @@ export async function startHarvester({
   userDataState.startupComplete = true
   if (userDataState.pendingRecovery) startUserDataRecovery()
 
-  const stop = async () => {
-    if (stopped) return
-    stopped = true
-    userDataState.ready = false
-    userDataState.status = "STOPPING"
-    logSystem(logger, { message: "Shutdown started" })
-
-    const auditReasons = []
-    let snapshotError
-    const logShutdownFailure = ({ message, stage, result, error } = {}) => {
-      const errors = error
-        ? [error]
-        : result?.errors?.length
-          ? result.errors
-          : [new Error(message)]
-      logger.error?.({
-        message,
-        stage,
-        errors: errors.map((entry) => ({
-          name: entry?.name,
-          message: entry?.message ?? String(entry),
-          stack: entry?.stack,
-        })),
-      })
-    }
-    const marketIntakeErrors = await stopMarketIntake({ subscriptions, bookSubscriptions })
-    if (marketIntakeErrors.length > 0) auditReasons.push("MARKET_INTAKE_SHUTDOWN_FAILED")
-
-    // Unsubscribing prevents new callbacks; drain callbacks already accepted
-    // before reconciling or cancelling orders. Otherwise an in-flight price
-    // evaluation can submit a fresh BUY after the shutdown cancellation pass.
-    const pendingMarketTasks = [...marketPriceIntake.values()]
-      .map(({ latestWebSocketPriceTask }) => latestWebSocketPriceTask)
-      .filter(Boolean)
-    await Promise.all(pendingMarketTasks)
-    await userDataState.eventQueue
-
-    if (tradingEnabled && tradingEngine) {
-      // Resolve PENDING submissions to canonical broker identities first.
-      // Only then can shutdown safely select and cancel owned BUY orders.
-      try {
-        const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) {
-          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-          logShutdownFailure({
-            message: "Shutdown order reconciliation failed",
-            stage: "BEFORE_BUY_CANCELLATION",
-            result: reconciliation,
-          })
-        }
-      } catch (error) {
-        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown order reconciliation failed",
-          stage: "BEFORE_BUY_CANCELLATION",
-          error,
-        })
-      }
-
-      const cancellation = await tradingEngine.cancelOwnedBuyOrdersForShutdown()
-      if (cancellation?.ok !== true) {
-        auditReasons.push("OWNED_BUY_CANCELLATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown BUY cancellation failed",
-          stage: "CANCEL_OWNED_BUYS",
-          result: cancellation,
-        })
-      }
-
-      // Keep execution reports flowing until cancellation responses and
-      // fills racing with cancellation have been processed.
-      await userDataState.eventQueue
-      try {
-        const reconciliation = await tradingEngine.reconcileOwnedOrders()
-        if (reconciliation?.ok !== true) {
-          auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-          logShutdownFailure({
-            message: "Shutdown order reconciliation failed",
-            stage: "AFTER_BUY_CANCELLATION",
-            result: reconciliation,
-          })
-        }
-      } catch (error) {
-        auditReasons.push("OWNED_ORDER_RECONCILIATION_FAILED")
-        logShutdownFailure({
-          message: "Shutdown order reconciliation failed",
-          stage: "AFTER_BUY_CANCELLATION",
-          error,
-        })
-      }
-    }
-
-    const userDataIntakeErrors = await stopUserDataIntake({ userDataSubscription })
-    userDataState.intakeStopped = true
-    if (userDataIntakeErrors.length > 0) auditReasons.push("USER_DATA_INTAKE_SHUTDOWN_FAILED")
-    await userDataState.eventQueue
-
-    if (tradingEnabled && tradingEngine) {
-      const terminalStatuses = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED", "EXPIRED_IN_MATCH"])
-      const unresolvedOrders = tradingEngine.getOrders().filter((order) => {
-        if (terminalStatuses.has(order.status)) return false
-        if (order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)) return false
-        return true
-      })
-      if (unresolvedOrders.length > 0) auditReasons.push("UNRESOLVED_OWNED_ORDERS:" + unresolvedOrders.length)
-      if (userDataState.accountingFailed || userDataState.requiresReconciliation) {
-        auditReasons.push("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")
-      }
-    }
-    try {
-      if (tradingEnabled) {
-        await publishAccountSnapshot({
-          phase: "CLOSING",
-          auditStatus: auditReasons.length === 0 ? "COMPLETE" : "INCOMPLETE",
-          auditReasons,
-        })
-      }
-    } catch (error) {
-      snapshotError = error
-      logger.error?.({ message: "closing account snapshot failed", error })
-    }
-
-    userDataState.status = "STOPPED"
-    const disconnectErrors = await disconnectBroker({ broker, brokerName, eventPublisher, logger })
-    const cancellationAuditFailed = tradingEnabled && auditReasons.some((reason) =>
-      [
-        "OWNED_BUY_CANCELLATION_FAILED",
-        "OWNED_ORDER_RECONCILIATION_FAILED",
-        "USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE",
-      ].includes(reason) || reason.startsWith("UNRESOLVED_OWNED_ORDERS:")
-    )
-    const auditError = cancellationAuditFailed
-      ? new Error("CLOSING account audit is incomplete: " + auditReasons.join(", "))
-      : undefined
-    const cleanupErrors = [
-      ...marketIntakeErrors,
-      ...userDataIntakeErrors,
-      ...disconnectErrors,
-      ...(snapshotError ? [snapshotError] : []),
-      ...(auditError ? [auditError] : []),
-    ]
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(cleanupErrors, "Harvester shutdown was incomplete")
-    }
-    logSystem(logger, { message: "Shutdown completed" })
-  }
+  const stop = createShutdownHandler({
+    state: userDataState,
+    logger,
+    tradingEnabled,
+    getTradingEngine: () => tradingEngine,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+    getUserDataSubscription: () => userDataSubscription,
+    broker,
+    brokerName,
+    eventPublisher,
+    publishAccountSnapshot,
+  })
 
   return Object.freeze({
     tradingConfig,

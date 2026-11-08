@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Shutdown handler extraction — 2026-11-08
+
+- [x] Move the process shutdown sequence into `src/bootstrap/shutdown/create-shutdown-handler.js`.
+- [x] Preserve market-intake unsubscribe and in-flight callback draining, owned-order reconciliation before/after BUY cancellation, user-data drain/disconnect, unresolved-order checks, CLOSING account audit, error aggregation, and final broker disconnect.
+- [x] Improve concurrent stop idempotency: all callers now await the same in-flight shutdown promise instead of later callers returning before cleanup completes.
+- [x] Add direct tests for safety-critical ordering, concurrent callers, and aggregated cleanup failures.
+
 ### User-data recovery coordinator extraction — 2026-11-08
 
 - [x] Move the application recovery task into `src/bootstrap/user-data/create-user-data-recovery-handler.js`.

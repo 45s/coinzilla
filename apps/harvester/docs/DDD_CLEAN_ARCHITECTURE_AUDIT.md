@@ -454,3 +454,10 @@ The recovery extraction initially captured the adjacent status-handler compositi
 
 
 A follow-up source/syntax review removed one duplicate closing brace left by the recovery-function extraction and restored the normal multiline subscription options formatting. This is a mechanical syntax correction; the recovery logic and status-handler composition are otherwise unchanged.
+
+
+## Shutdown handler extraction — 2026-11-08
+
+The ordered process shutdown workflow now lives in `src/bootstrap/shutdown/create-shutdown-handler.js`. It preserves market/book intake teardown, draining accepted market/user-data work, owned-order reconciliation before and after BUY cancellation, user-data disconnect, unresolved-order checks, durable CLOSING account audit, broker disconnect, and aggregate error reporting.
+
+The extraction also fixes concurrent stop semantics: callers share one in-flight shutdown promise and all observe its completion/failure. Direct tests cover the safety-critical sequence, concurrent callers, and multiple cleanup failures. This does not change the policy to cancel owned BUY orders while retaining eligible open SELL orders.
