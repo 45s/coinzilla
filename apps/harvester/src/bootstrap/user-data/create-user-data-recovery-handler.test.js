@@ -961,3 +961,104 @@ test("retries application recovery after an account snapshot REST timeout releas
     "The successful recovery retry must release its task slot after acknowledgement.",
   )
 })
+
+
+test("keeps recovery blocked and retries after an account-wide open-orders RPC timeout", async () => {
+  let openOrderReads = 0
+  const fixture = createRecovery({
+    getOpenOrders: async () => {
+      openOrderReads += 1
+      if (openOrderReads === 1) {
+        class RpcTimeoutError extends Error {
+          constructor(message) {
+            super(message)
+            this.name = "RpcTimeoutError"
+          }
+        }
+        const timeout = new RpcTimeoutError("account-wide open-orders RPC timed out")
+        timeout.code = "RPC_TIMEOUT"
+        return { ok: false, errors: [timeout] }
+      }
+      return { ok: true, data: [] }
+    },
+  })
+
+  fixture.start()
+  const timedOutAttempt = fixture.state.recoveryTask
+  await timedOutAttempt
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "An account-wide open-orders RPC timeout must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "An account-wide open-orders RPC timeout must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "The recovery account audit must not be published after the open-orders REST request times out.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "The recovery open-orders audit must not be published after its authoritative REST request times out.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged after an account-wide open-orders RPC timeout.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "The timed-out recovery attempt must release its task slot so a later broker reminder can retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorName,
+    "Error",
+    "The recovery coordinator wraps failed broker results in its own application-level Error.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
+    "The recovery failure diagnostic must retain the broker RPC timeout detail when wrapping the failed result.",
+  )
+
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    openOrderReads,
+    2,
+    "A later broker reminder must retry the authoritative open-orders request after the timeout.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "The successful retry must publish the recovery account audit.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "The successful retry must publish the recovery open-orders audit.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "Only the successful retry may acknowledge the broker.",
+  )
+  assert.equal(
+    fixture.state.lastAcknowledgedRecoveryGeneration,
+    1,
+    "The successful retry must acknowledge the original still-current recovery generation.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    false,
+    "The successful retry must clear the application reconciliation requirement.",
+  )
+})
