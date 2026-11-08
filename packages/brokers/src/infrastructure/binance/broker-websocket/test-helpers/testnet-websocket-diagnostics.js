@@ -17,6 +17,16 @@ function safeText(value) {
     .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
 }
 
+function readHttpUpgradeStatus(...sources) {
+  for (const source of sources) {
+    for (const key of ["status", "statusCode"]) {
+      const value = source?.[key]
+      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
+    }
+  }
+  return null
+}
+
 function probeHttpReachability(name, websocketUrl) {
   return new Promise((resolve) => {
     const endpoint = new URL(websocketUrl)
@@ -178,7 +188,7 @@ function probeEndpoint(name, url) {
 
     socket.addEventListener("error", (event) => {
       details.errorMessage = safeText(event?.message) ?? "WebSocket handshake error"
-      details.httpUpgradeStatus = httpStatus(event, event?.error)
+      details.httpUpgradeStatus = readHttpUpgradeStatus(event, event?.error)
       if (event?.error instanceof Error) {
         details.underlyingError = {
           name: typeof event.error.name === "string" ? event.error.name : "Error",
