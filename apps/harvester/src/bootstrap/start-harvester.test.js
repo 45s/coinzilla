@@ -135,22 +135,13 @@ const createBroker = (calls = [], { subscribeResult, subscribeResultBySymbol = {
       canonicalOrdersByBrokerId.set(order.brokerOrderId, canceledOrder)
       return { ok: true, data: canceledOrder }
     },
-    getOpenOrders: async ({ symbol } = {}) => {
-      if (recoveryPending) {
-        if (symbol) {
-          recoveryOwnedOpenOrderReads += 1
-        } else {
-          recoveryAccountWideOpenOrderReads += 1
-        }
-      }
-      return {
-        ok: true,
-        data: [...canonicalOrdersByBrokerId.values()]
-          .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-          .filter((order) => !symbol || order.market.symbol === symbol)
-          .map((order) => createOpenOrderSnapshot({ order })),
-      }
-    },
+    getOpenOrders: async ({ symbol } = {}) => ({
+      ok: true,
+      data: [...canonicalOrdersByBrokerId.values()]
+        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+        .filter((order) => !symbol || order.market.symbol === symbol)
+        .map((order) => createOpenOrderSnapshot({ order })),
+    }),
     getFills: async ({ orderId }) => ({ ok: true, data: fillHistoryByOrder.get(String(orderId)) ?? [] }),
     getCanonicalOrderHistory: async ({ orderId, symbol } = {}) => ({
       ok: true,
@@ -1300,13 +1291,22 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
     disconnect: async () => calls.push("disconnect"),
     getExchangeMarkets: async () => ({ ok: true, data: [] }),
     getSymbolFilters: async () => ({ ok: true, data: marketMetadata }),
-    getOpenOrders: async ({ symbol } = {}) => ({
-      ok: true,
-      data: [...canonicalOrdersByBrokerId.values()]
-        .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
-        .filter((order) => !symbol || order.market.symbol === symbol)
-        .map((order) => createOpenOrderSnapshot({ order })),
-    }),
+    getOpenOrders: async ({ symbol } = {}) => {
+      if (recoveryPending) {
+        if (symbol) {
+          recoveryOwnedOpenOrderReads += 1
+        } else {
+          recoveryAccountWideOpenOrderReads += 1
+        }
+      }
+      return {
+        ok: true,
+        data: [...canonicalOrdersByBrokerId.values()]
+          .filter((order) => ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+          .filter((order) => !symbol || order.market.symbol === symbol)
+          .map((order) => createOpenOrderSnapshot({ order })),
+      }
+    },
     getPrices: async () => ({ ok: true, data: { symbol: "BTCUSDT", price: "65000" } }),
     cancelOrder: async ({ order }) => {
       if (order.side === "BUY") buyCancellationCount.value += 1
@@ -1601,17 +1601,17 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     recoveryCanonicalHistoryReads,
     1,
-    "All 254 reminders must share one in-flight owned-order reconciliation rather than starting duplicate canonical-history reads.",
+    "All 254 reminders must share one in-flight owned-order reconciliation instead of starting duplicate canonical-history reads.",
   )
   assert.equal(
     recoveryAcknowledgementCount,
     0,
-    "The broker must not be acknowledged while the owned BUY canonical history read is unresolved.",
+    "The broker must not be acknowledged while the owned BUY canonical-history read is unresolved.",
   )
   assert.equal(
     runtime.userDataReady,
     false,
-    "Trading readiness must remain closed for the full pending recovery generation.",
+    "Trading readiness must remain closed throughout the pending recovery generation.",
   )
 
   baseBalance = "0.01"
@@ -1627,12 +1627,12 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     recoveryQueuedFillProcessedCount,
     0,
-    "The execution report must remain queued while the owned-order REST reconciliation is still pending.",
+    "The BUY execution report must remain queued while owned-order REST reconciliation is pending.",
   )
   assert.equal(
     recoveryAcknowledgementCount,
     0,
-    "Repeated reminders and a queued fill must not trigger a premature broker acknowledgement.",
+    "Repeated recovery reminders and a queued fill must not trigger premature broker acknowledgement.",
   )
 
   releaseRecoveryHistory()
@@ -1670,17 +1670,17 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     recoveryReminderCount,
     254,
-    "The recovery regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
+    "The regression must reproduce the 254 recovered reminders recorded in the incident Journal.",
   )
   assert.equal(
     recoveryCanonicalHistoryReads,
     1,
-    "The same unresolved recovery generation must reconcile its owned BUY exactly once despite all repeated reminders.",
+    "One unresolved recovery generation must reconcile its owned BUY exactly once despite all repeated reminders.",
   )
   assert.equal(
     recoveryFillHistoryReads,
     1,
-    "The one owned BUY must have its canonical fill history retrieved once during recovery.",
+    "One recovery generation must retrieve canonical fill history once for the owned BUY.",
   )
   assert.equal(
     recoveryOwnedOpenOrderReads,
@@ -1690,17 +1690,17 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     recoveryAccountWideOpenOrderReads,
     1,
-    "The completed recovery generation must perform exactly one account-wide open-orders audit.",
+    "The recovery generation must perform exactly one account-wide open-orders audit.",
   )
   assert.equal(
     recoveryAccountSnapshotReads,
     1,
-    "The completed recovery generation must perform exactly one fresh account snapshot read.",
+    "The recovery generation must perform exactly one fresh account snapshot read.",
   )
   assert.equal(
     recoveryQueuedFillProcessedCount,
     1,
-    "The queued BUY execution report must be drained once, not replayed for each recovered reminder.",
+    "The queued BUY execution report must be drained once rather than replayed for each recovered reminder.",
   )
   assert.equal(
     recoveryQueuedFillMode,
@@ -1715,7 +1715,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     runtime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
     "0.01",
-    "The Portfolio must contain exactly the one executed BUY quantity after stream/REST overlap.",
+    "The Portfolio must contain exactly one executed BUY quantity after stream/REST overlap.",
   )
   assert.equal(
     recoveryAcknowledgementCount,
@@ -1725,7 +1725,7 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   assert.equal(
     recoveryAcknowledgementObservation.queuedFillProcessedCount,
     1,
-    "The queued fill must be drained before the broker acknowledgement is attempted.",
+    "The queued fill must be drained before the broker recovery acknowledgement is attempted.",
   )
   assert.equal(
     recoveryAcknowledgementObservation.queuedFillMode,
