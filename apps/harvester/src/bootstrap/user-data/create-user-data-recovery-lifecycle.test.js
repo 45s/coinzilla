@@ -123,7 +123,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
   )
 
   statusHandler({ type: "connectionClosed", recoveryRequired: true })
-  statusHandler({ type: "recovered", recoveryRequired: true })
+  statusHandler({ type: "recovered", subscriptionId: 42, recoveryRequired: true })
 
   assert.equal(
     state.recoveryGeneration,
@@ -180,7 +180,7 @@ test("a second disconnect during an in-flight recovery invalidates stale work an
     "The stale recovery task must leave an actionable generation-superseded diagnostic.",
   )
 
-  statusHandler({ type: "recovered", recoveryRequired: true })
+  statusHandler({ type: "recovered", subscriptionId: 42, recoveryRequired: true })
   const currentTask = state.recoveryTask
   await currentTask
 
