@@ -140,7 +140,8 @@ src/
 ├── application/
 │   ├── ports/
 │   │   └── user-data-client-port.js
-│   └── user-data-session.js
+│   ├── user-data-session.js
+│   └── user-data-session.test.js
 ├── domain/
 │   └── user-data-recovery-policy.js
 ├── infrastructure/
@@ -160,7 +161,7 @@ src/
 │       ├── config/
 │       ├── constants/
 │       ├── helpers/
-│       ├── methods/
+│       ├── tests/
 │       └── utils/
 ├── broker.core.js
 └── index.js
@@ -173,7 +174,8 @@ The package already has a deterministic test suite for the partial vertical slic
 - `domain/user-data-recovery-policy.test.js`
 - `application/ports/user-data-client-port.test.js`
 - `infrastructure/binance/user-data-client-adapter.test.js`
-- `binance/broker-websocket/methods/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` cover the application session even though these lifecycle suites remain under the older Binance-oriented test tree; their shared fixtures live in `binance/broker-websocket/test-helpers/user-data-session-fixtures.js`.
+- `application/user-data-session.test.js` directly exercises `UserDataSession` through its injected client port without a Binance broker.
+- `binance/broker-websocket/tests/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` characterize the broker/application composition; the opt-in `user-data-session.integration.js` remains with these infrastructure tests. Shared broker fixtures stay in `binance/broker-websocket/test-helpers/`.
 
 The package scripts on the audited baseline are:
 
@@ -334,6 +336,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 
 ### Phase B — Characterization and test preparation
 - [ ] Identify public behaviors and safety-critical edge cases not already characterized.
+- [x] Add direct Application unit tests for `UserDataSession` through its injected `UserDataClientPort`; keep broker-composition and opt-in exchange integration tests in the infrastructure test suite.
 - [ ] Add only missing characterization tests; do not inflate test count for its own sake.
 - [ ] Capture public exports, result/error shapes, callback semantics, decimal fidelity, and state-changing RPC uncertainty.
 - [ ] Ensure deterministic fakes control clocks, timers, sockets, and concurrency without arbitrary sleeps.
