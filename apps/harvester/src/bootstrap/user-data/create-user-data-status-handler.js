@@ -24,7 +24,7 @@ export function createUserDataStatusHandler({
       })
     }
     if (status.type === "recovered" &&
-        state.state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) return
+        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) return
     if ([
       "connectionClosed",
       "recovering",

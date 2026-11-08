@@ -435,3 +435,6 @@ The application reconciliation gate remains distinct from the broker's stream-le
 
 
 The status-handler extraction follow-up corrected the same mechanical relocation issue as the event handler: the new module now references only its injected `state` object, not the former bootstrap-local variable name. Exact-head CI is required to validate both extracted handlers and the shared state transitions.
+
+
+The status-handler CI regression pinpointed one remaining doubled state qualifier in the recovered-generation guard. That reference is corrected to the injected state object's `lastAcknowledgedRecoveryGeneration` field; the failure was isolated to this guard, and the existing integration cases for recovery sequencing are retained.
