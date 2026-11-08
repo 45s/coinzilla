@@ -173,10 +173,9 @@ test("handshake failures retain safe cause, HTTP status, and close diagnostics",
     assert.equal(error.diagnostics.closeCode, 1006)
     assert.equal(error.diagnostics.closeReason, "")
     assert.equal(error.diagnostics.wasClean, false)
-    assert.deepEqual(error.diagnostics.underlyingError, {
-      name: "TypeError",
-      message: "Underlying WebSocket error",
-    })
+    assert.equal(error.diagnostics.underlyingError.name, "TypeError")
+    assert.equal(error.diagnostics.underlyingError.message, "Underlying WebSocket error")
+    assert.match(error.diagnostics.underlyingError.stack, /TypeError/)
     return true
   })
 
