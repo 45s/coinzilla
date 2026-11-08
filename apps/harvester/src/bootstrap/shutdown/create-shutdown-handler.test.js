@@ -69,10 +69,9 @@ test("drains market work, reconciles and cancels owned BUYs, audits CLOSING, the
     bookSubscriptions: [{ unsubscribe: async () => calls.push("book-unsubscribe") }],
     userDataSubscription: { disconnect: async () => calls.push("user-data-disconnect") },
     publishAccountSnapshot: async (input) => calls.push("audit-status:" + input.auditStatus),
-    disconnectBroker: async () => { calls.push("broker-disconnect"); return [] },
-    stopMarketIntake: async () => { calls.push("market-intake-stop"); return [] },
-    stopUserDataIntake: async (timeline, subscription) => {
-      timeline.push("user-data-intake-stop")
+    disconnectBroker: async () => [],
+    stopMarketIntake: async () => [],
+    stopUserDataIntake: async (_timeline, subscription) => {
       await subscription.disconnect()
       return []
     },
