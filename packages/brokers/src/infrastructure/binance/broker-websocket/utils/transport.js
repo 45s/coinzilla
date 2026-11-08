@@ -4,10 +4,10 @@ const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
 const MAX_DIAGNOSTIC_TEXT_LENGTH = 256
 
-function safeDiagnosticText(value) {
+function safeDiagnosticText(value, maxLength = MAX_DIAGNOSTIC_TEXT_LENGTH) {
   if (typeof value !== "string" || value.length === 0) return null
   return value
-    .slice(0, MAX_DIAGNOSTIC_TEXT_LENGTH)
+    .slice(0, maxLength)
     .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
     .replace(/https?:\/\/[^\s]+/gi, "[redacted-url]")
 }
@@ -27,6 +27,9 @@ function createHandshakeError(event) {
   const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
   const cause = source ? new Error(causeMessage) : undefined
   if (cause && typeof source.name === "string") cause.name = source.name
+  if (cause && typeof source.stack === "string") {
+    cause.stack = safeDiagnosticText(source.stack, 2_048) ?? cause.stack
+  }
 
   const message = safeDiagnosticText(event?.message) ??
     safeDiagnosticText(source?.message) ??
@@ -40,7 +43,7 @@ function createHandshakeError(event) {
     closeReason: null,
     wasClean: null,
     underlyingError: source
-      ? { name: cause.name, message: cause.message }
+      ? { name: cause.name, message: cause.message, stack: cause.stack }
       : null,
   }
   return error
