@@ -190,6 +190,27 @@ This is the strongest existing example of the intended architecture:
 
 This is a real, working vertical slice—not just empty architectural folders. Preserve it as the pattern to study when extending boundaries. It also shows that application code can own a lifecycle coordinator without importing a concrete Binance client.
 
+### Observed dependency direction
+
+The current import edges for the new vertical slice are already pointing inward:
+
+```text
+application/user-data-session.js
+    ├──> domain/user-data-recovery-policy.js
+    └──> ports/user-data-client-port.js
+
+infrastructure/binance/user-data-client-adapter.js
+    └──> Binance protocol helpers (adapt-msg, event identity)
+
+binance/broker-websocket/broker.js
+    ├──> application/user-data-session.js
+    ├──> infrastructure/binance/user-data-client-adapter.js
+    ├──> Binance RPC / Streams / transport / protocol helpers
+    └──> Binance response adapters
+```
+
+The inspected `domain/` policy and `ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The Binance adapter translates to the port, while the broker facade currently performs the composition by injecting the adapter factory into the application session. This is a sound dependency direction inside the vertical slice, with composition still embedded in the large concrete broker facade.
+
 ### Current gaps and boundary pressure
 
 - `binance/broker-websocket/broker.js` is 782 lines and imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. Its constructor creates concrete clients and wires the user-data session; its public methods also coordinate request workflows and normalization. It currently combines public facade, composition, exchange I/O, and application coordination.
