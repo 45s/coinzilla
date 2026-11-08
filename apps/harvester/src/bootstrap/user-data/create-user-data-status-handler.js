@@ -117,9 +117,14 @@ export function createUserDataStatusHandler({
     if (
       status.type === "reconciled" &&
       status.recoveryRequired !== true &&
-      status.reconciliationRequired !== true
+      status.reconciliationRequired !== true &&
+      state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
+      !state.accountingFailed
     ) {
+      // Only the matching generation's global broker completion may clear
+      // the application reconciliation gate and make readiness eligible.
       state.streamUnsafe = false
+      state.requiresReconciliation = false
     }
     const recoveryInvalidated = [
       "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
