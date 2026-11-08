@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Current code baseline:** `bec19bcbe3d92e3357d290bf10bd70685e15f142` (after PR #691). The user-data client port and its unchanged contract tests now live under `application/ports/`, making the Application ownership explicit.
+**Code baseline before this slice:** `2d46172d65e309bf40029b9accec561c4b1ab9ea` (after PR #692). The tree below reflects this PR's intended result: Binance DTO/Entity mapping is placed under `src/infrastructure/binance/adapters/`; adapter logic and test assertions remain unchanged; relative test imports are updated where needed.
 
 The package is **partially layered already**:
 
@@ -145,16 +145,23 @@ src/
 │   └── user-data-recovery-policy.js
 ├── infrastructure/
 │   └── binance/
+│       ├── adapters/
+│       │   ├── adapt-canonical-fill.js
+│       │   ├── adapt-canonical-order.js
+│       │   ├── adapt-fill.js
+│       │   ├── adapt-order.js
+│       │   ├── adapt-spot-asset.js
+│       │   ├── adapt-spot-balance.js
+│       │   └── normalize-binance-id.js
 │       └── user-data-client-adapter.js
 ├── binance/
-│   ├── broker-websocket/
-│   │   ├── broker.js
-│   │   ├── config/
-│   │   ├── constants/
-│   │   ├── helpers/
-│   │   ├── methods/
-│   │   └── utils/
-│   └── shared/
+│   └── broker-websocket/
+│       ├── broker.js
+│       ├── config/
+│       ├── constants/
+│       ├── helpers/
+│       ├── methods/
+│       └── utils/
 ├── broker.core.js
 └── index.js
 ```
@@ -175,7 +182,7 @@ pnpm --filter @coinzilla/brokers test
 pnpm --filter @coinzilla/brokers test:coverage
 ```
 
-The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the active broker WebSocket/shared runtime and the domain/application/infrastructure paths; application-owned ports are included through the application glob. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
+The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the broker WebSocket runtime and domain/application/infrastructure paths; Binance DTO adapters are included through the infrastructure glob. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
 
 No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
 
@@ -232,7 +239,7 @@ binance/broker-websocket/broker.js
     └──> Binance response adapters
 ```
 
-The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The Binance adapter translates to the port, while the broker facade currently performs the composition by injecting the adapter factory into the application session. This is a sound dependency direction inside the vertical slice, with composition still embedded in the large concrete broker facade.
+The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The remaining `binance/broker-websocket/` tree is also infrastructure, though it has not yet been relocated under the infrastructure folder.
 
 ### Current gaps and boundary pressure
 
@@ -241,7 +248,7 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 - There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
 - The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
-- `binance/shared/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Despite their current `shared/` path and canonical Entities output, they are exchange-specific infrastructure adapters, not exchange-neutral domain modules.
+- `infrastructure/binance/adapters/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Their Binance DTO and identifier dependencies make them Infrastructure adapters, not exchange-neutral domain modules.
 - `binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure. Their lifecycle and protocol tests are valuable and should remain with those components during migration.
 - `broker.core.js` is a compatibility base class with default unsupported-method behavior and shared maps. Its long-term ownership is unresolved; do not automatically treat a base class as a domain entity or port.
 
@@ -256,8 +263,8 @@ The inspected `domain/` policy and `application/ports/` contract have no imports
 | `binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
 | `binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; move/group under `infrastructure/binance/` incrementally |
 | `binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
-| `binance/shared/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
-| `binance/shared/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
+| `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
+| `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
 | `broker.core.js` | Shared base class and contract used by Market Simulator | Public compatibility extension point; preserve construction, state, and default methods |
 
 The 658-line `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
@@ -318,12 +325,12 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 ## Migration phases and exit criteria
 
 ### Phase A — Architecture discovery and baseline
-- [ ] Inventory all source modules, exports, import edges, side effects, state ownership, and consumers.
-- [ ] Map each responsibility to Domain, Application, Infrastructure, Bootstrap, or compatibility surface.
-- [ ] Identify existing canonical Entities contracts and avoid parallel models.
-- [ ] Record current test/coverage baseline and commands.
-- [ ] Record unresolved design questions and decisions in the roadmap.
-- **Exit:** reviewed responsibility map and dependency graph; no code moved.
+- [x] Inventory all source modules, exports, import edges, side effects, state ownership, and consumers.
+- [x] Map each responsibility to Domain, Application, Infrastructure, Bootstrap, or compatibility surface.
+- [x] Identify existing canonical Entities contracts and avoid parallel models.
+- [x] Record current test/coverage baseline and commands.
+- [x] Record unresolved design questions and decisions in the roadmap.
+- **Exit:** reviewed responsibility map and dependency graph; completed before the next extraction slice.
 
 ### Phase B — Characterization and test preparation
 - [ ] Identify public behaviors and safety-critical edge cases not already characterized.
