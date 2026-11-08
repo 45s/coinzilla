@@ -1,5 +1,37 @@
 # Utilities roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+### IMPORTANT — protect shared helper correctness and dependency direction
+
+1. **Complete the repository-wide utility reuse inventory.**
+   - **Why:** duplicate decimal, queue, validation or logging helpers can drift in edge-case behavior; moving domain rules into Utils would be equally harmful.
+   - **Do:** inspect each application/package candidate and record one disposition: reuse existing utility, extend a genuinely generic utility, keep domain-local, or intentionally duplicate with reason. Keep the inventory linked to the shared-utilities policy and update consumer roadmaps when a shared helper is adopted.
+   - **Verify:** every candidate has an owner and rationale; consumer migration tests preserve exact behavior. Do not consolidate code solely to reduce line count.
+
+2. **Finish the Logger API status and consumer contract documentation.**
+   - **Why:** the roadmap still describes configurable levels/transports as in progress on a feature branch, but PR #631 is merged. Stale status can cause duplicate implementation or consumers to rely on an incomplete contract.
+   - **Do:** mark configurable severity levels, independent transport thresholds, runtime changes, safe structured entries and transport lifecycle as complete. Document `success`/`system` severity mapping, default console behavior, custom transport failure isolation and close semantics. Audit existing Harvester logging use without changing its established output unnecessarily.
+   - **Verify:** Logger tests cover independent thresholds, runtime level changes, asynchronous write/close failure, redaction and queue/lifecycle behavior; README/JSDoc/roadmap agree with the merged API.
+
+3. **Enforce dependency direction for shared utilities.**
+   - **Why:** broad public-index imports can create avoidable dependency cycles or make domain packages depend on unrelated filesystem/logging capabilities.
+   - **Do:** expose narrow pure subpaths where a real consumer needs them; keep Utils independent of applications and domain packages. Do not move strategy, broker, Journal or entity rules into Utils.
+   - **Verify:** add architecture tests for forbidden reverse imports and public-export contract tests for supported subpaths.
+
+4. **Keep shared decimal arithmetic exact and bounded.**
+   - **Why:** decimal helpers underpin money, quantity, fees and order filters; accepting floating-point inputs or unbounded precision can create silent financial drift or resource abuse.
+   - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
+   - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
+
+### DEFERRED
+
+5. **Do not introduce new runtime dependencies, broad utility frameworks or speculative logger adapters.**
+   - **Why:** Utils is foundational and every dependency/API change increases workspace-wide risk.
+   - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
+   - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
+
+
 > Status: core audit hardening complete; optional cleanup remains demand-driven
 
 **Owner:** `packages/utils/`  
@@ -29,7 +61,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 
 ## Roadmap
 
-- [~] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (feature branch `feature/utils-logger-levels`).
+- [x] Extend the shared Logger with independent transport thresholds, runtime configuration, safe structured entries, and transport lifecycle handling (PR #631 merged).
 - [x] Document public and non-obvious `packages/utils` inputs, outputs, callbacks, async behavior, defaults, and validation contracts with JSDoc; completed in [PR #659](https://github.com/45s/coinzilla/pull/659), merged at `27388a54dd788819a08b5e605cb714258da57ccd`. JavaScript-first tooling remains unchanged.
 
 - [x] Maintain deterministic unit tests and meaningful coverage for all exported helpers.
@@ -55,7 +87,7 @@ No runtime dependencies were added and no consumer package source files were cha
 ## Repository-wide reuse audit
 
 - [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
-- [~] Consolidate exact decimal-string arithmetic shared by Harvester, Market Simulator, and Entities; shared API and first consumer migrations are in this PR, pending CI and compatibility review.
+- [x] Consolidate exact decimal-string arithmetic shared by Harvester, Market Simulator, and Entities; shared API and consumer migrations are merged and covered by workspace tests.
 - [ ] Audit direct console usage and app-local logger adapters; standardize diagnostics on the shared Logger / defaultLogger API.
 - [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
 - [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
