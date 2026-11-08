@@ -484,3 +484,10 @@ The first full test run after adding subscription/shutdown/recovery unit tests i
 Broker adapter construction, broker-port assertion, connection lifecycle publication, failure diagnostics, and disconnect-on-connect-failure cleanup now live in `src/bootstrap/broker/connect-broker.js`. It preserves the original behavior of rethrowing the connection error after successful cleanup and raising an AggregateError containing both failures when disconnect cleanup also fails.
 
 Direct tests cover connection success, connection failure with cleanup, and dual-failure aggregation. The broker adapter's exchange protocol implementation remains in the infrastructure/broker layer.
+
+
+## User-data subscription/startup gate extraction — 2026-11-08
+
+User-data subscription establishment and the initial PREFLIGHT account/open-order audits now live in `src/bootstrap/user-data/subscribe-to-user-data.js`. It preserves subscription-before-snapshot ordering, serializes the initial account audit behind accepted user-data events, requires the open-order audit, and opens TESTNET readiness only after the event queue and stream state are safe. Read-only mode still performs the PREFLIGHT account/open-order audits but never opens trading readiness.
+
+Direct tests cover read-only startup, successful trading startup, malformed subscription failure evidence, and unsafe events observed before order ownership initialization.

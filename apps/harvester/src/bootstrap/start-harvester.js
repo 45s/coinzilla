@@ -18,6 +18,7 @@ import { createUserDataRecoveryHandler } from "./user-data/create-user-data-reco
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
+import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
@@ -354,96 +355,21 @@ export async function startHarvester({
     if (tradingEnabled) activateTradingEngine()
     portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
 
-    logSystem(logger, { message: "Subscribing to Binance user-data events" })
-
-    let userDataResult
-    try {
-      userDataResult = await broker.subscribeForUserData({
+    userDataSubscription = await subscribeToUserData({
+      broker,
+      brokerName,
+      eventPublisher,
+      logger,
+      state: userDataState,
+      tradingEnabled,
+      enabledSymbols,
       onEvent: handleUserDataEvent,
       onStatus: handleUserDataStatus,
-      })
-    } catch (error) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-        dataResult: mapBrokerSubscriptionFailedData({
-          broker: brokerName,
-          stream: "user-data",
-          error,
-        }),
-      })
-      throw error
-    }
-
-    if (!userDataResult?.ok || typeof userDataResult.data?.disconnect !== "function") {
-      const details = userDataResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-      const error = new Error(
-        "Unable to subscribe to user data" + (details ? ": " + details : ""),
-      )
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-        dataResult: mapBrokerSubscriptionFailedData({ broker: brokerName, stream: "user-data", error }),
-      })
-      throw error
-    }
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-      dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
+      publishAccountSnapshot,
+      publishOpenOrdersSnapshot,
+      getAccountSnapshot,
+      resumeDeferredStrategyEvaluations,
     })
-    userDataSubscription = userDataResult.data
-    logSystem(logger, { message: "Binance user-data subscription established" })
-
-    userDataState.ready = false
-    userDataState.status = userDataState.accountingFailed
-      ? "EXECUTION_ACCOUNTING_FAILED"
-      : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-
-    const initialSnapshotTask = userDataState.eventQueue.then(async () => {
-      await publishAccountSnapshot({ phase: "PREFLIGHT" })
-    })
-    userDataState.eventQueue = initialSnapshotTask.then(() => undefined, () => undefined)
-    await initialSnapshotTask
-    userDataState.initialAccountSnapshotReady = true
-
-    if (!tradingEnabled) {
-      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-    }
-
-    if (tradingEnabled) {
-      if (userDataState.accountingFailed) {
-        throw new Error("Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized")
-      }
-
-      await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-
-      while (true) {
-        const queuedEvents = userDataState.eventQueue
-        await queuedEvents
-        if (queuedEvents === userDataState.eventQueue) break
-      }
-      const unsafeUserDataStatuses = new Set([
-        "connectionClosed", "recovering", "recovered", "recoveryFailed", "terminated",
-        "rpcError", "executionNormalizationFailed", "INVALID_EVENT",
-      ])
-      if (userDataState.accountingFailed || unsafeUserDataStatuses.has(userDataState.status)) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream is not in a safe state")
-      }
-      if (userDataState.requiresReconciliation) {
-        throw new Error("Conservative TESTNET startup blocked: user-data stream reconciliation is required")
-      }
-      logSystem(logger, {
-        message: "Conservative TESTNET startup checks passed; current account audit is complete",
-        enabledSymbols,
-        accountSnapshotSourceTime: getAccountSnapshot().sourceTime,
-      })
-      userDataState.requiresReconciliation = false
-      userDataState.ready = true
-      userDataState.status = "READY"
-      resumeDeferredStrategyEvaluations()
-      logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
-    }
 
     await subscribeToMarketData({
       broker,
