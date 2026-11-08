@@ -4912,6 +4912,48 @@ test("shutdown cancellation cancels only strategy-owned BUY orders and preserves
   assert.equal(engine.getOrders().find((order) => order.clientOrderId === "shutdown-sell").status, "OPEN", "graceful shutdown must preserve the owned recovery SELL order without cancellation")
 })
 
+test("account-integrity safety halt cancels only owned BUY orders and preserves recovery SELL orders", async () => {
+  const initialOwnedBuyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "safety-halt-buy",
+    brokerOrderId: "broker-safety-halt-buy",
+  })
+  const existingRecoverySellOrder = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "safety-halt-sell",
+    brokerOrderId: "broker-safety-halt-sell",
+  })
+  const { engine, cancellationIds } = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [initialOwnedBuyOrder, existingRecoverySellOrder] }),
+    },
+    eventPublisher: { publish: () => ({ ok: true }) },
+  })
+
+  const result = await engine.cancelOwnedBuyOrdersForSafetyHalt()
+
+  assert.equal(
+    result.ok,
+    true,
+    "an account-integrity safety halt must confirm cancellation of every acknowledged owned BUY order",
+  )
+  assert.deepEqual(
+    cancellationIds,
+    ["broker-safety-halt-buy"],
+    "an account-integrity safety halt must cancel the owned BUY while preserving every existing recovery SELL",
+  )
+  assert.equal(
+    engine.getOrders().find((order) => order.clientOrderId === "safety-halt-buy").status,
+    "CANCELED",
+    "the acknowledged owned BUY must reach its broker-confirmed terminal CANCELED state during the safety halt",
+  )
+  assert.equal(
+    engine.getOrders().find((order) => order.clientOrderId === "safety-halt-sell").status,
+    "OPEN",
+    "the existing recovery SELL must remain open and must never be canceled by the account-integrity safety halt",
+  )
+})
+
 test("shutdown cancellation applies partial BUY fills before confirming cancellation", async () => {
   const buyOrder = makeShutdownOrder({
     side: "BUY",
