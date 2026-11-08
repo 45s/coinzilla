@@ -571,3 +571,29 @@ trading remains paused rather than guessing.
 Harvester validates cancellation eligibility before invoking the broker: only acknowledged OPEN and PARTIALLY_FILLED orders with a broker identifier are cancellable. PENDING, UNKNOWN, and terminal orders fail closed and pause the affected market where appropriate. The Binance adapter repeats the lifecycle check for order-shaped requests and normalizes every Binance order ID with the shared broker-package normalizeBinanceId utility before calling the exchange client. Raw ID-only adapter requests still receive identifier validation, but they do not carry enough lifecycle context for application-state eligibility checks.
 
 Market-price subscription setup now awaits an already-received WebSocket tick before deciding whether a REST seed is needed; it does not issue the REST request when the WebSocket price is fresh. Recovery-mode classification is passed consistently to both the trading engine and observer. Broker/shutdown fixtures and the PREFLIGHT cleanup regression test were corrected after the first exact-head CI run.
+
+
+## Bootstrap composition and safety-halt workflow
+
+`bootstrap/start-harvester.js` is the process composition root. It resolves
+configuration, constructs domain/application state, connects adapters, wires
+user-data and market-data handlers, establishes startup gates, and exposes the
+runtime stop operation. It delegates account snapshots, market metadata,
+subscription setup, user-data event/status/recovery handling, and shutdown
+sequencing to focused bootstrap modules.
+
+The account-integrity safety halt is an application workflow in
+`src/use-cases/create-account-integrity-safety-halt.js`. When an unsafe
+execution or accounting failure is observed, it reconciles broker-owned order
+identities before asking the trading engine to cancel only strategy-owned BUYs.
+Concurrent triggers share one in-flight task. Bootstrap supplies the live
+engine lookup, stopped-process predicate, and logger; the use case does not
+depend on broker SDK or process-global state.
+
+Shutdown preserves the original safety sequence: stop market intake and drain
+accepted market work; drain accepted user-data events; reconcile owned orders;
+cancel owned BUYs; drain cancellation/fill reports and reconcile again; stop
+user-data intake; publish the CLOSING account audit; then disconnect broker
+resources. User-data intake intentionally remains active through cancellation
+and its follow-up reconciliation so late execution reports are still accounted
+before the final audit.
