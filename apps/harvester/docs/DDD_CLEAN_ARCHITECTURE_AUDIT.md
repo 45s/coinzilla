@@ -491,3 +491,10 @@ Direct tests cover connection success, connection failure with cleanup, and dual
 User-data subscription establishment and the initial PREFLIGHT account/open-order audits now live in `src/bootstrap/user-data/subscribe-to-user-data.js`. It preserves subscription-before-snapshot ordering, serializes the initial account audit behind accepted user-data events, requires the open-order audit, and opens TESTNET readiness only after the event queue and stream state are safe. Read-only mode still performs the PREFLIGHT account/open-order audits but never opens trading readiness.
 
 Direct tests cover read-only startup, successful trading startup, malformed subscription failure evidence, and unsafe events observed before order ownership initialization.
+
+
+## Startup configuration/read-only policy extraction — 2026-11-08
+
+Harvester config loading, strategy/pair validation, broker/mode resolution, TESTNET/non-production safety gates, and CONFIG_VALIDATED lifecycle publication now live in `src/bootstrap/config/resolve-harvester-options.js`. The read-only Conservative no-action decision is a separate deterministic use-case helper in `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+
+Direct tests cover read-only mode, all explicit TESTNET gates, invalid configuration flags, and immutable no-action evaluation. No default or production trading permission is broadened.

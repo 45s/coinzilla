@@ -9,6 +9,8 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { evaluateReadOnlyConservativeStrategy } from "../use-cases/evaluate-read-only-conservative-strategy.js"
+import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
@@ -22,7 +24,6 @@ import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
-  mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
 function logSystem(logger, data) {
@@ -32,15 +33,6 @@ function logSystem(logger, data) {
   }
   logger?.info?.(data)
 }
-
-const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
-  strategy: "CONSERVATIVE",
-  symbol: marketPrice?.symbol,
-  action: "NO_ACTION",
-  reason: "Trading is disabled; Conservative order evaluation runs only inside the trading engine.",
-  position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
-})
-
 
 export async function startHarvester({
   configSource,
@@ -62,47 +54,14 @@ export async function startHarvester({
   onUserDataStatus = () => {},
   now = Date.now,
 } = {}) {
-  const tradingConfig = await loadConfig(configSource)
-  const strategyConfig = tradingConfig.strategies?.CG_coinGrabber
-  if (strategyConfig?.enabled !== true) {
-    throw new Error("CG_coinGrabber strategy must remain enabled in trading config")
-  }
-  if (strategyConfig.settings?.conservative?.enabled !== true) {
-    throw new Error("Conservative strategy must remain enabled in CG_coinGrabber settings")
-  }
-  if (strategyConfig.settings?.aggressive?.enabled === true) {
-    throw new Error("Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false")
-  }
-  const { settings, pairs } = strategyConfig
-  const enabledSymbols = Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig.enabled)
-    .map(([symbol]) => symbol)
-  const brokerName = env.HARVESTER_BROKER
-  if (brokerName !== undefined && brokerName !== "" && brokerName !== "binance") {
-    throw new Error("Unsupported HARVESTER_BROKER value: " + brokerName)
-  }
-  const tradingRequested = env.HARVESTER_ENABLE_TRADING === "true"
-  if (tradingRequested && enabledSymbols.length === 0) {
-    throw new Error("Conservative TESTNET trading requires at least one enabled pair")
-  }
-  if (tradingRequested && (brokerName === undefined || brokerName === "")) {
-    throw new Error("HARVESTER_BROKER=binance is required when HARVESTER_ENABLE_TRADING=true")
-  }
-  const tradingEnabled = brokerName === "binance" && tradingRequested
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
-    dataResult: mapConfigValidatedData({
-      enabledMarkets: enabledSymbols,
-      strategyMode: tradingEnabled ? "conservative" : "read-only",
-      tradingEnabled,
-    }),
-  })
-  logSystem(logger, {
-    message: "Trading configuration validated",
+  const {
+    tradingConfig,
+    settings,
+    pairs,
     enabledSymbols,
-    strategyMode: env.HARVESTER_ENABLE_TRADING === "true" ? "conservative-testnet" : "read-only",
-  })
+    brokerName,
+    tradingEnabled,
+  } = await resolveHarvesterOptions({ configSource, loadConfig, env, eventPublisher, logger })
 
   let portfolioWorkflow = createPortfolioWorkflow({ evaluateStrategy, logger })
   let recoveredState = Object.freeze({

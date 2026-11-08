@@ -702,6 +702,12 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Startup configuration and read-only policy extraction — 2026-11-08
+
+- [x] Move config loading, strategy/pair validation, environment safety gates, mode selection, and CONFIG_VALIDATED lifecycle publication into `src/bootstrap/config/resolve-harvester-options.js`.
+- [x] Move the deterministic read-only Conservative fallback decision into `src/use-cases/evaluate-read-only-conservative-strategy.js`.
+- [x] Add direct tests for read-only resolution, explicit TESTNET gates, invalid strategy flags, and immutable no-action decisions.
+
 ### Broker connection lifecycle extraction — 2026-11-08
 
 - [x] Move broker adapter construction, broker-port validation, connection lifecycle publication, failure logging, and disconnect-on-connect-failure cleanup into `src/bootstrap/broker/connect-broker.js`.
