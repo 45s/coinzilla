@@ -1,6 +1,3 @@
-import { opendir, readFile, stat } from "node:fs/promises"
-import path from "node:path"
-
 import { toResult } from "@coinzilla/utils"
 import { parseJournalSession } from "./helpers/journal-record.js"
 
@@ -12,7 +9,10 @@ const DEFAULT_LIMITS = Object.freeze({
 })
 const SESSION_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/
 
-function validateReadOptions({ directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
+function validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes }) {
+  if (!store || typeof store.listSessions !== "function" || typeof store.statSession !== "function" || typeof store.readSession !== "function") {
+    return toResult({ error: new TypeError("A valid journal persistence store is required") })
+  }
   if (typeof directory !== "string" || directory.trim() === "") {
     return toResult({ error: new TypeError("A journal directory is required") })
   }
@@ -27,23 +27,24 @@ function validateReadOptions({ directory, maxRecords, maxSessions, maxBytes, max
 /**
  * Read and validate all sessions in deterministic filename/line order.
  * The configured record and byte limits bound recovery memory and I/O.
- * @param {{ directory: string, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
+ * @param {{ store: object, directory: string, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
+ * @returns {Promise<object>} Result containing the fully validated recovered snapshot or a structured error.
  */
 export async function readJournalRecords({
+  store,
   directory,
   maxRecords = DEFAULT_LIMITS.maxRecords,
   maxSessions = DEFAULT_LIMITS.maxSessions,
   maxBytes = DEFAULT_LIMITS.maxBytes,
   maxRecordBytes = DEFAULT_LIMITS.maxRecordBytes,
 } = {}) {
-  const optionsResult = validateReadOptions({ directory, maxRecords, maxSessions, maxBytes, maxRecordBytes })
+  const optionsResult = validateReadOptions({ store, directory, maxRecords, maxSessions, maxBytes, maxRecordBytes })
   if (!optionsResult.ok) return optionsResult
 
   try {
-    const sessionEntries = []
-    let directoryHandle
+    let sessionEntries
     try {
-      directoryHandle = await opendir(directory)
+      sessionEntries = await store.listSessions()
     } catch (cause) {
       if (cause.code === "ENOENT") {
         const error = new Error(`Journal directory does not exist: ${directory}`)
@@ -54,23 +55,24 @@ export async function readJournalRecords({
       throw cause
     }
 
-    for await (const entry of directoryHandle) {
+    const validSessionEntries = []
+    for (const entry of sessionEntries) {
       if (!entry.name.endsWith(".jsonl")) continue
-      if (!entry.isFile() || !SESSION_FILE_PATTERN.test(entry.name)) {
+      if (!entry.isFile || !SESSION_FILE_PATTERN.test(entry.name)) {
         const error = new Error(`Invalid journal session file entry: ${entry.name}`)
         error.code = "JOURNAL_INVALID_SESSION_FILE"
         throw error
       }
-      if (sessionEntries.length >= maxSessions) {
+      if (validSessionEntries.length >= maxSessions) {
         const error = new Error(`Journal recovery exceeds maxSessions while scanning ${directory}`)
         error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
         error.details = { maxSessions }
         throw error
       }
-      sessionEntries.push(entry)
+      validSessionEntries.push(entry)
     }
 
-    sessionEntries.sort((left, right) => {
+    validSessionEntries.sort((left, right) => {
       const timestampOrder = left.name.slice(0, 19).localeCompare(right.name.slice(0, 19))
       if (timestampOrder !== 0) return timestampOrder
       const leftSuffix = left.name.slice(19, -6)
@@ -82,10 +84,8 @@ export async function readJournalRecords({
     const recordIds = new Set()
     const sessions = []
     let bytesRead = 0
-
-    for (const entry of sessionEntries) {
-      const filePath = path.join(directory, entry.name)
-      const fileStats = await stat(filePath)
+    for (const entry of validSessionEntries) {
+      const fileStats = await store.statSession(entry.name)
       if (bytesRead + fileStats.size > maxBytes) {
         const error = new Error(`Journal recovery exceeds maxBytes while reading ${entry.name}`)
         error.code = "JOURNAL_RECOVERY_LIMIT_EXCEEDED"
@@ -93,7 +93,7 @@ export async function readJournalRecords({
         throw error
       }
 
-      const contentBuffer = await readFile(filePath)
+      const contentBuffer = await store.readSession(entry.name)
       const fileBytes = contentBuffer.byteLength
       let content
       try {

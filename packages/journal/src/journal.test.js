@@ -161,7 +161,7 @@ test("releases directory ownership when session-file creation fails during start
   const journal = new Journal({ eventBus, directory })
   let observedLockBeforeSessionCreation = false
 
-  journal.createSessionFile = async () => {
+  journal.store.createSession = async () => {
     try {
       await readFile(lockFilePath, "utf8")
       observedLockBeforeSessionCreation = true
@@ -415,7 +415,7 @@ test("rejects overlapping startup attempts without leaking a session file or sub
       "The Journal must clear its startup-in-progress flag after both start calls settle.",
     )
     assert.ok(
-      journal.fileHandle,
+      journal.store.sessionHandle,
       "The accepted start call must retain exactly one active session file handle.",
     )
     assert.ok(
@@ -459,12 +459,12 @@ test("closes a session file created after close cancels startup", async () => {
   const createSessionFileGate = new Promise((resolve) => {
     releaseCreateSessionFile = resolve
   })
-  const originalCreateSessionFile = journal.createSessionFile.bind(journal)
+  const originalCreateSession = journal.store.createSession.bind(journal.store)
 
-  journal.createSessionFile = async () => {
+  journal.store.createSession = async () => {
     signalCreateSessionFileStarted()
     await createSessionFileGate
-    return originalCreateSessionFile()
+    return originalCreateSession()
   }
 
   try {
@@ -482,7 +482,7 @@ test("closes a session file created after close cancels startup", async () => {
     assert.match(startResult.errors[0].message, /closed during startup/)
     assert.equal(journal.started, false)
     assert.equal(journal.starting, false)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
     assert.equal(journal.subscription, null)
     assert.equal((await readdir(directory)).length, 1)
   } finally {
@@ -532,7 +532,7 @@ test("cleans up the file handle when a closed event bus rejects subscription", a
   try {
     const result = await journal.start()
     assert.equal(result.ok, false)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
     assert.equal(journal.started, false)
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -546,7 +546,7 @@ test("rejects an empty directory before creating a session file", async () => {
   const result = await journal.start()
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /journal directory is required/)
-  assert.equal(journal.fileHandle, null)
+  assert.equal(journal.store.sessionHandle, null)
   await eventBus.close()
 })
 
@@ -566,7 +566,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
   const context = await createTestJournal()
 
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated disk sync failure")
     }
 
@@ -576,7 +576,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
     assert.match(result.errors[0].message, /simulated disk sync failure/)
   } finally {
     // Restore a working sync method so cleanup can complete normally.
-    delete context.journal.fileHandle.sync
+    delete context.journal.store.sync
     await context.journal.close()
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
@@ -587,7 +587,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
 test("does not claim a durable close on a repeated close after sync failure", async () => {
   const context = await createTestJournal()
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
     const first = await context.journal.close()
@@ -605,10 +605,9 @@ test("does not claim a durable close on a repeated close after sync failure", as
 
 test("reports a failed disk sync during close and still closes the file handle", async () => {
   const context = await createTestJournal()
-  const fileHandle = context.journal.fileHandle
-
+  
   try {
-    fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
 
@@ -616,7 +615,7 @@ test("reports a failed disk sync during close and still closes the file handle",
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /simulated close sync failure/)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -637,7 +636,7 @@ test("keeps close successful when the shutdown info logger throws", async () => 
 
     assert.equal(result.ok, true)
     assert.equal(result.closed, true)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -647,10 +646,9 @@ test("keeps close successful when the shutdown info logger throws", async () => 
 
 test("returns close errors even when the error logger throws", async () => {
   const context = await createTestJournal()
-  const fileHandle = context.journal.fileHandle
-
+  
   try {
-    fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
     context.journal.logger.error = () => {
@@ -661,7 +659,7 @@ test("returns close errors even when the error logger throws", async () => {
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /simulated close sync failure/)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -688,12 +686,12 @@ test("keeps startup successful when the startup info logger throws", async () =>
 
     assert.equal(result.ok, true)
     assert.equal(journal.started, true)
-    assert.ok(journal.fileHandle)
+    assert.ok(journal.store.sessionHandle)
 
     const closeResult = await journal.close()
     assert.equal(closeResult.ok, true)
     assert.equal(journal.closed, true)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
   } finally {
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
@@ -737,7 +735,7 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
     assert.equal(result.ok, false)
     assert.ok(result.errors.some((error) => /simulated unsubscribe failure/.test(error.message)))
     assert.ok(result.errors.some((error) => /simulated event bus flush rejection/.test(error.message)))
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
     assert.equal(context.journal.subscription, null)
   } finally {
@@ -750,11 +748,11 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
 
 test("retries a transient disk sync failure and durably persists records written before and after it", async () => {
   const context = await createTestJournal()
-  const originalSync = context.journal.fileHandle.sync.bind(context.journal.fileHandle)
+  const originalSync = context.journal.store.sync.bind(context.journal.store)
   let syncAttempts = 0
 
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       syncAttempts += 1
       if (syncAttempts === 1) {
         throw new Error("simulated transient disk sync failure")
@@ -846,8 +844,8 @@ test("retries a transient disk sync failure and durably persists records written
       "The durable JSONL history must preserve the first and retry audit payloads in publication order.",
     )
   } finally {
-    if (context.journal.fileHandle) {
-      delete context.journal.fileHandle.sync
+    if (context.journal.store.sessionHandle) {
+      delete context.journal.store.sync
     }
     await context.journal.close()
     await context.eventBus.close()
