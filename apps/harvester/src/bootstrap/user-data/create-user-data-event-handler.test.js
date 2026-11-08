@@ -104,3 +104,34 @@ test("contains observer failures without rolling back a valid event", async () =
   assert.equal(state.ready, true, "An observer failure must not close the readiness gate after valid event processing.")
   assert.equal(actions.resumptions, 1, "Deferred evaluations must still resume after an observer-only failure.")
 })
+
+ 
+test("passes recovery mode to both the trading engine and observer while application recovery is pending", async () => {
+  const state = createState({ requiresReconciliation: true })
+  let engineRecoveryMode
+  let observerRecoveryMode
+  const engine = {
+    processUserDataEvent: async ({ recoveryMode }) => {
+      engineRecoveryMode = recoveryMode
+      return { ok: true, data: { reevaluate: false } }
+    },
+    getOrders: () => [],
+  }
+  const { handler, actions } = createHandler({
+    state,
+    engine,
+    onUserDataEvent: async ({ recoveryMode }) => { observerRecoveryMode = recoveryMode },
+  })
+  handler({
+    event: {
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: { market: { symbol: "BTCUSDT" }, brokerOrderId: "recovery-order", clientOrderId: "recovery-client", side: "SELL" },
+    },
+  })
+  await state.eventQueue
+
+  assert.equal(engineRecoveryMode, true, "Queued order events must use recovery mode while authoritative application reconciliation is pending.")
+  assert.equal(observerRecoveryMode, true, "The observer must receive the same recovery-mode classification as the trading engine.")
+  assert.equal(actions.observations.length, 1, "The recovery-mode event must still be delivered to the observer.")
+})

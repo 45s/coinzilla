@@ -504,3 +504,6 @@ The broker-connection test fixture now implements the complete structural Broker
 
 
 The first integrated startup regression run found that a PREFLIGHT audit failure could occur after the broker subscription was created but before the new helper returned its handle to outer cleanup. The helper now reports the established subscription to bootstrap immediately, before snapshot work, so the existing failure cleanup can always disconnect it. The same run found that the extracted market subscription module relied on the old bootstrap-local `enabledSymbols`; it now derives the enabled list from its injected pair config.
+
+
+The develop synchronization incorporated the confirmed #626 recovery fix (PR #673): user-data order events accepted while application reconciliation is pending must be processed in recovery mode, and terminal recovery events must retain deferred strategy evaluation until acknowledgement. The extracted event handler now computes that mode at serialized task execution time and passes it to both the trading engine and observer. The upstream engine regression and integration tests are preserved in this branch.

@@ -37,6 +37,7 @@ export function createUserDataEventHandler({
       })
     }
     const task = state.eventQueue.then(async () => {
+      const recoveryMode = state.requiresReconciliation || state.recoveryTask !== null
       if (tradingEngine && isOrderUpdate) {
         const processed = await tradingEngine.processUserDataEvent({
           event,
@@ -111,6 +112,7 @@ export function createUserDataEventHandler({
       try {
         await onUserDataEvent({
           event,
+          recoveryMode,
           portfolio: getPortfolio(),
           recoveryLedger: event.fill instanceof Fill
             ? getRecoveryLedger({ marketId: event.fill.market.id })
