@@ -132,6 +132,7 @@ export async function startHarvester({
     eventSequence: 0,
     recoveryGeneration: 0,
     lastAcknowledgedRecoveryGeneration: -1,
+    lastReportedRecoveredGeneration: -1,
     recoveryTask: null,
     startupComplete: false,
     pendingRecovery: false,

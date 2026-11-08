@@ -25,7 +25,12 @@ export function createUserDataStatusHandler({
     }
     if (status.type === "recovered" &&
         state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) return
-    if ([
+    const isRepeatedRecoveredReminder = status.type === "recovered" &&
+      state.lastReportedRecoveredGeneration === state.recoveryGeneration
+    if (status.type === "recovered" && !isRepeatedRecoveredReminder) {
+      state.lastReportedRecoveredGeneration = state.recoveryGeneration
+    }
+    if (!isRepeatedRecoveredReminder && [
       "connectionClosed",
       "recovering",
       "recoveryFailed",
@@ -49,24 +54,26 @@ export function createUserDataStatusHandler({
         }),
       })
     }
-    logger.info?.({
-      message: "User-data stream status changed",
-      statusType: status.type ?? "UNKNOWN",
-      subscriptionId: status.subscriptionId,
-      attempt: status.attempt,
-      recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
-      reconciliationRequired: status.reconciliationRequired === true,
-      executionPending: status.executionPending === true,
-      orderUpdatePending: status.orderUpdatePending === true,
-      code: status.code,
-      reason: status.reason,
-      symbol: status.symbol,
-      brokerOrderId: status.brokerOrderId,
-      clientOrderId: status.clientOrderId,
-      executionId: status.executionId,
-      errorName: status.error?.name,
-      errorMessage: status.error?.message,
-    })
+    if (!isRepeatedRecoveredReminder) {
+      logger.info?.({
+        message: "User-data stream status changed",
+        statusType: status.type ?? "UNKNOWN",
+        subscriptionId: status.subscriptionId,
+        attempt: status.attempt,
+        recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
+        reconciliationRequired: status.reconciliationRequired === true,
+        executionPending: status.executionPending === true,
+        orderUpdatePending: status.orderUpdatePending === true,
+        code: status.code,
+        reason: status.reason,
+        symbol: status.symbol,
+        brokerOrderId: status.brokerOrderId,
+        clientOrderId: status.clientOrderId,
+        executionId: status.executionId,
+        errorName: status.error?.name,
+        errorMessage: status.error?.message,
+      })
+    }
     state.status = status.type ?? "UNKNOWN"
     if (status.type === "rpcError" || status.type === "recoveryFailed") {
       const error = status.error

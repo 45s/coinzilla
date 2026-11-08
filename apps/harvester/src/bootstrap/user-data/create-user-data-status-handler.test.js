@@ -13,6 +13,7 @@ const createState = (overrides = {}) => ({
   status: "READY",
   recoveryGeneration: 0,
   lastAcknowledgedRecoveryGeneration: -1,
+  lastReportedRecoveredGeneration: -1,
   startupComplete: true,
   pendingRecovery: false,
   initialAccountSnapshotReady: true,
@@ -21,20 +22,24 @@ const createState = (overrides = {}) => ({
 
 const createHandler = ({ state = createState(), onUserDataStatus = () => {}, tradingEnabled = true } = {}) => {
   const events = []
+  const logs = { info: [], error: [] }
   const actions = { recoveries: 0, cancellations: 0, resumptions: 0 }
   const handler = createUserDataStatusHandler({
     state,
     isStopped: () => false,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
     brokerName: "binance",
-    logger: { info: () => {}, error: () => {} },
+    logger: {
+      info: (entry) => { logs.info.push(entry) },
+      error: (entry) => { logs.error.push(entry) },
+    },
     tradingEnabled,
     startUserDataRecovery: () => { actions.recoveries += 1 },
     cancelOwnedBuysAfterAccountingFailure: () => { actions.cancellations += 1 },
     resumeDeferredStrategyEvaluations: () => { actions.resumptions += 1 },
     onUserDataStatus,
   })
-  return { handler, state, events, actions }
+  return { handler, state, events, logs, actions }
 }
 
 test("a transport disconnect invalidates recovery generation and closes readiness", () => {
@@ -100,4 +105,93 @@ test("status observer failures are contained and fail closed", () => {
   assert.equal(state.ready, false, "A failing status observer must not leave trading ready.")
   assert.equal(state.status, "STATUS_HANDLER_FAILED", "The observer failure must retain its explicit status.")
   assert.equal(actions.cancellations, 1, "A status observer failure must request the existing BUY safety halt.")
+})
+
+test("repeated recovered reminders publish and log once while retrying application recovery", () => {
+  let observerNotifications = 0
+  const { handler, events, logs, actions } = createHandler({
+    onUserDataStatus: () => { observerNotifications += 1 },
+  })
+  const recoveredReminder = {
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  }
+
+  handler(recoveredReminder)
+  handler(recoveredReminder)
+
+  assert.equal(
+    events.filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED).length,
+    1,
+    "An unchanged recovered reminder must publish only one broker-status lifecycle event per recovery generation.",
+  )
+  assert.equal(
+    logs.info.filter((entry) => entry.message === "User-data stream status changed").length,
+    1,
+    "An unchanged recovered reminder must not repeat the same INFO diagnostic for one recovery generation.",
+  )
+  assert.equal(
+    actions.recoveries,
+    2,
+    "Every recovered reminder must still reach the application recovery coordinator so a failed reconciliation can be retried.",
+  )
+  assert.equal(
+    observerNotifications,
+    2,
+    "Every recovered reminder must remain visible to the injected status observer even when duplicate diagnostics are suppressed.",
+  )
+})
+
+test("a new recovery generation publishes a fresh recovered status", () => {
+  const { handler, events, logs, actions } = createHandler()
+  const recoveredReminder = {
+    type: "recovered",
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  }
+
+  handler(recoveredReminder)
+  handler({ type: "connectionClosed", recoveryRequired: true })
+  handler(recoveredReminder)
+
+  assert.equal(
+    events.filter((event) => event.name === HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED).length,
+    3,
+    "A new recovery generation must publish a fresh recovered transition after recording its disconnect.",
+  )
+  assert.equal(
+    logs.info.filter((entry) => entry.statusType === "recovered").length,
+    2,
+    "A genuinely new recovery generation must produce its own recovered diagnostic.",
+  )
+  assert.equal(
+    actions.recoveries,
+    2,
+    "Each distinct recovered generation must start application reconciliation.",
+  )
+})
+
+test("an already acknowledged recovery ignores later recovered reminders", () => {
+  const { handler, events, logs, actions } = createHandler({
+    state: createState({ lastAcknowledgedRecoveryGeneration: 0 }),
+  })
+
+  handler({ type: "recovered", recoveryRequired: true })
+
+  assert.equal(
+    events.length,
+    0,
+    "A reminder for an already acknowledged generation must not publish another lifecycle event.",
+  )
+  assert.equal(
+    logs.info.length,
+    0,
+    "A reminder for an already acknowledged generation must not recreate recovery diagnostics.",
+  )
+  assert.equal(
+    actions.recoveries,
+    0,
+    "An acknowledged recovery generation must not restart application reconciliation.",
+  )
 })
