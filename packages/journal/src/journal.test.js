@@ -514,10 +514,22 @@ test("waits for startup cancellation to release the writer lock before close res
       null,
       "No session file handle may remain open when close reports completion after startup cancellation.",
     )
-    assert.deepEqual(
-      await readdir(directory),
-      [],
-      "The cancelled startup must remove its owned session and lock before close resolves.",
+    const remainingFiles = await readdir(directory)
+    assert.equal(
+      remainingFiles.includes(".coinzilla-journal.lock"),
+      false,
+      "The cancelled startup must release its exclusive writer lock before close resolves.",
+    )
+    const retainedSessions = remainingFiles.filter((fileName) => fileName.endsWith(".jsonl"))
+    assert.equal(
+      retainedSessions.length,
+      1,
+      "The session file created before startup cancellation must remain as an empty historical session rather than being deleted.",
+    )
+    assert.equal(
+      await readFile(path.join(directory, retainedSessions[0]), "utf8"),
+      "",
+      "The retained session file must remain empty because startup was cancelled before any event could be accepted.",
     )
   } finally {
     releaseCreateSessionFile()
