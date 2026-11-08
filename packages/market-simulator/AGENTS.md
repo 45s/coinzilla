@@ -13,7 +13,7 @@ Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGENT_WORKFLOW.md` be
 - Infrastructure implements repository/scheduler ports.
 - Broker integration belongs in adapters and must reuse `CoreBroker` from `@coinzilla/brokers`.
 - Do not create a second strategy-facing broker contract or change shared broker interfaces.
-- Read `apps/bot-free-roll/doge-history.json` in place; never copy or fabricate fixture data.
+- Require callers to supply an explicit history file or in-memory history; do not rely on application-owned fixtures or fabricate market data.
 - Never instantiate Binance broker clients or send exchange requests.
 - Preserve source decimal strings and timestamps.
 - Use exact string/BigInt decimal arithmetic for simulated accounting.

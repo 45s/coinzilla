@@ -77,7 +77,7 @@ try {
 }
 ```
 
-The default history file is `apps/bot-free-roll/doge-history.json`. It is read in place; the simulator does not copy or modify it. The bundled history contains only `DOGEUSDT`, so that is the symbol to subscribe to unless you supply another history source.
+Provide a history source explicitly through `historyFile` or the in-memory `history` option. The simulator does not bundle market-history fixtures.
 
 ### 2. Run a strategy with simulated MARKET orders
 
@@ -249,7 +249,7 @@ A balance contains `asset`, `free`, `locked`, and `total`. Order history include
 
 | Option | Description | Default |
 |---|---|---|
-| `historyFile` | JSON candle history file path | Bundled DOGEUSDT fixture |
+| `historyFile` | JSON candle history file path | Required unless `history` is supplied |
 | `history` | In-memory history object; when supplied, it is used instead of `historyFile` | Not set |
 | `speed` | Playback speed multiplier; must be a positive finite number | `60` |
 | `scheduler` | Injected scheduler implementation for playback | Internal timeout scheduler |

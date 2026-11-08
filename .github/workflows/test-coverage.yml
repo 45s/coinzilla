@@ -23,8 +23,6 @@ jobs:
       max-parallel: 5
       matrix:
         include:
-          - package: "@coinzilla/bot-free-roll"
-            has_coverage_script: true
           - package: "@coinzilla/harvester"
             has_coverage_script: false
           - package: "@coinzilla/brokers"

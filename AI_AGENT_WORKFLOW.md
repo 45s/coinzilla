@@ -40,7 +40,6 @@ Before implementing a shared helper or cross-cutting capability, follow the sing
 | `docs/<task>` | Short-lived documentation task | Responsible agent into `develop` |
 
 Examples:
-- `feature/bot-free-roll/fr-024-market-data-quality`
 - `feature/entities/fr-009-money-quantity`
 - `fix/brokers/order-reconciliation`
 - `feature/event-bus/bounded-delivery`

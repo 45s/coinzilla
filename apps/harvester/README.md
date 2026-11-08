@@ -101,7 +101,7 @@ See [Trading strategies](./docs/trading-strategies.md) for the agreed scope and 
 
 ## Configuration
 
-Harvester uses one `trading-config.json` with strategy-scoped configuration. The root contains a `strategies` object; each strategy owns its enabled flag, settings, and market pairs. The active strategy key is `CG_coinGrabber` (the former Free-Roll strategy name).
+Harvester uses one `trading-config.json` with strategy-scoped configuration. The root contains a `strategies` object; each strategy owns its enabled flag, settings, and market pairs. The active strategy key is `CG_coinGrabber`.
 
 - `strategies.CG_coinGrabber.enabled`: enables the strategy.
 - `strategies.CG_coinGrabber.settings.minProfit`: minimum required net profit per completed recovery sale, in the pair's quote currency.

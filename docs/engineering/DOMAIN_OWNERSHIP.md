@@ -4,7 +4,6 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 | Domain | Owned path | Responsibility |
 | --- | --- | --- |
-| Free-Roll | `apps/bot-free-roll/` | Strategy orchestration, pair lifecycle, trading decisions, application configuration |
 | Market Simulator | `packages/market-simulator/` | Deterministic historical simulation, market data and simulated order matching |
 | Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
