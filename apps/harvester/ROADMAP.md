@@ -1767,7 +1767,7 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 - [x] Journal sync retry characterization merged in [PR #714](https://github.com/45s/coinzilla/pull/714) (43/43 Journal tests); Harvester recovery retry and duplicate-publication proof merged in [PR #716](https://github.com/45s/coinzilla/pull/716) (760/760 Harvester tests, targeted 3/3). Exact tested heads: Journal `a52630cf4b2db0b5b317db4dd0e103789b64ed90`, Harvester `ae021f8f9fac071ebf3844069d5321ed11f8d0a3`; merge commits: `0638c8bbc51607805bd95299fc8b4e69363c774e` and `32a478d39a952206423fd6e552eea86e27d51f80`. All six required offline contexts passed on both PR heads. Coverage workflows passed; Journal and Harvester package threshold enforcement is not configured. TESTNET integration was skipped.
 - [ ] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity with the Brokers owner. See [cross-domain request #702](https://github.com/45s/coinzilla/issues/702). The single-subscriber path is guarded; the current Harvester subscriber count remains unverified because `start-harvester.js` is under active refactoring.
 - [ ] Brokers owner: add an exact-count assertion for one terminal `reconciled` notification per generation under cross-domain request [#702](https://github.com/45s/coinzilla/issues/702). Do not change the broker contract or add a Harvester workaround before owner acceptance.
-- [~] Add an end-to-end Harvester status/recovery composition regression for a second disconnect during an in-flight recovery. Test added on `test/harvester/second-disconnect-status-recovery-lifecycle`; exact-head CI is pending. `start-harvester.js` remains uninspected while under active refactoring.
+- [x] [PR #718](https://github.com/45s/coinzilla/pull/718) merged: the Harvester status/recovery composition test proves a second disconnect supersedes in-flight generation one, stale work publishes no audits or acknowledgement, and only generation two can complete and restore readiness. Exact tested head `a28bd72585a8b9d7c50b883b980a185b99711f49`, merged as `6236f49dca53a2938b016b52802f907c90611b44`; Harvester tests 761/761, targeted 3/3, and all six required offline contexts passed. Coverage execution passed; Harvester threshold enforcement is not configured. TESTNET integration was skipped.
 - [x] [PR #688](https://github.com/45s/coinzilla/pull/688) merged: account-wide open-orders RPC timeout keeps recovery blocked, releases the task slot, and retries the same generation successfully. Exact tested head `d52dad2347e8f9a76aa17b1f3def309e4d45f230`, merged as `a66e5f9114395fbc1ab776ccdffc55bdcb2a8f5a`; Harvester unit tests 754/754, configured targeted tests 3/3, and all six required offline CI contexts passed. Harvester coverage execution passed; package threshold enforcement is not configured. TESTNET integration was skipped.
 - [ ] PR #699 is superseded by PR #701; its old branch is stale and must not be merged. It remains open with a superseded-by comment pending normal repository cleanup.
 
@@ -1804,3 +1804,18 @@ PR [#711](https://github.com/45s/coinzilla/pull/711) merged into `develop` as `2
 The fix preserves the first native broker Error as `cause` through the relevant REST wrappers and includes the contextual Error object in structured recovery logs. Existing flattened log fields, contextual messages, retry behavior, recovery gates, and broker acknowledgement ordering remain unchanged.
 
 **Current `develop` checkpoint:** `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
+
+
+## 2026-11-08 second-disconnect Harvester lifecycle proof — complete
+
+PR [#718](https://github.com/45s/coinzilla/pull/718) merged into `develop` as `6236f49dca53a2938b016b52802f907c90611b44`. Exact tested head: `a28bd72585a8b9d7c50b883b980a185b99711f49`.
+
+- Harvester unit tests: 761/761 passed, including the new status/recovery composition test.
+- Configured Harvester targeted regression files: 3/3 passed.
+- All six required offline CI contexts passed.
+- Workspace coverage passed; Harvester coverage execution passed, but package threshold enforcement is not configured.
+- The test proves stale generation one cannot publish audits or acknowledge after the second disconnect; only generation two completes and reopens readiness.
+- The broker-owned exact terminal `reconciled` notification count and multi-subscriber acknowledgement result remain open under cross-domain request [#702](https://github.com/45s/coinzilla/issues/702). `start-harvester.js` remains uninspected while under active refactoring.
+- TESTNET integration was skipped. No TESTNET acceptance is claimed.
+
+**Current `develop` checkpoint:** `6236f49dca53a2938b016b52802f907c90611b44`.

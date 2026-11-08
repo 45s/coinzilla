@@ -510,4 +510,17 @@ Added a new offline composition test on branch `test/harvester/second-disconnect
 
 The test holds generation one in owned-order reconciliation, sends a second `connectionClosed` and `recovered` status, verifies the stale task publishes no account/open-orders audits and never acknowledges, then sends a later reminder and verifies only generation two reconciles, publishes both audits, acknowledges once, receives one terminal `reconciled` status, and restores readiness.
 
-This is Harvester consumer coverage only. The broker-owned exact terminal-notification count and multi-subscriber acknowledgement contract remain open under cross-domain request #702. Exact-head CI is pending; no production source or broker contract changed.
+This is Harvester consumer coverage only. The broker-owned exact terminal-notification count and multi-subscriber acknowledgement contract remain open under cross-domain request #702. PR #718 merged into `develop` as `6236f49dca53a2938b016b52802f907c90611b44`; exact-head Harvester tests 761/761, targeted 3/3, and all six required offline contexts passed. No production source or broker contract changed.
+
+
+## 24. Second-disconnect lifecycle proof merge confirmation — 2026-11-08
+
+PR [#718](https://github.com/45s/coinzilla/pull/718) is merged. Exact tested head: `a28bd72585a8b9d7c50b883b980a185b99711f49`. Merge commit and current `develop` checkpoint: `6236f49dca53a2938b016b52802f907c90611b44`.
+
+- Harvester package tests: 761/761 passed.
+- Configured Harvester targeted regression files: 3/3 passed.
+- All six required offline CI contexts passed.
+- Workspace coverage passed; Harvester coverage execution passed, but package threshold enforcement is not configured.
+- TESTNET integration was skipped.
+
+The Harvester consumer proof is complete. F-019 remains open only for the Brokers-owned per-subscriber acknowledgement contract and exact terminal `reconciled` notification count in issue #702. No `start-harvester.js` inspection or broker contract change was made.
