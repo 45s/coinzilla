@@ -1,5 +1,5 @@
 import { canCompleteUserDataRecovery } from "../domain/user-data-recovery-policy.js"
-import { assertUserDataClientPort } from "../ports/user-data-client-port.js"
+import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
 
 function logSafely(logger, level, ...args) {
   try {
@@ -38,7 +38,7 @@ export class UserDataSession {
   #clientPorts = new WeakMap()
 
   /**
-   * @param {{getClient: () => object|null, createClient: () => object, createUserDataClientPort: (client: object) => import("../ports/user-data-client-port.js").UserDataClientPort, setClient: (client: object) => void, setConnected: (connected: boolean) => void, setUnavailable: (unavailable: boolean) => void, logger?: object, reconnectDelay?: number, recoveryWarningThreshold?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
+   * @param {{getClient: () => object|null, createClient: () => object, createUserDataClientPort: (client: object) => import("./ports/user-data-client-port.js").UserDataClientPort, setClient: (client: object) => void, setConnected: (connected: boolean) => void, setUnavailable: (unavailable: boolean) => void, logger?: object, reconnectDelay?: number, recoveryWarningThreshold?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
    * @throws {TypeError|RangeError} If required callbacks, the port factory, or recovery limits are invalid.
    */
   constructor({

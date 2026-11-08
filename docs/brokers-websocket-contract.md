@@ -203,9 +203,13 @@ The session coordinator no longer imports Binance event adapters or Binance even
 
 ### Phase 9 implementation slice 4 — application session and explicit port
 
-The user-data lifecycle coordinator now lives at `src/application/user-data-session.js` and depends on the exchange-neutral recovery policy plus the application-owned `UserDataClientPort` contract in `src/ports/user-data-client-port.js`. The Binance broker facade composes this application service with the Binance client adapter. Runtime validation at the application boundary rejects incomplete injected ports before subscription operations begin.
+The user-data lifecycle coordinator now lives at `src/application/user-data-session.js` and depends on the exchange-neutral recovery policy plus the application-owned `UserDataClientPort` contract in `src/application/ports/user-data-client-port.js`. The Binance broker facade composes this application service with the Binance client adapter. Runtime validation at the application boundary rejects incomplete injected ports before subscription operations begin.
 
-The package coverage command now includes `src/application/**/*.js` and `src/ports/**/*.js`, excluding their test files, so these new DDD layers remain subject to the existing coverage thresholds.
+The package coverage command includes `src/application/**/*.js` (including application-owned ports) and excludes `*.test.js`, so the Application layer remains subject to the existing coverage thresholds.
+
+### Phase 9 implementation slice 6 — application-owned port location
+
+The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged.
 
 ### Phase 9 implementation slice 5 — Binance infrastructure adapter
 
