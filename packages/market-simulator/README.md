@@ -5,6 +5,8 @@
 
 A deterministic, offline market simulator for testing Coinzilla strategies against historical candles. It implements the existing `CoreBroker` contract and can simulate a documented subset of spot order execution. It never connects to an exchange.
 
+> **Usage status:** no current application or production workflow consumes this package. It is retained as an optional development tool, not an active project priority. Further simulator enhancements are deferred until a concrete consumer and validation use case exist. Its output must not be treated as evidence of live-market profitability or exchange behavior.
+
 ## What it provides
 
 - Replay caller-supplied historical candles.
