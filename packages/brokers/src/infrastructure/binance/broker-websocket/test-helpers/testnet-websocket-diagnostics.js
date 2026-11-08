@@ -24,6 +24,36 @@ function httpStatus(...sources) {
   return null
 }
 
+async function probeHttpReachability(name, websocketUrl) {
+  const endpoint = new URL(websocketUrl)
+  endpoint.protocol = "https:"
+  endpoint.pathname = "/"
+  endpoint.search = ""
+  endpoint.hash = ""
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(5_000),
+    })
+    await response.body?.cancel()
+    return {
+      endpoint: name,
+      reachable: true,
+      httpStatus: response.status,
+    }
+  } catch (error) {
+    return {
+      endpoint: name,
+      reachable: false,
+      httpStatus: null,
+      errorName: typeof error?.name === "string" ? error.name : "Error",
+      errorMessage: safeText(error?.message),
+    }
+  }
+}
+
 function probeEndpoint(name, url) {
   return new Promise((resolve) => {
     let socket
@@ -108,8 +138,13 @@ const report = {
   },
   authenticated: false,
   orderRequestsSent: false,
+  httpsReachability: [],
   endpoints: [],
 }
+
+report.httpsReachability = await Promise.all(
+  TARGETS.map(([name, url]) => probeHttpReachability(name, url)),
+)
 
 try {
   assertNativeWebSocketRuntime()
@@ -120,12 +155,13 @@ try {
     name: error.name,
     message: safeText(error.message),
   }
-  console.log(JSON.stringify(report, null, 2))
   process.exitCode = 1
 }
 
 if (report.runtime.guard === "passed") {
   report.endpoints = await Promise.all(TARGETS.map(([name, url]) => probeEndpoint(name, url)))
-  console.log(JSON.stringify(report, null, 2))
   if (report.endpoints.some((endpoint) => !endpoint.opened)) process.exitCode = 1
 }
+
+if (report.httpsReachability.some((endpoint) => !endpoint.reachable)) process.exitCode = 1
+console.log(JSON.stringify(report, null, 2))
