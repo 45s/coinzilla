@@ -22,6 +22,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. Unknown versions fail explicitly; legacy records remain readable.
 - [x] Verify recovery behavior after process interruption and malformed records. Restart read/replay, invalid UTF-8, malformed/incomplete data, unsupported versions, and missing-directory failures are covered. Incomplete, empty, malformed, invalid-encoding, and unsupported records return explicit errors; no automatic truncation is performed.
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits. Recovery has configurable session-count, record-count, total-byte, and per-record limits.
+- [~] Enforce single-writer directory ownership across processes. PR #741 adds an exclusive lock acquired before session creation, fail-closed contention/stale-lock handling, and cleanup on startup rollback and close. Cross-process, stale-lock preservation, and startup-rollback regressions are test-first; exact-head CI and merge remain pending.
 
 ## Current contract
 
@@ -31,13 +32,13 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 - `read({ maxRecords, maxBytes, maxRecordBytes })` validates all session files in filename and line order before returning records. Defaults are 100,000 records, 64 MiB total, and 1 MiB per record.
 - `replay({ handler, ...limits })` validates the entire journal before calling the handler sequentially. A handler failure stops replay and reports the number already applied. Replay is at-least-once across crashes; consumers must use stable record IDs idempotently.
 - A partial final line, malformed record, duplicate ID, unsupported schema version, or limit violation fails the entire read/replay. Journal never silently truncates or discards historical facts.
-- Only one writer may own a journal directory at a time (not enforced by an inter-process lock yet). Read/replay is available while the Journal instance is stopped, before start or after close. A missing directory is an explicit failure, not an empty-history success.
+- Only one writer may own a journal directory at a time. `start()` enforces this with an exclusive `.coinzilla-journal.lock` file acquired before session creation and released after the session file is synchronized and closed. Existing locks fail closed with `JOURNAL_DIRECTORY_LOCKED`; stale locks require operator verification and manual removal. Read/replay does not acquire a lock and must not overlap another process's writer.
 
 ## Delivered implementation
 
 The bounded read/replay capability was merged into `develop` in [PR #430](https://github.com/45s/coinzilla/pull/430), merge commit `46ac949a4f1b32e887e39bebbff299a7e97fb5ed`. Required CI passed on the PR head, including 42/42 Journal tests on Node 22.23.4 and Node 24.x.
 
-Operational limitation: the package documents a single-writer-per-directory requirement but does not yet acquire an inter-process lock. File-content fsync is acknowledged; directory-entry fsync is not part of the current contract.
+Operational limitation on the `develop` baseline `240966c03fa6812bc9c77664ff6dbea1555a5223`: the package required one writer per directory but did not enforce it across processes. PR #741 adds that guard; its exact-head verification and merge are still pending. File-content fsync is acknowledged; directory-entry fsync is not part of the current contract.
 
 ## Completion policy
 
@@ -54,4 +55,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - The test confirms two distinct event IDs remain in append order and become durable after the later successful sync.
 - `writeFile()` failure poisoning remains unchanged. No Journal production source changed.
 
-**Current `develop` checkpoint:** `0638c8bbc51607805bd95299fc8b4e69363c774e`.
+**Current `develop` checkpoint:** `240966c03fa6812bc9c77664ff6dbea1555a5223` (includes merged PR #740).
