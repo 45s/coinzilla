@@ -14,16 +14,35 @@ function logSystem(logger, data) {
 }
 
 function logUserDataStreamTransition({ state, logger, status } = {}) {
+  const error = status.error
+  const cause = error?.cause
   const authenticationExpired = status.authenticationExpired === true ||
     status.reason === "authentication_expired" ||
-    status.error?.code === "AUTHENTICATION_EXPIRED"
+    error?.code === "AUTHENTICATION_EXPIRED"
 
   let key
   let message
   let details
   let level = "system"
 
-  if (status.type === "connectionClosed" || status.type === "terminated") {
+  if (authenticationExpired) {
+    key = [
+      "authentication-expired",
+      status.code ?? error?.code ?? "",
+      error?.message ?? status.reason ?? "",
+    ].join(":")
+    message = "User-data stream authentication expired"
+    level = "error"
+    details = {
+      statusType: status.type,
+      reason: status.reason,
+      code: status.code ?? error?.code,
+      error,
+      errorName: error?.name ?? "Error",
+      errorMessage: error?.message ?? "User-data stream authentication expired",
+      errorStack: error?.stack,
+    }
+  } else if (status.type === "connectionClosed" || status.type === "terminated") {
     key = "disconnected"
     message = "User-data stream disconnected"
     details = {
@@ -57,10 +76,7 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
     ["rpcError", "recoveryFailed", "executionNormalizationFailed"].includes(status.type)
   ) {
     level = "error"
-    message = authenticationExpired
-      ? "User-data stream authentication expired"
-      : "User-data stream error"
-    const error = status.error
+    message = "User-data stream error"
     key = [
       "error",
       status.type,
@@ -85,6 +101,11 @@ function logUserDataStreamTransition({ state, logger, status } = {}) {
         ? error.message
         : "(empty error message)",
       errorStack: error?.stack,
+      causeName: cause instanceof Error ? cause.name : undefined,
+      causeMessage: cause instanceof Error
+        ? (cause.message || "(empty cause message)")
+        : cause === undefined ? undefined : String(cause),
+      causeStack: cause instanceof Error ? cause.stack : undefined,
     }
   } else {
     return
