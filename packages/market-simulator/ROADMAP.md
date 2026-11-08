@@ -62,7 +62,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 
 - Reuse the existing `CoreBroker` contract; do not fork or modify it.
 - Never instantiate a Binance broker or send exchange requests.
-- Read the actual DOGE fixture in place; do not copy or fabricate history.
+- Accept historical data explicitly through the configured history source; do not fabricate or silently assume a bundled fixture.
 - Preserve source decimal strings and timestamps.
 - Use string-based exact decimal arithmetic for simulated balances, prices, quantities and fees.
 - Keep tests offline, deterministic, credential-free and based on injected timers.
@@ -77,7 +77,7 @@ Dependencies point inward. Domain/application code must not depend on CoreBroker
 - [x] Workspace package map and lockfile registration.
 
 ### MS-002 — Historical market-data broker
-- [x] Load the actual 10,080-candle DOGEUSDT fixture.
+- [x] Load and validate caller-supplied historical market data. No bundled 10,080-candle fixture is present in the current package; tests must supply deterministic data explicitly.
 - [x] Validate candle structure and ascending timestamps.
 - [x] Implement CoreBroker-compatible connect/disconnect, getPrice(s), and subscribeForPrices.
 - [x] Preserve decimal strings, timestamps and OHLCV.
