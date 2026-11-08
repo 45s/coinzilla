@@ -5542,7 +5542,7 @@ test("keeps the standing BUY open when the proposed trailing replacement violate
   assert.deepEqual(harness.cancellationIds, [], "The existing BUY must not be canceled before MIN_NOTIONAL validation")
   assert.equal(harness.orders.length, 1, "An invalid replacement must never reach the broker")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The previously valid BUY must remain registered as open")
-  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED"))
+  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED"), "Regression assertion: keeps the standing BUY open when the proposed trailing replacement violates MIN_NOTIONAL")
 })
 
 test("keeps the standing BUY open when the proposed replacement violates quantity increments", async () => {
@@ -5558,8 +5558,8 @@ test("keeps the standing BUY open when the proposed replacement violates quantit
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /QUANTITY_INCREMENT/)
+  assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the proposed replacement violates quantity increments")
+  assert.match(result.errors[0].message, /QUANTITY_INCREMENT/, "Regression assertion: keeps the standing BUY open when the proposed replacement violates quantity increments")
   assert.deepEqual(harness.cancellationIds, [], "Quantity-filter rejection must happen before cancellation")
   assert.equal(harness.orders.length, 1, "Quantity-filter rejection must not submit a replacement")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
@@ -5578,10 +5578,10 @@ test("keeps the standing BUY open when the proposed replacement violates price i
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /PRICE_INCREMENT/)
+  assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the proposed replacement violates price increments")
+  assert.match(result.errors[0].message, /PRICE_INCREMENT/, "Regression assertion: keeps the standing BUY open when the proposed replacement violates price increments")
   assert.deepEqual(harness.cancellationIds, [], "Price-filter rejection must happen before cancellation")
-  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when the proposed replacement violates price increments")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
 })
 
@@ -5599,10 +5599,10 @@ test("keeps the standing BUY open when the replacement market price is stale", a
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, "Regression assertion: keeps the standing BUY open when the replacement market price is stale")
   assert.equal(result.data.reason, "STALE_MARKET_PRICE")
-  assert.deepEqual(harness.cancellationIds, [])
-  assert.equal(harness.orders.length, 1)
+  assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when the replacement market price is stale")
+  assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when the replacement market price is stale")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
 })
 
@@ -5622,10 +5622,10 @@ test("keeps the standing BUY open when the replacement trading rules become unav
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /trading rules/)
-  assert.deepEqual(harness.cancellationIds, [])
-  assert.equal(harness.orders.length, 1)
+  assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
+  assert.match(result.errors[0].message, /trading rules/, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
+  assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
+  assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when the replacement trading rules become unavailable")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
 })
 
@@ -5643,11 +5643,11 @@ test("does not submit a replacement when cancellation fails", async () => {
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(result.ok, false, "Regression assertion: does not submit a replacement when cancellation fails")
+  assert.equal(harness.cancellationIds.length, 1, "Regression assertion: does not submit a replacement when cancellation fails")
   assert.equal(harness.orders.length, 1, "A failed or unconfirmed cancellation must prevent replacement submission")
   assert.ok(["UNKNOWN", "OPEN"].includes(harness.engine.getOrders()[0].status))
-  assert.equal(harness.engine.getPausedMarkets().includes("DOGEUSDT"), true)
+  assert.equal(harness.engine.getPausedMarkets().includes("DOGEUSDT"), true, "Regression assertion: does not submit a replacement when cancellation fails")
 })
 
 test("retains an explicitly unknown replacement after cancellation succeeds but submission fails", async () => {
@@ -5664,17 +5664,17 @@ test("retains an explicitly unknown replacement after cancellation succeeds but 
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(result.ok, false, "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
+  assert.equal(harness.cancellationIds.length, 1, "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
   assert.equal(harness.orders.length, 2, "The broker must receive exactly one replacement attempt")
   assert.equal(harness.engine.getOrders()[0].status, "CANCELED", "The old order must not be represented as open after confirmed cancellation")
   assert.equal(harness.engine.getOrders()[1].status, "UNKNOWN", "The failed replacement outcome must remain explicitly reconcilable")
-  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
   const repeated = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: { symbol: "DOGEUSDT", price: "100.12", timestamp: 3 },
   })
-  assert.equal(repeated.ok, true)
+  assert.equal(repeated.ok, true, "Regression assertion: retains an explicitly unknown replacement after cancellation succeeds but submission fails")
   assert.equal(harness.orders.length, 2, "A paused market must not create duplicate replacement submissions")
 })
 
@@ -5693,11 +5693,11 @@ test("repeated market-price events cannot submit duplicate replacements after a 
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
   })
 
-  assert.equal(firstReplacement.ok, true)
-  assert.equal(firstReplacement.data.trailingBuyReplaced, true)
-  assert.equal(repeated.ok, true)
+  assert.equal(firstReplacement.ok, true, "Regression assertion: repeated market-price events cannot submit duplicate replacements after a valid replacement")
+  assert.equal(firstReplacement.data.trailingBuyReplaced, true, "Regression assertion: repeated market-price events cannot submit duplicate replacements after a valid replacement")
+  assert.equal(repeated.ok, true, "Regression assertion: repeated market-price events cannot submit duplicate replacements after a valid replacement")
   assert.equal(harness.orders.length, 2, "Repeated market events must not create a second replacement for the same trailing step")
-  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.cancellationIds.length, 1, "Regression assertion: repeated market-price events cannot submit duplicate replacements after a valid replacement")
 })
 
 
@@ -5717,7 +5717,7 @@ test("keeps the standing BUY open when the post-only market book becomes stale",
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, "Regression assertion: keeps the standing BUY open when the post-only market book becomes stale")
   assert.equal(result.data.reason, "REPLACEMENT_MARKET_DATA_UNAVAILABLE")
   assert.deepEqual(harness.cancellationIds, [], "A stale post-only book must prevent cancellation of the standing BUY")
   assert.equal(harness.orders.length, 1, "A stale post-only book must prevent replacement submission")
@@ -5748,9 +5748,9 @@ test("keeps the standing BUY open when a required exchange trading rule is missi
     priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /MIN_NOTIONAL/)
-  assert.deepEqual(harness.cancellationIds, [])
-  assert.equal(harness.orders.length, 1)
+  assert.equal(result.ok, false, "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
+  assert.match(result.errors[0].message, /MIN_NOTIONAL/, "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
+  assert.deepEqual(harness.cancellationIds, [], "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
+  assert.equal(harness.orders.length, 1, "Regression assertion: keeps the standing BUY open when a required exchange trading rule is missing")
   assert.equal(harness.engine.getOrders()[0].status, "OPEN")
 })
