@@ -113,6 +113,92 @@ test("prevents a second process from writing to an active journal directory", as
   }
 })
 
+
+test("refuses to take over an existing journal directory lock", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-stale-lock-"))
+  const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
+  const existingLock = JSON.stringify({ pid: 98765, startedAt: "2026-11-08T00:00:00.000Z" }) + "\n"
+  await writeFile(lockFilePath, existingLock, { flag: "wx" })
+  const logger = { info() {}, system() {}, error() {} }
+  const eventBus = new EventBus({ logger })
+  const journal = new Journal({ eventBus, directory, logger })
+
+  try {
+    const result = await journal.start()
+    assert.equal(
+      result.ok,
+      false,
+      "A Journal must not start when the directory already contains another writer's lock.",
+    )
+    assert.equal(
+      result.errors[0].code,
+      "JOURNAL_DIRECTORY_LOCKED",
+      "Lock contention must return a stable error code that callers can distinguish from unrelated startup failures.",
+    )
+    assert.equal(
+      await readFile(lockFilePath, "utf8"),
+      existingLock,
+      "A failed contender must preserve the existing lock byte-for-byte rather than stealing or rewriting it.",
+    )
+    assert.equal(
+      (await readdir(directory)).filter((name) => name.endsWith(".jsonl")).length,
+      0,
+      "A contender must not create a session file when directory ownership was not acquired.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("releases directory ownership when session-file creation fails during startup", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-lock-rollback-"))
+  const lockFilePath = path.join(directory, ".coinzilla-journal.lock")
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+  let observedLockBeforeSessionCreation = false
+
+  journal.createSessionFile = async () => {
+    try {
+      await readFile(lockFilePath, "utf8")
+      observedLockBeforeSessionCreation = true
+    } catch {
+      observedLockBeforeSessionCreation = false
+    }
+    throw new Error("simulated session-file creation failure")
+  }
+
+  try {
+    const result = await journal.start()
+    assert.equal(
+      observedLockBeforeSessionCreation,
+      true,
+      "The exclusive directory lock must be acquired before any session-file creation attempt.",
+    )
+    assert.equal(
+      result.ok,
+      false,
+      "A session-file creation failure must remain a failed startup rather than leaving a partially active Journal.",
+    )
+    assert.match(
+      result.errors[0].message,
+      /simulated session-file creation failure/,
+      "Startup must retain the original session-file creation failure for diagnosis.",
+    )
+    assert.equal(
+      (await readdir(directory)).includes(path.basename(lockFilePath)),
+      false,
+      "A failed startup must release its own lock so a later process is not stranded.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("creates a timestamped JSONL session file", async () => {
   const context = await createTestJournal()
 
