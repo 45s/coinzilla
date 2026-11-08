@@ -34,7 +34,10 @@ export function createUserDataRecoveryHandler({
       state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {
       return
     }
-    if (typeof userDataSubscription?.acknowledgeRecovery !== "function") {
+    if (
+      typeof userDataSubscription?.acknowledgeRecoveryResult !== "function" &&
+      typeof userDataSubscription?.acknowledgeRecovery !== "function"
+    ) {
     logger.error?.({
       message: "cannot acknowledge user-data recovery; subscription acknowledgement is unavailable",
     })
@@ -112,16 +115,61 @@ export function createUserDataRecoveryHandler({
         if (eventSequence === state.eventSequence) break
       }
 
-      // The broker only emits "reconciled" after every subscriber acknowledges.
-      // Keep the application gate closed unless this generation has passed
-      // order/fill reconciliation and durable account/order audits.
-      state.requiresReconciliation = false
-      const acknowledged = userDataSubscription.acknowledgeRecovery()
-      if (acknowledged !== true) {
-        state.requiresReconciliation = true
-        throw new Error("Broker rejected the application recovery acknowledgement")
+      // The broker only emits "reconciled" after every active subscriber
+      // acknowledges. Record local acceptance before the call because the
+      // final acknowledgement may publish "reconciled" synchronously.
+      const previousAcknowledgedGeneration = state.lastAcknowledgedRecoveryGeneration
+      if (typeof userDataSubscription.acknowledgeRecoveryResult === "function") {
+        state.lastAcknowledgedRecoveryGeneration = generation
+        let acknowledgement
+        try {
+          acknowledgement = userDataSubscription.acknowledgeRecoveryResult()
+        } catch (error) {
+          state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
+          throw error
+        }
+        if (acknowledgement?.accepted !== true) {
+          state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
+          const reason = typeof acknowledgement?.reason === "string"
+            ? `: ${acknowledgement.reason}`
+            : ""
+          throw new Error("Broker rejected the application recovery acknowledgement" + reason)
+        }
+        if (typeof acknowledgement.completed !== "boolean") {
+          state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
+          throw new Error("Broker returned an invalid recovery acknowledgement result")
+        }
+        if (!acknowledgement.completed) {
+          // This subscriber is reconciled, but another active subscriber is
+          // still pending. Local acceptance is not application readiness.
+          state.ready = false
+          state.requiresReconciliation = true
+          logger.info?.({
+            message: "application recovery acknowledged locally; waiting for broker-wide recovery completion",
+            generation,
+            reconciledOrders: reconciliation.data?.reconciled ?? 0,
+          })
+          return
+        }
+      } else {
+        // Compatibility fallback for older broker implementations. Their
+        // boolean API cannot distinguish local acceptance from global completion.
+        state.lastAcknowledgedRecoveryGeneration = generation
+        state.requiresReconciliation = false
+        let acknowledged
+        try {
+          acknowledged = userDataSubscription.acknowledgeRecovery()
+        } catch (error) {
+          state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
+          state.requiresReconciliation = true
+          throw error
+        }
+        if (acknowledged !== true) {
+          state.lastAcknowledgedRecoveryGeneration = previousAcknowledgedGeneration
+          state.requiresReconciliation = true
+          throw new Error("Broker rejected the application recovery acknowledgement")
+        }
       }
-      state.lastAcknowledgedRecoveryGeneration = generation
       logger.info?.({
         message: "application recovery completed and broker acknowledgement accepted",
         generation,
