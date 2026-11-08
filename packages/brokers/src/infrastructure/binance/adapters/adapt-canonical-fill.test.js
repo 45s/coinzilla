@@ -131,7 +131,7 @@ describe("adaptCanonicalFill", () => {
 
 describe("REST and WebSocket canonical fill parity", () => {
   it("maps equivalent execution facts to identical canonical fills when E differs from T", async () => {
-    const { adaptMsg } = await import("../broker-websocket/helpers/adapters/adapt-msg.js")
+    const { adaptMsg } = await import("../../../binance/broker-websocket/helpers/adapters/adapt-msg.js")
     const transactionTime = trade.time
     const event = adaptMsg({
       e: "executionReport",
