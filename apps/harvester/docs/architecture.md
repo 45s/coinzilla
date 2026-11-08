@@ -299,7 +299,7 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` |
 
-Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory.
+Broker intake teardown and disconnect aggregation are composed by `src/bootstrap/broker/cleanup-broker.js`; it remains bootstrap-owned because it coordinates process resources and publishes broker lifecycle outcomes. Account balance/open-order capture and mandatory durable audit publication are coordinated by `src/bootstrap/account/create-account-snapshot-manager.js`; this module owns the broker read + Journal barrier, not strategy inventory. Configured market filters and enabled-pair readiness are loaded by `src/bootstrap/market/load-market-metadata.js`; disabled-pair metadata is retained for account-audit asset coverage without enabling trading.
 | Strategy-specific decisions | `src/domain/strategies/` (or the established strategy boundary) |
 | Trigger handling for inbound events/commands | Application entry/handler boundary; add controllers only if an actual inbound protocol requires them |
 

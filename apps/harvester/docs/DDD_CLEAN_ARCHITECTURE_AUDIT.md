@@ -403,3 +403,10 @@ The extraction preserves the account-versus-strategy boundary: exchange balances
 
 
 The first source review of this extraction caught two mechanical relocation issues before acceptance: the account manager needed its own local system-log adapter, and the bootstrap readiness diagnostic needed to read the snapshot through the manager accessor. Both are corrected in the follow-up commit; exact-head workflow results remain the verification source.
+
+
+## Market metadata loading extraction — 2026-11-08
+
+The configured-market metadata loop now lives in `src/bootstrap/market/load-market-metadata.js`. It retains the original broker filter reads, canonical symbol/base/quote validation, enabled-market trading-readiness policy, market metadata map updates, lifecycle DTO publication, and system logging. Disabled configured markets continue to load canonical asset metadata for account audit coverage, but do not undergo order-readiness validation or publish trading-rule events.
+
+Focused tests cover enabled/disabled behavior, broker metadata failure, and symbol mismatch. The domain readiness validator remains in `src/domain/market/`; the new module only coordinates broker reads and bootstrap lifecycle publication.

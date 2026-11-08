@@ -6,13 +6,13 @@ import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
-import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { assertBrokerPort } from "../application/ports/broker.port.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { cleanupBroker, disconnectBroker, stopMarketIntake, stopUserDataIntake } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
+import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
@@ -22,7 +22,6 @@ import {
   mapBrokerSubscriptionEstablishedData,
   mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
-  mapMarketTradingRulesCapturedData,
   mapBrokerExecutionReportData,
 } from "../application/events/lifecycle-event-dtos.js"
 
@@ -488,49 +487,7 @@ export async function startHarvester({
   }
 
   try {
-    for (const [symbol, pairConfig] of Object.entries(pairs)) {
-      const filtersResult = await broker.getSymbolFilters({ symbol })
-      if (!filtersResult?.ok || !filtersResult.data) {
-        const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error(
-          "Unable to load exchange market metadata for configured pair " + symbol +
-          (details ? ": " + details : ""),
-        )
-      }
-      const market = filtersResult.data.market
-      if (
-        !market ||
-        market.symbol !== symbol ||
-        !market.baseAsset?.code ||
-        !market.quoteAsset?.code
-      ) {
-        throw new Error("Configured pair " + symbol + " does not expose canonical base/quote asset metadata")
-      }
-      if (!pairConfig.enabled) {
-        marketMetadata.set(symbol, filtersResult.data)
-        logSystem(logger, {
-          message: "Configured disabled market asset metadata loaded",
-          symbol,
-          baseAsset: market.baseAsset.code,
-          quoteAsset: market.quoteAsset.code,
-        })
-        continue
-      }
-
-      const validatedMetadata = validateMarketTradingReadiness({
-        symbol,
-        pairConfig,
-        marketMetadata: filtersResult.data,
-      })
-      marketMetadata.set(symbol, validatedMetadata)
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
-        dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
-      })
-      logSystem(logger, { message: "Exchange trading rules validated", symbol })
-    }
-
+    await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
     // Durable Journal replay is intentionally disabled. Harvester starts with
     // fresh in-process trading state; only current-session executions are owned.
     // The separate account PREFLIGHT/CLOSING audit remains mandatory.

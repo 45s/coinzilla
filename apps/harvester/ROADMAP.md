@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Market metadata loading extraction — 2026-11-08
+
+- [x] Move broker market-filter reads, canonical symbol/asset checks, enabled-pair readiness validation, market metadata storage, and trading-rule lifecycle publication into `src/bootstrap/market/load-market-metadata.js`.
+- [x] Preserve metadata loading for disabled configured pairs so account audits still include their base/quote assets; only enabled pairs undergo trading readiness validation.
+- [x] Add tests for enabled/disabled pair behavior, metadata-load failure, and symbol mismatch.
+- [ ] Continue separating market/book subscription setup and initial ticker seeding.
+
 ### Account snapshot manager extraction — 2026-11-08
 
 - [x] Move broker account-balance capture, configured-asset validation, account-wide open-order ownership classification, and durable PREFLIGHT/OPENING/CLOSING event publication into `src/bootstrap/account/create-account-snapshot-manager.js`.
