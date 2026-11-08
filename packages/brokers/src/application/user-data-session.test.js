@@ -240,6 +240,22 @@ function createRecoveryFixture() {
 }
 
 
+
+  it("does not accept an acknowledgement when no recovery is pending", async () => {
+    const fixture = createRecoveryFixture()
+    fixture.session.start()
+    const subscription = await fixture.session.subscribe({ onEvent() {} })
+
+    assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
+      accepted: false,
+      completed: false,
+      reason: "recovery-not-pending",
+    })
+
+    await subscription.data.disconnect()
+    await fixture.session.stop()
+  })
+
   it("reports local acknowledgement acceptance separately from shared recovery completion", async () => {
     const fixture = createRecoveryFixture()
     fixture.session.start()
