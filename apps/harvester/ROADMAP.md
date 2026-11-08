@@ -1,5 +1,66 @@
 # Harvester Roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+This section is the authoritative implementation order for current work. It supersedes older "current direction", P0/P1 and future-work notes below wherever their status or ordering conflicts. Historical incident records remain evidence, not active tasks. Harvester is the only application currently in this workspace.
+
+### CRITICAL — complete before unattended operation
+
+1. **Make Conservative trailing-BUY replacement failure-safe.**
+   - **Why:** the current replacement path can cancel the standing BUY before the replacement is known to be valid. If exchange-filter validation or submission then fails (including the observed `MIN_NOTIONAL` rejection), the market can be left without its intended standing order and repeated market ticks can repeat the failure.
+   - **Do:** build the candidate replacement from a single fresh market/trading-rule snapshot; validate quantity, price, notional, precision, freshness and POST_ONLY constraints before canceling the existing order. Preserve the old order until the candidate is known to be admissible. Where exchange semantics require cancel-before-submit, represent the gap explicitly, pause/defer the pair on rejection or unknown outcome, and reconcile by canonical client order ID before retrying. Do not silently swallow validation callbacks.
+   - **Verify:** add RED/GREEN regressions for below-min-notional candidates, stale book/price, cancel rejection, submit rejection, timeout/unknown acknowledgement, partial fills during replacement, and duplicate market ticks. Assert no duplicate order, no lost reservation, and no unbounded retry loop.
+
+2. **Close #626 recovery reliability with evidence, not assumptions.**
+   - **Why:** reconnecting the transport is not the same as restoring application readiness. A premature READY transition can allow decisions against stale order/account state; a permanently closed gate harms liveness but is safer than trading on uncertain state.
+   - **Do:** preserve generation/subscription fencing, queued user-data event handling, single-flight reconciliation, canonical order/fill history checks, and durable RECOVERY audit barriers. Investigate any remaining reproducible failure in the recovery state machine. Keep the gate closed on incomplete history, failed audit flush, stale acknowledgement, or conflicting state.
+   - **Verify:** cover first and second disconnects, stale and current generations, repeated reminders, queued BUY/SELL fills, multiple subscribers, history/API errors, Journal write failures and acknowledgement ordering. TESTNET acceptance remains **PAUSED / UNVERIFIED** after the regional HTTP 451 restriction; do not retry the same hosted path or claim exchange acceptance.
+
+3. **Implement #654 process-restart reconciliation before enabling unattended restarts.**
+   - **Why:** current Portfolio, RecoveryLedger and OrderRegistry state is process-local. A restart after an order/fill can lose ownership and reservations while Binance still has open orders or later executions. Same-process reconnect recovery does not solve process death.
+   - **Do:** define the minimum durable state (client/broker order IDs, order intent and terminal state, fill/trade identity, deduplication, reservations, Portfolio/Position, recovery-cycle state, strategy ownership and config/schema version). Persist execution facts before acknowledging them; on startup reconcile persisted state with balances, open orders and available order/trade history before READY. Define explicit operator intervention for retention gaps or irreconcilable conflicts.
+   - **Verify:** crash/restart at every order-submit, cancel, partial-fill, full-fill and recovery boundary; prove idempotent accounting and no duplicate order placement. Do not claim exactly-once transport delivery.
+
+### IMPORTANT — improve correctness and operational confidence
+
+4. **Keep Journal evidence complete without expanding trading-blocking behavior.**
+   - **Why:** investigation requires decision, request, broker acknowledgement, execution, fee and account evidence to be correlated. Missing fields make incident analysis guesswork, but optional diagnostics must not become new trading gates.
+   - **Do:** maintain the evidence coverage matrix and add only demonstrated gaps (including execution/trade IDs, per-fill commission amount/asset, last/cumulative quantities, order/client IDs and rejection/cancel outcomes). Preserve the existing mandatory PREFLIGHT/CLOSING and pre-side-effect durability barriers; keep additional evidence best-effort and explicitly report gaps.
+   - **Verify:** fixtures and mapping/persistence tests cover populated, missing, malformed and sensitive fields, duplicate/replayed events and optional-write failure isolation. Issue #650 is completed by PR #652; do not reopen it without a newly demonstrated gap.
+
+5. **Add consolidated trading-session statistics (C) as a separate reporting capability.**
+   - **Why:** the operator needs a trustworthy post-session explanation of inventory, capital recovery, fees and realized result; current event logs and point-in-time Portfolio snapshots do not provide a complete session report.
+   - **Do:** derive the report from confirmed, deduplicated fills and the existing Portfolio/RecoveryLedger accounting facts. Show BUY/SELL quantity and quote totals, actual commissions grouped by asset, invested quote, recovered net proceeds, outstanding recovery, realized net profit, retained inventory/dust and open/partial orders. Keep reporting read-only; do not create a second accounting source.
+   - **Verify:** compare report values against deterministic fill fixtures, including partial/duplicate fills, multiple fee assets, retained inventory and exchange-constrained dust. Start with a concise CLI summary; persistence/export is a separate decision.
+
+6. **Finish Conservative architecture decomposition after safety fixes.**
+   - **Why:** the trading engine is a 2,243-line orchestration hotspot with a 5,499-line test. This makes state transitions hard to review and increases the chance that a focused change breaks unrelated lifecycle behavior.
+   - **Do:** extract one cohesive workflow at a time (replacement, cancellation/reconciliation, fill application, deferred evaluation and pause/resume) behind explicit injected ports. Keep pure strategy decisions in the domain and broker I/O in application/infrastructure. Do not split by callback or introduce speculative frameworks.
+   - **Verify:** write characterization/regression tests before each extraction; preserve event ordering, reservations, accounting atomicity and existing public behavior. Add Harvester dependency-boundary tests.
+
+7. **Complete the multi-market acceptance matrix when an eligible TESTNET environment exists.**
+   - **Why:** offline fake-broker tests cannot establish exchange filter, shared-asset reservation and real acknowledgement behavior across markets.
+   - **Do:** verify markets sharing quote assets and base assets, investment limits, per-pair order/fill isolation, fee handling and shutdown/reconnect. Keep the operator runbook and evidence redacted.
+   - **Verify:** use read-only checks first and explicitly authorized bounded test orders only in a separately agreed session. This remains blocked by the current regional eligibility pause.
+
+8. **Keep operational notifications optional and isolated.**
+   - **Why:** operators need high-signal lifecycle and safety alerts, but a Telegram outage must never block trading or recovery.
+   - **Do:** the Telegram integration through `@coinzilla/notifiers` is already implemented (PR #734). Keep both credentials optional, preserve the explicit event allowlist, bounded serialized delivery and shutdown drain. Do not add automatic retries or a durable outbox without a concrete requirement.
+   - **Verify:** retain offline tests for absent/partial credentials, setup failure, queue overflow, transport failure and shutdown. A live smoke test is operator-controlled and is not a CI prerequisite.
+
+### DEFERRED — only after the critical Conservative path is safe
+
+9. **Aggressive strategy:** keep disabled until Conservative restart/recovery and exchange acceptance are proven. Then specify unresolved policy, implement pure intents, reuse the shared engine/accounting/safety gates, and test grid repricing, partial fills, reservations, risk fallback and handover before TESTNET.
+10. **Further reporting/notification channels:** do not add strategy-specific accounting, email/Discord, persistent notification delivery or speculative dashboards until a real consumer and acceptance contract exist.
+
+### Status corrections
+
+- #702 per-subscriber recovery acknowledgement and generation-fencing work is implemented in merged Brokers/Harvester PRs #732, #735 and #740; do not list it as open work.
+- #650 evidence work is complete in PR #652; additional evidence changes require a newly demonstrated gap.
+- #654 remains deferred but is a release-readiness blocker for unattended process restarts.
+- Remove obsolete references to the deleted legacy application; no extraction or migration work remains for it.
+
+
 ## Current blockers and work selection — 2026-11-08
 
 This section is the current operational status and supersedes older statements below that describe TESTNET acceptance as the immediate next action.
@@ -40,10 +101,10 @@ This section is the current operational status and supersedes older statements b
 
 ### Other active and deferred work
 
-- [ ] **#650 — Journal evidence completeness:** continue the bounded, allowlisted evidence coverage work; preserve mandatory durability barriers and keep additional diagnostics best-effort.
+- [x] **#650 — Journal evidence completeness:** completed in PR #652; required evidence matrix and allowlisted evidence coverage merged and verified. Preserve mandatory durability barriers; additional diagnostics remain best-effort.
 - [x] **#646 / #656 — Conservative conformance and dust:** completed in PR #653; exact-head offline CI passed. Issues #646 and #656 are closed.
-- [ ] **#654 — process-restart reconciliation:** explicitly deferred; not a blocker for current in-process recovery or strategy work.
-- **#377 — Free Roll/Grid extraction:** separate application workstream; not part of Harvester recovery.
+- [ ] **#654 — process-restart reconciliation:** deferred implementation, but a blocker for unattended restarts/operation; see the Critical priority plan above.
+- **Legacy application removal:** complete. No extraction, migration or maintenance work remains; keep its former implementation and terminology out of current Harvester documentation.
 
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
 
@@ -92,7 +153,7 @@ These items are intentionally recorded for future work. They are not current tra
 
 ### D. Optional Telegram notifications
 
-- [ ] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications.
+- [x] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications (PR #734; optional, bounded and failure-isolated).
 - [ ] Define a small allowlisted set of useful operational events (startup/connection status, trading pause or safety halt, order/fill lifecycle milestones, and shutdown) before implementation.
 - [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
 - [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
