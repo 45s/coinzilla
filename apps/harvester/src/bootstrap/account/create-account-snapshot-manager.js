@@ -44,8 +44,10 @@ export function createAccountSnapshotManager({
     const result = await broker.getAccountSnapshot()
     if (!result?.ok || !result.data || !Array.isArray(result.data.balances)) {
       const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+      const cause = result?.errors?.find?.((error) => error instanceof Error)
       throw new Error(
         "Unable to load canonical exchange account balances" + (details ? ": " + details : ""),
+        { cause },
       )
     }
     const quoteCashFlowBaselineByAssetId = new Map()
@@ -101,7 +103,11 @@ export function createAccountSnapshotManager({
       const result = await broker.getOpenOrders({})
       if (!result?.ok || !Array.isArray(result.data)) {
         const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        throw new Error("Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""))
+        const cause = result?.errors?.find?.((error) => error instanceof Error)
+        throw new Error(
+          "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
+          { cause },
+        )
       }
       orders = result.data
     }

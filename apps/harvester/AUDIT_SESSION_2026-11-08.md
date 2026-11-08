@@ -453,3 +453,20 @@ Added test-first assertions for the original broker Error to survive as native `
 Existing contextual messages, retry behavior, readiness gates, and acknowledgement ordering are asserted unchanged. The shared `@coinzilla/utils` logger already serializes nested Error causes; no utility/logger implementation change is required.
 
 **Production source is unchanged in this commit.** Expected-RED focused CI verification is pending. The implementation must not begin until those regressions fail for the missing-cause/log-field behavior rather than for fixture or syntax errors.
+
+
+## 19. F-016 cause-preservation implementation — 2026-11-08
+
+The test-only commit `918a3a6644c92cbe089919874177cba7b8193249` produced the expected RED result in the Harvester package suite: 758 tests, 752 passed, 6 failed. The six failures were exactly the new assertions for missing native broker Error causes and the missing Error object in structured recovery logs. No fixture or syntax failure was observed.
+
+The implementation now preserves the first native Error from each broker result as the contextual wrapper's `cause` in:
+- `createAccountSnapshotManager.refreshAccountSnapshot()`;
+- `createAccountSnapshotManager.publishOpenOrdersSnapshot()`;
+- owned-order `getOpenOrders()`;
+- owned-order `getCanonicalOrderHistory()`;
+- owned-order `getFills()`;
+- application recovery's account-wide `getOpenOrders()`.
+
+The application recovery failure log now includes the Error object in addition to the existing flattened `errorName`, `errorMessage`, and `errorStack` fields. The shared logger's existing serializer preserves the nested cause and stack; no shared utility or logging implementation was changed.
+
+No retry timing, recovery gate, acknowledgement, trading policy, Journal durability, broker protocol, or exchange behavior was changed. Exact-head GREEN verification is pending.

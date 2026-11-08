@@ -79,8 +79,10 @@ export function createUserDataRecoveryHandler({
         const openOrdersResult = await broker.getOpenOrders({})
         if (!openOrdersResult?.ok || !Array.isArray(openOrdersResult.data)) {
           const details = openOrdersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+          const cause = openOrdersResult?.errors?.find?.((error) => error instanceof Error)
           throw new Error(
             "Unable to load authoritative account-wide open orders" + (details ? ": " + details : ""),
+            { cause },
           )
         }
         await drainUserDataEvents()
@@ -134,6 +136,7 @@ export function createUserDataRecoveryHandler({
       logger.error?.({
         message: "application recovery failed; trading remains blocked",
         generation,
+        error,
         errorName: error?.name ?? "Error",
         errorMessage: error?.message || String(error),
         errorStack: error?.stack,
