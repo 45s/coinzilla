@@ -702,6 +702,12 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Market-data freshness policy extraction — 2026-11-08
+
+- [x] Move the shared market-price/book timestamp freshness decision into the pure domain helper `src/domain/market/is-market-data-fresh.js`.
+- [x] Keep time acquisition injected at the bootstrap/engine boundary; the helper has no clock, I/O, or mutable state.
+- [x] Add deterministic tests for inclusive age/future-skew boundaries, stale/future timestamps, invalid values, and explicit policy overrides.
+
 ### Market metadata loading extraction — 2026-11-08
 
 - [x] Move broker market-filter reads, canonical symbol/asset checks, enabled-pair readiness validation, market metadata storage, and trading-rule lifecycle publication into `src/bootstrap/market/load-market-metadata.js`.

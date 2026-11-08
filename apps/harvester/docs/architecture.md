@@ -294,6 +294,8 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Responsibility | Harvester location / owner |
 | --- | --- |
 | Trading invariants, value construction, calculations, deterministic policy | `src/domain/` |
+
+Market-data timestamp freshness is a deterministic domain policy in `src/domain/market/is-market-data-fresh.js`; the caller supplies the current time and policy bounds.
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
 | Binance/simulator request translation and response normalization | `src/infrastructure/` |

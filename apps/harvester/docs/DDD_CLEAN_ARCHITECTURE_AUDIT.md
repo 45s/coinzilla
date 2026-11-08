@@ -410,3 +410,8 @@ The first source review of this extraction caught two mechanical relocation issu
 The configured-market metadata loop now lives in `src/bootstrap/market/load-market-metadata.js`. It retains the original broker filter reads, canonical symbol/base/quote validation, enabled-market trading-readiness policy, market metadata map updates, lifecycle DTO publication, and system logging. Disabled configured markets continue to load canonical asset metadata for account audit coverage, but do not undergo order-readiness validation or publish trading-rule events.
 
 Focused tests cover enabled/disabled behavior, broker metadata failure, and symbol mismatch. The domain readiness validator remains in `src/domain/market/`; the new module only coordinates broker reads and bootstrap lifecycle publication.
+
+
+## Pure market-data freshness policy — 2026-11-08
+
+The identical market-price and book-ticker age/future-skew checks have been consolidated into the pure `src/domain/market/is-market-data-fresh.js` helper. The caller supplies the timestamp and current time, so the helper remains deterministic and has no hidden clock or infrastructure dependency. Boundary tests cover the inclusive maximum age and future skew, stale/future events, invalid timestamps, and explicit threshold overrides.

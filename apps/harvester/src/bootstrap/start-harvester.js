@@ -1,5 +1,6 @@
 import { Fill } from "@coinzilla/entities"
 import { createMarketPrice } from "../domain/market-price.js"
+import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { compareDecimal, defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -32,9 +33,6 @@ function logSystem(logger, data) {
   }
   logger?.info?.(data)
 }
-
-const MAX_MARKET_PRICE_AGE_MS = 5_000
-const MAX_MARKET_PRICE_FUTURE_SKEW_MS = 1_000
 
 const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) => Object.freeze({
   strategy: "CONSERVATIVE",
@@ -426,16 +424,8 @@ export async function startHarvester({
     userDataRecoveryTask = recoveryTask
   }
 
-  const isMarketPriceFresh = (marketPrice) => {
-    const ageMs = now() - marketPrice.timestamp
-    return Number.isSafeInteger(ageMs) &&
-      ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS &&
-      ageMs <= MAX_MARKET_PRICE_AGE_MS
-  }
-  const isMarketBookFresh = (marketBook) => {
-    const ageMs = now() - marketBook.timestamp
-    return Number.isSafeInteger(ageMs) && ageMs >= -MAX_MARKET_PRICE_FUTURE_SKEW_MS && ageMs <= MAX_MARKET_PRICE_AGE_MS
-  }
+  const isMarketPriceFresh = (marketPrice) => isMarketDataFresh({ timestamp: marketPrice.timestamp, now: now() })
+  const isMarketBookFresh = (marketBook) => isMarketDataFresh({ timestamp: marketBook.timestamp, now: now() })
 
   const activateTradingEngine = () => {
     if (!tradingEnabled) return
