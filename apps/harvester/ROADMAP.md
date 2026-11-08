@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### User-data status/recovery handler extraction — 2026-11-08
+
+- [x] Move broker status publication, transport-unsafe transitions, recovery-generation invalidation, readiness updates, and observer failure handling into `src/bootstrap/user-data/create-user-data-status-handler.js`.
+- [x] Preserve the distinction between broker stream recovery and application REST/stream reconciliation; only the application recovery coordinator may acknowledge recovery and reopen trading.
+- [x] Add direct tests for disconnect invalidation, reconciled-but-still-blocked state, recovered-before-startup handling, execution normalization failure, and observer failure.
+- [ ] Extract the REST/stream recovery task itself and its account-audit/acknowledgement sequence.
+
 ### User-data event handler extraction — 2026-11-08
 
 - [x] Group user-data readiness, sequencing, recovery-generation, and intake flags in one explicit bootstrap state object.
