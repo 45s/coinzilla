@@ -1,9 +1,7 @@
-import { Fill } from "@coinzilla/entities"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
-import { compareDecimal, defaultLogger, toResult } from "@coinzilla/utils"
+import { defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadTradingConfig } from "../infrastructure/config/load-trading-config.js"
@@ -21,10 +19,6 @@ import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
 import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { connectBroker } from "./broker/connect-broker.js"
 import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
-import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
-import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
-import {
-} from "../application/events/lifecycle-event-dtos.js"
 
 function logSystem(logger, data) {
   if (typeof logger?.system === "function") {
@@ -143,7 +137,7 @@ export async function startHarvester({
     pendingRecovery: false,
     intakeStopped: false,
   }
-    accountSnapshotManager = createAccountSnapshotManager({
+  accountSnapshotManager = createAccountSnapshotManager({
     broker,
     eventPublisher,
     marketMetadata,
