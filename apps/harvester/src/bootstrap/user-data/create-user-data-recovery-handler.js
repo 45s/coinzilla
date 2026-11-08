@@ -58,6 +58,8 @@ export function createUserDataRecoveryHandler({
           recoveryMode: true,
           beforeApply: drainUserDataEvents,
         })
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         if (!reconciliation?.ok) {
           throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
         }

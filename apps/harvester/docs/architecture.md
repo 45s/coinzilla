@@ -540,6 +540,8 @@ transition queue. The trading gate is reopened only after both steps succeed.
 
 During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. After the open-orders audit flush, bootstrap revalidates the generation and accounting state before draining more queued events; a superseded task does not drain under an obsolete generation. The final drain and stable event-sequence check must then succeed before broker acknowledgement.
 
+Immediately after the asynchronous owned-order REST/stream reconciliation returns, bootstrap revalidates the recovery generation and accounting state before certifying canonical ownership. A superseded generation or accounting failure must not set the ownership-reconciled flag and must not proceed to account or open-orders audits.
+
 The Conservative engine reconciles only orders already present in its
 in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
 for each acknowledged owned order it reads exactly one matching
