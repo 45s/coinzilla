@@ -1,7 +1,7 @@
 import {
   adaptCanonicalOrder,
   createCanonicalMarket,
-} from "../../../shared/adapt-canonical-order.js"
+} from "../../../../infrastructure/binance/adapters/adapt-canonical-order.js"
 import { normalizeBinanceId } from "../../../../infrastructure/binance/adapters/normalize-binance-id.js"
 
 /** @param {{orders: unknown}} options @returns {object[]} Validated Binance order history page. */
