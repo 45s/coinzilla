@@ -398,3 +398,6 @@ Added eight deterministic offline cases to `src/use-cases/conservative-trading-e
 Every case asserts a failed reconciliation result, the stage-specific error, a retained market pause, unchanged UNKNOWN order state and zero executed quantity, no applied fills, no cancel/replace or new order, and no reads beyond the malformed stage.
 
 **Production source is unchanged.** The source already rejects these envelopes; this work closes the direct regression-proof gap identified by F-017. The branch is `test/harvester/malformed-rest-envelope-regressions`, synchronized with `develop` at `cd454223c7d54f47f8f85e2019043a8b42720d51`. Focused execution, Harvester suite, and exact-head CI are pending; no test pass is claimed yet. No TESTNET operation or process restart was performed.
+
+
+The fixture helper was kept asynchronous and all newly added assertions carry scenario-specific failure messages. This follow-up changes no production behavior.
