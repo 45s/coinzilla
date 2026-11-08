@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Baseline commit:** `f92fdc518ae35a7ca3d2d6e0aa3276c41ac2ba34` (after PR #689). The following is verified from the current production source tree; it supersedes earlier assumptions that the package had no DDD structure.
+**Code baseline before this slice:** `1a95316b45a8bba4ef26fabb6f68a524b601e944` (after PR #690). The tree below reflects this PR's intended result: the application-owned port and its tests live under `application/ports/`; this is a path/ownership clarification with no port contract or runtime behavior change.
 
 The package is **partially layered already**:
 
@@ -175,7 +175,7 @@ pnpm --filter @coinzilla/brokers test
 pnpm --filter @coinzilla/brokers test:coverage
 ```
 
-The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the active broker WebSocket/shared runtime and the newer domain/application/ports/infrastructure paths. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
+The coverage gate currently enforces **90% lines, 80% branches, and 80% functions** across the active broker WebSocket/shared runtime and the domain/application/infrastructure paths; application-owned ports are included through the application glob. Test-only fixtures and opt-in integration suites are excluded. Preserve these gates during the migration; do not treat a percentage as a substitute for meaningful failure-path and contract assertions.
 
 No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
 
