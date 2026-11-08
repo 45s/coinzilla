@@ -31,6 +31,8 @@ export class Journal {
 
     this.started = false
     this.starting = false
+    this.startPromise = null
+    this.startupCleanupErrors = []
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -64,8 +66,9 @@ export class Journal {
 
   /**
    * Acquire directory ownership, create a session, and subscribe to EventBus messages.
+   * If close() races with startup, this promise resolves after startup cancellation and rollback.
    *
-   * @returns {Promise<object>} Result indicating whether startup succeeded.
+   * @returns {Promise<object>} Result indicating whether startup succeeded or was cancelled.
    */
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
@@ -79,17 +82,34 @@ export class Journal {
     }
 
     this.starting = true
+    const startPromise = this.startLifecycle()
+    this.startPromise = startPromise
+    return startPromise
+  }
+
+  /**
+   * Acquire resources and subscribe while the public start() promise tracks completion.
+   *
+   * @private
+   * @returns {Promise<object>} Startup result after success or complete rollback.
+   */
+  async startLifecycle() {
     try {
       await this.store.ensureDirectory()
       if (this.closing || this.closed) {
         return toResult({ error: new Error("Journal was closed during startup") })
       }
       await this.store.acquireWriter()
+      if (this.closing || this.closed) {
+        const errors = [new Error("Journal was closed during startup")]
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
+        return toResult({ errors })
+      }
       const { filePath } = await this.store.createSession()
       this.filePath = filePath
       if (this.closing || this.closed) {
         const errors = [new Error("Journal was closed during startup")]
-        await this.cleanupStoreResources(errors)
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
       const result = this.eventBus.subscribeAll({
@@ -102,7 +122,7 @@ export class Journal {
       })
       if (!result.ok) {
         const errors = [...result.errors]
-        await this.cleanupStoreResources(errors)
+        this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
       this.subscription = result.subscription
@@ -115,11 +135,12 @@ export class Journal {
       return toResult({ filePath: this.filePath })
     } catch (error) {
       const errors = [error]
-      await this.cleanupStoreResources(errors)
+      this.startupCleanupErrors = await this.cleanupStoreResources(errors)
       this.reportError({ message: "Failed to start journal", errors })
       return toResult({ errors })
     } finally {
       this.starting = false
+      this.startPromise = null
     }
   }
 
@@ -129,19 +150,25 @@ export class Journal {
    *
    * @private
    * @param {Error[]} errors - Cleanup errors are appended without replacing the original failure.
+   * @returns {Promise<Error[]>} Cleanup errors, also appended to errors.
    */
   async cleanupStoreResources(errors) {
+    const cleanupErrors = []
     try {
       await this.store.closeSession()
     } catch (error) {
       errors.push(error)
+      cleanupErrors.push(error)
     }
     try {
       await this.store.releaseWriter()
     } catch (error) {
       errors.push(error)
+      cleanupErrors.push(error)
     }
+    return cleanupErrors
   }
+
   async record({ event } = {}) {
     if (!this.started || this.closing || this.closed || !this.filePath) {
       return toResult({
@@ -260,7 +287,8 @@ export class Journal {
   }
 
   /**
-   * Stop accepting events, drain and sync writes, close the session, and release this writer's lock.
+   * Cancel and await an in-progress startup, or stop an active writer and release its owned resources.
+   * Active writers are unsubscribed, drained, synced, and closed before the lock is released.
    *
    * @returns {Promise<object>} Result describing close and durability success or failure.
    */
@@ -282,8 +310,28 @@ export class Journal {
       })
     }
 
+    if (this.starting) {
+      this.closing = true
+      const startPromise = this.startPromise
+      if (startPromise) {
+        await startPromise
+      }
+    }
+
     if (!this.started) {
       this.closed = true
+      this.closing = false
+      const cleanupErrors = this.startupCleanupErrors
+      this.startupCleanupErrors = []
+      if (cleanupErrors.length > 0) {
+        this.closeDurable = false
+        this.reportError({
+          message: "Journal startup cancellation left cleanup errors",
+          errors: cleanupErrors,
+          filePath: this.filePath,
+        })
+        return toResult({ errors: cleanupErrors, closed: true, durable: false })
+      }
       this.closeDurable = true
       return toResult({ closed: true, durable: true })
     }
