@@ -86,19 +86,139 @@ For every broker-connected startup, including read-only mode, bootstrap fetches 
 
 ## Normal shutdown
 
-The implemented order is:
+The sequence below is the implemented trading-enabled shutdown path. It is verified against
+`src/bootstrap/shutdown/create-shutdown-handler.js`, the Conservative engine's
+`cancelOwnedBuyOrdersForShutdown()` and `reconcileOwnedOrders()` workflows,
+`create-account-snapshot-manager.js`, and the process/lock cleanup in
+`src/index.js`. The diagram describes orchestration; the source remains authoritative.
 
-1. Stop market-price and book-ticker intake immediately so no new strategy decisions or orders can start.
-2. Drain already accepted user-data work, then cancel only acknowledged OPEN/PARTIALLY_FILLED BUY orders registered as owned by `CG_coinGrabber`. Each cancellation has a durable intent and canonical terminal response; retrieve and apply every execution that raced with cancellation before proceeding.
-3. Keep user-data intake active during cancellation and fill reconciliation. This preserves execution reports that arrive while the broker processes a cancellation. SELL orders are never canceled by shutdown and remain active on the broker.
-4. Drain accepted user-data work, reconcile owned orders, make a final BUY-cancellation pass for orders that became acknowledged during reconciliation, then stop user-data intake and drain the queue again.
-5. For trading-enabled runs, capture and durably flush the CLOSING account snapshot while broker access is still available. Mark it INCOMPLETE when any cancellation, reconciliation, intake, or accounting state is unresolved.
-6. Disconnect broker resources.
-7. Publish `harvester.stopped` while EventBus and Journal are still available.
-8. Close Journal. It unsubscribes, flushes accepted EventBus deliveries, drains writes, syncs, and closes the session file.
-9. Close EventBus with its 5-second timeout.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Signal as SIGINT or SIGTERM
+    participant Main as Process main
+    participant Stop as Shutdown handler
+    participant Market as Price and book streams
+    participant Engine as Trading engine
+    participant User as User-data stream and queue
+    participant Broker as Broker REST API
+    participant Journal
+    participant Bus as EventBus
+    participant Telegram as Optional Telegram subscriber
+    participant Locks as Host and Journal locks
 
-Cleanup failures are isolated so later cleanup still runs. For trading-enabled runs, an unresolved BUY cancellation, non-terminal/unknown owned order, or unresolved user-data/accounting reconciliation is a shutdown failure: the process reports a non-zero exit status and retains the trading-process lock. Other incomplete CLOSING audits are still recorded as INCOMPLETE. An EventBus close timeout or Journal close failure is reported and causes a non-zero process exit status. The Journal close API has no timeout option; only EventBus close is bounded.
+    Signal->>Main: shutdown(reason)
+    Main->>Stop: runtime.stop()
+    Stop->>Stop: stopped=true; ready=false; status=STOPPING
+    Stop->>Market: unsubscribe price and book subscriptions
+    Market-->>Stop: settle all unsubscribe attempts
+    Stop->>Stop: await accepted market-price tasks
+    Stop->>User: await current accepted event queue
+    Note over Stop,User: User-data intake remains connected through BUY cancellation and final owned-order reconciliation.
+
+    alt Trading enabled
+        Stop->>Engine: reconcileOwnedOrders() before cancellation
+        Engine->>Broker: resolve pending client IDs; read owned open orders, order history and fills
+        Broker-->>Engine: canonical owned-order snapshots
+        Engine-->>Stop: initial reconciliation result
+        alt Initial reconciliation fails
+            Stop->>Stop: add OWNED_ORDER_RECONCILIATION_FAILED
+        end
+
+        Stop->>Engine: cancelOwnedBuyOrdersForShutdown()
+        loop Each acknowledged owned OPEN or PARTIALLY_FILLED BUY
+            Engine->>Bus: publish order.cancel_requested
+            Bus->>Journal: deliver cancellation intent
+            Engine->>Journal: durable flush
+            alt Durable cancellation intent succeeds
+                Engine->>Broker: cancel BUY
+                Broker-->>Engine: canonical cancellation response
+                Engine->>Broker: getFills(orderId)
+                Broker-->>Engine: canonical execution history
+                Engine->>Engine: validate fill identity, deduplicate and verify executed-quantity parity
+                Engine->>Engine: apply cancellation-racing fills through normal accounting
+            else Intent, cancellation or fill reconciliation fails
+                Engine->>Engine: mark outcome unsafe and pause affected market
+            end
+        end
+        Note over Engine,User: Execution reports may arrive during REST cancellation; the stream remains active so accepted reports can be applied before the audit.
+        Stop->>User: await queued cancellation and execution-report work
+        Stop->>Engine: reconcileOwnedOrders() final verification
+        Engine->>Broker: reconcile registered owned orders against canonical REST state
+        Broker-->>Engine: final canonical order and fill state
+        Engine-->>Stop: final reconciliation result
+        Note over Stop,Engine: This final pass verifies state; the handler does not call BUY cancellation a second time. A still-open BUY is unresolved and fails shutdown.
+    else Read-only or no trading
+        Note over Stop,Engine: No owned-order cancellation and no trading CLOSING audit.
+    end
+
+    Stop->>User: disconnect user-data subscription
+    User-->>Stop: intake-stop result
+    Stop->>Stop: intakeStopped=true; await final accepted event queue
+
+    alt Trading enabled
+        Stop->>Engine: inspect owned order statuses and accounting flags
+        Note over Stop,Engine: FILLED, CANCELED, REJECTED, EXPIRED and EXPIRED_IN_MATCH are terminal. OPEN or PARTIALLY_FILLED SELLs are intentionally exempt.
+        alt Unresolved owned order or unsafe accounting/reconciliation
+            Stop->>Stop: add CLOSING audit reasons; classify audit INCOMPLETE
+        else Only terminal orders and known open SELLs
+            Stop->>Stop: classify audit COMPLETE
+        end
+        Stop->>Broker: getAccountSnapshot()
+        Broker-->>Stop: account balances
+        Stop->>Bus: publish account.snapshot_captured with phase CLOSING
+        Bus->>Journal: deliver CLOSING snapshot
+        Stop->>Journal: flush queued writes and filesystem sync
+        alt Durable flush confirmed
+            Journal-->>Stop: durable=true
+        else Snapshot query, publish or flush fails
+            Journal-->>Stop: error
+            Stop->>Stop: record shutdown failure; do not claim a durable CLOSING audit
+        end
+    end
+
+    Stop->>Stop: status=STOPPED
+    Stop->>Broker: disconnect()
+    Broker-->>Stop: disconnect result
+    Stop-->>Main: resolve or reject runtime.stop()
+    Main->>Bus: publish harvester.stopped; flush accepted events
+    opt Telegram notifications enabled
+        Main->>Telegram: close and drain accepted notifications
+        Telegram-->>Main: cleanup result
+    end
+    Main->>Journal: close and drain writes; sync and close session file
+    Main->>Bus: close with 5000 ms timeout
+    alt Runtime stop and Journal close both confirmed
+        Main->>Locks: release Journal lock, then broker-wide host lock
+        Locks-->>Main: release result
+    else Runtime stop or Journal close not confirmed
+        Note over Main,Locks: Retain the trading-process locks and exit non-zero.
+    end
+    Main->>Main: close logger transports
+```
+
+### Ordering and safety invariants
+
+- The handler marks the runtime stopped and not ready before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
+- For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
+- User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final REST/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
+- Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
+- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker REST is connected, filtered to configured market assets, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
+
+### Failure and process-lock behavior
+
+For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed.
+
+The process owns two locks: a broker-wide host lock and a Journal-directory lock. Lock release is allowed only when runtime shutdown was confirmed and Journal close returned a successful result. If runtime shutdown is uncertain, or Journal close/drain/sync is not confirmed, both locks are retained. The lock-release function removes the Journal lock first and only then the host lock; if Journal-lock release is uncertain, the host lock is deliberately retained. A failed lock release is reported and leaves the remaining lock in place.
+
+An EventBus close timeout (bounded at five seconds) still causes a non-zero process exit, but it does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are also reported separately from the runtime-stop and Journal-close lock-release gates. This distinction prevents an ancillary delivery failure from being described as an unresolved trading state.
+
+The handler's shutdown ordering and basic success/error aggregation are covered by
+`create-shutdown-handler.test.js`. Process tests in `src/index.test.js` verify
+that runtime-stop failure and unconfirmed Journal close retain the process lock.
+The tests do not establish an additional post-reconciliation BUY-cancellation
+pass; the sequence above intentionally documents the implementation that exists.
 
 A process kill, machine crash, power loss, or failed filesystem sync can still lose recent records. The Journal is not an unconditional durability guarantee.
 
