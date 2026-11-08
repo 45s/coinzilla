@@ -29,7 +29,6 @@ jobs:
       max-parallel: 5
       matrix:
         package:
-          - "@coinzilla/bot-free-roll"
           - "@coinzilla/harvester"
           - "@coinzilla/brokers"
           - "@coinzilla/db"
