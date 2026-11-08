@@ -141,3 +141,68 @@ test("records unowned open orders as blocked without adopting them", async () =>
   assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined, "An open-order audit must not manufacture an account balance snapshot.")
   assert.equal(fixture.getFlushCount(), 1, "The open-order audit must be durably flushed before startup continues.")
 })
+
+
+test("retries an account snapshot after a REST timeout without publishing a premature audit", async () => {
+  const market = createFixture().market
+  const timeout = Object.assign(
+    new Error("account.status request timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  const fixture = createFixture({
+    accountSnapshots: [
+      { ok: false, errors: [timeout] },
+      createAccountSnapshot({ market, sourceTime: 100 }),
+    ],
+  })
+
+  await assert.rejects(
+    fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" }),
+    /Unable to load canonical exchange account balances: account\.status request timed out/,
+    "A failed broker account snapshot result must fail the recovery audit with its actionable timeout message.",
+  )
+
+  assert.equal(
+    fixture.manager.getAccountSnapshot(),
+    undefined,
+    "A timed-out account snapshot must not become the accepted account view.",
+  )
+  assert.equal(
+    fixture.publishedEvents.length,
+    0,
+    "A failed account REST read must not publish a durable recovery audit.",
+  )
+  assert.equal(
+    fixture.getFlushCount(),
+    0,
+    "A failed account REST read must not flush an audit that contains no authoritative snapshot.",
+  )
+
+  const recoveredSnapshot = await fixture.manager.publishAccountSnapshot({ phase: "RECOVERY" })
+
+  assert.equal(
+    recoveredSnapshot.sourceTime,
+    100,
+    "A later successful REST read must be accepted after the transient timeout.",
+  )
+  assert.equal(
+    fixture.manager.getAccountSnapshot().sourceTime,
+    100,
+    "The successful retry must become the current account snapshot.",
+  )
+  assert.equal(
+    fixture.publishedEvents.length,
+    1,
+    "Only the successful retry may publish the recovery account audit.",
+  )
+  assert.equal(
+    fixture.publishedEvents[0].data.phase,
+    "RECOVERY",
+    "The successful retry must retain the recovery audit phase.",
+  )
+  assert.equal(
+    fixture.getFlushCount(),
+    1,
+    "The successful retry must durably flush exactly one recovery account audit.",
+  )
+})
