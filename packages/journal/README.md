@@ -32,6 +32,36 @@ Construct `Journal` with an EventBus, a directory path, and an optional logger. 
 
 Methods return the package's result objects; callers should check `ok` and inspect `errors` on failure. Detailed durability, recovery limits, lock handling, and replay guarantees are described below.
 
+## Startup and close lifecycle
+
+When `close()` races with `start()`, the Journal service requests cancellation and waits for the startup promise. Startup checks that request after each asynchronous acquisition step, then closes/releases only resources owned by the attempt. A session file already created is retained empty; the session handle and directory lock are released before close resolves.
+
+```mermaid
+flowchart TD
+  A[Journal.start] --> B[Validate dependencies and options]
+  B --> C[Set starting and track startup promise]
+  C --> D[Ensure journal directory]
+  D --> E{Close requested?}
+  E -- yes --> X[Return cancelled startup result]
+  E -- no --> F[Acquire exclusive writer lock]
+  F --> G{Close requested?}
+  G -- yes --> J[Release resources owned by startup]
+  G -- no --> H[Create timestamped session]
+  H --> I{Close requested?}
+  I -- yes --> J
+  I -- no --> K[Subscribe to EventBus and set started]
+  L[Journal.close during startup] --> M[Set closing and await startup promise]
+  X --> N[Set starting false and settle startup promise]
+  J --> N
+  N --> M
+  M --> O{Cleanup errors?}
+  O -- yes --> P[Set closed; return errors and durable false]
+  O -- no --> Q[Set closed; return durable true]
+  K --> R[Normal active-writer close path]
+```
+
+Startup cancellation preserves the distinction between the startup result (cancelled) and the close result (whether cleanup completed safely). The filesystem adapter continues to own file handles and the lock; the Journal service owns cancellation and lifecycle sequencing.
+
 ## Internal persistence boundary
 
 `Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
