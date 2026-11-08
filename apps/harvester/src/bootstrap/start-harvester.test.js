@@ -63,9 +63,11 @@ const tradingConfig = {
   },
 }
 const createMarketMetadata = (symbol) => {
-  const baseCode = symbol.replace(/USDT$/, "")
+  const quoteCode = ["USDT", "FDUSD"].find((code) => symbol.endsWith(code))
+  if (!quoteCode) throw new Error("Unsupported test market quote asset for " + symbol)
+  const baseCode = symbol.slice(0, -quoteCode.length)
   const baseAsset = new Asset({ id: "asset:" + baseCode, code: baseCode })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const quoteAsset = new Asset({ id: "asset:" + quoteCode, code: quoteCode })
   const market = new Market({
     venue: "binance",
     symbol,
@@ -284,6 +286,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -293,7 +296,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
   assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
   assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
-  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
+  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT")
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
 
@@ -318,6 +321,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -469,6 +473,7 @@ test("disconnects when a market price subscription fails", async () => {
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -1017,7 +1022,7 @@ test("fails startup closed when user-data subscription cannot be established", a
     }),
     /Unable to subscribe to user data: user stream unavailable/,
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "filters:ETHUSDT", "disconnect"])
 })
 
 test("does not expose a broker port that could bypass the trading engine", async () => {
@@ -1157,7 +1162,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
   await result.stop()
 })
 
-test("fails startup when the exchange snapshot omits an enabled market asset", async () => {
+test("fails startup when the exchange snapshot omits a configured market asset", async () => {
   const calls = []
   const broker = createBroker(calls)
   broker.getAccountSnapshot = async () => {
@@ -1187,6 +1192,7 @@ test("fails startup when the exchange snapshot omits an enabled market asset", a
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "unsubscribe:user-data",
@@ -2930,5 +2936,105 @@ test("cancels acknowledged Harvester BUY orders across markets after an unowned 
       return true
     },
     "the runtime must remain fail-closed at shutdown even after all owned BUY exposure has been canceled",
+  )
+})
+
+
+test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
+  const snapshotConfig = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          DOGEUSDT: {
+            enabled: false, investment: 100, orderQuantity: 400, keepQuantity: 1,
+            priceStepPercent: 0.05, pricePrecision: 5, quantityPrecision: 0,
+            makerPercent: 0, takerPercent: 0.1,
+          },
+          ZROFDUSD: {
+            enabled: false, investment: 100, orderQuantity: 5, keepQuantity: 0.01,
+            priceStepPercent: 0.5, pricePrecision: 3, quantityPrecision: 1,
+            makerPercent: 0, takerPercent: 0.1,
+          },
+          SOLFDUSD: {
+            enabled: false, investment: 100, orderQuantity: 1, keepQuantity: 0.01,
+            priceStepPercent: 0.05, pricePrecision: 2, quantityPrecision: 3,
+            makerPercent: 0, takerPercent: 0.1,
+          },
+        },
+      },
+    },
+  }
+  const assetsByCode = new Map()
+  for (const symbol of configuredMarkets) {
+    const { market } = createMarketMetadata(symbol)
+    assetsByCode.set(market.baseAsset.code, market.baseAsset)
+    assetsByCode.set(market.quoteAsset.code, market.quoteAsset)
+  }
+  const unrelatedAsset = new Asset({ id: "asset:XRP", code: "XRP" })
+  const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
+    free: new Quantity({ amount: "10", asset }),
+    locked: new Quantity({ amount: "0", asset }),
+  }))
+  broker.getAccountSnapshot = async () => ({
+    ok: true,
+    data: { balances: sourceBalances, sourceTime: 1 },
+  })
+
+  const events = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => snapshotConfig,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    logger: { info() {}, error() {}, debug() {} },
+  })
+
+  const expectedAssetCodes = ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
+  const preflight = events.find((event) =>
+    event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
+  assert.ok(preflight, "trading-enabled startup must durably capture its configured-asset PREFLIGHT snapshot")
+  assert.deepEqual(
+    preflight.data.balances.map((balance) => balance.asset),
+    expectedAssetCodes,
+    "PREFLIGHT Journal snapshot must include every configured base/quote asset, including disabled pairs, and exclude unrelated XRP",
+  )
+  assert.deepEqual(
+    runtime.getAccountSnapshot().balances.map((balance) => balance.asset.code).sort(),
+    expectedAssetCodes,
+    "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
+  )
+  for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
+    assert.ok(
+      calls.includes("filters:" + symbol),
+      "startup must resolve base/quote metadata for disabled configured pair " + symbol + " so its assets are included in the audit snapshot",
+    )
+    assert.equal(
+      calls.includes("subscribe:" + symbol) || calls.includes("subscribe:book:" + symbol),
+      false,
+      "resolving disabled configured pair " + symbol + " must not enable market subscriptions or trading",
+    )
+  }
+
+  await runtime.stop()
+  const closing = events.find((event) =>
+    event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
+  assert.ok(closing, "shutdown must retain a CLOSING account snapshot")
+  assert.deepEqual(
+    closing.data.balances.map((balance) => balance.asset),
+    expectedAssetCodes,
+    "CLOSING Journal snapshot must preserve the same configured-asset allowlist as PREFLIGHT",
   )
 })
