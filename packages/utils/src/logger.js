@@ -76,12 +76,16 @@ function createConsoleTransport() {
     name: 'console',
     level: isProdMode ? 'info' : 'debug',
     shouldWrite: ({ method }) => !(isTestingMode && method === 'warn'),
-    write({ timestamp, level, method, data }) {
+    write({ timestamp, level, method, data, context }) {
+      let logContent = data
+      if (context && Object.keys(context).length > 0) {
+        logContent = { context, data }
+      }
       console.log(
         colors.fg.gray,
         new Date(timestamp).toLocaleTimeString(),
         ...(LEVEL_COLORS[method] ?? LEVEL_COLORS[level]),
-        formatLogContent(data),
+        formatLogContent(logContent),
         colors.reset,
       )
     },
@@ -94,6 +98,7 @@ function createConsoleTransport() {
  * @property {'trace'|'debug'|'info'|'warn'|'error'} level Normalized severity.
  * @property {'trace'|'debug'|'info'|'warn'|'error'|'success'|'system'} method Called method.
  * @property {unknown} data Detached, frozen, JSON-safe data with sensitive fields redacted.
+ * @property {object} [context] Optional detached, frozen, redacted logger context.
  */
 
 /**
@@ -118,6 +123,7 @@ function createConsoleTransport() {
 export class Logger {
   #transports = new Map()
   #onTransportError
+  #context = Object.freeze({})
 
   /**
    * @param {{ transports?: LoggerTransport[], onTransportError?: (context: LoggerTransportError) => (void|Promise<void>) }} [options]
@@ -191,6 +197,27 @@ export class Logger {
   }
 
   /**
+   * Replace the structured context attached to every subsequent log entry.
+   * Pass an empty object to clear context. Context remains separate from caller
+   * data and is normalized, redacted, and frozen before transport delivery.
+   *
+   * @param {object} context Non-null, non-array context object.
+   * @returns {this}
+   * @throws {TypeError} If context is not a non-null, non-array object.
+   */
+  setContext(context = {}) {
+    if (!context || typeof context !== 'object' || Array.isArray(context)) {
+      throw new TypeError('Logger context must be a non-null object')
+    }
+    const normalizedContext = normalizeLogData(context)
+    if (!normalizedContext || typeof normalizedContext !== 'object' || Array.isArray(normalizedContext)) {
+      throw new TypeError('Normalized logger context must be an object')
+    }
+    this.#context = deepFreeze(normalizedContext)
+    return this
+  }
+
+  /**
    * Remove a transport and await its optional cleanup hook.
    * Cleanup failures are reported through onTransportError.
    * @param {string} name
@@ -255,12 +282,16 @@ export class Logger {
 
   #log(data, method) {
     const level = METHOD_LEVEL[method]
-    const entry = Object.freeze({
+    const entryData = {
       timestamp: new Date().toISOString(),
       level,
       method,
       data: deepFreeze(normalizeLogData(data)),
-    })
+    }
+    if (Object.keys(this.#context).length > 0) {
+      entryData.context = this.#context
+    }
+    const entry = Object.freeze(entryData)
 
     for (const [name, configuration] of this.#transports) {
       if (LEVEL_RANK[level] < LEVEL_RANK[configuration.level]) {
