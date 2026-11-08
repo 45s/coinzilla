@@ -23,6 +23,28 @@ export class FileSystemJournalStore {
    * Create the journal directory when it does not already exist.
    * @returns {Promise<void>}
    */
+ /**
+   * Compatibility view used only by the deprecated Journal.fileHandle accessor.
+   * The adapter continues to own both the real and any replacement handle.
+   *
+   * @returns {object|null} Active session handle.
+   */
+  get sessionHandle() {
+    return this.sessionHandleOverride ?? this.ownedSessionHandle
+  }
+
+  /**
+   * Install or clear a legacy test override without discarding the owned handle.
+   *
+   * @param {object|null} handle - Replacement handle or null to clear the override.
+   * @returns {void}
+   */
+  set sessionHandle(handle) {
+    this.sessionHandleOverride = handle
+  }
+
+
+
   async ensureDirectory() {
     await mkdir(this.directory, { recursive: true })
   }
@@ -161,24 +183,4 @@ export class FileSystemJournalStore {
   async readSession(fileName) {
     return readFile(path.join(this.directory, fileName))
   }
-}  /**
-   * Compatibility view used only by the deprecated Journal.fileHandle accessor.
-   * The adapter continues to own both the real and any replacement handle.
-   *
-   * @returns {object|null} Active session handle.
-   */
-  get sessionHandle() {
-    return this.sessionHandleOverride ?? this.ownedSessionHandle
-  }
-
-  /**
-   * Install or clear a legacy test override without discarding the owned handle.
-   *
-   * @param {object|null} handle - Replacement handle or null to clear the override.
-   * @returns {void}
-   */
-  set sessionHandle(handle) {
-    this.sessionHandleOverride = handle
-  }
-
-
+}

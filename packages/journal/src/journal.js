@@ -39,11 +39,6 @@ export class Journal {
   }
 
   /**
-   * Acquire directory ownership, create a session, and subscribe to EventBus messages.
-   *
-   * @returns {Promise<object>} Result indicating whether startup succeeded.
-   */
-  /**
    * Legacy internal compatibility accessor for package-level failure-injection tests.
    * The persistence store remains the sole owner of the session handle.
    *
@@ -67,6 +62,11 @@ export class Journal {
     this.store.sessionHandle = handle
   }
 
+  /**
+   * Acquire directory ownership, create a session, and subscribe to EventBus messages.
+   *
+   * @returns {Promise<object>} Result indicating whether startup succeeded.
+   */
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
       return toResult({ error: new Error("Journal has already started or closed") })
