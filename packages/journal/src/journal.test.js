@@ -1,4 +1,5 @@
 import test from "node:test"
+import { spawnSync } from "node:child_process"
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
@@ -28,6 +29,88 @@ async function createTestJournal() {
 
   return { directory, eventBus, journal, logs, filePath: result.filePath }
 }
+
+
+test("prevents a second process from writing to an active journal directory", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
+  const eventBus = new EventBus()
+  const journal = new Journal({ eventBus, directory })
+  const childScript = `
+    import path from "node:path"
+    import { pathToFileURL } from "node:url"
+    const { EventBus } = await import(pathToFileURL(path.resolve("../event-bus/src/index.js")))
+    const { Journal } = await import(pathToFileURL(path.resolve("src/index.js")))
+    const eventBus = new EventBus()
+    const journal = new Journal({ eventBus, directory: process.argv[1] })
+    const result = await journal.start()
+    const outcome = { ok: result.ok, code: result.errors?.[0]?.code ?? null }
+    if (result.ok) {
+      const closeResult = await journal.close()
+      outcome.closeOk = closeResult.ok
+    }
+    await eventBus.close()
+    process.stdout.write(JSON.stringify(outcome))
+  `
+  const runChildJournal = () => spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", childScript, directory],
+    { encoding: "utf8", timeout: 5000 },
+  )
+
+  try {
+    const parentStart = await journal.start()
+    assert.equal(
+      parentStart.ok,
+      true,
+      "The first process must acquire exclusive ownership before creating its Journal session.",
+    )
+
+    const competingProcess = runChildJournal()
+    assert.equal(
+      competingProcess.error,
+      undefined,
+      "The competing process must finish its lock attempt without a spawn or timeout error.",
+    )
+    assert.equal(
+      competingProcess.status,
+      0,
+      `The competing process must exit cleanly after reporting lock contention; stderr: ${competingProcess.stderr}`,
+    )
+    assert.deepEqual(
+      JSON.parse(competingProcess.stdout),
+      { ok: false, code: "JOURNAL_DIRECTORY_LOCKED" },
+      "A separate process must fail closed while another process owns the same Journal directory.",
+    )
+
+    const parentClose = await journal.close()
+    assert.equal(
+      parentClose.ok,
+      true,
+      "The owning process must finish its durable close before relinquishing directory ownership.",
+    )
+
+    const afterRelease = runChildJournal()
+    assert.equal(
+      afterRelease.error,
+      undefined,
+      "A new process must be able to attempt ownership after the previous writer closes.",
+    )
+    assert.equal(
+      afterRelease.status,
+      0,
+      `The post-close process must exit cleanly; stderr: ${afterRelease.stderr}`,
+    )
+    assert.deepEqual(
+      JSON.parse(afterRelease.stdout),
+      { ok: true, code: null, closeOk: true },
+      "A different process may acquire the directory only after the prior writer has durably closed.",
+    )
+  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
 
 test("creates a timestamped JSONL session file", async () => {
   const context = await createTestJournal()
