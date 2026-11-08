@@ -3148,6 +3148,6 @@ test("identifies user-data events received during application recovery as recove
     )
   } finally {
     releaseRecoverySnapshot()
-    await runtime.stop().catch(() => {})
+    await runtime.stop()
   }
 })
