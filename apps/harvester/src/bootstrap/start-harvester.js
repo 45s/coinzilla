@@ -609,7 +609,9 @@ export async function startHarvester({
       }
     })()
 
-    safetyHaltBuyCancellationTask = task.finally(() => {
+    safetyHaltBuyCancellationTask = task.catch((error) => {
+      logger.error?.({ message: "account-integrity safety halt workflow failed", error })
+    }).finally(() => {
       safetyHaltBuyCancellationTask = null
     })
     return safetyHaltBuyCancellationTask
@@ -1039,6 +1041,7 @@ export async function startHarvester({
               event,
             })
             if (!processed.ok) {
+              userDataReady = false
               userDataAccountingFailed = true
               userDataStatus = "EXECUTION_ACCOUNTING_FAILED"
               const rejectedOrder = event.executedOrder

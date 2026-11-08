@@ -1879,7 +1879,7 @@ export function makeConservativeTradingEngine({
   const cancelOwnedBuyOrders = ({ reason = "PROCESS_SHUTDOWN" } = {}) => {
     const reasonPrefix = reason === "PROCESS_SHUTDOWN" ? "SHUTDOWN" : "ACCOUNT_INTEGRITY_HALT"
     return runTransition({
-    task: async () => {
+      task: async () => {
       const activeBuyOrders = state.registry.getActiveOrders()
         .filter((order) =>
           order.side === "BUY" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
@@ -2089,14 +2089,14 @@ export function makeConservativeTradingEngine({
           publishOrderCancelFailed({
             order: reconciledOrder,
             outcome: reconciledOrder.status + "_DURING_" + reasonPrefix,
-            error: new Error("The BUY order reached " + reconciledOrder.status + " before shutdown cancellation completed"),
+            error: new Error("The BUY order reached " + reconciledOrder.status + " before " + reasonPrefix + " cancellation completed"),
           })
         }
       }
 
       if (errors.length > 0) return toResult({ errors })
       return toResult({ data: { canceled, reconciled } })
-    },
+      },
     })
   }
 
