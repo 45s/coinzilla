@@ -25,6 +25,7 @@ import {
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { validateCancellationEligibility } from "../domain/orders/validate-cancellation-eligibility.js"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 
 function assertJournalFillParity({ fill, ownedOrder, journalFill }) {
   const mismatch = (field) => {
@@ -828,20 +829,23 @@ export function makeConservativeTradingEngine({
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
-    let refreshedMetadataResult
+    let refreshedMetadata
     try {
-      refreshedMetadataResult = await broker.getSymbolFilters({ symbol })
+      const refreshedMetadataResult = await broker.getSymbolFilters({ symbol })
+      if (!refreshedMetadataResult?.ok || !refreshedMetadataResult.data) {
+        throw refreshedMetadataResult?.errors?.[0] ??
+          new Error("Fresh Binance exchange metadata is unavailable for " + symbol)
+      }
+      refreshedMetadata = validateMarketTradingReadiness({
+        symbol,
+        pairConfig,
+        marketMetadata: refreshedMetadataResult.data,
+      })
+      if (refreshedMetadata.market.id !== metadata.market.id ||
+          refreshedMetadata.market.symbol !== symbol) {
+        throw new Error("Fresh exchange metadata does not match the active market " + symbol)
+      }
     } catch (error) {
-      refreshedMetadataResult = toResult({ error })
-    }
-    const refreshedMetadata = refreshedMetadataResult?.data
-    if (!refreshedMetadataResult?.ok || !refreshedMetadata ||
-        refreshedMetadata.market?.id !== metadata.market.id ||
-        refreshedMetadata.market?.symbol !== symbol ||
-        !(refreshedMetadata.tradingRules instanceof TradingRules) ||
-        refreshedMetadata.tradingRules.market.id !== metadata.market.id) {
-      const error = refreshedMetadataResult?.errors?.[0] ??
-        new Error("Fresh exchange trading rules are unavailable or do not match the active market")
       await pause({ symbol, reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE", error })
       return toResult({ error })
     }
