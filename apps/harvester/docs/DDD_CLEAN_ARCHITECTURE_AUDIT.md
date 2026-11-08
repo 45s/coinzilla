@@ -373,3 +373,16 @@ The repository's ADR-0001 already adopts Clean Architecture, Hexagonal boundarie
 ---
 
 **Final judgment:** Harvester has a credible DDD/Hexagonal foundation and should evolve by extracting cohesive workflows and clarifying consistency/ownership boundaries—not by adding architectural ceremony. Keep the first working trading cycle as the delivery priority.
+
+
+## DDD-04 implementation progress — 2026-11-08
+
+The first DDD-04 extraction is implemented on the current Harvester branch:
+
+- `createPortfolioWorkflow` moved from `src/bootstrap/start-harvester.js` to `src/use-cases/create-portfolio-workflow.js`.
+- The extracted use case owns the in-memory Portfolio/RecoveryLedger references, serialized fill-accounting queue, accounting diagnostics, recovery completion/free-inventory allocation, ledger reset, and market-price workflow composition.
+- Domain invariants remain in the existing Portfolio, RecoveryLedger, and recovery-completion modules. The extracted use case delegates to the existing `updateTradingAccounting` use case; no trading policy or broker protocol was moved.
+- Bootstrap now imports and composes the workflow. Its external runtime API and user-data event serialization are intended to remain unchanged.
+- Direct tests cover concurrent fill application, duplicate delivery, invalid fill rejection, and the resulting Portfolio state.
+
+This is an internal application-boundary refactor. It does not change strategy decisions, exchange behavior, Journal durability requirements, or process-restart guarantees. Remaining bootstrap responsibilities—account snapshot coordination, user-data intake/readiness, market/book subscriptions, and process shutdown—are deliberately left for later focused extractions. Test/CI status must be read from the exact PR head; source edits alone are not verification.

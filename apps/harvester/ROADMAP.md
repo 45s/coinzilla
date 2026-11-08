@@ -694,12 +694,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 ### DDD-04 — Extract accounting/recovery workflows from bootstrap
 
-- [ ] Extract fill accounting coordination into a focused injected application workflow.
-- [ ] Extract recovery completion/free-inventory allocation and ledger reset if still implemented in bootstrap.
-- [ ] Keep bootstrap as composition root and process-lifecycle owner.
-- [ ] Preserve serialized event processing and add workflow/composition regression tests.
+- [x] Extract the state-owning Portfolio/RecoveryLedger workflow factory into `src/use-cases/create-portfolio-workflow.js`. It owns serialized canonical-fill accounting, immutable projection commits, recovery completion/free-inventory allocation, ledger reset, and market-price workflow composition.
+- [x] Keep the domain invariants in `Portfolio`, `RecoveryLedger`, and `evaluateRecoveryCompletion`; the extracted use case coordinates them and preserves the existing result/runtime API.
+- [x] Add direct use-case tests for concurrent fills, duplicate delivery, invalid non-canonical input, and resulting Portfolio/RecoveryLedger state without starting Harvester.
+- [x] Keep bootstrap as the composition root for this workflow and preserve the existing user-data event queue and process-lifecycle sequencing.
+- [~] Continue the remaining bootstrap decomposition (account snapshot coordination, user-data intake/readiness, market/book subscriptions, and shutdown/resource cleanup) in small independently tested increments.
 
-**Acceptance:** accounting and recovery transitions can be tested without starting Harvester; bootstrap primarily wires dependencies and resources.
+**Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
 ### DDD-05 — Decompose Conservative Trading Engine incrementally
 
