@@ -703,3 +703,61 @@ This does not match README wording that the PREFLIGHT/CLOSING audit contains eve
 **Not established:** a wrong-side Harvester order, an exchange-filter-invalid submitted order, an exchange rejection, duplicate fill accounting, or a successful overall session. No live account state was queried during this retrospective audit.
 
 **Scope:** this evidence report and documentation alignment do not implement the runtime fixes, do not enable Journal replay/process-restart recovery, and do not authorize any TESTNET or production exchange writes. See [issue #667](https://github.com/45s/coinzilla/issues/667) for implementation/regression follow-up.
+
+---
+
+## Follow-up source-code review — 2026-11-08 (supersedes first-pass classifications)
+
+This section updates the initial retrospective classifications using the current develop source, the complete event/log chronology, and the user's confirmed operating policy. The original order/fill ledger and timestamps above remain unchanged.
+
+### 1. The unowned ZRO execution intentionally closes global readiness
+
+At 23:38:39.319 UTC, pre-existing external ZRO SELL order 746804 filled. The Harvester order registry did not own its client or broker order ID. The engine emitted execution.unowned_order, paused ZRO with UNKNOWN_OR_EXTERNAL_ORDER_EVENT, and returned an unsuccessful processing result.
+
+Bootstrap treats that result as an account-integrity failure: it sets userDataAccountingFailed = true, clears userDataReady, and reports EXECUTION_ACCOUNTING_FAILED. The trading engine's canTrade gate depends on userDataReady, so strategy evaluations stop globally. The existing regression explicitly expects the closing audit to remain incomplete after an unowned execution.
+
+**Reclassification:** this global fail-closed behavior is intentional safety policy, not a defect to remove. Pre-existing external orders are allowed at startup and remain unowned; a later unowned execution is a separate account-integrity event.
+
+### 2. Confirmed defect: an already-resting Harvester BUY survived the global halt
+
+DOGE BUY order 1320270 was acknowledged/open at 23:33:26.420 UTC, before the external ZRO execution. The accounting-failure path closed readiness but did not cancel already-resting Harvester BUY orders. DOGE BUY 1320270 therefore remained live and filled at 00:34:50.045 UTC, after the bot had lost permission to evaluate or submit its recovery SELL.
+
+This is the confirmed safety gap: global trading was frozen, but an existing BUY could still add exposure while the bot could not manage the resulting position.
+
+**Fix:** PR #669 adds an account-integrity safety halt that first reconciles Harvester-owned order identities and then uses the existing durable, ownership-checked cancellation/fill-reconciliation workflow for acknowledged OPEN/PARTIALLY_FILLED BUYs only. Existing SELL orders and all external orders remain untouched. The global gate stays closed even after cancellation succeeds. Offline fake-broker regression, full Harvester package tests, and configured repository checks passed on the PR head. No TESTNET or production exchange actions were performed.
+
+### 3. ZRO residual and missing DOGE recovery SELL are consequences of the same halt
+
+After ZRO SELL 747805 filled, the immediate recovery-completion check did not yet have the strategy's inventoryDisposition; it returned RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH and requested a follow-up evaluation. The follow-up evaluation was suppressed because the earlier unowned ZRO execution had already closed global user-data readiness. Thus the 0.005 ZRO remainder was not independently demonstrated to be sellable, and its dust classification did not run in this session.
+
+Likewise, the later DOGE BUY 1320270 filled while global readiness remained closed, so no recovery SELL was generated. The evidence does not demonstrate a separate Conservative strategy-side or dust-policy defect. PR #669 addresses the actionable exposure gap by canceling resting owned BUYs after the safety gate closes.
+
+### 4. Startup PREFLIGHT BLOCKED is an ownership-audit classification
+
+The user confirmed that legitimate pre-existing open orders must not block startup. The account-wide open-order audit can report readiness BLOCKED because those orders are unowned and cannot be reconciled to the current process, while bootstrap still allows startup and leaves them untouched.
+
+**Reclassification:** the runtime behavior is consistent with the confirmed startup policy. The audit label describes ownership/reconciliation completeness, not process startup readiness. Documentation must make that distinction explicit.
+
+### 5. Confirmed snapshot allowlist scope defect — configured assets, not all exchange assets
+
+The user confirmed that PREFLIGHT/CLOSING snapshots must include every asset referenced by Harvester trading configuration, including pairs configured but disabled, and must exclude unrelated exchange-account assets.
+
+The current bootstrap derives both accountAuditMarkets and the Journal configuredAssetCodes allowlist from enabled symbols only. The checked-in config also contains disabled SOLFDUSD and ZROFDUSD pairs, so FDUSD (and SOL where relevant) can be omitted even though those assets are configured.
+
+**Reclassification:** the session's three persisted assets match the two enabled pairs, but the implementation does not satisfy the user's all-configured-pairs contract. This is a separate confirmed defect tracked in issue #667; it will be fixed in a separate focused PR. The intended snapshot is not the full 517-asset Binance wallet.
+
+### 6. CLOSING audit and process lock
+
+The CLOSING snapshot was correctly marked INCOMPLETE after the account-integrity failure. Shutdown must not report success or reopen trading merely because the owned BUY cancellation is confirmed. The retained lock is consistent with failed shutdown; verify PID 10208 on host lpv1 before any manual lock cleanup. Never delete the lock based only on file presence.
+
+### 7. Final reclassification
+
+**Confirmed correct/intentional:** no invalid tick/step/min-notional Harvester submission is demonstrated; no wrong-side Harvester order is demonstrated; duplicate fill delivery was ignored; the first DOGE recovery cycle's accounting is internally consistent; pre-existing external orders were not adopted; an unowned execution correctly triggered the global fail-closed gate; and the CLOSING audit remained incomplete.
+
+**Confirmed defect fixed by PR #669:** acknowledged Harvester-owned BUY orders were not canceled after global account-integrity readiness closed, allowing DOGE BUY 1320270 to fill after the halt.
+
+**Confirmed separate defect still open:** snapshot allowlists include only enabled markets rather than all configured market base/quote assets.
+
+**Not a demonstrated standalone defect:** ZRO dust completion and the absence of a DOGE recovery SELL in this session are explained by the global account-integrity halt; the runtime correctly refrained from further strategy actions while that gate remained closed.
+
+No exchange writes were performed during this review or verification.
