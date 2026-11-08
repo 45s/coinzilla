@@ -31,6 +31,22 @@ This section is the canonical policy for assessing and updating documentation in
 
 Other repository instructions and task checklists should link to this section rather than restating its policy.
 
+## Visual documentation and workflow schemas
+
+Visual explanations are a preferred documentation technique across **all applications, packages, infrastructure, and engineering workflows** when they make a non-trivial process easier to understand. They complement—not replace—the authoritative prose contract.
+
+- Prefer **Mermaid flowcharts** for workflows, decision trees, validation gates, state transitions, retry paths, and failure handling.
+- Prefer **Mermaid sequence diagrams** when the important detail is the order of messages or calls between actors, components, services, brokers, databases, or external systems.
+- Use diagrams when they materially improve understanding. Do not force them into trivial changes, simple reference material, or explanations that are already clearer as prose or a table.
+- When adding or materially changing a complex workflow, assess whether its owning documentation should gain or update a diagram in the same task/PR. Do not leave a useful diagram as an informal chat-only explanation.
+- Show meaningful branches, including rejected decisions, timeouts, unknown outcomes, retries, reconciliation, fallback behavior, and safety boundaries. Do not draw only the happy path when failure behavior is part of the contract.
+- Keep diagrams synchronized with the actual implementation, tests, and authoritative specification. Verify each node and transition against source code and tests before publishing.
+- Place a concise explanation near each diagram. State what the diagram covers, clarify important invariants, and identify which prose/specification remains authoritative if a diagram is illustrative.
+- Use GitHub-compatible Markdown Mermaid fences (`\`\`mermaid`) and valid Mermaid syntax. Keep labels concise and readable; split an oversized diagram into focused diagrams rather than shrinking text or omitting important behavior.
+- AI agents should proactively use these visual forms in technical documentation, PR descriptions, code reviews, investigation summaries, and user-facing explanations whenever they improve comprehension. Prefer a diagram followed by a concise explanation over unnecessarily long prose.
+
+This is a repository-wide convention. Domain-specific agent instructions may add examples or constraints, but must link here rather than define competing diagram rules.
+
 ## Principles
 
 ### 1. Correctness and reliability first
