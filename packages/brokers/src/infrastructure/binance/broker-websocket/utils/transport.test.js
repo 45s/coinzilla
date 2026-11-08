@@ -151,10 +151,60 @@ test("socket errors during connection reject and close the socket", async () => 
   const rejection = assert.rejects(connected, /Fake WebSocket error/)
 
   sockets[0].fail(new Error("Fake WebSocket error"))
+  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
   await rejection
 
   assert.equal(transport.state, "closing")
   assert.equal(sockets[0].closeCalls.length, 1)
+})
+
+test("handshake failures retain safe cause, HTTP status, and close diagnostics", async () => {
+  const { transport, sockets, clock } = createTransport()
+  const cause = new TypeError()
+  cause.statusCode = 503
+  const connected = transport.connect()
+  const rejection = assert.rejects(connected, (error) => {
+    assert.equal(error.name, "TypeError")
+    assert.match(error.message, /HTTP upgrade status 503/)
+    assert.match(error.message, /close code 1006/)
+    assert.equal(error.cause.name, "TypeError")
+    assert.equal(error.diagnostics.phase, "websocket-handshake")
+    assert.equal(error.diagnostics.httpUpgradeStatus, 503)
+    assert.equal(error.diagnostics.closeCode, 1006)
+    assert.equal(error.diagnostics.closeReason, "")
+    assert.equal(error.diagnostics.wasClean, false)
+    assert.deepEqual(error.diagnostics.underlyingError, {
+      name: "TypeError",
+      message: "Underlying WebSocket error",
+    })
+    return true
+  })
+
+  sockets[0].fail(cause, "Received network error or non-101 status code.")
+  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  await rejection
+
+  assert.equal(transport.state, "closed")
+  assert.equal(clock.pendingCount, 0)
+})
+
+test("handshake diagnostics redact credential-like text and URLs", async () => {
+  const { transport, sockets } = createTransport()
+  const connected = transport.connect()
+  const rejection = assert.rejects(connected, (error) => {
+    assert.equal(error.diagnostics.httpUpgradeStatus, null)
+    assert.match(error.message, /apiKey=\[redacted\]/)
+    assert.doesNotMatch(error.message, /secret-value/)
+    assert.doesNotMatch(error.message, /https:\/\/private\.example/)
+    return true
+  })
+
+  sockets[0].fail(
+    new TypeError(),
+    "Handshake failed apiKey=secret-value at https://private.example/path",
+  )
+  sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
+  await rejection
 })
 
 test("closed transports cannot be reopened", async () => {
