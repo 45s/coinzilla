@@ -49,9 +49,12 @@ export class FakeWebSocket extends EventTarget {
     this.dispatchEvent(event)
   }
 
-  fail(error = new Error("Fake WebSocket error")) {
+  fail(error = new Error("Fake WebSocket error"), message = error?.message ?? "") {
     const event = new Event("error")
-    Object.defineProperty(event, "error", { value: error })
+    Object.defineProperties(event, {
+      error: { value: error },
+      message: { value: message },
+    })
     this.dispatchEvent(event)
   }
 
