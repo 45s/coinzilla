@@ -1,5 +1,5 @@
 import { Asset, Market } from "@coinzilla/entities"
-import { adaptCanonicalFill } from "../../../../infrastructure/binance/adapters/adapt-canonical-fill.js"
+import { adaptCanonicalFill } from "../../../adapters/adapt-canonical-fill.js"
 
 /**
  * Build the canonical Market required to normalize trades for one symbol.

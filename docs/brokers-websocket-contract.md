@@ -2,7 +2,7 @@
 
 ## Source layout
 
-The current source tree has a partial Domain / Application / Infrastructure split. The main `src/binance/broker-websocket/` implementation remains under `src/binance/`; Binance DTO/Entity adapters now live under `src/infrastructure/binance/adapters/`. Remaining Binance protocol modules will move only through focused, tested architecture slices.
+The current source tree has a physical Domain / Application / Infrastructure split. All Binance-specific runtime, protocol, configuration, session, and DTO/Entity adapter code now lives under `src/infrastructure/binance/`. The existing `broker-websocket` internal structure is preserved; this move does not redesign its protocol clients.
 
 ```text
 packages/brokers/src/
@@ -60,7 +60,7 @@ packages/brokers/src/
             └── transport.js
 ```
 
-The lifecycle implementation and its direct unit tests live together in `src/application/user-data-session.js` and `src/application/user-data-session.test.js`; these tests exercise the injected client port without constructing a Binance broker. Broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test live under `broker-websocket/tests/` because they exercise the concrete broker/application composition. Their shared deterministic fixtures remain under `broker-websocket/test-helpers/`.
+The lifecycle implementation and its direct unit tests live together in `src/application/user-data-session.js` and `src/application/user-data-session.test.js`; these tests exercise the injected client port without constructing a Binance broker. Broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test live under `src/infrastructure/binance/broker-websocket/tests/` because they exercise the concrete broker/application composition. Their shared deterministic fixtures remain under `broker-websocket/test-helpers/`.
 
 ## Ownership and conventions
 
@@ -211,4 +211,8 @@ The Binance-specific adapters for canonical orders/fills, legacy orders/trades, 
 ### Phase 9 implementation slice 8 — separate Application unit tests from broker composition tests
 
 The six tests that instantiate `UserDataSession` directly now live in `src/application/user-data-session.test.js` and use an inline fake `UserDataClientPort`; they do not import or construct Binance infrastructure. The broker-level setup/recovery/reconciliation/cleanup suites and opt-in integration test move from the legacy `methods/` folder to `broker-websocket/tests/`. The production session and its behavior are unchanged; existing test cases/assertions are preserved, and only test placement/imports are adjusted. Broker-specific fake clients and fixtures remain under `broker-websocket/test-helpers/`. PR #695 merged at `5e7313a22303534dc555522fed22ccac0d3b08d9`; final-head CI passed Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted tests, syntax, and dependency audit.
+
+### Phase 9 implementation slice 9 — complete Binance Infrastructure placement
+
+The former `src/binance/index.js` and all 87 files under `src/binance/broker-websocket/` now live under `src/infrastructure/binance/`. The existing `broker-websocket` internal folder structure and tests are preserved. The root package entry point, broker facade, user-data adapter, canonical mapping helpers, and the two adapter test cross-references update only their relative paths. Coverage now includes the relocated broker implementation through the existing Infrastructure glob and excludes its integration/test-helper files at their new paths. Public root exports, broker methods, request/response shapes, decimal fidelity, event semantics, and protocol behavior are unchanged. No WebSocket client redesign or new wrapper layer is part of this slice.
 
