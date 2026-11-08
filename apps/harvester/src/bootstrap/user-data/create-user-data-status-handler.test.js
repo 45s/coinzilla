@@ -319,3 +319,59 @@ test("does not clear the application recovery gate for a different subscription 
   assert.equal(state.ready, false)
 })
 
+
+
+test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
+  const { handler, logs } = createHandler()
+  const disconnected = { type: "connectionClosed", reason: "connection_lost", recoveryRequired: true }
+  handler(disconnected)
+  handler(disconnected)
+  handler({ type: "terminated", reason: "connection_lost", recoveryRequired: true })
+  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
+  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
+  const reconnected = {
+    type: "recovered",
+    attempt: 1,
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  }
+  handler(reconnected)
+  handler(reconnected)
+  const restored = {
+    type: "reconciled",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+  }
+  handler(restored)
+  handler(restored)
+
+  assert.deepEqual(
+    logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
+      message, reason, attempt, subscriptionId, recoveryGeneration,
+    })),
+    [
+      { message: "User-data stream disconnected", reason: "connection_lost", attempt: undefined, subscriptionId: undefined, recoveryGeneration: undefined },
+      { message: "User-data stream reconnecting", reason: undefined, attempt: 1, subscriptionId: undefined, recoveryGeneration: undefined },
+      { message: "User-data stream reconnected", reason: undefined, attempt: 1, subscriptionId: 42, recoveryGeneration: 7 },
+      { message: "User-data stream subscription restored", reason: undefined, attempt: undefined, subscriptionId: 42, recoveryGeneration: 7 },
+    ],
+    "Only genuine disconnect, reconnect, reconnected, and restored transitions must be logged; duplicate status deliveries must not repeat them.",
+  )
+})
+
+test("logs user-data transport errors once with their original error context", () => {
+  const { handler, logs } = createHandler()
+  const transportError = Object.assign(new Error("socket request timed out"), { code: "ETIMEDOUT" })
+
+  handler({ type: "rpcError", error: transportError, attempt: 2 })
+  handler({ type: "rpcError", error: transportError, attempt: 2 })
+
+  assert.equal(logs.error.length, 1, "The same repeated user-data transport error must produce one actionable error log.")
+  assert.equal(logs.error[0].message, "User-data stream error", "Transport failures must use the concise user-data stream error heading.")
+  assert.equal(logs.error[0].error, transportError, "The stream error log must preserve the original broker Error object for diagnosis.")
+  assert.equal(logs.error[0].attempt, 2, "The stream error log must retain the broker reconnect attempt when supplied.")
+})
