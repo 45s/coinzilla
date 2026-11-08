@@ -477,3 +477,15 @@ No retry timing, recovery gate, acknowledgement, trading policy, Journal durabil
 PR [#711](https://github.com/45s/coinzilla/pull/711) is merged. Exact tested head: `661046e2c7142c879b9a8c5327e46f804f4e048a`. Merge commit and current `develop` checkpoint: `2a57a8e291bb54a2474df525a4cd20e8d51747e8`.
 
 The test-first RED/GREEN evidence is recorded in the roadmap and F-016 finding. All six required offline CI contexts passed on the final head. Harvester coverage execution passed; package threshold enforcement remains unconfigured. TESTNET integration was skipped.
+
+
+## 21. F-018 transient Journal sync failure and Harvester retry — test-first characterization
+
+Journal-side behavior is merged in [PR #714](https://github.com/45s/coinzilla/pull/714): the Journal package test forces the first file sync to fail after a completed write, then verifies a later flush on the same instance succeeds and both distinct event IDs remain in append order. The Journal package suite passed 43/43.
+
+The Harvester-side tests on branch `test/harvester/retry-after-transient-journal-flush` cover:
+- the account snapshot manager retaining the first published audit after a failed flush, then publishing a distinct second audit on retry;
+- the recovery handler keeping readiness/reconciliation blocked and withholding acknowledgement after the failed account audit flush;
+- release of the single-flight task slot, followed by a later reminder retrying the same generation, publishing the second account audit, completing the open-orders audit, and acknowledging once.
+
+No Journal or Harvester production source is changed for F-018. No audit record is deleted, overwritten, rotated, or deduplicated. Exact-head Harvester verification is pending.
