@@ -54,12 +54,10 @@ process.once("SIGTERM", onSigterm)
 
 const forwardOutput = async (stream, output) => {
   try {
-    await forwardChildOutput({
+    return await forwardChildOutput({
       source: stream,
-      destinations: () => [
-        output,
-        ...(!logStreamFailed ? [logStream] : []),
-      ],
+      destinations: () => (!logStreamFailed ? [logStream] : []),
+      bestEffortDestinations: () => [output],
     })
   } catch (error) {
     if (!logStreamFailed) {
@@ -67,6 +65,7 @@ const forwardOutput = async (stream, output) => {
       process.exitCode = 1
       if (!childClosed && !child.killed) child.kill("SIGTERM")
     }
+    return 0
   }
 }
 
@@ -93,8 +92,20 @@ child.on("close", async (code, signal) => {
   process.removeListener("SIGINT", onSigint)
   process.removeListener("SIGTERM", onSigterm)
 
-  await Promise.all(outputForwarding)
+  const droppedChunks = (await Promise.all(outputForwarding))
+    .reduce((total, count) => total + count, 0)
+
   await closeLogStream()
+
+  if (
+    droppedChunks > 0
+    && !process.stderr.destroyed
+    && !process.stderr.writableNeedDrain
+  ) {
+    process.stderr.write(
+      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath}\n`,
+    )
+  }
 
   if (logStreamFailed) {
     process.exitCode = 1

@@ -23,6 +23,19 @@ The log directory is relative to the Harvester working directory. Run
 `pnpm --filter @coinzilla/harvester dev` from the repository root, or run
 the package command from `apps/harvester`.
 
+## Development child-process capture
+
+The development runner also appends the child process's raw stdout and stderr
+to `logs_harvester/terminal.log`. This is separate from the structured
+`logs/harvester.log` and `logs/harvester-trace.log` transports above.
+
+The file capture applies backpressure so output is not intentionally discarded
+during normal disk operation. The VS Code/console display is best-effort and
+bounded: if the terminal stops consuming output, display chunks are skipped
+until it catches up, while file capture continues. At shutdown, the runner
+reports the number of skipped display chunks when stderr is writable. A disk
+write failure is reported and causes the child process to be stopped; no
+software can guarantee capture through a storage failure.
 
 ## Message design
 
@@ -60,7 +73,6 @@ DEBUG (or TRACE when they include detailed internal state). A quiet market
 should not flood the operator-facing console.
 
 ### Avoid duplicate and low-value messages
-
 - Emit one record for one meaningful event. Do not log the same event once as
   "received" and again as "processed" unless the two records describe distinct,
   actionable stages and the distinction is useful.
@@ -101,7 +113,6 @@ logger.debug({
 These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
-
 
 ### SYSTEM lifecycle events
 
