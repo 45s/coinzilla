@@ -358,7 +358,9 @@ The following are the exact PR head commits, not merge commits. For each listed 
 | [#681](https://github.com/45s/coinzilla/pull/681) | Undici source-level incident documentation | `6fd6a071ac42ee31b546c21936666b6a0ccac0a7` |
 | [#682](https://github.com/45s/coinzilla/pull/682) | Generation guard after open-orders audit | `3c9b31dedc669ca4f8135407b9df2562089d5c4d` |
 | [#683](https://github.com/45s/coinzilla/pull/683) | Explicit single-flight reconciliation call count | `a1a8eb75c808e5c06c4c3db53a679f6b6ea2a914` |
-| [#685](https://github.com/45s/coinzilla/pull/685) | Revalidate generation/accounting before certifying canonical ownership | `dad9472df9e1cca47e90e479d3b3f4b5ee5c93cb` |\n| [#700](https://github.com/45s/coinzilla/pull/700) | Owned-order REST fill-history timeout, fail-closed retry, exactly-once fill application | `e2c80515fa9624a13163d7fd47ecddaa4695bfc1` (merged as `3c0c5b81d7c70f1c86aeed5b0b3836e00045bc69`) |\n| [#701](https://github.com/45s/coinzilla/pull/701) | Account snapshot timeout at manager and application recovery boundaries | `a137f33f872776791e4bc02b5ce314067ed6c6f2` (merged as `2e04a77c19357cec89111892fd910276ae8b1619`) |
+| [#685](https://github.com/45s/coinzilla/pull/685) | Revalidate generation/accounting before certifying canonical ownership | `dad9472df9e1cca47e90e479d3b3f4b5ee5c93cb` |
+| [#700](https://github.com/45s/coinzilla/pull/700) | Owned-order REST fill-history timeout, fail-closed retry, exactly-once fill application | `e2c80515fa9624a13163d7fd47ecddaa4695bfc1` (merged as `3c0c5b81d7c70f1c86aeed5b0b3836e00045bc69`) |
+| [#701](https://github.com/45s/coinzilla/pull/701) | Account snapshot timeout at manager and application recovery boundaries | `a137f33f872776791e4bc02b5ce314067ed6c6f2` (merged as `2e04a77c19357cec89111892fd910276ae8b1619`) |
 
 **Latest follow-up:** [PR #685](https://github.com/45s/coinzilla/pull/685) adds the post-owned-order reconciliation generation/accounting guard and regression coverage. Harvester tests passed 741/741 on exact head `dad9472df9e1cca47e90e479d3b3f4b5ee5c93cb`; all required offline CI workflows passed and TESTNET integration was skipped.
 
