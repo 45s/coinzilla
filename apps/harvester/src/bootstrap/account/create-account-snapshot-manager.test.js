@@ -64,20 +64,19 @@ const createAccountSnapshot = ({ market, sourceTime }) => ({
 })
 
 test("captures configured-asset balances and durably publishes the account audit", async () => {
-  const fixture = createFixture()
-  fixture.manager // keep the fixture shape explicit for the scenario
-  const snapshotFixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market: fixture.market, sourceTime: 100 })],
+  const market = createFixture().market
+  const fixture = createFixture({
+    accountSnapshots: [createAccountSnapshot({ market, sourceTime: 100 })],
   })
 
-  const snapshot = await snapshotFixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
+  const snapshot = await fixture.manager.publishAccountSnapshot({ phase: "PREFLIGHT" })
 
   assert.equal(snapshot.sourceTime, 100, "The account snapshot must preserve the broker's source timestamp.")
-  assert.equal(snapshotFixture.manager.getAccountSnapshot().sourceTime, 100, "The accepted snapshot must become the manager's current account view.")
-  assert.equal(snapshotFixture.publishedEvents.length, 1, "The PREFLIGHT balance audit must publish exactly one lifecycle event.")
-  assert.equal(snapshotFixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
-  assert.equal(snapshotFixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
-  assert.equal(snapshotFixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+  assert.equal(fixture.manager.getAccountSnapshot().sourceTime, 100, "The accepted snapshot must become the manager's current account view.")
+  assert.equal(fixture.publishedEvents.length, 1, "The PREFLIGHT balance audit must publish exactly one lifecycle event.")
+  assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
+  assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
+  assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
 })
 
 test("rejects an account snapshot that omits a configured market asset", async () => {

@@ -8,6 +8,14 @@ import {
   mapAccountOpenOrdersCapturedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
+
 /**
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *

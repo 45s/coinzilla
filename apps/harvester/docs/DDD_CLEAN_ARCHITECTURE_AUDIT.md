@@ -400,3 +400,6 @@ This is intentionally still a bootstrap module: resource ownership, subscription
 The account snapshot lifecycle has been moved from `start-harvester.js` into `src/bootstrap/account/create-account-snapshot-manager.js`. It owns the current accepted account snapshot, validates that configured market assets are present, rejects stale source timestamps, classifies account-wide open orders against known in-memory ownership, and publishes/flushes the existing account audit events.
 
 The extraction preserves the account-versus-strategy boundary: exchange balances remain availability/audit facts and are not copied into Portfolio. It also preserves the required durable PREFLIGHT/OPENING/CLOSING audit barrier; no additional per-fill snapshot loop or Journal replay was introduced. Direct tests cover successful durable publication, missing assets, stale snapshots, and external open-order classification.
+
+
+The first source review of this extraction caught two mechanical relocation issues before acceptance: the account manager needed its own local system-log adapter, and the bootstrap readiness diagnostic needed to read the snapshot through the manager accessor. Both are corrected in the follow-up commit; exact-head workflow results remain the verification source.

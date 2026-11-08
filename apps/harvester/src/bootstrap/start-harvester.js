@@ -912,7 +912,7 @@ export async function startHarvester({
       logSystem(logger, {
         message: "Conservative TESTNET startup checks passed; current account audit is complete",
         enabledSymbols,
-        accountSnapshotSourceTime: accountSnapshot.sourceTime,
+        accountSnapshotSourceTime: getAccountSnapshot().sourceTime,
       })
       userDataRequiresReconciliation = false
       userDataReady = true
