@@ -1067,3 +1067,105 @@ test("keeps the legacy internal file-handle override forwarded to the store-owne
   }
 })
 
+
+
+test("rejects a concurrent close without starting a second EventBus flush", async () => {
+  const eventBus = new EventBus()
+  const storeCalls = []
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: "virtual-journal/session.jsonl" }
+    },
+    append: async () => storeCalls.push("append"),
+    sync: async () => storeCalls.push("sync"),
+    closeSession: async () => storeCalls.push("closeSession"),
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+  }
+  const journal = new Journal({
+    eventBus,
+    directory: "virtual-journal",
+    [JOURNAL_STORE]: store,
+  })
+
+  let releaseFirstFlush
+  let signalFirstFlushStarted
+  const firstFlushStarted = new Promise((resolve) => {
+    signalFirstFlushStarted = resolve
+  })
+  const firstFlushGate = new Promise((resolve) => {
+    releaseFirstFlush = resolve
+  })
+  let flushCalls = 0
+  eventBus.flush = async () => {
+    flushCalls += 1
+    if (flushCalls === 1) {
+      signalFirstFlushStarted()
+      await firstFlushGate
+    }
+    return { ok: true, errors: [] }
+  }
+
+  let firstClosePromise
+  let secondClosePromise
+  try {
+    const startResult = await journal.start()
+    assert.equal(
+      startResult.ok,
+      true,
+      "The Journal must become active before the test holds its first shutdown flush.",
+    )
+
+    firstClosePromise = journal.close()
+    await firstFlushStarted
+
+    secondClosePromise = journal.close()
+    assert.equal(
+      flushCalls,
+      1,
+      "A concurrent close attempt must be rejected before it invokes a second EventBus flush while the first close is still draining.",
+    )
+
+    const secondCloseResult = await secondClosePromise
+    assert.equal(
+      secondCloseResult.ok,
+      false,
+      "The second close call must report that another close operation already owns shutdown.",
+    )
+    assert.match(
+      secondCloseResult.errors[0].message,
+      /already closing/,
+      "The concurrent close failure must preserve the existing already-closing result contract.",
+    )
+
+    releaseFirstFlush()
+    const firstCloseResult = await firstClosePromise
+    assert.equal(
+      firstCloseResult.ok,
+      true,
+      "The first close operation must finish successfully after the in-flight EventBus flush is released.",
+    )
+    assert.equal(
+      flushCalls,
+      1,
+      "Exactly one EventBus flush must participate in a single active Journal close operation.",
+    )
+    assert.deepEqual(
+      storeCalls,
+      ["ensureDirectory", "acquireWriter", "createSession", "sync", "closeSession", "releaseWriter"],
+      "Only the close operation that owns shutdown may sync and release the session and writer resources.",
+    )
+    assert.equal(
+      journal.closed,
+      true,
+      "The owning close operation must leave the Journal in its terminal closed state.",
+    )
+  } finally {
+    releaseFirstFlush()
+    await Promise.allSettled([firstClosePromise, secondClosePromise].filter(Boolean))
+    eventBus.flush = EventBus.prototype.flush
+    await eventBus.close()
+  }
+})

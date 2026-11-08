@@ -73,7 +73,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `518a4600cc8088bc3af29092a42cd3184ed2579d` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
+**Audit checkpoint:** `develop` at `7103d9d14919620eae371f23f342c51d916d1d0b` (2026-11-09; includes merged Journal PR #748 and subsequent integration changes).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
@@ -296,7 +296,9 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] [J-2 / PR #747](https://github.com/45s/coinzilla/pull/747) — Centralized stable record-ID validation, rejected root-level enumerable `toJSON` hooks, and added serialization/recovery contract tests. Merged to `develop` as `5d38c1659d1fca187386ebe7c737b97540279419`; all six required checks passed on exact PR head `89f01ebde410d705e88bc48647557c5b36f6c201`.
 - [x] [J-3 / PR #748](https://github.com/45s/coinzilla/pull/748) — Isolated filesystem persistence and resource ownership behind the package-private `FileSystemJournalStore`; retained the deprecated internal `fileHandle` test seam without leaking the original descriptor. Merged to `develop` as `9ec03aaf7df3f49f7dbc42187baf9a099de7fe79`; all required CI checks passed on exact PR head `e550803eb47100aa23123aa8f6e42f2b0d1eedb6`.
 - [~] J-4 startup/close race: test-first commit `318df35b7d41d76cda25f96565ba5e9e2b9b961b` added a deterministic deferred-session-creation regression. On the exact RED head, Journal unit tests reported 59 passed / 1 failed; the failure was the expected assertion that `close()` must remain pending until startup cleanup releases its lock (actual `closeSettled: true`).
-- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/lifecycle-state-ownership`).
+- [x] [J-4 startup/close cancellation / PR #755](https://github.com/45s/coinzilla/pull/755) — Close now waits for startup cancellation and releases all resources acquired by that attempt. Merged to `develop` as `7103d9d14919620eae371f23f342c51d916d1d0b`; required CI passed on exact PR head `a803b2773ec8b29d271c7e8677ac29c52120de10`.
+- [~] J-4 overlapping-close regression: test-first commit `630196154c1dbfb3ed5fad93f7bd4976764639bb` added a deferred EventBus flush test. On the exact RED head, Journal tests reported 59 passed / 1 failed; the expected failure observed two EventBus flush invocations for overlapping close calls (actual 2, expected 1).
+- [~] J-4 — Make orchestration state ownership explicit (in progress on `feature/journal/serialize-close-operations`).
 - [ ] J-5 — Contract conformance and operational documentation.
 
 ## Current contract
@@ -324,4 +326,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `518a4600cc8088bc3af29092a42cd3184ed2579d`.
+**Current `develop` checkpoint:** `7103d9d14919620eae371f23f342c51d916d1d0b`.
