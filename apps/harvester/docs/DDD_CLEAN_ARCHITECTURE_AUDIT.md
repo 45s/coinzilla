@@ -542,5 +542,4 @@ captured handle remains disconnectable by outer bootstrap cleanup.
 
 These changes improve separation and testability without moving financial
 accounting invariants out of domain/application workflows or changing order,
-fill, recovery, or readiness semantics. Exact-head test and coverage execution
-remain required before this refactor can be considered verified.
+fill, recovery, or readiness semantics. Exact-head GitHub Actions on commit `900a4207df64d075608907eeb4f22e63764fc0a8` subsequently passed Harvester unit tests, Harvester coverage, targeted tests, workspace unit tests and coverage, JavaScript syntax, dependency audit, Utils unit tests, and actionlint. The read-only Binance TESTNET integration job was skipped by its workflow condition; no exchange operation was performed.
