@@ -628,16 +628,19 @@ Current source and regression inventory:
 
 ## F-021 — Shutdown repeats complete fill-history reconciliation
 
-**Classification:** SOURCE-EXPLAINED / DURATION UNRESOLVED  
-**Severity:** Medium observability concern
+**Classification:** SOURCE-EXPLAINED / LATENCY STRONGLY CORRELATED  
+**Severity:** Medium operational concern  
+**Tracking:** [#766](https://github.com/45s/coinzilla/issues/766)
 
-**Evidence:** Shutdown began at 22:38:29.849 UTC. At approximately 22:40:15 and 22:41:59 UTC, the runtime emitted two batches of 48 duplicate-fill observations. Both batches contained the same 48 fill identities already applied during the process. The accounting path reported `applied: false`, `duplicate: true`, and zero delta. Shutdown then captured a complete CLOSING account snapshot and completed successfully at 22:42:05.491 UTC.
+**Evidence:** Shutdown began at 22:38:29.849 UTC. At approximately 22:40:15 and 22:41:59 UTC, the runtime emitted two batches of 48 duplicate-fill observations. Both batches contained the same 48 fill identities already applied during the process. The accounting path reported `applied: false`, `duplicate: true`, and zero delta. Shutdown captured a complete CLOSING balance snapshot and completed successfully at 22:42:05.491 UTC.
 
-**Source correlation:** `create-shutdown-handler.js` intentionally invokes `reconcileOwnedOrders()` before BUY cancellation and again after cancellation/user-data queue drain. Each call runs `collectOwnedOrderSnapshots()`, which retrieves complete canonical fill history for each owned order. `applyOwnedOrderSnapshotsTransition()` passes all returned fills through normal idempotent accounting. The two 48-record batches align with these two explicit reconciliation passes. This explains the repeated observations and does not indicate duplicate accounting.
+**Owned-order reconstruction:** The Journal records 90 unique submitted orders, 40 unique cancellations without fills, 48 distinct fill-bearing orders (all latest statuses `FILLED`), and two remaining OPEN SELL orders: DOGEUSDT 1333893 and ZROUSDT 756212. Thus 50 owned orders remained in the registry for shutdown reconciliation.
 
-**Remaining impact:** The successful shutdown still took approximately 3m35s. The supplied logs do not record per-stage or per-RPC timings, so they cannot explain the approximately 105-second wait before the first batch or the approximately 104-second interval between batches.
+**Source correlation:** `create-shutdown-handler.js` invokes `reconcileOwnedOrders()` before BUY cancellation and again after cancellation/user-data queue drain. Each pass calls `collectOwnedOrderSnapshots()`, which fetches open orders once per symbol (2 calls), canonical history sequentially for each owned order (50 calls), then complete fill history sequentially for each owned order (50 calls in this session; one page each). This is approximately 102 sequential REST calls per pass, or 204 across both passes. The two 48-record batches align with the two passes and represent idempotent re-observation, not duplicate accounting.
 
-**Required follow-up:** add bounded shutdown-stage and owned-order REST reconciliation duration telemetry. Preserve both reconciliation passes and existing fill-idempotency/safety guarantees; do not add speculative retries.
+**Latency assessment:** The first batch appears about 105 seconds after shutdown start; the second appears about 104 seconds later. The approximately 102 sequential REST calls per pass strongly correlate with these waits (roughly one second per call if evenly distributed), but the logs do not contain per-request timings. Exact latency attribution is not measured.
+
+**Required follow-up:** [#766](https://github.com/45s/coinzilla) tracks bounded stage/RPC timing and evaluation of safe bounded concurrency/batching. Preserve both reconciliation passes, full order/fill validation, pagination, idempotent accounting, and fail-closed behavior. Do not cancel open SELLs or skip historical fills.
 
 ## F-022 — CLOSING balance audit omits the final open-order set
 
