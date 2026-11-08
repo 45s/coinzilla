@@ -1169,3 +1169,151 @@ test("rejects a concurrent close without starting a second EventBus flush", asyn
     await eventBus.close()
   }
 })
+
+
+test("waits for an active flush before closing the session and rejects flushes after close claims shutdown", async () => {
+  const eventBus = new EventBus()
+  const storeCalls = []
+  let activeSyncs = 0
+  let syncCalls = 0
+  let concurrentSync = false
+  let closeWhileSyncActive = false
+  let releaseFirstSync
+  let signalFirstSyncStarted
+  const firstSyncStarted = new Promise((resolve) => {
+    signalFirstSyncStarted = resolve
+  })
+  const firstSyncGate = new Promise((resolve) => {
+    releaseFirstSync = resolve
+  })
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: "virtual-journal/session.jsonl" }
+    },
+    append: async () => storeCalls.push("append"),
+    sync: async () => {
+      syncCalls += 1
+      activeSyncs += 1
+      if (activeSyncs > 1) {
+        concurrentSync = true
+        activeSyncs -= 1
+        throw new Error("Journal session sync operations must not overlap.")
+      }
+      try {
+        if (syncCalls === 1) {
+          signalFirstSyncStarted()
+          await firstSyncGate
+        }
+        storeCalls.push("sync")
+      } finally {
+        activeSyncs -= 1
+      }
+    },
+    closeSession: async () => {
+      closeWhileSyncActive ||= activeSyncs > 0
+      storeCalls.push("closeSession")
+    },
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+  }
+  const journal = new Journal({
+    eventBus,
+    directory: "virtual-journal",
+    [JOURNAL_STORE]: store,
+  })
+  const originalFlush = eventBus.flush.bind(eventBus)
+  let busFlushCalls = 0
+  eventBus.flush = async () => {
+    busFlushCalls += 1
+    return { ok: true, errors: [] }
+  }
+
+  let flushPromise
+  let closePromise
+  try {
+    const startResult = await journal.start()
+    assert.equal(
+      startResult.ok,
+      true,
+      "The Journal must be active before the test holds a flush inside the session sync boundary.",
+    )
+
+    flushPromise = journal.flush()
+    await firstSyncStarted
+
+    closePromise = journal.close()
+    const flushDuringClose = await journal.flush()
+    assert.equal(
+      flushDuringClose.ok,
+      false,
+      "A new flush must be rejected as soon as close owns shutdown, before the later record-admission cutoff.",
+    )
+    assert.equal(
+      flushDuringClose.errors[0].message,
+      "Journal must be started to flush durable records",
+      "A flush rejected by close ownership must return the normal stopped/closing guard error, not reach storage.",
+    )
+    assert.equal(
+      syncCalls,
+      1,
+      "Close must wait for the already-running flush rather than starting a concurrent final session sync.",
+    )
+    assert.equal(
+      busFlushCalls,
+      1,
+      "Close must wait for the active flush before starting its own final EventBus drain.",
+    )
+
+    releaseFirstSync()
+    const flushResult = await flushPromise
+    const closeResult = await closePromise
+
+    assert.equal(
+      flushResult.ok,
+      true,
+      "The flush that began before close claimed shutdown must finish successfully.",
+    )
+    assert.equal(
+      closeResult.ok,
+      true,
+      "Close must complete successfully after the active flush has settled and its own final drain and sync have completed.",
+    )
+    assert.equal(
+      concurrentSync,
+      false,
+      "The Journal must never issue overlapping session sync operations when flush and close overlap.",
+    )
+    assert.equal(
+      closeWhileSyncActive,
+      false,
+      "The session handle must not be closed while an earlier flush still owns an active sync operation.",
+    )
+    assert.equal(
+      syncCalls,
+      2,
+      "The lifecycle must perform exactly one sync for the explicit flush and one final sync for close.",
+    )
+    assert.equal(
+      busFlushCalls,
+      2,
+      "The close operation must perform one final EventBus drain after the earlier flush has completed.",
+    )
+    assert.deepEqual(
+      storeCalls,
+      ["ensureDirectory", "acquireWriter", "createSession", "sync", "sync", "closeSession", "releaseWriter"],
+      "The active flush must finish before the owning close performs its final sync, session close, and writer release.",
+    )
+    assert.equal(
+      journal.closed,
+      true,
+      "The Journal must reach its terminal closed state after flush/close serialization.",
+    )
+  } finally {
+    releaseFirstSync()
+    await Promise.allSettled([flushPromise, closePromise].filter(Boolean))
+    eventBus.flush = originalFlush
+    await eventBus.close()
+  }
+})
