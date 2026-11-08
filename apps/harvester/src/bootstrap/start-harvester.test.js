@@ -1162,7 +1162,7 @@ test("does not request another account snapshot after a TRADE when later snapsho
   await result.stop()
 })
 
-test("fails startup when the exchange snapshot omits an enabled market asset", async () => {
+test("fails startup when the exchange snapshot omits a configured market asset", async () => {
   const calls = []
   const broker = createBroker(calls)
   broker.getAccountSnapshot = async () => {
@@ -3005,7 +3005,7 @@ test("account snapshots include every configured pair asset, including disabled 
   const expectedAssetCodes = ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"]
   const preflight = events.find((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
-  assert.ok(preflight, "read-only startup must durably capture its configured-asset PREFLIGHT snapshot")
+  assert.ok(preflight, "trading-enabled startup must durably capture its configured-asset PREFLIGHT snapshot")
   assert.deepEqual(
     preflight.data.balances.map((balance) => balance.asset),
     expectedAssetCodes,
