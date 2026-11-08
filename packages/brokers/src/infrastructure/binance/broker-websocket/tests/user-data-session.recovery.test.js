@@ -60,14 +60,15 @@ describe("Binance user-data reconnect behavior", () => {
     const { broker, scheduler, clients } = createBroker()
     await broker.connect()
 
-    const statuses = []
+    const firstStatuses = []
+    const secondStatuses = []
     const first = await broker.subscribeForUserData({
       onEvent() {},
-      onStatus: (status) => statuses.push(status),
+      onStatus: (status) => firstStatuses.push(status),
     })
     const second = await broker.subscribeForUserData({
       onEvent() {},
-      onStatus: (status) => statuses.push(status),
+      onStatus: (status) => secondStatuses.push(status),
     })
 
     clients[0].state = "closed"
@@ -107,9 +108,23 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(clients[1].calls.some((call) => call.method === "order.cancel"), false)
     assert.equal(clients[1].calls.some((call) => call.method === "openOrders.cancelAll"), false)
 
+    assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
+
     assert.equal(second.data.acknowledgeRecovery(), true)
     assert.equal(broker.userDataUnavailable, false)
-    assert.ok(statuses.some((status) => status.type === "reconciled"))
+    assert.equal(scheduler.pendingCount, 0)
+    assert.deepEqual(
+      firstStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.deepEqual(
+      secondStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.equal(second.data.acknowledgeRecovery(), false)
+    assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 1)
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 1)
     const placed = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
     assert.equal(clients[1].calls.some((call) => call.method === "order.place"), true)
     assert.equal(placed.ok, true)
