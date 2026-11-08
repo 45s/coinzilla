@@ -38,7 +38,7 @@ async function probeHttpReachability(name, websocketUrl) {
       signal: AbortSignal.timeout(5_000),
     })
     const responseText = (await response.text()).slice(0, 512)
-    const blockedByLink = response.headers.get("link")?.match(/<([^>]+)>\\s*;\\s*rel=["']?blocked-by["']?/i)?.[1]
+    const blockedByLink = response.headers.get("link")?.match(/<([^>]+)>\s*;\s*rel=["']?blocked-by["']?/i)?.[1]
     let blockedByHost = null
     if (blockedByLink) {
       try {
