@@ -452,7 +452,7 @@ Added test-first assertions for the original broker Error to survive as native `
 
 Existing contextual messages, retry behavior, readiness gates, and acknowledgement ordering are asserted unchanged. The shared `@coinzilla/utils` logger already serializes nested Error causes; no utility/logger implementation change is required.
 
-**Production source is unchanged in this commit.** Expected-RED focused CI verification is pending. The implementation must not begin until those regressions fail for the missing-cause/log-field behavior rather than for fixture or syntax errors.
+**Production source was unchanged in the test-first commit.** Expected RED was confirmed: 758 Harvester tests, 752 passed, 6 failed exactly on missing native causes / missing structured Error field. The subsequent implementation commit preserved native causes and added the Error object to structured recovery logs without changing messages or recovery behavior. PR #711 exact head `e68da711eb44bc64bfeb5b1e8027f1f0a19f58dc` passed Harvester unit tests (758/758), configured targeted tests (3/3), and all six required offline CI contexts. Workspace coverage passed; Harvester package threshold enforcement is not configured. TESTNET integration was skipped. PR merge is pending.
 
 
 ## 19. F-016 cause-preservation implementation — 2026-11-08
