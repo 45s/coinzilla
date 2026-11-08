@@ -35,7 +35,7 @@
       "src/bootstrap/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
       "test/bootstrap/start-harvester.test.js",
-      "test/scripts/forward-child-output.test.js"
+      "scripts/forward-child-output.test.js"
     ]
   }
 }
