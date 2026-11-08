@@ -100,14 +100,17 @@ test("fails closed when accounting has already become unsafe during subscription
 
 test("exposes the live subscription to bootstrap before PREFLIGHT audit work can fail", async () => {
   let capturedSubscription
+  const calls = []
+  const events = []
+  const subscription = { disconnect: async () => calls.push("disconnect") }
 
   await assert.rejects(
     subscribeToUserData({
       broker: {
-        subscribeForUserData: async () => ({ ok: true, data: fixture.subscription }),
+        subscribeForUserData: async () => ({ ok: true, data: subscription }),
       },
       brokerName: "binance",
-      eventPublisher: { publish: (event) => { fixture.events.push(event); return { ok: true } } },
+      eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
       logger: {},
       state: createState(),
       tradingEnabled: false,
