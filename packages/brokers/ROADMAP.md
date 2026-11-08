@@ -68,7 +68,7 @@ The migration is complete only when all of the following are true:
 
 ### DDD architecture modernization — first tranche complete; operational verification remains
 
-The first DDD/TDD modernization tranche is merged into `develop`. It established deterministic tests, selected ports, and focused adapters. It is a foundation—not completion of the intended DDD architecture inside `@coinzilla/brokers`. The next stage is tracked separately as Phase 9 below.
+The first DDD/TDD modernization tranche established deterministic tests, selected ports, and focused adapters, but did not complete the intended architecture at that time. The subsequent Phase 9 work below has since completed and is merged into `develop`.
 
 - [x] Establish and execute the package-scoped coverage command in CI. Pre-threshold package coverage snapshot on PR #528 head `ba1fe560048fecd1d7d7aec83f071cf709c218da`: **83.20% lines, 85.89% branches, 80.55% functions**.
 - [x] Document the initial package boundary and selected responsibilities in `packages/brokers/AGENTS.md` and [the broker contract audit](../../docs/brokers-websocket-contract.md). This first-tranche description is historical; Phase 9 supersedes its blanket instruction against package-owned `domain/` and `application/` layers.
@@ -89,7 +89,7 @@ The first DDD/TDD modernization tranche is merged into `develop`. It established
 
 The broker facade remains the public infrastructure composition boundary. Keep simple RPC methods there unless a cohesive mapping or stateful responsibility justifies extraction; avoid one-wrapper-per-RPC over-abstraction.
 
-### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (in progress)
+### Phase 9 — DDD/TDD architecture refactor inside `@coinzilla/brokers` (complete)
 
 **Scope is the broker package itself.** This phase is not a Harvester refactor, does not move broker responsibilities into another package, and does not authorize changes to other domains. Harvester and bot packages may be inspected only when necessary to verify existing public broker consumers; they are not implementation scope.
 
