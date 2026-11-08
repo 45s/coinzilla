@@ -5503,20 +5503,26 @@ test("preserves the original broker error as cause when REST fill-history retrie
 })
 
 
-const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQuantity = "1" } = {}) => ({
-  evaluate: ({ marketPrice }) => ({
-    strategy: "TEST_POLICY",
-    symbol: "DOGEUSDT",
-    action: "PLACE_ORDERS",
-    actions: [{
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      price: marketPrice.price === "100" ? "99.95" : replacementPrice,
-      quantity: marketPrice.price === "100" ? "1" : replacementQuantity,
-    }],
-  }),
-  evaluateTrailingBuyRepricing: () => ({ shouldReplace: true, adjustmentThreshold: "0.05" }),
-})
+const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQuantity = "1" } = {}) => {
+  let trailingRepricingEvaluations = 0
+  return {
+    evaluate: ({ marketPrice }) => ({
+      strategy: "TEST_POLICY",
+      symbol: "DOGEUSDT",
+      action: "PLACE_ORDERS",
+      actions: [{
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: marketPrice.price === "100" ? "99.95" : replacementPrice,
+        quantity: marketPrice.price === "100" ? "1" : replacementQuantity,
+      }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({
+      shouldReplace: ++trailingRepricingEvaluations === 1,
+      adjustmentThreshold: "0.05",
+    }),
+  }
+}
 
 test("keeps the standing BUY open when the proposed trailing replacement violates MIN_NOTIONAL", async () => {
   const harness = await createHarness({
