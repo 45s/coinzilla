@@ -1,5 +1,35 @@
 # Harvester Roadmap
 
+## Current blockers and work selection — 2026-11-08
+
+This section is the current operational status and supersedes older statements below that describe TESTNET acceptance as the immediate next action.
+
+### TESTNET regional eligibility pause
+
+- [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
+- The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
+- No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
+- Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
+- No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
+
+### Recovery contract work
+
+- [ ] **#702 — Broker per-subscriber recovery acknowledgement contract.** Owner decision approved on 2026-11-08:
+  1. Add an explicit per-subscriber acknowledgement result API while preserving the existing boolean API and its meaning.
+  2. Distinguish accepted-but-pending, accepted-and-globally-completed, and stale/inactive rejection.
+  3. Preserve one terminal `reconciled` notification per recovery generation for every still-active subscriber; disconnected subscribers receive none.
+  4. Keep state-changing RPCs blocked until global recovery completion and keep reminder behavior bounded.
+- Implement #702 using DDD/TDD: define the Brokers-owned domain/application contract and compatibility boundary; write failing broker tests first; implement the smallest broker change; then update consumer tests/docs. Harvester must not infer global readiness from local acknowledgement acceptance.
+- [ ] **#626 — Harvester recovery reliability.** Continue closing the acceptance matrix with deterministic tests and exact-head CI. Keep readiness fail-closed and preserve durable audit barriers. Do not inspect or edit `apps/harvester/src/bootstrap/start-harvester.js` while the other agent's refactor is active.
+- [ ] **#667 — November 7 incident follow-up.** Close only with source/test evidence and exact-head CI; do not conflate it with the regional TESTNET pause.
+
+### Other active and deferred work
+
+- [ ] **#650 — Journal evidence completeness:** continue the bounded, allowlisted evidence coverage work; preserve mandatory durability barriers and keep additional diagnostics best-effort.
+- [ ] **#646 / #656 — Conservative conformance and dust:** resolve remaining implementation/test gaps against the canonical Conservative specification.
+- [ ] **#654 — process-restart reconciliation:** explicitly deferred; not a blocker for current in-process recovery or strategy work.
+- **#377 — Free Roll/Grid extraction:** separate application workstream; not part of Harvester recovery.
+
 > **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
 
 

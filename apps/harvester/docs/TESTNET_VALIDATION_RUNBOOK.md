@@ -3,7 +3,9 @@
 > This is an execution and evidence checklist, not a strategy specification. All Conservative expected behavior is derived from [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). If a checklist statement differs, the canonical specification controls.
 
 
-> **Execution gate: CLOSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin the joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
+> **Execution gate: CLOSED / PAUSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin an authorized joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
+>
+> **Regional eligibility pause (2026-11-08):** The prior hosted Binance Spot TESTNET attempt returned HTTP 451 due to regional eligibility restrictions. This is an external environment limitation, not evidence of a Harvester code defect. The operator cannot change location; do not ask them to do so or repeatedly retry the same blocked path. TESTNET exchange acceptance remains UNVERIFIED and PAUSED until an eligible, authorized environment is available. Offline engineering, deterministic tests, and CI may continue independently. This note does not authorize live trading or any exchange write.
 
 ## 1. Scope and hard limits
 
