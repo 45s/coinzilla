@@ -742,3 +742,26 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
 - If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
 
+
+
+### Phase 9 implementation slice 10 — executable dependency-direction enforcement (PR #704)
+
+**Scope:** architecture enforcement and public API contract characterization only. No Binance WebSocket internals, runtime behavior, consumer adapter, or public export was changed.
+
+- [x] Add the architecture contract test before its scanner implementation (RED stage). The RED-stage commit was `b5410b217fac6ab20b272dec87b1e980e603422e`; GitHub Actions reported the Brokers unit-test and coverage jobs failed on that intentionally incomplete test commit. The TESTNET job was skipped.
+- [x] Add the Node-built-in scanner in `src/test-helpers/architecture-boundaries.js`; no dependency was added.
+- [x] Enforce Domain → no Application/Infrastructure/Bootstrap; Application → no Infrastructure/Bootstrap; Infrastructure → no Bootstrap. Bootstrap composition and Infrastructure → Application/Domain remain allowed.
+- [x] Add synthetic negative/control cases proving forbidden imports are detected and inward/composition imports are accepted.
+- [x] Add `src/index.contract.test.js` for the exact four root exports and public Binance broker construction/method availability without connecting.
+- [ ] Verify the real source graph and all package/consumer checks on the final PR head. Do not mark this slice fully complete until the final-head CI evidence is green.
+
+**Exact contract coverage:** `src/architecture-boundaries.test.js`; `src/index.contract.test.js`; existing `src/infrastructure/binance/broker-websocket/broker.test.js` and operation suites under `src/infrastructure/binance/broker-websocket/tests/`; `src/infrastructure/binance/adapters/*.test.js`; `src/infrastructure/binance/user-data-client-adapter.test.js`; `src/infrastructure/binance/broker-websocket/helpers/adapters/user.test.js`. Harvester compatibility remains covered by the repository's `harvester-targeted-tests.yml` workflow and must be checked on the final PR head.
+
+**Next-action checklist for the next session:**
+
+1. Inspect PR #704's latest head and check-run conclusions; fix any architecture scanner false positives or missed import forms.
+2. Require green Brokers unit tests and 90/80/80 package coverage.
+3. Require green workspace unit tests/coverage, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit.
+4. Review the actual PR diff and confirm only the architecture enforcement, public contract test, and these three documentation updates are included.
+5. Keep TESTNET opt-in; do not dispatch the read-only TESTNET job without explicit safe configuration.
+6. Merge only after CI is green on the exact final PR head; then record the merge SHA and final measured results here.
