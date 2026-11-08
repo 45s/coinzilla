@@ -5097,3 +5097,64 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
     "the affected market must retain a deferred strategy evaluation so the BUY fill is not lost when the recovery gate closes",
   )
 })
+
+
+test("does not apply partial REST reconciliation after a fill-history timeout and permits a later retry", async () => {
+  const { engine, broker, accountedFills, pauses } = await createHarness()
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const fill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-timeout-retry-fill",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const historyOrder = makeOrderStatusUpdate({
+    order: buyOrder,
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2",
+    updatedAt: 3,
+  })
+  const timeout = Object.assign(
+    new Error("REST fill history request timed out"),
+    { name: "RpcTimeoutError", code: "RPC_TIMEOUT" },
+  )
+  let fillHistoryReads = 0
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => {
+    fillHistoryReads += 1
+    return fillHistoryReads === 1
+      ? { ok: false, errors: [timeout] }
+      : { ok: true, data: [fill] }
+  }
+
+  const failedAttempt = await engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(failedAttempt.ok, false, "A failed REST fill-history request must fail owned-order reconciliation.")
+  assert.equal(accountedFills.length, 0, "No fill may be applied until every REST snapshot for the owned order has been collected.")
+  assert.ok(pauses.includes("REST_STREAM_RECONCILIATION_FAILED"), "The failed recovery reconciliation must pause the affected market.")
+  assert.equal(
+    engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId).executedQuantity.amount,
+    "0",
+    "A timeout must leave the registered order unchanged rather than applying an incomplete REST snapshot.",
+  )
+
+  const retriedAttempt = await engine.reconcileOwnedOrders({ recoveryMode: true })
+
+  assert.equal(retriedAttempt.ok, true, retriedAttempt.errors?.[0]?.message)
+  assert.equal(fillHistoryReads, 2, "A later recovery attempt must be able to repeat the failed REST read.")
+  assert.equal(accountedFills.length, 1, "The successful retry must apply the recovered fill exactly once.")
+  assert.equal(accountedFills[0].id, fill.id, "The successful retry must apply the exact canonical REST fill.")
+  const reconciledOrder = engine.getOrders().find((order) => order.brokerOrderId === buyOrder.brokerOrderId)
+  assert.equal(reconciledOrder.status, "PARTIALLY_FILLED")
+  assert.equal(reconciledOrder.executedQuantity.amount, "0.2")
+})
