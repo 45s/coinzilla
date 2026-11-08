@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Code baseline before this slice:** `1685a6a420212c8e6f46add05229f1e0a31a8486` (after PR #694). The tree below reflects this PR's intended test ownership: direct `UserDataSession` tests are co-located under Application; broker-composition suites remain under the Binance broker test tree.
+**Current code baseline:** `5e7313a22303534dc555522fed22ccac0d3b08d9` (after PR #695). Direct `UserDataSession` unit tests now live beside the Application session; broker-composition suites remain under the Binance broker test tree.
 
 The package is **partially layered already**:
 
