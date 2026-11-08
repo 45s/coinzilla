@@ -519,3 +519,91 @@ test("keeps recovery blocked when the durable account open-orders audit fails", 
     "The durable account open-orders audit failure must remain visible in the recovery diagnostic.",
   )
 })
+
+test("does not publish the open-orders audit after recovery is superseded during the account audit", async () => {
+  let fixture
+  fixture = createRecovery({
+    publishAccountSnapshot: async () => {
+      fixture.state.recoveryGeneration += 1
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A recovery generation superseded during the account audit must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A recovery generation superseded during the account audit must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "The account audit already in progress may finish, but it must not authorize the next recovery stage.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "The open-orders audit must not begin after the recovery generation becomes stale during the account audit.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "A superseded recovery generation must never acknowledge the broker after its account audit.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A superseded recovery generation must release the in-flight task slot after the stale audit is detected.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "User-data recovery generation was superseded",
+    "The superseded recovery generation must leave an actionable failure diagnostic.",
+  )
+})
+
+test("repeats the recovery snapshots without publishing stale open orders when an event arrives during the account audit", async () => {
+  let fixture
+  let accountAuditAttempts = 0
+  let openOrderReads = 0
+  fixture = createRecovery({
+    getOpenOrders: async () => {
+      openOrderReads += 1
+      return { ok: true, data: [] }
+    },
+    publishAccountSnapshot: async () => {
+      accountAuditAttempts += 1
+      if (accountAuditAttempts === 1) {
+        fixture.state.eventSequence += 1
+      }
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    accountAuditAttempts,
+    2,
+    "A user-data event during the account audit must force a fresh account snapshot audit for a stable recovery window.",
+  )
+  assert.equal(
+    openOrderReads,
+    2,
+    "The account-wide open-orders REST request must be repeated after the account audit observes an intervening user-data event.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "Only the open-orders snapshot from the stable post-event recovery window may be published.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    1,
+    "Recovery may be acknowledged only after the account and open-orders audits describe a stable event window.",
+  )
+})

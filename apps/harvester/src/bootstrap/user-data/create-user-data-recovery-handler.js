@@ -87,6 +87,13 @@ export function createUserDataRecoveryHandler({
         if (eventSequence !== state.eventSequence) continue
 
         await publishAccountSnapshot({ phase: "RECOVERY", snapshot })
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        await drainUserDataEvents()
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
+        if (eventSequence !== state.eventSequence) continue
+
         await publishOpenOrdersSnapshot({
           phase: "RECOVERY",
           blockOnExistingOrders: tradingEnabled,
