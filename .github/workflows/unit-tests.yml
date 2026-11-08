@@ -63,7 +63,7 @@ jobs:
         run: pnpm --filter "${{ matrix.package }}" test
 
       - name: Probe Binance TESTNET endpoints without credentials
-        if: matrix.package == "@coinzilla/brokers" && github.event_name == "pull_request"
+        if: matrix.package == '@coinzilla/brokers' && github.event_name == 'pull_request'
         continue-on-error: true
         run: node packages/brokers/src/infrastructure/binance/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
 
