@@ -11,7 +11,7 @@ Journal stores the events it receives; it does not decide what those events mean
 - **Persisted Journal record:** the source event's fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key.
 - **Recovered record:** the read/replay representation derived from a persisted line. It separates Journal identity and schema from the event payload and adds the source file and 1-based line position.
 
-A source event is an object with a non-empty string `id`. That stable ID becomes the Journal record identity; Journal does not generate a replacement ID or deduplicate records by business meaning. The reserved `__coinzillaJournal` metadata key cannot be supplied by the source event.
+A source event is an object with a non-empty string `id`. That stable ID becomes the Journal record identity; Journal does not generate a replacement ID or deduplicate records by business meaning. The reserved `__coinzillaJournal` metadata key cannot be supplied by the source event. A source event must not define an own callable `toJSON` method: JSON serialization would otherwise allow that method to replace the complete persisted record envelope. Journal rejects this root-level serialization hook.
 
 A current schema-v1 JSONL line preserves all source event fields at the top level and adds `__coinzillaJournal: { schemaVersion: 1, id: event.id }`. Reading returns `{ id, schemaVersion, payload, position }`: `payload` contains the original event fields without the reserved metadata, and `position` contains `{ fileName, lineNumber }` with a 1-based line number.
 
