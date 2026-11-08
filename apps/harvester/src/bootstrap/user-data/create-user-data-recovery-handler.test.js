@@ -99,7 +99,63 @@ test("does not acknowledge a recovery generation superseded during order reconci
 
   assert.equal(fixture.state.requiresReconciliation, true, "A superseded generation must remain blocked.")
   assert.equal(fixture.state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "A superseded generation must retain the reconciliation-required status.")
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    false,
+    "A stale recovery generation must not certify canonical ownership after its reconciliation promise resolves.",
+  )
   assert.equal(fixture.calls.acknowledgements, 0, "A stale recovery generation must never be acknowledged.")
+})
+
+test("does not certify canonical ownership when accounting fails during owned-order reconciliation", async () => {
+  let resolveReconciliation
+  const reconciliation = new Promise((resolve) => { resolveReconciliation = resolve })
+  const fixture = createRecovery({ reconcileOwnedOrders: () => reconciliation })
+  fixture.start()
+  fixture.state.accountingFailed = true
+  resolveReconciliation({ ok: true, data: { reconciled: 2 } })
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "An accounting failure during owned-order reconciliation must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "An accounting failure during owned-order reconciliation must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    false,
+    "Canonical ownership must not be certified when accounting became unsafe during the reconciliation operation.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "Account snapshot auditing must not begin after accounting fails during owned-order reconciliation.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "Open-orders auditing must not begin after accounting fails during owned-order reconciliation.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged after accounting fails during owned-order reconciliation.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "An accounting failure during owned-order reconciliation must release the in-flight task slot.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "User-data accounting failed during recovery",
+    "The accounting failure during owned-order reconciliation must remain visible in the recovery diagnostic.",
+  )
 })
 
 test("repeats REST snapshots when a user-data event arrives during the audit window", async () => {
