@@ -2,6 +2,49 @@ import { assertNativeWebSocketRuntime } from "./runtime.js"
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000
 const DEFAULT_CLOSE_TIMEOUT = 5_000
+const MAX_DIAGNOSTIC_TEXT_LENGTH = 256
+
+function safeDiagnosticText(value) {
+  if (typeof value !== "string" || value.length === 0) return null
+  return value
+    .slice(0, MAX_DIAGNOSTIC_TEXT_LENGTH)
+    .replace(/(api[_-]?key|api[_-]?secret|signature|authorization|token)\\s*[:=]\\s*[^\\s,;]+/gi, "$1=[redacted]")
+    .replace(/https?:\\/\\/[^\\s]+/gi, "[redacted-url]")
+}
+
+function readHttpUpgradeStatus(...sources) {
+  for (const source of sources) {
+    for (const key of ["status", "statusCode"]) {
+      const value = source?.[key]
+      if (Number.isInteger(value) && value >= 100 && value <= 599) return value
+    }
+  }
+  return null
+}
+
+function createHandshakeError(event) {
+  const source = event?.error instanceof Error ? event.error : null
+  const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
+  const cause = source ? new Error(causeMessage) : undefined
+  if (cause && typeof source.name === "string") cause.name = source.name
+
+  const message = safeDiagnosticText(event?.message) ??
+    safeDiagnosticText(source?.message) ??
+    "WebSocket connection error"
+  const error = new Error(message, cause ? { cause } : undefined)
+  if (source && typeof source.name === "string") error.name = source.name
+  error.diagnostics = {
+    phase: "websocket-handshake",
+    httpUpgradeStatus: readHttpUpgradeStatus(event, source),
+    closeCode: null,
+    closeReason: null,
+    wasClean: null,
+    underlyingError: source
+      ? { name: cause.name, message: cause.message }
+      : null,
+  }
+  return error
+}
 
 /**
  * Own one native WHATWG WebSocket connection and normalize its lifecycle.
@@ -11,6 +54,7 @@ export class NativeWebSocketTransport {
   #state = "idle"
   #connectPromise = null
   #rejectConnect = null
+  #connectError = null
   #closePromise = null
   #resolveClose = null
   #connectTimer = null
@@ -96,13 +140,11 @@ export class NativeWebSocketTransport {
         },
         message: (event) => this.#emit("message", event.data),
         error: (event) => {
-          const error = event.error instanceof Error
-            ? event.error
-            : new Error("WebSocket connection error")
+          const error = createHandshakeError(event)
           this.#emit("error", error)
           if (this.#state === "connecting") {
-            reject(error)
-            this.#rejectConnect = null
+            this.#connectError = error
+            // Wait for close so the rejection includes the final close code/reason.
             this.#beginClosing()
           }
         },
@@ -256,7 +298,6 @@ export class NativeWebSocketTransport {
 
   #finalizeClose(event) {
     if (this.#state === "closed") return
-    const wasConnecting = this.#state === "connecting"
     this.#state = "closed"
     this.#clearConnectTimer()
     if (this.#closeTimer !== null) {
@@ -264,10 +305,37 @@ export class NativeWebSocketTransport {
       this.#closeTimer = null
     }
 
-    if (wasConnecting) {
-      this.#rejectConnect?.(new Error("WebSocket closed before opening"))
+    const closeReason = safeDiagnosticText(event.reason) ?? ""
+    if (this.#connectError) {
+      this.#connectError.diagnostics = {
+        ...this.#connectError.diagnostics,
+        closeCode: event.code ?? null,
+        closeReason,
+        wasClean: Boolean(event.wasClean),
+      }
+      const status = this.#connectError.diagnostics.httpUpgradeStatus
+      const statusText = status === null ? "unavailable" : String(status)
+      const reasonText = closeReason.length > 0 ? closeReason : "unavailable"
+      this.#connectError.message =
+        `WebSocket handshake failed (HTTP upgrade status ${statusText}; close code ${event.code ?? "unknown"}; close reason ${reasonText}): ${this.#connectError.message}`
+    }
+
+    if (this.#rejectConnect) {
+      const error = this.#connectError ?? new Error("WebSocket closed before opening")
+      if (!error.diagnostics) {
+        error.diagnostics = {
+          phase: "websocket-handshake",
+          httpUpgradeStatus: null,
+          closeCode: event.code ?? null,
+          closeReason,
+          wasClean: Boolean(event.wasClean),
+          underlyingError: null,
+        }
+      }
+      this.#rejectConnect(error)
       this.#rejectConnect = null
     }
+    this.#connectError = null
 
     if (this.#handlers && this.#socket) {
       for (const [type, handler] of Object.entries(this.#handlers)) {
