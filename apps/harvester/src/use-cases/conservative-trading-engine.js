@@ -1,4 +1,4 @@
-import { CanonicalOrder, Fill, Order, Quantity } from "@coinzilla/entities"
+import { CanonicalOrder, Fill, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, maxDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
@@ -157,6 +157,10 @@ export function makeConservativeTradingEngine({
   if (initialState.journalFills !== undefined && !Array.isArray(initialState.journalFills)) {
     throw new TypeError("initialState.journalFills must be an array")
   }
+
+  const refreshedMarketMetadata = new Map()
+  const getCurrentMarketMetadata = ({ symbol } = {}) =>
+    refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol })
   const journalFillsById = new Map()
   for (const journalFill of initialState.journalFills ?? []) {
     if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
@@ -779,7 +783,7 @@ export function makeConservativeTradingEngine({
   }
 
   const maybeReplaceTrailingBuy = async ({ symbol, marketPrice } = {}) => {
-    const metadata = getMarketMetadata({ symbol })
+    const metadata = getCurrentMarketMetadata({ symbol })
     const pairConfig = pairs[symbol]
     const activeBuy = state.registry.getActiveOrders({ marketId: metadata.market.id })
       .find((order) => order.side === "BUY")
@@ -823,6 +827,25 @@ export function makeConservativeTradingEngine({
     })
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
+
+    let refreshedMetadataResult
+    try {
+      refreshedMetadataResult = await broker.getSymbolFilters({ symbol })
+    } catch (error) {
+      refreshedMetadataResult = toResult({ error })
+    }
+    const refreshedMetadata = refreshedMetadataResult?.data
+    if (!refreshedMetadataResult?.ok || !refreshedMetadata ||
+        refreshedMetadata.market?.id !== metadata.market.id ||
+        refreshedMetadata.market?.symbol !== symbol ||
+        !(refreshedMetadata.tradingRules instanceof TradingRules) ||
+        refreshedMetadata.tradingRules.market.id !== metadata.market.id) {
+      const error = refreshedMetadataResult?.errors?.[0] ??
+        new Error("Fresh exchange trading rules are unavailable or do not match the active market")
+      await pause({ symbol, reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE", error })
+      return toResult({ error })
+    }
+    refreshedMarketMetadata.set(symbol, refreshedMetadata)
 
     const preflight = await evaluateLatestTransition({
       symbol,
@@ -887,7 +910,7 @@ export function makeConservativeTradingEngine({
       return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
     }
     try {
-      const metadata = getMarketMetadata({ symbol })
+      const metadata = getCurrentMarketMetadata({ symbol })
       const evaluationId = ++strategyEvaluationSequence
       const portfolioBefore = getPortfolio()
       const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
@@ -1211,7 +1234,7 @@ export function makeConservativeTradingEngine({
       if (price.symbol !== symbol) throw new Error("Market price symbol does not match subscription")
       const marketEventId = ++marketPriceEventSequence
       const previousPrice = state.prices.get(symbol)
-      const metadata = getMarketMetadata({ symbol })
+      const metadata = getCurrentMarketMetadata({ symbol })
       const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
       logger?.debug?.({
         message: "Harvester market price event received",
