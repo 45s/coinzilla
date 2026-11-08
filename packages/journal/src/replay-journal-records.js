@@ -4,13 +4,9 @@ import { readJournalRecords } from "./read-journal-records.js"
 /**
  * Validate the complete journal before invoking the consumer, then replay in order.
  * Handler effects are at-least-once across process crashes; consumers must be idempotent.
- * @param {{ directory: string, handler: (input: { record: object }) => unknown, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
- */
-/**
- * Replay a fully validated recovered snapshot sequentially through the supplied handler.
  * The persistence store is responsible only for bounded session discovery and byte reads.
  *
- * @param {{ store: object, handler: Function, directory: string }} input
+ * @param {{ store: object, directory: string, handler: (input: { record: object }) => unknown, maxRecords?: number, maxSessions?: number, maxBytes?: number, maxRecordBytes?: number }} input
  * @returns {Promise<object>} Result with replay progress or the first read/handler failure.
  */
 export async function replayJournalRecords({ store, handler, ...options } = {}) {

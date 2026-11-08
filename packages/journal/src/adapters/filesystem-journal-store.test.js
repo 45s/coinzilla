@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-import { FileSystemJournalStore } from "./adapters/filesystem-journal-store.js"
+import { FileSystemJournalStore } from "./filesystem-journal-store.js"
 
 test("owns the lock and session handles across append, sync, read, and release", async () => {
   const rootDirectory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-"))

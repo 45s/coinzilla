@@ -34,7 +34,7 @@ Methods return the package's result objects; callers should check `ok` and inspe
 
 ## Internal persistence boundary
 
-`Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The reader uses the same store boundary to discover sessions and read their original bytes before applying the record parser and recovery limits.
+`Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
 
 This is one internal filesystem implementation, not a public storage plugin API or a promise of multiple backends. The internal store injection token exists only for deterministic Journal service tests and is not exported from the package entry point. EventBus remains independently injected and is not wrapped by Journal.
 
