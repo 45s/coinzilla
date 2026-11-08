@@ -59,3 +59,37 @@ export function createPortfolioLogSummary({ portfolio, marketId } = {}) {
     appliedFillCount: portfolio.appliedFillIds.length,
   }
 }
+
+
+/**
+ * Build a readable Portfolio Stats snapshot using exact domain decimal strings.
+ * Exchange account balances are deliberately excluded; they are a separate
+ * broker snapshot and are not part of Harvester's in-memory Portfolio.
+ *
+ * @param {object} input
+ * @param {object} input.position
+ * @param {object} [input.recoveryLedger]
+ * @returns {object|null}
+ */
+export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}) {
+  if (!position) return null
+
+  const baseAsset = position.market.baseAsset.code
+  const quoteAsset = position.market.quoteAsset.code
+
+  return {
+    message: "Portfolio Stats",
+    symbol: position.market.symbol,
+    inventory: {
+      active: position.baseQuantity.amount + " " + baseAsset,
+      retained: position.freeBaseQuantity.amount + " " + baseAsset,
+      total: position.totalBaseQuantity.amount + " " + baseAsset,
+    },
+    accounting: {
+      cycleBuyCost: position.spent.amount + " " + quoteAsset,
+      netQuoteCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
+      outstandingRecovery: (recoveryLedger?.outstandingRecoveryAmount ?? "0") + " " + quoteAsset,
+      realizedNetProfit: (recoveryLedger?.realizedNetProfit ?? "0") + " " + quoteAsset,
+    },
+  }
+}
