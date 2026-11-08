@@ -161,7 +161,7 @@ Create these as **repository-level Actions secrets** in `45s/coinzilla` → Sett
 | `BINANCE_TESTNET_API_KEY` | Dedicated Binance Spot TESTNET API key |
 | `BINANCE_TESTNET_API_SECRET_KEY` | Matching Binance Spot TESTNET API secret |
 
-The workflow maps these repository secrets to the broker's existing environment-variable names `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. Do not create a GitHub Environment for this workflow; it does not reference one. Never put secret values in source files, workflow YAML, issue/PR text, logs, screenshots, or chat. Never print or inspect secret values while troubleshooting.
+The workflow maps these repository secrets to the broker's existing environment-variable names `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. It exposes them only to the single read-only integration step; checkout, tool setup, and dependency installation run without exchange credentials. That step rejects missing credentials and case-insensitive placeholder values before starting the integration tests. Do not create a GitHub Environment for this workflow; it does not reference one. Never put secret values in source files, workflow YAML, issue/PR text, logs, screenshots, or chat. Never print or inspect secret values while troubleshooting.
 
 **Permission matrix**
 
