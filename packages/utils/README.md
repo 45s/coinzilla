@@ -11,7 +11,8 @@ Public JavaScript APIs are documented with JSDoc for editor IntelliSense, parame
 
 Import the supported API from the package entry point:
 
-- `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
+- `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
+- `captureBuildMetadata`: one-time, allowlisted application build provenance capture from Git, with explicit `COINZILLA_BUILD_*` environment fallback.
 - `EM`: shared error-message factories.
 - `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft })` accepts `[value, rules, fieldName?]` tuples; soft mode returns structured errors and hard mode throws them.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
@@ -42,6 +43,79 @@ defaultLogger.info({
 ```
 
 Inject a logger into workflows/adapters when the dependency should be explicit or replaced in tests. Do not create an app-local logger just to wrap the shared implementation.
+
+### Structured logger context
+
+Use `Logger.setContext(context)` to attach process identity to every subsequent transport entry without changing the caller's `data` object:
+
+```js
+import { defaultLogger } from "@coinzilla/utils"
+
+defaultLogger.setContext({
+  application: "harvester",
+  version: "1.0.001",
+  runtimeSessionId: "runtime-session-id",
+  processId: 12345,
+  startedAt: "2026-11-09T00:30:00.000Z",
+  source: {
+    branch: "develop",
+    shortCommit: "abcdef01",
+    workingTree: "clean",
+  },
+})
+
+defaultLogger.info({ message: "Broker startup requested" })
+```
+
+The transport entry receives an optional `context` object separate from `data`. Context is normalized by the same safe formatter and sensitive-field redactor, then frozen before delivery. Calling `setContext` replaces the complete context snapshot; call `setContext({})` to clear it. When context is empty, the historical entry shape remains `{ timestamp, level, method, data }`. The default console transport displays configured context alongside the log data.
+
+### Build provenance
+
+Capture build identity once when an application process starts. Pass process state explicitly so the utility is deterministic in tests and does not read arbitrary environment variables:
+
+```js
+import { captureBuildMetadata, defaultLogger } from "@coinzilla/utils"
+
+const build = captureBuildMetadata({
+  application: "harvester",
+  version: "1.0.001",
+  cwd: process.cwd(),
+  env: process.env,
+})
+
+defaultLogger.setContext({
+  application: build.application,
+  version: build.version,
+  source: build.source,
+})
+
+// build.source includes:
+// {
+//   branch: "develop",
+//   commit: "<full commit SHA>",
+//   shortCommit: "<first 8 SHA characters>",
+//   commitMessage: "feat: example",
+//   commitDate: "2026-11-08T22:00:00+00:00",
+//   workingTree: "clean", // "dirty" or "unknown" when appropriate
+//   metadataSource: "git", // "environment" or "unavailable"
+// }
+```
+
+Git is queried synchronously once per call for the repository root, HEAD SHA, current branch, commit subject/date, and working-tree status. Call the utility once at process startup and reuse the returned immutable snapshot; do not call it for each log entry. The utility does not include changed file names or read `.env` files.
+
+If Git is unavailable or `cwd` is not a readable Git working tree, the utility uses only these optional string variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `COINZILLA_BUILD_COMMIT` | Full 40–64 character hexadecimal commit SHA |
+| `COINZILLA_BUILD_BRANCH` | Branch name |
+| `COINZILLA_BUILD_COMMIT_MESSAGE` | Commit subject |
+| `COINZILLA_BUILD_COMMIT_DATE` | Committer timestamp |
+| `COINZILLA_BUILD_WORKING_TREE` | `clean` or `dirty`; other values become `unknown` |
+
+Missing values are returned as `null`, and working-tree state becomes `unknown`; unavailable provenance never prevents application startup. `metadataSource` identifies whether the snapshot came from Git, explicit environment values, or neither. When Git is available, its values take precedence over environment fallback values.
+
+The returned object contains only `application`, `version`, and the allowlisted `source` fields. `application`, `version`, and `cwd` are required non-empty strings. `env` must be an object; `execFileSync` may be injected for deterministic tests. Invalid required inputs throw `TypeError`; Git execution failures are treated as unavailable metadata.
 
 ### Severity levels and transports
 
@@ -90,7 +164,8 @@ A transport is an object with a unique non-empty `name`, a `level` from the stan
   timestamp: "2026-11-05T12:00:00.000Z",
   level: "info",       // normalized severity
   method: "success",   // called method, including semantic methods
-  data: { message: "Completed" } // detached, frozen, JSON-safe, redacted data
+  data: { message: "Completed" }, // detached, frozen, JSON-safe, redacted data
+  context: { application: "harvester" } // optional, detached, frozen, redacted context
 }
 ```
 
@@ -100,6 +175,7 @@ Public configuration methods:
 
 - `addTransport(transport)` validates and adds a transport; duplicate names are rejected.
 - `setLevel({ transport, level })` changes one known transport's threshold and returns the current configuration snapshot. Invalid levels and unknown transport names throw `TypeError`.
+- `setContext(context)` replaces the optional context attached to subsequent entries and returns the Logger instance. Pass `{}` to clear context; invalid non-object values throw `TypeError`.
 - `getConfig()` returns a detached snapshot of transport names and thresholds.
 - `removeTransport(name)` removes a transport and awaits its optional `close()` hook. Unknown names return `false`.
 - `close()` removes all transports and awaits their optional cleanup hooks.
