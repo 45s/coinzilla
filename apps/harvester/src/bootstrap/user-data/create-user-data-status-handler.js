@@ -117,20 +117,34 @@ export function createUserDataStatusHandler({
     if (
       status.type === "reconciled" &&
       status.recoveryRequired !== true &&
-      status.reconciliationRequired !== true &&
-      state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
-      !state.accountingFailed
+      status.reconciliationRequired !== true
     ) {
-      // Only the matching generation's global broker completion may clear
-      // the application reconciliation gate and make readiness eligible.
+      // Transport recovery is complete even when application reconciliation
+      // is still pending; keep the two readiness facts independent.
       state.streamUnsafe = false
-      state.requiresReconciliation = false
+      if (
+        status.subscriptionId !== undefined &&
+        status.subscriptionId !== null &&
+        status.subscriptionId === state.recoverySubscriptionId &&
+        state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
+        !state.accountingFailed
+      ) {
+        // Only the global completion for this acknowledged subscription may
+        // clear the application reconciliation gate.
+        state.requiresReconciliation = false
+      }
     }
     const recoveryInvalidated = [
       "connectionClosed", "recovering", "recoveryFailed", "terminated", "rpcError",
       "executionNormalizationFailed",
     ].includes(status.type)
-    if (recoveryInvalidated) state.recoveryGeneration += 1
+    if (recoveryInvalidated) {
+      state.recoveryGeneration += 1
+      state.recoverySubscriptionId = null
+    }
+    if (status.type === "recovered" && status.subscriptionId !== undefined && status.subscriptionId !== null) {
+      state.recoverySubscriptionId = status.subscriptionId
+    }
     if (status.recoveryRequired === true || status.reconciliationRequired === true || connectionUnsafe) {
       state.streamUnsafe = true
       state.requiresReconciliation = true
