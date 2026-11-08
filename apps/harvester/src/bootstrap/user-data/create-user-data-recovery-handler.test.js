@@ -407,3 +407,115 @@ test("keeps recovery blocked when the account-wide open-orders REST request fail
     "The account-wide open-orders REST failure must retain its actionable reason in the recovery diagnostic.",
   )
 })
+
+test("keeps recovery blocked when the canonical account balance snapshot cannot be loaded", async () => {
+  let openOrderReads = 0
+  const fixture = createRecovery({
+    refreshAccountSnapshot: async () => {
+      throw new Error("canonical account balance snapshot unavailable")
+    },
+    getOpenOrders: async () => {
+      openOrderReads += 1
+      return { ok: true, data: [] }
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A failed canonical account balance read must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A failed canonical account balance read must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A failed canonical account balance read must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    openOrderReads,
+    0,
+    "The account-wide open-orders request must not run after the prerequisite account balance snapshot fails.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "A recovery account audit must not be published without a canonical account balance snapshot.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "A recovery open-orders audit must not be published when the account balance snapshot is unavailable.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged when the canonical account balance snapshot cannot be loaded.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A failed canonical account balance read must release the in-flight task slot for a later retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "canonical account balance snapshot unavailable",
+    "The canonical account balance read failure must remain visible in the recovery diagnostic.",
+  )
+})
+
+test("keeps recovery blocked when the durable account open-orders audit fails", async () => {
+  const fixture = createRecovery({
+    publishOpenOrdersSnapshot: async () => {
+      throw new Error("durable account open-orders audit flush failed")
+    },
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A failed durable account open-orders audit must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A failed durable account open-orders audit must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A failed durable account open-orders audit must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    1,
+    "The successful account snapshot audit may remain durable, but it cannot substitute for the failed open-orders audit.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    1,
+    "The open-orders audit attempt must be recorded before its durability failure is handled.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged when the durable account open-orders audit fails.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A failed durable account open-orders audit must release the in-flight task slot for a later retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "durable account open-orders audit flush failed",
+    "The durable account open-orders audit failure must remain visible in the recovery diagnostic.",
+  )
+})
