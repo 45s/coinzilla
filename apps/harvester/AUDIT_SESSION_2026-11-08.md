@@ -502,3 +502,12 @@ The Journal-side characterization merged in [PR #714](https://github.com/45s/coi
 - TESTNET integration was skipped. No TESTNET acceptance is claimed.
 
 F-018 is complete as a test/documentation characterization. The known permanent Journal `writeFile()` failure poisoning behavior remains documented and is not changed by this work.
+
+
+## 23. Second-disconnect end-to-end Harvester lifecycle proof — 2026-11-08
+
+Added a new offline composition test on branch `test/harvester/second-disconnect-status-recovery-lifecycle`. It wires `createUserDataStatusHandler` to `createUserDataRecoveryHandler` without inspecting or changing `start-harvester.js`.
+
+The test holds generation one in owned-order reconciliation, sends a second `connectionClosed` and `recovered` status, verifies the stale task publishes no account/open-orders audits and never acknowledges, then sends a later reminder and verifies only generation two reconciles, publishes both audits, acknowledges once, receives one terminal `reconciled` status, and restores readiness.
+
+This is Harvester consumer coverage only. The broker-owned exact terminal-notification count and multi-subscriber acknowledgement contract remain open under cross-domain request #702. Exact-head CI is pending; no production source or broker contract changed.
