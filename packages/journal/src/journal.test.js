@@ -7,6 +7,7 @@ import path from "node:path"
 
 import { EventBus } from "@coinzilla/event-bus"
 import { Journal } from "../src/index.js"
+import { JOURNAL_STORE } from "./journal-store-injection.js"
 
 async function createTestJournal() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-"))
@@ -160,7 +161,7 @@ test("releases directory ownership when session-file creation fails during start
   const journal = new Journal({ eventBus, directory })
   let observedLockBeforeSessionCreation = false
 
-  journal.createSessionFile = async () => {
+  journal.store.createSession = async () => {
     try {
       await readFile(lockFilePath, "utf8")
       observedLockBeforeSessionCreation = true
@@ -414,7 +415,7 @@ test("rejects overlapping startup attempts without leaking a session file or sub
       "The Journal must clear its startup-in-progress flag after both start calls settle.",
     )
     assert.ok(
-      journal.fileHandle,
+      journal.store.sessionHandle,
       "The accepted start call must retain exactly one active session file handle.",
     )
     assert.ok(
@@ -458,12 +459,12 @@ test("closes a session file created after close cancels startup", async () => {
   const createSessionFileGate = new Promise((resolve) => {
     releaseCreateSessionFile = resolve
   })
-  const originalCreateSessionFile = journal.createSessionFile.bind(journal)
+  const originalCreateSession = journal.store.createSession.bind(journal.store)
 
-  journal.createSessionFile = async () => {
+  journal.store.createSession = async () => {
     signalCreateSessionFileStarted()
     await createSessionFileGate
-    return originalCreateSessionFile()
+    return originalCreateSession()
   }
 
   try {
@@ -481,7 +482,7 @@ test("closes a session file created after close cancels startup", async () => {
     assert.match(startResult.errors[0].message, /closed during startup/)
     assert.equal(journal.started, false)
     assert.equal(journal.starting, false)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
     assert.equal(journal.subscription, null)
     assert.equal((await readdir(directory)).length, 1)
   } finally {
@@ -531,7 +532,7 @@ test("cleans up the file handle when a closed event bus rejects subscription", a
   try {
     const result = await journal.start()
     assert.equal(result.ok, false)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
     assert.equal(journal.started, false)
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -545,7 +546,7 @@ test("rejects an empty directory before creating a session file", async () => {
   const result = await journal.start()
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /journal directory is required/)
-  assert.equal(journal.fileHandle, null)
+  assert.equal(journal.store.sessionHandle, null)
   await eventBus.close()
 })
 
@@ -565,7 +566,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
   const context = await createTestJournal()
 
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated disk sync failure")
     }
 
@@ -575,7 +576,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
     assert.match(result.errors[0].message, /simulated disk sync failure/)
   } finally {
     // Restore a working sync method so cleanup can complete normally.
-    delete context.journal.fileHandle.sync
+    delete context.journal.store.sync
     await context.journal.close()
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
@@ -586,7 +587,7 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
 test("does not claim a durable close on a repeated close after sync failure", async () => {
   const context = await createTestJournal()
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
     const first = await context.journal.close()
@@ -604,10 +605,9 @@ test("does not claim a durable close on a repeated close after sync failure", as
 
 test("reports a failed disk sync during close and still closes the file handle", async () => {
   const context = await createTestJournal()
-  const fileHandle = context.journal.fileHandle
-
+  
   try {
-    fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
 
@@ -615,7 +615,7 @@ test("reports a failed disk sync during close and still closes the file handle",
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /simulated close sync failure/)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -636,7 +636,7 @@ test("keeps close successful when the shutdown info logger throws", async () => 
 
     assert.equal(result.ok, true)
     assert.equal(result.closed, true)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -646,10 +646,9 @@ test("keeps close successful when the shutdown info logger throws", async () => 
 
 test("returns close errors even when the error logger throws", async () => {
   const context = await createTestJournal()
-  const fileHandle = context.journal.fileHandle
-
+  
   try {
-    fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       throw new Error("simulated close sync failure")
     }
     context.journal.logger.error = () => {
@@ -660,7 +659,7 @@ test("returns close errors even when the error logger throws", async () => {
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /simulated close sync failure/)
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
   } finally {
     await context.eventBus.close()
@@ -687,12 +686,12 @@ test("keeps startup successful when the startup info logger throws", async () =>
 
     assert.equal(result.ok, true)
     assert.equal(journal.started, true)
-    assert.ok(journal.fileHandle)
+    assert.ok(journal.store.sessionHandle)
 
     const closeResult = await journal.close()
     assert.equal(closeResult.ok, true)
     assert.equal(journal.closed, true)
-    assert.equal(journal.fileHandle, null)
+    assert.equal(journal.store.sessionHandle, null)
   } finally {
     await eventBus.close()
     await rm(directory, { recursive: true, force: true })
@@ -736,7 +735,7 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
     assert.equal(result.ok, false)
     assert.ok(result.errors.some((error) => /simulated unsubscribe failure/.test(error.message)))
     assert.ok(result.errors.some((error) => /simulated event bus flush rejection/.test(error.message)))
-    assert.equal(context.journal.fileHandle, null)
+    assert.equal(context.journal.store.sessionHandle, null)
     assert.equal(context.journal.closed, true)
     assert.equal(context.journal.subscription, null)
   } finally {
@@ -749,11 +748,11 @@ test("still closes the journal when unsubscribe and event bus flush throw", asyn
 
 test("retries a transient disk sync failure and durably persists records written before and after it", async () => {
   const context = await createTestJournal()
-  const originalSync = context.journal.fileHandle.sync.bind(context.journal.fileHandle)
+  const originalSync = context.journal.store.sync.bind(context.journal.store)
   let syncAttempts = 0
 
   try {
-    context.journal.fileHandle.sync = async () => {
+    context.journal.store.sync = async () => {
       syncAttempts += 1
       if (syncAttempts === 1) {
         throw new Error("simulated transient disk sync failure")
@@ -845,11 +844,178 @@ test("retries a transient disk sync failure and durably persists records written
       "The durable JSONL history must preserve the first and retry audit payloads in publication order.",
     )
   } finally {
-    if (context.journal.fileHandle) {
-      delete context.journal.fileHandle.sync
+    if (context.journal.store.sessionHandle) {
+      delete context.journal.store.sync
     }
     await context.journal.close()
     await context.eventBus.close()
     await rm(context.directory, { recursive: true, force: true })
+  }
+})
+
+
+test("delegates writer lifecycle and record persistence to its injected internal store", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-injection-"))
+  const eventBus = new EventBus()
+  const storeCalls = []
+  const expectedFilePath = "virtual-journal/session.jsonl"
+  const sessionFileName = "2026-11-08_12-30-00.jsonl"
+  const sessionContent = `${JSON.stringify({ id: "stored-record", name: "stored.event" })}\n`
+  const store = {
+    ensureDirectory: async () => storeCalls.push("ensureDirectory"),
+    acquireWriter: async () => storeCalls.push("acquireWriter"),
+    createSession: async () => {
+      storeCalls.push("createSession")
+      return { filePath: expectedFilePath }
+    },
+    append: async (line) => storeCalls.push({ operation: "append", line }),
+    sync: async () => storeCalls.push("sync"),
+    closeSession: async () => storeCalls.push("closeSession"),
+    releaseWriter: async () => storeCalls.push("releaseWriter"),
+    listSessions: async () => {
+      storeCalls.push("listSessions")
+      return [{ name: sessionFileName, isFile: true }]
+    },
+    statSession: async () => {
+      storeCalls.push("statSession")
+      return { size: Buffer.byteLength(sessionContent) }
+    },
+    readSession: async () => {
+      storeCalls.push("readSession")
+      return Buffer.from(sessionContent)
+    },
+  }
+  const journal = new Journal({
+    eventBus,
+    directory,
+    [JOURNAL_STORE]: store,
+  })
+
+  try {
+    const startResult = await journal.start()
+    assert.equal(
+      startResult.ok,
+      true,
+      "Journal startup must succeed when its injected persistence store completes directory acquisition and session creation.",
+    )
+    assert.equal(
+      startResult.filePath,
+      expectedFilePath,
+      "The session path returned by Journal must come from the injected store rather than direct filesystem access.",
+    )
+
+    const published = eventBus.publish({
+      name: "journal.store_delegation_verified",
+      source: "unit-test",
+      data: { contract: "internal-store" },
+    })
+    assert.equal(
+      published.ok,
+      true,
+      "The EventBus must accept a source event while Journal delegates persistence to the injected store.",
+    )
+
+    const flushResult = await journal.flush()
+    assert.equal(
+      flushResult.ok,
+      true,
+      "Journal flush must delegate file-content synchronization to the injected store after draining EventBus and queued writes.",
+    )
+
+    const closeResult = await journal.close()
+    assert.equal(
+      closeResult.ok,
+      true,
+      "Journal close must close the injected session and release only the writer ownership acquired through that store.",
+    )
+
+    const readResult = await journal.read()
+    assert.equal(
+      readResult.ok,
+      true,
+      "Journal read must discover and load sessions through the same injected persistence boundary after the writer stops.",
+    )
+    assert.equal(
+      readResult.records[0].id,
+      "stored-record",
+      "The recovered snapshot must contain the record supplied by the injected store rather than the physical test directory.",
+    )
+
+    const replayedIds = []
+    const replayResult = await journal.replay({
+      handler: async ({ record }) => replayedIds.push(record.id),
+    })
+    assert.equal(
+      replayResult.ok,
+      true,
+      "Journal replay must validate and replay records obtained through the injected persistence boundary.",
+    )
+    assert.deepEqual(
+      replayedIds,
+      ["stored-record"],
+      "The replay handler must receive the recovered record supplied by the injected store.",
+    )
+
+    assert.deepEqual(
+      storeCalls.map((call) => typeof call === "string" ? call : call.operation),
+      [
+        "ensureDirectory",
+        "acquireWriter",
+        "createSession",
+        "append",
+        "sync",
+        "sync",
+        "closeSession",
+        "releaseWriter",
+        "listSessions",
+        "statSession",
+        "readSession",
+        "listSessions",
+        "statSession",
+        "readSession",
+      ],
+      "The Journal service must delegate writer lifecycle, append, sync, bounded discovery/read, close, and release operations in order.",
+    )
+    const appendCall = storeCalls.find((call) => typeof call === "object" && call.operation === "append")
+    assert.equal(
+      appendCall.line.includes("journal.store_delegation_verified"),
+      true,
+      "The injected store must receive the serialized JSONL record produced from the EventBus source event.",
+    )  } finally {
+    await journal.close()
+    await eventBus.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
+test("keeps the legacy internal file-handle override forwarded to the store-owned session handle", async () => {
+  const eventBus = new EventBus()
+  const store = { sessionHandle: null }
+  const journal = new Journal({
+    eventBus,
+    directory: "unused-by-store-alias-test",
+    [JOURNAL_STORE]: store,
+  })
+  const replacementHandle = {
+    writeFile: async () => {},
+    sync: async () => {},
+    close: async () => {},
+  }
+
+  try {
+    journal.fileHandle = replacementHandle
+    assert.equal(
+      store.sessionHandle,
+      replacementHandle,
+      "The legacy internal fileHandle override must update the session handle owned by the injected persistence store.",
+    )
+    assert.equal(
+      journal.fileHandle,
+      replacementHandle,
+      "The deprecated internal accessor must continue to expose the same handle for existing package-level failure-injection tests.",
+    )
+  } finally {
+    await eventBus.close()
   }
 })

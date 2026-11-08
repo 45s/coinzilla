@@ -319,7 +319,7 @@ test("poisons the writer after a write failure and rejects subsequent records", 
   const journal = new Journal({ directory, eventBus })
   try {
     assert.equal((await journal.start()).ok, true)
-    journal.fileHandle.writeFile = async () => {
+    journal.store.append = async () => {
       throw new Error("simulated partial write")
     }
     const first = await journal.record({ event: legacyEvent("one") })

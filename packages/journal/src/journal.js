@@ -1,12 +1,11 @@
-import { mkdir, open, unlink } from "node:fs/promises"
-import path from "node:path"
+import { FileSystemJournalStore } from "./adapters/filesystem-journal-store.js"
+import { JOURNAL_STORE } from "./journal-store-injection.js"
 
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { serializeJournalRecord } from "./helpers/journal-record.js"
 import { readJournalRecords } from "./read-journal-records.js"
 import { replayJournalRecords } from "./replay-journal-records.js"
 
-const JOURNAL_DIRECTORY_LOCK_FILE = ".coinzilla-journal.lock"
 
 /**
  * Persist EventBus source events as ordered JSONL records and recover them later.
@@ -19,15 +18,14 @@ const JOURNAL_DIRECTORY_LOCK_FILE = ".coinzilla-journal.lock"
  * @param {object} [options.logger] - Optional logger; defaults to the workspace logger.
  */
 export class Journal {
-  constructor({ eventBus, directory, logger = defaultLogger } = {}) {
+  constructor(options = {}) {
+    const { eventBus, directory, logger = defaultLogger } = options
     this.eventBus = eventBus
     this.directory = directory
     this.logger = logger
+    this.store = options[JOURNAL_STORE] ?? new FileSystemJournalStore({ directory })
 
-    this.fileHandle = null
     this.filePath = null
-    this.lockFileHandle = null
-    this.lockFilePath = null
     this.subscription = null
     this.writeQueue = Promise.resolve()
 
@@ -41,137 +39,84 @@ export class Journal {
   }
 
   /**
+   * Legacy internal compatibility accessor for package-level failure-injection tests.
+   * The persistence store remains the sole owner of the session handle.
+   *
+   * @deprecated
+   * @internal
+   * @returns {object|null} Active session handle, including a test override when installed.
+   */
+  get fileHandle() {
+    return this.store.sessionHandle
+  }
+
+  /**
+   * Forward a legacy internal test override to the persistence store.
+   *
+   * @deprecated
+   * @internal
+   * @param {object|null} handle - Test handle implementing writeFile(), sync(), and close().
+   * @returns {void}
+   */
+  set fileHandle(handle) {
+    this.store.sessionHandle = handle
+  }
+
+  /**
    * Acquire directory ownership, create a session, and subscribe to EventBus messages.
    *
    * @returns {Promise<object>} Result indicating whether startup succeeded.
    */
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
-      return toResult({
-        error: new Error("Journal has already started or closed"),
-      })
+      return toResult({ error: new Error("Journal has already started or closed") })
     }
-
     if (!this.eventBus || typeof this.eventBus.subscribeAll !== "function") {
-      return toResult({
-        error: new TypeError("A valid eventBus is required"),
-      })
+      return toResult({ error: new TypeError("A valid eventBus is required") })
     }
-
     if (typeof this.directory !== "string" || this.directory.trim() === "") {
-      return toResult({
-        error: new TypeError("A journal directory is required"),
-      })
+      return toResult({ error: new TypeError("A journal directory is required") })
     }
 
     this.starting = true
-
     try {
-      await mkdir(this.directory, { recursive: true })
-
+      await this.store.ensureDirectory()
       if (this.closing || this.closed) {
-        return toResult({
-          error: new Error("Journal was closed during startup"),
-        })
+        return toResult({ error: new Error("Journal was closed during startup") })
       }
-
-      await this.acquireDirectoryLock()
-
-      const { fileHandle, filePath } = await this.createSessionFile()
-
-      this.fileHandle = fileHandle
+      await this.store.acquireWriter()
+      const { filePath } = await this.store.createSession()
       this.filePath = filePath
-
       if (this.closing || this.closed) {
         const errors = [new Error("Journal was closed during startup")]
-
-        try {
-          await this.fileHandle.close()
-        } catch (error) {
-          errors.push(error)
-        }
-        this.fileHandle = null
-
-        try {
-          await this.releaseDirectoryLock()
-        } catch (error) {
-          errors.push(error)
-        }
-
+        await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
-
       const result = this.eventBus.subscribeAll({
         handler: async (event) => {
           const writeResult = await this.record({ event })
-
           if (!writeResult.ok) {
-            this.reportError({
-              message: "Failed to write journal event",
-              errors: writeResult.errors,
-              eventId: event.id,
-              eventName: event.name,
-            })
+            this.reportError({ message: "Failed to write journal event", errors: writeResult.errors, eventId: event.id, eventName: event.name })
           }
         },
       })
-
       if (!result.ok) {
         const errors = [...result.errors]
-
-        try {
-          await this.fileHandle.close()
-        } catch (error) {
-          errors.push(error)
-        }
-        this.fileHandle = null
-
-        try {
-          await this.releaseDirectoryLock()
-        } catch (error) {
-          errors.push(error)
-        }
-
+        await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
-
       this.subscription = result.subscription
       this.started = true
-
       try {
-        this.logger.system?.("Journal started", {
-          filePath: this.filePath,
-        })
+        this.logger.system?.("Journal started", { filePath: this.filePath })
       } catch {
         // Logging must not turn a successful startup into a failure.
       }
-
-      return toResult({
-        filePath: this.filePath,
-      })
+      return toResult({ filePath: this.filePath })
     } catch (error) {
       const errors = [error]
-
-      if (this.fileHandle) {
-        try {
-          await this.fileHandle.close()
-        } catch (cleanupError) {
-          errors.push(cleanupError)
-        }
-        this.fileHandle = null
-      }
-
-      try {
-        await this.releaseDirectoryLock()
-      } catch (cleanupError) {
-        errors.push(cleanupError)
-      }
-
-      this.reportError({
-        message: "Failed to start journal",
-        errors,
-      })
-
+      await this.cleanupStoreResources(errors)
+      this.reportError({ message: "Failed to start journal", errors })
       return toResult({ errors })
     } finally {
       this.starting = false
@@ -179,88 +124,26 @@ export class Journal {
   }
 
   /**
-   * Acquire exclusive ownership before creating a session file.
-   * An existing lock is never removed automatically; it may belong to a live
-   * process or be a stale lock left by a process that did not close cleanly.
-   */
-  async acquireDirectoryLock() {
-    const lockFilePath = path.join(this.directory, JOURNAL_DIRECTORY_LOCK_FILE)
-    let lockFileHandle
-
-    try {
-      lockFileHandle = await open(lockFilePath, "wx", 0o600)
-    } catch (cause) {
-      if (cause.code !== "EEXIST") {
-        throw cause
-      }
-
-      const error = new Error(
-        `Journal directory is already locked: ${this.directory}. Verify that no writer is active before removing ${lockFilePath}.`,
-      )
-      error.code = "JOURNAL_DIRECTORY_LOCKED"
-      error.details = { directory: this.directory, lockFilePath }
-      error.cause = cause
-      throw error
-    }
-
-    this.lockFileHandle = lockFileHandle
-    this.lockFilePath = lockFilePath
-
-    const metadata = {
-      pid: process.pid,
-      startedAt: new Date().toISOString(),
-    }
-    await lockFileHandle.writeFile(`${JSON.stringify(metadata)}\n`, "utf8")
-  }
-
-  /**
-   * Release this instance's directory lock after its session file is closed.
-   */
-  async releaseDirectoryLock() {
-    if (this.lockFileHandle) {
-      await this.lockFileHandle.close()
-      this.lockFileHandle = null
-    }
-
-    if (this.lockFilePath) {
-      await unlink(this.lockFilePath)
-      this.lockFilePath = null
-    }
-  }
-
-  async createSessionFile({} = {}) {
-    const timestamp = new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace("T", "_")
-      .replaceAll(":", "-")
-
-    for (let index = 0; ; index += 1) {
-      const suffix = index === 0 ? "" : `-${String(index).padStart(3, "0")}`
-
-      const filePath = path.join(this.directory, `${timestamp}${suffix}.jsonl`)
-
-      try {
-        const fileHandle = await open(filePath, "wx")
-
-        return { fileHandle, filePath }
-      } catch (error) {
-        if (error.code !== "EEXIST") {
-          throw error
-        }
-      }
-    }
-  }
-
-  /**
-   * Queue one source event for append to the active JSONL session.
-   * A successful result acknowledges the completed write, not durable storage.
+   * Close the session before releasing writer ownership acquired by this start attempt.
+   * The store releases only handles and lock files that it owns.
    *
-   * @param {{ event: object }} input - Source event with a non-empty stable string id.
-   * @returns {Promise<object>} Result containing the written record identity on success.
+   * @private
+   * @param {Error[]} errors - Cleanup errors are appended without replacing the original failure.
    */
+  async cleanupStoreResources(errors) {
+    try {
+      await this.store.closeSession()
+    } catch (error) {
+      errors.push(error)
+    }
+    try {
+      await this.store.releaseWriter()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
   async record({ event } = {}) {
-    if (!this.started || this.closing || this.closed || !this.fileHandle) {
+    if (!this.started || this.closing || this.closed || !this.filePath) {
       return toResult({
         error: new Error("Journal is not accepting records"),
       })
@@ -285,7 +168,7 @@ export class Journal {
         })
       }
       try {
-        await this.fileHandle.writeFile(line, "utf8")
+        await this.store.append(line)
         return toResult({ written: true, durable: false, recordId: event.id })
       } catch (error) {
         this.writeFailed = true
@@ -307,6 +190,7 @@ export class Journal {
       return toResult({ error: new Error("Journal records can only be read while the journal is stopped") })
     }
     return readJournalRecords({
+      store: this.store,
       directory: this.directory,
       maxRecords,
       maxSessions,
@@ -324,6 +208,7 @@ export class Journal {
       return toResult({ error: new Error("Journal can only be replayed while stopped") })
     }
     return replayJournalRecords({
+      store: this.store,
       directory: this.directory,
       handler,
       maxRecords,
@@ -339,7 +224,7 @@ export class Journal {
    * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
    */
   async flush({} = {}) {
-    if (!this.started || !this.fileHandle || this.closing || this.closed) {
+    if (!this.started || !this.filePath || this.closing || this.closed) {
       return toResult({ error: new Error("Journal must be started to flush durable records") })
     }
 
@@ -358,10 +243,10 @@ export class Journal {
     await this.writeQueue
     errors.push(...this.writeErrors)
 
-    if (errors.length === 0 && this.fileHandle && !this.closed) {
+    if (errors.length === 0 && this.filePath && !this.closed) {
       try {
         // record() acknowledges a completed write; flush() acknowledges an fsync.
-        await this.fileHandle.sync()
+        await this.store.sync()
       } catch (error) {
         errors.push(error)
       }
@@ -431,29 +316,24 @@ export class Journal {
     errors.push(...this.writeErrors)
     this.writeErrors = []
 
-    if (this.fileHandle) {
+    if (this.filePath) {
       try {
         // Sync the final queued writes before closing the session file.
-        await this.fileHandle.sync()
+        await this.store.sync()
       } catch (error) {
         errors.push(error)
       }
-
       try {
-        await this.fileHandle.close()
+        await this.store.closeSession()
       } catch (error) {
         errors.push(error)
       }
-
-      this.fileHandle = null
     }
-
     try {
-      await this.releaseDirectoryLock()
+      await this.store.releaseWriter()
     } catch (error) {
       errors.push(error)
     }
-
     this.closed = true
     this.started = false
     this.closing = false
