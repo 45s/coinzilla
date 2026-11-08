@@ -233,6 +233,9 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
     closeInitialConnection() {
       ports.get(initialClient).close()
     },
+    closeCurrentConnection() {
+      ports.get(currentClient).close()
+    },
     async reconnect() {
       const pending = [...timers.entries()][0]
       assert.ok(pending, "expected a scheduled reconnect")
@@ -286,22 +289,115 @@ function createRecoveryFixture({ failReconnect = false } = {}) {
   })
 
   it("reports local acknowledgement acceptance separately from shared recovery completion", async () => {
+    const recoveryStatuses = []
     const fixture = createRecoveryFixture()
     fixture.session.start()
-    const first = await fixture.session.subscribe({ onEvent() {} })
+    const first = await fixture.session.subscribe({
+      onEvent() {},
+      onStatus: (status) => recoveryStatuses.push(status),
+    })
     const second = await fixture.session.subscribe({ onEvent() {} })
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
+    const recoveryGeneration = recoveryStatuses.find((status) => status.type === "recovered")?.recoveryGeneration
 
-    assert.deepEqual(first.data.acknowledgeRecoveryResult(), {
+    assert.ok(
+      Number.isSafeInteger(recoveryGeneration),
+      "The broker must expose the current recovery generation before a subscriber acknowledges it.",
+    )
+    assert.deepEqual(first.data.acknowledgeRecoveryResult(recoveryGeneration), {
       accepted: true,
       completed: false,
     })
-    assert.deepEqual(second.data.acknowledgeRecoveryResult(), {
+    assert.deepEqual(second.data.acknowledgeRecoveryResult(recoveryGeneration), {
       accepted: true,
       completed: true,
     })
+
+    await fixture.session.stop()
+  })
+
+  it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
+    const firstStatuses = []
+    const secondStatuses = []
+    const fixture = createRecoveryFixture()
+    fixture.session.start()
+    const first = await fixture.session.subscribe({
+      onEvent() {},
+      onStatus: (status) => firstStatuses.push(status),
+    })
+    const second = await fixture.session.subscribe({
+      onEvent() {},
+      onStatus: (status) => secondStatuses.push(status),
+    })
+
+    fixture.closeInitialConnection()
+    await fixture.reconnect()
+    const firstRecoveryGeneration = firstStatuses.find((status) => status.type === "recovered")?.recoveryGeneration
+    assert.ok(
+      Number.isSafeInteger(firstRecoveryGeneration),
+      "The broker must publish an integer recovery-generation token with each recovered status.",
+    )
+    assert.deepEqual(
+      first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
+      { accepted: true, completed: false },
+      "The first subscriber may acknowledge only the generation it actually reconciled.",
+    )
+
+    fixture.closeCurrentConnection()
+    await fixture.reconnect()
+    const recoveredStatuses = firstStatuses.filter((status) => status.type === "recovered")
+    const secondRecoveryGeneration = recoveredStatuses.at(-1)?.recoveryGeneration
+    assert.ok(
+      Number.isSafeInteger(secondRecoveryGeneration) && secondRecoveryGeneration > firstRecoveryGeneration,
+      "A later transport recovery must publish a strictly newer broker generation.",
+    )
+
+    assert.deepEqual(
+      first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
+      {
+        accepted: false,
+        completed: false,
+        reason: "stale-recovery-generation",
+      },
+      "A delayed acknowledgement from the previous generation must be rejected without mutating current subscriber state.",
+    )
+    assert.equal(
+      firstStatuses.filter((status) => status.type === "reconciled").length,
+      0,
+      "A stale acknowledgement must never publish global completion for the newer recovery.",
+    )
+    assert.deepEqual(
+      first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
+      { accepted: true, completed: false },
+      "The current generation must remain pending until every active subscriber acknowledges it.",
+    )
+    assert.deepEqual(
+      second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
+      { accepted: true, completed: true },
+      "Only the final current-generation acknowledgement may complete shared recovery.",
+    )
+    assert.deepEqual(
+      firstStatuses.filter((status) => status.type === "reconciled"),
+      [{
+        type: "reconciled",
+        subscriptionId: 18,
+        recoveryGeneration: secondRecoveryGeneration,
+        recoveryRequired: false,
+      }],
+      "Each active subscriber must receive one terminal status for the completed current generation.",
+    )
+    assert.deepEqual(
+      secondStatuses.filter((status) => status.type === "reconciled"),
+      [{
+        type: "reconciled",
+        subscriptionId: 18,
+        recoveryGeneration: secondRecoveryGeneration,
+        recoveryRequired: false,
+      }],
+      "The second active subscriber must receive the same single current-generation terminal status.",
+    )
 
     await fixture.session.stop()
   })
