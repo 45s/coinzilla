@@ -1730,5 +1730,15 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 - [x] Make the broker connection test fixture satisfy the full structural BrokerPort contract.
 - [x] Avoid unnecessary REST ticker requests when a fresh WebSocket price arrives during subscription setup.
 - [x] Pass the recovery-mode classification through to the trading engine as well as the observer.
-- [x] Correct the shutdown test fixture to use its locally-owned market-intake map.
-- [x] Remove an unobserved rejected startup promise from the subscription cleanup regression test.
+- [x] Verify shutdown ordering against the original `develop` implementation; the test now records engine, intake, audit, and disconnect operations on one shared timeline without weakening the safety order.
+- [x] Fix the PREFLIGHT failure test to own its subscription/event fixtures, await the expected rejection, and prove bootstrap can disconnect the subscription handle after audit failure.
+- [x] Extract account-integrity safety-halt orchestration into `src/use-cases/create-account-integrity-safety-halt.js`; directly test reconciliation-before-cancellation, concurrent trigger coalescing, stopped-process behavior, and observable failures.
+- [x] Remove stale imports left in `start-harvester.js`; all current bootstrap and use-case extractions are wired into the composition root.
+
+
+### Bootstrap composition follow-up — 2026-11-08
+
+- [x] Move the account-integrity safety-halt workflow (owned-order reconciliation followed by owned BUY cancellation) from the composition root into a directly tested application use case.
+- [x] Keep process-stop checks, engine lookup, and logger injection explicit at the bootstrap boundary; the workflow coalesces concurrent safety-halt triggers and preserves failure logging.
+- [x] Confirm the extracted shutdown handler retains the original order: stop market intake, drain market/user-data work, reconcile, cancel owned BUYs, drain and reconcile cancellation/fill reports, stop user-data intake, audit CLOSING, then disconnect.
+- [ ] Run focused Harvester tests, the full Harvester suite, and coverage on the exact latest PR head; no local execution or passing exact-head CI is claimed yet.
