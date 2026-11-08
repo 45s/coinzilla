@@ -824,6 +824,30 @@ export function makeConservativeTradingEngine({
     if (!trigger.shouldReplace) return evaluateLatestTransition({ symbol })
     if (isStopping?.()) return toResult({ data: { skipped: true, reason: "STOPPING" } })
 
+    const preflight = await evaluateLatestTransition({
+      symbol,
+      preflightOnly: true,
+      excludedActiveOrderClientId: activeBuy.clientOrderId,
+      referencePriceOverride: marketPrice.price,
+    })
+    if (!preflight.ok) {
+      await pause({
+        symbol,
+        reason: "TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED",
+        error: preflight.errors?.[0],
+      })
+      return preflight
+    }
+    if (preflight.data?.preflightValid !== true) {
+      return toResult({
+        data: {
+          skipped: true,
+          reason: preflight.data?.reason ?? "TRAILING_BUY_REPLACEMENT_NOT_ADMISSIBLE",
+          previousOrderId: activeBuy.brokerOrderId,
+        },
+      })
+    }
+
     const cancellation = await cancelAndReconcileTrailingBuy({ symbol, order: activeBuy })
     if (!cancellation.ok) return cancellation
     state.buyReferenceOverrides.set(symbol, marketPrice.price)
@@ -843,7 +867,12 @@ export function makeConservativeTradingEngine({
     })
   }
 
-  const evaluateLatestTransition = async ({ symbol } = {}) => {
+  const evaluateLatestTransition = async ({
+    symbol,
+    preflightOnly = false,
+    excludedActiveOrderClientId,
+    referencePriceOverride,
+  } = {}) => {
     if (state.paused.has(symbol)) {
       return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
     }
@@ -863,7 +892,8 @@ export function makeConservativeTradingEngine({
       const portfolioBefore = getPortfolio()
       const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
       const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
-      const lastBuyPrice = state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
+        .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
+      const lastBuyPrice = referencePriceOverride ?? state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
       const evaluationInput = {
         marketPrice,
         pairConfig: pairs[symbol],
@@ -923,6 +953,7 @@ export function makeConservativeTradingEngine({
         }
       }
       if (decision.actions.length === 0) {
+        if (preflightOnly) return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_ACTION" } })
         logger?.debug?.({ message: "Harvester Conservative evaluation submitted no orders",
           evaluationId, symbol, reason: decision.reason, activeOrders: activeOrdersBefore.map((order) => order.value) })
         return toResult({ data: { decision, submittedOrders: [] } })
@@ -945,6 +976,7 @@ export function makeConservativeTradingEngine({
         .filter((item) => item.market.baseAsset.id === metadata.market.baseAsset.id)
         .reduce((total, item) => addDecimal({ left: total, right: item.baseQuantity.amount }), "0")
       const allActiveOrders = state.registry.getActiveOrders()
+        .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
       const committedQuote = activeOrdersBefore
         .filter((order) => order.side === "BUY")
         .reduce((total, order) => {
@@ -1039,6 +1071,7 @@ export function makeConservativeTradingEngine({
         quoteCashFlowBaseline,
       })
       if (executableActions.length === 0) {
+        if (preflightOnly) return toResult({ data: { preflightValid: false, reason: "NO_EXECUTABLE_REPLACEMENT" } })
         return toResult({
           data: {
             decision,
@@ -1084,6 +1117,21 @@ export function makeConservativeTradingEngine({
         }),
       })
       const executableDecision = Object.freeze({ ...decision, actions: Object.freeze(executableActions) })
+      if (preflightOnly) {
+        if (!executableActions.some((action) => action.side === "BUY")) {
+          return toResult({ data: { preflightValid: false, reason: "NO_REPLACEMENT_BUY" } })
+        }
+        const validation = await submit.validate({
+          decision: executableDecision,
+          marketMetadata: metadata,
+          notifyValidationFailure: false,
+        })
+        if (!validation.ok) return validation
+        if (validation.data?.deferred === true) {
+          return toResult({ data: { preflightValid: false, reason: "REPLACEMENT_MARKET_DATA_UNAVAILABLE" } })
+        }
+        return toResult({ data: { preflightValid: true, validatedOrders: validation.data.validatedOrders } })
+      }
       logger?.debug?.({
         message: "Harvester Conservative executable intents",
         evaluationId,

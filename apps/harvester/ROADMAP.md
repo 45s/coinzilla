@@ -6,10 +6,12 @@ This section is the authoritative implementation order for current work. It supe
 
 ### CRITICAL — complete before unattended operation
 
-1. **Make Conservative trailing-BUY replacement failure-safe.**
+1. **[~] Make Conservative trailing-BUY replacement failure-safe (implementation and GitHub CI verification in progress).**
    - **Why:** the current replacement path can cancel the standing BUY before the replacement is known to be valid. If exchange-filter validation or submission then fails (including the observed `MIN_NOTIONAL` rejection), the market can be left without its intended standing order and repeated market ticks can repeat the failure.
    - **Do:** build the candidate replacement from a single fresh market/trading-rule snapshot; validate quantity, price, notional, precision, freshness and POST_ONLY constraints before canceling the existing order. Preserve the old order until the candidate is known to be admissible. Where exchange semantics require cancel-before-submit, represent the gap explicitly, pause/defer the pair on rejection or unknown outcome, and reconcile by canonical client order ID before retrying. Do not silently swallow validation callbacks.
    - **Verify:** add RED/GREEN regressions for below-min-notional candidates, stale book/price, cancel rejection, submit rejection, timeout/unknown acknowledgement, partial fills during replacement, and duplicate market ticks. Assert no duplicate order, no lost reservation, and no unbounded retry loop.
+   - **Implementation in PR #751:** the serialized replacement transition now evaluates and allocates the exact replacement decision, constructs pending canonical orders, and runs the existing exchange-rule and post-only readiness validation before cancellation. Validation/readiness failure leaves the standing BUY registered and untouched. After confirmed cancellation, an uncertain or rejected replacement remains represented as UNKNOWN and the pair is paused for reconciliation.
+   - **Regression coverage in PR #751:** production-path tests cover MIN_NOTIONAL, quantity and price increments, stale price and book data, unavailable and incomplete trading rules, cancellation failure, post-cancellation submission failure, repeated market events, and the existing valid Conservative replacement behavior. This item remains in progress until all required GitHub checks pass on the final PR head and the PR is merged.
 
 2. **Close #626 recovery reliability with evidence, not assumptions.**
    - **Why:** reconnecting the transport is not the same as restoring application readiness. A premature READY transition can allow decisions against stale order/account state; a permanently closed gate harms liveness but is safer than trading on uncertain state.

@@ -24,7 +24,7 @@ Before implementing a shared helper or cross-cutting capability, follow the sing
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
 5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
-6. Run the required local checks and open a PR targeting `develop`.
+6. Commit the implementation, strong regression tests, and documentation, then open a PR targeting `develop`. GitHub Actions is the required verification runner; run local checks when a working local environment is available, but local execution is not a prerequisite for implementation or PR creation.
 7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
 8. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
@@ -123,15 +123,15 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 
 ## 8. Required verification
 
-From the repository root, run the narrowest relevant checks first, then the applicable broader checks:
+Run the narrowest relevant checks first, then the applicable broader checks. **GitHub Actions is the authoritative execution environment for PR verification.**
 
-- `pnpm --filter @coinzilla/<package> test` for the changed package.
-- The package's coverage command when defined.
-- `pnpm test` for workspace unit tests.
-- `pnpm run check:syntax` and/or `pnpm run quality` as applicable.
-- `pnpm run test:coverage` when the change affects coverage-sensitive behavior.
+- When a working local checkout and toolchain are available, run the relevant package test, coverage, syntax, and quality commands locally for fast feedback.
+- When local execution is unavailable, do not pause implementation, ask the user to run commands, or report local-environment limitations as blockers. Commit the actual source changes, strong tests, and documentation; open/update the PR and let GitHub Actions execute the required checks.
+- Inspect check conclusions for the exact current PR head SHA. A green run on an earlier SHA does not count.
+- Fix failed checks by correcting source, tests, or workflow defects without weakening assertions, skipping tests, reducing coverage, or masking failures. Push the fix and wait for GitHub to rerun.
+- Merge only after every required check passes on the exact head SHA and branch freshness is verified.
 
-For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only. Never claim a check passed unless it was actually run and passed.
+For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only. Never claim a check passed unless GitHub (or an actually executed local runner when GitHub is not the applicable runner) reports success.
 
 ## 9. Final release: one human review
 
