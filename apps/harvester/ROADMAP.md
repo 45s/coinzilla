@@ -702,6 +702,13 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Market subscription coordinator extraction — 2026-11-08
+
+- [x] Move book-ticker and market-price subscription setup, callback processing, subscription event publication, all-symbol readiness validation, and initial REST ticker seeding into `src/bootstrap/subscriptions/subscribe-to-market-data.js`.
+- [x] Preserve the ordering guarantee that every enabled WebSocket stream is established before any REST ticker seed is fetched.
+- [x] Preserve fresh WebSocket first-price preference, read-only mode behavior, callback error containment, and shutdown-owned unsubscribe handles.
+- [x] Add direct tests for subscription/seed ordering, fresh WebSocket suppression of REST seed, read-only mode, and subscription failure evidence.
+
 ### Shutdown handler extraction — 2026-11-08
 
 - [x] Move the process shutdown sequence into `src/bootstrap/shutdown/create-shutdown-handler.js`.

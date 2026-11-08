@@ -1,5 +1,4 @@
 import { Fill } from "@coinzilla/entities"
-import { createMarketPrice } from "../domain/market-price.js"
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { compareDecimal, defaultLogger, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
@@ -18,13 +17,12 @@ import { createUserDataEventHandler } from "./user-data/create-user-data-event-h
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
+import { subscribeToMarketData } from "./subscriptions/subscribe-to-market-data.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import {
   mapBrokerConnectedData,
   mapBrokerConnectionFailedData,
-  mapBrokerSubscriptionEstablishedData,
-  mapBrokerSubscriptionFailedData,
   mapConfigValidatedData,
 } from "../application/events/lifecycle-event-dtos.js"
 
@@ -44,21 +42,6 @@ const evaluateReadOnlyConservativeStrategy = ({ marketPrice, portfolio } = {}) =
   position: portfolio?.getPosition({ symbol: marketPrice?.symbol })?.value,
 })
 
-function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
-  if (!processed?.ok) return
-
-  const { decision } = processed.data ?? {}
-  const action = decision?.action ??
-    (decision?.actions?.length
-      ? decision.actions.map(({ side }) => side).join("+")
-      : "NO_ACTION")
-  logger.debug?.({
-    message: "Market price evaluated",
-    symbol,
-    price: priceEvent?.price,
-    action,
-  })
-}
 
 export async function startHarvester({
   configSource,
@@ -404,17 +387,6 @@ export async function startHarvester({
     processMarketPrice = tradingEngine.processMarketPrice
     processMarketBook = tradingEngine.processBookTicker
   }
-  const reportPriceError = (details) => {
-    try {
-      onMarketPriceError(details)
-    } catch (error) {
-      logger.error?.({
-        message: "market price error handler failed",
-        error,
-      })
-    }
-  }
-
   try {
     await loadMarketMetadata({ broker, pairs, marketMetadata, eventPublisher, logger })
     // Durable Journal replay is intentionally disabled. Harvester starts with
@@ -514,187 +486,24 @@ export async function startHarvester({
       logSystem(logger, { message: "Conservative TESTNET trading engine activated" })
     }
 
-    // Establish every enabled market stream before doing any REST ticker
-    // seeding or waiting for an initial strategy evaluation. A slow first
-    // market must never prevent later enabled markets from receiving prices.
-    for (const [symbol, pairConfig] of Object.entries(pairs)) {
-      if (!pairConfig.enabled) continue
-
-      if (tradingEnabled) {
-        let bookResult
-        try {
-          bookResult = await broker.subscribeForBookTicker({
-            symbol,
-            onBookTicker: (bookTicker) => {
-              if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-              return Promise.resolve().then(() => processMarketBook({ symbol, bookTicker })).then((processed) => {
-                if (!processed.ok) logger.error?.({ message: "market book processing failed", symbol, errors: processed.errors })
-                return processed
-              }).catch((error) => {
-                logger.error?.({ message: "market book processing failed", symbol, error })
-                return toResult({ error })
-              })
-            },
-          })
-        } catch (error) {
-          bookResult = toResult({ error })
-        }
-        if (!bookResult?.ok || typeof bookResult.data?.unsubscribe !== "function") {
-          const details = bookResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-          throw new Error("Unable to subscribe to book ticker for " + symbol + (details ? ": " + details : ""))
-        }
-        bookSubscriptions.push({ symbol, unsubscribe: bookResult.data.unsubscribe })
-        logSystem(logger, {
-          message: "Book ticker subscribed",
-          symbol,
-          stream: bookResult.data.stream ?? null,
-        })
-      }
-
-      const intakeState = {
-        hasFreshWebSocketPrice: false,
-        latestWebSocketPriceTask: null,
-      }
-      let result
-      try {
-        result = await broker.subscribeForPrices({
-          symbol,
-          onPrice: (priceEvent) => {
-            if (userDataState.stopped) return toResult({ data: { skipped: true, reason: "STOPPING" } })
-
-            try {
-              if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
-                intakeState.hasFreshWebSocketPrice = true
-              }
-            } catch {
-              // The trading engine reports malformed events through its normal result.
-            }
-
-            intakeState.latestWebSocketPriceTask = Promise.resolve().then(() => processMarketPrice({
-              symbol,
-              priceEvent,
-              pairConfig,
-              settings,
-            })).then((processed) => {
-              if (!processed.ok) {
-                reportPriceError({ symbol, errors: processed.errors })
-              } else {
-                logMarketPriceEvaluation({ logger, symbol, priceEvent, processed })
-              }
-              return processed
-            }).catch((error) => {
-              reportPriceError({ symbol, error })
-              return { ok: false, errors: [error] }
-            })
-            return intakeState.latestWebSocketPriceTask
-          },
-        })
-      } catch (error) {
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-          dataResult: mapBrokerSubscriptionFailedData({
-            broker: brokerName,
-            stream: "market-price",
-            market: symbol,
-            error,
-          }),
-        })
-        throw error
-      }
-
-      if (!result?.ok || typeof result.data?.unsubscribe !== "function") {
-        const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-        const error = new Error(
-          "Unable to subscribe to market prices for " + symbol + (details ? ": " + details : ""),
-        )
-        publishLifecycleEvent({
-          eventPublisher,
-          eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
-          dataResult: mapBrokerSubscriptionFailedData({
-            broker: brokerName,
-            stream: "market-price",
-            market: symbol,
-            error,
-          }),
-        })
-        throw error
-      }
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
-        dataResult: mapBrokerSubscriptionEstablishedData({
-          broker: brokerName,
-          stream: "market-price",
-          market: symbol,
-        }),
-      })
-      subscriptions.push({ symbol, unsubscribe: result.data.unsubscribe })
-      marketPriceIntake.set(symbol, intakeState)
-      logSystem(logger, {
-        message: "Market data subscribed",
-        symbol,
-        stream: result.data.stream ?? null,
-      })
-    }
-
-    const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
-    const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
-    if (missingSubscriptions.length > 0) {
-      throw new Error("Harvester startup did not establish market-price subscriptions for every enabled pair: " + missingSubscriptions.join(", "))
-    }
-    logSystem(logger, {
-      message: "Market data subscriptions ready",
-      enabledSymbols,
-      subscribedSymbols,
+    await subscribeToMarketData({
+      broker,
+      brokerName,
+      eventPublisher,
+      logger,
+      tradingEnabled,
+      pairs,
+      settings,
+      processMarketPrice,
+      processMarketBook,
+      isMarketPriceFresh,
+      now,
+      isStopped: () => userDataState.stopped,
+      onMarketPriceError,
+      subscriptions,
+      bookSubscriptions,
+      marketPriceIntake,
     })
-
-    // Only after all enabled symbols have active stream subscriptions may
-    // startup perform REST price seeding and wait for outstanding first ticks.
-    if (tradingEnabled) {
-      for (const [symbol, pairConfig] of Object.entries(pairs)) {
-        if (!pairConfig.enabled) continue
-        const intakeState = marketPriceIntake.get(symbol)
-        if (!intakeState) throw new Error("Missing market-price intake state for enabled pair " + symbol)
-
-        let tickerResult
-        try {
-          tickerResult = await broker.getPrices({ symbol })
-        } catch (error) {
-          tickerResult = toResult({ error })
-        }
-        if (intakeState.latestWebSocketPriceTask) await intakeState.latestWebSocketPriceTask
-
-        if (!intakeState.hasFreshWebSocketPrice) {
-          if (!tickerResult?.ok || !tickerResult.data) {
-            const details = tickerResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-            throw new Error(
-              "Unable to load initial market price for " + symbol + (details ? ": " + details : ""),
-            )
-          }
-          const priceEvent = {
-            symbol: tickerResult.data.symbol,
-            price: tickerResult.data.price,
-            timestamp: now(),
-          }
-          const marketPrice = createMarketPrice({ priceEvent })
-          if (marketPrice.symbol !== symbol) {
-            throw new Error("Initial ticker price symbol does not match enabled market " + symbol)
-          }
-          const processed = await processMarketPrice({
-            symbol,
-            priceEvent,
-            pairConfig,
-            settings,
-          })
-          if (!processed.ok) {
-            reportPriceError({ symbol, errors: processed.errors })
-          } else {
-            logMarketPriceEvaluation({ logger, symbol, processed })
-          }
-        }
-      }
-    }
   } catch (error) {
     logger.error?.({
       message: "Broker startup step failed",

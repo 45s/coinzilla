@@ -467,3 +467,10 @@ The recovery-handler CI run caught one remaining dependency on the former bootst
 
 
 The first shutdown-module review corrected two mechanical extraction leftovers before acceptance: the moved handler now uses its injected `state` object and no longer repeats the shutdown guard/state transition/log entry already owned by the shared-promise wrapper. The direct shutdown test fixture now models user-data disconnect as part of intake teardown.
+
+
+## Market subscription coordinator extraction — 2026-11-08
+
+Market-price and book-ticker intake setup now lives in `src/bootstrap/subscriptions/subscribe-to-market-data.js`. The module owns per-enabled-market subscription setup, callback processing/error containment, subscription lifecycle events, all-symbol subscription verification, and REST first-price seeding after all WebSocket streams are established.
+
+It preserves fresh WebSocket first-price preference (avoiding redundant REST seeds), read-only mode without book subscriptions/REST seeding, and unsubscribe handles for shutdown. Direct tests cover ordering, fresh WebSocket behavior, read-only behavior, and failed subscription evidence.
