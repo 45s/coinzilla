@@ -702,6 +702,12 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 
 **Acceptance:** the accounting and recovery transition factory is independently testable; bootstrap composes it rather than implementing the stateful accounting/recovery workflow. The broader bootstrap cleanup remains follow-up work within this DDD-04 task.
 
+### Broker connection lifecycle extraction — 2026-11-08
+
+- [x] Move broker adapter construction, broker-port validation, connection lifecycle publication, failure logging, and disconnect-on-connect-failure cleanup into `src/bootstrap/broker/connect-broker.js`.
+- [x] Preserve the AggregateError contract when both connection and cleanup fail.
+- [x] Add direct tests for successful connection, failed connection cleanup, and dual-failure aggregation.
+
 ### Market subscription coordinator extraction — 2026-11-08
 
 - [x] Move book-ticker and market-price subscription setup, callback processing, subscription event publication, all-symbol readiness validation, and initial REST ticker seeding into `src/bootstrap/subscriptions/subscribe-to-market-data.js`.

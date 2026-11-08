@@ -477,3 +477,10 @@ It preserves fresh WebSocket first-price preference (avoiding redundant REST see
 
 
 The first full test run after adding subscription/shutdown/recovery unit tests identified test-fixture ordering issues rather than production regressions: the shutdown market-task promise used a different call log, the concurrent-stop test asserted before the broker-disconnect phase was reached, and the recovery test omitted its mutable state argument. Those fixtures are corrected; the market subscription reporter is now scoped inside its injected coordinator and stop-state checks use the injected predicate.
+
+
+## Broker connection lifecycle extraction — 2026-11-08
+
+Broker adapter construction, broker-port assertion, connection lifecycle publication, failure diagnostics, and disconnect-on-connect-failure cleanup now live in `src/bootstrap/broker/connect-broker.js`. It preserves the original behavior of rethrowing the connection error after successful cleanup and raising an AggregateError containing both failures when disconnect cleanup also fails.
+
+Direct tests cover connection success, connection failure with cleanup, and dual-failure aggregation. The broker adapter's exchange protocol implementation remains in the infrastructure/broker layer.
