@@ -60,7 +60,7 @@ const tradingConfig = {
   },
 }
 
-async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
+async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingConfig, isMarketPriceFresh = () => true, isMarketBookFresh = () => true, initialBook = true, marketMetadata: suppliedMarketMetadata, getMarketMetadata: getMarketMetadataOverride, placeOrderFailureAfterFirst = false, placeOrderFailureError, placeOrderFailureCount = 0, cancelWithFill = false, cancelExecutedQuantity = cancelWithFill ? "0.1" : "0", cancelOrderGate, onCancelOrderStarted, eventPublisher, placeOrderFailure = false, placeOrderThrow = false, cancelFailure = false, cancelThrow = false, onPlaceOrder, placeOrderGate, deferOrderSide = "SELL", onPlaceOrderStarted, initialPortfolio, initialRecoveryLedger, getPortfolio: getPortfolioOverride, getRecoveryLedger: getRecoveryLedgerOverride, updateTradingAccounting: updateTradingAccountingOverride, completeRecoveryCycle: completeRecoveryCycleOverride, baseFreeBalance = "0", quoteFreeBalance = "1000", quoteCashFlowBaseline = "0", accountingApplied = false, accountingFailure = false, immediateFilledAcknowledgement = false, getAcknowledgedFills = () => [], acknowledgedFillsGate, getTerminalFills = () => [], recoveryCompletion = { eligible: true, freeQuantity: "0.1", realizedNetProfit: "1.5" }, initialState } = {}) {
   const orders = []
   const pauses = []
   const accountedFills = []
@@ -72,13 +72,18 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
   const acknowledgedOrdersById = new Map()
   const canonicalOrdersByClientId = new Map()
   let remainingPlaceOrderFailures = placeOrderFailure ? Number.POSITIVE_INFINITY : placeOrderFailureCount
+  let placeOrderCallCount = 0
   const broker = {
     placeOrder: async ({ order }) => {
+      placeOrderCallCount += 1
       orders.push(order)
       onPlaceOrder?.({ order })
       onPlaceOrderStarted?.({ order })
       if (placeOrderGate && order.side === deferOrderSide) await placeOrderGate.promise
       if (placeOrderThrow) throw new Error("socket closed")
+      if (placeOrderFailureAfterFirst && placeOrderCallCount > 1) {
+        return { ok: false, errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
+      }
       if (remainingPlaceOrderFailures > 0) {
         if (Number.isFinite(remainingPlaceOrderFailures)) remainingPlaceOrderFailures -= 1
         return { ok: false, errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
@@ -220,7 +225,7 @@ async function createHarness({ strategyPolicy, tradingConfig: suppliedTradingCon
     tradingConfig: suppliedTradingConfig ?? tradingConfig,
     getPortfolio: getPortfolioOverride ?? (() => currentPortfolio),
     getRecoveryLedger: getRecoveryLedgerOverride ?? (() => currentRecoveryLedger),
-    getMarketMetadata: () => marketMetadata,
+    getMarketMetadata: () => getMarketMetadataOverride ? getMarketMetadataOverride() : (suppliedMarketMetadata ?? marketMetadata),
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting: updateTradingAccountingOverride ?? (async ({ fill }) => {
       if (accountingFailure) {
@@ -5495,4 +5500,196 @@ test("preserves the original broker error as cause when REST fill-history retrie
     scenario: "a REST fill-history RPC timeout during owned-order recovery",
     expectedMessage: "REST fill history is incomplete or invalid for owned order broker-malformed-rest-envelope-owned-order",
   })
+})
+
+
+const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQuantity = "1" } = {}) => ({
+  evaluate: ({ marketPrice }) => ({
+    strategy: "TEST_POLICY",
+    symbol: "DOGEUSDT",
+    action: "PLACE_ORDERS",
+    actions: [{
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: marketPrice.price === "100" ? "99.95" : replacementPrice,
+      quantity: marketPrice.price === "100" ? "1" : replacementQuantity,
+    }],
+  }),
+  evaluateTrailingBuyRepricing: () => ({ shouldReplace: true, adjustmentThreshold: "0.05" }),
+})
+
+test("keeps the standing BUY open when the proposed trailing replacement violates MIN_NOTIONAL", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "100", replacementQuantity: "0.04" }),
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false, "A below-minimum-notional replacement must be rejected during preflight")
+  assert.match(result.errors[0].message, /MIN_NOTIONAL/, "The validation failure must identify the violated exchange rule")
+  assert.deepEqual(harness.cancellationIds, [], "The existing BUY must not be canceled before MIN_NOTIONAL validation")
+  assert.equal(harness.orders.length, 1, "An invalid replacement must never reach the broker")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN", "The previously valid BUY must remain registered as open")
+  assert.ok(harness.pauses.includes("TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED"))
+})
+
+test("keeps the standing BUY open when the proposed replacement violates quantity increments", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "100", replacementQuantity: "1.05" }),
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /QUANTITY_INCREMENT/)
+  assert.deepEqual(harness.cancellationIds, [], "Quantity-filter rejection must happen before cancellation")
+  assert.equal(harness.orders.length, 1, "Quantity-filter rejection must not submit a replacement")
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+test("keeps the standing BUY open when the proposed replacement violates price increments", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy({ replacementPrice: "99.951", replacementQuantity: "1" }),
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /PRICE_INCREMENT/)
+  assert.deepEqual(harness.cancellationIds, [], "Price-filter rejection must happen before cancellation")
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+test("keeps the standing BUY open when the replacement market price is stale", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    isMarketPriceFresh: ({ timestamp }) => timestamp === 1,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.reason, "STALE_MARKET_PRICE")
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+test("keeps the standing BUY open when the replacement trading rules become unavailable", async () => {
+  let currentMetadata = marketMetadata
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    getMarketMetadata: () => currentMetadata,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  currentMetadata = { ...marketMetadata, tradingRules: undefined }
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /trading rules/)
+  assert.deepEqual(harness.cancellationIds, [])
+  assert.equal(harness.orders.length, 1)
+  assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+})
+
+test("does not submit a replacement when cancellation fails", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    cancelFailure: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.orders.length, 1, "A failed or unconfirmed cancellation must prevent replacement submission")
+  assert.ok(["UNKNOWN", "OPEN"].includes(harness.engine.getOrders()[0].status))
+  assert.equal(harness.engine.getPausedMarkets().includes("DOGEUSDT"), true)
+})
+
+test("retains an explicitly unknown replacement after cancellation succeeds but submission fails", async () => {
+  const harness = await createHarness({
+    strategyPolicy: makeTrailingReplacementPolicy(),
+    placeOrderFailureAfterFirst: true,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(harness.cancellationIds.length, 1)
+  assert.equal(harness.orders.length, 2, "The broker must receive exactly one replacement attempt")
+  assert.equal(harness.engine.getOrders()[0].status, "CANCELED", "The old order must not be represented as open after confirmed cancellation")
+  assert.equal(harness.engine.getOrders()[1].status, "UNKNOWN", "The failed replacement outcome must remain explicitly reconcilable")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  const repeated = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.12", timestamp: 3 },
+  })
+  assert.equal(repeated.ok, true)
+  assert.equal(harness.orders.length, 2, "A paused market must not create duplicate replacement submissions")
+})
+
+test("repeated market-price events cannot submit duplicate replacements after a valid replacement", async () => {
+  const harness = await createHarness({ strategyPolicy: makeTrailingReplacementPolicy() })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const firstReplacement = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 2 },
+  })
+  const repeated = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.06", timestamp: 3 },
+  })
+
+  assert.equal(firstReplacement.ok, true)
+  assert.equal(firstReplacement.data.trailingBuyReplaced, true)
+  assert.equal(repeated.ok, true)
+  assert.equal(harness.orders.length, 2, "Repeated market events must not create a second replacement for the same trailing step")
+  assert.equal(harness.cancellationIds.length, 1)
 })
