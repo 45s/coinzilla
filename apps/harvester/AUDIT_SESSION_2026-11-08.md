@@ -14,7 +14,7 @@ The broker continued emitting `recovered` reminders, but the application never a
 
 **Confirmed root cause:** bootstrap omitted the engine's `recoveryMode` option when processing queued user-data events during recovery. The engine already had recovery-mode behavior that suppresses normal cancellation/replacement side effects. A second lifecycle gap meant terminal events processed in recovery mode could return `reevaluate: true` while the bootstrap correctly deferred evaluation; the affected symbol was not retained in `deferredEvaluations`, so the post-recovery evaluation could be lost. PR #673 addresses both.
 
-**Not established:** the lower-level cause of the original empty-message `TypeError` / WebSocket close code 1006. The operator reported an internet outage; that is consistent with the transport symptoms but the supplied evidence does not identify the exact throwing operation or prove the network as the root cause.
+**Source-level cause of the empty-message `TypeError`: identified.** The November 8 stacks match Node.js v24.22.2's bundled Undici WebSocket close/handshake paths. At 03:20:30.119Z the stack shows an established TLS socket closing without a WebSocket close frame (1006). At 03:20:35.148Z and later retries, `failHandshake` / `processResponse` prove a separate opening-handshake failure path. In Node v24.22.2, Undici drops the handshake `reason` and `cause` when it calls `handler.onSocketClose()` without arguments; the parser has no close-frame information, so `#onSocketClose()` constructs `new TypeError("")`. The actual underlying network/TLS/non-101 cause remains **UNKNOWN** because it was discarded before reaching the broker. Exact local `process.version` was not recorded; the surrounding Node source line numbers match v24.22.2. Cross-domain follow-up: [#680](https://github.com/45s/coinzilla/issues/680); upstream [Undici #4625](https://github.com/nodejs/undici/issues/4625) and [PR #4996](https://github.com/nodejs/undici/pull/4996).
 
 ## 1. Evidence inventory and integrity
 
@@ -163,7 +163,7 @@ Journal broker-status counts:
 | `recovering` | 9 |
 | `recovered` | 47 |
 
-The first transport error is at 03:20:30.119Z. The logs show an empty-message `TypeError`, followed by abnormal WebSocket close code `1006`; five RPC-error/connection-close cycles are recorded before the first `recovered` status at 03:21:42.433Z. The operator's internet-outage report is consistent with this, but the precise lower-level throwing operation is not identified by the supplied evidence.
+The first transport error is at 03:20:30.119Z. Two Undici paths are present: (A) the first stack ends at `TLSSocket.onSocketClose` / `TCP.done` and is consistent with an established socket being lost without a close frame; (B) stacks at 03:20:35.148Z, 03:20:40.162Z, 03:20:50.177Z, and 03:21:10.199Z include `failWebsocketConnection → failHandshake → processResponse`, identifying failed opening handshakes. Both produce an empty-message `TypeError`; the five RPC-error/connection-close cycles precede the first `recovered` status at 03:21:42.433Z. The exact cause of the transport failures is still unknown. The operator's internet-outage report is consistent but not proven.
 
 The broker contract documented in #626 says `recovered` means transport/subscription readiness while `recoveryRequired` and `reconciliationRequired` remain true. The broker intentionally repeats this reminder while subscriber acknowledgement is outstanding, on an exponential timer capped at 30 seconds. The 47 reminders are therefore not 47 successful recoveries and are not, by themselves, a broker defect.
 
@@ -266,3 +266,53 @@ The subsequent PR commits are documentation/formatting follow-ups; the final PR-
 - `harvester(1).log`: line 9307 (first RPC error); 9351 (first recovered status); 9362 (DOGE pause); 9398–9400 (ZRO pause and account-integrity halt); 9470 (application recovery failure); 9699–9703 (CLOSING and shutdown).
 - `harvester-trace(1).log`: lines 9739 and 9787 (PREFLIGHT and startup); 10942–10943 (transport error); 11005–11006 (first recovered status); 11024–11026 (DOGE failure); 11080–11084 (ZRO failure); 11186–11187 (recovery failure); 11489–11498 (CLOSING, disconnect, failed shutdown, retained lock).
 
+
+
+## 11. Empty WebSocket TypeError — Node/Undici source-level finding
+
+The uploaded November 8 trace contains two distinct abnormal WebSocket close paths. The distinction matters: close code 1006 is a symptom of an abnormal close without a received close frame, not a diagnosis of the underlying network failure.
+
+### Path B — established socket closes without a WebSocket close frame
+
+At **03:20:30.119Z**, the stack is:
+
+```text
+#onSocketClose
+TLSSocket.onSocketClose
+TLSSocket.emit (node:events:526:24)
+node:net:362:12
+TCP.done (node:internal/tls/wrap:779:7)
+```
+
+The corresponding status reports close code `1006` and an empty reason. This is consistent with an established TLS socket closing without a WebSocket close frame. The supplied stack does not reveal whether the lower-level cause was a reset, timeout, TLS failure, or another transport condition.
+
+### Path A — opening-handshake failure loses the underlying cause
+
+At **03:20:35.148Z**, repeated at **03:20:40.162Z**, **03:20:50.177Z**, and **03:21:10.199Z**, the stack additionally contains:
+
+```text
+failWebsocketConnection
+failHandshake
+Object.processResponse
+```
+
+This identifies the opening-handshake failure path. The exact source line mapping of the surrounding Node frames (`events.js:526`, `net.js:362`, `internal/tls/wrap.js:779`) matches Node.js **v24.22.2**. The Harvester runtime did not record `process.version`, so this is a strong source-line identification rather than a directly logged version value.
+
+In the matching Node v24.22.2 bundled Undici source:
+
+1. [`connection.js`](https://github.com/nodejs/node/blob/v24.22.2/deps/undici/src/lib/web/websocket/connection.js#L306-L329) passes the failure `reason` and `cause` into `failWebsocketConnection()`, but the still-CONNECTING branch calls `handler.onSocketClose()` without forwarding either value.
+2. [`websocket.js`](https://github.com/nodejs/node/blob/v24.22.2/deps/undici/src/lib/web/websocket/websocket.js#L575-L609) initializes `reason` to an empty string. During a failed opening handshake the parser has not been initialized with close-frame information, so the reason remains empty and Undici emits `new TypeError(reason)`.
+3. The original handshake/network cause is therefore lost before the broker receives the WebSocket error.
+
+This is consistent with upstream [nodejs/undici#4625](https://github.com/nodejs/undici/issues/4625). Upstream [PR #4996](https://github.com/nodejs/undici/pull/4996) proposes forwarding the cause into the TypeError, but was still open when this audit was updated; it does not by itself guarantee a non-empty message.
+
+### Disposition
+
+- **Confirmed:** the empty TypeError is produced by Node's bundled Undici WebSocket close/handshake handling, not by Harvester recovery logic.
+- **Confirmed:** the handshake path discards an available cause in the Node v24.22.2 source.
+- **Unknown:** the actual network/TLS/HTTP handshake failure that triggered each attempt; the original cause is not present in the supplied Harvester records.
+- **Not inferred:** close code 1006 does not prove an internet outage or a particular socket error.
+- **Ownership:** broker transport diagnostics are owned by `packages/brokers`; Harvester must not patch that implementation privately.
+- **Cross-domain request:** [45s/coinzilla#680](https://github.com/45s/coinzilla/issues/680) asks the Brokers domain to characterize both paths and preserve/correlate underlying transport errors where the runtime exposes them.
+
+No broker implementation, runtime version, retry policy, WebSocket transport, or exchange behavior was changed during this investigation.

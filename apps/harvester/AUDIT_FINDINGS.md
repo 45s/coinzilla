@@ -539,3 +539,16 @@ Current source and regression inventory:
 - **Regression coverage:** repeated reminders publish/log once but invoke recovery twice; a new generation publishes a fresh status; an acknowledged generation ignores later reminders.
 - **Related issue:** #626. This closes the repeated-status diagnostic portion of its acceptance criteria, not the complete issue.
 - **Documentation impact:** architecture and recovery roadmap now describe generation-scoped diagnostics and reminder-driven retry semantics.
+
+
+## F-015 — Node/Undici WebSocket failures emit an empty TypeError and discard handshake cause
+
+- **Severity:** Medium — diagnostic/incident-response impact across both market-data and user-data WebSockets. The broker's fail-closed behavior preserves trading safety; the missing cause delays identification of the underlying transport failure.
+- **Verdict:** CONFIRMED source-level runtime behavior; the actual network/TLS/HTTP failure remains UNKNOWN.
+- **Evidence:** November 8 `harvester-trace(1).log` lines 10944–11003. The 03:20:30.119Z stack follows the established-socket close path and reports code 1006. Stacks at 03:20:35.148Z, 03:20:40.162Z, 03:20:50.177Z, and 03:21:10.199Z include `failWebsocketConnection → failHandshake → processResponse`. The surrounding Node frames match v24.22.2 source line locations: `events.js:526`, `net.js:362`, and `internal/tls/wrap.js:779`.
+- **Source cause:** Node v24.22.2 bundled Undici's [`connection.js:316-329`](https://github.com/nodejs/node/blob/v24.22.2/deps/undici/src/lib/web/websocket/connection.js#L316-L329) calls `handler.onSocketClose()` without forwarding the handshake reason/cause. Its [`websocket.js:575-609`](https://github.com/nodejs/node/blob/v24.22.2/deps/undici/src/lib/web/websocket/websocket.js#L575-L609) leaves `reason` empty when no close-frame parser information exists and emits `new TypeError("")`.
+- **Important distinction:** the 03:20:30.119Z established-socket close path may not have a WebSocket close reason; do not infer an underlying cause from code 1006. The later handshake path had a cause available in Undici but it was discarded.
+- **Upstream status:** [nodejs/undici#4625](https://github.com/nodejs/undici/issues/4625) tracks the empty TypeError; [PR #4996](https://github.com/nodejs/undici/pull/4996) proposes forwarding the cause and remained open at investigation time.
+- **Required follow-up:** [cross-domain request #680](https://github.com/45s/coinzilla/issues/680) asks the Brokers domain to test both paths, preserve the handshake cause, and evaluate safe capture/correlation of underlying socket errors.
+- **Ownership:** `packages/brokers`; no broker implementation was modified by Harvester.
+- **Related issue:** #626. The empty TypeError's source is identified, but the underlying network cause and broker-side diagnostic improvement remain open.
