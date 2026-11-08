@@ -538,6 +538,8 @@ REST snapshot is applied, bootstrap drains user-data events received during
 the reads; the engine then validates and applies the snapshot in its serialized
 transition queue. The trading gate is reopened only after both steps succeed.
 
+During application recovery, the account-balance and account-wide open-orders audits are separate durability barriers. After the account snapshot is durably published, bootstrap revalidates the recovery generation and accounting state, drains queued user-data events, and compares the event sequence before it starts the open-orders audit. If the generation was superseded or an event changed the snapshot boundary, the open-orders audit is skipped and the snapshot window is retried. The broker is acknowledged only after both durable audits and a final stable event-sequence check succeed.
+
 The Conservative engine reconciles only orders already present in its
 in-memory `OrderRegistry`. For each owned symbol it reads `getOpenOrders()`;
 for each acknowledged owned order it reads exactly one matching
