@@ -87,12 +87,12 @@ For every broker-connected startup, including read-only mode, bootstrap fetches 
 ## Normal shutdown
 
 The sequence below is the implemented trading-enabled shutdown path. It is verified against
-\`src/bootstrap/shutdown/create-shutdown-handler.js\`, the Conservative engine's
-\`cancelOwnedBuyOrdersForShutdown()\` and \`reconcileOwnedOrders()\` workflows,
-\`create-account-snapshot-manager.js\`, and the process/lock cleanup in
-\`src/index.js\`. The diagram describes orchestration; the source remains authoritative.
+`src/bootstrap/shutdown/create-shutdown-handler.js`, the Conservative engine's
+`cancelOwnedBuyOrdersForShutdown()` and `reconcileOwnedOrders()` workflows,
+`create-account-snapshot-manager.js`, and the process/lock cleanup in
+`src/index.js`. The diagram describes orchestration; the source remains authoritative.
 
-\`\`\`mermaid
+```mermaid
 sequenceDiagram
     autonumber
     actor Signal as SIGINT or SIGTERM
@@ -104,6 +104,7 @@ sequenceDiagram
     participant Broker as Broker REST API
     participant Journal
     participant Bus as EventBus
+    participant Telegram as Optional Telegram subscriber
     participant Locks as Host and Journal locks
 
     Signal->>Main: shutdown(reason)
@@ -126,7 +127,9 @@ sequenceDiagram
 
         Stop->>Engine: cancelOwnedBuyOrdersForShutdown()
         loop Each acknowledged owned OPEN or PARTIALLY_FILLED BUY
-            Engine->>Journal: publish order.cancel_requested and durable flush
+            Engine->>Bus: publish order.cancel_requested
+            Bus->>Journal: deliver cancellation intent
+            Engine->>Journal: durable flush
             alt Durable cancellation intent succeeds
                 Engine->>Broker: cancel BUY
                 Broker-->>Engine: canonical cancellation response
@@ -163,8 +166,9 @@ sequenceDiagram
         end
         Stop->>Broker: getAccountSnapshot()
         Broker-->>Stop: account balances
-        Stop->>Journal: publish account.snapshot_captured with phase CLOSING
-        Journal->>Journal: flush queued writes and filesystem sync
+        Stop->>Bus: publish account.snapshot_captured with phase CLOSING
+        Bus->>Journal: deliver CLOSING snapshot
+        Stop->>Journal: flush queued writes and filesystem sync
         alt Durable flush confirmed
             Journal-->>Stop: durable=true
         else Snapshot query, publish or flush fails
@@ -173,10 +177,15 @@ sequenceDiagram
         end
     end
 
+    Stop->>Stop: status=STOPPED
     Stop->>Broker: disconnect()
     Broker-->>Stop: disconnect result
     Stop-->>Main: resolve or reject runtime.stop()
     Main->>Bus: publish harvester.stopped; flush accepted events
+    opt Telegram notifications enabled
+        Main->>Telegram: close and drain accepted notifications
+        Telegram-->>Main: cleanup result
+    end
     Main->>Journal: close and drain writes; sync and close session file
     Main->>Bus: close with 5000 ms timeout
     alt Runtime stop and Journal close both confirmed
@@ -185,27 +194,28 @@ sequenceDiagram
     else Runtime stop or Journal close not confirmed
         Note over Main,Locks: Retain the trading-process locks and exit non-zero.
     end
-\`\`\`
+    Main->>Main: close logger transports
+```
 
 ### Ordering and safety invariants
 
 - The handler marks the runtime stopped and not ready before unsubscribing market streams. It unsubscribes both market-price and book-ticker subscriptions, waits for already accepted market-price tasks, and waits for the current user-data queue before touching owned orders. No new strategy decisions should be started by later market callbacks.
-- For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed \`order.cancel_requested\` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
+- For trading-enabled runs, the first owned-order reconciliation resolves pending client-order identities and reads canonical order state before cancellation selection. The cancellation workflow selects only registered, acknowledged BUY orders in OPEN or PARTIALLY_FILLED state. Each broker cancellation is preceded by a durably flushed `order.cancel_requested` event. The canonical response must match the owned order and be terminal; canonical fills are then checked for identity, duplicates and cumulative executed-quantity parity before normal accounting applies them.
 - User-data intake remains active through cancellation and the final owned-order reconciliation. After cancellation, the handler awaits queued user-data work, performs its final REST/stream owned-order reconciliation, disconnects user-data intake, marks intake stopped, and awaits the final accepted queue. The final reconciliation is verification, not another cancellation pass. If it leaves an owned BUY non-terminal, shutdown fails closed.
 - Shutdown never cancels SELL orders. An owned SELL in OPEN or PARTIALLY_FILLED state is explicitly excluded from the unresolved-order check and remains resting at the broker. Other non-terminal/unknown owned-order states are unresolved.
-- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker REST is connected, filtered to configured market assets, checked for required asset coverage, published as \`account.snapshot_captured\` with \`phase: "CLOSING"\`, and accepted only after the event publisher confirms a durable flush. An audit reason produces \`auditStatus: "INCOMPLETE"\`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
-- Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes \`harvester.stopped\`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
+- Only trading-enabled runs capture a CLOSING account audit. The snapshot is fetched while broker REST is connected, filtered to configured market assets, checked for required asset coverage, published as `account.snapshot_captured` with `phase: "CLOSING"`, and accepted only after the event publisher confirms a durable flush. An audit reason produces `auditStatus: "INCOMPLETE"`; a query, publish or flush failure means no durable CLOSING audit can be claimed. The CLOSING event is a balance snapshot, not an open-orders audit or a Portfolio import.
+- Broker disconnect is attempted after the CLOSING audit attempt, even when earlier shutdown stages recorded errors. The process then publishes `harvester.stopped`, flushes EventBus work, closes the optional Telegram subscriber, closes Journal, closes EventBus, and finally evaluates lock release.
 
 ### Failure and process-lock behavior
 
-For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because \`runtime.stop()\` was not confirmed.
+For trading-enabled runs, any owned-BUY cancellation failure, initial/final owned-order reconciliation failure, unresolved non-terminal/unknown owned order, or unsafe user-data/accounting state makes the CLOSING audit INCOMPLETE and rejects runtime shutdown. Market-intake unsubscribe errors, user-data-intake stop errors, CLOSING snapshot query/publish/flush errors, and broker-disconnect errors also make runtime shutdown fail. The process sets a non-zero exit status, still attempts later cleanup, and retains the trading-process locks because `runtime.stop()` was not confirmed.
 
 The process owns two locks: a broker-wide host lock and a Journal-directory lock. Lock release is allowed only when runtime shutdown was confirmed and Journal close returned a successful result. If runtime shutdown is uncertain, or Journal close/drain/sync is not confirmed, both locks are retained. The lock-release function removes the Journal lock first and only then the host lock; if Journal-lock release is uncertain, the host lock is deliberately retained. A failed lock release is reported and leaves the remaining lock in place.
 
 An EventBus close timeout (bounded at five seconds) still causes a non-zero process exit, but it does not by itself retain the trading lock when runtime shutdown and Journal close were both confirmed. Telegram/log-transport cleanup failures are also reported separately from the runtime-stop and Journal-close lock-release gates. This distinction prevents an ancillary delivery failure from being described as an unresolved trading state.
 
 The handler's shutdown ordering and basic success/error aggregation are covered by
-\`create-shutdown-handler.test.js\`. Process tests in \`src/index.test.js\` verify
+`create-shutdown-handler.test.js`. Process tests in `src/index.test.js` verify
 that runtime-stop failure and unconfirmed Journal close retain the process lock.
 The tests do not establish an additional post-reconciliation BUY-cancellation
 pass; the sequence above intentionally documents the implementation that exists.
