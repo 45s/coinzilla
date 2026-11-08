@@ -761,3 +761,9 @@ The CLOSING snapshot was correctly marked INCOMPLETE after the account-integrity
 **Not a demonstrated standalone defect:** ZRO dust completion and the absence of a DOGE recovery SELL in this session are explained by the global account-integrity halt; the runtime correctly refrained from further strategy actions while that gate remained closed.
 
 No exchange writes were performed during this review or verification.
+
+
+
+### Configured-asset snapshot correction — PR #670
+
+PR #670 adds a fake-broker regression for enabled BTCUSDT plus disabled ETHUSDT, ZROFDUSD, and SOLFDUSD. It requires both the in-memory account snapshot and PREFLIGHT/CLOSING Journal snapshots to contain exactly the configured base/quote assets while excluding unrelated DOGE. The implementation loads read-only market identity metadata for every configured pair, but only enabled pairs undergo trading-rule validation and market subscriptions. Merge status remains pending exact-head CI.

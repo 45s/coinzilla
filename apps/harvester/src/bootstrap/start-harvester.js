@@ -636,21 +636,21 @@ export async function startHarvester({
         }),
       )
     }
+    const accountAuditMarkets = [...marketMetadata.values()].map(({ market }) => market)
+    const configuredAssetCodes = new Set(accountAuditMarkets.flatMap((market) => [
+      market.baseAsset.code,
+      market.quoteAsset.code,
+    ]))
+    const configuredBalances = result.data.balances.filter((balance) =>
+      configuredAssetCodes.has(balance?.asset?.code))
     const nextSnapshot = new AccountSnapshot({
-      balances: result.data.balances,
+      balances: configuredBalances,
       sourceTime: result.data.sourceTime,
       quoteCashFlowBaseline: [...quoteCashFlowBaselineByAssetId].map(([assetId, amount]) => ({
         assetId,
         amount,
       })),
     })
-    const accountAuditMarkets = [...marketMetadata.values()]
-      .map(({ market }) => market)
-      .filter((market) =>
-        enabledSymbols.includes(market.symbol) ||
-        Boolean(recoveredState.portfolio.getPosition({ marketId: market.id })) ||
-        (recoveredState.orderRegistry?.getActiveOrders({ marketId: market.id }).length ?? 0) > 0
-      )
     assertAccountSnapshotCoversMarkets({
       accountSnapshot: nextSnapshot,
       markets: accountAuditMarkets,
@@ -772,7 +772,6 @@ export async function startHarvester({
   } = {}) => {
     const snapshot = suppliedSnapshot ?? await refreshAccountSnapshot()
     const configuredAssetCodes = [...new Set([...marketMetadata.values()]
-      .filter(({ market }) => enabledSymbols.includes(market.symbol))
       .flatMap(({ market }) => [market.baseAsset.code, market.quoteAsset.code]))]
     const published = publishLifecycleEvent({
       eventPublisher,
@@ -978,16 +977,34 @@ export async function startHarvester({
 
   try {
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
-      if (!pairConfig.enabled) continue
-
       const filtersResult = await broker.getSymbolFilters({ symbol })
       if (!filtersResult?.ok || !filtersResult.data) {
         const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
         throw new Error(
-          "Unable to load required exchange trading rules for " + symbol +
+          "Unable to load exchange market metadata for configured pair " + symbol +
           (details ? ": " + details : ""),
         )
       }
+      const market = filtersResult.data.market
+      if (
+        !market ||
+        market.symbol !== symbol ||
+        !market.baseAsset?.code ||
+        !market.quoteAsset?.code
+      ) {
+        throw new Error("Configured pair " + symbol + " does not expose canonical base/quote asset metadata")
+      }
+      if (!pairConfig.enabled) {
+        marketMetadata.set(symbol, filtersResult.data)
+        logSystem(logger, {
+          message: "Configured disabled market asset metadata loaded",
+          symbol,
+          baseAsset: market.baseAsset.code,
+          quoteAsset: market.quoteAsset.code,
+        })
+        continue
+      }
+
       const validatedMetadata = validateMarketTradingReadiness({
         symbol,
         pairConfig,
