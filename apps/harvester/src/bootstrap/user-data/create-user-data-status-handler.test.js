@@ -195,3 +195,49 @@ test("an already acknowledged recovery ignores later recovered reminders", () =>
     "An acknowledged recovery generation must not restart application reconciliation.",
   )
 })
+
+
+test("clears the application recovery gate only for the locally acknowledged generation", () => {
+  const state = createState({
+    ready: false,
+    requiresReconciliation: true,
+    streamUnsafe: true,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    recoveryGeneration: 4,
+    lastAcknowledgedRecoveryGeneration: 4,
+  })
+  const fixture = createHandler({ state })
+  fixture.handler({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: 42,
+  })
+
+  assert.equal(state.requiresReconciliation, false)
+  assert.equal(state.streamUnsafe, false)
+  assert.equal(state.ready, true)
+  assert.equal(state.status, "READY")
+})
+
+test("does not clear the application recovery gate for a stale reconciled generation", () => {
+  const state = createState({
+    ready: false,
+    requiresReconciliation: true,
+    streamUnsafe: true,
+    status: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    recoveryGeneration: 5,
+    lastAcknowledgedRecoveryGeneration: 4,
+  })
+  const fixture = createHandler({ state })
+  fixture.handler({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: 42,
+  })
+
+  assert.equal(state.requiresReconciliation, true)
+  assert.equal(state.ready, false)
+})
+
