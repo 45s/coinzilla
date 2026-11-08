@@ -89,11 +89,13 @@ describe("Binance user-data reconnect behavior", () => {
     assert.equal(second.data.subscriptionId, 110)
     assert.equal(broker.connected, true)
     assert.equal(broker.userDataUnavailable, true)
-    assert.ok(statuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+    assert.ok(firstStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+    assert.ok(secondStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
     assert.equal(scheduler.pendingCount, 1)
 
     await scheduler.runNext()
-    assert.equal(statuses.filter((status) => status.type === "recovered").length, 4)
+    assert.equal(firstStatuses.filter((status) => status.type === "recovered").length, 2)
+    assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
     assert.equal(broker.userDataUnavailable, true)
     assert.equal(scheduler.pendingCount, 1)
 
