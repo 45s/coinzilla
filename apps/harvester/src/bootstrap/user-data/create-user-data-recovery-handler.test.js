@@ -293,3 +293,117 @@ test("does not leave recovery pending when startup is complete but recovery is b
     )
   }
 })
+
+test("keeps recovery blocked when owned-order reconciliation returns a failed result", async () => {
+  const fixture = createRecovery({
+    reconcileOwnedOrders: async () => ({
+      ok: false,
+      errors: [new Error("canonical owned-order history unavailable")],
+    }),
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "A failed owned-order reconciliation must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "A failed owned-order reconciliation must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "A failed owned-order reconciliation must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    false,
+    "A failed owned-order reconciliation must not certify canonical ownership for account-wide order classification.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "Account snapshot auditing must not proceed after owned-order reconciliation fails.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "Account-wide open-order auditing must not proceed after owned-order reconciliation fails.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged after owned-order reconciliation fails.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "A failed owned-order reconciliation must release the in-flight task slot for a later retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "canonical owned-order history unavailable",
+    "The canonical owned-order reconciliation failure must remain visible in the recovery diagnostic.",
+  )
+})
+
+test("keeps recovery blocked when the account-wide open-orders REST request fails", async () => {
+  const fixture = createRecovery({
+    getOpenOrders: async () => ({
+      ok: false,
+      errors: [new Error("account-wide open-orders endpoint unavailable")],
+    }),
+  })
+  fixture.start()
+  await fixture.state.recoveryTask
+
+  assert.equal(
+    fixture.state.ready,
+    false,
+    "An unavailable account-wide open-orders snapshot must never reopen the Harvester trading-readiness gate.",
+  )
+  assert.equal(
+    fixture.state.requiresReconciliation,
+    true,
+    "An unavailable account-wide open-orders snapshot must preserve the application reconciliation requirement.",
+  )
+  assert.equal(
+    fixture.state.status,
+    "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+    "An unavailable account-wide open-orders snapshot must retain the explicit reconciliation-blocked status.",
+  )
+  assert.equal(
+    fixture.calls.ownershipReconciled,
+    true,
+    "The successful owned-order step may remain recorded, but it must not substitute for the missing account-wide snapshot.",
+  )
+  assert.equal(
+    fixture.calls.accountAudits.length,
+    0,
+    "The recovery account audit must not be published without an authoritative account-wide open-orders snapshot.",
+  )
+  assert.equal(
+    fixture.calls.orderAudits.length,
+    0,
+    "The recovery open-orders audit must not be published when the REST snapshot request fails.",
+  )
+  assert.equal(
+    fixture.calls.acknowledgements,
+    0,
+    "The broker must not be acknowledged when the account-wide open-orders REST request fails.",
+  )
+  assert.equal(
+    fixture.state.recoveryTask,
+    null,
+    "An account-wide open-orders REST failure must release the in-flight task slot for a later retry.",
+  )
+  assert.equal(
+    fixture.logs.error[0]?.errorMessage,
+    "Unable to load authoritative account-wide open orders: account-wide open-orders endpoint unavailable",
+    "The account-wide open-orders REST failure must retain its actionable reason in the recovery diagnostic.",
+  )
+})
