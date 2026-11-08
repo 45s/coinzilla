@@ -5506,11 +5506,11 @@ test("preserves the original broker error as cause when REST fill-history retrie
 const makeTrailingReplacementPolicy = ({ replacementPrice = "100", replacementQuantity = "1" } = {}) => {
   let trailingRepricingEvaluations = 0
   return {
-    evaluate: ({ marketPrice }) => ({
+    evaluate: ({ marketPrice, activeOrders }) => ({
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
-      action: "PLACE_ORDERS",
-      actions: [{
+      action: activeOrders.length > 0 ? "NO_ACTION" : "PLACE_ORDERS",
+      actions: activeOrders.length > 0 ? [] : [{
         side: "BUY",
         type: "LIMIT_MAKER",
         price: marketPrice.price === "100" ? "99.95" : replacementPrice,
