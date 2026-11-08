@@ -286,6 +286,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -295,7 +296,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.equal(result.recoveredState.requiresExchangeReconciliation, false)
   assert.deepEqual(result.recoveredState.pausedMarkets, new Set())
   assert.equal(result.recoveredState.orderRegistry.orders.length, 0)
-  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }), undefined)
+  assert.equal(result.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT")
   assert.equal(result.userDataReady, false)
   assert.equal(result.userDataStatus, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
 
@@ -320,6 +321,7 @@ test("subscribes only enabled pairs and passes the current Portfolio to strategy
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "subscribe:BTCUSDT",
@@ -1189,6 +1191,7 @@ test("fails startup when the exchange snapshot omits an enabled market asset", a
   assert.deepEqual(calls, [
     "connect",
     "filters:BTCUSDT",
+    "filters:ETHUSDT",
     "subscribe:user-data",
     "account:snapshot",
     "unsubscribe:user-data",
@@ -2981,7 +2984,7 @@ test("account snapshots include every configured pair asset, including disabled 
   const events = []
   const runtime = await startHarvesterForTest({
     loadConfig: async () => snapshotConfig,
-    env: binanceEnv,
+    env: { ...binanceEnv, HARVESTER_ENABLE_TRADING: "true", HARVESTER_TRADING_MODE: "testnet", NODE_ENV: "test" },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
       publish: (event) => {
