@@ -169,7 +169,51 @@ Do not retroactively change historical shutdown snapshots. Safe process-restart 
 
 No TESTNET order, cancellation, restart, or other exchange action is authorized by this specification.
 
-## 8. Derived algorithm schema
+## 8. Conservative trailing-BUY replacement safety
+
+The following flowchart documents the implemented application workflow for replacing an existing Conservative trailing BUY. It is derived from the Conservative Trading Engine and strategy-decision execution path; the implementation and tests remain the evidence for exact behavior.
+
+```mermaid
+flowchart TD
+    A[Market price event] --> B{Active strategy position exists?}
+    B -- Yes --> Z[Do not trail or replace BUY]
+    B -- No --> C[Check active BUY and trailing trigger]
+    C -->|No trigger| Z
+    C -->|Trigger| D[Fetch fresh Binance exchange filters]
+    D --> E[Validate complete market trading readiness and market identity]
+    E --> F[Evaluate Conservative replacement using current price]
+    F --> G[Exclude standing BUY commitment and allocate commitments]
+    G --> H[Construct canonical pending-order candidate]
+    H --> I[Validate exchange filters and current post-only book readiness]
+    I --> J{Replacement admissible?}
+
+    J -- No: not admissible --> K[Keep existing BUY untouched]
+    J -- Validation error --> L[Pause pair; keep existing BUY untouched]
+
+    J -- Yes --> M[Check cancellation eligibility and persist cancellation intent]
+    M --> N[Request cancellation of existing BUY]
+    N --> O{Cancellation authoritatively confirmed?}
+    O -- No or unknown --> P[Mark cancellation UNKNOWN; pause and reconcile]
+    O -- Yes --> Q[Reconcile canonical BUY fills and execution quantity]
+    Q --> R{All fills match canceled order and status is CANCELED?}
+    R -- No --> S[Apply verified fills; pause pair; do not replace]
+    R -- Yes --> T{Trading still ready and process not stopping?}
+    T -- No --> U[Leave pair waiting for readiness; do not submit]
+    T -- Yes --> V[Re-evaluate Conservative decision with replacement reference]
+    V --> W[Construct and validate actual pending order]
+    W --> X[Submit replacement BUY]
+    X --> Y{Submission outcome?}
+    Y -- Acknowledged --> AA[Continue Conservative trading]
+    Y -- Failed or uncertain --> AB[Record UNKNOWN outcome; pause and reconcile]
+```
+
+The preflight is deliberately performed **before cancellation**. It evaluates the replacement with the standing BUY excluded from active commitments, uses the current market price as the replacement reference, refreshes exchange filters, and checks the candidate through the canonical order-validation and submission-readiness path. A candidate that is not admissible must never cause the existing BUY to be canceled. A validation failure pauses the pair; a normal non-admissible/deferred result leaves the existing order in place.
+
+After a successful preflight, cancellation is not treated as complete merely because a request was sent. Harvester requires an eligible order, a durable cancellation intent, an authoritative canonical cancellation response, and reconciliation of the order's canonical fills against its executed quantity. An uncertain cancellation, mismatched fill, fill during cancellation, or non-CANCELED terminal result blocks replacement and pauses the pair.
+
+Only after cancellation and fill reconciliation succeed does the engine re-evaluate the strategy and submit the replacement. This second evaluation is intentional: preflight does not submit or register a real order. If trading readiness is lost or shutdown begins after cancellation, Harvester waits rather than submitting. If replacement submission has an unknown outcome after the old BUY was canceled, the pending order is retained as UNKNOWN, the pair is paused, and reconciliation is required before further trading.
+
+## 9. Derived algorithm schema
 
 The following Mermaid flowchart visualizes the rules above. If the diagram and prose ever differ, the prose in this specification controls.
 
