@@ -782,3 +782,18 @@ The complete four-artifact evidence inventory, session timeline, 16-fill ledger,
 **Policy disposition:** the PREFLIGHT external DOGE order is not a defect. The user explicitly confirmed in issue #667 that external orders are allowed at startup and must remain external/unowned and untouched. The TESTNET runbook is updated to match that policy and the configured-asset snapshot contract established by PR #670.
 
 **Unknowns and boundaries:** the original empty-message TypeError's lower-level cause remains UNKNOWN; close code 1006 does not prove the precise network cause. The CLOSING audit is INCOMPLETE, the two owned SELL states remain unconfirmed, and the process lock was retained because shutdown was not confirmed. No manual lock cleanup or exchange action was performed. TESTNET acceptance is NOT CLAIMED.
+
+ 
+## 2026-11-08 evening trading session — 16:33:33–22:42:05 UTC
+
+The separately uploaded evening-session Journal and full runtime/TRACE logs have been parsed and reconciled. The complete evidence inventory, SHA-256 hashes, line ranges, symbol event cadence, fill ledger, exact five-asset PREFLIGHT/CLOSING balance reconciliation, shutdown observations, and explicit unknowns are preserved in [AUDIT_SESSION_2026-11-08_16-33-33.md](./AUDIT_SESSION_2026-11-08_16-33-33.md).
+
+**Session verdict:** no global process freeze is demonstrated in this afternoon session. The runtime processed 1,555 market-price events, 1,616 strategy evaluations, 90 submitted orders, 40 confirmed cancellations, 48 unique applied fills, and four recovery completions; the afternoon logs contain no error-level records. Shutdown completed successfully.
+
+**New unresolved anomaly:** ZROUSDT produced 61 market-price events versus 1,494 for DOGEUSDT. Its longest inter-event gap was 3,242.118 seconds (54m 2.118s), while DOGE events continued. There was no corresponding afternoon market-stream error. This does not prove a Binance feed outage; quiet `aggTrade` activity remains a possible explanation. Per-symbol feed liveness is tracked separately in [#760](https://github.com/45s/coinzilla/issues/760).
+
+**Accounting verdict:** 48 unique applied fills reconcile exactly to the PREFLIGHT/CLOSING DOGE, ZRO, and USDT balance deltas, including commissions. The 162 duplicate-fill notifications map to those same 48 identities and did not apply a second accounting delta.
+
+**Remaining evidence gaps:** the CLOSING Journal includes a complete balance snapshot but no CLOSING open-orders payload, so the exact final exchange order set is not independently established. Shutdown also produced two 48-record duplicate-fill batches about 104 seconds apart; the accounting effect was zero, but the reason for the repeated history observation is not established.
+
+The separate 03:20–03:45 UTC transport/recovery failure earlier the same day remains part of #626/#680 and must not be conflated with this successfully started afternoon session. Process-restart reconciliation remains deferred under #654. No exchange writes, process restart, or TESTNET acceptance are claimed.
