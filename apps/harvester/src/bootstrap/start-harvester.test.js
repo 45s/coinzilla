@@ -867,6 +867,7 @@ test("keeps one recovery generation single-flight across 254 reminders while dra
       NODE_ENV: "test",
     },
     brokerAdapterFactory: () => broker,
+    now: () => 1000,
     eventPublisher: {
       publish: (event) => {
         publishedEvents.push(event)
