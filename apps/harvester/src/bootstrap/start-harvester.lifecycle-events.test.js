@@ -301,7 +301,7 @@ test("surfaces Binance fill-normalization failures as an actionable user-data pa
   assert.equal(rawEvidenceEvent.data.executionId, "402")
   assert.equal(rawEvidenceEvent.data.commissionAmount, "0.001")
   assert.ok(logs.some((entry) =>
-    entry.message === "Binance execution normalization failed" &&
+    entry.message === "User-data stream error" &&
     entry.symbol === "BTCUSDT" &&
     entry.brokerOrderId === "102" &&
     entry.executionId === "402" &&
