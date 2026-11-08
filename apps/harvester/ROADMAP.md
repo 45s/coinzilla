@@ -34,6 +34,7 @@ tests and full Harvester suite still require execution on the exact PR head.
 
 ## Current work selection
 
+- [~] Close the 2026-11-07/08 session follow-up: account-integrity halt leaving an owned BUY live is fixed in [PR #669](https://github.com/45s/coinzilla/pull/669); correct the snapshot allowlist to include every configured pair asset (enabled or disabled) while excluding unrelated wallet assets in a separate follow-up PR. Tracking issue: [#667](https://github.com/45s/coinzilla/issues/667); evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667).
 - [~] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Tracking PR: [#663](https://github.com/45s/coinzilla/pull/663).
 
 The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
