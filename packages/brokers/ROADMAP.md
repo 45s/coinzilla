@@ -785,3 +785,15 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - Added a credential-free TESTNET probe to the manual read-only workflow and the `@coinzilla/brokers` pull-request matrix job. It sends raw unauthenticated WebSocket upgrade requests to the configured Spot TESTNET API and Streams endpoints, captures the HTTP upgrade status/body when rejected, validates the WebSocket accept hash on HTTP 101, and separately exercises Node's native WebSocket implementation. It prints Node.js and bundled Undici versions and checks the existing runtime guard. It sends no credentials, RPC messages, signatures, or order operations. Both workflow invocations are non-blocking; the manual job still runs the original read-only integration and reports its own result.
 - PR #721: [diagnose native TESTNET WebSocket handshake failures](https://github.com/45s/coinzilla/pull/721), merged to `develop` as `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. Exact head `ad48ae4bb71d81d0318a031f101f582a67cca083` passed JavaScript Syntax/actionlint, Dependency Audit, Utils Unit Tests, Harvester Targeted Tests, all nine workspace package-test jobs, and all package plus workspace coverage jobs. Brokers: 414/414 tests passed; coverage 98.72% statements, 93.39% branches, 94.98% functions. The read-only TESTNET integration job was skipped because the PR event is not the manual workflow dispatch.
 - Safety remains unchanged: `BINANCE_TESTNET_ALLOW_ORDER_MUTATIONS=0`, `BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=0`, and no changes to order safety, reconciliation, or recovery acknowledgement gates. Phase 8 remains incomplete pending successful read-only account/recovery validation and a controlled live recovery/soak.
+
+
+## 2026-11-08 — multi-subscriber terminal recovery notification count
+
+Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) includes a broker-owned proof requirement that is independent of the still-open public acknowledgement-result contract.
+
+- Added exact per-subscriber assertions to the existing two-subscriber reconnect/recovery regression: the first local acknowledgement remains recorded-but-globally-pending (legacy boolean `false`), the final acknowledgement completes recovery, each still-active subscriber receives exactly one `reconciled` status for subscription `110`, and a repeated acknowledgement cannot publish another terminal status.
+- Asserted the acknowledgement reminder timer is cleared at global completion and the existing order-mutation gate remains blocked until that point.
+- Added a second regression proving that when the first subscriber has acknowledged and the second disconnects, the remaining active subscriber receives exactly one terminal `reconciled` status while the removed subscriber receives none.
+- No broker source, public API, Harvester consumer, or acknowledgement return semantics changed. The additive result-shape proposal remains pending owner agreement.
+- Exact-head CI verification is pending; do not mark the cross-domain contract issue complete until the agreed public acknowledgement semantics and consumer compatibility work are resolved.
+
