@@ -5,6 +5,101 @@ import {
   mapBrokerStatusChangedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+function logSystem(logger, data) {
+  if (typeof logger?.system === "function") {
+    logger.system(data)
+    return
+  }
+  logger?.info?.(data)
+}
+
+function logUserDataStreamTransition({ state, logger, status } = {}) {
+  const authenticationExpired = status.authenticationExpired === true ||
+    status.reason === "authentication_expired" ||
+    status.error?.code === "AUTHENTICATION_EXPIRED"
+
+  let key
+  let message
+  let details
+  let level = "system"
+
+  if (status.type === "connectionClosed" || status.type === "terminated") {
+    key = "disconnected"
+    message = "User-data stream disconnected"
+    details = {
+      reason: status.reason ?? (status.type === "terminated" ? "terminated" : undefined),
+      code: status.code,
+    }
+  } else if (status.type === "recovering") {
+    key = "reconnecting:" + (status.attempt ?? "unknown")
+    message = "User-data stream reconnecting"
+    details = { attempt: status.attempt }
+  } else if (status.type === "recovered") {
+    key = "reconnected:" + (status.recoveryGeneration ?? status.subscriptionId ?? status.attempt ?? "unknown")
+    message = "User-data stream reconnected"
+    details = {
+      attempt: status.attempt,
+      subscriptionId: status.subscriptionId,
+      recoveryGeneration: status.recoveryGeneration,
+    }
+  } else if (
+    status.type === "reconciled" &&
+    status.recoveryRequired !== true &&
+    status.reconciliationRequired !== true
+  ) {
+    key = "restored:" + (status.recoveryGeneration ?? status.subscriptionId ?? "unknown")
+    message = "User-data stream subscription restored"
+    details = {
+      subscriptionId: status.subscriptionId,
+      recoveryGeneration: status.recoveryGeneration,
+    }
+  } else if (
+    ["rpcError", "recoveryFailed", "executionNormalizationFailed"].includes(status.type)
+  ) {
+    level = "error"
+    message = authenticationExpired
+      ? "User-data stream authentication expired"
+      : "User-data stream error"
+    const error = status.error
+    key = [
+      "error",
+      status.type,
+      error?.code ?? status.code ?? "",
+      error?.name ?? "",
+      error?.message ?? "",
+      status.symbol ?? "",
+      status.brokerOrderId ?? "",
+      status.executionId ?? "",
+    ].join(":")
+    details = {
+      statusType: status.type,
+      attempt: status.attempt,
+      code: status.code ?? error?.code,
+      symbol: status.symbol,
+      brokerOrderId: status.brokerOrderId,
+      clientOrderId: status.clientOrderId,
+      executionId: status.executionId,
+      error,
+      errorName: error?.name ?? "Error",
+      errorMessage: typeof error?.message === "string" && error.message
+        ? error.message
+        : "(empty error message)",
+      errorStack: error?.stack,
+    }
+  } else {
+    return
+  }
+
+  if (state.lastLoggedStreamLifecycleKey === key) return
+  state.lastLoggedStreamLifecycleKey = key
+  const entry = { message, ...details }
+  if (level === "error") {
+    logger?.error?.(entry)
+    return
+  }
+  logSystem(logger, entry)
+}
+
 /**
  * Create the broker user-data status handler and its application-readiness transitions.
  * Stream-level recovery never clears the application reconciliation gate by itself.
@@ -54,60 +149,12 @@ export function createUserDataStatusHandler({
         }),
       })
     }
-    if (!isRepeatedRecoveredReminder) {
-      logger.info?.({
-        message: "User-data stream status changed",
-        statusType: status.type ?? "UNKNOWN",
-        subscriptionId: status.subscriptionId,
-        attempt: status.attempt,
-        recoveryRequired: status.recoveryRequired === true || status.reconciliationRequired === true,
-        reconciliationRequired: status.reconciliationRequired === true,
-        executionPending: status.executionPending === true,
-        orderUpdatePending: status.orderUpdatePending === true,
-        code: status.code,
-        reason: status.reason,
-        symbol: status.symbol,
-        brokerOrderId: status.brokerOrderId,
-        clientOrderId: status.clientOrderId,
-        executionId: status.executionId,
-        errorName: status.error?.name,
-        errorMessage: status.error?.message,
-      })
-    }
+    logUserDataStreamTransition({ state, logger, status })
     state.status = status.type ?? "UNKNOWN"
-    if (status.type === "rpcError" || status.type === "recoveryFailed") {
-      const error = status.error
-      const cause = error?.cause
-      logger.error?.({
-        message: "Binance user-data transport reported an error",
-        statusType: status.type,
-        attempt: status.attempt,
-        errorName: error?.name ?? "Error",
-        errorMessage: typeof error?.message === "string" && error.message
-          ? error.message
-          : "(empty error message)",
-        errorStack: error?.stack,
-        causeName: cause instanceof Error ? cause.name : undefined,
-        causeMessage: cause instanceof Error
-          ? (cause.message || "(empty cause message)")
-          : cause === undefined ? undefined : String(cause),
-        causeStack: cause instanceof Error ? cause.stack : undefined,
-      })
-    }
     if (status.type === "executionNormalizationFailed") {
       state.accountingFailed = true
       state.ready = false
       state.status = "EXECUTION_NORMALIZATION_FAILED"
-      logger.error?.({
-        message: "Binance execution normalization failed",
-        symbol: status.symbol,
-        brokerOrderId: status.brokerOrderId,
-        clientOrderId: status.clientOrderId,
-        executionId: status.executionId,
-        errorName: status.error?.name ?? "Error",
-        errorMessage: status.error?.message ?? String(status.error ?? "Unknown normalization error"),
-        errorStack: status.error?.stack,
-      })
       void cancelOwnedBuysAfterAccountingFailure()
     }
     const connectionUnsafe = [
