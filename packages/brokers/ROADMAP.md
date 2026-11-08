@@ -210,7 +210,7 @@ The current `packages/brokers/src/index.js` exports exactly:
 | `BinanceWebSocketBroker` | `binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
 | `BinanceWebSocketConfig` | `binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
 | `CoreBroker` | `broker.core.js` | Shared base class used by broker implementations, including Market Simulator |
-| `normalizeBinanceId` | `binance/shared/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
+| `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
 The module retains an internal `BinanceSdkConfig` alias for compatibility inside its own module, but it is not a separate public root export. The old SDK/REST broker and standalone legacy Streams exports are not current root exports. Do not restore or remove aliases without a consumer-backed compatibility decision.
 
