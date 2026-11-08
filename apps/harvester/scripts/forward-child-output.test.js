@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { PassThrough, Writable } from "node:stream"
 import test from "node:test"
-import { forwardChildOutput } from "../../scripts/forward-child-output.js"
+import { forwardChildOutput } from "./forward-child-output.js"
 
 test("forwards each chunk to every durable destination", async () => {
   const source = new PassThrough()
