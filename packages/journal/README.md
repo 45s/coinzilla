@@ -2,6 +2,36 @@
 
 Durable JSONL event recording with bounded restart reading and deterministic replay.
 
+## Public API and event vocabulary
+
+Journal stores the events it receives; it does not decide what those events mean to the business. Keep these concepts distinct:
+
+- **Domain event:** a business fact named and owned by the domain that produces it (for example, an order being filled). Journal does not infer domain meaning from an event name or payload.
+- **EventBus message / source event:** the event delivered to Journal by the injected EventBus subscription. Journal consumes the event object as supplied; it does not reclassify it as a domain or integration event.
+- **Persisted Journal record:** the source event's fields retained at the JSONL top level, plus Journal-owned schema and identity metadata under the reserved `__coinzillaJournal` key.
+- **Recovered record:** the read/replay representation derived from a persisted line. It separates Journal identity and schema from the event payload and adds the source file and 1-based line position.
+
+A source event is an object with a non-empty string `id`. That stable ID becomes the Journal record identity; Journal does not generate a replacement ID or deduplicate records by business meaning. The reserved `__coinzillaJournal` metadata key cannot be supplied by the source event.
+
+A current schema-v1 JSONL line preserves all source event fields at the top level and adds `__coinzillaJournal: { schemaVersion: 1, id: event.id }`. Reading returns `{ id, schemaVersion, payload, position }`: `payload` contains the original event fields without the reserved metadata, and `position` contains `{ fileName, lineNumber }` with a 1-based line number.
+
+Legacy JSONL lines written before the metadata field existed remain readable as schema-v1 records: their top-level object is the payload, and its non-empty `id` supplies record identity. Unknown schema versions and malformed identities fail closed.
+
+Replay passes each recovered record to the consumer as `{ record }`, in session/line order, only after the complete snapshot has been validated. The consumer owns interpretation, application restoration, and idempotent handling. Replay is at-least-once; it is not a command dispatcher or an exactly-once side-effect mechanism.
+
+Construct `Journal` with an EventBus, a directory path, and an optional logger. Journal uses only the EventBus operations `subscribeAll({ handler })` and `flush()`; the returned subscription must expose `unsubscribe()`. EventBus owns message delivery. Journal owns its persisted representation and storage lifecycle.
+
+| Method | Observable contract |
+| --- | --- |
+| `start()` | Creates the directory if needed, acquires exclusive writer ownership, creates a session, and subscribes to EventBus messages. A second active writer for the same directory is rejected. |
+| `record({ event })` | Appends one validated source event in queue order. A successful result means the write completed and reports `durable: false`; it does not confirm file-content sync. |
+| `flush()` | Flushes EventBus delivery, waits for queued writes, and syncs the active session file. Success reports `durable: true`; failure does not claim durability. |
+| `close()` | Unsubscribes, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. A failed close remains a failed durability outcome on repeated calls. |
+| `read(options)` | Reads and validates a complete bounded snapshot while this Journal instance is stopped. It does not acquire a cross-process reader lock. |
+| `replay(options)` | Validates the complete snapshot, then awaits the handler sequentially for each recovered record. A handler failure stops replay and reports completed progress. |
+
+Methods return the package's result objects; callers should check `ok` and inspect `errors` on failure. Detailed durability, recovery limits, lock handling, and replay guarantees are described below.
+
 ## Writing and durability
 
 ```js
@@ -58,7 +88,7 @@ for (const record of result.records) {
 
 Sessions are ordered by timestamp and then numeric collision suffix (the unsuffixed file first); records retain their line order within each session. Each record includes its source filename and 1-based line number.
 
-The reader rejects invalid UTF-8, duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current additive metadata format. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
+The reader rejects invalid UTF-8 and duplicate IDs across all sessions. It accepts legacy raw event records with a non-empty `id` and the current additive metadata format. Unknown schema versions are rejected. A non-empty session must end in a newline; an incomplete final line is reported and preserved unchanged. Journal does not auto-truncate or discard it.
 
 Recovery is bounded by configurable `maxSessions`, `maxRecords`, `maxBytes`, and `maxRecordBytes`. Defaults are 10,000 sessions, 100,000 records, 64 MiB total, and 1 MiB per record. Exceeding a limit fails the entire read; increase limits deliberately when the retained history requires it.
 

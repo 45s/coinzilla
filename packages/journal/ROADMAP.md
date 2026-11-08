@@ -34,7 +34,7 @@ Journal must not classify an event as a domain or integration event based on its
 
 ## Current implementation audit
 
-**Audit checkpoint:** `develop` at `32f40eaadbbaf874fa6518d0c36164b06a1c749e` (2026-11-08).
+**Audit checkpoint:** `develop` at `a8c316dd74cdff359ba631c8db149b248c991f69` (2026-11-08; includes merged PR #745).
 
 | Area | Current state | Assessment / planned disposition |
 | --- | --- | --- |
@@ -252,7 +252,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 - [x] Verify resource cleanup and bounded memory/disk behavior where applicable. Recovery enforces session, record, total-byte, and per-record limits.
 - [x] [PR #741](https://github.com/45s/coinzilla/pull/741) merged: exclusive directory ownership is acquired before session creation, competing/stale locks are preserved, and startup rollback/durable close release the owned lock. Cross-process, stale-lock, and rollback regressions were confirmed RED before implementation; all required CI passed on exact PR head `74ad5a7369aee444940b5d7feb009ee0d17ffc7d`.
 - [x] [PR #742](https://github.com/45s/coinzilla/pull/742) merged: package-scoped Journal coverage is enforced at 85% lines / 80% branches. Exact PR head `86a63d3d9dfb0acdf30bcf77aa92937e324f5491` measured 88.24% lines / 83.50% branches / 100% functions; all six required offline CI workflows passed.
-- [ ] J-1 — Define the record vocabulary and contract.
+- [~] J-1 — Define the record vocabulary and contract (documentation and public API contract comments in progress on `docs/journal-record-vocabulary`).
 - [ ] J-2 — Establish a lightweight JournalRecord domain contract.
 - [ ] J-3 — Isolate filesystem persistence behind an internal adapter.
 - [ ] J-4 — Make orchestration state ownership explicit.
@@ -283,4 +283,4 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 - Later successful sync preserves both distinct event IDs in append order.
 - `writeFile()` failure poisoning remains unchanged; no Journal production source changed.
 
-**Current `develop` checkpoint:** `32f40eaadbbaf874fa6518d0c36164b06a1c749e`.
+**Current `develop` checkpoint:** `a8c316dd74cdff359ba631c8db149b248c991f69`.
