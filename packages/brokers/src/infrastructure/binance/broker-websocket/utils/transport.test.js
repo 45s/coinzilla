@@ -154,7 +154,7 @@ test("socket errors during connection reject and close the socket", async () => 
   sockets[0].serverClose({ code: 1006, reason: "", wasClean: false })
   await rejection
 
-  assert.equal(transport.state, "closing")
+  assert.equal(transport.state, "closed")
   assert.equal(sockets[0].closeCalls.length, 1)
 })
 
