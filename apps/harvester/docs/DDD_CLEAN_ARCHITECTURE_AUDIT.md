@@ -511,3 +511,36 @@ The develop synchronization incorporated the confirmed #626 recovery fix (PR #67
 ## CI regression fixes — 2026-11-08
 
 The first exact-head CI run identified a missing BrokerPort fixture method, an unnecessary REST ticker call despite a fresh WebSocket tick, missing recovery-mode propagation into the trading engine, and two test-fixture defects. These are corrected in the current branch; the exact-head CI suite is being rerun before the refactor is considered verified.
+
+
+## Bootstrap extraction follow-up — 2026-11-08
+
+The bootstrap workflow extraction now covers the main independent process
+responsibilities: startup configuration resolution, broker connection and
+cleanup, account snapshot management, market metadata loading, market/book
+subscription orchestration, user-data subscription/PREFLIGHT gating, serialized
+user-data event/status/recovery handlers, and ordered shutdown. The composition
+root wires these modules rather than duplicating their implementations.
+
+One remaining application workflow was identified during the final composition
+review: the account-integrity safety halt. It reconciles owned order identities
+before cancelling owned BUYs and coalesces concurrent triggers. This now lives
+in `src/use-cases/create-account-integrity-safety-halt.js` with direct tests
+for sequencing, concurrency, stopped-process behavior, and failure reporting.
+
+The extracted shutdown handler was compared with the original implementation
+on `develop`. The original ordering is retained: market intake stop and drain,
+user-data queue drain, pre-cancellation reconciliation, owned BUY cancellation,
+post-cancellation event drain and reconciliation, user-data intake stop,
+CLOSING audit, and broker disconnect. The test was corrected to observe all
+participants on a shared timeline; production ordering was not changed to fit
+the failing assertion.
+
+The PREFLIGHT subscription regression now uses a locally scoped subscription
+and event fixture, awaits the expected audit rejection, and verifies the
+captured handle remains disconnectable by outer bootstrap cleanup.
+
+These changes improve separation and testability without moving financial
+accounting invariants out of domain/application workflows or changing order,
+fill, recovery, or readiness semantics. Exact-head test and coverage execution
+remain required before this refactor can be considered verified.
