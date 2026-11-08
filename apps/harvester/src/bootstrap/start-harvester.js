@@ -324,6 +324,7 @@ export async function startHarvester({
       enabledSymbols,
       onEvent: handleUserDataEvent,
       onStatus: handleUserDataStatus,
+      onSubscriptionEstablished: (subscription) => { userDataSubscription = subscription },
       publishAccountSnapshot,
       publishOpenOrdersSnapshot,
       getAccountSnapshot,

@@ -731,7 +731,7 @@ The detailed source-code assessment is recorded in [DDD and Clean Architecture A
 ### User-data subscription/startup gate extraction — 2026-11-08
 
 - [x] Move user-data subscription setup, success/failure lifecycle evidence, serialized initial PREFLIGHT account audit, open-order audit, and TESTNET readiness gate into `src/bootstrap/user-data/subscribe-to-user-data.js`.
-- [x] Preserve subscription-before-snapshot ordering and readiness only after durable account/open-order audits plus safe stream state.
+- [x] Preserve subscription-before-snapshot ordering, expose the live subscription handle to outer cleanup before PREFLIGHT audit work, and open readiness only after durable account/open-order audits plus safe stream state.
 - [x] Add direct tests for read-only startup, safe trading startup, malformed subscriptions, and unsafe pre-initialization events.
 
 ### User-data recovery coordinator extraction — 2026-11-08

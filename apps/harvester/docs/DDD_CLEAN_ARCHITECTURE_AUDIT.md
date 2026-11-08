@@ -501,3 +501,6 @@ Direct tests cover read-only mode, all explicit TESTNET gates, invalid configura
 
 
 The broker-connection test fixture now implements the complete structural BrokerPort contract, not only the methods exercised by connection itself. This keeps the unit test aligned with the production composition-boundary assertion.
+
+
+The first integrated startup regression run found that a PREFLIGHT audit failure could occur after the broker subscription was created but before the new helper returned its handle to outer cleanup. The helper now reports the established subscription to bootstrap immediately, before snapshot work, so the existing failure cleanup can always disconnect it. The same run found that the extracted market subscription module relied on the old bootstrap-local `enabledSymbols`; it now derives the enabled list from its injected pair config.

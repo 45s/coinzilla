@@ -41,6 +41,7 @@ export async function subscribeToMarketData({
   processMarketPrice, processMarketBook, isMarketPriceFresh, now, isStopped,
   onMarketPriceError, subscriptions, bookSubscriptions, marketPriceIntake,
 } = {}) {
+  const enabledSymbols = Object.entries(pairs).filter(([, pairConfig]) => pairConfig.enabled).map(([symbol]) => symbol)
 const reportPriceError = (details) => {
   try {
     onMarketPriceError(details)

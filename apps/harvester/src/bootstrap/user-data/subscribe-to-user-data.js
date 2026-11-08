@@ -39,6 +39,7 @@ export async function subscribeToUserData({
   enabledSymbols,
   onEvent,
   onStatus,
+  onSubscriptionEstablished,
   publishAccountSnapshot,
   publishOpenOrdersSnapshot,
   getAccountSnapshot,
@@ -81,6 +82,7 @@ export async function subscribeToUserData({
     dataResult: mapBrokerSubscriptionEstablishedData({ broker: brokerName, stream: "user-data" }),
   })
   const userDataSubscription = userDataResult.data
+  onSubscriptionEstablished?.(userDataSubscription)
   logSystem(logger, { message: "Binance user-data subscription established" })
 
   state.ready = false

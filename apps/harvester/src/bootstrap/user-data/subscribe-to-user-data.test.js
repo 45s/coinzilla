@@ -97,3 +97,34 @@ test("fails closed when accounting has already become unsafe during subscription
   )
   assert.equal(fixture.state.ready, false, "Unsafe startup must leave trading readiness closed.")
 })
+
+test("exposes the live subscription to bootstrap before PREFLIGHT audit work can fail", async () => {
+  const fixture = createFixture({
+    publishAccountSnapshot: async () => { throw new Error("journal flush failed") },
+  })
+  let capturedSubscription
+
+  await assert.rejects(
+    subscribeToUserData({
+      broker: {
+        subscribeForUserData: async () => ({ ok: true, data: fixture.subscription }),
+      },
+      brokerName: "binance",
+      eventPublisher: { publish: (event) => { fixture.events.push(event); return { ok: true } } },
+      logger: {},
+      state: createState(),
+      tradingEnabled: false,
+      enabledSymbols: ["BTCUSDT"],
+      onEvent: () => {},
+      onStatus: () => {},
+      onSubscriptionEstablished: (subscription) => { capturedSubscription = subscription },
+      publishAccountSnapshot: async () => { throw new Error("journal flush failed") },
+      publishOpenOrdersSnapshot: async () => {},
+      getAccountSnapshot: () => ({ sourceTime: 100 }),
+      resumeDeferredStrategyEvaluations: () => {},
+    }),
+    /journal flush failed/,
+    "A PREFLIGHT audit failure must still propagate to bootstrap cleanup.",
+  )
+  assert.equal(capturedSubscription, fixture.subscription, "Bootstrap must retain the live subscription handle before later startup work can fail.")
+})
