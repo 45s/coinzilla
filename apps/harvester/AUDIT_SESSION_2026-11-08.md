@@ -1,6 +1,6 @@
 # Harvester incident audit — 2026-11-08 reconnect failure
 
-**Status:** Source-level defect reproduced and fixed in PR [#673](https://github.com/45s/coinzilla/pull/673); exact-head CI and TESTNET acceptance are separate verification gates.
+**Status:** Source-level defect reproduced and fixed in PR [#673](https://github.com/45s/coinzilla/pull/673). All PR workflows passed on implementation/test head `aa9196fb8b9121a95d0a566fbc2fc7585408bd3c`; TESTNET acceptance remains NOT CLAIMED.
 
 **Owning issue:** [#626 — user-data stream recovery stuck with recoveryRequired=true](https://github.com/45s/coinzilla/issues/626)
 
@@ -165,7 +165,7 @@ Journal broker-status counts:
 
 The first transport error is at 03:20:30.119Z. The logs show an empty-message `TypeError`, followed by abnormal WebSocket close code `1006`; five RPC-error/connection-close cycles are recorded before the first `recovered` status at 03:21:42.433Z. The operator's internet-outage report is consistent with this, but the precise lower-level throwing operation is not identified by the supplied evidence.
 
-The broker contract documented in #626 says `recovered` means transport/subscription readiness while `recoveryRequired` and `reconciliationRequired` remain true. The broker intentionally repeats this reminder while subscriber acknowledgement is outstanding (up to its bounded reminder interval). The 47 reminders are therefore not 47 successful recoveries and are not, by themselves, a broker defect.
+The broker contract documented in #626 says `recovered` means transport/subscription readiness while `recoveryRequired` and `reconciliationRequired` remain true. The broker intentionally repeats this reminder while subscriber acknowledgement is outstanding, on an exponential timer capped at 30 seconds. The 47 reminders are therefore not 47 successful recoveries and are not, by themselves, a broker defect.
 
 The failure sequence:
 
@@ -251,9 +251,14 @@ The two tests were added first on the PR branch and run against the unmodified i
 - Engine regression failed: actual deferred evaluation list `[]`, expected `["DOGEUSDT"]`.
 - Harvester Targeted Tests, Unit Tests, and Test Coverage failed on that test-only head as expected. Utils Unit Tests, JavaScript Syntax, and Dependency Audit passed.
 
-**GREEN verification:** pending the exact final PR head after implementation and documentation commits. No green result is claimed in this document until the workflows complete on that exact head.
+**GREEN verification on implementation/test head `aa9196fb8b9121a95d0a566fbc2fc7585408bd3c`:**
+- Harvester Targeted Tests: PASS; the changed `start-harvester.test.js` file reports 54/54 passing tests, and the configured targeted run plus actionlint succeeds.
+- Full Harvester package Unit Tests: 672/672 PASS, including the engine deferred-evaluation regression.
+- Harvester package coverage: PASS (73.97% lines, 78.22% branches, 72.64% functions); workspace coverage workflow PASS.
+- Workspace Unit Tests, JavaScript Syntax, Utils Unit Tests, and Dependency Audit: PASS.
+- Read-only Binance TESTNET integration: SKIPPED. No exchange action was performed.
 
-**TESTNET acceptance:** NOT CLAIMED. No exchange writes, restarts, or account changes were performed as part of this audit or implementation.
+The subsequent PR commits are documentation/formatting follow-ups; the final PR-head workflows are rerun before merge. **TESTNET acceptance:** NOT CLAIMED. No exchange writes, restarts, or account changes were performed as part of this audit or implementation.
 
 ## 10. Key diagnostic source locations
 
