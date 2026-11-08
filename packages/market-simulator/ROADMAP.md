@@ -1,5 +1,37 @@
 # Market Simulator Engineering Roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+### IMPORTANT — make simulation results trustworthy before using them to validate strategies
+
+1. **Propagate failed broker snapshot results instead of producing partial reports.**
+   - **Why:** the simulation finalization path currently reads balances, order history and fills without consistently checking each result's `ok` state. A failed query can therefore be represented as an empty section and make an incomplete simulation look valid.
+   - **Do:** validate every final broker read, preserve the original failure code/context and return an explicit failed/incomplete simulation result. Do not substitute empty arrays or balances for failed reads.
+   - **Verify:** add regressions for each final read failing independently and in combination; assert the report is not marked successful and the original error remains visible.
+
+2. **Guarantee broker disconnect even when unsubscribe fails.**
+   - **Why:** cleanup currently awaits unsubscribe and then disconnect in the same `finally` path. If unsubscribe rejects, disconnect may never run, leaking sockets/listeners and contaminating later simulations.
+   - **Do:** attempt unsubscribe and disconnect independently, preserve the primary simulation failure, and aggregate or report cleanup failures without skipping later cleanup.
+   - **Verify:** test unsubscribe failure, disconnect failure, both failures, and success; assert disconnect is always attempted exactly once.
+
+3. **Make simulation time deterministic.**
+   - **Why:** simulated order/fill timestamps currently use wall-clock time. Re-running the same market history and strategy can produce different output, undermining reproducible comparisons and debugging.
+   - **Do:** inject a clock or derive simulated execution timestamps from the supplied market event/simulation timeline. Keep wall-clock time out of domain matching and result generation.
+   - **Verify:** run identical input twice and assert byte-for-byte equivalent economic results and timestamps; test out-of-order/duplicate market events explicitly.
+
+4. **Add a package-owned coverage gate focused on failure branches.**
+   - **Why:** audited source coverage showed weak branch coverage in the simulation runner and matching/execution adapters, and the package had no enforceable package-specific threshold. Workspace coverage can conceal these gaps.
+   - **Do:** add a scoped coverage command and negative CI self-check after the above regressions; set a measured baseline and enforce at least 90% lines / 80% branches / 80% functions, raising thresholds only with evidence.
+   - **Verify:** CI must fail when a deliberately insufficient threshold is configured and pass on the exact PR head. Prioritize error/cleanup/time/partial-fill branches over percentage-only tests.
+
+### DEFERRED — do not expand the simulator prematurely
+
+5. **Improve matching realism only against a documented execution model.**
+   - **Why:** fees, partial fills, queue priority, spread and liquidity assumptions can materially change strategy conclusions. Adding realism without a stated model creates false confidence.
+   - **Do:** document each simulation assumption and introduce one behavior at a time with source fixtures and an explicit model version.
+   - **Verify:** compare deterministic fixtures and clearly label unsupported market microstructure behavior in every report.
+
+
 **Package path:** `packages/market-simulator`  
 **Package:** `@coinzilla/market-simulator`  
 **Target branch:** `develop`
