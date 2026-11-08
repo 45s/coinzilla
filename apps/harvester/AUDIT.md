@@ -767,3 +767,18 @@ No exchange writes were performed during this review or verification.
 ### Configured-asset snapshot correction — PR #670
 
 PR #670 adds a fake-broker regression for enabled BTCUSDT plus disabled ETHUSDT, DOGEUSDT, ZROFDUSD, and SOLFDUSD. It requires both the in-memory account snapshot and PREFLIGHT/CLOSING Journal snapshots to contain exactly the configured base/quote assets while excluding unrelated XRP. The implementation loads read-only market identity metadata for every configured pair, but only enabled pairs undergo trading-rule validation and market subscriptions. The configured Harvester regression suite passes 53/53; the full Harvester package suite passes 670/670, and the Harvester coverage workflow succeeds on the current PR head. Merge status is pending.
+
+
+## 2026-11-08 reconnect recovery failure — issue #626 / PR #673
+
+The complete four-artifact evidence inventory, session timeline, 16-fill ledger, exact PREFLIGHT/CLOSING balance reconciliation, two unresolved owned SELLs, source-level root cause, and shutdown outcome are preserved in [AUDIT_SESSION_2026-11-08.md](./AUDIT_SESSION_2026-11-08.md). The repeatable evidence-handling procedure is [INCIDENT_AUDIT_PLAYBOOK.md](./docs/INCIDENT_AUDIT_PLAYBOOK.md).
+
+**Confirmed defect:** while application reconciliation was pending after transport reconnect, bootstrap processed queued user-data order events without the engine's recovery-mode flag. A BUY fill therefore attempted to cancel a recovery SELL while the broker still reported the user-data stream unavailable. Both cancellation attempts failed, the orders became UNKNOWN, accounting readiness closed, and application recovery failed. A second gap failed to retain the required post-recovery evaluation for terminal events consumed while the bootstrap correctly deferred normal evaluation.
+
+**Fix under verification:** [PR #673](https://github.com/45s/coinzilla/pull/673) routes queued order events through recovery mode and retains affected symbols in the engine's deferred-evaluation set until recovery acknowledgement. It does not weaken the durable reconciliation gate or enable exchange actions during recovery.
+
+**Accounting verdict:** all 16 unique applied fills reconcile exactly to the PREFLIGHT/CLOSING asset deltas. The 93 duplicate-fill notifications represent duplicate observations of 16 trade identities, not additional applied fills. Accounting correctness does not imply trading recovery succeeded.
+
+**Policy disposition:** the PREFLIGHT external DOGE order is not a defect. The user explicitly confirmed in issue #667 that external orders are allowed at startup and must remain external/unowned and untouched. The TESTNET runbook is updated to match that policy and the configured-asset snapshot contract established by PR #670.
+
+**Unknowns and boundaries:** the original empty-message TypeError's lower-level cause remains UNKNOWN; close code 1006 does not prove the precise network cause. The CLOSING audit is INCOMPLETE, the two owned SELL states remain unconfirmed, and the process lock was retained because shutdown was not confirmed. No manual lock cleanup or exchange action was performed. TESTNET acceptance is NOT CLAIMED.
