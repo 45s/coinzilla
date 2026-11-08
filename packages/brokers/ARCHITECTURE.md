@@ -131,7 +131,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Current implementation snapshot (develop baseline)
 
-**Code baseline before this slice:** `2d46172d65e309bf40029b9accec561c4b1ab9ea` (after PR #692). The tree below reflects this PR's intended result: Binance DTO/Entity mapping is placed under `src/infrastructure/binance/adapters/`; adapter logic and test assertions remain unchanged; relative test imports are updated where needed.
+**Current code baseline:** `512b77f4a7745e2b5fbff7849dcfe136830acab8` (after PR #693). Binance DTO/Entity mapping now lives under `src/infrastructure/binance/adapters/`; mapper logic and test assertions are preserved, with relative test imports updated where needed.
 
 The package is **partially layered already**:
 
