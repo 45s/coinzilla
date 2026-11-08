@@ -1823,10 +1823,10 @@ test("logs safe correlation details when an execution report is not owned", asyn
     clientOrderId: "external-client-id",
     brokerOrderId: "987654",
     market: metadata.market,
-    side: "BUY",
+    side: "SELL",
     type: "LIMIT",
     limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    originalQuantity: new Quantity({ amount: "59.87", asset: metadata.market.baseAsset }),
     executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
     status: "OPEN",
     createdAt: 1,
@@ -2744,7 +2744,7 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
 })
 
 
-test("cancels acknowledged Harvester BUY orders after an unowned execution report closes the global accounting gate", async () => {
+test("cancels acknowledged Harvester BUY orders across markets after an unowned external execution closes the global accounting gate", async () => {
   const calls = []
   const broker = createBroker(calls)
   const cancelledBrokerOrderIds = []
@@ -2846,7 +2846,7 @@ test("cancels acknowledged Harvester BUY orders after an unowned execution repor
     "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
   )
 
-  const metadata = createMarketMetadata("BTCUSDT")
+  const metadata = createMarketMetadata("ZROUSDT")
   const externalOrder = new CanonicalOrder({
     clientOrderId: "external-client-id",
     brokerOrderId: "987654",
