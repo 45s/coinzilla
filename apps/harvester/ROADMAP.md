@@ -31,7 +31,7 @@ This section is the current operational status and supersedes older statements b
 
 ### Other active and deferred work
 
-- [ ] **#650 — Journal evidence completeness:** continue the bounded, allowlisted evidence coverage work; preserve mandatory durability barriers and keep additional diagnostics best-effort.
+- [x] **#650 — Journal evidence completeness:** completed by [PR #652](https://github.com/45s/coinzilla/pull/652), merged as `4043fcbff483ae975f1e46d9c5170f20109de18d` from exact tested head `67f85cd0958bdbbe409acbfe4c21bab1ea24217f`. All five workflow runs on that exact head succeeded: Unit Tests #3862 (`42219597413`), Test Coverage #3446 (`42219597575`), JavaScript Syntax #2758 (`42219597353`), Utils Unit Tests #3767 (`42219597563`), and Dependency Audit #3037 (`42219597557`).
 - [x] **#646 / #656 — Conservative conformance and dust:** completed in PR #653; exact-head offline CI passed. Issues #646 and #656 are closed.
 - [ ] **#654 — process-restart reconciliation:** explicitly deferred; not a blocker for current in-process recovery or strategy work.
 - **#377 — Free Roll/Grid extraction:** separate application workstream; not part of Harvester recovery.
@@ -83,18 +83,18 @@ These items are intentionally recorded for future work. They are not current tra
 
 ### D. Optional Telegram notifications
 
-- [ ] Integrate Harvester with the existing @coinzilla/notifiers package for optional Telegram notifications.
-- [ ] Define a small allowlisted set of useful operational events (startup/connection status, trading pause or safety halt, order/fill lifecycle milestones, and shutdown) before implementation.
-- [ ] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures must never block order handling, accounting, startup readiness, or shutdown safety.
-- [ ] Reuse existing notifier and event-bus contracts; do not add Telegram SDK logic to Harvester domain/use-case code or duplicate the notifier package.
-- [ ] Define configuration, credential handling, message content, and tests when this feature is selected. Notifications remain disabled unless explicitly configured.
+- [x] Integrate Harvester with the existing `@coinzilla/notifiers` package for optional Telegram notifications; completed in [PR #734](https://github.com/45s/coinzilla/pull/734).
+- [x] Define and implement the allowlisted event mapping for startup/connection status, trading pause or safety halt, applied fills, recovery completion/failure, and shutdown in PR #734.
+- [x] Keep notification delivery asynchronous and isolated: missing credentials, Telegram outages, formatting errors, or subscriber failures do not block order handling, accounting, startup readiness, or shutdown safety (PR #734).
+- [x] Reuse existing notifier and event-bus contracts; no Telegram SDK logic was added to Harvester domain/use-case code and no notifier package was duplicated (PR #734).
+- [x] Define configuration, credential handling, message content, and offline integration tests in PR #734. Notifications remain disabled unless both optional credentials are configured.
 ## Current work selection
 
 - [x] Close the 2026-11-07/08 session follow-up: source-level findings are resolved by PRs [#653](https://github.com/45s/coinzilla/pull/653), [#663](https://github.com/45s/coinzilla/pull/663), [#664](https://github.com/45s/coinzilla/pull/664), [#669](https://github.com/45s/coinzilla/pull/669), [#670](https://github.com/45s/coinzilla/pull/670), and [#673](https://github.com/45s/coinzilla/pull/673). Tracking audit [#667](https://github.com/45s/coinzilla/issues/667) is closed; evidence: [AUDIT.md session report](./AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). TESTNET acceptance is separate and paused/unverified.
 - [x] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Implemented and merged in [PR #663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
-The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is the active Journal evidence workstream.
+The former blanket TESTNET acceptance gate is removed. Explicitly selected Harvester work may proceed independently of TESTNET acceptance. Issue [#650](https://github.com/45s/coinzilla/issues/650) is complete through PR #652; additional Journal evidence expansion requires a separately selected task.
 
 Trading safety requirements remain in force: live trading stays disabled unless explicitly authorized; TESTNET-only runtime protections, exact-order ownership, and the existing mandatory Journal durability barriers must not be weakened. Journal evidence beyond those barriers is bounded, allowlisted, and best-effort. Journal is not trading-state authority. Replay and process-restart recovery remain disabled unless separately requested.
 
@@ -106,7 +106,7 @@ Trading safety requirements remain in force: live trading stays disabled unless 
 
 ## Journal evidence workstream
 
-Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
+Issue [#650](https://github.com/45s/coinzilla/issues/650) completed its accepted evidence scope in [PR #652](https://github.com/45s/coinzilla/pull/652). The evidence contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md) remains the reference for any separately selected future extension. Journal replay and process-restart recovery remain disabled unless separately requested.
 
 ## Mission and delivery priority
 
@@ -1801,8 +1801,8 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 - [x] [PR #708](https://github.com/45s/coinzilla/pull/708) merged: eight direct offline malformed REST-envelope regressions for non-array/malformed `getOpenOrders()`, zero/multiple/non-`CanonicalOrder` `getCanonicalOrderHistory()`, and non-array/non-`Fill`/oversized `getFills()`. Exact tested head `b3f5ed25d11ab093836dc50d563b8c590b09439f`, merged as `982ddc8c4366658ce75a9cfac9432b4f3e81381e`. Harvester unit tests 753/753 and configured targeted tests 3/3 passed; all six required offline contexts passed. Harvester coverage passed; package threshold enforcement is not configured. TESTNET integration was skipped.
 - [x] [PR #711](https://github.com/45s/coinzilla/pull/711) merged: native broker Error causes preserved through account snapshot, account-wide open-orders, owned-order open-orders, canonical-history, and fill-history wrappers; recovery logs include the native Error object. Exact tested head `661046e2c7142c879b9a8c5327e46f804f4e048a`, merged as `2a57a8e291bb54a2474df525a4cd20e8d51747e8`. Test-first RED: 752/758 passed with exactly six expected missing-cause/log-object failures; GREEN: 758/758 passed. Configured targeted tests 3/3 and all six required offline CI contexts passed. Harvester coverage execution passed; package threshold enforcement is not configured. TESTNET integration was skipped.
 - [x] Journal sync retry characterization merged in [PR #714](https://github.com/45s/coinzilla/pull/714) (43/43 Journal tests); Harvester recovery retry and duplicate-publication proof merged in [PR #716](https://github.com/45s/coinzilla/pull/716) (760/760 Harvester tests, targeted 3/3). Exact tested heads: Journal `a52630cf4b2db0b5b317db4dd0e103789b64ed90`, Harvester `ae021f8f9fac071ebf3844069d5321ed11f8d0a3`; merge commits: `0638c8bbc51607805bd95299fc8b4e69363c774e` and `32a478d39a952206423fd6e552eea86e27d51f80`. All six required offline contexts passed on both PR heads. Coverage workflows passed; Journal and Harvester package threshold enforcement is not configured. TESTNET integration was skipped.
-- [ ] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity with the Brokers owner. See [cross-domain request #702](https://github.com/45s/coinzilla/issues/702). The single-subscriber path is guarded; the current Harvester subscriber count remains unverified because `start-harvester.js` is under active refactoring.
-- [x] Brokers terminal-notification count proof merged in [PR #729](https://github.com/45s/coinzilla/pull/729), exact tested head `fc7467a260f7813e27fe1a7506317e18fe044e53`, merge `ba0992116a34b91ac907218203562880475c9dfd`: exactly one `reconciled` status per active subscriber, no status for a removed subscriber, reminder cancellation, and no duplicate after repeated acknowledgement. Brokers tests 416/416; all six required offline CI contexts and workspace coverage passed. The public acknowledgement-result contract remains open under #702; do not change it or add a Harvester workaround before owner agreement.
+- [x] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity through Brokers PR #732 and Harvester PR #735. The additive result API preserves the legacy boolean contract; Harvester records local acceptance but keeps readiness closed until the matching global `reconciled` status. Issue #702 is closed.
+- [x] Brokers terminal-notification count proof merged in [PR #729](https://github.com/45s/coinzilla/pull/729), exact tested head `fc7467a260f7813e27fe1a7506317e18fe044e53`, merge `ba0992116a34b91ac907218203562880475c9dfd`: exactly one `reconciled` status per active subscriber, no status for a removed subscriber, reminder cancellation, and no duplicate after repeated acknowledgement. Brokers tests 416/416; all six required offline CI contexts and workspace coverage passed. The remaining acknowledgement-result contract was completed by PR #732 and its Harvester consumer integration by PR #735; issue #702 is closed.
 - [x] [PR #718](https://github.com/45s/coinzilla/pull/718) merged: the Harvester status/recovery composition test proves a second disconnect supersedes in-flight generation one, stale work publishes no audits or acknowledgement, and only generation two can complete and restore readiness. Exact tested head `a28bd72585a8b9d7c50b883b980a185b99711f49`, merged as `6236f49dca53a2938b016b52802f907c90611b44`; Harvester tests 761/761, targeted 3/3, and all six required offline contexts passed. Coverage execution passed; Harvester threshold enforcement is not configured. TESTNET integration was skipped.
 
 ## 2026-11-08 second-disconnect Harvester lifecycle proof — complete
@@ -1814,7 +1814,7 @@ PR [#718](https://github.com/45s/coinzilla/pull/718) merged into `develop` as `6
 - All six required offline CI contexts passed.
 - Workspace coverage passed; Harvester coverage execution passed, but package threshold enforcement is not configured.
 - The test proves stale generation one cannot publish audits or acknowledge after the second disconnect; only generation two completes and reopens readiness.
-- The exact terminal `reconciled` notification count is covered by merged PR #729. The multi-subscriber acknowledgement-result semantics and Harvester consumer compatibility remain open under cross-domain request [#702](https://github.com/45s/coinzilla/issues/702). `start-harvester.js` remains uninspected while under active refactoring.
+- The exact terminal `reconciled` notification count is covered by merged PR #729. The additive acknowledgement-result semantics and Harvester consumer compatibility are complete in PRs #732 and #735. `start-harvester.js` was not changed by this work.
 - TESTNET integration was skipped. No TESTNET acceptance is claimed.
 
 **Current `develop` checkpoint at the time of merge:** `6236f49dca53a2938b016b52802f907c90611b44`.
@@ -1867,7 +1867,7 @@ PR [#719](https://github.com/45s/coinzilla/pull/719) merged into `develop` as `1
 - Brokers package tests: 414/414 passed; Journal package tests: 43/43 passed.
 - Harvester coverage execution passed; package threshold enforcement is not configured.
 - Read-only TESTNET integration was skipped. No TESTNET acceptance is claimed.
-- The merged documentation marks the Harvester second-disconnect consumer proof complete while leaving the Brokers-owned multi-subscriber contract #702 open.
+- The merged documentation marks the Harvester second-disconnect consumer proof complete; the formerly open Brokers-owned multi-subscriber contract #702 is now closed after PRs #732 and #735.
 - The synchronized task branch was removed after merge; no open PR remains at this checkpoint.
 
 PRs #698 and #699 remain closed as superseded; no work from those branches is to be recreated.
