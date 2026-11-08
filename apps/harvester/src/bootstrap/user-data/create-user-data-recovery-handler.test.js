@@ -903,13 +903,13 @@ test("keeps recovery blocked and retries after an account-wide open-orders RPC t
   )
   assert.equal(
     fixture.logs.error[0]?.errorName,
-    "RpcTimeoutError",
-    "The recovery failure diagnostic must preserve the broker RPC timeout type.",
+    "Error",
+    "The recovery coordinator wraps failed broker results in its own application-level Error.",
   )
   assert.equal(
     fixture.logs.error[0]?.errorMessage,
-    "account-wide open-orders RPC timed out",
-    "The recovery failure diagnostic must preserve the broker RPC timeout message.",
+    "Unable to load authoritative account-wide open orders: account-wide open-orders RPC timed out",
+    "The recovery failure diagnostic must retain the broker RPC timeout detail when wrapping the failed result.",
   )
 
   fixture.start()
