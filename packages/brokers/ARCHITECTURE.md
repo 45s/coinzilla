@@ -146,8 +146,6 @@ src/
 ├── infrastructure/
 │   └── binance/
 │       └── user-data-client-adapter.js
-├── ports/
-│   └── user-data-client-port.js
 ├── binance/
 │   ├── broker-websocket/
 │   │   ├── broker.js
@@ -210,7 +208,7 @@ This is the strongest existing example of the intended architecture:
 
 - `domain/user-data-recovery-policy.js` exports the pure `canCompleteUserDataRecovery` policy. It has no imports and decides whether recovery is complete from explicit facts.
 - `application/user-data-session.js` owns subscriber lifecycle, remote subscription coordination, reconnect attempts, timers, recovery acknowledgements, and event delivery. It depends on the domain policy and an injected port contract/factory, not directly on Binance RPC classes.
-- `application/ports/user-data-client-port.js` defines and validates the application-facing user-data client capability. Its current location is `src/ports/`; the target location is `src/application/ports/` once a dedicated move is justified.
+- `application/ports/user-data-client-port.js` defines and validates the application-facing user-data client capability. It lives under `src/application/ports/`, making its Application ownership explicit.
 - `infrastructure/binance/user-data-client-adapter.js` adapts the Binance RPC client to the exchange-neutral port, including Binance event-envelope normalization, subscription methods, and event identity.
 
 This is a real, working vertical slice—not just empty architectural folders. Preserve it as the pattern to study when extending boundaries. It also shows that application code can own a lifecycle coordinator without importing a concrete Binance client.
@@ -222,7 +220,7 @@ The current import edges for the new vertical slice are already pointing inward:
 ```text
 application/user-data-session.js
     ├──> domain/user-data-recovery-policy.js
-    └──> ports/user-data-client-port.js
+    └──> application/ports/user-data-client-port.js
 
 infrastructure/binance/user-data-client-adapter.js
     └──> Binance protocol helpers (adapt-msg, event identity)
@@ -234,11 +232,11 @@ binance/broker-websocket/broker.js
     └──> Binance response adapters
 ```
 
-The inspected `domain/` policy and `ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The Binance adapter translates to the port, while the broker facade currently performs the composition by injecting the adapter factory into the application session. This is a sound dependency direction inside the vertical slice, with composition still embedded in the large concrete broker facade.
+The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The Binance adapter translates to the port, while the broker facade currently performs the composition by injecting the adapter factory into the application session. This is a sound dependency direction inside the vertical slice, with composition still embedded in the large concrete broker facade.
 
 ### Current gaps and boundary pressure
 
-- `binance/broker-websocket/broker.js` is 782 lines and imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. Its constructor creates concrete clients and wires the user-data session; its public methods also coordinate request workflows and normalization. It currently combines public facade, composition, exchange I/O, and application coordination.
+- `binance/broker-websocket/broker.js` is 782 lines and imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
 - The user-data client port is now nested under `application/ports/`, matching the application-owned port placement used by Harvester. The infrastructure adapter implements this contract; application session code owns its use.
 - There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
@@ -253,14 +251,14 @@ The inspected `domain/` policy and `ports/` contract have no imports. The Applic
 | --- | --- | --- |
 | `domain/user-data-recovery-policy.js` | Pure recovery-completion policy | Correctly placed in Domain |
 | `application/user-data-session.js` | Subscriber/session lifecycle and recovery coordination | Application coordinator; retain state ownership and test behavior |
-| `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Application-owned port; consider nesting under `application/ports/` |
+| `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
 | `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
-| `binance/broker-websocket/broker.js` | Public broker facade plus client construction, protocol calls, orchestration, mapping | Main boundary-pressure area; split only after responsibility/import audit |
+| `binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
 | `binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; move/group under `infrastructure/binance/` incrementally |
 | `binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
 | `binance/shared/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
 | `binance/shared/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
-| `broker.core.js` | Compatibility base class and shared in-memory maps | Ownership decision pending; inspect consumers before redesign |
+| `broker.core.js` | Shared base class and contract used by Market Simulator | Public compatibility extension point; preserve construction, state, and default methods |
 
 The 658-line `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
