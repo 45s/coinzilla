@@ -157,6 +157,7 @@ Ports are defined at the boundary needed by application/domain policy; infrastru
 - [x] Slice 3 — normalize Binance user-data events and termination notifications in the adapter; the session retains only generic bounded identity state. Merged via PR #602; 400/400 broker tests and coverage passed.
 - [x] Slice 4 — move the session coordinator into `src/application/user-data-session.js` and define `src/ports/user-data-client-port.js`; runtime port validation and application/port coverage merged via PR #603. 405/405 broker tests and coverage passed.
 - [x] Slice 5 — move the Binance user-data client-port implementation into `src/infrastructure/binance/user-data-client-adapter.js`, co-locate deterministic adapter tests, and include infrastructure modules in the package coverage gate; merged via PR #605 on 2026-11-05 (merge commit `675b4c693abceecfd26a6401a7430f148c0ca1cc`).
+- [~] Slice 6 — move the application-owned `UserDataClientPort` contract and its deterministic contract tests from `src/ports/` to `src/application/ports/`; update application/adapter imports, package coverage includes, and architecture/roadmap docs. No runtime behavior or port contract changes.
 
 ---
 
@@ -183,7 +184,7 @@ The following files exceed 500 lines. Their size is a review trigger, not a reas
 6. Keep state-changing order requests blocked while user data is unavailable or any consumer has not acknowledged reconciliation. A timeout or connection loss during a state-changing RPC is an unknown outcome; never blindly replay it.
 7. Phase 7 is complete through PR #333. Do not reintroduce the removed REST transport, legacy listen-key session, or third-party Binance SDK.
 8. RPC cancellation was reviewed: `BinanceWebSocketApiClient.request()` supports a bounded timeout and settles pending requests on disconnect, but exposes no `AbortSignal` option. Abort semantics are not part of the existing contract; do not invent a cancellation API as part of this modernization.
-9. Phase 9 is in progress. Slices 1–5 are merged (PRs #596, #599, #602, #603, #605). The user-data recovery vertical slice is complete across Domain, Application, Application Port, and Binance Infrastructure. Next, finish the package-wide responsibility/import and consumer audit; align the existing application-owned port's location with Harvester, then choose a real dependency-inversion or workflow extraction. Keep the broker facade as the current composition boundary until a safer, contract-preserving composition design is demonstrated; do not add one wrapper or port per RPC.
+9. Phase 9 is in progress. Slices 1–5 are merged (PRs #596, #599, #602, #603, #605). The user-data recovery vertical slice is complete across Domain, Application, Application Port, and Binance Infrastructure. Slice 6 aligns the port's physical location with its Application ownership. Next, finish the package-wide responsibility/import and consumer audit; align the existing application-owned port's location with Harvester, then choose a real dependency-inversion or workflow extraction. Keep the broker facade as the current composition boundary until a safer, contract-preserving composition design is demonstrated; do not add one wrapper or port per RPC.
 
 **Do not skip the next-action checklist because a previous chat said a phase was complete. Verify branch state and current files.**
 
