@@ -205,11 +205,12 @@ export function captureBuildMetadata({
   })
   const environmentMetadata = readEnvironmentMetadata({ environment })
   const selectedMetadata = gitMetadata ?? environmentMetadata
-  const metadataSource = gitMetadata
-    ? "git"
-    : hasEnvironmentMetadata(environmentMetadata)
-      ? "environment"
-      : "unavailable"
+  let metadataSource = "unavailable"
+  if (gitMetadata) {
+    metadataSource = "git"
+  } else if (hasEnvironmentMetadata(environmentMetadata)) {
+    metadataSource = "environment"
+  }
   const commit = selectedMetadata.commit
 
   return Object.freeze({
