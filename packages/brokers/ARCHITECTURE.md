@@ -179,6 +179,18 @@ The coverage gate currently enforces **90% lines, 80% branches, and 80% function
 
 No local test run was performed as part of this source/documentation audit. PR #689's repository CI passed the broker unit-test and coverage jobs; the opt-in TESTNET job was skipped by its safety gate, as intended.
 
+### Consumer boundary: Harvester owns the broker application port
+
+The current Harvester implementation confirms an important ownership rule:
+
+- `apps/harvester/src/application/ports/broker.port.js` owns Harvester's application-facing `BrokerPort` contract.
+- `apps/harvester/src/infrastructure/brokers/binance-broker-adapter.js` implements that port by composing `BinanceWebSocketBroker` and translating Harvester's normalized order/workflow contracts to the package's public API.
+- Harvester bootstrap composes the concrete adapter. The broker package must not import Harvester or own Harvester's trading workflow.
+
+Therefore, do **not** add a duplicate package-level `application/ports/broker.port.js` that mirrors the entire public Binance broker API. The existing `src/ports/user-data-client-port.js` is a different, internal port: it abstracts the RPC/user-data client needed by the Brokers package's own user-data session coordinator.
+
+This is the intended hexagonal boundary: the consuming application owns the port it needs; the package's Binance implementation is an infrastructure detail from the application's perspective. Within the Brokers package, use an Application port only where an internal application workflow (currently user-data session) needs to invert a dependency.
+
 ### Existing vertical slice: user-data recovery
 
 This is the strongest existing example of the intended architecture:
