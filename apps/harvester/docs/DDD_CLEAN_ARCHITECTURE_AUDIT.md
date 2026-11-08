@@ -461,3 +461,6 @@ A follow-up source/syntax review removed one duplicate closing brace left by the
 The ordered process shutdown workflow now lives in `src/bootstrap/shutdown/create-shutdown-handler.js`. It preserves market/book intake teardown, draining accepted market/user-data work, owned-order reconciliation before and after BUY cancellation, user-data disconnect, unresolved-order checks, durable CLOSING account audit, broker disconnect, and aggregate error reporting.
 
 The extraction also fixes concurrent stop semantics: callers share one in-flight shutdown promise and all observe its completion/failure. Direct tests cover the safety-critical sequence, concurrent callers, and multiple cleanup failures. This does not change the policy to cancel owned BUY orders while retaining eligible open SELL orders.
+
+
+The recovery-handler CI run caught one remaining dependency on the former bootstrap-local ownership-reconciliation flag during RECOVERY open-order publication. The extracted coordinator now tracks the successful reconciliation result locally for the duration of its recovery pass while updating the shared bootstrap flag, preserving the original ownership classification.

@@ -14,6 +14,7 @@ export function createUserDataRecoveryHandler({
   return function startUserDataRecovery() {
     const userDataSubscription = getUserDataSubscription()
     const tradingEngine = getTradingEngine()
+    let hasCanonicalOwnershipReconciliation = false
     if (isStopped() || !state.startupComplete || !state.requiresReconciliation ||
       state.accountingFailed || state.recoveryTask ||
       state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration) {
@@ -47,6 +48,7 @@ export function createUserDataRecoveryHandler({
         if (!reconciliation?.ok) {
           throw reconciliation?.errors?.[0] ?? new Error("Owned-order REST/stream reconciliation failed")
         }
+        hasCanonicalOwnershipReconciliation = true
         setCanonicalOwnershipReconciled(true)
       }
       while (true) {
