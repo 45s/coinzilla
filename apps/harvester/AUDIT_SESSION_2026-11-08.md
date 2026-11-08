@@ -385,3 +385,16 @@ The following are the exact PR head commits, not merge commits. For each listed 
 - **PR #688:** the repository documents six required contexts (`actionlint`, `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`) and strict up-to-date protection. At current develop `2e04a77c19357cec89111892fd910276ae8b1619`, its branch is 4 ahead / 11 behind. The old-head green checks cannot satisfy the current merge commit; use the normal Update branch action and rerun checks. No bypass or rule change is appropriate.
 
 **Current develop checkpoint:** `2e04a77c19357cec89111892fd910276ae8b1619`. Production behavior remains unchanged by PRs #700 and #701. Process-restart reconciliation remains deferred to #654.
+
+
+## 14. F-017 malformed REST-envelope regression follow-up — 2026-11-08
+
+Added eight deterministic offline cases to `src/use-cases/conservative-trading-engine.test.js`:
+
+- `getOpenOrders()`: non-array data and an array containing a non-`Order` record.
+- `getCanonicalOrderHistory()`: zero records, multiple records, and a non-`CanonicalOrder` record.
+- `getFills()`: non-array data, a non-`Fill` record, and a page larger than the supported 1,000-record limit.
+
+Every case asserts a failed reconciliation result, the stage-specific error, a retained market pause, unchanged UNKNOWN order state and zero executed quantity, no applied fills, no cancel/replace or new order, and no reads beyond the malformed stage.
+
+**Production source is unchanged.** The source already rejects these envelopes; this work closes the direct regression-proof gap identified by F-017. The branch is `test/harvester/malformed-rest-envelope-regressions`, synchronized with `develop` at `cd454223c7d54f47f8f85e2019043a8b42720d51`. Focused execution, Harvester suite, and exact-head CI are pending; no test pass is claimed yet. No TESTNET operation or process restart was performed.

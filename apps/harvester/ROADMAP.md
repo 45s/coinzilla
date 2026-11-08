@@ -1762,7 +1762,7 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 
 ### Confirmed risks and remaining proof gaps
 
-- [ ] Add direct malformed REST-envelope regressions for owned-order `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()`. Source guards already fail closed; the missing cases are regression-proof gaps, not confirmed accepted-invalid-data defects.
+- [~] Added eight direct offline malformed REST-envelope regressions on `test/harvester/malformed-rest-envelope-regressions`: non-array/malformed `getOpenOrders()`, zero/multiple/non-`CanonicalOrder` `getCanonicalOrderHistory()`, and non-array/non-`Fill`/oversized `getFills()`. Existing source guards remain unchanged; exact-head test/CI verification is pending.
 - [ ] Preserve original broker errors as `cause` through account snapshot and owned-order REST wrappers, and include the Error object in structured recovery logs. The current wrappers discard the original typed error class/stack/cause; the fill-history wrapper can also discard its message. See F-016 in `AUDIT_FINDINGS.md`.
 - [ ] Add a transient Journal flush/sync failure retry regression. Recovery correctly remains blocked and unacknowledged until `durable: true`; a retry after a completed write but failed sync can make both the first and second audit records durable (at-least-once audit publication). A Journal write failure poisons that Journal instance, so repeated reminders cannot recover it in place. Do not delete, overwrite, or deduplicate Journal evidence.
 - [ ] Resolve the conditional multi-subscriber acknowledgement liveness ambiguity with the Brokers owner. See [cross-domain request #702](https://github.com/45s/coinzilla/issues/702). The single-subscriber path is guarded; the current Harvester subscriber count remains unverified because `start-harvester.js` is under active refactoring.
@@ -1771,3 +1771,12 @@ The test-to-contract evidence map is [ACCOUNTING_INVARIANTS.md](./docs/domain/AC
 - [ ] PR #699 is superseded by PR #701; its old branch is stale and must not be merged. It remains open with a superseded-by comment pending normal repository cleanup.
 
 **Current `develop` checkpoint:** `2e04a77c19357cec89111892fd910276ae8b1619`. No production trading, exchange, broker, Journal, or logging implementation changed in PRs #700/#701. Process-restart reconciliation remains deferred to [#654](https://github.com/45s/coinzilla/issues/654). TESTNET acceptance remains separate and unclaimed.
+
+
+## 2026-11-08 F-017 malformed REST-envelope regression follow-up
+
+The next Harvester-owned recovery proof gap is addressed with eight deterministic offline regressions in `src/use-cases/conservative-trading-engine.test.js`. The cases inject malformed `getOpenOrders()`, `getCanonicalOrderHistory()`, and `getFills()` result envelopes and assert fail-closed behavior, no partial fill application, no order mutation, and no advancement of the owned-order state.
+
+This is a test-only change: the existing production guards are unchanged. The branch is `test/harvester/malformed-rest-envelope-regressions`; focused execution and exact-head CI verification are pending. Finding F-017 must not be marked complete until those checks pass and the PR is merged into `develop`.
+
+**Current develop checkpoint after synchronization:** `cd454223c7d54f47f8f85e2019043a8b42720d51`. The separate PR #688 branch remains stale (4 ahead / 28 behind); the repository reports `allow_update_branch=false`, so no branch-protection or merge bypass is appropriate. PR #688 remains open pending a safe synchronization path.
