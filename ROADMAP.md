@@ -1,91 +1,72 @@
-# Bug-Resistance Roadmap
+# Coinzilla — develop engineering roadmap
 
-Goal: make Coinzilla safer to change and release, without adding product features.
+**Scope:** the active shared development branch `develop`. This roadmap deliberately does not track release-branch synchronization or work on the old `main` snapshot.
 
-Prioritize demonstrated engineering risks over checklist progress. Keep changes focused, inspect complete affected files against current `main`, and verify mergeability and checks before calling work complete.
+**Goal:** make every application and shared package safe, deterministic, observable and maintainable. Prioritize demonstrated correctness and operational risks over refactoring volume or checklist completion.
 
-## 1. Make CI trustworthy
+## Priority order across the workspace
 
-- [x] Provide repository workflows for package tests and workspace test coverage.
-- [x] Audit which tests need environment variables, network access, exchange APIs, or other external services.
-- [x] Separate deterministic unit tests from integration tests that contact exchanges or other services.
+### CRITICAL — Harvester trading safety and recovery
 
-  Audit result: the broker package has two `.integration.js` tests that require network access. The default `pnpm test` runs package `node --test` scripts and discovers `.test.js` files, so those integration tests are not part of the deterministic unit-test run. Run them explicitly with `pnpm --filter @coinzilla/brokers test:integration`; the Binance SDK integration suite skips unless non-placeholder credentials are configured. Integration tests are not currently run in CI.
-- [~] Verify all relevant checks consistently pass on pull requests; distinguish checks that run from checks enforced by branch protection.
+1. **Conservative trailing-BUY replacement safety** — validate replacement intent before canceling the standing order, and define fail-closed behavior for exchange-filter rejection or unknown outcomes. This addresses the observed `MIN_NOTIONAL` failure path and prevents a rejected replacement from silently removing the strategy's standing order. Add RED/GREEN tests for stale market data, min-notional, cancel/submit failures, partial fills and duplicate ticks.
+   - Owner and implementation plan: [Harvester roadmap](apps/harvester/ROADMAP.md).
 
-  Verified on PR #339 at head `80ec1a1f2c65ae1d9d62eae1f9c4d82cad50ac1c`: the six required `develop` check contexts all completed successfully — `actionlint`, `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. The active `develop-core` ruleset requires these exact contexts and requires the branch to be up to date. This change also makes coverage, syntax/actionlint, dependency audit, and utils tests run on pushes to both `main` and `develop`, not only on PRs. Re-verify the new push runs after this change merges.
-- [ ] Give unit tests explicit test configuration and mocks. Keep live API tests opt-in and use GitHub Secrets only when genuinely required.
+2. **User-data recovery acceptance (#626)** — transport reconnect must not reopen trading until the matching recovery generation has authoritative order/fill reconciliation and required durable audit barriers. Keep TESTNET **PAUSED / UNVERIFIED** after the regional HTTP 451 restriction; do not claim acceptance or repeat the same blocked hosted attempt.
+   - Owner and evidence matrix: [Harvester](apps/harvester/ROADMAP.md), [Brokers](packages/brokers/ROADMAP.md).
 
-## 2. Protect main and improve change safety
+3. **Process-restart reconciliation (#654)** — current trading ownership/accounting state is process-local. Before unattended restarts, persist order/fill identity, reservations, Portfolio/Position and strategy-control state, then reconcile persisted state with exchange balances/open orders/history before READY. Fail closed on incomplete or conflicting history.
+   - Owner: [Harvester](apps/harvester/ROADMAP.md).
 
-- [~] Protect `main`: require pull requests, one approving review, and the complete release CI check set.
+### IMPORTANT — trustworthy simulation, persistence and contracts
 
-  Current configuration: the active repository ruleset `core` targets `refs/heads/main`, requires a pull request, requires the branch to be up to date, requires conversation resolution, and enforces these status checks: `Run package tests`, `Check JavaScript syntax`, `packages/utils tests`, and `Audit production dependencies`. It requires one approving review, has no bypass actors, and blocks force pushes and deletions. Its required status checks still omit `Workspace test coverage` and `actionlint`; add both before treating the release CI gate as complete.
-- [x] Pin third-party GitHub Actions to reviewed commit SHAs where practical.
-- [x] Review dependency updates and GitHub Actions permissions for least privilege.
+4. **Market Simulator correctness and determinism** — propagate failed final broker reads, always attempt disconnect after unsubscribe failure, and replace wall-clock timestamps with an injected/simulation clock. Without these guarantees, incomplete or non-repeatable simulations can mislead strategy decisions.
+   - Owner: [Market Simulator](packages/market-simulator/ROADMAP.md).
 
-  Existing workflows use read-only `contents` permissions and pin third-party Actions to full commit SHAs. GitHub-native Dependabot updates are configured weekly for the pnpm workspace and GitHub Actions; no package dependency is added.
+5. **Journal persistence boundary** — finish the internal filesystem adapter (J-3), explicit orchestration state ownership (J-4), and conformance/operational docs (J-5). Preserve required Harvester PREFLIGHT/CLOSING and pre-side-effect durability barriers; optional diagnostic evidence must not add trading gates.
+   - J-1 and J-2 are complete in PRs #746 and #747.
+   - Owner: [Journal](packages/journal/ROADMAP.md).
 
-## 3. Test critical behavior
+6. **Package-owned test quality** — add scoped coverage and negative self-checks where the audit found gaps, especially Market Simulator and Entities. Workspace aggregate coverage alone can hide a weak package. Prioritize meaningful error, cleanup, concurrency, duplicate-event and partial-failure branches; never add tests just to inflate percentages.
+   - Owners: [Entities](packages/entities/ROADMAP.md), [Market Simulator](packages/market-simulator/ROADMAP.md), [Harvester](apps/harvester/ROADMAP.md).
 
-- [ ] Audit test coverage across every package and important cross-package flow.
-- [ ] Cover invalid input, missing data, API errors, timeouts, retries, duplicate events, concurrency, and partial failures.
-- [ ] Keep tests isolated, repeatable, and independent of execution order.
-- [ ] Add a regression test for each bug fix when practical.
+7. **Broker protocol acceptance** — resolve the native WebSocket read-only TESTNET handshake gap in an authorized environment and record exact runtime/commit/evidence. Preserve recovery generation fencing and keep mutation tests disabled unless separately authorized.
+   - Owner: [Brokers](packages/brokers/ROADMAP.md).
 
-## 4. Improve code quality and dependency safety
+### IMPORTANT — architecture and package ownership
 
-- [ ] Add JavaScript linting and formatting only when separately approved. ESLint is intentionally deferred; GitHub Actions workflow linting remains enforced by the existing workflow.
-- [x] Add dependency vulnerability checks to CI.
+8. **Decompose oversized Harvester/Brokers modules only after behavior is protected by tests.** Extract cohesive workflows, preserve public contracts, and add executable dependency-boundary tests. Avoid broad speculative rewrites.
+9. **Keep shared Entities and Utils contracts pure and stable.** Use exact decimal strings, explicit unknown/incomplete states, narrow imports and architecture tests. Do not move business rules into generic utilities.
+10. **Use DB only for a real domain-owned persistence requirement.** Define repository ports in the owning context, keep SQL in adapters, and test transactions, locking, migration and backup/restore before deployment.
+11. **Keep Event Bus and Notifiers bounded and optional by contract.** Preserve explicit delivery, failure and shutdown semantics. Do not add retries, dead-letter queues, new transports or durable notification outboxes without a concrete consumer requirement.
 
-  Current check: `pnpm audit --prod --audit-level high` runs on pull requests, pushes to `main` and `develop`, and the weekly schedule.
-- [x] Keep the existing mock Binance key/secret examples in `.env.example` to demonstrate expected format, with an explicit comment that the values are fake.
+## Application and package execution map
 
-## 5. Release safely
+- [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation, evidence and session statistics.
+- [Brokers](packages/brokers/ROADMAP.md) — native WebSocket protocol, user-data lifecycle, recovery and integration acceptance.
+- [Database](packages/db/ROADMAP.md) — first domain-owned persistence consumer and operational procedures.
+- [Entities](packages/entities/ROADMAP.md) — exact financial contracts, dependency boundaries and package coverage.
+- [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery, failure semantics and lifecycle guarantees.
+- [Journal](packages/journal/ROADMAP.md) — record contract, filesystem adapter, orchestration and durability documentation.
+- [Market Simulator](packages/market-simulator/ROADMAP.md) — correct failure propagation, deterministic time and coverage.
+- [Notifiers](packages/notifiers/ROADMAP.md) — safe optional delivery and operator-controlled live smoke test.
+- [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, logger API and generic helper reuse.
 
-- [x] Document release and rollback steps.
-- [ ] Verify critical workflows in a staging/test environment before production use.
+## Delivery and verification rules
 
-## Working rules
+1. Work one meaningful behavior at a time. For bug fixes, add a focused regression test first and demonstrate RED before implementation.
+2. Read the owning package's `AGENTS.md`, roadmap, implementation, tests and consumer contracts before editing.
+3. Keep domain rules in their owning bounded context; use shared packages only for demonstrated generic contracts.
+4. Preserve exact decimal financial values, idempotent fill accounting, fail-closed order/recovery gates and explicit unknown outcomes.
+5. Run focused tests, package tests/coverage, then relevant workspace CI. Report exact head SHA and results; never infer success from a previous commit.
+6. Treat network/exchange/Telegram checks as separate integration acceptance. A skipped test is not a pass.
+7. Update the owning roadmap in the same PR as verified implementation. Mark an item complete only after merge to `develop` and required checks pass.
+8. Keep PRs small, based on current `develop`, and delete task branches after merge when repository settings permit.
+9. Never weaken tests, coverage thresholds, safety gates or CI to make a PR green.
 
-- Work one meaningful change at a time.
-- Before editing, inspect the latest `main`, the complete affected file(s), related tests, and branches/PRs touching the same paths.
-- When changes overlap, reconcile the full file against current `main`; do not stack stale, partial patches.
-- Run the narrow tests first, then relevant package/workspace checks. Fix failures rather than hiding them or using empty commits to restart CI.
-- Check mergeability and all relevant CI results after pushing. Never claim checks are green while they are pending or failed.
-- Update this roadmap when a task is actually verified complete; distinguish repository configuration from checks that are merely present.
+## Current verification checkpoint
 
-## 6. AI-agent workflow and low-overhead integration
-
-- [~] Establish `develop` as the shared integration branch, with protected PR-only merges and required automated checks.
-
-  The branch was restored from the release merge commit after PR #339 was merged. The active `develop-core` ruleset requires PRs, up-to-date branches, and six CI contexts, with no bypass actors. **The ruleset currently does not include a deletion rule**, while repository auto-delete-on-merge is enabled. Therefore `develop` is protected against force-pushes but is not yet protected against deletion; this item remains in progress until the deletion rule is added and verified.
-- [x] Keep `main` as the stable release branch; only milestone/release PRs from `develop` to `main` require the user's final approval.
-- [x] Require every AI agent to follow `AI_AGENT_WORKFLOW.md`, root `AGENTS.md`, and the owning domain's local instructions.
-- [x] Give each application/package its own roadmap and local agent instructions; keep domain ownership independent of Git branch lifetime.
-- [x] Use short-lived task branches based on `develop`; do not maintain permanent per-domain feature branches.
-- [x] Allow task PRs to merge into `develop` after required CI, freshness, and ownership checks pass; no routine human approval.
-- [x] Define cross-domain requests so consumer agents report needs and owning-domain agents implement shared package changes.
-- [~] Configure GitHub rulesets for `develop` and `main`; verify the exact required check names and auto-merge/agent merge permissions.
-
-  Both rulesets are active. The `main` ruleset blocks deletion and force-pushes. The `develop` ruleset blocks force-pushes and requires all six CI contexts, but currently lacks the deletion rule. Auto-merge is disabled. The GitHub connection available for this task can inspect rulesets but cannot update them, so adding and verifying the missing deletion rule remains an administrator-side configuration blocker.
-- [ ] Retire or migrate legacy long-lived feature branches and open PRs only after their work is safely preserved.
-
-The policy is documented in `AI_AGENT_WORKFLOW.md`. GitHub-side protection is enforced by repository rulesets, not documentation alone.
-
-### Active package roadmaps
-
-- [Broker package roadmap](packages/brokers/ROADMAP.md) — native Binance WebSocket migration, compatibility contract, lifecycle/recovery phases, and broker-specific acceptance criteria.
-- [Database package roadmap](packages/db/ROADMAP.md) — provider-neutral database lifecycle boundary, DDD ownership, and future provider selection.
-
-
-## 7. Agent-policy enforcement
-
-- [x] Validate domain ownership maps against discovered local `AGENTS.md` files.
-- [x] Validate that each owned domain has a roadmap and that central policy documents do not contain broken local links.
-- [x] Add regression tests for missing policy links and missing domain roadmaps.
-- [x] Configure GitHub-native weekly dependency update PRs for npm/pnpm manifests and GitHub Actions; no new package dependency is introduced.
-- [ ] Add `Workspace test coverage` and `actionlint` to the live `main` ruleset. The current ruleset was read back on 2026-11-02 and still requires only four contexts.
-
-
-- [ ] Add an execution-first rule to the canonical AI-agent instructions: clear implementation requests must be carried through to working changes, without unnecessary debate or deflection, while preserving security, ownership, and safety gates.
+- Audited branch: `develop`.
+- Baseline before this roadmap update: `7d2d8b05a5dcc223a3f434b1f6a4357e87126eae`.
+- PRs #746 and #747 are merged; Journal record vocabulary and the lightweight record contract are implemented.
+- Offline required CI passed on the exact PR #747 head. Binance TESTNET integration was skipped; exchange acceptance remains unverified.
+- Existing open Harvester tracker correction PR #738 is accounted for in this roadmap update; do not duplicate its completed status corrections.

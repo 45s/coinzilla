@@ -1,5 +1,39 @@
 # Database roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+No current production defect in this package was established by the repository audit. The priorities below are deliberate groundwork, not a reason to introduce persistence abstractions before a real consumer needs them.
+
+### IMPORTANT — first production persistence use
+
+1. **Integrate one domain-owned repository contract with a real consumer.**
+   - **Why:** the package currently provides a provider-neutral SQLite lifecycle boundary but does not yet demonstrate a complete application-owned persistence workflow. Designing generic repositories without a real aggregate risks coupling the database package to business concepts.
+   - **Do:** select one concrete consumer and define its repository interface in that domain. Keep SQL, connection management and migrations in the DB adapter; keep domain invariants and transaction boundaries in the owning application/domain. Add only the schema and operations required by that use case.
+   - **Verify:** integration tests against a temporary SQLite database prove create/read/update behavior, transaction rollback, uniqueness, restart persistence and deterministic cleanup. Keep package unit tests independent of a developer's local database.
+
+2. **Define transaction, concurrency and failure behavior for the first consumer.**
+   - **Why:** persistence correctness depends on what happens when writes race, locks occur, a transaction partially fails or the process closes with work pending.
+   - **Do:** document transaction ownership, busy/lock timeout policy, idempotent write semantics, migration compatibility and shutdown behavior as part of the selected consumer contract.
+   - **Verify:** test lock contention, rollback, interrupted writes, duplicate commands and close during pending work. Do not promise cross-process guarantees SQLite configuration does not provide.
+
+3. **Document backup, restore and operational ownership before persistent deployment.**
+   - **Why:** a database that cannot be safely backed up or restored is not an operationally complete persistence solution.
+   - **Do:** document database location, file permissions, backup consistency, restore validation, schema migration/rollback limits and retention responsibility for the first deployed consumer.
+   - **Verify:** perform a temporary-database backup/restore test and compare restored records and schema version.
+
+### DEFERRED — evidence-driven only
+
+4. **Reassess PostgreSQL or MongoDB only when requirements outgrow SQLite.**
+   - **Why:** changing providers now adds deployment and operational complexity without demonstrated scale, concurrency or query pressure.
+   - **Do:** record measurable requirements (concurrent writers, dataset size, availability, query patterns, deployment topology) before selecting another provider.
+   - **Verify:** provide benchmark/operational evidence and a migration/rollback plan before adding a second adapter.
+
+5. **Add domain-specific repositories and migrations only alongside the owning bounded context.**
+   - **Why:** schema ownership should follow the data's business meaning; a generic DB package must not become the owner of Harvester or other domain rules.
+   - **Do:** version migrations, keep repository ports in the domain/application package and add adapters here only for concrete persistence needs.
+   - **Verify:** migration-upgrade tests and domain-level contract tests run in CI.
+
+
 **Owner:** Database Infrastructure domain (`packages/db/`)  
 **Package:** `@coinzilla/db`  
 **Purpose:** provide reliable embedded SQL persistence while preserving DDD dependency direction.

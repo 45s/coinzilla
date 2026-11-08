@@ -1,5 +1,44 @@
 # Binance Broker Roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+This section is authoritative for next work and orders the broker package by risk. Historical phases below remain implementation evidence.
+
+### CRITICAL — protocol and recovery safety
+
+1. **Resolve the outstanding native WebSocket TESTNET handshake/acceptance gap.**
+   - **Why:** the read-only Binance TESTNET workflow has failed during the native Undici WebSocket handshake before account/recovery checks completed. Passing offline broker tests does not prove real endpoint compatibility or reconnect behavior.
+   - **Do:** preserve the exact failing error/cause and distinguish DNS/TLS/HTTP upgrade/Undici transport failures from application authentication. Reproduce only in an authorized, eligible environment; use the existing read-only workflow and keep order mutations disabled. Do not inspect or print secrets, change regions, weaken validation or repeatedly retry an identical blocked path.
+   - **Verify:** record exact Node/Undici versions, endpoint, workflow commit, handshake stage and sanitized cause; then complete read-only account/open-order/trade queries and user-data recovery acknowledgement. Full exchange acceptance remains unverified until the complete run succeeds.
+
+2. **Preserve recovery-generation and subscriber acknowledgement invariants.**
+   - **Why:** stale acknowledgements or a terminal recovery notification delivered to the wrong subscriber can reopen a consumer before authoritative reconciliation is complete.
+   - **Do:** retain the explicit per-subscriber acknowledgement result API, monotonic generation token, active-subscriber fencing and one terminal `reconciled` notification per active subscriber. Keep state-changing RPCs blocked until global recovery completion; removed subscribers must not receive terminal events.
+   - **Verify:** cover multiple subscribers, first-versus-last acknowledgement, duplicate/stale token, subscriber removal, second disconnect during reconciliation, reminder cancellation and exactly one terminal event. Do not regress the legacy boolean API's documented meaning.
+
+### IMPORTANT — lifecycle quality and maintainability
+
+3. **Complete the read-only integration matrix and document what remains unverified.**
+   - **Why:** unit tests prove deterministic behavior against fakes, not Binance protocol compatibility, signed RPC behavior, or exchange-side recovery semantics.
+   - **Do:** keep integration suites explicitly opt-in, read-only by default, credential-safe and separate from offline CI. Add a clear result matrix for public streams, signed RPC, user-data subscription, reconnect/resubscribe, account snapshots and canonical order/trade reconciliation.
+   - **Verify:** every run records exact commit/runtime and skipped checks; never describe skipped mutation tests or failed handshakes as passed acceptance.
+
+4. **Decompose the largest broker lifecycle modules in small, behavior-preserving steps.**
+   - **Why:** the broker contains large transport, streams and user-data lifecycle modules. Their responsibilities overlap at connection ownership, pending requests, listener cleanup and recovery, making regressions difficult to localize.
+   - **Do:** map state ownership first; extract only cohesive state machines (transport handshake/close, RPC request lifecycle, stream subscription control, user-data recovery) with explicit ports. Keep the public broker interface and wire contracts stable.
+   - **Verify:** add characterization tests before each extraction and retain timeout, late-ack, reconnect, manual-close, listener-removal and resource-cleanup regressions. Do not refactor several lifecycle areas in one PR.
+
+5. **Keep broker contracts exchange-neutral and testable.**
+   - **Why:** Harvester and other consumers should depend on normalized broker capabilities/results, not Binance-specific transport details.
+   - **Do:** use the existing Entities contracts for orders, fills, commissions, balances, trading rules and capability snapshots. Add a shared contract only when a second consumer needs it; keep Binance mapping inside the adapter.
+   - **Verify:** contract tests cover supported/unsupported/unknown capabilities, partial responses, unknown outcomes, exact decimal strings and timestamp identity.
+
+### DEFERRED
+
+6. **Additional exchanges/transports:** do not add another venue or generic transport abstraction until a real consumer and protocol acceptance matrix exist.
+7. **Performance work:** add benchmarks only when production evidence identifies throughput, memory or latency limits; preserve bounded queues and deterministic cleanup first.
+
+
 > **Agent entry point:** When asked to implement, improve, audit, or maintain `/packages/brokers`, read this file first and follow it as the package-level source of truth. Start with **Current status and next action**, then complete the mandatory pre-work checks before changing code. Do not rely on chat history or assume earlier findings are still current.
 
 **Package:** `@coinzilla/brokers`  

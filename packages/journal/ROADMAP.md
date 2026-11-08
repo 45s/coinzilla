@@ -1,5 +1,40 @@
 # Journal roadmap
 
+## Priority execution plan — current develop direction (2026-11-08)
+
+This section supersedes stale checkboxes below where they conflict with merged work. Journal is an evidence store, not the authority for trading state. Preserve the existing mandatory Harvester durability barriers; additional diagnostics remain best-effort.
+
+### IMPORTANT — finish the DDD and persistence boundary in order
+
+1. **J-1 and J-2 — source vocabulary and record contract (COMPLETE).**
+   - **Why:** persisted records need stable identity and an unambiguous distinction between source events, on-disk records and recovered records. A source-provided serialization hook must not be able to replace Journal-owned metadata.
+   - **Do:** retain the vocabulary and explicit schema-v1 contract from PR #746, plus the lightweight JournalRecord validation/serialization boundary from PR #747. Preserve legacy raw-line compatibility and the current public Journal API.
+   - **Verify:** maintain tests for stable ID, reserved metadata, root `toJSON` rejection, identity agreement, source non-mutation, schema round-trip and legacy record recovery. Both PRs are merged to develop.
+
+2. **J-3 — isolate filesystem persistence behind an internal adapter.**
+   - **Why:** current orchestration tests must replace instance/file-handle methods directly in places. This couples lifecycle logic to Node filesystem details and makes partial acquisition/append/sync/close failures difficult to exercise consistently.
+   - **Do:** introduce a narrow internal adapter for directory ownership, session creation, append, sync, close and lock release. Inject it only into the internal orchestration path; preserve `new Journal({ eventBus, directory, logger })` and public behavior.
+   - **Verify:** use a fake adapter for deterministic orchestration/failure tests and real temporary directories/child processes for filesystem, locking and crash-safety guarantees. Prove cleanup only releases resources owned by the failed attempt.
+
+3. **J-4 — make orchestration state ownership explicit.**
+   - **Why:** session lifecycle, subscription state, pending writes and close state must have one clear owner; otherwise races can accept writes after close or lose an uncertain append.
+   - **Do:** map each lifecycle state and transition, define when an event is admitted, persisted, synced and acknowledged, and keep retry semantics explicit. Preserve exclusive directory ownership and write-failure behavior.
+   - **Verify:** test concurrent close/publish, logger failures, append/sync failures, partial startup rollback and retry after uncertain sync. Do not deduplicate uncertain records by business meaning.
+
+4. **J-5 — contract conformance and operational documentation.**
+   - **Why:** consumers need to know which facts are durable, when flush completes, what failure means and how to inspect/restore a session.
+   - **Do:** document file format/versioning, size limits, locking, durability boundaries, error/result semantics, backup/restore and unit-versus-filesystem test commands.
+   - **Verify:** docs match executable behavior; package tests and the 85% line / 80% branch gate pass on the exact PR head.
+
+### CRITICAL consumer constraint
+
+5. **Preserve Harvester's mandatory durability gates without making optional evidence a trading dependency.**
+   - **Why:** PREFLIGHT/CLOSING account audits and pre-side-effect order/cancel intent flushes protect against unrecorded exchange mutations. Weakening them risks losing the evidence needed to reconcile an order. Conversely, optional diagnostic writes must not block ordinary trading transitions.
+   - **Do:** keep mandatory flush failures fail-closed at their existing boundaries; keep extra event evidence asynchronous/best-effort and visibly report gaps. Never claim Journal records override broker facts.
+   - **Verify:** Harvester tests prove no corresponding broker side effect occurs when a required flush fails, and optional evidence failures do not change Portfolio, RecoveryLedger, order execution or readiness.
+
+
+
 **Owner:** `packages/journal/`  
 **Purpose:** provide reliable, auditable journal records and persistence behavior for application and operational history.
 

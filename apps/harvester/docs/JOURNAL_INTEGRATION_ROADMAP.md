@@ -18,7 +18,7 @@ Step 1 is implemented and merged into `develop` in [PR #453](https://github.com/
 - Harvester already has suitable application boundaries: bootstrap lifecycle, the Conservative trading engine, order submission, sequential user-data processing, canonical Fill accounting, and Portfolio/RecoveryLedger transitions.
 - Harvester has an application EventBus boundary, stable lifecycle event names/DTO mappings, an optional asynchronously started Journal service, and process/configuration/broker lifecycle publication.
 - Initial lifecycle DTOs contain no financial amounts, so exact decimal-string preservation applies to later order/execution event mappings.
-- Bot-Free-Roll is a reference for composition and lifecycle ownership, not a template to copy. In particular, its Journal startup/initial flush can prevent trading startup; Harvester must not inherit that dependency.
+- The former separate application is removed and is not a supported architecture or implementation reference. Preserve only independently documented behavioral requirements, re-specify them within Harvester's own domain boundaries, and never copy a legacy runtime. Harvester's Journal startup and durability rules are defined by this roadmap and `TRADING_FIRST.md`.
 
 See [Architecture — operational event journal](./architecture.md#operational-event-journal) and the [AI implementation task](./tasks/AI_TASK_JOURNAL_INTEGRATION.md).
 
