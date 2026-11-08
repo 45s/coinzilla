@@ -166,7 +166,7 @@ The package already has a deterministic test suite for the partial vertical slic
 - `domain/user-data-recovery-policy.test.js`
 - `ports/user-data-client-port.test.js`
 - `infrastructure/binance/user-data-client-adapter.test.js`
-- `binance/broker-websocket/methods/user-data-session.test.js` covers the application session even though the test still sits under the older Binance-oriented tree.
+- `binance/broker-websocket/methods/user-data-session.{setup,recovery,reconciliation,cleanup}.test.js` cover the application session even though these lifecycle suites remain under the older Binance-oriented test tree; their shared fixtures live in `binance/broker-websocket/test-helpers/user-data-session-fixtures.js`.
 
 The package scripts on the audited baseline are:
 
