@@ -16,7 +16,7 @@ Read [the journal agent instructions](./AGENTS.md) and [the domain ownership gui
 
 - [x] Document the current journal record schema and public API. Versioned schema-v1 metadata is additive; legacy raw event records remain readable. See [README](./README.md). Schema-v1 metadata is added alongside the original top-level event fields; legacy raw event records remain readable as schema v1. See [README](./README.md).
 - [x] Verify append/read ordering and behavior after partial write failures.
-- [~] Characterize retry after a transient file-content sync failure and the resulting at-least-once audit publication. The focused test proves a later successful sync makes both the original completed write and retry record durable without rewriting or deduplicating either record.
+- [x] [PR #714](https://github.com/45s/coinzilla/pull/714) merged: a transient file-content sync failure is reported as non-durable; a later flush on the same Journal instance succeeds and durably preserves both the original completed write and the retry record in append order. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed. No source change, deduplication, record rewrite, or deletion.
 - [~] Characterize retry after a transient file-content sync failure and the resulting at-least-once audit publication. The focused test must prove that a later successful sync makes both the original completed write and the retry record durable without rewriting or deduplicating either record. Deterministic ordering, incomplete-tail rejection, write-failure poisoning, and explicit file-sync acknowledgement are covered by tests. Read/replay is deterministic and bounded; a write failure poisons the active session and incomplete tails fail closed. Runtime tests still need execution.
 - [x] Define and test duplicate/replay handling and stable record identity. Stable IDs are required, duplicates fail recovery, and replay is sequential/idempotency-aware. Record IDs are required and duplicates fail recovery; replay is ordered and consumers must remain idempotent.
 - [x] Define serialization compatibility and schema evolution policy. Schema v1 is written additively; legacy raw records are supported; unknown versions fail explicitly. Unknown versions fail explicitly; legacy records remain readable.
@@ -42,3 +42,16 @@ Operational limitation: the package documents a single-writer-per-directory requ
 ## Completion policy
 
 A journal capability is complete only when its behavior is documented, failure/recovery paths are tested, and the change is merged into `develop`.
+
+
+## 2026-11-08 transient file-sync retry characterization — complete
+
+PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0638c8bbc51607805bd95299fc8b4e69363c774e`. Exact tested head: `a52630cf4b2db0b5b317db4dd0e103789b64ed90`.
+
+- Journal package tests: 43/43 passed, including the transient sync failure/retry case.
+- All six required offline CI contexts passed.
+- Workspace coverage passed; Journal coverage execution passed, but package threshold enforcement is not configured.
+- The test confirms two distinct event IDs remain in append order and become durable after the later successful sync.
+- `writeFile()` failure poisoning remains unchanged. No Journal production source changed.
+
+**Current `develop` checkpoint:** `0638c8bbc51607805bd95299fc8b4e69363c774e`.
