@@ -86,7 +86,7 @@ export function createPortfolioStatsLogSummary({ position, recoveryLedger } = {}
       total: position.totalBaseQuantity.amount + " " + baseAsset,
     },
     accounting: {
-      buyCostBasis: position.spent.amount + " " + quoteAsset,
+      cycleBuyCost: position.spent.amount + " " + quoteAsset,
       netQuoteCashFlow: position.quoteNetCashFlow.amount + " " + quoteAsset,
       outstandingRecovery: (recoveryLedger?.outstandingRecoveryAmount ?? "0") + " " + quoteAsset,
       realizedNetProfit: (recoveryLedger?.realizedNetProfit ?? "0") + " " + quoteAsset,
