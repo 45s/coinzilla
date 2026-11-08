@@ -209,7 +209,7 @@ The package coverage command includes `src/application/**/*.js` (including appli
 
 ### Phase 9 implementation slice 6 — application-owned port location
 
-The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged.
+The existing `UserDataClientPort` contract and its unchanged deterministic contract tests now live under `src/application/ports/`. The top-level `src/ports/` folder is removed. `UserDataSession` imports the contract within the Application layer, while the Binance infrastructure adapter references and implements it. This is an ownership/location clarification only; the port shape and runtime behavior are unchanged. PR #691 merged with package unit tests, the 90/80/80 Brokers coverage gate, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
 
 ### Phase 9 implementation slice 5 — Binance infrastructure adapter
 
