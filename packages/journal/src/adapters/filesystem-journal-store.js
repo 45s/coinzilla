@@ -13,7 +13,8 @@ const JOURNAL_DIRECTORY_LOCK_FILE = ".coinzilla-journal.lock"
 export class FileSystemJournalStore {
   constructor({ directory } = {}) {
     this.directory = directory
-    this.sessionHandle = null
+    this.ownedSessionHandle = null
+    this.sessionHandleOverride = null
     this.lockFileHandle = null
     this.lockFilePath = null
   }
@@ -62,7 +63,7 @@ export class FileSystemJournalStore {
       const filePath = path.join(this.directory, `${timestamp}${suffix}.jsonl`)
       try {
         const sessionHandle = await open(filePath, "wx")
-        this.sessionHandle = sessionHandle
+        this.ownedSessionHandle = sessionHandle
         return { filePath }
       } catch (error) {
         if (error.code !== "EEXIST") throw error
@@ -94,12 +95,24 @@ export class FileSystemJournalStore {
    * @returns {Promise<void>}
    */
   async closeSession() {
-    if (!this.sessionHandle) return
-    const sessionHandle = this.sessionHandle
-    try {
-      await sessionHandle.close()
-    } finally {
-      this.sessionHandle = null
+    const sessionHandles = [
+      ...new Set([this.sessionHandleOverride, this.ownedSessionHandle].filter(Boolean)),
+    ]
+    this.sessionHandleOverride = null
+    this.ownedSessionHandle = null
+
+    const errors = []
+    for (const sessionHandle of sessionHandles) {
+      try {
+        await sessionHandle.close()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Failed to close all Journal session handles")
     }
   }
 
@@ -148,4 +161,24 @@ export class FileSystemJournalStore {
   async readSession(fileName) {
     return readFile(path.join(this.directory, fileName))
   }
-}
+}  /**
+   * Compatibility view used only by the deprecated Journal.fileHandle accessor.
+   * The adapter continues to own both the real and any replacement handle.
+   *
+   * @returns {object|null} Active session handle.
+   */
+  get sessionHandle() {
+    return this.sessionHandleOverride ?? this.ownedSessionHandle
+  }
+
+  /**
+   * Install or clear a legacy test override without discarding the owned handle.
+   *
+   * @param {object|null} handle - Replacement handle or null to clear the override.
+   * @returns {void}
+   */
+  set sessionHandle(handle) {
+    this.sessionHandleOverride = handle
+  }
+
+

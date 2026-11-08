@@ -68,3 +68,47 @@ test("preserves a pre-existing lock when another adapter cannot acquire ownershi
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test("closes the owned session handle when a legacy compatibility override is installed", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-store-override-"))
+  const store = new FileSystemJournalStore({ directory })
+  let overrideClosed = false
+
+  try {
+    await store.ensureDirectory()
+    await store.acquireWriter()
+    await store.createSession()
+    const ownedHandle = store.ownedSessionHandle
+    store.sessionHandle = {
+      writeFile: async () => {},
+      sync: async () => {},
+      close: async () => { overrideClosed = true },
+    }
+
+    await store.closeSession()
+    assert.equal(
+      overrideClosed,
+      true,
+      "Closing the adapter must close the compatibility handle used by legacy failure-injection tests.",
+    )
+    assert.equal(
+      store.sessionHandle,
+      null,
+      "Closing the adapter must clear the compatibility override and expose no active handle.",
+    )
+    assert.equal(
+      store.ownedSessionHandle,
+      null,
+      "Closing the adapter must also release the original filesystem handle it continues to own.",
+    )
+    await assert.rejects(
+      ownedHandle.stat(),
+      { code: "EBADF" },
+      "Replacing the visible handle must not leak the original open filesystem descriptor.",
+    )
+  } finally {
+    await store.closeSession()
+    await store.releaseWriter()
+    await rm(directory, { recursive: true, force: true })
+  }
+})

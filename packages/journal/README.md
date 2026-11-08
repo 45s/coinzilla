@@ -36,7 +36,7 @@ Methods return the package's result objects; callers should check `ok` and inspe
 
 `Journal` remains the public facade: it coordinates EventBus subscription, lifecycle policy, write ordering, flush, and replay. The package-private `FileSystemJournalStore` owns Node filesystem operations and the resources they create, including the exclusive directory lock and active session handle. The store exposes directory-entry metadata, file sizes, and original bytes only; the reader remains responsible for session-name validation, ordering, UTF-8 checks, record parsing, duplicate-ID detection, and recovery limits.
 
-This is one internal filesystem implementation, not a public storage plugin API or a promise of multiple backends. The internal store injection token exists only for deterministic Journal service tests and is not exported from the package entry point. EventBus remains independently injected and is not wrapped by Journal.
+This is one internal filesystem implementation, not a public storage plugin API or a promise of multiple backends. The internal store injection token exists only for deterministic Journal service tests and is not exported from the package entry point. A deprecated `@internal` `Journal.fileHandle` accessor remains as a compatibility bridge for existing failure-injection tests; it forwards overrides to the adapter, which retains ownership of both the replacement and original handles. EventBus remains independently injected and is not wrapped by Journal.
 
 ## Writing and durability
 

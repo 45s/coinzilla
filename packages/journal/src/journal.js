@@ -43,6 +43,30 @@ export class Journal {
    *
    * @returns {Promise<object>} Result indicating whether startup succeeded.
    */
+  /**
+   * Legacy internal compatibility accessor for package-level failure-injection tests.
+   * The persistence store remains the sole owner of the session handle.
+   *
+   * @deprecated
+   * @internal
+   * @returns {object|null} Active session handle, including a test override when installed.
+   */
+  get fileHandle() {
+    return this.store.sessionHandle
+  }
+
+  /**
+   * Forward a legacy internal test override to the persistence store.
+   *
+   * @deprecated
+   * @internal
+   * @param {object|null} handle - Test handle implementing writeFile(), sync(), and close().
+   * @returns {void}
+   */
+  set fileHandle(handle) {
+    this.store.sessionHandle = handle
+  }
+
   async start({} = {}) {
     if (this.started || this.starting || this.closing || this.closed) {
       return toResult({ error: new Error("Journal has already started or closed") })
