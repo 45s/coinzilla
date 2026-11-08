@@ -100,6 +100,8 @@ export function createUserDataRecoveryHandler({
           ownershipReconciled: tradingEnabled && hasCanonicalOwnershipReconciliation,
           orders: openOrdersResult.data,
         })
+        if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
+        if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
         await drainUserDataEvents()
         if (!isCurrentGeneration()) throw new Error("User-data recovery generation was superseded")
         if (state.accountingFailed) throw new Error("User-data accounting failed during recovery")
