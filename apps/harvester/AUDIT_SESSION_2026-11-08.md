@@ -488,4 +488,17 @@ The Harvester-side tests on branch `test/harvester/retry-after-transient-journal
 - the recovery handler keeping readiness/reconciliation blocked and withholding acknowledgement after the failed account audit flush;
 - release of the single-flight task slot, followed by a later reminder retrying the same generation, publishing the second account audit, completing the open-orders audit, and acknowledging once.
 
-No Journal or Harvester production source is changed for F-018. No audit record is deleted, overwritten, rotated, or deduplicated. Exact-head Harvester verification is pending.
+No Journal or Harvester production source changed for F-018. No audit record is deleted, overwritten, rotated, or deduplicated. Journal PR #714 and Harvester PR #716 are merged; exact-head verification passed.
+
+
+## 22. F-018 merge confirmation — 2026-11-08
+
+The Journal-side characterization merged in [PR #714](https://github.com/45s/coinzilla/pull/714), exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`, merge commit `0638c8bbc51607805bd95299fc8b4e69363c774e`. The Harvester-side recovery proof merged in [PR #716](https://github.com/45s/coinzilla/pull/716), exact head `ae021f8f9fac071ebf3844069d5321ed11f8d0a3`, merge commit/current `develop` checkpoint `32a478d39a952206423fd6e552eea86e27d51f80`.
+
+- Journal package tests: 43/43 passed.
+- Harvester package tests: 760/760 passed; configured targeted regression files 3/3 passed.
+- All six required offline CI contexts passed on both PR heads.
+- Workspace coverage passed; Journal and Harvester package threshold enforcement is not configured.
+- TESTNET integration was skipped. No TESTNET acceptance is claimed.
+
+F-018 is complete as a test/documentation characterization. The known permanent Journal `writeFile()` failure poisoning behavior remains documented and is not changed by this work.
