@@ -2742,3 +2742,193 @@ test("keeps user-data intake active until shutdown BUY cancellation and fill rec
   assert.ok(calls.indexOf("cancelOrder:BUY") < calls.indexOf("unsubscribe:user-data"), "the BUY cancellation request must complete before user-data intake is disconnected")
   assert.ok(calls.indexOf("unsubscribe:user-data") < calls.indexOf("disconnect"), "user-data intake must be disconnected only after cancellation reconciliation and before broker disconnect")
 })
+
+
+test("cancels acknowledged Harvester BUY orders after an unowned execution report closes the global accounting gate", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const cancelledBrokerOrderIds = []
+  let resolveOwnedBuyAcknowledged
+  const ownedBuyAcknowledged = new Promise((resolve) => {
+    resolveOwnedBuyAcknowledged = resolve
+  })
+  let resolveOwnedBuyCancellation
+  const ownedBuyCancellation = new Promise((resolve) => {
+    resolveOwnedBuyCancellation = resolve
+  })
+
+  broker.getPrices = async ({ symbol } = {}) => ({
+    ok: true,
+    data: { symbol, price: "6500" },
+  })
+  broker.placeOrder = async ({ order } = {}) => {
+    const metadata = createMarketMetadata(order.symbol)
+    const acknowledgedOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: "owned-buy-1",
+      market: metadata.market,
+      side: order.side,
+      type: order.type,
+      limitPrice: new Money({ amount: order.price, asset: metadata.market.quoteAsset }),
+      originalQuantity: new Quantity({ amount: order.quantity, asset: metadata.market.baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: metadata.market.baseAsset }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 1,
+      updatedAt: 1,
+    })
+    broker.emitUserDataEvent({
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: acknowledgedOrder,
+    })
+    return { ok: true, data: acknowledgedOrder }
+  }
+  const cancelOrder = broker.cancelOrder
+  broker.cancelOrder = async ({ order } = {}) => {
+    cancelledBrokerOrderIds.push(order.brokerOrderId)
+    const result = await cancelOrder({ order })
+    if (order.brokerOrderId === "owned-buy-1") resolveOwnedBuyCancellation(order.brokerOrderId)
+    return result
+  }
+
+  const tradingConfigWithRegularLimitBuys = {
+    ...tradingConfig,
+    strategies: {
+      ...tradingConfig.strategies,
+      CG_coinGrabber: {
+        ...tradingConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...tradingConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...tradingConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
+          },
+        },
+      },
+    },
+  }
+  const journalEvents = []
+  const result = await startHarvesterForTest({
+    loadConfig: async () => tradingConfigWithRegularLimitBuys,
+    env: {
+      ...binanceEnv,
+      HARVESTER_ENABLE_TRADING: "true",
+      HARVESTER_TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    onUserDataEvent: ({ event } = {}) => {
+      if (event?.executionType === "NEW" && event.executedOrder?.brokerOrderId === "owned-buy-1") {
+        resolveOwnedBuyAcknowledged(event.executedOrder)
+      }
+    },
+    logger: { info() {}, debug() {}, error() {} },
+  })
+
+  await waitForTestSignal(
+    ownedBuyAcknowledged,
+    "acknowledged Harvester BUY before the ownership failure",
+    () => ({ calls, userDataStatus: result.userDataStatus }),
+    2_000,
+  )
+  assert.deepEqual(
+    (await broker.getOpenOrders({})).data.map((order) => order.id),
+    ["owned-buy-1"],
+    "the regression scenario must have one acknowledged Harvester-owned BUY resting before the external execution arrives",
+  )
+
+  const metadata = createMarketMetadata("BTCUSDT")
+  const externalOrder = new CanonicalOrder({
+    clientOrderId: "external-client-id",
+    brokerOrderId: "987654",
+    market: metadata.market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "6500", asset: metadata.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+    completedAt: 1,
+  })
+  const externalFill = new Fill({
+    tradeId: "external-trade-1",
+    brokerOrderId: externalOrder.brokerOrderId,
+    clientOrderId: externalOrder.clientOrderId,
+    market: metadata.market,
+    side: "BUY",
+    price: new Money({ amount: "6500", asset: metadata.market.quoteAsset }),
+    quantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    quoteQuantity: new Money({ amount: "65", asset: metadata.market.quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+
+  broker.emitUserDataEvent({
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executionId: "external-trade-1",
+    executedOrder: externalOrder,
+    fill: externalFill,
+  })
+
+  await waitForTestSignal(
+    ownedBuyCancellation,
+    "safety cancellation of the acknowledged Harvester BUY",
+    () => ({
+      cancelledBrokerOrderIds,
+      userDataStatus: result.userDataStatus,
+      userDataReady: result.userDataReady,
+    }),
+    2_000,
+  )
+
+  assert.deepEqual(
+    cancelledBrokerOrderIds,
+    ["owned-buy-1"],
+    "an account-integrity failure must cancel the Harvester-owned BUY without ever canceling the unowned external order",
+  )
+  assert.equal(
+    result.userDataReady,
+    false,
+    "canceling resting BUY exposure must not reopen trading while execution ownership/accounting remains unsafe",
+  )
+  assert.equal(
+    result.userDataStatus,
+    "EXECUTION_ACCOUNTING_FAILED",
+    "the original execution-accounting failure must remain visible after safety cancellation",
+  )
+  assert.equal(
+    (await broker.getOpenOrders({})).data.length,
+    0,
+    "the owned BUY must reach a broker-confirmed terminal state before the safety halt is considered complete",
+  )
+  assert.ok(
+    journalEvents.some((event) => event.name === "order.cancel_requested"),
+    "the emergency BUY cancellation must preserve the durable cancellation-intent journal barrier",
+  )
+
+  await assert.rejects(
+    result.stop(),
+    (error) => {
+      assert.ok(error instanceof AggregateError, "shutdown must aggregate the unresolved account-integrity state instead of reporting success")
+      assert.ok(
+        error.errors.some((entry) => entry.message.includes("USER_DATA_OR_ACCOUNTING_RECONCILIATION_INCOMPLETE")),
+        "the closing audit must retain the original user-data/accounting reconciliation failure after BUY cancellation",
+      )
+      return true
+    },
+    "the runtime must remain fail-closed at shutdown even after all owned BUY exposure has been canceled",
+  )
+})
