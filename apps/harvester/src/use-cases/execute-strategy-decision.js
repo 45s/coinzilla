@@ -34,7 +34,46 @@ export function makeExecuteStrategyDecision({
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
 
-  return async function executeStrategyDecision({ decision, marketMetadata } = {}) {
+  const validateDecision = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) => {
+    try {
+      if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
+        throw new TypeError("validateDecision requires a strategy decision with actions")
+      }
+      if (!marketMetadata?.market || !marketMetadata?.tradingRules) {
+        throw new TypeError("validateDecision requires canonical market metadata and trading rules")
+      }
+      const validatedOrders = []
+      for (const [index, action] of decision.actions.entries()) {
+        const pendingOrder = createPendingCanonicalOrder({
+          order: {
+            symbol: marketMetadata.market.symbol,
+            side: action.side,
+            type: action.type,
+            quantity: action.quantity,
+            price: action.price,
+          },
+          market: marketMetadata.market,
+          clientOrderId: "h-" + orderIdNamespace + "-preflight-" + index,
+          supportedOrderTypes: marketMetadata.supportedOrderTypes,
+        })
+        try {
+          validateOrderAgainstTradingRules({ order: pendingOrder, tradingRules: marketMetadata.tradingRules })
+        } catch (error) {
+          if (notifyValidationFailure) await onOrderValidationFailure({ order: pendingOrder, error })
+          throw error
+        }
+        if (!canSubmit({ order: pendingOrder })) {
+          return toResult({ data: { deferred: true, validatedOrders: [] } })
+        }
+        validatedOrders.push(pendingOrder)
+      }
+      return toResult({ data: { validatedOrders } })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+
+  const executeStrategyDecision = async ({ decision, marketMetadata } = {}) => {
     try {
       if (!decision || typeof decision !== "object" || !Array.isArray(decision.actions)) {
         throw new TypeError("executeStrategyDecision requires a strategy decision with actions")
@@ -117,4 +156,6 @@ export function makeExecuteStrategyDecision({
       return toResult({ error })
     }
   }
+  executeStrategyDecision.validate = validateDecision
+  return executeStrategyDecision
 }
