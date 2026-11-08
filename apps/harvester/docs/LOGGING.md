@@ -6,23 +6,49 @@ to the terminal.
 
 ## Destinations and thresholds
 
-When the CLI starts, it configures three independent destinations:
+Harvester keeps three logging files, plus the separate Journal persistence:
 
-| Destination | File | Minimum severity |
-| --- | --- | --- |
-| Console | terminal | INFO |
-| Development diagnostics | `logs/harvester.log` | DEBUG |
-| Detailed trace | `logs/harvester-trace.log` | TRACE |
+| File | Contents |
+| --- | --- |
+| `logs/harvester.log` | Structured DEBUG-and-higher diagnostics (JSONL) |
+| `logs/harvester-trace.log` | Structured TRACE diagnostics (JSONL) |
+| `logs_harvester/terminal.log` | Raw stdout and stderr captured by the development runner |
 
-Complete console lines (timestamp, level, message, and displayed details) are colored when stdout is an interactive terminal and `NO_COLOR` is not set. INFO is blue and its label is omitted—the color already communicates the level. SYSTEM is cyan and its label is also omitted for the same reason. DEBUG remains magenta, TRACE bright magenta, SUCCESS green, and WARN yellow, and ERROR red. `SUCCESS` and `SYSTEM` retain their semantic methods in structured log entries even though both use INFO severity for transport filtering. Non-interactive output remains plain text. The terminal is intentionally a summary, not a second diagnostic dump: it prints the event message plus a small allowlist of actionable fields, omits stacks/fingerprints/audit internals, and caps each line at 200 characters. Consecutive identical summaries are suppressed and reported as a repeat count. Full structured entries—including stack traces and all other normalized fields—remain in the DEBUG/TRACE JSONL files. Each entry
-retains its timestamp, normalized severity, logging method, and redacted,
-JSON-safe structured data. A console threshold change does not change either
-file threshold.
+The Journal is a separate durable event store; it is not an additional logging
+file. The console is also not a file: it displays a compact INFO-and-higher
+summary and remains independently configurable.
+
+Complete console lines (timestamp, level, message, and displayed details) are
+colored when stdout is an interactive terminal and `NO_COLOR` is not set.
+INFO is blue and its label is omitted—the color already communicates the
+level. SYSTEM is cyan and its label is also omitted for the same reason.
+DEBUG remains magenta, TRACE bright magenta, SUCCESS green, WARN yellow, and
+ERROR red. `SUCCESS` and `SYSTEM` retain their semantic methods in structured
+log entries even though both use INFO severity for transport filtering.
+Non-interactive output remains plain text. The terminal is intentionally a
+summary, not a second diagnostic dump: it prints the event message plus a
+small allowlist of actionable fields, omits stacks/fingerprints/audit
+internals, and caps each line at 200 characters. Consecutive identical
+summaries are suppressed and reported as a repeat count. Full structured
+entries—including stack traces and all other normalized fields—remain in the
+DEBUG/TRACE JSONL files. Each entry retains its timestamp, normalized
+severity, logging method, and redacted, JSON-safe structured data. A console
+threshold change does not change either file threshold.
 
 The log directory is relative to the Harvester working directory. Run
 `pnpm --filter @coinzilla/harvester dev` from the repository root, or run
 the package command from `apps/harvester`.
 
+The development runner appends raw child stdout and stderr to
+`logs_harvester/terminal.log`. This is the third existing logging file, not
+an additional file introduced by terminal backpressure handling. The file
+capture applies backpressure so output is not intentionally discarded during
+normal disk operation. The VS Code/console display is best-effort and bounded:
+if the terminal stops consuming output, display chunks are skipped until it
+catches up, while file capture continues. At shutdown, the runner reports the
+number of skipped display chunks when stderr is writable. A disk write failure
+is reported and causes the child process to be stopped; no software can
+guarantee capture through a storage failure.
 
 ## Message design
 
@@ -60,7 +86,6 @@ DEBUG (or TRACE when they include detailed internal state). A quiet market
 should not flood the operator-facing console.
 
 ### Avoid duplicate and low-value messages
-
 - Emit one record for one meaningful event. Do not log the same event once as
   "received" and again as "processed" unless the two records describe distinct,
   actionable stages and the distinction is useful.
@@ -101,7 +126,6 @@ logger.debug({
 These are message-design examples, not a claim that every current call site
 already follows this policy. When changing a log call, update its tests and
 keep the console allowlist in sync with any new fields intended for INFO.
-
 
 ### SYSTEM lifecycle events
 
