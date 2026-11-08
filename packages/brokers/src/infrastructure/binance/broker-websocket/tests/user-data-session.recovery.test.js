@@ -137,6 +137,40 @@ describe("Binance user-data reconnect behavior", () => {
 
 
 
+  it("notifies only the remaining active subscriber when its removal completes shared recovery", async () => {
+    const { broker, scheduler, clients } = createBroker()
+    await broker.connect()
+
+    const firstStatuses = []
+    const secondStatuses = []
+    const first = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => firstStatuses.push(status),
+    })
+    const second = await broker.subscribeForUserData({
+      onEvent() {},
+      onStatus: (status) => secondStatuses.push(status),
+    })
+
+    clients[0].state = "closed"
+    clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+    await scheduler.runNext()
+
+    assert.equal(first.data.acknowledgeRecovery(), false)
+    await second.data.disconnect()
+
+    assert.equal(broker.userDataUnavailable, false)
+    assert.equal(scheduler.pendingCount, 0)
+    assert.deepEqual(
+      firstStatuses.filter((status) => status.type === "reconciled"),
+      [{ type: "reconciled", subscriptionId: 110, recoveryRequired: false }],
+    )
+    assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
+
+    await first.data.disconnect()
+    await broker.disconnect()
+  })
+
   it("schedules recovery when an explicit resume subscription attempt fails", async () => {
     const scheduler = createScheduler()
     let subscriptionAttempts = 0
