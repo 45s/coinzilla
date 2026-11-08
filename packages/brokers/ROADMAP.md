@@ -798,3 +798,15 @@ Cross-domain request [#680](https://github.com/45s/coinzilla/issues/680) asks wh
 - This is characterization only: no global diagnostics subscriber, socket monkey-patch, timing heuristic, production transport behavior, public broker contract, or dependency was added.
 - Exact-head CI for the corrected test is pending. Do not mark #680 complete until the corrected test passes on the supported Node runtime and the remaining runtime limitation is documented.
 
+
+
+## 2026-11-08 — multi-subscriber terminal recovery notification count
+
+Cross-domain request [#702](https://github.com/45s/coinzilla/issues/702) includes a broker-owned proof requirement that is independent of the still-open public acknowledgement-result contract.
+
+- Added exact per-subscriber assertions to the existing two-subscriber reconnect/recovery regression: the first local acknowledgement remains recorded-but-globally-pending (legacy boolean `false`), the final acknowledgement completes recovery, each still-active subscriber receives exactly one `reconciled` status for subscription `110`, and a repeated acknowledgement cannot publish another terminal status.
+- Asserted the acknowledgement reminder timer is cleared at global completion and the existing order-mutation gate remains blocked until that point.
+- Added a second regression proving that when the first subscriber has acknowledged and the second disconnects, the remaining active subscriber receives exactly one terminal `reconciled` status while the removed subscriber receives none.
+- No broker source, public API, Harvester consumer, or acknowledgement return semantics changed. The additive result-shape proposal remains pending owner agreement.
+- Exact-head CI verification is pending; do not mark the cross-domain contract issue complete until the agreed public acknowledgement semantics and consumer compatibility work are resolved.
+
